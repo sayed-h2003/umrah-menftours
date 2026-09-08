@@ -526,7 +526,10 @@ function setupSmartSystem() {
       [ACC_TRIP_PRICES_SHEET, ACC_TRIP_PRICES_HEADERS],
       [ACC_CLIENT_PRICES_SHEET, ACC_CLIENT_PRICES_HEADERS],
       [ACC_MERGE_SHEET, ACC_MERGE_HEADERS],
-      [CATERING_SHEET, CATERING_HEADERS] // 📑 (V4.54) بيان اتفاقيات الإعاشة
+      [CATERING_SHEET, CATERING_HEADERS], // 📑 (V4.54) بيان اتفاقيات الإعاشة
+      [MF_SHEET, MF_HEADERS],             // 🏛️ (V4.106) ملفات مراجعة الوزارة
+      [MF_SUP_SHEET, MF_SUP_HEADERS],     // 🏛️ (V4.106) سجل المشرفين
+      [MF_REC_SHEET, MF_REC_HEADERS]      // 🏛️ (V4.106) إيصالات رسوم الغرفة
     ];
     _accSheets.forEach(function(pair) {
       var _existed = !!ss.getSheetByName(pair[0]);
@@ -5994,7 +5997,7 @@ function checkPasswordMatch_(plainPassword, storedValue) {
 /* 🔐 نموذج الصلاحيات الذكية (سيرفر): يفهم رموز "screen.cap" مع التتالي + الرموز القديمة
    - أي صلاحية شاشة تعني العرض؛ الحذف يعني التعديل والعرض
    - الرمز القديم "delete" يمنح الحذف في كل الشاشات (حفاظاً على السلوك السابق) */
-var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering'];
+var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry'];
 var _PERM_LEGACY_MAP_ = {
   'add':'bookings.add','edit':'bookings.edit','delete':'bookings.delete',
   'print':'bookings.print','approve':'bookings.approve',
@@ -9790,7 +9793,9 @@ function getCompaniesSettings(authToken) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
-  var data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+  // 🏛️ (V4.106) العمود D = رقم الترخيص — يُستخدم في مطابقة إيصال البنك بالشركة تلقائياً
+  if (sheet.getLastColumn() < 4) sheet.getRange(1, 4).setValue('رقم الترخيص');
+  var data = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
   var result = [];
   for (var i = 0; i < data.length; i++) {
     if (!data[i][0] && !data[i][1]) continue;
@@ -9798,7 +9803,8 @@ function getCompaniesSettings(authToken) {
       row: i + 2,
       agent: data[i][0] || "",
       company: data[i][1] || "",
-      logoUrl: data[i][2] || ""
+      logoUrl: data[i][2] || "",
+      licence: String(data[i][3] || "").trim()
     });
   }
   setCachedData('agents_cache', result);
@@ -9806,7 +9812,7 @@ function getCompaniesSettings(authToken) {
 }
 
 // يضيف أو يعدّل شركة (لو targetRow فارغ = إضافة جديدة، لو موجود = تعديل الصف)
-function saveCompanySetting(authToken, targetRow, agent, company, logoUrl) {
+function saveCompanySetting(authToken, targetRow, agent, company, logoUrl, licence) {
   var session = requireSettingsBasicPermission_(authToken);
 
   if (!company) throw new Error("اسم الشركة مطلوب");
@@ -9815,15 +9821,19 @@ function saveCompanySetting(authToken, targetRow, agent, company, logoUrl) {
   var sheet = ss.getSheetByName("Agents_Settings");
   if (!sheet) throw new Error("ورقة Agents_Settings غير موجودة");
 
+  // 🏛️ (V4.106) العمود D = رقم الترخيص
+  if (sheet.getLastColumn() < 4) sheet.getRange(1, 4).setValue('رقم الترخيص');
+  var lic = String(licence == null ? "" : licence).trim();
   var oldValues = null;
   if (targetRow) {
-    oldValues = sheet.getRange(targetRow, 1, 1, 3).getValues()[0];
-    sheet.getRange(targetRow, 1, 1, 3).setValues([[agent || "", company, logoUrl || ""]]);
+    oldValues = sheet.getRange(targetRow, 1, 1, 4).getValues()[0];
+    if (licence === undefined) lic = String(oldValues[3] || "").trim(); // نداء قديم بلا ترخيص: لا تمسحه
+    sheet.getRange(targetRow, 1, 1, 4).setValues([[agent || "", company, logoUrl || "", lic]]);
     logChange_(session.username, "تعديل شركة", company, "بيانات الشركة",
-      JSON.stringify({ agent: oldValues[0], logoUrl: oldValues[2] }),
-      JSON.stringify({ agent: agent, logoUrl: logoUrl }));
+      JSON.stringify({ agent: oldValues[0], logoUrl: oldValues[2], licence: oldValues[3] }),
+      JSON.stringify({ agent: agent, logoUrl: logoUrl, licence: lic }));
   } else {
-    sheet.appendRow([agent || "", company, logoUrl || ""]);
+    sheet.appendRow([agent || "", company, logoUrl || "", lic]);
     logChange_(session.username, "إضافة شركة جديدة", company, "-", "-", company + " / " + (agent || ""));
   }
 
@@ -12872,13 +12882,16 @@ function getAllClientsSummary(authToken) {
 // ---------- إعدادات التسعير (رسوم الغرف بفترات + ثوابت) ----------
 function _accPricing_() {
   // ملاحظة: أسعار التذاكر ليست تسعيرًا عامًا — تُدخل داخل بنود كل رحلة على حدة (بطلب صريح)
-  var d = { roomFeePeriods: [], supRoomFee: 200 };
+  // 🏛️ (V4.106) barcodePeriods = رسوم تجديد الباركود بفترات صلاحية · vipSurcharge = زيادة رسوم غرفة المعتمر في VIP
+  var d = { roomFeePeriods: [], supRoomFee: 200, barcodePeriods: [], vipSurcharge: 100 };
   try {
     var raw = PropertiesService.getScriptProperties().getProperty('ACC_PRICING');
     if (!raw) return d;
     var c = JSON.parse(raw);
     if (!Array.isArray(c.roomFeePeriods)) c.roomFeePeriods = [];
+    if (!Array.isArray(c.barcodePeriods)) c.barcodePeriods = [];
     if (c.supRoomFee === undefined) c.supRoomFee = d.supRoomFee;
+    if (c.vipSurcharge === undefined) c.vipSurcharge = d.vipSurcharge;
     return c;
   } catch (e) { return d; }
 }
@@ -12892,13 +12905,22 @@ function saveAccPricing(authToken, cfg) {
   var session = _accPerm_(authToken, 'edit');
   var clean = {
     roomFeePeriods: [],
-    supRoomFee: _accNum_(cfg && cfg.supRoomFee) || 200
+    supRoomFee: _accNum_(cfg && cfg.supRoomFee) || 200,
+    barcodePeriods: [],
+    vipSurcharge: (cfg && cfg.vipSurcharge !== undefined) ? _accNum_(cfg.vipSurcharge) : 100
   };
   ((cfg && cfg.roomFeePeriods) || []).forEach(function(p) {
     var from = String(p.from || '').trim(), to = String(p.to || '').trim();
     var price = _accNum_(p.price);
     if (!from || !price) return;
     clean.roomFeePeriods.push({ from: from, to: to, price: price }); // to فارغة = مفتوحة النهاية
+  });
+  // 🏛️ (V4.106) رسوم تجديد الباركود — نفس منطق الفترات
+  ((cfg && cfg.barcodePeriods) || []).forEach(function(p) {
+    var from = String(p.from || '').trim(), to = String(p.to || '').trim();
+    var price = _accNum_(p.price);
+    if (!from || !price) return;
+    clean.barcodePeriods.push({ from: from, to: to, price: price });
   });
   PropertiesService.getScriptProperties().setProperty('ACC_PRICING', JSON.stringify(clean));
   logChange_(session.username, 'تعديل تسعير الحسابات', '-', 'ACC_PRICING', '-',
@@ -19327,4 +19349,776 @@ function _latinToArabicName_(latinName) {
   }
   if (!counted || dictHits < Math.ceil(counted / 2)) return '';
   return out.join(' ').replace(/\s+/g, ' ').trim();
+}
+/* ==================================================================================
+   🏛️ (V4.106) شاشة «مراجعة ملفات الوزارة»
+   ملفات مراجعة بوابة العمرة الإلكترونية: بيانات الملف والشركة والوكيل والمشرفين
+   والمعتمرين والتسعير والسكن + سجل المشرفين + إيصالات رسوم الغرفة وحركتها.
+   المعادلات مطابقة تماماً لملف «ملفات عمرة 1448هـ» (المخالصة بالريال معادلة عكسية).
+   ================================================================================== */
+
+var MF_SHEET = 'MinistryFiles';
+var MF_HEADERS = [
+  'معرف الملف','مسلسل','رقم الملف','معتمد','فاتورة إلكترونية','القيد',
+  'الشركة المصرية','الوكيل السعودي','تاريخ المراجعة','نوع المراجعة','سبب VIP اليدوي','وسيلة السفر',
+  'العميل','بنود العميل (JSON)','الرحلة المرتبطة','تاريخ الذهاب','تاريخ العودة',
+  'معتمرين','مشرفين','المشرفون (JSON)',
+  'سعر البرنامج','التذكرة','رسوم الغرفة للفرد','رسوم إدارية للفرد','النسبة','سعر صرف الريال',
+  'فندق المدينة','دخول المدينة','خروج المدينة','فندق مكة','دخول مكة','خروج مكة',
+  'شركة النقل','ملاحظات','المعتمرون المختارون (JSON)',
+  'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في'
+];
+
+var MF_SUP_SHEET = 'MinistrySupervisors';
+var MF_SUP_HEADERS = [
+  'اسم المشرف','النوع','الشركة الأساسية','شركات المشاركة','رقم الجوال','ملاحظات',
+  'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في'
+];
+
+var MF_REC_SHEET = 'RoomFeeReceipts';
+var MF_REC_HEADERS = [
+  'رقم الإيصال','التاريخ','الوقت','الشركة','رقم الترخيص','المبلغ','اسم المودع','المصدر','ملاحظات',
+  'أنشئ بواسطة','أنشئ في'
+];
+
+// أسماء الحقول للسجل (تُستخدم في سجل التعديلات لكل ملف)
+var MF_FIELD_LABELS_ = {
+  fileNo:'رقم الملف', approved:'الاعتماد', eInvoice:'فاتورة إلكترونية', ref:'القيد',
+  company:'الشركة المصرية', agent:'الوكيل السعودي', reviewDate:'تاريخ المراجعة',
+  reviewType:'نوع المراجعة', vipReason:'سبب VIP اليدوي', travelMode:'وسيلة السفر',
+  clientLabel:'العميل', tripName:'الرحلة المرتبطة', goDate:'تاريخ الذهاب', retDate:'تاريخ العودة',
+  pilgrims:'عدد المعتمرين', supCount:'عدد المشرفين', progPrice:'سعر البرنامج', ticket:'سعر التذكرة',
+  roomFee:'رسوم الغرفة للفرد', adminFee:'رسوم إدارية للفرد', pct:'النسبة', fxRate:'سعر صرف الريال',
+  madinahHotel:'فندق المدينة', madinahIn:'دخول المدينة', madinahOut:'خروج المدينة',
+  makkahHotel:'فندق مكة', makkahIn:'دخول مكة', makkahOut:'خروج مكة',
+  transport:'شركة النقل', notes:'ملاحظات', breakdown:'بنود العميل', sups:'المشرفون',
+  selected:'المعتمرون المختارون'
+};
+
+/* ---------- صلاحية الشاشة ---------- */
+function _mfPerm_(authToken, cap) {
+  var session = requireAuth_(authToken);
+  if (_sessionHasPerm_(session, 'ministry.' + cap)) return session;
+  throw new Error('لا تملك صلاحية ' + ({view:'عرض',add:'إضافة',edit:'تعديل',delete:'حذف'}[cap] || cap) + ' مراجعة ملفات الوزارة');
+}
+
+/* ---------- أدوات مساعدة ---------- */
+// تطبيع الأرقام العربية/الفارسية إلى لاتينية (يُطبَّق على كل مُدخل نصّي قادم من الموبايل)
+function _mfLatin_(s) {
+  return String(s == null ? '' : s)
+    .replace(/[٠-٩]/g, function(d) { return String.fromCharCode(d.charCodeAt(0) - 0x0660 + 48); })
+    .replace(/[۰-۹]/g, function(d) { return String.fromCharCode(d.charCodeAt(0) - 0x06F0 + 48); })
+    .replace(/٫/g, '.').replace(/٬/g, ',');
+}
+function _mfStr_(v) { return _mfLatin_(v).trim(); }
+function _mfNum_(v) { var n = parseFloat(_mfLatin_(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+
+// تاريخ إلى dd/mm/yyyy — يقبل Date أو نص بأي فاصل، ويكمل السنة الحالية لو غابت
+function _mfDate_(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy');
+  }
+  var s = _mfStr_(v).replace(/[-.\\]/g, '/');
+  if (!s) return '';
+  var p = s.split('/').filter(function(x) { return x !== ''; });
+  if (p.length < 2) return '';
+  var d = p[0].replace(/\D/g, ''), m = p[1].replace(/\D/g, ''), y = (p[2] || '').replace(/\D/g, '');
+  if (!d || !m) return '';
+  if (!y) y = String(new Date().getFullYear());
+  else if (y.length === 2) y = '20' + y;
+  if (y.length !== 4) return '';
+  if (d.length === 1) d = '0' + d;
+  if (m.length === 1) m = '0' + m;
+  return d + '/' + m + '/' + y;
+}
+function _mfMs_(dmy) {
+  var m = String(dmy || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : NaN;
+}
+function _mfToday_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy');
+}
+function _mfStamp_() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
+}
+function _mfJson_(v, fallback) {
+  try { var o = JSON.parse(String(v || '')); return o || fallback; } catch (e) { return fallback; }
+}
+// يوم الأسبوع: 5 = جمعة، 6 = سبت
+function _mfDow_(dmy) {
+  var t = _mfMs_(dmy);
+  return isNaN(t) ? -1 : new Date(t).getDay();
+}
+// نسبة الربح الافتراضية: من 3.00% تنازلياً حتى 2.50% عند 120 معتمر فأكثر، برقمين عشريين
+function _mfDefaultPct_(pilgrims) {
+  var n = Math.max(0, Math.min(120, Number(pilgrims) || 0));
+  var base = 3.00 - (n / 120) * 0.5;
+  var jitter = (Math.random() - 0.5) * 0.04;
+  var v = Math.max(2.50, Math.min(3.00, base + jitter));
+  return Math.round(v * 100) / 100;
+}
+// رسوم تجديد الباركود السارية في تاريخ معيّن
+function _mfBarcodeFeeAt_(dateStr) {
+  var t = _mfMs_(_mfDate_(dateStr));
+  if (isNaN(t)) return 0;
+  var periods = (_accPricing_().barcodePeriods) || [];
+  for (var i = 0; i < periods.length; i++) {
+    var p = periods[i];
+    var fromMs = _mfMs_(_mfDate_(p.from));
+    if (isNaN(fromMs)) continue;
+    var toMs = p.to ? _mfMs_(_mfDate_(p.to)) : 8640000000000000;
+    if (isNaN(toMs)) toMs = 8640000000000000;
+    if (t >= fromMs && t <= toMs) return _mfNum_(p.price);
+  }
+  return 0;
+}
+
+/* ---------- محرك الحسابات (مطابق لمعادلات ملف عمرة 1448هـ) ----------
+   U = ROUND( (Q − R*(N+O) − (N*S + مرافقون*رسوم مشرف) − T*(N+O) − Q*AC) / (N+O) / V , 0 )
+   حيث Q=الإيراد، R=التذكرة، S=رسوم غرفة المعتمر، T=رسوم إدارية، V=سعر الريال، AC=النسبة
+------------------------------------------------------------------- */
+function _mfCompute_(f, cfg) {
+  cfg = cfg || _accPricing_();
+  var N = _mfNum_(f.pilgrims), O = _mfNum_(f.supCount);
+  var heads = N + O;
+  var vipAdd = (f.reviewType === 'VIP') ? (_mfNum_(cfg.vipSurcharge) || 100) : 0;
+  var S = _mfNum_(f.roomFee) + vipAdd;                       // رسوم غرفة المعتمر (VIP تزيد للمعتمر فقط)
+  var supFee = _mfNum_(cfg.supRoomFee) || 200;
+  var sups = Array.isArray(f.sups) ? f.sups : [];
+  // المشرف «مرافق» فقط له رسوم غرفة — استقبال والوكيل بدون رسوم غرفة ولا مخالصة
+  var murafiq = sups.filter(function(s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+  var R = _mfNum_(f.ticket), T = _mfNum_(f.adminFee), V = _mfNum_(f.fxRate);
+  var AC = _mfNum_(f.pct) / 100;
+  var barcode = (f.reviewType === 'تجديد باركود') ? _mfBarcodeFeeAt_(f.reviewDate) * N : 0;
+
+  var Q = N * _mfNum_(f.progPrice);                          // الإيراد
+  var W = R * heads;                                         // إجمالي التذاكر
+  var X = (N * S) + (murafiq * supFee);                      // إجمالي رسوم الغرفة
+  var Z = T * heads;                                         // مصروفات أخرى
+  var U = 0;
+  if (heads > 0 && V > 0) U = Math.round((Q - W - X - Z - (Q * AC) - barcode) / heads / V);
+  var Y = U * heads;                                         // إجمالي الريال
+  var AA = (Y * V) + W + X + Z + barcode;                    // إجمالي المصروف
+  var AB = Q - AA;                                           // هامش الربح
+  var AL = N > 0 ? (AB / N) : 0;                             // هامش الفرد
+
+  return {
+    heads: heads, murafiq: murafiq, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode,
+    revenue: Q, totalTickets: W, totalRoomFee: X, otherExp: Z,
+    clearanceSAR: U, totalSAR: Y, totalExp: Math.round(AA), margin: Math.round(AB),
+    perPersonMargin: Math.round(AL)
+  };
+}
+
+/* ---------- فحص قواعد العمل ---------- */
+function _mfRules_(f, allFiles, balances) {
+  var out = [];
+  var c = _mfCompute_(f);
+  var sups = Array.isArray(f.sups) ? f.sups : [];
+  var reviewed = !!_mfStr_(f.reviewDate);
+  var hasFileNo = !!_mfStr_(f.fileNo);
+
+  // 1) حد المشرف المرافق: 50 معتمر إجمالاً على الملفات المتطابقة في تاريخي السفر والعودة
+  sups.forEach(function(s) {
+    if (String(s.type || '').indexOf('مرافق') < 0) return;
+    var total = 0;
+    (allFiles || []).forEach(function(o) {
+      if (o.id === f.id) return;
+      if (_mfStr_(o.goDate) !== _mfStr_(f.goDate) || _mfStr_(o.retDate) !== _mfStr_(f.retDate)) return;
+      (o.sups || []).forEach(function(os) { if (_mfStr_(os.name) === _mfStr_(s.name)) total += _mfNum_(o.pilgrims); });
+    });
+    total += _mfNum_(f.pilgrims);
+    if (total > 50) {
+      out.push({ level:'warn', code:'SUP50',
+        msg:'المشرف «' + s.name + '» (مرافق) مُسند إليه ' + total + ' معتمر على الملفات المتطابقة في تاريخي السفر والعودة — الحد الأقصى 50 معتمر إجمالاً.' });
+    }
+  });
+
+  // 2) مشرف الاستقبال: تاريخ سفر الملف يجب أن يكون في يوم عودته من رحلته الحالية أو بعده
+  sups.forEach(function(s) {
+    if (String(s.type || '').indexOf('استقبال') < 0) return;
+    var busy = _mfStr_(s.busyTo);
+    if (!busy) return;
+    var g = _mfMs_(_mfStr_(f.goDate)), b = _mfMs_(busy);
+    if (!isNaN(g) && !isNaN(b) && g < b) {
+      out.push({ level:'warn', code:'RECEP',
+        msg:'مشرف الاستقبال «' + s.name + '» لم يعد بعد من رحلته الحالية (عودته ' + busy + ') وتاريخ سفر هذا الملف ' + f.goDate + '.' });
+    }
+  });
+
+  // 3) منطقية تواريخ السكن
+  var g = _mfMs_(_mfStr_(f.goDate)), r = _mfMs_(_mfStr_(f.retDate));
+  [['madinahIn','madinahOut','المدينة'], ['makkahIn','makkahOut','مكة']].forEach(function(p) {
+    var i = _mfMs_(_mfStr_(f[p[0]])), o = _mfMs_(_mfStr_(f[p[1]]));
+    if (!isNaN(i) && !isNaN(o) && o <= i) {
+      out.push({ level:'warn', code:'HDATE', msg:'تاريخ الخروج من سكن ' + p[2] + ' يجب أن يكون بعد تاريخ الدخول.' });
+    }
+    [[i, 'دخول'], [o, 'خروج']].forEach(function(x) {
+      if (isNaN(x[0])) return;
+      if (!isNaN(g) && x[0] < g) out.push({ level:'warn', code:'HRANGE', msg:'تاريخ ' + x[1] + ' سكن ' + p[2] + ' قبل تاريخ الذهاب.' });
+      if (!isNaN(r) && x[0] > r) out.push({ level:'warn', code:'HRANGE', msg:'تاريخ ' + x[1] + ' سكن ' + p[2] + ' بعد تاريخ العودة.' });
+    });
+  });
+
+  // 4) مطابقة إجمالي بنود العميل مع عدد المعتمرين
+  var bd = Array.isArray(f.breakdown) ? f.breakdown : [];
+  if (bd.length) {
+    var sum = bd.reduce(function(a, b) { return a + _mfNum_(b.count); }, 0);
+    if (sum !== _mfNum_(f.pilgrims)) {
+      out.push({ level:'warn', code:'CLISUM', msg:'إجمالي بنود العميل (' + sum + ') لا يطابق عدد المعتمرين (' + _mfNum_(f.pilgrims) + ').' });
+    }
+  }
+
+  // 5) رصيد رسوم الغرفة — التنبيه يظهر عند تسجيل رقم الملف، وهو غير مانع
+  if (hasFileNo && !reviewed && balances) {
+    var bal = _mfNum_((balances[_mfStr_(f.company)] || {}).balance);
+    if (c.totalRoomFee > bal) {
+      out.push({ level:'warn', code:'NOBAL',
+        msg:'رصيد رسوم الغرفة لشركة «' + f.company + '» (' + bal + ') لا يكفي المطلوب لهذا الملف (' + c.totalRoomFee + ') — تنبيه غير مانع، السحب يتم عند تسجيل تاريخ المراجعة.' });
+    }
+  }
+
+  // 6) سفر خلال 3 أيام أو أقل ولم تتم المراجعة
+  if (!reviewed && !isNaN(g)) {
+    var days = Math.ceil((g - _mfMs_(_mfToday_())) / 86400000);
+    if (days <= 3 && days >= 0) {
+      out.push({ level:'warn', code:'URGENT', msg:'السفر بعد ' + days + ' يوم ولم تتم المراجعة بعد — نوع المراجعة الافتراضي VIP.' });
+    }
+  }
+  return out;
+}
+
+// نوع المراجعة التلقائي: VIP لو تاريخ المراجعة جمعة/سبت أو لو تبقّى أقل من 3 أيام على السفر
+// (الإجازات الرسمية والمراجعة بعد 4 عصراً يحدّدها الموظف يدوياً — لا يمكن للنظام استنتاجها)
+function _mfAutoReviewType_(reviewDate, goDate, current) {
+  if (current === 'تجديد باركود') return current;
+  var d = _mfDate_(reviewDate);
+  if (d) {
+    var dow = _mfDow_(d);
+    if (dow === 5 || dow === 6) return 'VIP';
+    var g = _mfMs_(_mfDate_(goDate));
+    if (!isNaN(g)) {
+      var diff = Math.ceil((g - _mfMs_(d)) / 86400000);
+      if (diff <= 3 && diff >= 0) return 'VIP';
+    }
+  }
+  return current === 'VIP' ? 'VIP' : 'عادية'; // VIP اليدوي يبقى كما اختاره الموظف
+}
+
+/* ---------- قراءة/كتابة صفوف الشيت ---------- */
+function _mfRowToObj_(r) {
+  return {
+    id: _mfStr_(r[0]), seq: _mfNum_(r[1]), fileNo: _mfStr_(r[2]),
+    approved: (_mfStr_(r[3]) === 'نعم'), eInvoice: _mfStr_(r[4]), ref: _mfStr_(r[5]),
+    company: _mfStr_(r[6]), agent: _mfStr_(r[7]),
+    reviewDate: _mfDate_(r[8]), reviewType: _mfStr_(r[9]) || 'عادية', vipReason: _mfStr_(r[10]),
+    travelMode: _mfStr_(r[11]) || 'طيران',
+    clientLabel: _mfStr_(r[12]), breakdown: _mfJson_(r[13], []), tripName: _mfStr_(r[14]),
+    goDate: _mfDate_(r[15]), retDate: _mfDate_(r[16]),
+    pilgrims: _mfNum_(r[17]), supCount: _mfNum_(r[18]), sups: _mfJson_(r[19], []),
+    progPrice: _mfNum_(r[20]), ticket: _mfNum_(r[21]), roomFee: _mfNum_(r[22]),
+    adminFee: _mfNum_(r[23]), pct: _mfNum_(r[24]), fxRate: _mfNum_(r[25]),
+    madinahHotel: _mfStr_(r[26]), madinahIn: _mfDate_(r[27]), madinahOut: _mfDate_(r[28]),
+    makkahHotel: _mfStr_(r[29]), makkahIn: _mfDate_(r[30]), makkahOut: _mfDate_(r[31]),
+    transport: _mfStr_(r[32]), notes: _mfStr_(r[33]), selected: _mfJson_(r[34], []),
+    createdBy: _mfStr_(r[35]), createdAt: _mfStr_(r[36]),
+    updatedBy: _mfStr_(r[37]), updatedAt: _mfStr_(r[38])
+  };
+}
+function _mfObjToRow_(f) {
+  return [
+    f.id, f.seq, f.fileNo, (f.approved ? 'نعم' : 'لا'), f.eInvoice, f.ref,
+    f.company, f.agent, f.reviewDate, f.reviewType, f.vipReason, f.travelMode,
+    f.clientLabel, JSON.stringify(f.breakdown || []), f.tripName, f.goDate, f.retDate,
+    f.pilgrims, f.supCount, JSON.stringify(f.sups || []),
+    f.progPrice, f.ticket, f.roomFee, f.adminFee, f.pct, f.fxRate,
+    f.madinahHotel, f.madinahIn, f.madinahOut, f.makkahHotel, f.makkahIn, f.makkahOut,
+    f.transport, f.notes, JSON.stringify(f.selected || []),
+    f.createdBy, f.createdAt, f.updatedBy, f.updatedAt
+  ];
+}
+function _mfNextSeq_() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var next = (parseInt(props.getProperty('MF_SEQ_CTR'), 10) || 0) + 1;
+    props.setProperty('MF_SEQ_CTR', String(next));
+    return next;
+  } finally { lock.releaseLock(); }
+}
+function _mfReadAll_() {
+  var sh = _accSheet_(MF_SHEET, MF_HEADERS);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var vals = sh.getRange(2, 1, last - 1, MF_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    if (!_mfStr_(vals[i][0])) continue;
+    var o = _mfRowToObj_(vals[i]);
+    o._row = i + 2;
+    out.push(o);
+  }
+  return out;
+}
+
+/* ---------- إيصالات رسوم الغرفة ---------- */
+function _mfReadReceipts_() {
+  var sh = _accSheet_(MF_REC_SHEET, MF_REC_HEADERS);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var vals = sh.getRange(2, 1, last - 1, MF_REC_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    if (!_mfStr_(vals[i][0]) && !_mfStr_(vals[i][3])) continue;
+    out.push({
+      receiptNo: _mfStr_(vals[i][0]), date: _mfDate_(vals[i][1]), time: _mfStr_(vals[i][2]),
+      company: _mfStr_(vals[i][3]), licence: _mfStr_(vals[i][4]), amount: _mfNum_(vals[i][5]),
+      depositor: _mfStr_(vals[i][6]), source: _mfStr_(vals[i][7]) || 'يدوي', notes: _mfStr_(vals[i][8]),
+      createdBy: _mfStr_(vals[i][9]), createdAt: _mfStr_(vals[i][10]), _row: i + 2
+    });
+  }
+  return out;
+}
+// الرصيد لكل شركة: الإيداعات − المسحوب للملفات التي سُجِّل لها تاريخ مراجعة
+function _mfBalances_(files, receipts) {
+  var cfg = _accPricing_();
+  var bal = {};
+  function slot(c) {
+    if (!bal[c]) bal[c] = { company: c, deposits: 0, withdrawn: 0, balance: 0, pending: 0 };
+    return bal[c];
+  }
+  (receipts || []).forEach(function(x) { slot(x.company).deposits += _mfNum_(x.amount); });
+  (files || []).forEach(function(f) {
+    var amt = _mfCompute_(f, cfg).totalRoomFee;
+    var s = slot(_mfStr_(f.company));
+    if (_mfStr_(f.reviewDate)) s.withdrawn += amt; else s.pending += amt;
+  });
+  Object.keys(bal).forEach(function(k) { bal[k].balance = bal[k].deposits - bal[k].withdrawn; });
+  return bal;
+}
+// كشف حركة رسوم الغرفة (إيداعات + سحوبات) مرتّب زمنياً مع الرصيد بعد كل حركة
+function getRoomFeeLedger(authToken, company) {
+  _mfPerm_(authToken, 'view');
+  var files = _mfReadAll_(), receipts = _mfReadReceipts_(), cfg = _accPricing_();
+  var mv = [];
+  receipts.forEach(function(x) {
+    mv.push({ date: x.date, ms: _mfMs_(x.date), company: x.company,
+      desc: 'إيداع إيصال رقم ' + x.receiptNo + (x.depositor ? ' — ' + x.depositor : ''),
+      inn: _mfNum_(x.amount), out: 0 });
+  });
+  files.forEach(function(f) {
+    if (!_mfStr_(f.reviewDate)) return;
+    mv.push({ date: f.reviewDate, ms: _mfMs_(f.reviewDate), company: f.company,
+      desc: 'سحب رسوم غرفة — ملف رقم ' + (f.fileNo || '—') + (f.clientLabel ? ' (' + f.clientLabel + ')' : ''),
+      inn: 0, out: _mfCompute_(f, cfg).totalRoomFee });
+  });
+  var comp = _mfStr_(company);
+  if (comp && comp !== 'الكل') mv = mv.filter(function(m) { return m.company === comp; });
+  mv.sort(function(a, b) { return (isNaN(a.ms) ? 0 : a.ms) - (isNaN(b.ms) ? 0 : b.ms); });
+  var run = {};
+  mv.forEach(function(m) {
+    run[m.company] = (run[m.company] || 0) + m.inn - m.out;
+    m.balance = run[m.company];
+  });
+  return { success: true, moves: mv };
+}
+
+function saveRoomFeeReceipt(authToken, rec) {
+  var session = _mfPerm_(authToken, 'add');
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); }
+  catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  try {
+    var sh = _accSheet_(MF_REC_SHEET, MF_REC_HEADERS);
+    var no = _mfStr_(rec && rec.receiptNo);
+    var company = _mfStr_(rec && rec.company);
+    var amount = _mfNum_(rec && rec.amount);
+    if (!no) return { success: false, error: 'رقم الإيصال مطلوب' };
+    if (!company) return { success: false, error: 'اسم الشركة مطلوب' };
+    if (amount <= 0) return { success: false, error: 'المبلغ يجب أن يكون أكبر من صفر' };
+
+    var existing = _mfReadReceipts_();
+    var dup = existing.filter(function(x) { return x.receiptNo === no; })[0];
+    var row = [ no, _mfDate_(rec.date) || _mfToday_(), _mfStr_(rec.time), company,
+      _mfStr_(rec.licence), amount, _mfStr_(rec.depositor), _mfStr_(rec.source) || 'يدوي',
+      _mfStr_(rec.notes), session.username, _mfStamp_() ];
+    if (dup) {
+      if (!rec._allowUpdate) return { success: false, error: 'رقم الإيصال ' + no + ' مسجَّل من قبل لشركة ' + dup.company };
+      sh.getRange(dup._row, 1, 1, MF_REC_HEADERS.length).setValues([row]);
+      logChange_(session.username, 'تعديل إيصال رسوم غرفة', no, 'المبلغ', dup.amount, amount);
+    } else {
+      sh.appendRow(row);
+      logChange_(session.username, 'تسجيل إيصال رسوم غرفة', no, company, '-', amount + ' ج');
+    }
+    SpreadsheetApp.flush();
+    return { success: true };
+  } finally { lock.releaseLock(); }
+}
+
+function deleteRoomFeeReceipt(authToken, receiptNo) {
+  var session = _mfPerm_(authToken, 'delete');
+  var sh = _accSheet_(MF_REC_SHEET, MF_REC_HEADERS);
+  var list = _mfReadReceipts_();
+  var hit = list.filter(function(x) { return x.receiptNo === _mfStr_(receiptNo); })[0];
+  if (!hit) return { success: false, error: 'الإيصال غير موجود' };
+  sh.deleteRow(hit._row);
+  SpreadsheetApp.flush();
+  logChange_(session.username, 'حذف إيصال رسوم غرفة', hit.receiptNo, hit.company, hit.amount, '-');
+  return { success: true };
+}
+
+/* ---------- سجل المشرفين ---------- */
+function _mfReadSupervisors_() {
+  var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var vals = sh.getRange(2, 1, last - 1, MF_SUP_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    if (!_mfStr_(vals[i][0])) continue;
+    out.push({
+      name: _mfStr_(vals[i][0]), type: _mfStr_(vals[i][1]) || 'مرافق',
+      home: _mfStr_(vals[i][2]),
+      shared: _mfStr_(vals[i][3]) ? _mfStr_(vals[i][3]).split(/[،,]/).map(function(s){return s.trim();}).filter(String) : [],
+      mobile: _mfStr_(vals[i][4]), notes: _mfStr_(vals[i][5]),
+      createdBy: _mfStr_(vals[i][6]), createdAt: _mfStr_(vals[i][7]), _row: i + 2
+    });
+  }
+  return out;
+}
+function saveMinistrySupervisor(authToken, sup) {
+  var session = _mfPerm_(authToken, 'edit');
+  var name = _mfStr_(sup && sup.name);
+  if (!name) return { success: false, error: 'اسم المشرف مطلوب' };
+  var home = _mfStr_(sup.home);
+  if (!home) return { success: false, error: 'الشركة الأساسية مطلوبة' };
+  var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
+  var list = _mfReadSupervisors_();
+  var old = list.filter(function(x) { return x.name === (_mfStr_(sup._origName) || name); })[0];
+  var shared = Array.isArray(sup.shared) ? sup.shared.map(_mfStr_).filter(String) : [];
+  var row = [ name, _mfStr_(sup.type) || 'مرافق', home, shared.join('، '),
+    _mfStr_(sup.mobile), _mfStr_(sup.notes),
+    old ? old.createdBy : session.username, old ? old.createdAt : _mfStamp_(),
+    session.username, _mfStamp_() ];
+  if (old) {
+    sh.getRange(old._row, 1, 1, MF_SUP_HEADERS.length).setValues([row]);
+    logChange_(session.username, 'تعديل مشرف', name, 'بيانات المشرف',
+      old.type + ' / ' + old.home, row[1] + ' / ' + home);
+  } else {
+    if (list.filter(function(x) { return x.name === name; }).length) return { success: false, error: 'المشرف مسجَّل من قبل' };
+    sh.appendRow(row);
+    logChange_(session.username, 'إضافة مشرف', name, '-', '-', row[1] + ' / ' + home);
+  }
+  SpreadsheetApp.flush();
+  return { success: true };
+}
+function deleteMinistrySupervisor(authToken, name) {
+  var session = _mfPerm_(authToken, 'delete');
+  var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
+  var hit = _mfReadSupervisors_().filter(function(x) { return x.name === _mfStr_(name); })[0];
+  if (!hit) return { success: false, error: 'المشرف غير موجود' };
+  sh.deleteRow(hit._row);
+  SpreadsheetApp.flush();
+  logChange_(session.username, 'حذف مشرف', hit.name, '-', hit.name, '-');
+  return { success: true };
+}
+
+// آخر تاريخ عودة مسجَّل لكل مشرف (يُحتسب منه شرط مشرف الاستقبال)
+function _mfSupBusy_(files) {
+  var busy = {};
+  (files || []).forEach(function(f) {
+    (f.sups || []).forEach(function(s) {
+      var n = _mfStr_(s.name); if (!n) return;
+      var t = _mfMs_(_mfStr_(f.retDate));
+      if (isNaN(t)) return;
+      if (!busy[n] || t > busy[n].ms) busy[n] = { ms: t, date: f.retDate, trip: f.clientLabel || f.tripName };
+    });
+  });
+  return busy;
+}
+// عبء كل مشرف مرافق على مجموعة تواريخ سفر/عودة معيّنة
+function _mfSupLoad_(files, name, goDate, retDate, excludeId) {
+  var total = 0;
+  (files || []).forEach(function(f) {
+    if (excludeId && f.id === excludeId) return;
+    if (goDate && _mfStr_(f.goDate) !== _mfStr_(goDate)) return;
+    if (retDate && _mfStr_(f.retDate) !== _mfStr_(retDate)) return;
+    (f.sups || []).forEach(function(s) { if (_mfStr_(s.name) === _mfStr_(name)) total += _mfNum_(f.pilgrims); });
+  });
+  return total;
+}
+
+// 🎯 اقتراح مشرف لرحلة: الافتراضي المتاحون فقط، و showAll يعرض الجميع مع سبب الاستبعاد
+function suggestMinistrySupervisors(authToken, opts) {
+  _mfPerm_(authToken, 'view');
+  opts = opts || {};
+  var company = _mfStr_(opts.company);
+  var goDate = _mfDate_(opts.goDate);
+  var retDate = _mfDate_(opts.retDate);
+  var count = _mfNum_(opts.pilgrims);
+  var showAll = !!opts.showAll;
+
+  var files = _mfReadAll_();
+  var busy = _mfSupBusy_(files);
+  var out = [];
+  _mfReadSupervisors_().forEach(function(s) {
+    var allowed = (s.home === company) || (s.home === 'الكل') || (s.shared.indexOf(company) >= 0);
+    var ok = false, why = '';
+    var load = _mfSupLoad_(files, s.name, goDate, retDate, opts.excludeId);
+    var b = busy[s.name];
+    if (!company) { ok = false; why = 'اختر الشركة أولاً'; }
+    else if (!allowed) { why = 'غير مسجّل بالشركة ولا مُشارَك فيها'; }
+    else if (s.type.indexOf('مرافق') >= 0 && (load + count) > 50) {
+      why = 'عبؤه الحالي ' + load + ' + ' + count + ' يتجاوز الحد الأقصى 50 معتمر';
+    } else if (s.type.indexOf('استقبال') >= 0 && b && goDate && _mfMs_(goDate) < b.ms) {
+      why = 'لم يعد بعد من رحلته الحالية (عودته ' + b.date + ')';
+    } else {
+      ok = true;
+      why = (s.home === company ? 'مسجّل بالشركة' : (s.home === 'الكل' ? 'متاح لكل الشركات' : 'مُشارَك في الشركة')) +
+        (s.type.indexOf('مرافق') >= 0 ? ' · متاح له ' + Math.max(0, 50 - load) + ' معتمر' : ' · بدون رسوم غرفة ولا مخالصة');
+    }
+    if (ok || showAll) out.push({ name: s.name, type: s.type, home: s.home, shared: s.shared, load: load, eligible: ok, reason: why, busyTo: b ? b.date : '' });
+  });
+  return { success: true, list: out };
+}
+
+/* ---------- تحميل كل بيانات الشاشة في نداء واحد ---------- */
+function getMinistryBootstrap(authToken) {
+  var session = _mfPerm_(authToken, 'view');
+  var files = _mfReadAll_();
+  var receipts = _mfReadReceipts_();
+  var supervisors = _mfReadSupervisors_();
+  var cfg = _accPricing_();
+  var balances = _mfBalances_(files, receipts);
+  var busy = _mfSupBusy_(files);
+
+  // إثراء كل ملف بالقيم المحسوبة + التنبيهات + آخر تعديل
+  files.forEach(function(f) {
+    (f.sups || []).forEach(function(s) { if (busy[s.name]) s.busyTo = busy[s.name].date; });
+    f.calc = _mfCompute_(f, cfg);
+    f.flags = _mfRules_(f, files, balances);
+    delete f._row;
+  });
+
+  // الشركات مع رقم الترخيص والوكيل الافتراضي
+  var companies = [];
+  try {
+    var ash = getSpreadsheet_().getSheetByName('Agents_Settings');
+    if (ash && ash.getLastRow() > 1) {
+      var need = Math.max(4, ash.getLastColumn());
+      var av = ash.getRange(2, 1, ash.getLastRow() - 1, need).getValues();
+      av.forEach(function(r, i) {
+        if (!_mfStr_(r[1])) return;
+        companies.push({ row: i + 2, agent: _mfStr_(r[0]), company: _mfStr_(r[1]),
+          logoUrl: _mfStr_(r[2]), licence: _mfStr_(r[3]) });
+      });
+    }
+  } catch (e) {}
+
+  // الرحلات (اسم + تواريخ + فنادق) والعملاء المسجلون
+  var trips = [], clients = [];
+  try {
+    var tsh = getSpreadsheet_().getSheetByName(TRIPS_SHEET_NAME_);
+    if (tsh && tsh.getLastRow() > 1) {
+      var tmap = _robustColMap_(tsh, TRIPS_HEADERS_);
+      var tv = tsh.getRange(2, 1, tsh.getLastRow() - 1, tsh.getLastColumn()).getValues();
+      var rd = _cellReader_(tmap, TRIPS_COL_);
+      tv.forEach(function(row) {
+        var nm = _mfStr_(rd(row, 'name'));
+        if (!nm) return;
+        trips.push({ name: nm, company: _mfStr_(rd(row, 'company')), agent: _mfStr_(rd(row, 'agent')),
+          supervisor: _mfStr_(rd(row, 'supervisor')), supervisorRole: _mfStr_(rd(row, 'supervisorRole')),
+          goDate: _mfDate_(rd(row, 'departDate')), retDate: _mfDate_(rd(row, 'returnDate')),
+          madinahHotel: _mfStr_(rd(row, 'madinahHotel')), madinahIn: _mfDate_(rd(row, 'madinahCheckIn')),
+          madinahOut: _mfDate_(rd(row, 'madinahCheckOut')),
+          makkahHotel: _mfStr_(rd(row, 'makkahHotel')), makkahIn: _mfDate_(rd(row, 'makkahCheckIn')),
+          makkahOut: _mfDate_(rd(row, 'makkahCheckOut')),
+          seats: _mfNum_(rd(row, 'bookedSeats')) });
+      });
+    }
+  } catch (e) {}
+  try {
+    var csh = getSpreadsheet_().getSheetByName('Clients');
+    if (csh && csh.getLastRow() > 1) {
+      csh.getRange(2, 1, csh.getLastRow() - 1, 1).getValues().forEach(function(r) {
+        var n = _mfStr_(r[0]); if (n && clients.indexOf(n) < 0) clients.push(n);
+      });
+    }
+  } catch (e) {}
+
+  return {
+    success: true, files: files, receipts: receipts, supervisors: supervisors,
+    companies: companies, trips: trips, clients: clients,
+    balances: balances, cfg: cfg, today: _mfToday_(),
+    user: session.username,
+    can: {
+      add: _sessionHasPerm_(session, 'ministry.add'),
+      edit: _sessionHasPerm_(session, 'ministry.edit'),
+      del: _sessionHasPerm_(session, 'ministry.delete')
+    }
+  };
+}
+
+/* ---------- حفظ ملف مراجعة (إضافة/تعديل) ---------- */
+function saveMinistryFile(authToken, data) {
+  var isNew = !_mfStr_(data && data.id);
+  var session = _mfPerm_(authToken, isNew ? 'add' : 'edit');
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); }
+  catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  try {
+    var sh = _accSheet_(MF_SHEET, MF_HEADERS);
+    var all = _mfReadAll_();
+    var old = isNew ? null : all.filter(function(x) { return x.id === _mfStr_(data.id); })[0];
+    if (!isNew && !old) return { success: false, error: 'الملف غير موجود' };
+
+    // تطبيع الأرقام العربية وتوحيد صيغة التواريخ
+    var bd = Array.isArray(data.breakdown) ? data.breakdown.map(function(b) {
+      return { name: _mfStr_(b.name), count: _mfNum_(b.count), sups: _mfNum_(b.sups),
+        note: _mfStr_(b.note), isTrip: !!b.isTrip };
+    }) : (old ? old.breakdown : []);
+    var sups = Array.isArray(data.sups) ? data.sups.map(function(s) {
+      return { name: _mfStr_(s.name), type: _mfStr_(s.type) || 'مرافق', directTo: _mfStr_(s.directTo) };
+    }) : (old ? old.sups : []);
+
+    var pilg = _mfNum_(data.pilgrims);
+    if (!pilg && bd.length) pilg = bd.reduce(function(a, b) { return a + b.count; }, 0);
+
+    var f = {
+      id: isNew ? _accId_('MF') : old.id,
+      seq: isNew ? _mfNextSeq_() : old.seq,
+      fileNo: _mfStr_(data.fileNo),
+      approved: !!data.approved,
+      eInvoice: _mfStr_(data.eInvoice), ref: _mfStr_(data.ref),
+      company: _mfStr_(data.company), agent: _mfStr_(data.agent),
+      reviewDate: _mfDate_(data.reviewDate),
+      reviewType: _mfStr_(data.reviewType) || 'عادية',
+      vipReason: _mfStr_(data.vipReason),
+      travelMode: _mfStr_(data.travelMode) || 'طيران',
+      clientLabel: _mfStr_(data.clientLabel) || bd.map(function(b) { return b.name; }).join(' + '),
+      breakdown: bd, tripName: _mfStr_(data.tripName),
+      goDate: _mfDate_(data.goDate), retDate: _mfDate_(data.retDate),
+      pilgrims: pilg, supCount: (data.supCount === undefined ? sups.length : _mfNum_(data.supCount)),
+      sups: sups,
+      progPrice: _mfNum_(data.progPrice), ticket: _mfNum_(data.ticket),
+      roomFee: _mfNum_(data.roomFee) || _mfNum_(_accRoomFeeAt_(_mfDate_(data.reviewDate) || _mfToday_())),
+      adminFee: _mfNum_(data.adminFee),
+      pct: _mfNum_(data.pct) || (old ? old.pct : 0) || _mfDefaultPct_(pilg),
+      fxRate: _mfNum_(data.fxRate),
+      madinahHotel: _mfStr_(data.madinahHotel), madinahIn: _mfDate_(data.madinahIn), madinahOut: _mfDate_(data.madinahOut),
+      makkahHotel: _mfStr_(data.makkahHotel), makkahIn: _mfDate_(data.makkahIn), makkahOut: _mfDate_(data.makkahOut),
+      transport: _mfStr_(data.transport), notes: _mfStr_(data.notes),
+      selected: Array.isArray(data.selected) ? data.selected : (old ? old.selected : []),
+      createdBy: isNew ? session.username : old.createdBy,
+      createdAt: isNew ? _mfStamp_() : old.createdAt,
+      updatedBy: session.username, updatedAt: _mfStamp_()
+    };
+
+    // نوع المراجعة التلقائي (جمعة/سبت أو أقل من 3 أيام) — ما لم يُثبّته الموظف يدوياً
+    if (!data._manualType) f.reviewType = _mfAutoReviewType_(f.reviewDate, f.goDate, f.reviewType);
+    // شركة النقل الافتراضية: اسم الوكيل، و«بدون» لو نوع المشرف = الوكيل
+    if (!f.transport) {
+      var isAgentSup = sups.some(function(s) { return s.type.indexOf('الوكيل') >= 0; });
+      f.transport = isAgentSup ? 'بدون' : f.agent;
+    }
+
+    var row = _mfObjToRow_(f);
+    if (isNew) sh.appendRow(row);
+    else sh.getRange(old._row, 1, 1, MF_HEADERS.length).setValues([row]);
+    SpreadsheetApp.flush();
+
+    // سجل التعديلات: فرق حقل بحقل
+    var recId = 'MF:' + f.id;
+    var entries = [];
+    if (isNew) {
+      entries.push({ action: 'إنشاء ملف مراجعة وزارة', recordId: recId, field: '-', oldVal: '-',
+        newVal: (f.fileNo ? 'ملف رقم ' + f.fileNo : 'بدون رقم ملف') + ' — ' + (f.clientLabel || '') + ' — ' + f.company });
+    } else {
+      Object.keys(MF_FIELD_LABELS_).forEach(function(k) {
+        var a = old[k], b = f[k];
+        if (k === 'breakdown' || k === 'sups' || k === 'selected') { a = JSON.stringify(a || []); b = JSON.stringify(b || []); }
+        if (k === 'approved') { a = a ? 'معتمد' : 'غير معتمد'; b = b ? 'معتمد' : 'غير معتمد'; }
+        if (String(a == null ? '' : a) === String(b == null ? '' : b)) return;
+        entries.push({ action: 'تعديل ملف مراجعة وزارة', recordId: recId, field: MF_FIELD_LABELS_[k],
+          oldVal: String(a == null || a === '' ? '-' : a).slice(0, 300),
+          newVal: String(b == null || b === '' ? '-' : b).slice(0, 300) });
+      });
+      // سحب رسوم الغرفة يتم عند تسجيل تاريخ المراجعة
+      if (!_mfStr_(old.reviewDate) && _mfStr_(f.reviewDate)) {
+        entries.push({ action: 'سحب رسوم غرفة', recordId: recId, field: 'رصيد ' + f.company,
+          oldVal: '-', newVal: _mfCompute_(f).totalRoomFee + ' ج عند تسجيل تاريخ المراجعة ' + f.reviewDate });
+      }
+    }
+    if (entries.length) logChangesBatch_(session.username, entries);
+
+    var allAfter = _mfReadAll_();
+    var balances = _mfBalances_(allAfter, _mfReadReceipts_());
+    f.calc = _mfCompute_(f);
+    f.flags = _mfRules_(f, allAfter, balances);
+    return { success: true, file: f, balances: balances };
+  } finally { lock.releaseLock(); }
+}
+
+function deleteMinistryFile(authToken, id) {
+  var session = _mfPerm_(authToken, 'delete');
+  var sh = _accSheet_(MF_SHEET, MF_HEADERS);
+  var hit = _mfReadAll_().filter(function(x) { return x.id === _mfStr_(id); })[0];
+  if (!hit) return { success: false, error: 'الملف غير موجود' };
+  sh.deleteRow(hit._row);
+  SpreadsheetApp.flush();
+  logChange_(session.username, 'حذف ملف مراجعة وزارة', 'MF:' + hit.id, '-',
+    (hit.fileNo ? 'ملف رقم ' + hit.fileNo : 'بدون رقم') + ' — ' + hit.clientLabel, '-');
+  return { success: true };
+}
+
+// سجل تعديلات ملف واحد
+function getMinistryFileHistory(authToken, id) {
+  _mfPerm_(authToken, 'view');
+  var sh = ensureAuditLogSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return { success: true, entries: [] };
+  var vals = sh.getRange(2, 1, last - 1, 7).getValues();
+  var key = 'MF:' + _mfStr_(id);
+  var tz = Session.getScriptTimeZone() || 'Asia/Riyadh';
+  var out = [];
+  for (var i = vals.length - 1; i >= 0; i--) {
+    if (_mfStr_(vals[i][3]) !== key) continue;
+    var ts = vals[i][0];
+    out.push({
+      when: (ts instanceof Date) ? Utilities.formatDate(ts, tz, 'dd/MM/yyyy HH:mm:ss') : _mfStr_(ts),
+      who: _mfStr_(vals[i][1]), action: _mfStr_(vals[i][2]),
+      field: _mfStr_(vals[i][4]), oldVal: _mfStr_(vals[i][5]), newVal: _mfStr_(vals[i][6])
+    });
+  }
+  return { success: true, entries: out };
+}
+
+// 🔗 ربط شاشة الرحلات: أي رحلة مرتبطة بملف مراجعة + الرحلات التي تسافر خلال 3 أيام ولم تُراجع
+function getMinistryTripLinks(authToken) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'ministry.view') && !_sessionHasPerm_(session, 'trips.view')) {
+    return { success: true, links: {}, alerts: [] };
+  }
+  var files = _mfReadAll_();
+  var links = {}, alerts = [];
+  var todayMs = _mfMs_(_mfToday_());
+  files.forEach(function(f) {
+    var t = _mfStr_(f.tripName);
+    if (!t) return;
+    if (!links[t]) links[t] = [];
+    links[t].push({ id: f.id, fileNo: f.fileNo, reviewDate: f.reviewDate,
+      reviewed: !!_mfStr_(f.reviewDate), approved: f.approved, pilgrims: f.pilgrims });
+  });
+  files.forEach(function(f) {
+    if (_mfStr_(f.reviewDate)) return;
+    var g = _mfMs_(_mfStr_(f.goDate));
+    if (isNaN(g)) return;
+    var days = Math.ceil((g - todayMs) / 86400000);
+    if (days <= 3 && days >= 0) {
+      alerts.push({ id: f.id, tripName: f.tripName, client: f.clientLabel, goDate: f.goDate,
+        days: days, linked: !!_mfStr_(f.tripName), fileNo: f.fileNo });
+    }
+  });
+  return { success: true, links: links, alerts: alerts };
 }
