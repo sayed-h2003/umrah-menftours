@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>طباعة إشعار رحلة العمرة</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      padding: 25px;
+      direction: rtl;
+    }
+
+    /* إطار الصفحة فقط — التصميم الداخلي بالكامل (رأس، جداول، ألوان) يأتي جاهزاً
+       من buildBookingNoticeHtml_ في Code.gs بأنماط inline، وهو نفس المصدر المستخدم في المشاركة */
+    .report-container {
+      width: 210mm;
+      min-height: 297mm;
+      margin: auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .debug-box {
+      background: #f1f5f9;
+      border-right: 4px solid #ef4444;
+      padding: 15px;
+      margin: 15px 0;
+      font-family: monospace;
+      font-size: 13px;
+      direction: ltr;
+      text-align: left;
+      white-space: pre-wrap;
+    }
+
+    @media print {
+      html, body {
+        width: 210mm;
+        height: 297mm;
+        background: white;
+        margin: 0;
+        padding: 0;
+      }
+      body { zoom: 92%; }
+      .report-container {
+        width: 100%;
+        max-width: 100%;
+        box-shadow: none;
+        border-radius: 0;
+        margin: 0;
+        overflow: visible;
+      }
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+
+<div class="report-container" id="reportContent"><?!= reportHtml ?></div>
+
+<style>
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<script>
+
+function showDebugError(msg) {
+  var container = document.getElementById("reportContent");
+  container.innerHTML =
+    '<div class="debug-box">❌ ' + msg + '</div>';
+}
+
+var bookingId = null;
+var isInvalidLink = false;
+
+try {
+  isInvalidLink = <?!= JSON.stringify(invalidLink) ?>;
+  bookingId = <?!= JSON.stringify(id) ?>;
+  if (typeof bookingId === 'string') {
+    bookingId = bookingId.replace(/["']/g, '').trim();
+  }
+} catch(e) {
+  showDebugError("فشل استلام رقم الإشعار: " + e.message);
+}
+
+if (isInvalidLink || !bookingId) {
+
+  showDebugError("هذا الرابط غير صالح أو منتهي الصلاحية. يرجى طلب رابط جديد من النظام.");
+
+} else {
+
+  // البيانات مبنية بالفعل سيرفر-سايد داخل reportContent — نضبط فقط اسم الملف وننفّذ الطباعة
+  var titleTag = document.querySelector('title');
+  var pageTitle = titleTag ? titleTag.textContent : '';
+
+  setTimeout(function () {
+    window.focus();
+    window.print();
+  }, 1200);
+
+}
+
+</script>
+</body>
+</html>
