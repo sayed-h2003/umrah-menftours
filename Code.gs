@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.107";
+var APP_VERSION = "4.108";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6201,14 +6201,34 @@ function deleteUserAccount(authToken, targetRow, expectedUsername) {
 
 
 function updateUserPermissions(authToken, targetRow, newPermissions) {
-  requireAdminPermission_(authToken);
+  var session = requireAdminPermission_(authToken);
   if (!targetRow) throw new Error("بيانات غير مكتملة");
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Users");
   _clearUsersPermsValidation_(sheet); // إزالة قاعدة التحقق القديمة التي ترفض رموز الصلاحيات الجديدة (screen.cap)
   sheet.getRange(targetRow, 5).setValue(newPermissions || "");
   clearAllCache();
+  // 🔄 (V4.108) لو الأدمن يعدّل صلاحيات حسابه هو نفسه، حدِّث جلسته النشطة فوراً بنفس التوكن —
+  // بدون هذا كانت الجلسة المفتوحة تحتفظ بالصلاحيات القديمة المخزَّنة وقت الدخول (CacheService)
+  // فتظل كل الشاشات المُضافة حديثاً تُظهر "لا تملك صلاحية" رغم نجاح الحفظ، حتى يخرج ويدخل من جديد.
+  var editedUsername = String(sheet.getRange(targetRow, 1).getValue() || "").trim();
+  if (editedUsername && editedUsername === session.username) {
+    _refreshSessionPermissions_(authToken, newPermissions || "");
+  }
   return { success: true };
+}
+
+// يحدّث حقل الصلاحيات داخل جلسة نشطة بعينها (بنفس رمزها) دون تغيير باقي بياناتها أو مدة انتهائها
+function _refreshSessionPermissions_(token, newPermissions) {
+  if (!token) return;
+  var cache = CacheService.getScriptCache();
+  var raw = cache.get('session_' + token);
+  if (!raw) return;
+  try {
+    var s = JSON.parse(raw);
+    s.permissions = newPermissions;
+    cache.put('session_' + token, JSON.stringify(s), SESSION_DURATION_SECONDS);
+  } catch (e) {}
 }
 
 // يغيّر اسم مستخدم موجود (العمود A) — صلاحية admin فقط، مع منع الفراغ والتكرار.
@@ -20121,4 +20141,120 @@ function getMinistryTripLinks(authToken) {
     }
   });
   return { success: true, links: links, alerts: alerts };
+}
+
+/* ==================================================================================
+   🏛️ (V4.108) استخلاص إيصالات رسوم الغرفة بالذكاء الاصطناعي (دفعة واحدة، صور/PDF)
+   يعتمد نفس نمط استخلاص اتفاقيات الإعاشة (extractCateringContract) — Gemini vision،
+   مع تحويل تلقائي للأرقام العربية ومطابقة الشركة عبر رقم الترخيص (كود العميل بالإيصال).
+   ================================================================================== */
+function extractRoomFeeReceiptImage(authToken, base64Data, mimeType) {
+  _mfPerm_(authToken, 'add');
+  if (!base64Data) return { success: false, error: 'لا يوجد ملف' };
+  var GKEYS = _geminiKeys_();
+  if (!GKEYS.length) return { success: false, error: 'مفتاح Gemini غير مُعدّ' };
+
+  var prompt =
+    "This is an Egyptian bank cash-deposit receipt (إيصال إيداع نقدية), typically Banque Misr format. " +
+    "Extract these Arabic-labelled fields exactly as printed: " +
+    "'الرقم المرجعى' (reference number) -> receiptNo. " +
+    "'كود العميل' (customer/client code, a short numeric code identifying the company) -> licence. " +
+    "'المبلغ بالارقام' (amount in digits) -> amount (digits only, no commas). " +
+    "'التاريخ' (date, may include time like '12:12PM') -> date (dd/mm/yyyy) and time (e.g. '12:12 PM'). " +
+    "'اسم المودع' (depositor's name) -> depositor. " +
+    "'المودع لحساب شركة' or 'المودع لحساب' (company name if printed) -> companyNamePrinted. " +
+    "Return ONLY pure JSON, no markdown:\n" +
+    '{"receiptNo":"","licence":"","amount":"","date":"","time":"","depositor":"","companyNamePrinted":""}\n' +
+    "Numbers must be Latin digits only (convert Arabic-Indic ٠-٩ to 0-9). Empty string if a field is unreadable.";
+
+  var payload = { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType || 'image/jpeg', data: base64Data } }] }] };
+  var MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
+  var rawText = '', lastErr = '';
+  for (var ki = 0; ki < GKEYS.length && !rawText; ki++) {
+    for (var mi = 0; mi < MODELS.length; mi++) {
+      var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki];
+      var resp = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+      var httpCode = resp.getResponseCode();
+      var jsonRes = null;
+      try { jsonRes = JSON.parse(resp.getContentText()); } catch (pe) { jsonRes = null; }
+      if (httpCode === 200 && jsonRes && jsonRes.candidates && jsonRes.candidates.length && jsonRes.candidates[0].content) {
+        rawText = jsonRes.candidates[0].content.parts[0].text || '';
+        break;
+      }
+      lastErr = (jsonRes && jsonRes.error && jsonRes.error.message) ? jsonRes.error.message : ('HTTP ' + httpCode);
+      if (httpCode === 401 || httpCode === 403) break;
+    }
+  }
+  if (!rawText) return { success: false, error: lastErr || 'تعذّر الاتصال بالذكاء الاصطناعي' };
+
+  var text = rawText.replace(/```json|```/g, '').trim();
+  var m = text.match(/\{[\s\S]*\}/);
+  if (m) text = m[0];
+  var d;
+  try { d = JSON.parse(text); } catch (e) { return { success: false, error: 'رد غير صالح من الذكاء الاصطناعي' }; }
+
+  var out = {
+    receiptNo: _mfStr_(d.receiptNo), licence: _mfStr_(d.licence).replace(/\D/g, ''),
+    amount: _mfNum_(d.amount), date: _mfDate_(d.date), time: _mfStr_(d.time), depositor: _mfStr_(d.depositor)
+  };
+  if (!out.amount) return { success: false, error: 'تعذّر قراءة المبلغ من الإيصال' };
+
+  var comp = null;
+  try {
+    var ash = getSpreadsheet_().getSheetByName('Agents_Settings');
+    if (ash && ash.getLastRow() > 1 && out.licence) {
+      var av = ash.getRange(2, 1, ash.getLastRow() - 1, Math.max(4, ash.getLastColumn())).getValues();
+      for (var i = 0; i < av.length; i++) { if (_mfStr_(av[i][3]) === out.licence) { comp = _mfStr_(av[i][1]); break; } }
+    }
+  } catch (e) {}
+  out.company = comp || '';
+  return { success: true, data: out };
+}
+
+/* ==================================================================================
+   🏛️ (V4.108) استيراد ملفات مراجعة قديمة من إكسيل (للأدمن فقط)
+   التحليل يتم في المتصفح (SheetJS)، هذه الدالة فقط تُدرج السجلات — بلا ربط برحلة
+   (يتم لاحقاً يدوياً من الشاشة). كل صف يُعلَّم في الملاحظات بأنه مستورد.
+   ================================================================================== */
+function importMinistryFilesBatch(authToken, rows) {
+  var session = requireAdminPermission_(authToken);
+  rows = Array.isArray(rows) ? rows : [];
+  if (!rows.length) return { success: false, error: 'لا توجد صفوف صالحة للاستيراد' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); }
+  catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  try {
+    var sh = _accSheet_(MF_SHEET, MF_HEADERS);
+    var out = [];
+    var now = _mfStamp_();
+    rows.forEach(function (r) {
+      var pilgrims = _mfNum_(r.pilgrims), supCount = _mfNum_(r.supCount);
+      var clientLabel = _mfStr_(r.clientLabel) || ('مستورد — ملف ' + _mfStr_(r.fileNo));
+      var breakdown = pilgrims ? [{ name: clientLabel, count: pilgrims, sups: supCount, note: 'مستورد من إكسيل — يحتاج ربط يدوي بالرحلة' }] : [];
+      var sups = _mfStr_(r.supName) ? [{ name: _mfStr_(r.supName), type: 'مرافق', directTo: '' }] : [];
+      var pct = _mfNum_(r.pct);
+      if (pct && pct < 1) pct = pct * 100; // النسبة بالملف الأصلي كسر عشري (0.03) — نخزّنها كنسبة مئوية (3)
+      var f = {
+        id: _accId_('MF'), seq: _mfNextSeq_(), fileNo: _mfStr_(r.fileNo),
+        approved: !!r.approved, eInvoice: _mfStr_(r.eInvoice), ref: _mfStr_(r.ref),
+        company: _mfStr_(r.company), agent: _mfStr_(r.agent),
+        reviewDate: _mfDate_(r.reviewDate), reviewType: 'عادية', vipReason: '',
+        travelMode: _mfStr_(r.travelMode) || 'طيران',
+        clientLabel: clientLabel, breakdown: breakdown, tripName: '',
+        goDate: _mfDate_(r.goDate), retDate: _mfDate_(r.retDate),
+        pilgrims: pilgrims, supCount: supCount, sups: sups,
+        progPrice: _mfNum_(r.progPrice), ticket: _mfNum_(r.ticket), roomFee: _mfNum_(r.roomFee),
+        adminFee: _mfNum_(r.adminFee), pct: pct, fxRate: _mfNum_(r.fxRate),
+        madinahHotel: _mfStr_(r.madinahHotel), madinahIn: _mfDate_(r.madinahIn), madinahOut: _mfDate_(r.madinahOut),
+        makkahHotel: _mfStr_(r.makkahHotel), makkahIn: _mfDate_(r.makkahIn), makkahOut: _mfDate_(r.makkahOut),
+        transport: _mfStr_(r.transport), notes: (_mfStr_(r.notes) ? _mfStr_(r.notes) + ' — ' : '') + '📤 مستورد من إكسيل قديم — بحاجة لربط يدوي بالرحلة',
+        selected: [], createdBy: session.username, createdAt: now, updatedBy: session.username, updatedAt: now
+      };
+      out.push(_mfObjToRow_(f));
+    });
+    if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, MF_HEADERS.length).setValues(out);
+    SpreadsheetApp.flush();
+    logChange_(session.username, 'استيراد ملفات مراجعة من إكسيل', '-', 'عدد الصفوف', '-', String(out.length));
+    return { success: true, imported: out.length };
+  } finally { lock.releaseLock(); }
 }

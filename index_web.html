@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.107 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.108 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.107)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.108)', diag);
 }, 6000);
 </script>
 
@@ -1491,7 +1491,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.107</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.108</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4669,6 +4669,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="mf-btn" onclick="mfExportPdf()">📄 PDF</button>
       <button class="mf-btn" onclick="mfExportImage(this)">📸 صورة HD</button>
       <button class="mf-btn" onclick="mfLoad(true)">🔄 تحديث</button>
+      <button class="mf-btn" id="mfImportBtn" style="display:none;" onclick="mfOpenImport()">📤 استيراد ملفات قديمة (إكسيل)</button>
     </div>
 
     <div id="mfAlerts"></div>
@@ -4676,7 +4677,7 @@ input[type="date"]:not(:focus):not(:valid) {
     <div class="mf-bar mb-2">
       <div class="d-flex align-items-end gap-2 flex-wrap">
         <div class="mf-fld" style="flex:1 1 170px;"><label>بحث شامل</label>
-          <input id="mfSearch" placeholder="ابحث في كل الأعمدة..." autocomplete="off"></div>
+          <input id="mfSearch" placeholder="ابحث في كل الأعمدة أو باسم معتمر/رقم جوازه..." autocomplete="off" title="يبحث أيضاً بأسماء وأرقام جوازات معتمري الرحلة المرتبطة بكل ملف"></div>
         <div class="mf-fld"><label>رقم الملف</label><input id="mfF_fileNo" autocomplete="off"></div>
         <div class="mf-fld"><label>الشركة المصرية</label><input id="mfF_company" autocomplete="off"></div>
         <div class="mf-fld"><label>الوكيل السعودي</label><input id="mfF_agent" autocomplete="off"></div>
@@ -6184,7 +6185,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.107";
+var CLIENT_APP_VERSION = "4.108";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -19650,6 +19651,14 @@ function saveEditedPermissions() {
         alert('تعذر حفظ الصلاحيات: ' + (res && res.error ? res.error : 'خطأ غير معروف'));
         return;
       }
+      // 🔄 (V4.108) لو المستخدم يعدّل صلاحيات حسابه هو نفسه، حدِّث window.currentUser فوراً وأعد رسم
+      // القائمة الجانبية — بدون هذا كانت الشاشات المُضافة حديثاً (مثل مراجعة ملفات الوزارة) تبقى
+      // "لا تملك صلاحية" في نفس الجلسة رغم نجاح الحفظ سيرفرياً، حتى تسجيل خروج ودخول من جديد.
+      if (window.currentUser && window.currentUser.username === editPermsOriginalUsername) {
+        window.currentUser.permissions = permissions;
+        delete window.currentUser._permSet; // hasPermission() يخزّن مجموعة الصلاحيات محسوبة مرة واحدة على الكائن
+        if (typeof toggleAdminOnlyLinks_ === 'function') toggleAdminOnlyLinks_();
+      }
       if (!usernameChanged) { _saveFullNameThenFinish(); return; }
       // تغيير اسم المستخدم ثم الاسم الكامل
       google.script.run
@@ -32164,6 +32173,19 @@ function mfInit() {
   else { mfRender(); }
   mfAttachDateInputs();
   mfAttachTypeaheads();
+  mfWarmPilgrimSearch();
+  var ib = document.getElementById('mfImportBtn');
+  if (ib) ib.style.display = hasPermission('admin') ? '' : 'none';
+}
+// 🔎 (V4.108) يحمّل السجل العام للمعتمرين بالخلفية (لو لم يكن محمَّلاً) — يتيح للبحث الشامل بهذه
+// الشاشة إيجاد الملف حسب اسم المعتمر أو رقم جوازه عبر مطابقة رحلته المرتبطة
+function mfWarmPilgrimSearch() {
+  if ((window._registryCache || []).length || window._mfRegLoading) return;
+  window._mfRegLoading = true;
+  google.script.run
+    .withSuccessHandler(function (r) { window._mfRegLoading = false; window._registryCache = (r && r.pilgrims) || []; mfRender(); })
+    .withFailureHandler(function () { window._mfRegLoading = false; })
+    .getGlobalPilgrimsRegistry(window.authToken);
 }
 function mfLoad(force) {
   var wrap = document.getElementById('mfTableWrap');
@@ -32191,12 +32213,20 @@ function mfLoad(force) {
 
 /* ---------- التصفية والفرز ---------- */
 function mfFV(id) { var e = document.getElementById(id); return e ? mfStr(e.value) : ''; }
+// 🔎 (V4.108) هل توجد أسماء/جوازات معتمرين مطابقة ضمن معتمري رحلة هذا الملف؟ — يعتمد على
+// window._registryCache (السجل العام للمعتمرين) الذي تُحمِّله mfWarmPilgrimSearch عند فتح الشاشة
+function mfPilgrimMatches(f, q) {
+  if (!f.tripName || !(window._registryCache || []).length) return false;
+  return window._registryCache.some(function (r) {
+    return r.client === f.tripName && ((r.name || '').toLowerCase().indexOf(q) >= 0 || (r.passport || '').toLowerCase().indexOf(q) >= 0);
+  });
+}
 function mfMatch(f) {
   var q = mfFV('mfSearch').toLowerCase();
   if (q) {
     var hay = [f.fileNo, f.company, f.agent, f.clientLabel, f.tripName, f.ref, f.eInvoice,
       mfRaw('supNames', f), f.madinahHotel, f.makkahHotel, f.transport, f.notes].join(' ').toLowerCase();
-    if (hay.indexOf(q) < 0) return false;
+    if (hay.indexOf(q) < 0 && !mfPilgrimMatches(f, q)) return false;
   }
   var pairs = [['mfF_fileNo', 'fileNo'], ['mfF_company', 'company'], ['mfF_agent', 'agent'],
     ['mfF_clientLabel', 'clientLabel'], ['mfF_madinahHotel', 'madinahHotel'], ['mfF_makkahHotel', 'makkahHotel']];
@@ -33671,12 +33701,201 @@ function mfRecFromBank() {
     'حقل «<b style="color:#2563eb;">التاريخ</b>» ← <b>تاريخ وساعة الإيداع</b><br>' +
     'حقل «<b style="color:#2563eb;">اسم المودع</b>» ← <b>اسم المودع</b>' +
     '</div>' +
-    '<div class="mt-2" style="font-size:11.5px;">ألصق نص الإيصال (أو اكتب الحقول) وسيُستخلص تلقائياً بلا ذكاء اصطناعي:</div>' +
-    '<textarea id="mfBankText" class="form-control form-control-sm mt-1" rows="7" placeholder="ألصق نص الإيصال هنا..."></textarea>' +
+    '<div class="mt-2 mb-1" style="font-size:11.5px;font-weight:800;">📎 ارفع عدة إيصالات دفعة واحدة (صور أو PDF) — يُستخلص كل إيصال تلقائياً بالذكاء الاصطناعي:</div>' +
+    '<input type="file" id="mfBankFiles" class="form-control form-control-sm" accept="image/*,.pdf" multiple onchange="mfBankFilesPicked(this.files)">' +
+    '<div id="mfBankQueue" class="mt-2"></div>' +
+    '<hr class="my-2">' +
+    '<div style="font-size:11.5px;">أو ألصق نص الإيصال يدوياً (بلا ذكاء اصطناعي):</div>' +
+    '<textarea id="mfBankText" class="form-control form-control-sm mt-1" rows="4" placeholder="ألصق نص الإيصال هنا..."></textarea>' +
     '<div id="mfBankOut" class="mt-2"></div>';
   mfModal('📷 استخلاص من إيصال البنك', h,
     '<div style="flex:1;"></div><button class="mf-btn" onclick="mfOpenReceipts()">إلغاء</button>' +
-    '<button class="mf-btn pri" onclick="mfBankParse()">🔎 استخلاص</button>', 700);
+    '<button class="mf-btn pri" onclick="mfBankParse()">🔎 استخلاص النص الملصق</button>', 760);
+}
+
+/* ---------- استخلاص عدة إيصالات دفعة واحدة (صور/PDF) بالذكاء الاصطناعي ---------- */
+function mfBankFilesPicked(files) {
+  if (!files || !files.length) return;
+  var arr = Array.prototype.slice.call(files);
+  MF._bankQueue = arr.map(function (f) { return { file: f, status: 'pending', data: null, err: '' }; });
+  mfBankQueueRender();
+  mfBankQueueRun(0);
+}
+function mfBankQueueRender() {
+  var box = document.getElementById('mfBankQueue'); if (!box) return;
+  var q = MF._bankQueue || [];
+  var done = q.filter(function (x) { return x.status === 'ok' || x.status === 'error'; }).length;
+  var h = '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">جاري الاستخلاص — ' + done + ' من ' + q.length + ' ملفات</div>';
+  q.forEach(function (x, i) {
+    var icon = x.status === 'pending' ? '⏳' : (x.status === 'ok' ? '✅' : (x.status === 'error' ? '❌' : '⏳'));
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:11px;background:#fff;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:4px;">' +
+      '<span>' + icon + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + mfEsc(x.file.name) + '</span>' +
+      (x.status === 'ok' ? ('<span class="mf-latin" style="color:#0e9f6e;font-weight:700;">' + mfFmt(x.data.amount) + ' — ' + mfEsc(x.data.company || 'بلا شركة مطابقة') + '</span>') : '') +
+      (x.status === 'error' ? ('<span style="color:#dc2626;">' + mfEsc(x.err) + '</span>') : '') + '</div>';
+  });
+  if (done === q.length && q.length) {
+    var ok = q.filter(function (x) { return x.status === 'ok'; });
+    if (ok.length) {
+      h += '<table class="mf-mini" style="background:#fff;margin-top:6px;"><thead><tr><th>الملف</th><th>رقم الإيصال</th><th>الشركة</th><th>المبلغ</th><th>التاريخ</th></tr></thead><tbody>';
+      ok.forEach(function (x, i) {
+        h += '<tr><td>' + mfEsc(x.file.name) + '</td><td class="mf-latin">' + mfEsc(x.data.receiptNo || '—') + '</td>' +
+          '<td>' + (x.data.company ? mfEsc(x.data.company) : '<span style="color:#dc2626;">غير مطابقة</span>') + '</td>' +
+          '<td class="mf-latin">' + mfFmt(x.data.amount) + '</td><td class="mf-latin">' + mfEsc(x.data.date || '—') + '</td></tr>';
+      });
+      h += '</tbody></table><button class="mf-btn pri mt-2" onclick="mfBankQueueSaveAll()">💾 حفظ كل الإيصالات المستخلَصة (' + ok.length + ')</button>';
+    }
+  }
+  box.innerHTML = h;
+}
+function mfBankQueueRun(i) {
+  var q = MF._bankQueue || [];
+  if (i >= q.length) return;
+  var item = q[i];
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var base64 = String(e.target.result).split(',')[1] || '';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success) { item.status = 'ok'; item.data = res.data; }
+        else { item.status = 'error'; item.err = (res && res.error) || 'تعذّر الاستخلاص'; }
+        mfBankQueueRender();
+        mfBankQueueRun(i + 1);
+      })
+      .withFailureHandler(function (err) {
+        item.status = 'error'; item.err = err && err.message ? err.message : String(err);
+        mfBankQueueRender();
+        mfBankQueueRun(i + 1);
+      })
+      .extractRoomFeeReceiptImage(window.authToken, base64, item.file.type || 'image/jpeg');
+  };
+  reader.onerror = function () { item.status = 'error'; item.err = 'تعذّر قراءة الملف'; mfBankQueueRender(); mfBankQueueRun(i + 1); };
+  reader.readAsDataURL(item.file);
+}
+function mfBankQueueSaveAll() {
+  var ok = (MF._bankQueue || []).filter(function (x) { return x.status === 'ok'; });
+  if (!ok.length) return;
+  var writes = ok.map(function (x) { return {
+    receiptNo: x.data.receiptNo || ('AI' + Date.now() + Math.floor(Math.random() * 1000)),
+    date: x.data.date, time: x.data.time, company: x.data.company, licence: x.data.licence,
+    amount: x.data.amount, depositor: x.data.depositor, source: 'إيصال بنك (AI)', notes: 'مستخلَص من ' + x.file.name
+  }; });
+  var i = 0, saved = 0, failed = 0;
+  function next() {
+    if (i >= writes.length) {
+      _showPopup('تم حفظ ' + saved + ' إيصال' + (failed ? (' — فشل ' + failed) : ''), failed ? 'error' : 'success');
+      mfLoad(true); setTimeout(mfOpenReceipts, 600);
+      return;
+    }
+    var w = writes[i++];
+    google.script.run
+      .withSuccessHandler(function (res) { if (res && res.success) saved++; else failed++; next(); })
+      .withFailureHandler(function () { failed++; next(); })
+      .saveRoomFeeReceipt(window.authToken, w);
+  }
+  next();
+}
+
+/* ---------- استيراد ملفات مراجعة قديمة من إكسيل (أدمن فقط) ----------
+   يعتمد المكتبة XLSX (SheetJS) المحمَّلة بالفعل بالتطبيق. التحليل بالكامل في المتصفح؛
+   يُطابق أعمدة نفس بنية ملف "ملفات عمرة 1448هـ" الأصلي (A إلى AM) بالموضع. */
+var MF_IMPORT_MAP = [
+  ['eInvoice', 0], ['ref', 2], ['company', 5], ['agent', 6], ['fileNo', 7],
+  ['reviewDate', 8], ['travelMode', 9], ['clientLabel', 10], ['goDate', 11], ['retDate', 12],
+  ['pilgrims', 13], ['supCount', 14], ['progPrice', 15], ['ticket', 17], ['roomFee', 18],
+  ['adminFee', 19], ['fxRate', 21], ['pct', 28], ['madinahHotel', 29], ['madinahIn', 30],
+  ['madinahOut', 31], ['makkahHotel', 32], ['makkahIn', 33], ['makkahOut', 34],
+  ['transport', 35], ['supName', 36], ['notes', 38]
+];
+function mfOpenImport() {
+  if (!hasPermission('admin')) { _showPopup('هذه الميزة للأدمن فقط', 'error'); return; }
+  var h = '<div class="mf-note info">📤<div>يستورد ملفات مراجعة قديمة من إكسيل بنفس بنية ملف "ملفات عمرة" الأصلي (الأعمدة A إلى AM). ' +
+    '<b>الملفات المستوردة تُحفظ غير مرتبطة بأي رحلة</b> — تربطها يدوياً لاحقاً من نموذج تعديل كل ملف.</div></div>' +
+    '<div class="row g-2 mt-1 mb-2">' +
+    mfFld('ملف الإكسيل', '<input type="file" id="mfImpFile" class="form-control form-control-sm" accept=".xlsx,.xls" onchange="mfImportPreview()">', 8) +
+    mfFld('يبدأ التحليل من الصف رقم', '<input class="form-control form-control-sm" id="mfImpStart" value="4" onchange="mfImportPreview()">', 4) +
+    '</div><div id="mfImpOut"></div>';
+  mfModal('📤 استيراد ملفات مراجعة قديمة من إكسيل', h,
+    '<span id="mfImpCnt" style="font-size:11.5px;font-weight:700;"></span><div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
+    '<button class="mf-btn pri" id="mfImpGoBtn" style="display:none;" onclick="mfImportGo()">📤 استيراد الصفوف الصالحة</button>', 900);
+}
+function mfImportPreview() {
+  var finp = document.getElementById('mfImpFile');
+  var out = document.getElementById('mfImpOut');
+  if (!finp.files || !finp.files.length) { out.innerHTML = ''; return; }
+  if (typeof XLSX === 'undefined') { out.innerHTML = '<div class="alert alert-danger small">مكتبة قراءة الإكسيل غير محمَّلة</div>'; return; }
+  out.innerHTML = '<div class="text-muted small p-2">⏳ جاري قراءة الملف…</div>';
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+      var start = Math.max(0, (mfNum(document.getElementById('mfImpStart').value) || 4) - 1);
+      MF._impRows = [];
+      for (var i = start; i < aoa.length; i++) {
+        var row = aoa[i];
+        if (!row || !row.length) continue;
+        var get = function (idx) { return row[idx] === undefined ? '' : row[idx]; };
+        var toDate = function (v) {
+          if (v instanceof Date) return mfDate(v.getDate() + '/' + (v.getMonth() + 1) + '/' + v.getFullYear());
+          return mfDate(v);
+        };
+        var obj = {};
+        MF_IMPORT_MAP.forEach(function (p) {
+          var v = get(p[1]);
+          obj[p[0]] = /Date|In$|Out$/.test(p[0]) ? v : v;
+        });
+        ['reviewDate', 'goDate', 'retDate', 'madinahIn', 'madinahOut', 'makkahIn', 'makkahOut'].forEach(function (k) {
+          obj[k] = toDate(obj[k]);
+        });
+        ['pilgrims', 'supCount', 'progPrice', 'ticket', 'roomFee', 'adminFee', 'fxRate', 'pct'].forEach(function (k) {
+          obj[k] = mfNum(obj[k]);
+        });
+        obj.company = mfStr(obj.company); obj.fileNo = mfStr(obj.fileNo); obj.clientLabel = mfStr(obj.clientLabel);
+        if (!obj.company && !obj.fileNo && !obj.clientLabel) continue; // صف فارغ
+        MF._impRows.push(obj);
+      }
+      mfImportRenderPreview();
+    } catch (err) {
+      out.innerHTML = '<div class="alert alert-danger small">❌ تعذّر قراءة الملف: ' + escapeHtml_(err.message || err) + '</div>';
+    }
+  };
+  reader.readAsBinaryString(finp.files[0]);
+}
+function mfImportRenderPreview() {
+  var rows = MF._impRows || [];
+  var out = document.getElementById('mfImpOut');
+  document.getElementById('mfImpCnt').textContent = rows.length ? ('عُثر على ' + rows.length + ' صف صالح') : '';
+  document.getElementById('mfImpGoBtn').style.display = rows.length ? '' : 'none';
+  if (!rows.length) { out.innerHTML = '<div class="alert alert-warning small">لم يُعثر على صفوف صالحة — جرّب تغيير رقم صف البداية.</div>'; return; }
+  var h = '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">معاينة أول 8 صفوف من ' + rows.length + ':</div>' +
+    '<div style="max-height:280px;overflow:auto;border:1px solid #e2e8f0;border-radius:9px;">' +
+    '<table class="mf-mini" style="background:#fff;"><thead><tr><th>رقم الملف</th><th>الشركة</th><th>العميل</th>' +
+    '<th>تاريخ المراجعة</th><th>معتمرين</th><th>مشرفين</th><th>المشرف</th></tr></thead><tbody>';
+  rows.slice(0, 8).forEach(function (r) {
+    h += '<tr><td class="mf-latin">' + mfEsc(r.fileNo || '—') + '</td><td>' + mfEsc(r.company || '—') + '</td>' +
+      '<td>' + mfEsc(r.clientLabel || '—') + '</td><td class="mf-latin">' + mfEsc(r.reviewDate || '—') + '</td>' +
+      '<td class="mf-latin">' + mfEsc(r.pilgrims || 0) + '</td><td class="mf-latin">' + mfEsc(r.supCount || 0) + '</td>' +
+      '<td>' + mfEsc(r.supName || '—') + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  out.innerHTML = h;
+}
+function mfImportGo() {
+  var rows = MF._impRows || [];
+  if (!rows.length) return;
+  var btn = document.getElementById('mfImpGoBtn');
+  btn.disabled = true; btn.textContent = '⏳ جاري الاستيراد…';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      btn.disabled = false; btn.textContent = '📤 استيراد الصفوف الصالحة';
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الاستيراد', 'error'); return; }
+      _showPopup('تم استيراد ' + res.imported + ' ملف — اربطها يدوياً بالرحلات من نموذج التعديل', 'success');
+      mfCloseModal(); mfLoad(true);
+    })
+    .withFailureHandler(function (e) { btn.disabled = false; btn.textContent = '📤 استيراد الصفوف الصالحة'; _showPopup(e && e.message ? e.message : e, 'error'); })
+    .importMinistryFilesBatch(window.authToken, rows);
 }
 function mfBankParse() {
   var t = mfLatin(document.getElementById('mfBankText').value || '');
