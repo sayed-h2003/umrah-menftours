@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.109 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.110 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.109)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.110)', diag);
 }, 6000);
 </script>
 
@@ -1491,7 +1491,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.109</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.110</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2384,6 +2384,11 @@ input[type="date"]:not(:focus):not(:valid) {
               <input type="hidden" id="companyLogoUrl" value="">
               <div id="companyLogoPreview" class="mt-1"></div>
             </div>
+            <!-- 🏛️ (V4.106) رقم الترخيص — يُطابق به إيصال البنك بشاشة مراجعة ملفات الوزارة تلقائياً -->
+            <div class="col-md-4">
+              <label class="form-label small fw-bold">رقم الترخيص <span class="text-muted fw-normal">(لمطابقة إيصالات رسوم الغرفة تلقائياً)</span></label>
+              <input id="companyLicenceInput" class="form-control form-control-sm" placeholder="كود العميل بإيصال البنك">
+            </div>
           </div>
           <div class="mt-3 d-flex gap-2">
             <button type="button" class="btn btn-primary btn-sm" onclick="submitCompanyForm()">حفظ</button>
@@ -2398,6 +2403,7 @@ input[type="date"]:not(:focus):not(:valid) {
                 <th style="width:70px;">الشعار</th>
                 <th>اسم الشركة</th>
                 <th>الوكيل السعودي</th>
+                <th style="width:110px;">رقم الترخيص</th>
                 <th style="width:120px;">إجراءات</th>
               </tr>
             </thead>
@@ -3459,7 +3465,10 @@ input[type="date"]:not(:focus):not(:valid) {
       <div class="modal-content" style="border:none; border-radius:10px; overflow:hidden;">
         <div class="modal-header" style="background:linear-gradient(135deg,#0f4c4c,#0c3d3d); color:#fff;">
           <h6 class="modal-title fw-bold">📊 إحصائية العملاء — <span id="tripClientStatsTripName"></span></h6>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-outline-light btn-sm" onclick="_tripClientStatsExportImage_(this)">📸 صورة HD</button>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
         </div>
         <div class="modal-body bg-light p-3" id="tripClientStatsArea">
           <div class="text-center p-5 text-muted">⏳ جاري تحميل بيانات المعتمرين...</div>
@@ -3554,6 +3563,8 @@ input[type="date"]:not(:focus):not(:valid) {
           <h6 class="modal-title fw-bold">🔗 تسكين مدموج: <span id="mhTitleLabel"></span></h6>
           <div class="d-flex gap-2">
             <button class="btn btn-success btn-sm" onclick="_mhSave_(this)">💾 حفظ الترتيب المدموج</button>
+            <button class="btn btn-outline-light btn-sm" onclick="_mhPrintCards_()">🖨️ طباعة</button>
+            <button class="btn btn-outline-light btn-sm" onclick="_mhSharePdf_(this)">📤 مشاركة PDF</button>
             <button class="btn btn-outline-light btn-sm" onclick="_mhExportImage_(this)">📸 صورة HD</button>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
           </div>
@@ -6185,7 +6196,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.109";
+var CLIENT_APP_VERSION = "4.110";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7317,6 +7328,7 @@ function showAddCompanyForm() {
   document.getElementById('companyNameInput').value = '';
   document.getElementById('companyAgentInput').value = '';
   document.getElementById('companyLogoUrl').value = '';
+  document.getElementById('companyLicenceInput').value = '';
   document.getElementById('companyLogoPreview').innerHTML = '';
   document.getElementById('addCompanyFormBox').classList.remove('d-none');
 }
@@ -7325,11 +7337,12 @@ function hideAddCompanyForm() {
   document.getElementById('addCompanyFormBox').classList.add('d-none');
 }
 
-function editCompany(row, agent, company, logoUrl) {
+function editCompany(row, agent, company, logoUrl, licence) {
   document.getElementById('companyEditRow').value = row;
   document.getElementById('companyNameInput').value = company || '';
   document.getElementById('companyAgentInput').value = agent || '';
   document.getElementById('companyLogoUrl').value = logoUrl || '';
+  document.getElementById('companyLicenceInput').value = licence || '';
   document.getElementById('companyLogoPreview').innerHTML = logoUrl
     ? '<img src="' + logoUrl + '" style="height:40px;border-radius:4px;">'
     : '';
@@ -7367,6 +7380,7 @@ function submitCompanyForm() {
   var company = document.getElementById('companyNameInput').value.trim();
   var agent = document.getElementById('companyAgentInput').value.trim();
   var logoUrl = document.getElementById('companyLogoUrl').value.trim();
+  var licence = document.getElementById('companyLicenceInput').value.trim();
 
   if (!company) {
     alert('اسم الشركة مطلوب');
@@ -7383,7 +7397,7 @@ function submitCompanyForm() {
     .withFailureHandler(function (err) {
       alert('تعذر الحفظ: ' + (err.message || err));
     })
-    .saveCompanySetting(window.authToken, row ? Number(row) : null, agent, company, logoUrl);
+    .saveCompanySetting(window.authToken, row ? Number(row) : null, agent, company, logoUrl, licence);
 }
 
 function deleteCompanyRow(row, company) {
@@ -7402,7 +7416,7 @@ function loadCompaniesTable() {
   google.script.run
     .withSuccessHandler(function (companies) {
       if (!companies || !companies.length) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">لا توجد شركات مسجّلة</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">لا توجد شركات مسجّلة</td></tr>';
         return;
       }
       tbody.innerHTML = companies.map(function (c) {
@@ -7413,15 +7427,16 @@ function loadCompaniesTable() {
           '<td>' + logoCell + '</td>' +
           '<td>' + c.company + '</td>' +
           '<td>' + (c.agent || '-') + '</td>' +
+          '<td>' + (c.licence ? '<code>' + c.licence + '</code>' : '<span class="text-muted small">-</span>') + '</td>' +
           '<td>' +
-          '<button class="btn btn-sm btn-outline-warning me-1" onclick=\'editCompany(' + c.row + ', ' + JSON.stringify(c.agent || '') + ', ' + JSON.stringify(c.company || '') + ', ' + JSON.stringify(c.logoUrl || '') + ')\'>✏️</button>' +
+          '<button class="btn btn-sm btn-outline-warning me-1" onclick=\'editCompany(' + c.row + ', ' + JSON.stringify(c.agent || '') + ', ' + JSON.stringify(c.company || '') + ', ' + JSON.stringify(c.logoUrl || '') + ', ' + JSON.stringify(c.licence || '') + ')\'>✏️</button>' +
           '<button class="btn btn-sm btn-outline-danger" onclick=\'deleteCompanyRow(' + c.row + ', ' + JSON.stringify(c.company || '') + ')\'>🗑️</button>' +
           '</td>' +
           '</tr>';
       }).join('');
     })
     .withFailureHandler(function (err) {
-      tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">تعذر التحميل: ' + (err.message || err) + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">تعذر التحميل: ' + (err.message || err) + '</td></tr>';
     })
     .getCompaniesSettings(window.authToken);
 }
@@ -9800,6 +9815,20 @@ function _clearTripsUrgentFilter() {
 function _clearTripsFieldFilter() {
   window._tripsFieldFilter = null;
   loadTripsList();
+}
+
+// 📸 (V4.110) حفظ/مشاركة إحصائية عملاء الرحلة كصورة HD — التقاط مباشر لنفس العنصر المعروض حياً
+// (نفس مسار _mhExportImage_ المُثبَت: بلا iframe، مباشرة على DOM الصفحة الحالية)
+function _tripClientStatsExportImage_(btn) {
+  var root = document.getElementById('tripClientStatsArea');
+  if (!root || !root.innerHTML.trim()) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
+  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳...';
+  var name = (document.getElementById('tripClientStatsTripName') || {}).textContent || 'رحلة';
+  _captureElementAsPngFiles_(root, 'إحصائية العملاء — ' + name, function(files, err) {
+    btn.disabled = false; btn.innerHTML = orig;
+    if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
+    _shareOrSaveImageFiles_(files);
+  });
 }
 
 // 📊 إحصائية عملاء رحلة مستقلة — تُفتَح من زر 📊 بجوار كل رحلة في شاشة قائمة الرحلات مباشرة،
@@ -17081,88 +17110,87 @@ function _sliceCanvasToPngFiles_(full, fileNameBase, cb) {
 // html2pdf.js وينفّذ الالتقاط داخل سياق الـiframe نفسه (وليس عبر حدود النوافذ من الصفحة الأم) —
 // هذا هو الأسلوب المُتحقَّق منه عملياً؛ الالتقاط من نافذة أخرى عبر حدود iframe قد يفشل صامتاً
 // بمتصفحات معيّنة في قراءة الأنماط المحسوبة (computed styles) من مستند غير مستند النافذة الحالية
+// 🛡️ (V4.110) الإصدار السابق كان يبني التقرير داخل iframe مخفي ويلتقطه بـhtml2canvas عبر
+// foreignObjectRendering من داخل نافذة الـiframe نفسها — وهذا مسار مصدر الأعطال الفعلية: قناة
+// foreignObjectRendering عبر حدود iframe (حتى srcdoc من نفس الأصل) معروفة بأنها تفشل صامتة في
+// متصفحات/إصدارات معيّنة فتُنتج Canvas أبيض فارغاً بلا أي خطأ (Promise تنجح بصورة فارغة) — هذا هو
+// بالضبط عَرَض "صفحة بيضاء" و"الزر يبدو محمَّلاً ثم يرجع بلا أي رسالة" الذي وصفه المستخدم. الحل
+// الجذري: التقاط العنصر من DOM الصفحة الحقيقية مباشرة (بلا أي iframe) عبر نفس مسار
+// _captureElementAsPngFiles_ المُثبَت عمليًا بالفعل للوحة الإحصائيات ودمج التسكين — نبني عنصراً
+// مخفياً بنفس الصفحة الحالية، نضع فيه محتوى التقرير، ثم نلتقطه بنفس الدالة الموثوقة تماماً.
 function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb) {
-  var iframe = document.createElement('iframe');
-  // (V4.106) عرض ابتدائي واسع حتى تتخطّط الجداول العريضة بالكامل، ثم يُضبط على العرض الحقيقي قبل الالتقاط
-  iframe.style.cssText = 'position:fixed; left:-99999px; top:0; width:1600px; height:900px; border:0;';
-  document.body.appendChild(iframe);
-  var cleanup = function() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); };
-  var done = false;
-  var safetyTimer = setTimeout(function() { if (!done) { done = true; cleanup(); cb(null, 'انتهت مهلة تحميل التقرير'); } }, 20000);
+  // 🛡️ (V4.110) غلاف بارتفاع صفر و overflow:hidden عند إحداثيات طبيعية (0,0) — لا نُبعد العنصر
+  // لآلاف البكسل خارج الشاشة (إحداثيات متطرفة قد تُربك حساب مواضع foreignObjectRendering في بعض
+  // المتصفحات) ولا نُظهره ولو للحظة: الغلاف صفري الارتفاع فلا يشغل أي مساحة مرئية إطلاقاً، بينما
+  // العنصر الداخلي يحتفظ بحجمه الطبيعي الكامل (القيد البصري لغلاف خارجي لا يُقلِّص تخطيط ابنه).
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed; top:0; left:0; width:1600px; height:0; overflow:hidden;';
+  var host = document.createElement('div');
+  host.id = 'rptRoot';
+  host.style.cssText = 'width:1600px; background:#ffffff; direction:rtl;';
+  wrap.appendChild(host);
+  document.body.appendChild(wrap);
+  var cleanup = function() { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); };
 
-  var captureScript =
-    '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>' +
-    '<script>' +
-    'window.__exportImage = function() {' +
-    '  var root = document.getElementById("rptRoot") || document.body;' +
-    // 📐 (V4.106) قِس العرض الحقيقي للتقرير ووسّع الإطار له أولاً — بلا هذا كان الجدول الأعرض من
-    // الإطار يُقصّ من جهة اليمين وتخرج الصورة ناقصة عمود الإجمالي
-    '  var natW = Math.max(root.scrollWidth || 0, root.offsetWidth || 0,' +
-    '                      document.documentElement ? document.documentElement.scrollWidth : 0,' +
-    '                      document.body ? document.body.scrollWidth : 0, 794);' +
-    '  try { if (window.frameElement) window.frameElement.style.width = (natW + 48) + "px"; } catch (e) {}' +
-    '  setTimeout(function() {' +
-    '    var cssW = Math.max(root.scrollWidth || 0, root.offsetWidth || 0, natW);' +
-    '    var cssH = Math.max(root.scrollHeight || 0, root.offsetHeight || 0, 1000);' +
-    '    var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);' +
-    '    var MAX_AREA = IS_IOS_ ? 16000000 : 180000000;' +
-    '    var MAX_DIM = IS_IOS_ ? 8192 : 16384;' +
-    '    var byArea = Math.sqrt(MAX_AREA / (cssW * cssH));' +
-    '    var byDim = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);' +
-    '    var scale = Math.min(8, byArea, byDim);' +
-    '    if (!(scale > 0) || scale < 1) scale = 1;' +
-    '    html2pdf().set({ html2canvas: { scale: scale, useCORS: true, backgroundColor: "#ffffff", foreignObjectRendering: true, logging: false,' +
-    '      width: cssW, windowWidth: cssW, scrollX: 0, scrollY: 0 } })' +
-    '      .from(root).toCanvas().get("canvas")' +
-    '      .then(function(c) { window.parent._exportFullHtmlAsImage_onCanvas_(c); })' +
-    '      .catch(function(err) { window.parent._exportFullHtmlAsImage_onCanvas_(null, String(err)); });' +
-    '  }, 260);' +
-    '};' +
-    '<\/script>';
+  // المحتوى الوارد مستند HTML كامل (html/head/style/body) — عند ضبطه كـinnerHTML على عنصر عادي
+  // يُحلَّله المتصفح كجزء (fragment parsing): يُسقط أغلفة html/head/body الهيكلية ويُبقي عناصر
+  // <style> ومحتوى <body> كأبناء مباشرين للعنصر — وهو سلوك قياسي مضمون بكل المتصفحات الحديثة.
+  host.innerHTML = fullHtml;
 
-  window._exportFullHtmlAsImage_onCanvas_ = function(canvas, err) {
-    if (done) return; done = true; clearTimeout(safetyTimer);
-    if (!canvas) { cleanup(); cb(null, err || 'تعذّر الرسم'); return; }
-    _sliceCanvasToPngFiles_(canvas, fileNameBase, function(files) { cleanup(); cb(files); });
+  // انتظار اكتمال تحميل الخطوط (الخط العربي قد يتأخر قليلاً) قبل الالتقاط، مع سقف أمان قصير
+  var capture = function() {
+    _captureElementAsPngFiles_(host, fileNameBase, function(files, err) { cleanup(); cb(files, err); });
   };
-
-  iframe.onload = function() {
-    // تأخير بسيط يضمن اكتمال رسم الخطوط العربية/الصور وتحميل html2pdf.js داخل الـiframe قبل الالتقاط
-    var tries = 0;
-    var wait = function() {
-      tries++;
-      if (iframe.contentWindow && iframe.contentWindow.__exportImage) {
-        setTimeout(function() { try { iframe.contentWindow.__exportImage(); } catch (e) { if (!done) { done = true; cleanup(); cb(null, String(e)); } } }, 400);
-      } else if (tries < 40) {
-        setTimeout(wait, 150);
-      } else if (!done) { done = true; cleanup(); cb(null, 'تعذّر تحميل مكتبة الالتقاط داخل التقرير'); }
-    };
-    wait();
-  };
-
-  // 💉 حقن سكربت الالتقاط قبل </head> (أو قبل </body> لو لا يوجد <head>) — يبقى جزءاً من مستند
-  // الـiframe نفسه، فيعمل html2canvas داخل نافذته هو، بلا أي التقاط عبر حدود نوافذ مختلفة
-  var injected = /<\/head>/i.test(fullHtml)
-    ? fullHtml.replace(/<\/head>/i, captureScript + '</head>')
-    : fullHtml.replace(/<\/body>/i, captureScript + '</body>');
-  iframe.srcdoc = injected;
+  try {
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function() { setTimeout(capture, 120); }).catch(function() { setTimeout(capture, 300); });
+    } else { setTimeout(capture, 300); }
+  } catch (e) { setTimeout(capture, 300); }
 }
 
-// 📤 نقطة الاستدعاء الموحّدة لأي زر "📸 صورة HD": يلتقط ثم يشارك مباشرة (Web Share API) أو
-// يحفظ الملف/الملفات تلقائياً لو المشاركة غير متاحة بالجهاز/المتصفح
-function _shareOrSaveImageFiles_(files) {
-  try {
-    if (navigator.canShare && navigator.canShare({ files: files })) {
-      navigator.share({ files: files, title: 'مشاركة' }).catch(function() {});
-      return;
-    }
-  } catch (e) { /* نستمر للحفظ */ }
+// 💾 حفظ ملفات محلياً (رابط تنزيل مؤقت لكل ملف) — المسار الاحتياطي الدائم
+function _saveImageFilesLocally_(files) {
   files.forEach(function(f) {
     var a = document.createElement('a');
     a.href = URL.createObjectURL(f); a.download = f.name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function() { URL.revokeObjectURL(a.href); }, 30000);
   });
+}
+// 📤 نقطة الاستدعاء الموحّدة لأي زر "📸 صورة HD": يلتقط ثم يشارك مباشرة (Web Share API) أو
+// يحفظ الملف/الملفات تلقائياً لو المشاركة غير متاحة بالجهاز/المتصفح.
+// 🛡️ (V4.110) كانت `.catch(function(){})` تتجاهل أي رفض بصمت — فلو تعذّرت المشاركة (لا استجابة،
+// خطأ، أو رفض) كان المستخدم لا يرى شيئاً على الإطلاق ولا يُحفَظ الملف بديلاً. الآن نتابع ظهور/اختفاء
+// الصفحة (visibilitychange) بنفس أسلوب مشاركة PDF المُثبَت أعلاه: لو اختفت الصفحة فهذا دليل أن لوحة
+// المشاركة فُتحت فعلاً؛ ولو لم تستجب لوحة المشاركة إطلاقاً خلال مهلة معقولة، نحفظ الملف بديلاً بدل
+// ترك المستخدم أمام زر بلا أي أثر.
+function _shareOrSaveImageFiles_(files) {
+  try {
+    if (navigator.canShare && navigator.canShare({ files: files })) {
+      var settled = false, wasHidden = false;
+      var onVis = function() { if (document.hidden) wasHidden = true; };
+      document.addEventListener('visibilitychange', onVis);
+      var cleanupVis = function() { document.removeEventListener('visibilitychange', onVis); };
+      navigator.share({ files: files, title: 'مشاركة' })
+        .then(function() { settled = true; cleanupVis(); })
+        .catch(function(err) {
+          settled = true; cleanupVis();
+          if (err && err.name === 'AbortError') return; // المستخدم أغلق لوحة المشاركة بنفسه
+          if (wasHidden) return; // اللوحة فُتحت فعلاً (الصفحة اختفت لحظياً) — لا نحفظ بديلاً فوقها
+          _saveImageFilesLocally_(files);
+          showToast('⚠️ تعذّرت المشاركة المباشرة — تم حفظ الصورة بدلاً منها', true);
+        });
+      setTimeout(function() {
+        cleanupVis();
+        if (!settled && !wasHidden && !document.hidden) {
+          _saveImageFilesLocally_(files);
+          showToast('⚠️ لوحة المشاركة لم تستجب — تم حفظ الصورة بدلاً منها', true);
+        }
+      }, 8000);
+      return;
+    }
+  } catch (e) { /* نستمر للحفظ */ }
+  _saveImageFilesLocally_(files);
 }
 
 // 🔘 دالة زر عامة: تبني HTML التقرير الكامل (نفس دالة الطباعة/PDF الجاهزة أصلاً لكل شاشة)
@@ -18229,8 +18257,14 @@ function _mhRenderCards_() {
         '</tr>';
     });
     html += '</tbody></table>';
+    // ✅ (V4.110) نفس زر "اعتماد الغرفة على وضعها الفعلي" الموجود بشاشات التسكين الأخرى — كان
+    // موجوداً هناك فقط دون شاشة التسكين المدموج رغم وجود نفس مفهوم "ناقصة سرير" فيها
     if (room.shortage) {
-      html += '<div class="d-flex align-items-center py-1 px-2" style="background:#fef3c7; color:#92400e; font-size:12px; font-weight:700; border-top:1px dashed #f59e0b;">🛏️ سرير فارغ: ' + room.shortageCount + '</div>';
+      var mhActualType = BEDS_TO_TYPE_[bedsCount] || room.bookedType;
+      html += '<div class="d-flex align-items-center justify-content-between py-1 px-2" style="background:#fef3c7; color:#92400e; font-size:12px; font-weight:700; border-top:1px dashed #f59e0b;">' +
+        '<span>🛏️ سرير فارغ: ' + room.shortageCount + '</span>' +
+        '<button class="btn btn-success btn-sm py-0 px-2" style="font-size:11px;" title="تحويل طبيعة الغرفة إلى ' + escapeHtml_(mhActualType) + ' بناءً على العدد الفعلي الساكن (' + bedsCount + ')" onclick="_mhConfirmRoomActualType_(' + roomIdx + ')">✅ اعتماد الغرفة</button>' +
+        '</div>';
     }
     html += '</div></div>';
   });
@@ -18391,6 +18425,146 @@ function _mhSave_(btn) {
     })
     .withFailureHandler(function(err) { btn.disabled = false; btn.innerHTML = orig; if (_handleSessErr_(err)) return; showToast('❌ ' + (err.message || err), true); })
     .saveMergedHousing(window.authToken, window._mhMeta.tripNames, window._mhMeta.city, payload);
+}
+
+// ✅ (V4.110) اعتماد غرفة ناقصة على وضعها الفعلي — نفس _confirmRoomActualType_ بشاشات التسكين
+// الأخرى، لكن على window._mhRooms (تسكين مدموج، منفصل تماماً عن تسكين كل رحلة الأصلي)
+function _mhConfirmRoomActualType_(roomIdx) {
+  var room = (window._mhRooms || [])[roomIdx];
+  if (!room || !room.shortage) return;
+  var beds = room.members.filter(function(m) { return !m.noBed; }).length;
+  var newType = BEDS_TO_TYPE_[beds] || room.bookedType;
+  var oldType = room.bookedType || _dynamicRoomType_(room);
+  showElegantConfirm({
+    icon: '✅',
+    title: 'اعتماد الغرفة على وضعها الفعلي',
+    message: 'سيتم تحويل طبيعة تسكين هذه الغرفة من «' + oldType + '» إلى «' + newType + '» بناءً على عدد الشاغلين الفعلي (' + beds + '). متابعة؟',
+    buttons: [
+      { label: '✅ نعم، اعتمد الغرفة', class: 'btn-success', onClick: function() {
+          room.bookedType = newType;
+          room.type = newType;
+          room.shortage = false;
+          room.shortageCount = 0;
+          room._typeReassigned = true;
+          _mhRenderCards_();
+      }},
+      { label: 'إلغاء', class: 'btn-outline-secondary', onClick: function() {} }
+    ]
+  });
+}
+
+// 🖨️📄📤 (V4.110) طباعة/PDF/مشاركة PDF لشاشة التسكين المدموج — كانت موجودة بكل شاشات التسكين
+// الأخرى (printHousingCards / shareHousingPdf) ومفقودة هنا فقط رغم وجود نفس المفهوم بالضبط.
+// نفس البنية الكاملة تماماً، فقط المصدر window._mhRooms/_mhMeta بدل window._housingRooms/رحلة واحدة.
+function _mhPrintableHtml_() {
+  var rooms = window._mhRooms || [];
+  var meta = window._mhMeta || {};
+  var printedAt = _formatPrintTimestamp();
+  var cityLabel = (meta.city === 'makkah') ? 'مكة المكرمة' : 'المدينة المنورة';
+
+  var cardsHtml = '';
+  rooms.forEach(function(room, roomIdx) {
+    var roomLabel = 'غرفة ' + (roomIdx + 1);
+    var bedsCount = room.members.filter(function(m){ return !m.noBed; }).length;
+    var hTh = 'border:1px solid #cbd5e1; padding:3px 5px; background-color:#e2e8f0; text-align:center;';
+    var footerText = (room.hotel ? ('🏨 ' + room.hotel) : 'بلا فندق محدد') + (room.shortage ? (' | 🛏️ سرير فارغ: ' + room.shortageCount) : '');
+    var cardHeaderColor = _hotelColor_(room.hotel);
+    var shortageBadge = room.shortage ? (' <span style="background-color:#f59e0b; color:#7c2d12; border-radius:3px; padding:1px 5px; font-size:9.5px; font-weight:bold;">⚠️ ناقصة ' + room.shortageCount + ' سرير</span>') : '';
+    var pHasM = room.members.some(function(m){ return m.type === 'ذكر'; });
+    var pHasF = room.members.some(function(m){ return m.type === 'أنثى'; });
+    var pIsFamily = room.members.some(function(m){ return String(m.accommodation || '').indexOf('أسرة') !== -1; });
+    var pGenderBadge = '';
+    if (pHasM && pHasF && !pIsFamily) pGenderBadge = ' <span style="background-color:#dc2626; color:#fff; border-radius:3px; padding:1px 5px; font-size:9.5px; font-weight:bold;">⚠️ مختلطة</span>';
+    else if (pHasM && !pHasF) pGenderBadge = ' <span style="background-color:#2563eb; color:#fff; border-radius:3px; padding:1px 5px; font-size:9.5px; font-weight:bold;">رجال</span>';
+    else if (pHasF && !pHasM) pGenderBadge = ' <span style="background-color:#0891b2; color:#fff; border-radius:3px; padding:1px 5px; font-size:9.5px; font-weight:bold;">سيدات</span>';
+    cardsHtml += '<div class="hcard" style="border:' + (room.shortage ? '2px solid #f59e0b' : '1px solid #94a3b8') + '; border-radius:6px; overflow:hidden;"><div class="hcard-head" style="background-color:' + cardHeaderColor + '; color:#ffffff; padding:4px 8px; font-size:12px; font-weight:bold;">' + roomLabel + pGenderBadge + ' — ' + escapeHtml_(_dynamicRoomType_(room)) + ' (' + bedsCount + ' سرير)' + shortageBadge + '</div>' +
+      '<table style="width:100%; border-collapse:collapse; font-size:10.5px;"><thead><tr><th style="' + hTh + ' width:26px;">م</th><th style="' + hTh + '">الاسم</th><th style="' + hTh + '">النوع</th><th style="' + hTh + '">العميل</th><th style="' + hTh + '">الرحلة</th></tr></thead><tbody>';
+    var bedSeqPr = 0;
+    room.members.forEach(function(m, mi) {
+      if (!m.noBed) bedSeqPr++;
+      var cTd = 'border:1px solid #cbd5e1; padding:3px 5px; text-align:center;' + (m.noBed ? ' background-color:#fef9c3;' : '');
+      cardsHtml += '<tr><td style="' + cTd + '">' + (m.noBed ? escapeHtml_(m.type || 'طفل') : bedSeqPr) + '</td>' +
+        '<td style="' + cTd + ' text-align:right;">' + escapeHtml_(m.name) + (m.noBed ? ' (بدون سرير)' : '') + '</td>' +
+        '<td style="' + cTd + '">' + escapeHtml_(m.type) + '</td><td style="' + cTd + ' white-space:nowrap;">' + escapeHtml_(m.client || '-') + '</td>' +
+        '<td style="' + cTd + ' white-space:nowrap;">' + escapeHtml_(m.tripName || '-') + '</td></tr>';
+    });
+    cardsHtml += '</tbody><tfoot><tr><td colspan="5" style="border:1px solid #cbd5e1; padding:3px 5px; font-size:9.5px; background-color:#f8fafc; text-align:center;">' + escapeHtml_(footerText) + '</td></tr></tfoot></table></div>';
+  });
+
+  var unhoused = window._mhUnhoused || [];
+  var unhousedHtml = '';
+  if (unhoused.length) {
+    unhousedHtml = '<div class="stats-section"><h3>🚷 غير مسكَّنين (' + unhoused.length + ')</h3>' +
+      '<table style="width:100%;"><thead><tr><th>الاسم</th><th>النوع</th><th>العميل</th><th>الرحلة</th></tr></thead><tbody>' +
+      unhoused.map(function(m) {
+        return '<tr><td style="text-align:right;">' + escapeHtml_(m.name) + '</td><td>' + escapeHtml_(m.type) + '</td><td>' + escapeHtml_(m.client || '-') + '</td><td>' + escapeHtml_(m.tripName || '-') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  return `
+    <!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+    <title>تسكين مدموج — ${escapeHtml_(meta.label || '')}</title>
+    <style>
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      body { font-family: 'Cairo', Tahoma, sans-serif; margin: 0; padding: 10mm 8mm 16mm; }
+      .title { text-align:center; font-size: 17px; font-weight: 800; margin-bottom: 10px; }
+      .cards { display: flex; flex-wrap: wrap; gap: 8px; }
+      .hcard { width: calc(50% - 4px); border: 1px solid #94a3b8; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
+      .hcard-head { background-color:#0F766E; color:white; padding: 4px 8px; font-size: 12px; font-weight: bold; }
+      .hcard table { width:100%; border-collapse: collapse; font-size: 10.5px; }
+      .hcard th, .hcard td { border: 1px solid #cbd5e1; padding: 3px 5px; text-align:center; }
+      .hcard th { background-color:#e2e8f0; }
+      .hcard tfoot td { font-size: 9.5px; background-color:#f8fafc; }
+      .stats-section { margin-top: 14px; page-break-inside: avoid; }
+      .stats-section h3 { font-size: 13px; margin: 8px 0 4px; }
+      .stats-section table { border-collapse: collapse; font-size: 11px; }
+      .stats-section th, .stats-section td { border: 1px solid #94a3b8; padding: 4px 10px; text-align:center; }
+      .stats-section th { background-color:#e2e8f0; }
+      @page {
+        size: A4 portrait; margin: 4mm 4mm 14mm 4mm;
+        @bottom-left { content: "تمت الطباعة: ${printedAt}"; font-size: 9px; color: #555; }
+        @bottom-center { content: "صفحة " counter(page) " من " counter(pages); font-size: 9px; color: #555; }
+        @bottom-right { content: "Smart Manager Pro"; font-size: 9px; color: #555; }
+      }
+    </style></head><body>
+    <div class="title">🏨 تسكين مدموج — ${escapeHtml_(meta.label || '')} (${cityLabel})</div>
+    <div class="cards">${cardsHtml}</div>
+    ${unhousedHtml}
+    <div class="stats-section"><h3>📊 إحصائية التسكين المدموج</h3>${_buildSingleHotelStatsTable_(rooms, '').html}</div>
+    </body></html>`;
+}
+
+function _mhPrintCards_() {
+  var rooms = window._mhRooms || [];
+  if (!rooms.length) { alert('لا يوجد تسكين مدموج'); return; }
+  var w = window.open('', '_blank');
+  w.document.open(); w.document.write(_mhPrintableHtml_()); w.document.close();
+  w.onload = function () { setTimeout(function () { w.focus(); w.print(); }, 500); };
+}
+
+function _mhSharePdf_(btn) {
+  var rooms = window._mhRooms || [];
+  if (!rooms.length) { alert('لا يوجد تسكين مدموج'); return; }
+  var modalEl = document.getElementById('shareBookingModal');
+  var modalBody = document.getElementById('shareBookingModalBody');
+  modalBody.innerHTML = '<div class="text-center p-4">⏳ جاري تجهيز ملف التسكين المدموج...</div>';
+  new bootstrap.Modal(modalEl).show();
+  if (btn) btn.disabled = true;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) btn.disabled = false;
+      if (!res || !res.pdfBase64) { modalBody.innerHTML = '<div class="text-center text-danger p-4">تعذر إنشاء ملف PDF</div>'; return; }
+      _renderShareSheet_({
+        modalEl: modalEl, modalBody: modalBody, modalInstance: null, modalTitle: '📤 مشاركة التسكين المدموج',
+        res: res, icon: '🏨', shareText: 'تسكين مدموج — ' + (window._mhMeta ? window._mhMeta.label : ''), cleanupOnHide: false
+      });
+    })
+    .withFailureHandler(function(err) {
+      if (btn) btn.disabled = false;
+      modalBody.innerHTML = '<div class="text-center text-danger p-4">' + (err.message || err) + '</div>';
+    })
+    .generateHousingPdf(window.authToken, _gasPdfFriendly_(_mhPrintableHtml_()),
+      'تسكين مدموج — ' + (window._mhMeta ? window._mhMeta.label : ''));
 }
 
 // 📸 (V4.104) صورة HD لكارت التسكين المدموج — التقاط مباشر للعنصر المعروض حياً على الشاشة
@@ -33025,7 +33199,13 @@ function mfModal(title, body, foot, wide) {
   mfCloseModal();
   var ov = document.createElement('div');
   ov.id = 'mfModalOv';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,24,.5);z-index:2300;display:flex;' +
+  // 🛡️ (V4.110) السبب الجذري لتعطّل كل أزرار الشاشة تقريباً: #mainAppContainer يأخذ
+  // z-index:999999 بجافاسكريبت بعد الدخول (سطر appDiv.style.zIndex بدالة الدخول)، وهذه النافذة
+  // تُلحَق مباشرة بـ document.body فتصبح "شقيقة" لـ mainAppContainer لا ابنة له — فأي z-index أقل من
+  // 999999 يجعلها تُرسَم فعلياً لكنها مختفية خلف كامل التطبيق (لا خطأ يظهر لأن الكود لم يفشل، فقط
+  // غير مرئي). نفس الرقم المستخدم بالفعل لكل نافذة أخرى تُلحَق بـ body مباشرة بهذا التطبيق
+  // (globalSearchOverlay وغيرها) — وليس رقماً عشوائياً.
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,24,.5);z-index:2147482000;display:flex;' +
     'align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML = '<div class="mf-dlg" style="background:#fff;border-radius:14px;width:min(' + (wide || 880) + 'px,100%);' +
     'max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35);direction:rtl;font-size:13px;">' +
@@ -33974,15 +34154,18 @@ function mfLedgerRender() {
 }
 
 /* ---------- الطباعة والتصدير ---------- */
+// 🛡️ (V4.110) كانت هذه الدالة تحاول إخفاء كل شيء بالصفحة الأصلية عدا #section-ministry بواسطة
+// CSS (body.mf-printing > *:not(#section-ministry)) — لكن #section-ministry ليست ابنة مباشرة
+// لـ body (هي حفيدة #mainAppContainer)، فهذا الانتقاء لم يكن يعمل بنيوياً أبداً: إما لا يُخفي شيئاً
+// (فتُطبَع الشاشة كاملة كما وصف المستخدم) أو يُخفي mainAppContainer نفسه فتخرج صفحة بيضاء — حسب
+// ترتيب الحمل. الحل الجذري المطابق لبقية شاشات هذا التطبيق (كشف حساب الرحلة وغيره): نافذة طباعة
+// مستقلة بمستند HTML كامل خاص بها (نفس مسار mfExportPdf تماماً)، فلا صراع إطلاقاً مع DOM التطبيق.
 function mfPrint() {
-  var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
-  var st = document.getElementById('mfPrintStamp');
-  if (st) st.textContent = 'طُبع في: ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + '  ' + p(d.getHours()) + ':' + p(d.getMinutes());
-  MF.openId = null; mfRender();
-  document.body.classList.add('mf-printing');
-  var done = function () { document.body.classList.remove('mf-printing'); window.removeEventListener('afterprint', done); };
-  window.addEventListener('afterprint', done);
-  setTimeout(function () { window.print(); setTimeout(done, 1500); }, 120);
+  var html = mfBuildPrintDoc();
+  var w = window.open('', '_blank');
+  if (!w) { _showPopup('اسمح بالنوافذ المنبثقة للطباعة', 'error'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  w.onload = function () { setTimeout(function () { w.focus(); w.print(); }, 500); };
 }
 function mfBuildPrintDoc() {
   var list = mfVisible();
