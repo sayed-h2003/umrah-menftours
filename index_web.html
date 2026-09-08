@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.105 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.106 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.105)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.106)', diag);
 }, 6000);
 </script>
 
@@ -1489,7 +1489,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.105</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.106</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1593,6 +1593,11 @@ input[type="date"]:not(:focus):not(:valid) {
     <!-- 📑 (V4.54) بيان اتفاقيات الإعاشة — بطلب صريح -->
     <a id="link-cateringContracts-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('cateringContracts'); closeAppSidebarOnMobile();">
       <i class="fas fa-file-contract me-2 text-warning"></i> اتفاقيات الإعاشة
+    </a>
+
+    <!-- 🏛️ (V4.106) مراجعة ملفات الوزارة -->
+    <a id="link-ministry-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('ministry'); closeAppSidebarOnMobile();">
+      <i class="fas fa-landmark me-2 text-warning"></i> مراجعة ملفات الوزارة
     </a>
 
     <a id="link-stats-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('stats'); closeAppSidebarOnMobile();">
@@ -5608,6 +5613,14 @@ function toggleAdminOnlyLinks_() {
     else el.classList.add("d-none");
   });
 
+  // 🏛️ (V4.106) رابط مراجعة ملفات الوزارة — صلاحية مستقلة ministry.view
+  ['link-ministry-side'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (hasPermission("admin") || hasPermission("ministry.view")) el.classList.remove("d-none");
+    else el.classList.add("d-none");
+  });
+
   // رابط الرحلات: admin أو TRIPS
   ['link-trips', 'link-trips-side'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -6152,7 +6165,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.105";
+var CLIENT_APP_VERSION = "4.106";
 
 // 🩺 تشخيص الصفحة البيضاء بعد تسجيل الدخول (V3.57):
 // قبل هذا التعديل كانت استدعاءات google.script.run الأساسية (تحميل القوائم/الحجوزات/لوحة التحكم)
@@ -6261,6 +6274,7 @@ var PERM_SCREENS = [
   { key: 'transport', label: 'حسابات النقل' },
   { key: 'accounts',  label: 'حسابات العملاء' },
   { key: 'catering',  label: 'اتفاقيات الإعاشة' },
+  { key: 'ministry',  label: 'مراجعة ملفات الوزارة' },
   { key: 'pricing',   label: 'تسعير الرحلات' },
   { key: 'audit',     label: 'سجل التدقيق' },
   { key: 'stats',     label: 'لوحة الإحصائيات' },
@@ -10132,7 +10146,49 @@ function _tripsRerender_() {
   if ((window.tripsCache || []).length) _tripsRenderList_(window.tripsCache);
   else loadTripsList();
 }
+/* 🏛️ (V4.106) شارة ربط الرحلة بملف مراجعة الوزارة — مثل شارة ربط الإشعار تماماً،
+   مع تنبيه أحمر لو باقٍ 3 أيام أو أقل على السفر والملف لم يُراجع بعد (أو لا يوجد ملف أصلاً) */
+function _mfTripChip_(t) {
+  var links = (window._mfTripLinks && window._mfTripLinks[t.name]) || [];
+  var d = String(t.departDate || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  var days = null;
+  if (d) {
+    var dep = new Date(Number(d[3]), Number(d[2]) - 1, Number(d[1])).getTime();
+    var t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    days = Math.ceil((dep - t0.getTime()) / 86400000);
+  }
+  var soon = (days !== null && days <= 3 && days >= 0);
+  if (!links.length) {
+    return '<span class="badge ' + (soon ? 'bg-danger' : 'bg-light text-muted border') + '" style="font-size:10px;"' +
+      ' title="' + (soon ? 'لم تُربط بملف مراجعة وزارة وباقٍ ' + days + ' يوم على السفر' : 'غير مرتبطة بملف مراجعة وزارة') + '">' +
+      (soon ? '⚠️ بلا ملف وزارة' : 'ملف وزارة') + '</span>';
+  }
+  var reviewed = links.filter(function (x) { return x.reviewed; });
+  if (reviewed.length === links.length) {
+    var nos = reviewed.map(function (x) { return x.fileNo || '—'; }).join('، ');
+    return '<span class="badge bg-success" style="font-size:10px;" title="مرتبطة بملف مراجعة وزارة تمت مراجعته">🏛️ ملف ' + escapeHtml_(nos) + ' ✓</span>';
+  }
+  return '<span class="badge ' + (soon ? 'bg-danger' : 'bg-warning text-dark') + '" style="font-size:10px;"' +
+    ' title="' + (soon ? 'مرتبطة بملف مراجعة لم يُراجع وباقٍ ' + days + ' يوم على السفر' : 'مرتبطة بملف مراجعة لم يُراجع بعد') + '">' +
+    (soon ? '⚠️ ' : '') + '🏛️ لم يُراجع</span>';
+}
+function _mfLoadTripLinks_() {
+  if (window._mfTripLinksLoading) return;
+  window._mfTripLinksLoading = true;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      window._mfTripLinksLoading = false;
+      if (!res || !res.success) return;
+      window._mfTripLinks = res.links || {};
+      window._mfTripAlerts = res.alerts || [];
+      if ((window.tripsCache || []).length && typeof _tripsRerender_ === 'function') _tripsRerender_();
+    })
+    .withFailureHandler(function () { window._mfTripLinksLoading = false; })
+    .getMinistryTripLinks(window.authToken);
+}
+
 function _tripsRenderList_(trips) {
+  if (!window._mfTripLinks) _mfLoadTripLinks_();
   var area = document.getElementById('tripsListArea');
   {
       trips = trips || [];
@@ -10282,7 +10338,7 @@ function _tripsRenderList_(trips) {
         };
         var bookingChipLabel = (rd.booking && t.linkedBookingId) ? ('إشعار #' + t.linkedBookingId) : 'إشعار';
         var readinessHtml = chip(rd.manifest, 'كشف') + ' ' + chip(rd.housing, 'تسكين') + ' ' +
-          chip(rd.booking, bookingChipLabel) + ' ' + chip(rd.ticket, 'تذكرة');
+          chip(rd.booking, bookingChipLabel) + ' ' + chip(rd.ticket, 'تذكرة') + ' ' + _mfTripChip_(t);
 
         // المقاعد المشغولة = القيمة المحسوبة سيرفرياً بنفس منطق الكشف (تطابق العدد في العمود)
         var used = (t.seatsOccupied !== undefined) ? t.seatsOccupied : (t.pilgrimCount - (t.infantCount || 0));
@@ -19663,6 +19719,11 @@ document
     return;
   }
 
+  if (page === "ministry" && !hasPermission("all") && !hasPermission("ministry.view")) {
+    alert("هذه الشاشة متاحة فقط لمستخدم بصلاحية مراجعة ملفات الوزارة");
+    return;
+  }
+
   if (page === "cateringContracts" && !hasPermission("all") && !hasPermission("catering.view") && !hasPermission("accounts.view")) {
     alert("هذه الشاشة متاحة فقط لمستخدم بصلاحية حسابات العملاء أو ALL");
     return;
@@ -19727,6 +19788,10 @@ document
 
   if (page === 'auditLog') {
     loadAuditLogTable();
+  }
+
+  if (page === 'ministry') {
+    if (typeof mfInit === 'function') mfInit();
   }
 
   if (page === 'cateringContracts') {
@@ -31804,6 +31869,1813 @@ window.__step('4️⃣.14 مقطع الجافاسكربت 14/14 ✅');
 window.__step('6️⃣ نهاية المستند — الملف وصل كاملاً ✅',
   'الحجم المُستقبَل: ' + document.documentElement.outerHTML.length + ' حرف');
 window.__bootReport();
+
+
+/* =====================================================================================
+   🏛️ (V4.106) شاشة «مراجعة ملفات الوزارة» — منطق الواجهة
+   البيانات تُحمَّل بنداء واحد getMinistryBootstrap، والحسابات مطابقة لمحرك السيرفر
+   ===================================================================================== */
+var MF = {
+  files: [], receipts: [], sups: [], companies: [], trips: [], clients: [],
+  balances: {}, cfg: {}, can: {}, today: '', loaded: false,
+  hidden: {}, colFilters: {}, facets: {}, sort: { key: 'seq', dir: 1 },
+  selId: null, openId: null
+};
+
+/* ---------- أدوات ---------- */
+function mfLatin(v) {
+  return String(v == null ? '' : v)
+    .replace(/[٠-٩]/g, function (d) { return String.fromCharCode(d.charCodeAt(0) - 0x0660 + 48); })
+    .replace(/[۰-۹]/g, function (d) { return String.fromCharCode(d.charCodeAt(0) - 0x06F0 + 48); })
+    .replace(/٫/g, '.').replace(/٬/g, ',');
+}
+function mfStr(v) { return mfLatin(v).trim(); }
+function mfNum(v) { var n = parseFloat(mfLatin(String(v == null ? '' : v)).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+function mfFmt(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
+function mfEsc(v) { return escapeHtml_(String(v == null ? '' : v)); }
+function mfL(v) { return '<span class="mf-latin">' + mfEsc(v) + '</span>'; }
+function mfDate(v) {
+  var s = mfStr(v).replace(/[-.\\]/g, '/');
+  if (!s) return '';
+  var p = s.split('/').filter(function (x) { return x !== ''; });
+  if (p.length < 2) return '';
+  var d = p[0].replace(/\D/g, ''), m = p[1].replace(/\D/g, ''), y = (p[2] || '').replace(/\D/g, '');
+  if (!d || !m) return '';
+  if (!y) y = String(new Date().getFullYear()); else if (y.length === 2) y = '20' + y;
+  if (y.length !== 4) return '';
+  if (d.length === 1) d = '0' + d;
+  if (m.length === 1) m = '0' + m;
+  return d + '/' + m + '/' + y;
+}
+function mfMs(dmy) { var m = String(dmy || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : NaN; }
+function mfStatus(f) {
+  if (mfStr(f.ref)) return 4;            // له رقم قيد
+  if (f.approved) return 3;              // معتمد
+  if (mfStr(f.fileNo)) return 2;         // تمت المراجعة
+  return 1;                              // لم تُراجع بعد
+}
+function mfReviewed(f) { return !!mfStr(f.reviewDate); }
+function mfHasFlag(f, code) { return (f.flags || []).some(function (x) { return code ? x.code === code : true; }); }
+
+// محرك الحسابات — نسخة مطابقة تماماً لـ _mfCompute_ بالسيرفر
+function mfCalc(f) {
+  var cfg = MF.cfg || {};
+  var N = mfNum(f.pilgrims), O = mfNum(f.supCount), heads = N + O;
+  var vipAdd = (f.reviewType === 'VIP') ? (mfNum(cfg.vipSurcharge) || 100) : 0;
+  var S = mfNum(f.roomFee) + vipAdd;
+  var supFee = mfNum(cfg.supRoomFee) || 200;
+  var sups = f.sups || [];
+  var murafiq = sups.filter(function (s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+  var R = mfNum(f.ticket), T = mfNum(f.adminFee), V = mfNum(f.fxRate), AC = mfNum(f.pct) / 100;
+  var barcode = (f.reviewType === 'تجديد باركود') ? mfBarcodeFee(f.reviewDate) * N : 0;
+  var Q = N * mfNum(f.progPrice);
+  var W = R * heads;
+  var X = (N * S) + (murafiq * supFee);
+  var Z = T * heads;
+  var U = (heads > 0 && V > 0) ? Math.round((Q - W - X - Z - (Q * AC) - barcode) / heads / V) : 0;
+  var Y = U * heads;
+  var AA = (Y * V) + W + X + Z + barcode;
+  var AB = Q - AA;
+  return { heads: heads, murafiq: murafiq, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode,
+    revenue: Q, totalTickets: W, totalRoomFee: X, otherExp: Z, clearanceSAR: U, totalSAR: Y,
+    totalExp: Math.round(AA), margin: Math.round(AB), perPersonMargin: N > 0 ? Math.round(AB / N) : 0 };
+}
+function mfBarcodeFee(dateStr) {
+  var t = mfMs(mfDate(dateStr)); if (isNaN(t)) return 0;
+  var ps = (MF.cfg && MF.cfg.barcodePeriods) || [];
+  for (var i = 0; i < ps.length; i++) {
+    var fm = mfMs(mfDate(ps[i].from)); if (isNaN(fm)) continue;
+    var to = ps[i].to ? mfMs(mfDate(ps[i].to)) : 8640000000000000;
+    if (isNaN(to)) to = 8640000000000000;
+    if (t >= fm && t <= to) return mfNum(ps[i].price);
+  }
+  return 0;
+}
+function mfRoomFeeAt(dateStr) {
+  var t = mfMs(mfDate(dateStr)); if (isNaN(t)) return 0;
+  var ps = (MF.cfg && MF.cfg.roomFeePeriods) || [];
+  for (var i = 0; i < ps.length; i++) {
+    var fm = mfMs(mfDate(ps[i].from)); if (isNaN(fm)) continue;
+    var to = ps[i].to ? mfMs(mfDate(ps[i].to)) : 8640000000000000;
+    if (isNaN(to)) to = 8640000000000000;
+    if (t >= fm && t <= to) return mfNum(ps[i].price);
+  }
+  return 0;
+}
+// نسبة الربح الافتراضية: 3.00% تنازلياً حتى 2.50% عند 120 معتمر فأكثر، برقمين عشريين
+function mfDefaultPct(pilgrims) {
+  var n = Math.max(0, Math.min(120, mfNum(pilgrims)));
+  var v = 3.00 - (n / 120) * 0.5 + (Math.random() - 0.5) * 0.04;
+  return Math.round(Math.max(2.50, Math.min(3.00, v)) * 100) / 100;
+}
+// نوع المراجعة التلقائي: جمعة/سبت أو أقل من 3 أيام على السفر (الباقي يدوي بقرار الموظف)
+function mfAutoType(reviewDate, goDate, current) {
+  if (current === 'تجديد باركود') return current;
+  var d = mfDate(reviewDate);
+  if (d) {
+    var dow = new Date(mfMs(d)).getDay();
+    if (dow === 5 || dow === 6) return 'VIP';
+    var g = mfMs(mfDate(goDate));
+    if (!isNaN(g)) { var diff = Math.ceil((g - mfMs(d)) / 86400000); if (diff <= 3 && diff >= 0) return 'VIP'; }
+  }
+  return current === 'VIP' ? 'VIP' : 'عادية';
+}
+function mfBalanceOf(company) {
+  var b = MF.balances[mfStr(company)];
+  return b ? b : { company: company, deposits: 0, withdrawn: 0, balance: 0, pending: 0 };
+}
+
+/* ---------- تعريف الأعمدة ---------- */
+var MF_COLS = [
+  { k: 'act',    g: 'بيانات الملف',      l: '⚙',                     w: 38,  pin: 1, nof: 1 },
+  { k: 'seq',    g: 'بيانات الملف',      l: 'م',                      w: 54,  pin: 1 },
+  { k: 'approved', g: 'بيانات الملف',    l: 'معتمد',                  w: 56,  pin: 1 },
+  { k: 'fileNo', g: 'بيانات الملف',      l: 'رقم الملف',              w: 74,  pin: 1 },
+  { k: 'clientLabel', g: 'بيانات الملف', l: 'العميل',                 w: 160, pin: 1, txt: 1 },
+  { k: 'eInvoice', g: 'بيانات الملف',    l: 'فاتورة إلكترونية',       w: 108 },
+  { k: 'ref',    g: 'بيانات الملف',      l: 'القيد',                  w: 84 },
+  { k: 'company', g: 'الشركة والمراجعة', l: 'الشركة المصرية',         w: 120, txt: 1 },
+  { k: 'agent',  g: 'الشركة والمراجعة',  l: 'الوكيل السعودي',         w: 140, txt: 1 },
+  { k: 'reviewDate', g: 'الشركة والمراجعة', l: 'تاريخ المراجعة',      w: 100 },
+  { k: 'reviewType', g: 'الشركة والمراجعة', l: 'نوع المراجعة',        w: 96 },
+  { k: 'travelMode', g: 'الشركة والمراجعة', l: 'وسيلة السفر',         w: 82 },
+  { k: 'goDate', g: 'العميل والمعتمرون', l: 'تاريخ الذهاب',           w: 96 },
+  { k: 'retDate', g: 'العميل والمعتمرون', l: 'تاريخ العودة',          w: 96 },
+  { k: 'pilgrims', g: 'العميل والمعتمرون', l: 'معتمرين',              w: 66,  sum: 1 },
+  { k: 'supCount', g: 'العميل والمعتمرون', l: 'مشرفين',               w: 62,  sum: 1 },
+  { k: 'supNames', g: 'العميل والمعتمرون', l: 'المشرف',               w: 150, txt: 1 },
+  { k: 'supTypes', g: 'العميل والمعتمرون', l: 'نوع المشرف',           w: 106, txt: 1 },
+  { k: 'progPrice', g: 'التسعير (للفرد)', l: 'سعر البرنامج',          w: 92 },
+  { k: 'revenue', g: 'التسعير (للفرد)',  l: 'الإيراد',                w: 100, sum: 1, calc: 1 },
+  { k: 'ticket', g: 'التسعير (للفرد)',   l: 'التذكرة',                w: 82 },
+  { k: 'roomFee', g: 'التسعير (للفرد)',  l: 'رسوم الغرفة/فرد',        w: 106 },
+  { k: 'adminFee', g: 'التسعير (للفرد)', l: 'رسوم إدارية/فرد',        w: 100 },
+  { k: 'accDir', g: 'التسعير (للفرد)',   l: 'التوجيه المحاسبي',       w: 132, txt: 1 },
+  { k: 'clearanceSAR', g: 'التحويل والمخالصة', l: 'المخالصة بالريال', w: 106, calc: 1 },
+  { k: 'fxRate', g: 'التحويل والمخالصة', l: 'سعر صرف الريال',         w: 100 },
+  { k: 'totalTickets', g: 'الإجماليات',  l: 'إجمالي التذاكر',         w: 108, sum: 1, calc: 1 },
+  { k: 'totalRoomFee', g: 'الإجماليات',  l: 'إجمالي رسوم الغرفة',     w: 122, sum: 1, calc: 1 },
+  { k: 'totalSAR', g: 'الإجماليات',      l: 'إجمالي الريال',          w: 100, sum: 1, calc: 1 },
+  { k: 'otherExp', g: 'الإجماليات',      l: 'مصروفات أخرى',           w: 100, sum: 1, calc: 1 },
+  { k: 'totalExp', g: 'الإجماليات',      l: 'إجمالي المصروف',         w: 112, sum: 1, calc: 1 },
+  { k: 'margin', g: 'الإجماليات',        l: 'هامش الربح',             w: 100, sum: 1, calc: 1 },
+  { k: 'perPersonMargin', g: 'الإجماليات', l: 'هامش الفرد',           w: 90,  calc: 1 },
+  { k: 'pct',    g: 'الإجماليات',        l: 'النسبة',                 w: 68 },
+  { k: 'madinahHotel', g: 'السكن',       l: 'فندق المدينة',           w: 130, txt: 1 },
+  { k: 'madinahIn', g: 'السكن',          l: 'دخول المدينة',           w: 96 },
+  { k: 'madinahOut', g: 'السكن',         l: 'خروج المدينة',           w: 96 },
+  { k: 'makkahHotel', g: 'السكن',        l: 'فندق مكة',               w: 130, txt: 1 },
+  { k: 'makkahIn', g: 'السكن',           l: 'دخول مكة',               w: 92 },
+  { k: 'makkahOut', g: 'السكن',          l: 'خروج مكة',               w: 92 },
+  { k: 'transport', g: 'اللوجستيات',     l: 'شركة النقل',             w: 120, txt: 1 },
+  { k: 'notes',  g: 'اللوجستيات',        l: 'ملاحظات',                w: 170, txt: 1 },
+  { k: 'created', g: 'سجل التتبع',       l: 'الإنشاء (بواسطة · التاريخ)', w: 200, txt: 1 },
+  { k: 'updated', g: 'سجل التتبع',       l: 'آخر تعديل',              w: 200, txt: 1 }
+];
+var MF_COLS_ORDER = MF_COLS.map(function (c) { return c.k; });
+var MF_COLS_PIN = MF_COLS.map(function (c) { return !!c.pin; });
+
+// قيمة العمود كنص خام (للفرز والتصفية والتلميح)
+function mfRaw(k, f) {
+  var c = f._c || (f._c = mfCalc(f));
+  switch (k) {
+    case 'act': return '';
+    case 'seq': return String(f.seq || '');
+    case 'approved': return f.approved ? 'معتمد' : 'غير معتمد';
+    case 'supNames': return (f.sups || []).map(function (s) { return s.name; }).filter(String).join('، ') || '—';
+    case 'supTypes': return (f.sups || []).map(function (s) { return s.type; }).filter(String).join(' + ') || '—';
+    case 'accDir': return (f.breakdown || []).map(function (b) { return b.name; }).filter(String).join(' + ') || (f.clientLabel || '—');
+    case 'created': return (f.createdBy || '—') + ' · ' + (f.createdAt || '—');
+    case 'updated': return (f.updatedBy || '—') + ' · ' + (f.updatedAt || '—');
+    case 'pct': return f.pct ? (Number(f.pct).toFixed(2) + '%') : '';
+    default:
+      if (c[k] !== undefined) return String(c[k]);
+      return String(f[k] == null ? '' : f[k]);
+  }
+}
+function mfCell(col, f) {
+  var k = col.k, c = f._c || (f._c = mfCalc(f));
+  if (k === 'act') return '<button class="mf-rowbtn" title="سجل التعديلات" onclick="event.stopPropagation();mfHistory(\'' + f.id + '\')">📜</button>';
+  if (k === 'seq') return '<button class="mf-exp" title="عرض التفاصيل" onclick="event.stopPropagation();mfToggleDetail(\'' + f.id + '\')">▸</button> ' + mfL(f.seq);
+  if (k === 'approved') return '<span class="mf-tog ' + (f.approved ? 'on' : '') + '" title="' + (f.approved ? 'معتمد' : 'غير معتمد') + '" onclick="event.stopPropagation();mfToggleApproved(\'' + f.id + '\')"></span>';
+  if (k === 'fileNo') return mfStr(f.fileNo) ? mfL(f.fileNo) : '<span class="mf-badge off">لم تُراجع</span>';
+  if (k === 'reviewType') {
+    if (f.reviewType === 'VIP') return '<span class="mf-badge vip" title="' + mfEsc(f.vipReason || 'تلقائي') + '">VIP</span>';
+    if (f.reviewType === 'تجديد باركود') return '<span class="mf-badge renew">تجديد باركود</span>';
+    return '<span class="mf-badge norm">عادية</span>';
+  }
+  if (k === 'clientLabel') return (mfStr(f.tripName) ? '<span class="mf-badge link">🔗</span> ' : '') + mfEsc(f.clientLabel || '—');
+  if (k === 'supNames') {
+    var nm = mfRaw('supNames', f);
+    return (mfHasFlag(f, 'SUP50') || mfHasFlag(f, 'RECEP') ? '<span class="mf-badge warn">⚠️</span> ' : '') + mfEsc(nm);
+  }
+  if (k === 'roomFee') return mfL(mfFmt(f.roomFee)) + (f.reviewType === 'VIP' ? ' <span class="mf-badge vip">+' + ((MF.cfg && MF.cfg.vipSurcharge) || 100) + '</span>' : '');
+  if (k === 'totalRoomFee') return mfL(mfFmt(c.totalRoomFee)) + (mfHasFlag(f, 'NOBAL') ? ' <span class="mf-badge warn">🏦</span>' : '');
+  if (k === 'accDir') return '<span class="mf-badge link">📑</span> ' + mfEsc(mfRaw('accDir', f));
+  if (k === 'pct') return f.pct ? mfL(Number(f.pct).toFixed(2) + '%') : '—';
+  if (col.calc || ['progPrice', 'ticket', 'adminFee', 'fxRate'].indexOf(k) >= 0) {
+    var v = (c[k] !== undefined) ? c[k] : f[k];
+    return mfNum(v) ? mfL(k === 'fxRate' ? mfNum(v).toFixed(2) : mfFmt(v)) : '—';
+  }
+  var raw = mfRaw(k, f);
+  if (!raw || raw === '—') return '—';
+  return /^[\d\s,.\/%:-]+$/.test(raw) ? mfL(raw) : mfEsc(raw);
+}
+
+/* ---------- تحميل البيانات ---------- */
+function mfInit() {
+  if (!MF.loaded) mfLoad(false);
+  else { mfRender(); }
+  mfAttachDateInputs();
+  mfAttachTypeaheads();
+}
+function mfLoad(force) {
+  var wrap = document.getElementById('mfTableWrap');
+  if (wrap) wrap.innerHTML = '<div class="p-4 text-center text-muted small">⏳ جاري تحميل ملفات المراجعة…</div>';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) {
+        if (wrap) wrap.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_((res && res.error) || 'تعذّر التحميل') + '</div>';
+        return;
+      }
+      MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
+      MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
+      MF.balances = res.balances || {}; MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
+      MF.files.forEach(function (f) { f._c = mfCalc(f); });
+      MF.loaded = true;
+      mfRestoreColPrefs();
+      mfRender();
+      mfAttachTypeaheads();
+    })
+    .withFailureHandler(function (err) {
+      if (wrap) wrap.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_(err && err.message ? err.message : err) + '</div>';
+    })
+    .getMinistryBootstrap(window.authToken);
+}
+
+/* ---------- التصفية والفرز ---------- */
+function mfFV(id) { var e = document.getElementById(id); return e ? mfStr(e.value) : ''; }
+function mfMatch(f) {
+  var q = mfFV('mfSearch').toLowerCase();
+  if (q) {
+    var hay = [f.fileNo, f.company, f.agent, f.clientLabel, f.tripName, f.ref, f.eInvoice,
+      mfRaw('supNames', f), f.madinahHotel, f.makkahHotel, f.transport, f.notes].join(' ').toLowerCase();
+    if (hay.indexOf(q) < 0) return false;
+  }
+  var pairs = [['mfF_fileNo', 'fileNo'], ['mfF_company', 'company'], ['mfF_agent', 'agent'],
+    ['mfF_clientLabel', 'clientLabel'], ['mfF_madinahHotel', 'madinahHotel'], ['mfF_makkahHotel', 'makkahHotel']];
+  for (var i = 0; i < pairs.length; i++) {
+    var v = mfFV(pairs[i][0]);
+    if (v && String(f[pairs[i][1]] || '').toLowerCase().indexOf(v.toLowerCase()) < 0) return false;
+  }
+  var sv = mfFV('mfF_supName');
+  if (sv && mfRaw('supNames', f).toLowerCase().indexOf(sv.toLowerCase()) < 0) return false;
+  var gf = mfDate(mfFV('mfF_goFrom'));
+  if (gf && !isNaN(mfMs(gf)) && !(mfMs(f.goDate) >= mfMs(gf))) return false;
+  var rt = mfDate(mfFV('mfF_retTo'));
+  if (rt && !isNaN(mfMs(rt)) && !(mfMs(f.retDate) <= mfMs(rt))) return false;
+  for (var k in MF.colFilters) {
+    var val = MF.colFilters[k]; if (!val) continue;
+    if (mfRaw(k, f).toLowerCase().indexOf(mfStr(val).toLowerCase()) < 0) return false;
+  }
+  var st = mfStatus(f);
+  if (MF.facets.unreviewed && mfStr(f.fileNo)) return false;
+  if (MF.facets.flag && !(f.flags || []).length) return false;
+  if (MF.facets.approved && !f.approved) return false;
+  if (MF.facets.notapproved && f.approved) return false;
+  if (MF.facets.posted && st !== 4) return false;
+  if (MF.facets.noref && mfStr(f.ref)) return false;
+  if (MF.facets.vip && f.reviewType !== 'VIP') return false;
+  if (MF.facets.urgent && !mfHasFlag(f, 'URGENT')) return false;
+  if (MF.facets.nobal && !mfHasFlag(f, 'NOBAL')) return false;
+  return true;
+}
+function mfVisible() {
+  var list = MF.files.filter(mfMatch);
+  var k = MF.sort.key, dir = MF.sort.dir;
+  list.sort(function (a, b) {
+    if (k === 'seq') return ((a.seq || 0) - (b.seq || 0)) * dir;
+    var av = mfRaw(k, a), bv = mfRaw(k, b);
+    var an = mfNum(av), bn = mfNum(bv);
+    if (/^[\d\s,.%-]+$/.test(av) && /^[\d\s,.%-]+$/.test(bv)) return (an - bn) * dir;
+    return String(av).localeCompare(String(bv), 'ar') * dir;
+  });
+  return list;
+}
+function mfToggleFacet(btn) { btn.classList.toggle('on'); MF.facets[btn.dataset.q] = btn.classList.contains('on'); mfRender(); }
+function mfSort(k) { if (MF.sort.key === k) MF.sort.dir *= -1; else { MF.sort.key = k; MF.sort.dir = 1; } mfRender(); }
+function mfClearFilters() {
+  ['mfSearch', 'mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_clientLabel', 'mfF_supName',
+    'mfF_madinahHotel', 'mfF_makkahHotel', 'mfF_goFrom', 'mfF_retTo'].forEach(function (id) {
+      var e = document.getElementById(id); if (e) e.value = '';
+    });
+  MF.colFilters = {}; MF.facets = {};
+  document.querySelectorAll('#section-ministry .mf-facet').forEach(function (b) { b.classList.remove('on'); });
+  mfRender();
+}
+function mfRemoveChip(i) { if (MF._chipFns && MF._chipFns[i]) MF._chipFns[i](); mfRender(); }
+
+/* ---------- الرسم ---------- */
+function mfFrozenOffset(ci) {
+  var o = 0;
+  for (var i = 0; i < ci; i++) if (MF_COLS[i].pin && !MF.hidden[MF_COLS[i].k]) o += (MF_COLS[i].w || 100);
+  return o;
+}
+function mfRender() {
+  var wrap = document.getElementById('mfTableWrap');
+  if (!wrap) return;
+  var list = mfVisible();
+  var h = '<table class="mf-tab"><thead><tr class="mf-grp">';
+  var i = 0;
+  while (i < MF_COLS.length) {
+    var g = MF_COLS[i].g, span = 0, j = i;
+    while (j < MF_COLS.length && MF_COLS[j].g === g) { span++; j++; }
+    var fr = MF_COLS[i].pin ? ' class="mf-fz' + ((!MF_COLS[j] || !MF_COLS[j].pin) ? ' mf-edge' : '') + '" style="right:' + mfFrozenOffset(i) + 'px"' : '';
+    h += '<th colspan="' + span + '"' + fr + '>' + mfEsc(g) + '</th>';
+    i = j;
+  }
+  h += '</tr><tr class="mf-cols">';
+  MF_COLS.forEach(function (c, ci) {
+    var cls = '', st = 'min-width:' + (c.w || 100) + 'px;';
+    if (c.pin) { cls += 'mf-fz'; if (!MF_COLS[ci + 1] || !MF_COLS[ci + 1].pin) cls += ' mf-edge'; st += 'right:' + mfFrozenOffset(ci) + 'px;'; }
+    if (MF.hidden[c.k]) cls += ' mf-hide';
+    var si = MF.sort.key === c.k ? (MF.sort.dir > 0 ? '▲' : '▼') : '⇅';
+    var ics = c.nof ? '' :
+      '<button class="mf-thic' + (MF.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="mf-thic' + (MF.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();mfSort(\'' + c.k + '\')">' + si + '</button>';
+    h += '<th class="' + cls + '" style="' + st + '" draggable="true" data-key="' + c.k + '"' +
+      ' ondragstart="mfDragStart(event,\'' + c.k + '\')" ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)"' +
+      ' ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
+      '<div class="mf-thin">' + (c.pin ? '<span style="font-size:8.5px;color:#ffd77a;">📌</span>' : '') +
+      '<span>' + mfEsc(c.l) + '</span>' + ics + '</div></th>';
+  });
+  h += '</tr></thead><tbody>';
+  if (!list.length) {
+    h += '<tr><td colspan="' + MF_COLS.length + '" style="padding:26px;text-align:center;color:#94a3b8;">لا توجد ملفات مطابقة للفلاتر</td></tr>';
+  }
+  list.forEach(function (f) {
+    f._c = mfCalc(f);
+    h += '<tr class="mf-row mf-s' + mfStatus(f) + (MF.selId === f.id ? ' mf-sel' : '') + (MF.openId === f.id ? ' mf-open' : '') +
+      '" data-id="' + f.id + '" onclick="mfSelect(\'' + f.id + '\')">';
+    MF_COLS.forEach(function (c, ci) {
+      var cls = c.txt ? 'mf-txt' : 'mf-num', st = '';
+      if (c.pin) { cls += ' mf-fz'; if (!MF_COLS[ci + 1] || !MF_COLS[ci + 1].pin) cls += ' mf-edge'; st = ' style="right:' + mfFrozenOffset(ci) + 'px"'; }
+      if (MF.hidden[c.k]) cls += ' mf-hide';
+      h += '<td class="' + cls + '"' + st + ' data-full="' + mfEsc(mfRaw(c.k, f)) + '">' + mfCell(c, f) + '</td>';
+    });
+    h += '</tr>';
+    h += '<tr class="mf-det" id="mfDet-' + f.id + '" style="display:' + (MF.openId === f.id ? 'table-row' : 'none') + ';">' +
+      '<td colspan="' + MF_COLS.length + '"><div class="mf-detin">' + (MF.openId === f.id ? mfDetail(f) : '') + '</div></td></tr>';
+  });
+  h += '</tbody><tfoot class="mf-tot"><tr>';
+  var sums = {};
+  MF_COLS.forEach(function (c) { if (c.sum) sums[c.k] = 0; });
+  list.forEach(function (f) {
+    var c2 = f._c;
+    Object.keys(sums).forEach(function (k) { sums[k] += mfNum(c2[k] !== undefined ? c2[k] : f[k]); });
+  });
+  MF_COLS.forEach(function (c, ci) {
+    var cls = '', st = '';
+    if (c.pin) { cls = 'mf-fz'; st = ' style="right:' + mfFrozenOffset(ci) + 'px"'; }
+    if (MF.hidden[c.k]) cls += ' mf-hide';
+    var v = (c.k === 'seq') ? 'الإجمالي' : (sums[c.k] !== undefined ? mfL(mfFmt(sums[c.k])) : '');
+    h += '<td class="' + cls + '"' + st + '>' + v + '</td>';
+  });
+  h += '</tr></tfoot></table>';
+  wrap.innerHTML = h;
+  mfRenderApplied(list);
+  mfRenderAlerts();
+  mfRenderCharts(list);
+  mfAttachTips();
+}
+function mfRenderApplied(list) {
+  var box = document.getElementById('mfApplied'); if (!box) return;
+  var chips = [];
+  var q = mfFV('mfSearch'); if (q) chips.push({ l: 'بحث: ' + q, f: function () { document.getElementById('mfSearch').value = ''; } });
+  [['mfF_fileNo', 'رقم الملف'], ['mfF_company', 'الشركة'], ['mfF_agent', 'الوكيل'], ['mfF_clientLabel', 'العميل'],
+   ['mfF_supName', 'المشرف'], ['mfF_madinahHotel', 'فندق المدينة'], ['mfF_makkahHotel', 'فندق مكة'],
+   ['mfF_goFrom', 'سفر من'], ['mfF_retTo', 'عودة حتى']].forEach(function (p) {
+    var v = mfFV(p[0]);
+    if (v) chips.push({ l: p[1] + ': ' + v, f: (function (id) { return function () { document.getElementById(id).value = ''; }; })(p[0]) });
+  });
+  Object.keys(MF.colFilters).forEach(function (k) {
+    if (!MF.colFilters[k]) return;
+    var c = MF_COLS.filter(function (x) { return x.k === k; })[0];
+    chips.push({ l: '🔽 ' + (c ? c.l : k) + ': ' + MF.colFilters[k], f: function () { delete MF.colFilters[k]; } });
+  });
+  var FL = { unreviewed: 'لم تُراجع بعد', flag: 'به تنبيه قاعدة', approved: 'معتمد', notapproved: 'غير معتمد',
+    posted: 'له رقم قيد', noref: 'بدون قيد', vip: 'VIP', urgent: 'سفر خلال 3 أيام', nobal: 'بلا رصيد كافٍ' };
+  Object.keys(MF.facets).forEach(function (k) {
+    if (!MF.facets[k]) return;
+    chips.push({ l: FL[k] || k, f: function () {
+      MF.facets[k] = false;
+      var b = document.querySelector('#section-ministry .mf-facet[data-q="' + k + '"]'); if (b) b.classList.remove('on');
+    } });
+  });
+  MF._chipFns = chips.map(function (c) { return c.f; });
+  var h = '<span style="font-size:10.5px;font-weight:800;color:#94a3b8;">الفلاتر المطبقة:</span>';
+  if (!chips.length) h += '<span style="font-size:10.5px;color:#94a3b8;">لا يوجد</span>';
+  chips.forEach(function (c, i) {
+    h += '<span class="mf-chip">' + mfEsc(c.l) + '<button title="إلغاء هذا الفلتر" onclick="mfRemoveChip(' + i + ')">✕</button></span>';
+  });
+  if (chips.length) h += '<button class="mf-clearall" onclick="mfClearFilters()">✕ مسح كل الفلاتر</button>';
+  var tot = list.reduce(function (a, f) { return a + mfNum(f.pilgrims); }, 0);
+  h += '<span class="ms-auto" style="font-size:10.5px;color:#94a3b8;font-weight:700;">عرض ' + mfL(list.length) +
+    ' من ' + mfL(MF.files.length) + ' ملف · معتمرين: ' + mfL(tot) + '</span>';
+  box.innerHTML = h;
+  var ph = document.getElementById('mfPrintFilters');
+  if (ph) ph.textContent = 'الفلاتر المطبقة: ' + (chips.length ? chips.map(function (c) { return c.l; }).join('  ·  ') : 'بدون فلاتر — كل الملفات');
+  var ps = document.getElementById('mfPrintSub');
+  if (ps) ps.textContent = 'عدد الملفات: ' + list.length + '   |   إجمالي المعتمرين: ' + tot;
+}
+function mfRenderAlerts() {
+  var box = document.getElementById('mfAlerts'); if (!box) return;
+  var urgent = MF.files.filter(function (f) { return mfHasFlag(f, 'URGENT'); });
+  var low = [];
+  (MF.companies || []).forEach(function (c) {
+    var b = mfBalanceOf(c.company);
+    if (b.pending > b.balance) low.push({ company: c.company, short: b.pending - b.balance });
+  });
+  var h = '';
+  if (urgent.length) {
+    h += '<div class="mf-note bad" style="margin-bottom:8px;"><span style="font-size:16px;">⏰</span><div style="flex:1;">' +
+      '<div style="font-weight:800;color:#dc2626;margin-bottom:4px;">رحلات تسافر خلال 3 أيام أو أقل ولم تُراجع بعد (' + urgent.length + ')</div>' +
+      '<div class="d-flex gap-2 flex-wrap">' + urgent.map(function (f) {
+        return '<span class="mf-btn" style="font-size:10.5px;" onclick="mfSelect(\'' + f.id + '\',true)">' +
+          mfEsc(f.clientLabel || f.tripName || 'ملف') + ' — سفر ' + mfL(f.goDate) +
+          (mfStr(f.tripName) ? '' : ' · غير مرتبط برحلة') + '</span>';
+      }).join('') + '</div></div></div>';
+  }
+  if (low.length) {
+    h += '<div class="mf-note" style="background:#fef3e2;border:1px solid #f6d199;margin-bottom:8px;"><span style="font-size:16px;">🏦</span><div style="flex:1;">' +
+      '<div style="font-weight:800;color:#c2670a;margin-bottom:4px;">شركات ليس لها رصيد كافٍ في رسوم الغرفة للملفات التي لم تُراجع بعد</div>' +
+      '<div class="d-flex gap-2 flex-wrap">' + low.map(function (x) {
+        return '<span class="mf-btn" style="font-size:10.5px;" onclick="mfOpenReceipts()">' + mfEsc(x.company) +
+          ' — ينقص ' + mfL(mfFmt(x.short)) + '</span>';
+      }).join('') + '</div>' +
+      '<div style="font-size:10.5px;color:#5c6b83;margin-top:5px;font-weight:600;">التنبيه يظهر عند تسجيل رقم الملف وهو غير مانع · السحب الفعلي عند تسجيل تاريخ المراجعة.</div>' +
+      '</div></div>';
+  }
+  box.innerHTML = h;
+}
+function mfRenderCharts(list) {
+  var byComp = {}, byCli = {};
+  (MF.companies || []).forEach(function (c) { byComp[c.company] = 0; });
+  list.forEach(function (f) {
+    byComp[f.company] = (byComp[f.company] || 0) + mfNum(f.pilgrims);
+    (f.breakdown || []).forEach(function (b) { if (mfStr(b.name)) byCli[b.name] = (byCli[b.name] || 0) + mfNum(b.count); });
+  });
+  MF._byCli = byCli;
+  document.getElementById('mfChartComp').innerHTML = mfBars(byComp, 0);
+  document.getElementById('mfChartCli').innerHTML = mfBars(byCli, 5);
+  var tc = Object.keys(byComp).reduce(function (a, k) { return a + byComp[k]; }, 0);
+  var tl = Object.keys(byCli).reduce(function (a, k) { return a + byCli[k]; }, 0);
+  document.getElementById('mfCompFoot').textContent = 'الإجمالي: ' + tc + ' معتمر · ' + Object.keys(byComp).length + ' شركات';
+  document.getElementById('mfCliFoot').textContent = 'الإجمالي: ' + tl + ' معتمر · ' + Object.keys(byCli).length + ' عملاء';
+}
+function mfBars(obj, limit) {
+  var keys = Object.keys(obj).sort(function (a, b) { return obj[b] - obj[a]; });
+  if (limit) keys = keys.slice(0, limit);
+  if (!keys.length) return '<div style="font-size:11px;color:#94a3b8;padding:12px 0;">لا توجد بيانات</div>';
+  var max = Math.max.apply(null, keys.map(function (k) { return obj[k]; })) || 1;
+  return keys.map(function (k) {
+    return '<div class="mf-bar-row" title="' + mfEsc(k) + ': ' + obj[k] + ' معتمر"><span class="nm">' + mfEsc(k) + '</span>' +
+      '<span class="mf-track"><span class="mf-fill" style="width:' + Math.max(2, (obj[k] / max) * 100).toFixed(1) + '%"></span></span>' +
+      '<span style="font-size:11px;font-weight:800;" class="mf-latin">' + obj[k] + '</span></div>';
+  }).join('');
+}
+function mfAllClients() {
+  var o = MF._byCli || {};
+  var keys = Object.keys(o).sort(function (a, b) { return o[b] - o[a]; });
+  var t = keys.reduce(function (a, k) { return a + o[k]; }, 0);
+  var rows = keys.map(function (k, i) {
+    return '<tr><td class="mf-latin">' + (i + 1) + '</td><td>' + mfEsc(k) + '</td><td class="mf-latin">' + o[k] +
+      '</td><td class="mf-latin">' + (t ? ((o[k] / t) * 100).toFixed(1) : 0) + '%</td></tr>';
+  }).join('');
+  var html = '<table class="mf-mini" id="mfAllCliTable"><thead><tr><th>#</th><th>العميل</th><th>عدد المعتمرين</th><th>النسبة</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody><tfoot><tr><td></td><td>الإجمالي</td><td class="mf-latin">' + t + '</td><td class="mf-latin">100%</td></tr></tfoot></table>';
+  mfModal('👥 كل العملاء بأعدادهم', '<div id="mfAllCliWrap">' + html + '</div>',
+    '<button class="mf-btn" onclick="mfPrintFragment(\'mfAllCliWrap\',\'أعداد المعتمرين حسب العميل\')">🖨️ طباعة</button>' +
+    '<button class="mf-btn" onclick="mfImageFragment(\'mfAllCliWrap\',\'أعداد المعتمرين حسب العميل\',this)">📸 صورة HD</button>');
+}
+
+/* ---------- التحديد وفتح التفاصيل ---------- */
+function mfGet(id) { return MF.files.filter(function (f) { return f.id === id; })[0]; }
+function mfSelect(id, scroll) {
+  MF.selId = id;
+  document.querySelectorAll('#section-ministry tr.mf-row').forEach(function (t) { t.classList.remove('mf-sel'); });
+  var tr = document.querySelector('#section-ministry tr.mf-row[data-id="' + id + '"]');
+  if (tr) tr.classList.add('mf-sel');
+  var f = mfGet(id);
+  var el = document.getElementById('mfCurFile');
+  if (el) el.innerHTML = f ? (mfL('#' + f.seq) + ' · ' + (mfStr(f.fileNo) ? 'ملف ' + mfL(f.fileNo) : 'بدون رقم ملف') +
+    ' · ' + mfEsc(f.clientLabel || '—') + ' · ' + mfEsc(f.company || '—')) : '—';
+  if (scroll && tr) tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+function mfToggleDetail(id) {
+  var was = (MF.openId === id);
+  MF.openId = was ? null : id;
+  mfSelect(id);
+  mfRender();
+}
+function mfToggleApproved(id) {
+  var f = mfGet(id); if (!f) return;
+  if (!MF.can.edit) { _showPopup('لا تملك صلاحية تعديل ملفات المراجعة', 'error'); return; }
+  var next = !f.approved;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      f.approved = next;
+      if (res.balances) MF.balances = res.balances;
+      if (res.file) { res.file._c = mfCalc(res.file); Object.keys(res.file).forEach(function (k) { f[k] = res.file[k]; }); }
+      mfRender();
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveMinistryFile(window.authToken, Object.assign({}, mfPayload(f), { approved: next }));
+}
+function mfPayload(f) {
+  return {
+    id: f.id, fileNo: f.fileNo, approved: f.approved, eInvoice: f.eInvoice, ref: f.ref,
+    company: f.company, agent: f.agent, reviewDate: f.reviewDate, reviewType: f.reviewType,
+    vipReason: f.vipReason, travelMode: f.travelMode, clientLabel: f.clientLabel,
+    breakdown: f.breakdown, tripName: f.tripName, goDate: f.goDate, retDate: f.retDate,
+    pilgrims: f.pilgrims, supCount: f.supCount, sups: f.sups,
+    progPrice: f.progPrice, ticket: f.ticket, roomFee: f.roomFee, adminFee: f.adminFee,
+    pct: f.pct, fxRate: f.fxRate,
+    madinahHotel: f.madinahHotel, madinahIn: f.madinahIn, madinahOut: f.madinahOut,
+    makkahHotel: f.makkahHotel, makkahIn: f.makkahIn, makkahOut: f.makkahOut,
+    transport: f.transport, notes: f.notes, selected: f.selected,
+    _manualType: !!f._manualType
+  };
+}
+
+/* ---------- بطاقة التفاصيل ---------- */
+function mfDetail(f) {
+  var c = f._c || mfCalc(f), rb = c.roomFeeEffective, bal = mfBalanceOf(f.company);
+  var h = '<div class="mf-dgrid"><div><div class="mf-dcard">';
+  h += mfStr(f.tripName)
+    ? '<div class="mf-trip">🔗 مرتبط بالرحلة: ' + mfEsc(f.tripName) +
+      '<button class="mf-btn ms-auto" style="font-size:10px;" onclick="event.stopPropagation();mfGoTrip(\'' + mfEsc(f.tripName).replace(/'/g, "\\'") + '\')">فتح الرحلة ⬅</button></div>'
+    : '<div class="mf-note bad">✖<div>هذا الملف <b>غير مرتبط بأي رحلة</b> — يظهر التنبيه في شاشة الرحلات أيضاً.</div></div>';
+  h += '<h6>📑 التوجيه المحاسبي (موحّد مع توجيه رسوم غرفة المشرف)</h6>';
+  h += '<table class="mf-mini"><thead><tr><th>بند التوجيه</th><th>معتمرين</th><th>مشرفين</th><th>رسوم الغرفة</th><th>ملاحظات</th></tr></thead><tbody>';
+  var tp = 0, ts = 0, tv = 0;
+  (f.breakdown || []).forEach(function (b) {
+    var sf = (mfNum(b.sups) > 0 && (f.sups || []).some(function (s) { return String(s.type || '').indexOf('مرافق') >= 0; })) ? c.supRoomFee : 0;
+    var v = mfNum(b.count) * rb + (sf > 0 ? mfNum(b.sups) * sf : 0);
+    tp += mfNum(b.count); ts += mfNum(b.sups); tv += v;
+    h += '<tr><td>' + mfEsc(b.name) + '</td><td>' + mfL(b.count) + '</td><td>' +
+      (mfNum(b.sups) > 0 ? mfL(b.sups) + ' ' + (sf > 0 ? '(مرافق)' : '(بدون رسوم)') : mfL(0)) + '</td>' +
+      '<td>' + mfL((mfNum(b.count) + (sf > 0 ? mfNum(b.sups) : 0)) + ' × ' + mfFmt(rb) + ' = ' + mfFmt(v)) + '</td>' +
+      '<td style="color:#5c6b83;">' + mfEsc(b.note || '—') + '</td></tr>';
+  });
+  if (!(f.breakdown || []).length) h += '<tr><td colspan="5" style="color:#94a3b8;">لا توجد بنود — اضغط «تعديل الملف» لإضافتها</td></tr>';
+  h += '</tbody><tfoot><tr><td>الإجمالي</td><td>' + mfL(tp) + '</td><td>' + mfL(ts) + '</td><td>' + mfL(mfFmt(tv)) + '</td><td></td></tr></tfoot></table>';
+  h += (tp === mfNum(f.pilgrims))
+    ? '<div class="mf-note good">✅ إجمالي البنود (' + mfL(tp) + ') يطابق عمود معتمرين (' + mfL(f.pilgrims) + ')</div>'
+    : '<div class="mf-note bad">⚠️ إجمالي البنود (' + mfL(tp) + ') لا يطابق عمود معتمرين (' + mfL(f.pilgrims) + ')</div>';
+  var dc = (f.breakdown || []).filter(function (b) { return mfStr(b.name) && mfStr(b.name).indexOf('أفراد') < 0; })[0];
+  if (dc) h += '<div class="mf-note info">🧾<div>يُرحَّل إلى كشف حساب العميل بند <b>«رسوم غرفة»</b> بصيغة العدد × القيمة — مثال: <b>' +
+    mfEsc(dc.name) + ' ← ' + mfL(mfNum(dc.count) + ' × ' + mfFmt(rb) + ' = ' + mfFmt(mfNum(dc.count) * rb)) + '</b></div></div>';
+  h += '<div class="d-flex gap-2 flex-wrap mt-2">' +
+    '<button class="mf-btn pri" onclick="event.stopPropagation();mfEditFile(\'' + f.id + '\')">✏️ تعديل الملف</button>' +
+    '<button class="mf-btn" onclick="event.stopPropagation();mfPickPilgrims(\'' + f.id + '\')">👥 اختيار المعتمرين</button>' +
+    '<button class="mf-btn" onclick="event.stopPropagation();mfHistory(\'' + f.id + '\')">📜 سجل التعديلات</button>' +
+    (MF.can.del ? '<button class="mf-btn" style="color:#dc2626;" onclick="event.stopPropagation();mfDeleteFile(\'' + f.id + '\')">🗑️ حذف</button>' : '') +
+    '</div></div>';
+
+  if ((f.sups || []).length) {
+    h += '<div class="mf-dcard"><h6>🧑‍✈️ المشرفون</h6>';
+    (f.sups || []).forEach(function (s) {
+      var isM = String(s.type || '').indexOf('مرافق') >= 0;
+      h += '<div class="d-flex align-items-center gap-2 mb-1" style="background:#eef1f6;border-radius:8px;padding:5px 8px;font-size:11px;">' +
+        '<b style="flex:1;">' + mfEsc(s.name) + '</b>' +
+        '<span class="mf-badge ' + (isM ? 'norm' : 'off') + '">' + mfEsc(s.type) + '</span>' +
+        '<span style="font-size:10px;color:#94a3b8;">' + (isM ? 'برسوم غرفة' : 'بدون رسوم غرفة ولا مخالصة') + '</span>' +
+        (s.directTo ? '<span class="mf-badge link">على: ' + mfEsc(s.directTo) + '</span>' : '') + '</div>';
+    });
+    h += '</div>';
+  }
+
+  h += '</div><div><div class="mf-dcard"><h6>⚖️ فحص قواعد العمل</h6>';
+  if ((f.flags || []).length) {
+    (f.flags || []).forEach(function (x) { h += '<div class="mf-note bad">⚠️<div>' + mfEsc(x.msg) + '</div></div>'; });
+  } else {
+    h += '<div class="mf-note good">✅ لا توجد مخالفات لقواعد العمل على هذا الملف</div>';
+  }
+  if (f.reviewType === 'VIP') {
+    h += '<div class="mf-note good">⭐ نوع المراجعة VIP' + (mfStr(f.vipReason) ? ' — ' + mfEsc(f.vipReason) : ' (تلقائي: جمعة/سبت أو أقل من 3 أيام على السفر)') +
+      ' · تُضاف ' + mfL((MF.cfg.vipSurcharge || 100)) + ' ج لرسوم غرفة المعتمر فقط دون المشرف.</div>';
+  }
+  if (mfReviewed(f)) {
+    h += '<div class="mf-note good">🏦 سُحب <b>' + mfL(mfFmt(c.totalRoomFee)) + '</b> من رصيد رسوم الغرفة لشركة ' +
+      mfEsc(f.company) + ' عند تسجيل تاريخ المراجعة (' + mfL(f.reviewDate) + ').</div>';
+  } else {
+    h += '<div class="mf-note info">🏦<div>رصيد الشركة الحالي ' + mfL(mfFmt(bal.balance)) + ' · المطلوب لهذا الملف ' +
+      mfL(mfFmt(c.totalRoomFee)) + ' — السحب يتم عند تسجيل تاريخ المراجعة.</div></div>';
+  }
+  h += '</div>';
+
+  h += '<div class="mf-dcard"><h6>🧮 تفصيل الحساب</h6><table class="mf-mini"><tbody>' +
+    mfKV('الإيراد = معتمرين × سعر البرنامج', mfFmt(c.revenue)) +
+    mfKV('إجمالي التذاكر = التذكرة × (معتمرين + مشرفين)', mfFmt(c.totalTickets)) +
+    mfKV('إجمالي رسوم الغرفة = (معتمرين × ' + mfFmt(c.roomFeeEffective) + ') + (مرافقون ' + c.murafiq + ' × ' + mfFmt(c.supRoomFee) + ')', mfFmt(c.totalRoomFee)) +
+    mfKV('مصروفات أخرى = رسوم إدارية × الأفراد', mfFmt(c.otherExp)) +
+    (c.barcodeFee ? mfKV('رسوم تجديد الباركود', mfFmt(c.barcodeFee)) : '') +
+    mfKV('النسبة المخصومة', (mfNum(f.pct).toFixed(2)) + '% = ' + mfFmt(c.revenue * mfNum(f.pct) / 100)) +
+    mfKV('<b>المخالصة للفرد بالريال</b> (معادلة عكسية)', '<b>' + mfFmt(c.clearanceSAR) + '</b>') +
+    mfKV('إجمالي الريال', mfFmt(c.totalSAR)) +
+    mfKV('إجمالي المصروف', mfFmt(c.totalExp)) +
+    mfKV('<b>هامش الربح</b>', '<b>' + mfFmt(c.margin) + '</b>') +
+    mfKV('هامش الفرد', mfFmt(c.perPersonMargin)) +
+    '</tbody></table></div>';
+
+  h += '<div class="mf-dcard"><h6>🏨 السكن</h6><table class="mf-mini"><thead><tr><th>الفندق</th><th>دخول</th><th>خروج</th></tr></thead><tbody>' +
+    '<tr><td>' + mfEsc(f.madinahHotel || '—') + ' <span style="color:#94a3b8;">(المدينة)</span></td><td>' + mfL(f.madinahIn || '—') + '</td><td>' + mfL(f.madinahOut || '—') + '</td></tr>' +
+    '<tr><td>' + mfEsc(f.makkahHotel || '—') + ' <span style="color:#94a3b8;">(مكة)</span></td><td>' + mfL(f.makkahIn || '—') + '</td><td>' + mfL(f.makkahOut || '—') + '</td></tr>' +
+    '</tbody></table></div>';
+
+  h += '<div class="mf-dcard"><h6>📜 التتبع</h6><div style="font-size:11px;color:#5c6b83;line-height:1.9;">' +
+    '<b>أنشئ بواسطة:</b> ' + mfEsc(f.createdBy || '—') + ' · ' + mfL(f.createdAt || '—') + '<br>' +
+    '<b>آخر تعديل:</b> ' + mfEsc(f.updatedBy || '—') + ' · ' + mfL(f.updatedAt || '—') + '</div></div>';
+  return h + '</div></div>';
+}
+function mfKV(k, v) { return '<tr><td style="color:#5c6b83;">' + k + '</td><td style="text-align:end;font-weight:700;" class="mf-latin">' + v + '</td></tr>'; }
+function mfGoTrip(name) {
+  try {
+    if (typeof switchPage === 'function') switchPage('trips');
+    setTimeout(function () {
+      var box = document.getElementById('tripsSearchInput') || document.querySelector('#section-trips input[type="search"]');
+      if (box) { box.value = name; box.dispatchEvent(new Event('input', { bubbles: true })); }
+    }, 400);
+  } catch (e) { _showPopup('تعذّر فتح شاشة الرحلات: ' + (e.message || e), 'error'); }
+}
+
+/* ---------- التلميح على النص الطويل ---------- */
+function mfAttachTips() {
+  var tip = document.getElementById('mfCellTip'); if (!tip) return;
+  document.querySelectorAll('#section-ministry tbody td').forEach(function (td) {
+    td.addEventListener('mouseenter', function () {
+      if (td.scrollWidth <= td.clientWidth + 1) return;
+      var full = td.getAttribute('data-full'); if (!full) return;
+      tip.textContent = full; tip.classList.add('show');
+      var r = td.getBoundingClientRect();
+      tip.style.top = (r.bottom + 5) + 'px';
+      tip.style.left = Math.max(8, Math.min(window.innerWidth - 350, r.left)) + 'px';
+    });
+    td.addEventListener('mouseleave', function () { tip.classList.remove('show'); });
+  });
+}
+
+/* ---------- تصفية عمود من رأسه ---------- */
+var _mfPopKey = null;
+function mfColFilter(ev, k) {
+  _mfPopKey = k;
+  var col = MF_COLS.filter(function (c) { return c.k === k; })[0];
+  var pop = document.getElementById('mfColFilterPop');
+  document.getElementById('mfColFilterLbl').textContent = 'تصفية: ' + col.l;
+  var inp = document.getElementById('mfColFilterInput');
+  inp.value = MF.colFilters[k] || '';
+  inp.oninput = function () {
+    var v = mfStr(inp.value);
+    if (v) MF.colFilters[_mfPopKey] = v; else delete MF.colFilters[_mfPopKey];
+    mfRender();
+  };
+  var r = ev.currentTarget.getBoundingClientRect();
+  pop.style.top = (r.bottom + 6) + 'px';
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - 195, r.left - 70)) + 'px';
+  pop.classList.add('show');
+  setTimeout(function () { inp.focus(); }, 30);
+}
+
+/* ---------- التقويم المخصص ---------- */
+var MFDP = { id: null, el: null, y: 0, m: 0, after: null };
+var MF_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+var MF_DOW = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+function mfPickDate(id, ev, after) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var el = document.getElementById(id); if (!el) return;
+  MFDP.id = id; MFDP.el = el; MFDP.after = after || null;
+  var cur = mfDate(el.value), p = cur ? cur.split('/') : null;
+  if (p && p.length === 3) { MFDP.y = +p[2]; MFDP.m = +p[1] - 1; }
+  else { var t = (MF.today || '').split('/'); var now = new Date();
+    MFDP.y = t.length === 3 ? +t[2] : now.getFullYear(); MFDP.m = t.length === 3 ? +t[1] - 1 : now.getMonth(); }
+  mfDpRender();
+  var box = document.getElementById('mfDatePick');
+  box.classList.add('show');
+  var anchor = (ev && ev.currentTarget) ? ev.currentTarget : el;
+  var r = anchor.getBoundingClientRect(), bw = 248, bh = box.offsetHeight || 290;
+  box.style.left = Math.max(6, Math.min(window.innerWidth - bw - 6, r.right - bw)) + 'px';
+  box.style.top = ((r.bottom + bh + 8 > window.innerHeight) ? Math.max(6, r.top - bh - 6) : (r.bottom + 6)) + 'px';
+}
+function mfDpRender() {
+  var box = document.getElementById('mfDatePick');
+  var cur = mfDate(MFDP.el ? MFDP.el.value : ''), selMs = cur ? mfMs(cur) : NaN;
+  var todayMs = mfMs(MF.today || '');
+  var startDow = new Date(MFDP.y, MFDP.m, 1).getDay();
+  var dim = new Date(MFDP.y, MFDP.m + 1, 0).getDate();
+  var prevDim = new Date(MFDP.y, MFDP.m, 0).getDate();
+  var h = '<div class="dh"><button type="button" onclick="mfDpNav(-1)" title="الشهر السابق">‹</button>' +
+    '<select class="mo" onchange="MFDP.m=+this.value;mfDpRender()">' +
+    MF_MONTHS.map(function (n, i) { return '<option value="' + i + '"' + (i === MFDP.m ? ' selected' : '') + '>' + n + '</option>'; }).join('') +
+    '</select><select onchange="MFDP.y=+this.value;mfDpRender()">';
+  var y0 = (new Date()).getFullYear() - 3;
+  for (var y = y0; y <= y0 + 10; y++) h += '<option value="' + y + '"' + (y === MFDP.y ? ' selected' : '') + '>' + y + '</option>';
+  h += '</select><button type="button" onclick="mfDpNav(1)" title="الشهر التالي">›</button></div><div class="dg">';
+  MF_DOW.forEach(function (d) { h += '<div class="dw">' + d + '</div>'; });
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  for (var i = 0; i < startDow; i++) h += '<button type="button" class="dd other" disabled>' + (prevDim - startDow + i + 1) + '</button>';
+  var anyWe = false;
+  for (var d = 1; d <= dim; d++) {
+    var ms = new Date(MFDP.y, MFDP.m, d).getTime();
+    var dow = new Date(MFDP.y, MFDP.m, d).getDay();
+    var cls = 'dd' + ((dow === 5 || dow === 6) ? ' we' : '') + (ms === todayMs ? ' today' : '') + (ms === selMs ? ' sel' : '');
+    if (dow === 5 || dow === 6) anyWe = true;
+    h += '<button type="button" class="' + cls + '" onclick="mfDpPick(' + d + ')" title="' +
+      (dow === 5 ? 'جمعة — مراجعة VIP تلقائية' : (dow === 6 ? 'سبت — مراجعة VIP تلقائية' : '')) + '">' + d + '</button>';
+  }
+  h += '</div><div class="df"><button type="button" onclick="mfDpToday()">اليوم</button>' +
+    '<button type="button" onclick="mfDpClear()">مسح</button><button type="button" onclick="mfDpClose()">إغلاق</button></div>';
+  if (anyWe) h += '<div class="dn">الجمعة والسبت = مراجعة VIP تلقائية</div>';
+  box.innerHTML = h;
+}
+function mfDpNav(k) { MFDP.m += k; if (MFDP.m < 0) { MFDP.m = 11; MFDP.y--; } if (MFDP.m > 11) { MFDP.m = 0; MFDP.y++; } mfDpRender(); }
+function mfDpPick(d) {
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  MFDP.el.value = pad(d) + '/' + pad(MFDP.m + 1) + '/' + MFDP.y;
+  mfDpClose(); mfDpAfter();
+}
+function mfDpToday() { MFDP.el.value = MF.today || ''; mfDpClose(); mfDpAfter(); }
+function mfDpClear() { MFDP.el.value = ''; mfDpClose(); mfDpAfter(); }
+function mfDpClose() { var b = document.getElementById('mfDatePick'); if (b) b.classList.remove('show'); }
+function mfDpAfter() {
+  if (MFDP.after) { try { MFDP.after(MFDP.el.value); } catch (e) {} }
+  else if (MFDP.id && MFDP.id.indexOf('mfF_') === 0) mfRender();
+  if (MFDP.el) { try { MFDP.el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {} }
+}
+// تطبيع كل حقول التاريخ عند الخروج منها + تحويل الأرقام العربية فوراً
+function mfAttachDateInputs() {
+  document.querySelectorAll('#section-ministry .mf-date input, .mf-dlg .mf-date input').forEach(function (el) {
+    if (el._mfDateBound) return; el._mfDateBound = true;
+    el.addEventListener('blur', function () {
+      el.value = mfDate(el.value);
+      if (el.id && el.id.indexOf('mfF_') === 0) mfRender();
+    });
+    el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { el.value = mfDate(el.value); el.blur(); } });
+  });
+}
+
+/* ---------- البحث التنبئي ---------- */
+function mfTaList(id) {
+  if (id === 'mfF_company') return (MF.companies || []).map(function (c) { return c.company; });
+  if (id === 'mfF_agent') return mfUniq(function (f) { return f.agent; }).concat((MF.companies || []).map(function (c) { return c.agent; }));
+  if (id === 'mfF_supName') return (MF.sups || []).map(function (s) { return s.name; });
+  if (id === 'mfF_fileNo') return mfUniq(function (f) { return f.fileNo; });
+  if (id === 'mfF_clientLabel') return mfUniq(function (f) { return f.clientLabel; })
+    .concat(MF.clients || []).concat((MF.trips || []).map(function (t) { return t.name; }));
+  if (id === 'mfF_madinahHotel') return mfUniq(function (f) { return f.madinahHotel; });
+  if (id === 'mfF_makkahHotel') return mfUniq(function (f) { return f.makkahHotel; });
+  return [];
+}
+function mfUniq(fn) {
+  var out = [];
+  MF.files.forEach(function (f) { var v = mfStr(fn(f)); if (v && v !== '—' && out.indexOf(v) < 0) out.push(v); });
+  return out;
+}
+function mfAttachTypeaheads() {
+  ['mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_clientLabel', 'mfF_supName', 'mfF_madinahHotel', 'mfF_makkahHotel']
+    .forEach(function (id) { mfBindTA(id, function () { return mfTaList(id); }, function () { mfRender(); }); });
+  var s = document.getElementById('mfSearch');
+  if (s && !s._mfBound) { s._mfBound = true; s.addEventListener('input', function () { mfRender(); }); }
+}
+function mfBindTA(id, getList, onPick) {
+  var inp = document.getElementById(id); if (!inp || inp._mfTA) return;
+  inp._mfTA = true;
+  var box = document.getElementById('mfTypeahead');
+  function draw() {
+    var v = mfStr(inp.value).toLowerCase();
+    var seen = {}, items = [];
+    (getList() || []).forEach(function (x) {
+      var s = mfStr(x); if (!s || seen[s]) return;
+      if (v && s.toLowerCase().indexOf(v) < 0) return;
+      seen[s] = 1; items.push(s);
+    });
+    items = items.slice(0, 14);
+    if (!items.length) { box.innerHTML = '<div class="te">لا توجد نتائج مطابقة</div>'; }
+    else {
+      box.innerHTML = items.map(function (s) {
+        var i = v ? s.toLowerCase().indexOf(v) : -1;
+        var lbl = i >= 0 ? (mfEsc(s.slice(0, i)) + '<span class="hl">' + mfEsc(s.slice(i, i + v.length)) + '</span>' + mfEsc(s.slice(i + v.length))) : mfEsc(s);
+        return '<div class="ti" data-v="' + mfEsc(s) + '">' + lbl + '</div>';
+      }).join('');
+      box.querySelectorAll('.ti').forEach(function (el) {
+        el.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          inp.value = el.getAttribute('data-v');
+          box.classList.remove('show');
+          if (onPick) onPick();
+        });
+      });
+    }
+    var r = inp.getBoundingClientRect();
+    box.style.minWidth = Math.max(150, r.width) + 'px';
+    box.style.left = Math.max(6, Math.min(window.innerWidth - 200, r.left)) + 'px';
+    box.style.top = (r.bottom + 4) + 'px';
+    box.classList.add('show');
+    box._mfOwner = id;
+  }
+  inp.addEventListener('input', function () { inp.value = mfLatin(inp.value); draw(); if (onPick) onPick(); });
+  inp.addEventListener('focus', draw);
+  inp.addEventListener('blur', function () { setTimeout(function () { if (box._mfOwner === id) box.classList.remove('show'); }, 140); });
+}
+
+/* ---------- تخصيص الأعمدة: إظهار/إخفاء + تثبيت + سحب ---------- */
+function mfBuildColWin() {
+  var gs = [];
+  MF_COLS.forEach(function (c) { if (gs.indexOf(c.g) < 0) gs.push(c.g); });
+  var h = '';
+  gs.forEach(function (g) {
+    var cols = MF_COLS.filter(function (c) { return c.g === g; });
+    var allOn = cols.every(function (c) { return !MF.hidden[c.k]; });
+    h += '<div class="g"><div class="gh"><input type="checkbox" ' + (allOn ? 'checked' : '') +
+      ' onchange="mfSetGroup(\'' + mfEsc(g).replace(/'/g, "\\'") + '\',this.checked)"> ' + mfEsc(g) +
+      '<span class="lk"><button type="button" onclick="mfSetGroup(\'' + mfEsc(g).replace(/'/g, "\\'") + '\',true)">الكل</button>' +
+      '<button type="button" onclick="mfSetGroup(\'' + mfEsc(g).replace(/'/g, "\\'") + '\',false)">لا شيء</button></span></div>';
+    cols.forEach(function (c) {
+      h += '<div class="ci" draggable="true" data-key="' + c.k + '" ondragstart="mfDragStart(event,\'' + c.k + '\')"' +
+        ' ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)" ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
+        '<span style="color:#94a3b8;font-size:11px;">⠿</span>' +
+        '<input type="checkbox" ' + (MF.hidden[c.k] ? '' : 'checked') + ' onchange="mfSetCol(\'' + c.k + '\',this.checked)">' +
+        '<span class="nm">' + mfEsc(c.l) + '</span>' +
+        '<button type="button" class="pin' + (c.pin ? ' on' : '') + '" title="تثبيت العمود عند التمرير الأفقي" onclick="mfTogglePin(\'' + c.k + '\')">📌</button></div>';
+    });
+    h += '</div>';
+  });
+  document.getElementById('mfColWinBody').innerHTML = h;
+}
+function mfSetCol(k, on) { MF.hidden[k] = !on; mfRender(); mfBuildColWin(); }
+function mfSetGroup(g, on) { MF_COLS.filter(function (c) { return c.g === g; }).forEach(function (c) { MF.hidden[c.k] = !on; }); mfRender(); mfBuildColWin(); }
+function mfTogglePin(k) {
+  var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
+  if (i < 0) return;
+  var c = MF_COLS[i];
+  if (c.pin) c.pin = 0;
+  else {
+    c.pin = 1;
+    var last = -1;
+    MF_COLS.forEach(function (x, ix) { if (x.pin && ix !== i) last = ix; });
+    var item = MF_COLS.splice(i, 1)[0];
+    MF_COLS.splice(last < i ? last + 1 : last, 0, item);
+  }
+  mfRender(); mfBuildColWin();
+  _showPopup(c.pin ? ('تم تثبيت العمود «' + c.l + '»') : ('تم إلغاء تثبيت العمود «' + c.l + '»'), 'success');
+}
+function mfMoveCol(from, to) {
+  var fi = -1, ti = -1;
+  MF_COLS.forEach(function (c, i) { if (c.k === from) fi = i; if (c.k === to) ti = i; });
+  if (fi < 0 || ti < 0 || fi === ti) return;
+  var it = MF_COLS.splice(fi, 1)[0];
+  MF_COLS.splice(ti, 0, it);
+  mfRender(); mfBuildColWin();
+}
+var _mfDragKey = null;
+function mfDragStart(e, k) { _mfDragKey = k; if (e.currentTarget.classList) e.currentTarget.classList.add('mf-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch (x) {} }
+function mfDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('mf-dragover'); }
+function mfDragLeave(e) { e.currentTarget.classList.remove('mf-dragover'); }
+function mfDrop(e, k) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('mf-dragover'); if (_mfDragKey && _mfDragKey !== k) mfMoveCol(_mfDragKey, k); _mfDragKey = null; }
+function mfDragEnd() { document.querySelectorAll('.mf-dragover,.mf-dragging').forEach(function (x) { x.classList.remove('mf-dragover', 'mf-dragging'); }); }
+function mfResetCols() {
+  MF.hidden = {};
+  MF_COLS.sort(function (a, b) { return MF_COLS_ORDER.indexOf(a.k) - MF_COLS_ORDER.indexOf(b.k); });
+  MF_COLS.forEach(function (c) { c.pin = MF_COLS_PIN[MF_COLS_ORDER.indexOf(c.k)] ? 1 : 0; });
+  mfRender(); mfBuildColWin();
+  _showPopup('تمت إعادة الأعمدة للوضع الافتراضي', 'success');
+}
+function mfColPrefsKey() {
+  var u = (window.currentUser && window.currentUser.username) ? window.currentUser.username : '__anon__';
+  return 'mfCols_' + u;
+}
+function mfSaveColPrefs() {
+  try {
+    localStorage.setItem(mfColPrefsKey(), JSON.stringify({
+      order: MF_COLS.map(function (c) { return c.k; }),
+      pin: MF_COLS.filter(function (c) { return c.pin; }).map(function (c) { return c.k; }),
+      hidden: Object.keys(MF.hidden).filter(function (k) { return MF.hidden[k]; })
+    }));
+    _showPopup('تم حفظ ترتيب الأعمدة وتثبيتها وإظهارها كافتراضي لهذا المستخدم', 'success');
+  } catch (e) { _showPopup('تعذّر الحفظ محلياً: ' + (e.message || e), 'error'); }
+}
+function mfRestoreColPrefs() {
+  try {
+    var raw = localStorage.getItem(mfColPrefsKey()); if (!raw) return;
+    var p = JSON.parse(raw); if (!p) return;
+    if (Array.isArray(p.order)) {
+      MF_COLS.sort(function (a, b) {
+        var ia = p.order.indexOf(a.k), ib = p.order.indexOf(b.k);
+        if (ia < 0) ia = 999; if (ib < 0) ib = 999;
+        return ia - ib;
+      });
+    }
+    if (Array.isArray(p.pin)) MF_COLS.forEach(function (c) { c.pin = p.pin.indexOf(c.k) >= 0 ? 1 : 0; });
+    MF.hidden = {};
+    if (Array.isArray(p.hidden)) p.hidden.forEach(function (k) { MF.hidden[k] = true; });
+  } catch (e) {}
+}
+var _mfColWinOpen = false;
+function mfOpenColWin(ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var w = document.getElementById('mfColWin');
+  if (!w.style.top) { w.style.top = '140px'; w.style.left = '24px'; }
+  w.classList.add('show'); _mfColWinOpen = true; mfBuildColWin();
+}
+function mfCloseColWin() { document.getElementById('mfColWin').classList.remove('show'); _mfColWinOpen = false; }
+(function () {
+  document.addEventListener('mousedown', function (e) {
+    var pop = document.getElementById('mfColFilterPop');
+    if (pop && pop.classList.contains('show') && !pop.contains(e.target) && !(e.target.closest && e.target.closest('.mf-thic'))) pop.classList.remove('show');
+    if (_mfColWinOpen) {
+      var w = document.getElementById('mfColWin');
+      if (w && !w.contains(e.target)) mfCloseColWin();
+    }
+    var dp = document.getElementById('mfDatePick');
+    if (dp && dp.classList.contains('show') && !dp.contains(e.target) && !(e.target.closest && e.target.closest('.mf-date'))) mfDpClose();
+  });
+  // سحب نافذة تخصيص الأعمدة
+  var w = document.getElementById('mfColWin');
+  var hd = document.getElementById('mfColWinHead');
+  if (w && hd) {
+    var dx = 0, dy = 0, dr = false;
+    hd.addEventListener('mousedown', function (e) {
+      if (e.target.classList && e.target.classList.contains('btn-close')) return;
+      dr = true; var r = w.getBoundingClientRect(); dx = e.clientX - r.left; dy = e.clientY - r.top; e.preventDefault();
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (!dr) return;
+      w.style.left = Math.max(4, Math.min(window.innerWidth - 60, e.clientX - dx)) + 'px';
+      w.style.top = Math.max(4, Math.min(window.innerHeight - 60, e.clientY - dy)) + 'px';
+    });
+    document.addEventListener('mouseup', function () { dr = false; });
+  }
+  // التنقل بالأسهم بين الملفات
+  document.addEventListener('keydown', function (e) {
+    var sec = document.getElementById('section-ministry');
+    if (!sec || !sec.classList.contains('active')) return;
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].indexOf(document.activeElement.tagName) >= 0) return;
+    var list = mfVisible(); if (!list.length) return;
+    var i = -1; list.forEach(function (f, ix) { if (f.id === MF.selId) i = ix; });
+    i = (e.key === 'ArrowDown') ? Math.min(list.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
+    e.preventDefault();
+    mfSelect(list[i].id);
+    var tr = document.querySelector('#section-ministry tr.mf-row[data-id="' + list[i].id + '"]');
+    if (tr) tr.scrollIntoView({ block: 'nearest' });
+  });
+})();
+
+/* ---------- نافذة عامة ---------- */
+function mfModal(title, body, foot, wide) {
+  mfCloseModal();
+  var ov = document.createElement('div');
+  ov.id = 'mfModalOv';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,24,.5);z-index:2300;display:flex;' +
+    'align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML = '<div class="mf-dlg" style="background:#fff;border-radius:14px;width:min(' + (wide || 880) + 'px,100%);' +
+    'max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35);direction:rtl;font-size:13px;">' +
+    '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;">' +
+    '<b style="font-size:14px;">' + title + '</b>' +
+    '<button type="button" class="btn-close ms-auto" onclick="mfCloseModal()"></button></div>' +
+    '<div style="padding:14px 16px;overflow:auto;background:#f8fafc;flex:1;" id="mfModalBody">' + body + '</div>' +
+    (foot ? '<div style="padding:11px 16px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + foot + '</div>' : '') +
+    '</div>';
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) mfCloseModal(); });
+  document.body.appendChild(ov);
+  mfAttachDateInputs();
+  return ov;
+}
+function mfCloseModal() { var o = document.getElementById('mfModalOv'); if (o && o.parentNode) o.parentNode.removeChild(o); }
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { mfCloseModal(); mfDpClose(); mfCloseColWin(); } });
+
+/* ---------- نموذج ملف المراجعة (إضافة/تعديل) ---------- */
+function mfNewFile() {
+  if (!MF.can.add) { _showPopup('لا تملك صلاحية إضافة ملفات مراجعة', 'error'); return; }
+  mfEditFile(null);
+}
+function mfEditFile(id) {
+  var f = id ? mfGet(id) : null;
+  if (id && !MF.can.edit) { _showPopup('لا تملك صلاحية تعديل ملفات المراجعة', 'error'); return; }
+  var d = f ? JSON.parse(JSON.stringify(mfPayload(f))) : {
+    id: '', fileNo: '', approved: false, eInvoice: '', ref: '', company: '', agent: '',
+    reviewDate: '', reviewType: 'عادية', vipReason: '', travelMode: 'طيران', clientLabel: '',
+    breakdown: [], tripName: '', goDate: '', retDate: '', pilgrims: 0, supCount: 0, sups: [],
+    progPrice: 0, ticket: 0, roomFee: mfRoomFeeAt(MF.today), adminFee: 0, pct: 0, fxRate: 0,
+    madinahHotel: '', madinahIn: '', madinahOut: '', makkahHotel: '', makkahIn: '', makkahOut: '',
+    transport: '', notes: '', selected: []
+  };
+  MF._draft = d;
+  mfModal((id ? '✏️ تعديل ملف مراجعة' : '➕ ملف مراجعة جديد'), '<div id="mfFormBox"></div>',
+    '<span id="mfFormWarn" style="font-size:11px;color:#c2670a;font-weight:700;"></span>' +
+    '<div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="mfSaveDraft()">💾 حفظ الملف</button>', 1000);
+  mfFormRender();
+}
+function mfFormRender() {
+  var d = MF._draft;
+  var comps = (MF.companies || []).map(function (c) { return c.company; });
+  var tripNames = (MF.trips || []).map(function (t) { return t.name; });
+  var c = mfCalc(d);
+  var h = '<div class="row g-2">';
+  h += mfFld('رقم الملف', '<input class="form-control form-control-sm" id="mfd_fileNo" value="' + mfEsc(d.fileNo) + '" oninput="mfDraftSet(\'fileNo\',this.value)">', 2);
+  h += mfFld('فاتورة إلكترونية', '<input class="form-control form-control-sm" id="mfd_eInvoice" value="' + mfEsc(d.eInvoice) + '" oninput="mfDraftSet(\'eInvoice\',this.value)">', 2);
+  h += mfFld('القيد (مرجع)', '<input class="form-control form-control-sm" id="mfd_ref" value="' + mfEsc(d.ref) + '" oninput="mfDraftSet(\'ref\',this.value)">', 2);
+  h += mfFld('معتمد', '<div class="pt-1"><span class="mf-tog ' + (d.approved ? 'on' : '') + '" onclick="mfDraftSet(\'approved\',!MF._draft.approved);mfFormRender()"></span></div>', 2);
+  h += mfFld('الشركة المصرية', mfSel('mfd_company', comps, d.company, 'mfDraftCompany(this.value)'), 3);
+  h += mfFld('الوكيل السعودي', '<input class="form-control form-control-sm" id="mfd_agent" value="' + mfEsc(d.agent) + '" oninput="mfDraftSet(\'agent\',this.value)">', 3);
+  h += mfFld('الرحلة المرتبطة', mfSel('mfd_trip', [''].concat(tripNames), d.tripName, 'mfDraftTrip(this.value)'), 4);
+  h += mfFld('العميل (العنوان الظاهر)', '<input class="form-control form-control-sm" value="' + mfEsc(d.clientLabel) + '" oninput="mfDraftSet(\'clientLabel\',this.value)" placeholder="يُملأ تلقائياً من بنود العميل">', 4);
+  h += mfFld('تاريخ المراجعة', mfDateFld('mfd_reviewDate', d.reviewDate, 'mfDraftReviewDate'), 2);
+  h += mfFld('نوع المراجعة', mfSel('mfd_reviewType', ['عادية', 'VIP', 'تجديد باركود'], d.reviewType, 'mfDraftType(this.value)'), 2);
+  h += mfFld('سبب VIP اليدوي', mfSel('mfd_vipReason', ['', 'إجازة رسمية', 'مراجعة بعد الساعة 4 عصراً', 'أخرى'], d.vipReason, 'mfDraftSet(\'vipReason\',this.value)'), 3);
+  h += mfFld('وسيلة السفر', mfSel('mfd_travelMode', ['طيران', 'بري', 'بواخر'], d.travelMode, 'mfDraftSet(\'travelMode\',this.value)'), 2);
+  h += mfFld('تاريخ الذهاب', mfDateFld('mfd_goDate', d.goDate, 'mfDraftGo'), 2);
+  h += mfFld('تاريخ العودة', mfDateFld('mfd_retDate', d.retDate, 'mfDraftRet'), 2);
+  h += '</div>';
+
+  h += '<hr class="my-2"><div class="d-flex align-items-center gap-2 mb-1"><b style="font-size:12px;">👥 بنود العميل (عميل / عدد معتمرين / عدد مشرفين / ملاحظات)</b>' +
+    '<button class="mf-btn ms-auto" onclick="mfBdAdd()">➕ إضافة بند</button></div>';
+  h += '<table class="mf-mini" style="background:#fff;"><thead><tr><th style="width:34%;">العميل / الرحلة</th><th style="width:13%;">معتمرين</th>' +
+    '<th style="width:13%;">مشرفين</th><th>ملاحظات</th><th style="width:36px;"></th></tr></thead><tbody>';
+  (d.breakdown || []).forEach(function (b, i) {
+    h += '<tr><td><input class="form-control form-control-sm mf-bd-name" list="mfCliList" value="' + mfEsc(b.name) + '" oninput="mfBdSet(' + i + ',\'name\',this.value)"></td>' +
+      '<td><input class="form-control form-control-sm" value="' + mfEsc(b.count) + '" oninput="mfBdSet(' + i + ',\'count\',this.value)"></td>' +
+      '<td><input class="form-control form-control-sm" value="' + mfEsc(b.sups) + '" oninput="mfBdSet(' + i + ',\'sups\',this.value)"></td>' +
+      '<td><input class="form-control form-control-sm" value="' + mfEsc(b.note) + '" oninput="mfBdSet(' + i + ',\'note\',this.value)"></td>' +
+      '<td><button class="mf-btn" style="color:#dc2626;" onclick="mfBdDel(' + i + ')">✕</button></td></tr>';
+  });
+  if (!(d.breakdown || []).length) h += '<tr><td colspan="5" style="color:#94a3b8;">لا توجد بنود — أضف بنداً واحداً على الأقل</td></tr>';
+  h += '</tbody><tfoot><tr><td>الإجمالي</td><td class="mf-latin">' + mfNum(d.pilgrims) + '</td><td class="mf-latin">' +
+    (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.sups); }, 0) + '</td><td colspan="2"></td></tr></tfoot></table>';
+  h += '<datalist id="mfCliList">' + (MF.clients || []).concat(tripNames).map(function (x) { return '<option value="' + mfEsc(x) + '">'; }).join('') + '</datalist>';
+
+  h += '<hr class="my-2"><div class="d-flex align-items-center gap-2 mb-1"><b style="font-size:12px;">🧑‍✈️ المشرفون</b>' +
+    '<button class="mf-btn ms-auto" onclick="mfSupAdd()">➕ إضافة مشرف</button>' +
+    '<button class="mf-btn" onclick="mfOpenSuggest(true)">🎯 اقتراح</button></div>';
+  h += '<table class="mf-mini" style="background:#fff;"><thead><tr><th style="width:36%;">المشرف</th><th style="width:22%;">النوع</th>' +
+    '<th>يُحمَّل على بند التوجيه</th><th style="width:36px;"></th></tr></thead><tbody>';
+  (d.sups || []).forEach(function (s, i) {
+    var opts = [''].concat((d.breakdown || []).map(function (b) { return b.name; }));
+    h += '<tr><td><input class="form-control form-control-sm" list="mfSupList" value="' + mfEsc(s.name) + '" oninput="mfSupSet(' + i + ',\'name\',this.value)"></td>' +
+      '<td>' + mfSel('', ['مرافق', 'استقبال', 'الوكيل'], s.type, 'mfSupSet(' + i + ',\'type\',this.value)') + '</td>' +
+      '<td>' + mfSel('', opts, s.directTo, 'mfSupSet(' + i + ',\'directTo\',this.value)') + '</td>' +
+      '<td><button class="mf-btn" style="color:#dc2626;" onclick="mfSupDel(' + i + ')">✕</button></td></tr>';
+  });
+  if (!(d.sups || []).length) h += '<tr><td colspan="4" style="color:#94a3b8;">لا يوجد مشرفون</td></tr>';
+  h += '</tbody></table><datalist id="mfSupList">' + (MF.sups || []).map(function (s) { return '<option value="' + mfEsc(s.name) + '">'; }).join('') + '</datalist>';
+
+  h += '<hr class="my-2"><div class="row g-2">';
+  h += mfFld('سعر البرنامج (للفرد)', mfNumFld('progPrice', d.progPrice), 2);
+  h += mfFld('سعر التذكرة (للفرد)', mfNumFld('ticket', d.ticket) + '<div style="font-size:9.5px;color:#94a3b8;">افتراضي من الرحلة — قابل للتغيير</div>', 2);
+  h += mfFld('رسوم الغرفة (للفرد)', mfNumFld('roomFee', d.roomFee) + '<div style="font-size:9.5px;color:#94a3b8;">' +
+    (d.reviewType === 'VIP' ? ('VIP: +' + ((MF.cfg.vipSurcharge) || 100) + ' ج للمعتمر') : 'من الإعدادات حسب التاريخ') + '</div>', 2);
+  h += mfFld('رسوم إدارية (للفرد)', mfNumFld('adminFee', d.adminFee), 2);
+  h += mfFld('النسبة %', mfNumFld('pct', d.pct) + '<div style="font-size:9.5px;color:#94a3b8;">افتراضي ' + mfDefaultPct(d.pilgrims).toFixed(2) + '% حسب العدد</div>', 2);
+  h += mfFld('سعر صرف الريال', mfNumFld('fxRate', d.fxRate) + '<div style="font-size:9.5px;color:#94a3b8;">سعر بيع بنك مصر</div>', 2);
+  h += mfFld('فندق المدينة', mfTxtFld('madinahHotel', d.madinahHotel), 3);
+  h += mfFld('دخول المدينة', mfDateFld('mfd_madinahIn', d.madinahIn, 'mfDraftDate:madinahIn'), 2);
+  h += mfFld('خروج المدينة', mfDateFld('mfd_madinahOut', d.madinahOut, 'mfDraftDate:madinahOut'), 2);
+  h += mfFld('فندق مكة', mfTxtFld('makkahHotel', d.makkahHotel), 3);
+  h += mfFld('دخول مكة', mfDateFld('mfd_makkahIn', d.makkahIn, 'mfDraftDate:makkahIn'), 2);
+  h += mfFld('خروج مكة', mfDateFld('mfd_makkahOut', d.makkahOut, 'mfDraftDate:makkahOut'), 2);
+  h += mfFld('شركة النقل', mfTxtFld('transport', d.transport) + '<div style="font-size:9.5px;color:#94a3b8;">افتراضي: اسم الوكيل · «بدون» لو المشرف هو الوكيل</div>', 3);
+  h += mfFld('ملاحظات', mfTxtFld('notes', d.notes), 5);
+  h += '</div>';
+
+  h += '<div class="mf-note info mt-2"><span>🧮</span><div style="flex:1;">' +
+    'الإيراد ' + mfL(mfFmt(c.revenue)) + ' · إجمالي التذاكر ' + mfL(mfFmt(c.totalTickets)) +
+    ' · إجمالي رسوم الغرفة ' + mfL(mfFmt(c.totalRoomFee)) + ' · <b>المخالصة للفرد ' + mfL(mfFmt(c.clearanceSAR)) + ' ريال</b>' +
+    ' · إجمالي المصروف ' + mfL(mfFmt(c.totalExp)) + ' · <b>هامش الربح ' + mfL(mfFmt(c.margin)) + '</b>' +
+    ' · هامش الفرد ' + mfL(mfFmt(c.perPersonMargin)) + '</div></div>';
+
+  document.getElementById('mfFormBox').innerHTML = h;
+  mfAttachDateInputs();
+  mfFormValidate();
+}
+function mfFld(label, inner, cols) {
+  return '<div class="col-md-' + (cols || 3) + '"><label style="font-size:9.5px;font-weight:800;color:#94a3b8;">' + label + '</label>' + inner + '</div>';
+}
+function mfSel(id, opts, val, handler) {
+  return '<select class="form-select form-select-sm"' + (id ? ' id="' + id + '"' : '') + ' onchange="' + handler + '">' +
+    opts.map(function (o) { return '<option value="' + mfEsc(o) + '"' + (String(o) === String(val || '') ? ' selected' : '') + '>' + (o === '' ? '—' : mfEsc(o)) + '</option>'; }).join('') +
+    '</select>';
+}
+function mfNumFld(k, v) { return '<input class="form-control form-control-sm" value="' + mfEsc(v || '') + '" oninput="mfDraftNum(\'' + k + '\',this.value)">'; }
+function mfTxtFld(k, v) { return '<input class="form-control form-control-sm" value="' + mfEsc(v || '') + '" oninput="mfDraftSet(\'' + k + '\',this.value)">'; }
+function mfDateFld(id, v, cb) {
+  return '<div class="mf-date"><input class="form-control form-control-sm" id="' + id + '" maxlength="10" value="' + mfEsc(v || '') + '" placeholder="">' +
+    '<button type="button" onclick="mfPickDate(\'' + id + '\',event,function(val){' +
+    (cb.indexOf('mfDraftDate:') === 0 ? ('mfDraftSet(\'' + cb.split(':')[1] + '\',val)') : (cb + '(val)')) + ';})">📅</button></div>';
+}
+function mfDraftSet(k, v) { MF._draft[k] = (typeof v === 'boolean') ? v : mfStr(v); mfFormValidate(); }
+function mfDraftNum(k, v) { MF._draft[k] = mfNum(v); mfFormValidate(); }
+function mfDraftCompany(v) {
+  MF._draft.company = mfStr(v);
+  var c = (MF.companies || []).filter(function (x) { return x.company === MF._draft.company; })[0];
+  if (c && c.agent) MF._draft.agent = c.agent;   // الوكيل يُختار تلقائياً حسب الشركة
+  mfFormRender();
+}
+function mfDraftTrip(v) {
+  var d = MF._draft;
+  d.tripName = mfStr(v);
+  var t = (MF.trips || []).filter(function (x) { return x.name === d.tripName; })[0];
+  if (t) {
+    // جلب بيانات الرحلة استرشادياً — كلها قابلة للتغيير
+    if (t.company) d.company = t.company;
+    if (t.agent) d.agent = t.agent;
+    if (t.goDate) d.goDate = t.goDate;
+    if (t.retDate) d.retDate = t.retDate;
+    if (t.madinahHotel) d.madinahHotel = t.madinahHotel;
+    if (t.madinahIn) d.madinahIn = t.madinahIn;
+    if (t.madinahOut) d.madinahOut = t.madinahOut;
+    if (t.makkahHotel) d.makkahHotel = t.makkahHotel;
+    if (t.makkahIn) d.makkahIn = t.makkahIn;
+    if (t.makkahOut) d.makkahOut = t.makkahOut;
+    if (!d.transport) d.transport = t.agent || '';
+    // سعر التذكرة الموحّد للرحلة: يُجلب من أي ملف سابق لنفس الرحلة (استرشادي وقابل للتغيير)
+    var prev = MF.files.filter(function (x) { return x.tripName === d.tripName && mfNum(x.ticket); })[0];
+    if (prev) { if (!mfNum(d.ticket)) d.ticket = prev.ticket; if (!mfNum(d.progPrice)) d.progPrice = prev.progPrice; }
+    if (!(d.breakdown || []).length) d.breakdown = [{ name: t.name, count: 0, sups: 0, note: 'من الرحلة', isTrip: true }];
+    if (!d.clientLabel) d.clientLabel = t.name;
+  }
+  mfFormRender();
+}
+function mfDraftReviewDate(v) {
+  var d = MF._draft;
+  d.reviewDate = mfDate(v);
+  if (!d._manualType) d.reviewType = mfAutoType(d.reviewDate, d.goDate, d.reviewType);
+  if (!mfNum(d.roomFee)) d.roomFee = mfRoomFeeAt(d.reviewDate);
+  mfFormRender();
+}
+function mfDraftGo(v) { MF._draft.goDate = mfDate(v); if (!MF._draft._manualType) MF._draft.reviewType = mfAutoType(MF._draft.reviewDate, MF._draft.goDate, MF._draft.reviewType); mfFormRender(); }
+function mfDraftRet(v) { MF._draft.retDate = mfDate(v); mfFormRender(); }
+function mfDraftType(v) { MF._draft.reviewType = mfStr(v); MF._draft._manualType = true; mfFormRender(); }
+function mfBdAdd() { MF._draft.breakdown = MF._draft.breakdown || []; MF._draft.breakdown.push({ name: '', count: 0, sups: 0, note: '' }); mfFormRender(); }
+function mfBdDel(i) { MF._draft.breakdown.splice(i, 1); mfSyncCounts(); mfFormRender(); }
+function mfBdSet(i, k, v) {
+  MF._draft.breakdown[i][k] = (k === 'count' || k === 'sups') ? mfNum(v) : mfStr(v);
+  if (k === 'count' || k === 'sups') mfSyncCounts();
+  mfFormValidate();
+}
+function mfSupAdd() { MF._draft.sups = MF._draft.sups || []; MF._draft.sups.push({ name: '', type: 'مرافق', directTo: '' }); MF._draft.supCount = MF._draft.sups.length; mfFormRender(); }
+function mfSupDel(i) { MF._draft.sups.splice(i, 1); MF._draft.supCount = MF._draft.sups.length; mfFormRender(); }
+function mfSupSet(i, k, v) { MF._draft.sups[i][k] = mfStr(v); MF._draft.supCount = MF._draft.sups.length; mfFormValidate(); }
+function mfSyncCounts() {
+  var d = MF._draft;
+  d.pilgrims = (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.count); }, 0);
+  if (!mfNum(d.pct)) d.pct = mfDefaultPct(d.pilgrims);
+}
+function mfFormValidate() {
+  var d = MF._draft, msgs = [];
+  var sum = (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.count); }, 0);
+  if (sum !== mfNum(d.pilgrims)) msgs.push('إجمالي بنود العميل (' + sum + ') ≠ عدد المعتمرين (' + mfNum(d.pilgrims) + ')');
+  if (!mfStr(d.company)) msgs.push('اختر الشركة المصرية');
+  // حد المشرف المرافق 50 معتمر إجمالاً على الملفات المتطابقة في تاريخي السفر والعودة
+  (d.sups || []).forEach(function (s) {
+    if (String(s.type || '').indexOf('مرافق') < 0 || !mfStr(s.name)) return;
+    var tot = mfNum(d.pilgrims);
+    MF.files.forEach(function (o) {
+      if (o.id === d.id) return;
+      if (mfStr(o.goDate) !== mfStr(d.goDate) || mfStr(o.retDate) !== mfStr(d.retDate)) return;
+      (o.sups || []).forEach(function (os) { if (mfStr(os.name) === mfStr(s.name)) tot += mfNum(o.pilgrims); });
+    });
+    if (tot > 50) msgs.push('المشرف «' + s.name + '» (مرافق) إجماليه ' + tot + ' معتمر — الحد 50');
+  });
+  if (mfStr(d.fileNo) && !mfReviewed(d)) {
+    var bal = mfBalanceOf(d.company), need = mfCalc(d).totalRoomFee;
+    if (need > bal.balance) msgs.push('🏦 رصيد رسوم الغرفة لـ«' + d.company + '» (' + mfFmt(bal.balance) + ') لا يكفي (' + mfFmt(need) + ') — تنبيه غير مانع');
+  }
+  var el = document.getElementById('mfFormWarn');
+  if (el) el.innerHTML = msgs.length ? ('⚠️ ' + msgs.map(mfEsc).join(' · ')) : '';
+}
+function mfSaveDraft() {
+  var d = MF._draft;
+  if (!mfStr(d.company)) { _showPopup('اختر الشركة المصرية', 'error'); return; }
+  mfSyncCounts();
+  d.supCount = (d.sups || []).length;
+  if (!mfStr(d.clientLabel)) d.clientLabel = (d.breakdown || []).map(function (b) { return b.name; }).filter(String).join(' + ');
+  var btnBox = document.getElementById('mfFormWarn');
+  if (btnBox) btnBox.innerHTML = '⏳ جاري الحفظ…';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); mfFormValidate(); return; }
+      mfCloseModal();
+      _showPopup('تم حفظ ملف المراجعة', 'success');
+      mfLoad(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); mfFormValidate(); })
+    .saveMinistryFile(window.authToken, d);
+}
+function mfDeleteFile(id) {
+  var f = mfGet(id); if (!f) return;
+  if (!confirm('حذف ملف المراجعة ' + (f.fileNo ? 'رقم ' + f.fileNo : '(بدون رقم)') + ' — ' + (f.clientLabel || '') + '؟')) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
+      _showPopup('تم حذف الملف', 'success'); MF.openId = null; mfLoad(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .deleteMinistryFile(window.authToken, id);
+}
+
+/* ---------- اختيار المعتمرين (حسب العميل + فردي معاً) ---------- */
+function mfPickPilgrims(id) {
+  var f = mfGet(id); if (!f) return;
+  if (!mfStr(f.tripName)) { _showPopup('اربط الملف برحلة أولاً حتى تظهر قائمة معتمريها', 'error'); return; }
+  mfModal('👥 اختيار معتمري الملف — ' + mfEsc(f.clientLabel || f.tripName),
+    '<div id="mfPickBox"><div class="p-3 text-center text-muted small">⏳ جاري تحميل معتمري الرحلة…</div></div>',
+    '<span id="mfPickCnt" style="font-size:11.5px;font-weight:700;"></span><div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfPickAll(true)">تحديد الكل</button>' +
+    '<button class="mf-btn" onclick="mfPickAll(false)">إفراغ</button>' +
+    '<button class="mf-btn pri" onclick="mfPickSave(\'' + id + '\')">تأكيد الاختيار</button>', 820);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var list = (res && res.pilgrims) ? res.pilgrims : (Array.isArray(res) ? res : []);
+      MF._pick = { file: f, list: list, sel: {} };
+      (f.selected || []).forEach(function (k) { MF._pick.sel[k] = true; });
+      mfPickRender();
+    })
+    .withFailureHandler(function (e) {
+      document.getElementById('mfPickBox').innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>';
+    })
+    .getTripPilgrims(window.authToken, f.tripName);
+}
+function mfPickKey(p, i) { return mfStr(p.passportNo || p.passport || '') || ('idx:' + i); }
+function mfPickRender() {
+  var P = MF._pick; if (!P) return;
+  var groups = {};
+  P.list.forEach(function (p, i) {
+    var g = mfStr(p.clientName || p.client || 'أفراد مباشر') || 'أفراد مباشر';
+    (groups[g] = groups[g] || []).push({ p: p, i: i, key: mfPickKey(p, i) });
+  });
+  var h = '<div style="font-size:11.5px;color:#5c6b83;margin-bottom:8px;">اختر عميلاً كاملاً (كل معتمريه) أو افتحه وحدّد معتمرين بعينهم — أو اجمع بين الاثنين.</div>';
+  Object.keys(groups).forEach(function (g, gi) {
+    var items = groups[g];
+    var allOn = items.every(function (x) { return P.sel[x.key]; });
+    h += '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;overflow:hidden;">' +
+      '<div style="display:flex;align-items:center;gap:8px;padding:8px 11px;background:#eef1f6;font-size:11.5px;font-weight:800;cursor:pointer;"' +
+      ' onclick="var b=document.getElementById(\'mfPg' + gi + '\');b.style.display=(b.style.display===\'none\'?\'block\':\'none\');">' +
+      '<input type="checkbox" ' + (allOn ? 'checked' : '') + ' onclick="event.stopPropagation();mfPickGroup(\'' + mfEsc(g).replace(/'/g, "\\'") + '\',this.checked)"> ' +
+      mfEsc(g) + '<span class="ms-auto" style="font-size:10.5px;color:#5c6b83;font-weight:700;">' +
+      items.filter(function (x) { return P.sel[x.key]; }).length + ' / ' + items.length + ' · اضغط للتفصيل ▾</span></div>' +
+      '<div id="mfPg' + gi + '" style="display:none;padding:5px 11px 9px;">';
+    items.forEach(function (x) {
+      var nm = mfStr(x.p.name || x.p.pilgrimName || ('معتمر ' + (x.i + 1)));
+      h += '<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-size:11px;border-radius:6px;">' +
+        '<input type="checkbox" class="mf-pchk" data-k="' + mfEsc(x.key) + '" ' + (P.sel[x.key] ? 'checked' : '') + ' onchange="mfPickOne(this)">' +
+        mfEsc(nm) + '<span class="ms-auto mf-latin" style="font-size:10px;color:#94a3b8;">' + mfEsc(x.p.passportNo || x.p.passport || '') + '</span></label>';
+    });
+    h += '</div></div>';
+  });
+  if (!P.list.length) h += '<div class="alert alert-warning small">لا يوجد معتمرون مسجلون على هذه الرحلة.</div>';
+  document.getElementById('mfPickBox').innerHTML = h;
+  mfPickCount();
+}
+function mfPickOne(chk) { MF._pick.sel[chk.getAttribute('data-k')] = chk.checked; mfPickCount(); }
+function mfPickGroup(g, on) {
+  var P = MF._pick;
+  P.list.forEach(function (p, i) {
+    var gg = mfStr(p.clientName || p.client || 'أفراد مباشر') || 'أفراد مباشر';
+    if (gg === g) P.sel[mfPickKey(p, i)] = on;
+  });
+  mfPickRender();
+}
+function mfPickAll(on) {
+  var P = MF._pick;
+  P.list.forEach(function (p, i) { P.sel[mfPickKey(p, i)] = on; });
+  mfPickRender();
+}
+function mfPickCount() {
+  var P = MF._pick; if (!P) return;
+  var n = Object.keys(P.sel).filter(function (k) { return P.sel[k]; }).length;
+  var need = mfNum(P.file.pilgrims);
+  var el = document.getElementById('mfPickCnt');
+  if (el) el.innerHTML = (n === need)
+    ? '<span style="color:#0e9f6e;">✅ ' + mfL(n) + ' من ' + mfL(need) + ' — مطابق لإجمالي الملف</span>'
+    : '<span style="color:#dc2626;">⚠️ ' + mfL(n) + ' من ' + mfL(need) + ' — الفارق ' + mfL(Math.abs(need - n)) + '</span>';
+}
+function mfPickSave(id) {
+  var P = MF._pick, f = mfGet(id);
+  var keys = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      mfCloseModal(); _showPopup('تم اعتماد اختيار المعتمرين (' + keys.length + ')', 'success'); mfLoad(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveMinistryFile(window.authToken, Object.assign({}, mfPayload(f), { selected: keys }));
+}
+
+/* ---------- سجل التعديلات ---------- */
+function mfHistory(id) {
+  var f = mfGet(id);
+  mfModal('📜 سجل تعديلات الملف ' + (f && mfStr(f.fileNo) ? mfEsc(f.fileNo) : '(بدون رقم)') + (f ? ' — ' + mfEsc(f.clientLabel || '') : ''),
+    '<div id="mfHistBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 700);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var box = document.getElementById('mfHistBox'); if (!box) return;
+      var h = '';
+      if (f) h += '<div class="mf-dcard" style="margin-bottom:10px;"><div style="font-size:11.5px;line-height:1.9;">' +
+        '<b>أنشئ بواسطة:</b> ' + mfEsc(f.createdBy || '—') + ' · ' + mfL(f.createdAt || '—') +
+        '<br><b>آخر تعديل:</b> ' + mfEsc(f.updatedBy || '—') + ' · ' + mfL(f.updatedAt || '—') + '</div></div>';
+      var es = (res && res.entries) || [];
+      if (!es.length) h += '<div class="text-muted small">لا توجد تعديلات مسجَّلة.</div>';
+      else {
+        h += '<table class="mf-mini" style="background:#fff;"><thead><tr><th>التاريخ والساعة</th><th>المستخدم</th><th>العملية</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead><tbody>';
+        es.forEach(function (e) {
+          h += '<tr><td class="mf-latin">' + mfEsc(e.when) + '</td><td>' + mfEsc(e.who) + '</td><td>' + mfEsc(e.action) +
+            '</td><td>' + mfEsc(e.field) + '</td><td style="color:#94a3b8;">' + mfEsc(e.oldVal) + '</td><td style="font-weight:700;">' + mfEsc(e.newVal) + '</td></tr>';
+        });
+        h += '</tbody></table>';
+      }
+      box.innerHTML = h;
+    })
+    .withFailureHandler(function (e) {
+      var box = document.getElementById('mfHistBox');
+      if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>';
+    })
+    .getMinistryFileHistory(window.authToken, id);
+}
+
+/* ---------- سجل المشرفين ---------- */
+function mfOpenSupReg() {
+  mfModal('🧑‍✈️ سجل المشرفين والشركات',
+    '<div style="font-size:11.5px;color:#5c6b83;margin-bottom:9px;">كل مشرف يُسجَّل على شركته الأساسية ويمكن منحه <b>مشاركة</b> في شركات أخرى. ' +
+    'لا يُسمح باختياره على شركة غير مسجّل ولا مُشارَك فيها.</div><div id="mfSupRegBox"></div>',
+    '<button class="mf-btn pri" onclick="mfSupEdit(null)">➕ إضافة مشرف</button>', 820);
+  mfSupRegRender();
+}
+function mfSupRegRender() {
+  var h = '<table class="mf-mini" style="background:#fff;"><thead><tr><th>المشرف</th><th>النوع</th><th>الشركة الأساسية</th>' +
+    '<th>مشاركة في</th><th>العبء الحالي</th><th style="width:90px;"></th></tr></thead><tbody>';
+  (MF.sups || []).forEach(function (s) {
+    var load = 0;
+    MF.files.forEach(function (f) { (f.sups || []).forEach(function (x) { if (mfStr(x.name) === mfStr(s.name)) load += mfNum(f.pilgrims); }); });
+    h += '<tr><td style="font-weight:800;">' + mfEsc(s.name) + '</td>' +
+      '<td><span class="mf-badge ' + (String(s.type).indexOf('مرافق') >= 0 ? 'norm' : 'off') + '">' + mfEsc(s.type) + '</span></td>' +
+      '<td>' + mfEsc(s.home) + '</td>' +
+      '<td>' + ((s.shared || []).length ? mfEsc((s.shared || []).join('، ')) : '<span style="color:#94a3b8;">—</span>') + '</td>' +
+      '<td class="mf-latin">' + (String(s.type).indexOf('مرافق') >= 0 ? (load + ' / 50') : '—') + '</td>' +
+      '<td><button class="mf-btn" onclick="mfSupEdit(\'' + mfEsc(s.name).replace(/'/g, "\\'") + '\')">✏️</button> ' +
+      '<button class="mf-btn" style="color:#dc2626;" onclick="mfSupRegDel(\'' + mfEsc(s.name).replace(/'/g, "\\'") + '\')">🗑️</button></td></tr>';
+  });
+  if (!(MF.sups || []).length) h += '<tr><td colspan="6" style="color:#94a3b8;">لا يوجد مشرفون مسجلون</td></tr>';
+  h += '</tbody></table>';
+  document.getElementById('mfSupRegBox').innerHTML = h;
+}
+function mfSupEdit(name) {
+  var s = name ? (MF.sups || []).filter(function (x) { return x.name === name; })[0] : null;
+  var comps = (MF.companies || []).map(function (c) { return c.company; });
+  var h = '<div class="row g-2">' +
+    mfFld('اسم المشرف', '<input class="form-control form-control-sm" id="mfsu_name" value="' + mfEsc(s ? s.name : '') + '">', 6) +
+    mfFld('النوع', mfSel('mfsu_type', ['مرافق', 'استقبال', 'الوكيل'], s ? s.type : 'مرافق', ''), 6) +
+    mfFld('الشركة الأساسية', mfSel('mfsu_home', [''].concat(comps).concat(['الكل']), s ? s.home : '', ''), 6) +
+    mfFld('رقم الجوال', '<input class="form-control form-control-sm" id="mfsu_mobile" value="' + mfEsc(s ? s.mobile : '') + '">', 6) +
+    '<div class="col-12"><label style="font-size:9.5px;font-weight:800;color:#94a3b8;">مشاركة في شركات أخرى</label><div class="d-flex gap-3 flex-wrap">' +
+    comps.map(function (c) {
+      var on = s && (s.shared || []).indexOf(c) >= 0;
+      return '<label style="font-size:11.5px;display:flex;gap:5px;align-items:center;"><input type="checkbox" class="mfsu-share" value="' + mfEsc(c) + '" ' + (on ? 'checked' : '') + '> ' + mfEsc(c) + '</label>';
+    }).join('') + '</div></div>' +
+    mfFld('ملاحظات', '<input class="form-control form-control-sm" id="mfsu_notes" value="' + mfEsc(s ? s.notes : '') + '">', 12) +
+    '</div>';
+  mfModal(name ? '✏️ تعديل مشرف' : '➕ إضافة مشرف', h,
+    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfOpenSupReg()">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="mfSupRegSave(' + (name ? '\'' + mfEsc(name).replace(/'/g, "\\'") + '\'' : 'null') + ')">💾 حفظ</button>', 620);
+}
+function mfSupRegSave(origName) {
+  var shared = [];
+  document.querySelectorAll('.mfsu-share:checked').forEach(function (c) { shared.push(c.value); });
+  var payload = {
+    _origName: origName || '', name: mfStr(document.getElementById('mfsu_name').value),
+    type: document.getElementById('mfsu_type').value, home: document.getElementById('mfsu_home').value,
+    shared: shared, mobile: mfStr(document.getElementById('mfsu_mobile').value),
+    notes: mfStr(document.getElementById('mfsu_notes').value)
+  };
+  if (!payload.name) { _showPopup('اسم المشرف مطلوب', 'error'); return; }
+  if (!payload.home) { _showPopup('الشركة الأساسية مطلوبة', 'error'); return; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      _showPopup('تم حفظ بيانات المشرف', 'success');
+      mfLoad(true); setTimeout(mfOpenSupReg, 500);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveMinistrySupervisor(window.authToken, payload);
+}
+function mfSupRegDel(name) {
+  if (!confirm('حذف المشرف «' + name + '» من السجل؟')) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
+      _showPopup('تم حذف المشرف', 'success'); mfLoad(true); setTimeout(mfOpenSupReg, 500);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .deleteMinistrySupervisor(window.authToken, name);
+}
+
+/* ---------- اقتراح مشرف ---------- */
+function mfOpenSuggest(fromForm) {
+  var d = fromForm ? MF._draft : null;
+  var comps = (MF.companies || []).map(function (c) { return c.company; });
+  var unrev = MF.files.filter(function (f) { return !mfReviewed(f); });
+  var h = '<div class="row g-2 mb-2">' +
+    mfFld('الشركة', mfSel('mfsg_comp', [''].concat(comps), d ? d.company : '', 'mfRunSuggest()'), 3) +
+    mfFld('تاريخ السفر', mfDateFld('mfsg_go', d ? d.goDate : '', 'mfSgDate'), 2) +
+    mfFld('تاريخ العودة', mfDateFld('mfsg_ret', d ? d.retDate : '', 'mfSgDate'), 2) +
+    mfFld('عدد المعتمرين', '<input class="form-control form-control-sm" id="mfsg_n" value="' + (d ? mfNum(d.pilgrims) : 0) + '" oninput="mfRunSuggest()">', 2) +
+    mfFld('أو ملف لم يُراجع', mfSel('mfsg_file', [''].concat(unrev.map(function (f) { return (f.clientLabel || f.tripName || 'ملف') + ' | ' + f.id; })), '', 'mfSgFromFile(this.value)'), 3) +
+    '</div>' +
+    '<label style="font-size:11.5px;font-weight:700;display:flex;gap:6px;align-items:center;margin-bottom:8px;">' +
+    '<input type="checkbox" id="mfsg_all" onchange="mfRunSuggest()"> إظهار كل المشرفين وحالتهم (الافتراضي: المتاحون فقط)</label>' +
+    '<div id="mfSgOut"></div>';
+  mfModal('🎯 اقتراح مشرف لرحلة', h,
+    (fromForm ? '<div style="flex:1;"></div><button class="mf-btn" onclick="mfFormBack()">⬅ عودة للنموذج</button>' : ''), 820);
+  mfRunSuggest();
+}
+function mfSgDate() { mfRunSuggest(); }
+function mfSgFromFile(v) {
+  if (!v) return;
+  var id = v.split(' | ').pop();
+  var f = mfGet(id); if (!f) return;
+  document.getElementById('mfsg_comp').value = f.company || '';
+  document.getElementById('mfsg_go').value = f.goDate || '';
+  document.getElementById('mfsg_ret').value = f.retDate || '';
+  document.getElementById('mfsg_n').value = mfNum(f.pilgrims);
+  mfRunSuggest();
+}
+function mfRunSuggest() {
+  var out = document.getElementById('mfSgOut'); if (!out) return;
+  out.innerHTML = '<div class="text-muted small p-2">⏳ جاري الفحص…</div>';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var list = (res && res.list) || [];
+      var showAll = document.getElementById('mfsg_all').checked;
+      if (!list.length) {
+        out.innerHTML = '<div class="mf-note bad">⚠️<div>لا يوجد مشرف متاح مطابق للبيانات المختارة — فعّل «إظهار كل المشرفين» لمعرفة أسباب الاستبعاد.</div></div>';
+        return;
+      }
+      var h = '<table class="mf-mini" style="background:#fff;"><thead><tr><th>المشرف</th><th>النوع</th>' +
+        (showAll ? '<th>الأهلية</th>' : '') + '<th>السبب / السعة</th><th style="width:70px;"></th></tr></thead><tbody>';
+      list.forEach(function (x) {
+        h += '<tr><td style="font-weight:700;">' + mfEsc(x.name) + '</td><td>' + mfEsc(x.type) + '</td>' +
+          (showAll ? ('<td>' + (x.eligible ? '<span class="mf-badge ok">✅ مرشّح</span>' : '<span class="mf-badge warn">✖ غير متاح</span>') + '</td>') : '') +
+          '<td style="color:#5c6b83;">' + mfEsc(x.reason) + '</td>' +
+          '<td>' + (x.eligible && MF._draft ? '<button class="mf-btn" onclick="mfSgUse(\'' + mfEsc(x.name).replace(/'/g, "\\'") + '\',\'' + mfEsc(x.type) + '\')">استخدم</button>' : '') + '</td></tr>';
+      });
+      out.innerHTML = h + '</tbody></table>';
+    })
+    .withFailureHandler(function (e) { out.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>'; })
+    .suggestMinistrySupervisors(window.authToken, {
+      company: document.getElementById('mfsg_comp').value,
+      goDate: mfDate(document.getElementById('mfsg_go').value),
+      retDate: mfDate(document.getElementById('mfsg_ret').value),
+      pilgrims: mfNum(document.getElementById('mfsg_n').value),
+      showAll: document.getElementById('mfsg_all').checked,
+      excludeId: MF._draft ? MF._draft.id : ''
+    });
+}
+function mfSgUse(name, type) {
+  if (!MF._draft) return;
+  MF._draft.sups = MF._draft.sups || [];
+  MF._draft.sups.push({ name: name, type: type, directTo: '' });
+  MF._draft.supCount = MF._draft.sups.length;
+  mfFormBack();
+}
+function mfFormBack() {
+  var d = MF._draft;
+  mfEditFileFromDraft(d);
+}
+function mfEditFileFromDraft(d) {
+  MF._draft = d;
+  mfModal((d.id ? '✏️ تعديل ملف مراجعة' : '➕ ملف مراجعة جديد'), '<div id="mfFormBox"></div>',
+    '<span id="mfFormWarn" style="font-size:11px;color:#c2670a;font-weight:700;"></span>' +
+    '<div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="mfSaveDraft()">💾 حفظ الملف</button>', 1000);
+  mfFormRender();
+}
+
+/* ---------- إيصالات رسوم الغرفة + الأرصدة + كشف الحركة ---------- */
+var MF_REC_COLS = [
+  { k: 'date', l: 'التاريخ' }, { k: 'time', l: 'الوقت' }, { k: 'receiptNo', l: 'رقم الإيصال' },
+  { k: 'company', l: 'الشركة' }, { k: 'licence', l: 'رقم الترخيص' }, { k: 'amount', l: 'المبلغ' },
+  { k: 'depositor', l: 'اسم المودع' }, { k: 'source', l: 'المصدر' }
+];
+var MF_recF = {};
+function mfOpenReceipts() {
+  mfModal('🏦 إيصالات رسوم الغرفة وحركتها',
+    '<div id="mfRecBalBox"></div>' +
+    '<div class="d-flex gap-2 flex-wrap mb-2">' +
+      '<button class="mf-btn pri" onclick="mfRecEdit(null)">➕ تسجيل إيصال</button>' +
+      '<button class="mf-btn gold" onclick="mfRecFromBank()">📷 استخلاص من إيصال البنك</button>' +
+      '<button class="mf-btn" onclick="mfRecTab(\'rec\')">🧾 الإيصالات</button>' +
+      '<button class="mf-btn" onclick="mfRecTab(\'led\')">📒 كشف حركة رسوم الغرفة</button>' +
+      '<div style="flex:1;"></div>' +
+      '<button class="mf-btn" onclick="mfPrintFragment(\'mfRecPane\',\'إيصالات رسوم الغرفة\')">🖨️ طباعة</button>' +
+      '<button class="mf-btn" onclick="mfImageFragment(\'mfRecPane\',\'إيصالات رسوم الغرفة\',this)">📸 صورة HD</button>' +
+    '</div>' +
+    '<div id="mfRecPane"></div>', '', 980);
+  mfRecTab('rec');
+}
+function mfRecBalances() {
+  var h = '<div style="font-size:11.5px;font-weight:800;color:#1e3d59;margin-bottom:7px;">💳 رصيد رسوم الغرفة لكل شركة — الإيداعات ناقص المسحوب للملفات التي سُجِّل لها تاريخ مراجعة</div><div class="mf-bal">';
+  (MF.companies || []).forEach(function (c) {
+    var b = mfBalanceOf(c.company);
+    var low = b.pending > b.balance;
+    h += '<div class="mf-balc' + (low ? ' low' : '') + '"><div style="font-size:11.5px;font-weight:800;margin-bottom:5px;">' +
+      mfEsc(c.company) + ' <span style="font-size:10px;color:#94a3b8;">ترخيص ' + mfL(c.licence || '—') + '</span></div>' +
+      '<div class="v mf-latin">' + mfFmt(b.balance) + '</div>' +
+      '<div style="font-size:10px;color:#5c6b83;margin-top:3px;line-height:1.6;">إيداعات: ' + mfL(mfFmt(b.deposits)) +
+      ' · مسحوب: ' + mfL(mfFmt(b.withdrawn)) +
+      (b.pending ? ('<br>مطلوب لملفات لم تُراجع: ' + mfL(mfFmt(b.pending)) + (low ? ' <b style="color:#dc2626;">— لا يكفي</b>' : ' ✅ يكفي')) : '') +
+      '</div></div>';
+  });
+  return h + '</div>';
+}
+function mfRecTab(t) {
+  document.getElementById('mfRecBalBox').innerHTML = mfRecBalances();
+  var pane = document.getElementById('mfRecPane');
+  if (t === 'led') { mfLedgerRender(); return; }
+  var list = (MF.receipts || []).filter(function (x) {
+    for (var k in MF_recF) {
+      var v = MF_recF[k]; if (!v) continue;
+      if (String(x[k] == null ? '' : x[k]).toLowerCase().indexOf(mfStr(v).toLowerCase()) < 0) return false;
+    }
+    return true;
+  });
+  var h = '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">🔽 اضغط أيقونة التصفية في رأس أي عمود — صف الإجماليات يتغيّر مع الفلاتر.</div>';
+  h += '<div style="max-height:320px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;">' +
+    '<table class="mf-mini" style="background:#fff;"><thead><tr>';
+  MF_REC_COLS.forEach(function (c) {
+    h += '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;"><span style="display:flex;align-items:center;gap:4px;">' +
+      mfEsc(c.l) + '<button class="mf-thic' + (MF_recF[c.k] ? ' on' : '') + '" onclick="mfRecFilter(\'' + c.k + '\')">🔽</button></span></th>';
+  });
+  h += '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;width:70px;"></th></tr></thead><tbody>';
+  list.forEach(function (x) {
+    h += '<tr><td class="mf-latin">' + mfEsc(x.date) + '</td><td class="mf-latin">' + mfEsc(x.time || '—') + '</td>' +
+      '<td class="mf-latin">' + mfEsc(x.receiptNo) + '</td><td>' + mfEsc(x.company) + '</td>' +
+      '<td class="mf-latin">' + mfEsc(x.licence || '—') + '</td>' +
+      '<td class="mf-latin" style="color:#0e9f6e;font-weight:800;">' + mfFmt(x.amount) + '</td>' +
+      '<td>' + mfEsc(x.depositor || '—') + '</td>' +
+      '<td><span class="mf-badge ' + (x.source === 'إيصال بنك' ? 'link' : 'off') + '">' + mfEsc(x.source) + '</span></td>' +
+      '<td><button class="mf-btn" onclick="mfRecEdit(\'' + mfEsc(x.receiptNo).replace(/'/g, "\\'") + '\')">✏️</button> ' +
+      (MF.can.del ? '<button class="mf-btn" style="color:#dc2626;" onclick="mfRecDel(\'' + mfEsc(x.receiptNo).replace(/'/g, "\\'") + '\')">🗑️</button>' : '') + '</td></tr>';
+  });
+  if (!list.length) h += '<tr><td colspan="9" style="color:#94a3b8;padding:16px;text-align:center;">لا توجد إيصالات مطابقة</td></tr>';
+  var tot = list.reduce(function (a, x) { return a + mfNum(x.amount); }, 0);
+  h += '</tbody><tfoot><tr><td colspan="5" style="position:sticky;bottom:0;background:#eef1f6;font-weight:800;">الإجمالي (' + mfL(list.length) + ' إيصال)</td>' +
+    '<td class="mf-latin" style="position:sticky;bottom:0;background:#eef1f6;font-weight:800;">' + mfFmt(tot) + '</td>' +
+    '<td colspan="3" style="position:sticky;bottom:0;background:#eef1f6;"></td></tr></tfoot></table></div>';
+  pane.innerHTML = h;
+}
+function mfRecFilter(k) {
+  var c = MF_REC_COLS.filter(function (x) { return x.k === k; })[0];
+  var v = prompt('تصفية عمود «' + c.l + '» — اترك الحقل فارغاً لإلغاء الفلتر:', MF_recF[k] || '');
+  if (v === null) return;
+  v = mfStr(v);
+  if (v) MF_recF[k] = v; else delete MF_recF[k];
+  mfRecTab('rec');
+}
+function mfRecEdit(no) {
+  var r = no ? (MF.receipts || []).filter(function (x) { return x.receiptNo === no; })[0] : null;
+  var comps = (MF.companies || []).map(function (c) { return c.company; });
+  var h = '<div class="row g-2">' +
+    mfFld('رقم الإيصال (الرقم المرجعي بالبنك)', '<input class="form-control form-control-sm" id="mfr_no" value="' + mfEsc(r ? r.receiptNo : '') + '">', 4) +
+    mfFld('التاريخ', mfDateFld('mfr_date', r ? r.date : MF.today, 'mfNoop'), 3) +
+    mfFld('الوقت', '<input class="form-control form-control-sm" id="mfr_time" placeholder="12:12 PM" value="' + mfEsc(r ? r.time : '') + '">', 2) +
+    mfFld('المبلغ', '<input class="form-control form-control-sm" id="mfr_amount" value="' + mfEsc(r ? r.amount : '') + '">', 3) +
+    mfFld('الشركة', mfSel('mfr_company', [''].concat(comps), r ? r.company : '', 'mfRecSyncLic()'), 4) +
+    mfFld('رقم الترخيص (كود العميل بالإيصال)', '<input class="form-control form-control-sm" id="mfr_lic" value="' + mfEsc(r ? r.licence : '') + '" oninput="mfRecSyncComp()">', 3) +
+    mfFld('اسم المودع', '<input class="form-control form-control-sm" id="mfr_dep" value="' + mfEsc(r ? r.depositor : '') + '">', 5) +
+    mfFld('المصدر', mfSel('mfr_src', ['يدوي', 'إيصال بنك'], r ? r.source : 'يدوي', ''), 3) +
+    mfFld('ملاحظات', '<input class="form-control form-control-sm" id="mfr_notes" value="' + mfEsc(r ? r.notes : '') + '">', 9) +
+    '</div>';
+  mfModal(no ? '✏️ تعديل إيصال' : '➕ تسجيل إيصال رسوم غرفة', h,
+    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfOpenReceipts()">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="mfRecSave(' + (no ? 'true' : 'false') + ')">💾 حفظ</button>', 700);
+}
+function mfNoop() {}
+function mfRecSyncLic() {
+  var c = (MF.companies || []).filter(function (x) { return x.company === document.getElementById('mfr_company').value; })[0];
+  if (c && c.licence) document.getElementById('mfr_lic').value = c.licence;
+}
+function mfRecSyncComp() {
+  var lic = mfStr(document.getElementById('mfr_lic').value);
+  var c = (MF.companies || []).filter(function (x) { return mfStr(x.licence) === lic; })[0];
+  if (c) document.getElementById('mfr_company').value = c.company;
+}
+function mfRecSave(isEdit) {
+  var payload = {
+    receiptNo: mfStr(document.getElementById('mfr_no').value),
+    date: mfDate(document.getElementById('mfr_date').value),
+    time: mfStr(document.getElementById('mfr_time').value),
+    company: document.getElementById('mfr_company').value,
+    licence: mfStr(document.getElementById('mfr_lic').value),
+    amount: mfNum(document.getElementById('mfr_amount').value),
+    depositor: mfStr(document.getElementById('mfr_dep').value),
+    source: document.getElementById('mfr_src').value,
+    notes: mfStr(document.getElementById('mfr_notes').value),
+    _allowUpdate: !!isEdit
+  };
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      _showPopup('تم حفظ الإيصال', 'success');
+      mfLoad(true); setTimeout(mfOpenReceipts, 600);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveRoomFeeReceipt(window.authToken, payload);
+}
+function mfRecDel(no) {
+  if (!confirm('حذف الإيصال رقم ' + no + '؟')) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
+      _showPopup('تم حذف الإيصال', 'success'); mfLoad(true); setTimeout(mfOpenReceipts, 600);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .deleteRoomFeeReceipt(window.authToken, no);
+}
+function mfRecFromBank() {
+  var h = '<div style="font-size:11.5px;line-height:1.9;background:#fff;border:1px dashed #cbd5e1;border-radius:10px;padding:11px 13px;">' +
+    '<div style="font-weight:800;margin-bottom:5px;">🏦 خريطة الاستخلاص من إيصال بنك مصر (صيغة موحدة):</div>' +
+    'حقل «<b style="color:#2563eb;">كود العميل</b>» ← <b>رقم الترخيص</b> ← تُطابَق به الشركة تلقائياً<br>' +
+    'حقل «<b style="color:#2563eb;">الرقم المرجعى</b>» ← <b>رقم الإيصال</b><br>' +
+    'حقل «<b style="color:#2563eb;">المبلغ بالارقام</b>» ← <b>المبلغ</b><br>' +
+    'حقل «<b style="color:#2563eb;">التاريخ</b>» ← <b>تاريخ وساعة الإيداع</b><br>' +
+    'حقل «<b style="color:#2563eb;">اسم المودع</b>» ← <b>اسم المودع</b>' +
+    '</div>' +
+    '<div class="mt-2" style="font-size:11.5px;">ألصق نص الإيصال (أو اكتب الحقول) وسيُستخلص تلقائياً بلا ذكاء اصطناعي:</div>' +
+    '<textarea id="mfBankText" class="form-control form-control-sm mt-1" rows="7" placeholder="ألصق نص الإيصال هنا..."></textarea>' +
+    '<div id="mfBankOut" class="mt-2"></div>';
+  mfModal('📷 استخلاص من إيصال البنك', h,
+    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfOpenReceipts()">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="mfBankParse()">🔎 استخلاص</button>', 700);
+}
+function mfBankParse() {
+  var t = mfLatin(document.getElementById('mfBankText').value || '');
+  var out = { receiptNo: '', licence: '', amount: 0, date: '', time: '', depositor: '', company: '', source: 'إيصال بنك' };
+  var m;
+  if ((m = t.match(/الرقم\s*المرجع[ىي]?\s*:?\s*([0-9]{6,})/))) out.receiptNo = m[1];
+  if ((m = t.match(/كود\s*العميل\s*:?\s*([0-9]{1,10})/))) out.licence = m[1];
+  if ((m = t.match(/المبلغ\s*بالارقام\s*:?\s*([0-9.,]+)/))) out.amount = mfNum(m[1]);
+  if (!out.amount && (m = t.match(/([0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]{2})?)/))) out.amount = mfNum(m[1]);
+  if ((m = t.match(/([0-3]?[0-9])[-\/]([0-1]?[0-9])[-\/](20[0-9]{2})/))) out.date = mfDate(m[1] + '/' + m[2] + '/' + m[3]);
+  if ((m = t.match(/([0-9]{1,2}:[0-9]{2}\s*(?:AM|PM|ص|م)?)/i))) out.time = m[1];
+  if ((m = t.match(/اسم\s*المودع\s*:?\s*([^\n\r:]{3,60})/))) out.depositor = mfStr(m[1]);
+  var c = (MF.companies || []).filter(function (x) { return mfStr(x.licence) && mfStr(x.licence) === out.licence; })[0];
+  if (c) out.company = c.company;
+  var h = '<table class="mf-mini" style="background:#fff;"><tbody>' +
+    mfKV('رقم الإيصال', out.receiptNo || '—') + mfKV('رقم الترخيص (كود العميل)', out.licence || '—') +
+    mfKV('الشركة المطابقة', out.company || '<span style="color:#dc2626;">لم تُطابَق — أضف رقم الترخيص في إعدادات الشركات</span>') +
+    mfKV('المبلغ', out.amount ? mfFmt(out.amount) : '—') + mfKV('التاريخ', out.date || '—') +
+    mfKV('الوقت', out.time || '—') + mfKV('اسم المودع', out.depositor || '—') + '</tbody></table>';
+  MF._bank = out;
+  document.getElementById('mfBankOut').innerHTML = h +
+    '<button class="mf-btn pri mt-2" onclick="mfBankUse()">✅ استخدم هذه البيانات في نموذج الإيصال</button>';
+}
+function mfBankUse() {
+  var o = MF._bank || {};
+  mfRecEdit(null);
+  setTimeout(function () {
+    if (o.receiptNo) document.getElementById('mfr_no').value = o.receiptNo;
+    if (o.date) document.getElementById('mfr_date').value = o.date;
+    if (o.time) document.getElementById('mfr_time').value = o.time;
+    if (o.amount) document.getElementById('mfr_amount').value = o.amount;
+    if (o.licence) document.getElementById('mfr_lic').value = o.licence;
+    if (o.company) document.getElementById('mfr_company').value = o.company;
+    if (o.depositor) document.getElementById('mfr_dep').value = o.depositor;
+    document.getElementById('mfr_src').value = 'إيصال بنك';
+  }, 60);
+}
+function mfLedgerRender() {
+  var pane = document.getElementById('mfRecPane');
+  pane.innerHTML = '<div class="text-muted small p-2">⏳ جاري تحميل كشف الحركة…</div>';
+  var comps = ['كل الشركات'].concat((MF.companies || []).map(function (c) { return c.company; }));
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var mv = (res && res.moves) || [];
+      var h = '<div class="d-flex gap-2 align-items-end mb-2">' +
+        '<div class="mf-fld"><label>الشركة</label>' + mfSel('mfLedComp', comps, MF._ledComp || 'كل الشركات', 'MF._ledComp=this.value;mfLedgerRender()') + '</div></div>' +
+        '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">كشف زمني: الإيداعات (+) والمسحوب للملفات التي سُجِّل لها تاريخ مراجعة (−) مع الرصيد بعد كل حركة.</div>' +
+        '<div style="max-height:330px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;">' +
+        '<table class="mf-mini" style="background:#fff;"><thead><tr>' +
+        ['التاريخ', 'الشركة', 'البيان', 'إيداع', 'سحب', 'الرصيد بعد الحركة'].map(function (t) {
+          return '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;">' + t + '</th>';
+        }).join('') + '</tr></thead><tbody>';
+      var ti = 0, to = 0;
+      mv.forEach(function (m) {
+        ti += mfNum(m.inn); to += mfNum(m.out);
+        h += '<tr><td class="mf-latin">' + mfEsc(m.date) + '</td><td>' + mfEsc(m.company) + '</td>' +
+          '<td style="text-align:start;">' + mfEsc(m.desc) + '</td>' +
+          '<td class="mf-latin" style="color:#0e9f6e;font-weight:800;">' + (mfNum(m.inn) ? mfFmt(m.inn) : '—') + '</td>' +
+          '<td class="mf-latin" style="color:#dc2626;font-weight:800;">' + (mfNum(m.out) ? mfFmt(m.out) : '—') + '</td>' +
+          '<td class="mf-latin" style="font-weight:800;' + (mfNum(m.balance) < 0 ? 'color:#dc2626;' : '') + '">' + mfFmt(m.balance) + '</td></tr>';
+      });
+      if (!mv.length) h += '<tr><td colspan="6" style="padding:16px;text-align:center;color:#94a3b8;">لا توجد حركات</td></tr>';
+      h += '</tbody><tfoot><tr><td colspan="3" style="position:sticky;bottom:0;background:#eef1f6;font-weight:800;">الإجمالي</td>' +
+        '<td class="mf-latin" style="position:sticky;bottom:0;background:#eef1f6;font-weight:800;color:#0e9f6e;">' + mfFmt(ti) + '</td>' +
+        '<td class="mf-latin" style="position:sticky;bottom:0;background:#eef1f6;font-weight:800;color:#dc2626;">' + mfFmt(to) + '</td>' +
+        '<td class="mf-latin" style="position:sticky;bottom:0;background:#eef1f6;font-weight:800;">' + mfFmt(ti - to) + '</td></tr></tfoot></table></div>';
+      pane.innerHTML = h;
+    })
+    .withFailureHandler(function (e) { pane.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>'; })
+    .getRoomFeeLedger(window.authToken, MF._ledComp || 'كل الشركات');
+}
+
+/* ---------- الطباعة والتصدير ---------- */
+function mfPrint() {
+  var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+  var st = document.getElementById('mfPrintStamp');
+  if (st) st.textContent = 'طُبع في: ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + '  ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  MF.openId = null; mfRender();
+  document.body.classList.add('mf-printing');
+  var done = function () { document.body.classList.remove('mf-printing'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(function () { window.print(); setTimeout(done, 1500); }, 120);
+}
+function mfBuildPrintDoc() {
+  var list = mfVisible();
+  var cols = MF_COLS.filter(function (c) { return !MF.hidden[c.k] && c.k !== 'act'; });
+  var sums = {}; MF_COLS.forEach(function (c) { if (c.sum) sums[c.k] = 0; });
+  var body = list.map(function (f) {
+    f._c = mfCalc(f);
+    Object.keys(sums).forEach(function (k) { sums[k] += mfNum(f._c[k] !== undefined ? f._c[k] : f[k]); });
+    return '<tr class="s' + mfStatus(f) + '">' + cols.map(function (c) {
+      return '<td>' + mfEsc(mfRaw(c.k, f)) + '</td>';
+    }).join('') + '</tr>';
+  }).join('');
+  var foot = '<tr>' + cols.map(function (c) {
+    return '<td>' + (c.k === 'seq' ? 'الإجمالي' : (sums[c.k] !== undefined ? mfFmt(sums[c.k]) : '')) + '</td>';
+  }).join('') + '</tr>';
+  var flt = document.getElementById('mfPrintFilters');
+  var sub = document.getElementById('mfPrintSub');
+  return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>مراجعة ملفات الوزارة</title><style>' +
+    '*{box-sizing:border-box;} body{font-family:"Cairo",Tahoma,sans-serif;margin:0;padding:8mm 6mm;}' +
+    '.t{font-size:17px;font-weight:900;color:#1e3d59;} .s{font-size:10px;color:#64748b;margin-top:2px;}' +
+    '.f{font-size:9.5px;color:#333;background:#f1f5f9;border:1px solid #ccc;border-radius:3px;padding:3px 6px;margin:5px 0 8px;}' +
+    'table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px;}' +
+    'th,td{border:1px solid #999;padding:2px 3px;text-align:center;word-break:break-word;}' +
+    'thead th{background:#1e3d59 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'tfoot td{background:#e8edf4 !important;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'tr.s1{background:#fef6e7;} tr.s2{background:#eaf3fe;} tr.s3{background:#e6f6f4;} tr.s4{background:#e8f6ea;}' +
+    'tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    '@media screen{ body{min-width:1500px;} }' +
+    '@media print{ @page{size:A4 landscape;margin:9mm 6mm 13mm;} body{min-width:0;} thead{display:table-header-group;} }' +
+    '</style></head><body><div class="t">🏛️ مراجعة ملفات الوزارة — منظومة منف للسياحة</div>' +
+    '<div class="s">' + mfEsc(sub ? sub.textContent : '') + ' — طُبع في ' + mfEsc(_formatPrintTimestamp ? _formatPrintTimestamp() : '') + '</div>' +
+    '<div class="f">' + mfEsc(flt ? flt.textContent : '') + '</div>' +
+    '<table><thead><tr>' + cols.map(function (c) { return '<th>' + mfEsc(c.l) + '</th>'; }).join('') + '</tr></thead>' +
+    '<tbody>' + body + '</tbody><tfoot>' + foot + '</tfoot></table></body></html>';
+}
+function mfExportPdf() {
+  var html = mfBuildPrintDoc();
+  var w = window.open('', '_blank');
+  if (!w) { _showPopup('اسمح بالنوافذ المنبثقة لحفظ PDF', 'error'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  w.onload = function () { setTimeout(function () { w.focus(); w.print(); }, 500); };
+}
+function mfExportImage(btn) {
+  if (typeof exportReportAsImage === 'function') exportReportAsImage(mfBuildPrintDoc, 'مراجعة ملفات الوزارة', btn);
+  else _showPopup('نظام تصدير الصور غير متاح', 'error');
+}
+function mfPrintFragment(elId, title) {
+  var el = document.getElementById(elId); if (!el) return;
+  var w = window.open('', '_blank');
+  if (!w) { _showPopup('اسمح بالنوافذ المنبثقة للطباعة', 'error'); return; }
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>' + title + '</title><style>' +
+    'body{font-family:"Cairo",Tahoma,sans-serif;padding:10mm;} .t{font-size:16px;font-weight:900;color:#1e3d59;margin-bottom:8px;}' +
+    'table{width:100%;border-collapse:collapse;font-size:11px;} th,td{border:1px solid #cbd5e1;padding:4px 6px;text-align:center;}' +
+    'thead th{background:#1e3d59 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'tfoot td{background:#e2e8f0 !important;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'button{display:none;} @page{size:A4;margin:10mm;}</style></head><body><div class="t">' + title + '</div>' +
+    el.innerHTML + '</body></html>');
+  w.document.close();
+  w.onload = function () { setTimeout(function () { w.focus(); w.print(); }, 400); };
+}
+function mfImageFragment(elId, title, btn) {
+  var el = document.getElementById(elId); if (!el) return;
+  var build = function () {
+    return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>' + title + '</title><style>' +
+      'body{font-family:"Cairo",Tahoma,sans-serif;padding:10mm;background:#fff;} .t{font-size:16px;font-weight:900;color:#1e3d59;margin-bottom:8px;}' +
+      'table{width:100%;border-collapse:collapse;font-size:11px;} th,td{border:1px solid #cbd5e1;padding:4px 6px;text-align:center;}' +
+      'thead th{background:#1e3d59;color:#fff;} tfoot td{background:#e2e8f0;font-weight:900;} button{display:none;}' +
+      '@media screen{ body{min-width:1100px;} }</style></head><body><div id="rptRoot"><div class="t">' + title + '</div>' +
+      el.innerHTML + '</div></body></html>';
+  };
+  if (typeof exportReportAsImage === 'function') exportReportAsImage(build, title, btn);
+  else _showPopup('نظام تصدير الصور غير متاح', 'error');
+}
+
 </script>
 </body>
 </html>
