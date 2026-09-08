@@ -4377,6 +4377,375 @@ input[type="date"]:not(:focus):not(:valid) {
   #ccColsPanelWrap .cc-cols-panel label input { accent-color:#0f4c4c; }
 </style>
 
+<!-- ================= 🏛️ (V4.106) شاشة مراجعة ملفات الوزارة ================= -->
+<style>
+  #section-ministry{ --mfNavy:#1e3d59; --mfNavyD:#152c42; --mfBlue:#2563eb; --mfBlueSoft:#dbeafe;
+    --mfBorder:#e2e8f0; --mfBorderS:#cbd5e1; --mfText:#0f172a; --mfMuted:#5c6b83; --mfFaint:#94a3b8;
+    --mfSurf:#fff; --mfSurf2:#f8fafc; --mfSurf3:#eef1f6;
+    --mfOk:#0e9f6e; --mfOkBg:#e5f9f1; --mfWarn:#c2670a; --mfWarnBg:#fef3e2; --mfDang:#dc2626; --mfDangBg:#fef2f2;
+    --mfIndigo:#6d28d9; --mfIndigoBg:#f1ebfe;
+    --mfSt1:#fef6e7; --mfSt1L:#d97706; --mfSt2:#eaf3fe; --mfSt2L:#2563eb;
+    --mfSt3:#e6f6f4; --mfSt3L:#0d9488; --mfSt4:#e8f6ea; --mfSt4L:#16a34a;
+    --mfSel:#d7e4f6; --mfSelL:#1e3d59;
+    font-size:13px; }
+  #section-ministry .mf-latin{ direction:ltr; unicode-bidi:embed; display:inline-block; font-variant-numeric:tabular-nums; }
+  #section-ministry .mf-bar{ background:var(--mfSurf); border:1px solid var(--mfBorder); border-radius:12px;
+    padding:9px 12px; box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05); }
+  #section-ministry .mf-btn{ font-size:11.5px; font-weight:700; border-radius:9px; padding:6px 11px; cursor:pointer;
+    border:1px solid var(--mfBorderS); background:var(--mfSurf); color:var(--mfText); display:inline-flex;
+    align-items:center; gap:5px; white-space:nowrap; }
+  #section-ministry .mf-btn:hover{ border-color:var(--mfBlue); color:var(--mfBlue); background:var(--mfBlueSoft); }
+  #section-ministry .mf-btn.pri{ background:var(--mfNavy); border-color:var(--mfNavy); color:#fff; }
+  #section-ministry .mf-btn.pri:hover{ background:var(--mfNavyD); color:#fff; }
+  #section-ministry .mf-btn.gold{ background:var(--mfWarnBg); border-color:#f6d199; color:var(--mfWarn); }
+  #section-ministry .mf-sep{ width:1px; align-self:stretch; background:var(--mfBorder); margin:0 3px; }
+  #section-ministry .mf-fld{ display:flex; flex-direction:column; gap:3px; position:relative; }
+  #section-ministry .mf-fld > label{ font-size:9.5px; font-weight:800; color:var(--mfFaint); padding-inline-start:2px; margin:0; }
+  #section-ministry .mf-fld input, #section-ministry .mf-fld select{ font-size:11.5px; padding:5px 8px; border-radius:8px;
+    border:1px solid var(--mfBorder); background:var(--mfSurf2); color:var(--mfText); min-width:118px; font-family:inherit; }
+  #section-ministry .mf-fld input:focus{ border-color:var(--mfBlue); outline:none; }
+  #section-ministry .mf-date{ display:flex; align-items:center; gap:2px; background:var(--mfSurf2);
+    border:1px solid var(--mfBorder); border-radius:8px; padding-inline-end:4px; }
+  #section-ministry .mf-date input{ border:none !important; background:none !important; min-width:92px !important; }
+  #section-ministry .mf-date button{ background:none; border:none; cursor:pointer; font-size:12px; color:var(--mfMuted); padding:2px 3px; }
+  #section-ministry .mf-facet{ font-size:10.5px; font-weight:700; border:1px solid var(--mfBorder); border-radius:99px;
+    padding:4px 10px; color:var(--mfMuted); cursor:pointer; background:var(--mfSurf); white-space:nowrap; }
+  #section-ministry .mf-facet:hover{ border-color:var(--mfBlue); }
+  #section-ministry .mf-facet.on{ background:var(--mfNavy); border-color:var(--mfNavy); color:#fff; }
+  #section-ministry .mf-chip{ display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700;
+    background:var(--mfBlueSoft); color:var(--mfBlue); border:1px solid var(--mfBlue); border-radius:99px; padding:3px 5px 3px 10px; }
+  #section-ministry .mf-chip button{ background:none; border:none; color:inherit; cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
+  #section-ministry .mf-clearall{ font-size:10.5px; font-weight:800; color:var(--mfDang); background:var(--mfDangBg);
+    border:1px solid #f6b8b8; border-radius:99px; padding:3px 10px; cursor:pointer; }
+
+  #section-ministry .mf-tablewrap{ overflow:auto; max-height:58vh; position:relative; border-radius:12px; }
+  #section-ministry table.mf-tab{ border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-size:11.5px; }
+  #section-ministry table.mf-tab th, #section-ministry table.mf-tab td{ border-bottom:1px solid var(--mfBorder);
+    border-inline-start:1px solid var(--mfBorder); text-align:center; white-space:nowrap; }
+  #section-ministry table.mf-tab td{ padding:5px 8px; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
+  #section-ministry table.mf-tab thead tr.mf-grp th{ background:var(--mfNavyD); color:#dce8fb; font-size:10px;
+    font-weight:800; position:sticky; top:0; z-index:12; padding:3px 7px; border-inline-start:2px solid rgba(255,255,255,.13); }
+  #section-ministry table.mf-tab thead tr.mf-cols th{ background:var(--mfNavy); color:#fff; font-size:10.5px;
+    font-weight:700; position:sticky; top:22px; z-index:11; padding:4px 5px; cursor:grab; }
+  #section-ministry table.mf-tab thead tr.mf-cols th.mf-dragover{ background:var(--mfBlue); box-shadow:inset 3px 0 0 #fff; }
+  #section-ministry .mf-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
+  #section-ministry .mf-thic{ background:none; border:none; color:#a9c1e2; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
+  #section-ministry .mf-thic:hover{ color:#fff; background:rgba(255,255,255,.16); }
+  #section-ministry .mf-thic.on{ color:#ffd77a; }
+  #section-ministry th.mf-fz, #section-ministry td.mf-fz{ position:sticky; z-index:8; }
+  #section-ministry thead th.mf-fz{ z-index:15; }
+  #section-ministry thead tr.mf-grp th.mf-fz{ z-index:16; }
+  #section-ministry .mf-edge{ box-shadow:-7px 0 8px -7px rgba(0,0,0,.28); }
+  #section-ministry tbody tr.mf-row{ background:var(--mfSurf); }
+  #section-ministry tbody tr.mf-row td.mf-fz{ background:var(--mfSurf); }
+  #section-ministry tbody tr.mf-s1{ background:var(--mfSt1); } #section-ministry tbody tr.mf-s1 td.mf-fz{ background:var(--mfSt1); }
+  #section-ministry tbody tr.mf-s2{ background:var(--mfSt2); } #section-ministry tbody tr.mf-s2 td.mf-fz{ background:var(--mfSt2); }
+  #section-ministry tbody tr.mf-s3{ background:var(--mfSt3); } #section-ministry tbody tr.mf-s3 td.mf-fz{ background:var(--mfSt3); }
+  #section-ministry tbody tr.mf-s4{ background:var(--mfSt4); } #section-ministry tbody tr.mf-s4 td.mf-fz{ background:var(--mfSt4); }
+  #section-ministry tbody tr.mf-row td:first-child{ border-inline-start:4px solid transparent; }
+  #section-ministry tbody tr.mf-s1 td:first-child{ border-inline-start-color:var(--mfSt1L); }
+  #section-ministry tbody tr.mf-s2 td:first-child{ border-inline-start-color:var(--mfSt2L); }
+  #section-ministry tbody tr.mf-s3 td:first-child{ border-inline-start-color:var(--mfSt3L); }
+  #section-ministry tbody tr.mf-s4 td:first-child{ border-inline-start-color:var(--mfSt4L); }
+  #section-ministry tbody tr.mf-row:hover{ filter:brightness(.975); }
+  #section-ministry tbody tr.mf-row.mf-sel{ background:var(--mfSel) !important; box-shadow:inset 0 2px 0 var(--mfSelL), inset 0 -2px 0 var(--mfSelL); }
+  #section-ministry tbody tr.mf-row.mf-sel td.mf-fz{ background:var(--mfSel) !important; }
+  #section-ministry tbody tr.mf-row td{ cursor:pointer; }
+  #section-ministry td.mf-txt{ text-align:start; }
+  #section-ministry td.mf-num{ font-weight:700; }
+  #section-ministry tfoot.mf-tot td{ position:sticky; bottom:0; background:var(--mfSurf3); border-top:2px solid var(--mfBorderS);
+    font-weight:800; color:var(--mfNavy); z-index:10; padding:6px 8px; }
+  #section-ministry tfoot.mf-tot td.mf-fz{ z-index:17; }
+  #section-ministry .mf-hide{ display:none !important; }
+  #section-ministry .mf-exp{ background:none; border:1px solid transparent; border-radius:5px; font-size:10px;
+    color:var(--mfMuted); cursor:pointer; padding:0 3px; }
+  #section-ministry .mf-exp:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
+  #section-ministry tr.mf-open .mf-exp{ color:var(--mfBlue); border-color:var(--mfBlue); }
+  #section-ministry .mf-badge{ display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:800;
+    padding:1px 7px; border-radius:99px; border:1px solid transparent; }
+  #section-ministry .mf-badge.ok{ background:var(--mfOkBg); color:var(--mfOk); border-color:#a7e8cf; }
+  #section-ministry .mf-badge.off{ background:var(--mfSurf3); color:var(--mfFaint); border-color:var(--mfBorder); }
+  #section-ministry .mf-badge.vip{ background:var(--mfWarnBg); color:var(--mfWarn); border-color:#f6d199; }
+  #section-ministry .mf-badge.norm{ background:var(--mfSurf3); color:var(--mfMuted); border-color:var(--mfBorder); }
+  #section-ministry .mf-badge.renew{ background:var(--mfIndigoBg); color:var(--mfIndigo); border-color:#d9c8fb; }
+  #section-ministry .mf-badge.warn{ background:var(--mfDangBg); color:var(--mfDang); border-color:#f6b8b8; }
+  #section-ministry .mf-badge.link{ background:var(--mfBlueSoft); color:var(--mfBlue); border-color:var(--mfBlue); }
+  #section-ministry .mf-tog{ width:30px; height:16px; border-radius:99px; background:var(--mfBorderS); position:relative;
+    cursor:pointer; display:inline-block; border:none; vertical-align:middle; }
+  #section-ministry .mf-tog::after{ content:""; position:absolute; top:2px; inset-inline-start:2px; width:12px; height:12px;
+    border-radius:50%; background:#fff; transition:.15s; }
+  #section-ministry .mf-tog.on{ background:var(--mfOk); }
+  #section-ministry .mf-tog.on::after{ inset-inline-start:16px; }
+  #section-ministry .mf-rowbtn{ background:none; border:1px solid var(--mfBorderS); border-radius:6px; font-size:10px;
+    padding:1px 5px; cursor:pointer; color:var(--mfMuted); }
+  #section-ministry .mf-rowbtn:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
+
+  #section-ministry tr.mf-det td{ background:var(--mfSurf2) !important; cursor:default !important; max-width:none !important;
+    white-space:normal !important; padding:0 !important; }
+  #section-ministry .mf-detin{ padding:12px 14px; text-align:start; }
+  #section-ministry .mf-dgrid{ display:grid; grid-template-columns:1.25fr 1fr; gap:11px; align-items:start; }
+  @media (max-width:1100px){ #section-ministry .mf-dgrid{ grid-template-columns:1fr; } }
+  #section-ministry .mf-dcard{ background:var(--mfSurf); border:1px solid var(--mfBorder); border-radius:10px; padding:10px 12px; }
+  #section-ministry .mf-dcard + .mf-dcard{ margin-top:8px; }
+  #section-ministry .mf-dcard h6{ font-size:11.5px; font-weight:800; color:var(--mfNavy); margin:0 0 6px; }
+  #section-ministry .mf-mini{ width:100%; border-collapse:collapse; font-size:11px; }
+  #section-ministry .mf-mini th{ background:var(--mfSurf3); font-weight:800; padding:4px 6px; text-align:start;
+    border-bottom:1px solid var(--mfBorder); white-space:nowrap; }
+  #section-ministry .mf-mini td{ padding:4px 6px; border-bottom:1px solid var(--mfBorder); }
+  #section-ministry .mf-mini tfoot td{ background:var(--mfSurf3); font-weight:800; }
+  #section-ministry .mf-note{ display:flex; gap:6px; align-items:flex-start; border-radius:8px; padding:7px 9px;
+    font-size:11px; font-weight:600; margin-bottom:6px; line-height:1.6; }
+  #section-ministry .mf-note.bad{ background:var(--mfDangBg); border:1px solid #f6b8b8; }
+  #section-ministry .mf-note.good{ background:var(--mfOkBg); border:1px solid #a7e8cf; }
+  #section-ministry .mf-note.info{ background:var(--mfBlueSoft); border:1px solid var(--mfBlue); }
+  #section-ministry .mf-trip{ display:flex; align-items:center; gap:6px; background:var(--mfBlueSoft); border:1px solid var(--mfBlue);
+    border-radius:9px; padding:6px 10px; font-size:11.5px; font-weight:700; color:var(--mfBlue); margin-bottom:8px; }
+  #section-ministry .mf-legend{ display:flex; gap:12px; flex-wrap:wrap; padding:8px 12px; font-size:10.5px;
+    color:var(--mfMuted); border-top:1px solid var(--mfBorder); }
+  #section-ministry .mf-sw{ width:20px; height:11px; border-radius:3px; display:inline-block; border-inline-start:3px solid; }
+
+  #section-ministry .mf-stats{ display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+  @media (max-width:820px){ #section-ministry .mf-stats{ grid-template-columns:1fr; } }
+  #section-ministry .mf-bar-row{ display:grid; grid-template-columns:135px 1fr 48px; align-items:center; gap:8px; margin-bottom:7px; }
+  #section-ministry .mf-bar-row .nm{ font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #section-ministry .mf-track{ height:14px; background:var(--mfSurf3); border-radius:4px; overflow:hidden; }
+  #section-ministry .mf-fill{ height:100%; background:#2f6ea8; border-radius:0 4px 4px 0; }
+  #section-ministry .mf-bal{ display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:8px; margin-bottom:12px; }
+  #section-ministry .mf-balc{ background:var(--mfSurf); border:1px solid var(--mfBorder); border-radius:10px;
+    padding:9px 11px; border-top:3px solid var(--mfOk); }
+  #section-ministry .mf-balc.low{ border-top-color:var(--mfDang); }
+  #section-ministry .mf-balc .v{ font-size:16px; font-weight:900; color:var(--mfOk); }
+  #section-ministry .mf-balc.low .v{ color:var(--mfDang); }
+
+  /* نافذة تخصيص الأعمدة العائمة */
+  #mfColWin{ position:fixed; z-index:2000; width:330px; max-width:94vw; background:#fff; border:1px solid #cbd5e1;
+    border-radius:12px; box-shadow:0 18px 50px rgba(15,23,42,.28); display:none; flex-direction:column; max-height:76vh; }
+  #mfColWin.show{ display:flex; }
+  #mfColWin .h{ padding:10px 13px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; gap:7px;
+    cursor:move; background:#eef1f6; border-radius:11px 11px 0 0; user-select:none; }
+  #mfColWin .h b{ font-size:12.5px; }
+  #mfColWin .b{ flex:1; overflow:auto; padding:9px 13px; }
+  #mfColWin .f{ padding:10px 13px; border-top:1px solid #e2e8f0; display:flex; gap:6px; }
+  #mfColWin .g{ margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
+  #mfColWin .gh{ display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:800; padding:6px 9px;
+    background:#eef1f6; color:#1e3d59; }
+  #mfColWin .gh .lk{ margin-inline-start:auto; display:flex; gap:4px; }
+  #mfColWin .gh .lk button{ font-size:9.5px; font-weight:800; border:1px solid #cbd5e1; background:#fff;
+    border-radius:6px; padding:1px 6px; cursor:pointer; color:#5c6b83; }
+  #mfColWin .ci{ display:flex; align-items:center; gap:6px; padding:4px 9px; font-size:11.5px;
+    border-top:1px solid #e2e8f0; cursor:grab; background:#fff; }
+  #mfColWin .ci:hover{ background:#f8fafc; }
+  #mfColWin .ci.mf-dragover{ background:#dbeafe; box-shadow:inset 0 2px 0 #2563eb; }
+  #mfColWin .ci .nm{ flex:1; }
+  #mfColWin .pin{ background:none; border:1px solid #e2e8f0; border-radius:6px; font-size:10px; padding:0 5px;
+    cursor:pointer; color:#94a3b8; }
+  #mfColWin .pin.on{ background:#fef3e2; border-color:#f6d199; color:#c2670a; }
+
+  /* التقويم المخصص — لا يعتمد على showPicker المحجوب داخل إطار Apps Script */
+  #mfDatePick{ position:fixed; z-index:2100; background:#fff; border:1px solid #cbd5e1; border-radius:11px;
+    box-shadow:0 18px 50px rgba(15,23,42,.28); padding:9px; display:none; width:248px; }
+  #mfDatePick.show{ display:block; }
+  #mfDatePick .dh{ display:flex; align-items:center; gap:4px; margin-bottom:7px; }
+  #mfDatePick .dh button{ background:none; border:1px solid #e2e8f0; border-radius:7px; cursor:pointer; font-size:12px; padding:1px 7px; }
+  #mfDatePick .dh select{ font-size:11px; padding:2px 4px; border-radius:7px; border:1px solid #e2e8f0; background:#f8fafc; }
+  #mfDatePick .dh select.mo{ flex:1; }
+  #mfDatePick .dg{ display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+  #mfDatePick .dw{ font-size:9px; font-weight:800; color:#94a3b8; text-align:center; padding:2px 0; }
+  #mfDatePick .dd{ font-size:11px; text-align:center; padding:4px 0; border-radius:6px; cursor:pointer;
+    border:1px solid transparent; background:none; color:#0f172a; font-family:inherit; }
+  #mfDatePick .dd:hover{ background:#dbeafe; color:#2563eb; }
+  #mfDatePick .dd.other{ color:#94a3b8; opacity:.4; }
+  #mfDatePick .dd.today{ border-color:#2563eb; font-weight:800; }
+  #mfDatePick .dd.we{ color:#c2670a; font-weight:800; }
+  #mfDatePick .dd.sel{ background:#1e3d59; color:#fff; font-weight:800; }
+  #mfDatePick .df{ display:flex; gap:5px; margin-top:7px; }
+  #mfDatePick .df button{ flex:1; font-size:10.5px; font-weight:700; padding:4px; border-radius:7px;
+    border:1px solid #cbd5e1; background:#fff; cursor:pointer; }
+  #mfDatePick .dn{ font-size:9.5px; color:#c2670a; font-weight:700; text-align:center; margin-top:5px; }
+
+  #mfCellTip{ position:fixed; z-index:2200; background:#152c42; color:#fff; font-size:11.5px; font-weight:600;
+    padding:5px 10px; border-radius:8px; max-width:340px; box-shadow:0 10px 30px rgba(0,0,0,.3); display:none;
+    pointer-events:none; line-height:1.5; }
+  #mfCellTip.show{ display:block; }
+  #mfTypeahead{ position:fixed; z-index:2150; background:#fff; border:1px solid #cbd5e1; border-radius:9px;
+    box-shadow:0 12px 34px rgba(15,23,42,.22); max-height:200px; overflow:auto; display:none; min-width:150px; }
+  #mfTypeahead.show{ display:block; }
+  #mfTypeahead .ti{ padding:5px 10px; font-size:11.5px; cursor:pointer; white-space:nowrap; }
+  #mfTypeahead .ti:hover, #mfTypeahead .ti.on{ background:#dbeafe; color:#2563eb; }
+  #mfTypeahead .ti .hl{ font-weight:800; color:#2563eb; }
+  #mfTypeahead .te{ padding:7px 10px; font-size:11px; color:#94a3b8; }
+  #mfColFilterPop{ position:fixed; z-index:2150; background:#fff; border:1px solid #cbd5e1; border-radius:10px;
+    box-shadow:0 12px 34px rgba(15,23,42,.22); padding:8px; display:none; min-width:175px; }
+  #mfColFilterPop.show{ display:block; }
+  #mfColFilterPop .ph{ font-size:9.5px; font-weight:800; color:#94a3b8; margin-bottom:4px; }
+  #mfColFilterPop input{ width:100%; font-size:11.5px; padding:5px 8px; border-radius:7px; border:1px solid #e2e8f0;
+    background:#f8fafc; outline:none; font-family:inherit; }
+
+  /* الطباعة: عرض ملائم + ترقيم حقيقي + تذييل بكل صفحة + سطر الفلاتر */
+  #mfPrintHead, #mfPrintFoot{ display:none; }
+  @media print{
+    body.mf-printing > *:not(#section-ministry){ display:none !important; }
+    body.mf-printing #section-ministry{ display:block !important; }
+    body.mf-printing #section-ministry .mf-noprint{ display:none !important; }
+    body.mf-printing #mfPrintHead{ display:block !important; border-bottom:2px solid #1e3d59; padding-bottom:4px; margin-bottom:5px; }
+    body.mf-printing #mfPrintHead h1{ font-size:13pt; font-weight:800; color:#1e3d59; margin:0; }
+    body.mf-printing #mfPrintHead .sub{ font-size:8pt; color:#444; margin-top:2px; }
+    body.mf-printing #mfPrintHead .flt{ font-size:7pt; color:#333; background:#f1f5f9; border:1px solid #ccc;
+      border-radius:3px; padding:2px 5px; margin-top:3px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body.mf-printing #mfPrintFoot{ display:flex !important; position:fixed; bottom:0; inset-inline-start:0; inset-inline-end:0;
+      justify-content:space-between; font-size:7pt; color:#444; border-top:1px solid #bbb; padding-top:2px; }
+    body.mf-printing #mfPrintFoot .pg::after{ content:"صفحة " counter(page) " من " counter(pages); }
+    body.mf-printing #section-ministry .mf-tablewrap{ max-height:none !important; overflow:visible !important; }
+    body.mf-printing #section-ministry table.mf-tab{ width:100% !important; table-layout:fixed !important; font-size:6.4pt !important; }
+    body.mf-printing #section-ministry table.mf-tab th, body.mf-printing #section-ministry table.mf-tab td{
+      white-space:normal !important; word-break:break-word !important; max-width:none !important;
+      padding:1px 2px !important; border:1px solid #999 !important; overflow:visible !important; text-overflow:clip !important; }
+    body.mf-printing #section-ministry table.mf-tab thead tr.mf-grp th,
+    body.mf-printing #section-ministry table.mf-tab thead tr.mf-cols th{ background:#1e3d59 !important; color:#fff !important;
+      position:static !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body.mf-printing #section-ministry thead{ display:table-header-group; }
+    body.mf-printing #section-ministry tfoot{ display:table-footer-group; }
+    body.mf-printing #section-ministry tfoot.mf-tot td{ position:static !important; background:#e8edf4 !important;
+      -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body.mf-printing #section-ministry th.mf-fz, body.mf-printing #section-ministry td.mf-fz{ position:static !important; box-shadow:none !important; }
+    body.mf-printing #section-ministry tbody tr.mf-row{ break-inside:avoid; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body.mf-printing #section-ministry tbody tr.mf-s1{ background:#fef6e7 !important; }
+    body.mf-printing #section-ministry tbody tr.mf-s2{ background:#eaf3fe !important; }
+    body.mf-printing #section-ministry tbody tr.mf-s3{ background:#e6f6f4 !important; }
+    body.mf-printing #section-ministry tbody tr.mf-s4{ background:#e8f6ea !important; }
+    body.mf-printing #section-ministry tbody tr.mf-row.mf-sel{ background:inherit !important; box-shadow:none !important; }
+    body.mf-printing #section-ministry tr.mf-det{ display:none !important; }
+    body.mf-printing #section-ministry .mf-thic, body.mf-printing #section-ministry .mf-exp,
+    body.mf-printing #section-ministry .mf-rowbtn{ display:none !important; }
+    @page{ size:A4 landscape; margin:10mm 6mm 14mm; }
+  }
+</style>
+
+<div id="section-ministry" class="page-section container-fluid my-3 px-3">
+  <div id="mfPrintHead">
+    <h1>مراجعة ملفات الوزارة — منظومة منف للسياحة</h1>
+    <div class="sub" id="mfPrintSub"></div>
+    <div class="flt" id="mfPrintFilters"></div>
+  </div>
+
+  <div class="mf-noprint">
+    <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+      <div style="flex:1;">
+        <h4 class="fw-bold mb-0" style="color:#1e3d59;">🏛️ مراجعة ملفات الوزارة</h4>
+        <div class="small text-muted">ملفات مراجعة بوابة العمرة الإلكترونية · رسوم الغرفة · المشرفون</div>
+      </div>
+      <button class="mf-btn pri" onclick="mfNewFile()">➕ ملف جديد</button>
+      <button class="mf-btn" onclick="mfOpenColWin(event)">🧩 تخصيص الأعمدة</button>
+      <div class="mf-sep"></div>
+      <button class="mf-btn gold" onclick="mfOpenReceipts()">🏦 إيصالات رسوم الغرفة</button>
+      <button class="mf-btn" onclick="mfOpenSupReg()">🧑‍✈️ سجل المشرفين</button>
+      <button class="mf-btn" onclick="mfOpenSuggest()">🎯 اقتراح مشرف</button>
+      <div class="mf-sep"></div>
+      <button class="mf-btn" onclick="mfPrint()">🖨️ طباعة</button>
+      <button class="mf-btn" onclick="mfExportPdf()">📄 PDF</button>
+      <button class="mf-btn" onclick="mfExportImage(this)">📸 صورة HD</button>
+      <button class="mf-btn" onclick="mfLoad(true)">🔄 تحديث</button>
+    </div>
+
+    <div id="mfAlerts"></div>
+
+    <div class="mf-bar mb-2">
+      <div class="d-flex align-items-end gap-2 flex-wrap">
+        <div class="mf-fld" style="flex:1 1 170px;"><label>بحث شامل</label>
+          <input id="mfSearch" placeholder="ابحث في كل الأعمدة..." autocomplete="off"></div>
+        <div class="mf-fld"><label>رقم الملف</label><input id="mfF_fileNo" autocomplete="off"></div>
+        <div class="mf-fld"><label>الشركة المصرية</label><input id="mfF_company" autocomplete="off"></div>
+        <div class="mf-fld"><label>الوكيل السعودي</label><input id="mfF_agent" autocomplete="off"></div>
+        <div class="mf-fld"><label>العميل</label><input id="mfF_clientLabel" autocomplete="off"></div>
+        <div class="mf-fld"><label>المشرف</label><input id="mfF_supName" autocomplete="off"></div>
+        <div class="mf-fld"><label>فندق المدينة</label><input id="mfF_madinahHotel" autocomplete="off"></div>
+        <div class="mf-fld"><label>فندق مكة</label><input id="mfF_makkahHotel" autocomplete="off"></div>
+        <div class="mf-fld"><label>تاريخ السفر من</label>
+          <div class="mf-date"><input id="mfF_goFrom" maxlength="10" placeholder=""><button type="button" onclick="mfPickDate('mfF_goFrom',event)">📅</button></div></div>
+        <div class="mf-fld"><label>تاريخ العودة حتى</label>
+          <div class="mf-date"><input id="mfF_retTo" maxlength="10" placeholder=""><button type="button" onclick="mfPickDate('mfF_retTo',event)">📅</button></div></div>
+      </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" style="border-top:1px dashed var(--mfBorder);">
+        <button class="mf-facet" data-q="unreviewed" onclick="mfToggleFacet(this)">🕓 لم تُراجع بعد</button>
+        <button class="mf-facet" data-q="flag" onclick="mfToggleFacet(this)">⚠️ به تنبيه قاعدة</button>
+        <button class="mf-facet" data-q="approved" onclick="mfToggleFacet(this)">✅ معتمد</button>
+        <button class="mf-facet" data-q="notapproved" onclick="mfToggleFacet(this)">⬜ غير معتمد</button>
+        <button class="mf-facet" data-q="posted" onclick="mfToggleFacet(this)">🧾 له رقم قيد</button>
+        <button class="mf-facet" data-q="noref" onclick="mfToggleFacet(this)">📭 بدون قيد</button>
+        <button class="mf-facet" data-q="vip" onclick="mfToggleFacet(this)">⭐ VIP</button>
+        <button class="mf-facet" data-q="urgent" onclick="mfToggleFacet(this)">⏰ سفر خلال 3 أيام</button>
+        <button class="mf-facet" data-q="nobal" onclick="mfToggleFacet(this)">🏦 بلا رصيد كافٍ</button>
+      </div>
+      <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" id="mfApplied" style="border-top:1px dashed var(--mfBorder);"></div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm" style="border-radius:13px; overflow:hidden;">
+    <div class="mf-noprint d-flex align-items-center gap-2" style="padding:6px 12px; background:var(--mfSel); border-bottom:1px solid var(--mfBorder); font-size:11.5px; font-weight:700;">
+      <span style="font-size:10px; color:var(--mfMuted); font-weight:800;">الملف الحالي:</span>
+      <span id="mfCurFile">— لم يتم اختيار ملف —</span>
+      <span class="ms-auto" style="font-size:10px; color:var(--mfMuted); font-weight:600;">اضغط ▸ في عمود «م» لعرض التفاصيل · ↑↓ للتنقل</span>
+    </div>
+    <div class="mf-tablewrap" id="mfTableWrap">
+      <div class="p-4 text-center text-muted small">⏳ جاري التحميل…</div>
+    </div>
+    <div class="mf-legend mf-noprint">
+      <span><span class="mf-sw" style="background:var(--mfSt1); border-color:var(--mfSt1L);"></span> لم تُراجع بعد</span>
+      <span><span class="mf-sw" style="background:var(--mfSt2); border-color:var(--mfSt2L);"></span> تمت المراجعة</span>
+      <span><span class="mf-sw" style="background:var(--mfSt3); border-color:var(--mfSt3L);"></span> معتمدة</span>
+      <span><span class="mf-sw" style="background:var(--mfSt4); border-color:var(--mfSt4L);"></span> لها رقم قيد</span>
+      <span><span class="mf-sw" style="background:var(--mfSel); border-color:var(--mfSelL);"></span> الملف المحدد</span>
+      <span><span class="mf-badge vip">VIP</span> +100ج للمعتمر فقط</span>
+      <span><span class="mf-badge warn">⚠️</span> تنبيه قاعدة</span>
+    </div>
+  </div>
+
+  <div id="mfPrintFoot"><span class="pg"></span><span id="mfPrintStamp"></span></div>
+
+  <div class="mf-noprint mt-3">
+    <h6 class="fw-bold mb-2" style="color:#1e3d59;">📊 إحصائية أعداد المعتمرين <span class="small text-muted fw-normal">— تتحدّث مع الفلاتر</span></h6>
+    <div class="mf-stats">
+      <div class="mf-bar" style="padding:12px 14px;">
+        <div class="fw-bold" style="font-size:12.5px;">حسب الشركة المصرية</div>
+        <div class="small text-muted mb-2" style="font-size:10.5px;">كل الشركات</div>
+        <div id="mfChartComp"></div>
+        <div class="small text-muted pt-2 mt-1" style="border-top:1px solid var(--mfBorder); font-size:10.5px;" id="mfCompFoot"></div>
+      </div>
+      <div class="mf-bar" style="padding:12px 14px;">
+        <div class="d-flex align-items-baseline">
+          <div class="fw-bold" style="font-size:12.5px;">أكبر 5 عملاء</div>
+          <button class="ms-auto btn btn-link p-0" style="font-size:10.5px; font-weight:800;" onclick="mfAllClients()">عرض كل العملاء ⬅</button>
+        </div>
+        <div class="small text-muted mb-2" style="font-size:10.5px;">العملاء المسجلون داخل الرحلات</div>
+        <div id="mfChartCli"></div>
+        <div class="small text-muted pt-2 mt-1" style="border-top:1px solid var(--mfBorder); font-size:10.5px;" id="mfCliFoot"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<aside id="mfColWin">
+  <div class="h" id="mfColWinHead"><b>🧩 تخصيص الأعمدة</b>
+    <span style="font-size:10px; color:#94a3b8; font-weight:700;">⠿ اسحب للتحريك</span>
+    <button class="ms-auto btn-close" style="font-size:10px;" onclick="mfCloseColWin()"></button></div>
+  <div class="b">
+    <div style="font-size:10px; color:#5c6b83; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
+      padding:5px 8px; margin-bottom:8px; line-height:1.6;">
+      ☑️ إظهار/إخفاء · 📌 تثبيت العمود عند التمرير الأفقي · ⠿ اسحب لإعادة الترتيب</div>
+    <div id="mfColWinBody"></div>
+  </div>
+  <div class="f">
+    <button class="mf-btn pri" style="flex:1; justify-content:center;" onclick="mfSaveColPrefs()">💾 حفظ كافتراضي</button>
+    <button class="mf-btn" onclick="mfResetCols()">↺ إعادة تعيين</button>
+  </div>
+</aside>
+
+<div id="mfDatePick"></div>
+<div id="mfCellTip"></div>
+<div id="mfTypeahead"></div>
+<div id="mfColFilterPop"><div class="ph" id="mfColFilterLbl"></div><input id="mfColFilterInput" placeholder="اكتب للتصفية..." autocomplete="off"></div>
+<!-- ================= نهاية شاشة مراجعة ملفات الوزارة ================= -->
+
 <!-- 📊 لوحة الإحصاءات — استُعيد الغلاف section-stats بعد استيعابه سهواً داخل كارت الاتفاقيات (V4.58) -->
 <div id="section-stats" class="page-section container-fluid my-3 px-3">
   <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
@@ -16578,13 +16947,18 @@ function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   // 🔍 (V4.104) سقف أعلى قليلاً من الأصل لتقارير الصفحة الواحدة (كشوف الحسابات/التسكين عادة أصغر
   // من سقف الذاكرة الآمن أصلاً)، مع إبقاء سقف iOS كما هو (قيد نظام تشغيل حقيقي غير قابل للتفاوض)
-  var MAX_AREA = IS_IOS_ ? 16000000 : 60000000; // بكسل² (4 بايت/بكسل RGBA بالذاكرة)
-  var MAX_DIM  = 8000;                           // أقصى بعد لأي canvas واحد (حد متصفحات فعلي)
-  var scale = Math.min(6, Math.sqrt(MAX_AREA / (cssW * cssH)));
+  // 🔍 (V4.106) الدقة تُحسب الآن من حدّين معاً: المساحة الكلية **وأقصى بُعد** — فيخرج التقرير
+  // دائماً في صورة واحدة غير مقسّمة (لأن الطول والعرض يبقيان تحت حد المتصفح)، وبأعلى دقة يسمح بها.
+  var MAX_AREA = IS_IOS_ ? 16000000 : 180000000; // بكسل² (4 بايت/بكسل RGBA بالذاكرة)
+  var MAX_DIM  = IS_IOS_ ? 8192 : 16384;         // أقصى بعد لأي canvas واحد (حد المتصفح الفعلي)
+  var byArea = Math.sqrt(MAX_AREA / (cssW * cssH));
+  var byDim  = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
+  var scale = Math.min(8, byArea, byDim);
   if (!(scale > 0) || scale < 1) scale = 1;
 
   html2pdf().set({
-    html2canvas: { scale: scale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true, logging: false }
+    html2canvas: { scale: scale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true, logging: false,
+      width: cssW, windowWidth: cssW, scrollX: 0, scrollY: 0 }
   }).from(rootEl).toCanvas().get('canvas').then(function(full) {
     _sliceCanvasToPngFiles_(full, fileNameBase, cb);
   }).catch(function(err) { cb(null, err); });
@@ -16592,7 +16966,10 @@ function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
 
 // ✂️ تقسيم أي طول يتجاوز الحد الأقصى لعدة قطع رأسية (صور متعددة) بدل فشل الرسم — PNG بلا فقد دائماً
 function _sliceCanvasToPngFiles_(full, fileNameBase, cb) {
-  var MAX_DIM = 8000;
+  // (V4.106) الحد الفعلي لبُعد الـcanvas في المتصفحات — التقسيم صار حالة قصوى نادرة لا الوضع الطبيعي
+  var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var MAX_DIM = IS_IOS_ ? 8192 : 16384;
   var pieces = [], total = full.height;
   var sliceH = Math.min(MAX_DIM, total) || total;
   for (var y = 0; y < total; y += sliceH) {
@@ -16624,7 +17001,8 @@ function _sliceCanvasToPngFiles_(full, fileNameBase, cb) {
 // بمتصفحات معيّنة في قراءة الأنماط المحسوبة (computed styles) من مستند غير مستند النافذة الحالية
 function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb) {
   var iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed; left:-99999px; top:0; width:900px; height:600px; border:0;';
+  // (V4.106) عرض ابتدائي واسع حتى تتخطّط الجداول العريضة بالكامل، ثم يُضبط على العرض الحقيقي قبل الالتقاط
+  iframe.style.cssText = 'position:fixed; left:-99999px; top:0; width:1600px; height:900px; border:0;';
   document.body.appendChild(iframe);
   var cleanup = function() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); };
   var done = false;
@@ -16635,16 +17013,28 @@ function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb) {
     '<script>' +
     'window.__exportImage = function() {' +
     '  var root = document.getElementById("rptRoot") || document.body;' +
-    '  var cssW = root.scrollWidth || root.offsetWidth || 794;' +
-    '  var cssH = root.scrollHeight || root.offsetHeight || 1000;' +
-    '  var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);' +
-    '  var MAX_AREA = IS_IOS_ ? 16000000 : 60000000;' +
-    '  var scale = Math.min(6, Math.sqrt(MAX_AREA / (cssW * cssH)));' +
-    '  if (!(scale > 0) || scale < 1) scale = 1;' +
-    '  html2pdf().set({ html2canvas: { scale: scale, useCORS: true, backgroundColor: "#ffffff", foreignObjectRendering: true, logging: false } })' +
-    '    .from(root).toCanvas().get("canvas")' +
-    '    .then(function(c) { window.parent._exportFullHtmlAsImage_onCanvas_(c); })' +
-    '    .catch(function(err) { window.parent._exportFullHtmlAsImage_onCanvas_(null, String(err)); });' +
+    // 📐 (V4.106) قِس العرض الحقيقي للتقرير ووسّع الإطار له أولاً — بلا هذا كان الجدول الأعرض من
+    // الإطار يُقصّ من جهة اليمين وتخرج الصورة ناقصة عمود الإجمالي
+    '  var natW = Math.max(root.scrollWidth || 0, root.offsetWidth || 0,' +
+    '                      document.documentElement ? document.documentElement.scrollWidth : 0,' +
+    '                      document.body ? document.body.scrollWidth : 0, 794);' +
+    '  try { if (window.frameElement) window.frameElement.style.width = (natW + 48) + "px"; } catch (e) {}' +
+    '  setTimeout(function() {' +
+    '    var cssW = Math.max(root.scrollWidth || 0, root.offsetWidth || 0, natW);' +
+    '    var cssH = Math.max(root.scrollHeight || 0, root.offsetHeight || 0, 1000);' +
+    '    var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);' +
+    '    var MAX_AREA = IS_IOS_ ? 16000000 : 180000000;' +
+    '    var MAX_DIM = IS_IOS_ ? 8192 : 16384;' +
+    '    var byArea = Math.sqrt(MAX_AREA / (cssW * cssH));' +
+    '    var byDim = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);' +
+    '    var scale = Math.min(8, byArea, byDim);' +
+    '    if (!(scale > 0) || scale < 1) scale = 1;' +
+    '    html2pdf().set({ html2canvas: { scale: scale, useCORS: true, backgroundColor: "#ffffff", foreignObjectRendering: true, logging: false,' +
+    '      width: cssW, windowWidth: cssW, scrollX: 0, scrollY: 0 } })' +
+    '      .from(root).toCanvas().get("canvas")' +
+    '      .then(function(c) { window.parent._exportFullHtmlAsImage_onCanvas_(c); })' +
+    '      .catch(function(err) { window.parent._exportFullHtmlAsImage_onCanvas_(null, String(err)); });' +
+    '  }, 260);' +
     '};' +
     '<\/script>';
 
@@ -22380,7 +22770,10 @@ function _tasBuildPrintDoc_() {
       'th, td { border: 1px solid #cbd5e1; padding: 5px 6px; text-align: center; }' +
       'thead th { background: #0f4c4c !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
       'tfoot td { background: #e2e8f0 !important; font-weight: 900; -webkit-print-color-adjust: exact; print-color-adjust: exact; }' +
-      '@media print { @page { size: A4 landscape; margin: 10mm; } }' +
+      // 📐 (V4.106) عرض تخطيط مناسب للتقرير العرضي عند العرض/الالتقاط كصورة — بدونه كان الجدول
+      // ينضغط في إطار ضيق فيلتف نص كل خلية لأسطر كثيرة، فيطول التقرير ويخرج مقسّماً لصورتين
+      '@media screen { body { min-width: 1500px; } td.tas-desc { white-space: normal; } }' +
+      '@media print { @page { size: A4 landscape; margin: 10mm; } body { min-width: 0; padding: 0; } }' +
     '</style></head><body>' +
     '<div class="title">📈 ملخص حسابات الرحلة — ' + escapeHtml_(res.trip) + '</div>' +
     '<div class="sub-title">طُبع بتاريخ ' + printedAt + '</div>' +
