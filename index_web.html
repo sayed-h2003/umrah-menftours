@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.106 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.107 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.106)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.107)', diag);
 }, 6000);
 </script>
 
@@ -1474,6 +1474,8 @@ input[type="date"]:not(:focus):not(:valid) {
           🔐 تسجيل الدخول
         </button>
       </form>
+      <!-- 🏷️ (V4.107) رقم الإصدار في شاشة الدخول — نفس رقم appVersionBadge، بخط صغير أسفل زر الدخول -->
+      <div class="text-center text-muted" id="loginVersionTag" style="font-size:10.5px; margin-top:10px;"></div>
     </div>
   </div>
 </div>
@@ -1489,7 +1491,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.106</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.107</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4484,6 +4486,23 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry .mf-rowbtn{ background:none; border:1px solid var(--mfBorderS); border-radius:6px; font-size:10px;
     padding:1px 5px; cursor:pointer; color:var(--mfMuted); }
   #section-ministry .mf-rowbtn:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
+  /* التعديل السريع في مكانه (ضغطتان على الصف) */
+  #section-ministry tr.mf-editrow{ background:var(--mfBlueSoft) !important; box-shadow:inset 0 2px 0 var(--mfBlue), inset 0 -2px 0 var(--mfBlue); }
+  #section-ministry tr.mf-editrow td{ padding:3px 4px; cursor:default; }
+  #section-ministry tr.mf-editrow td.mf-fz{ background:var(--mfBlueSoft) !important; }
+  #section-ministry .mf-inline-in{ width:100%; font-size:11px; padding:3px 5px; border-radius:6px; border:1px solid var(--mfBorderS);
+    background:#fff; font-family:inherit; color:var(--mfText); }
+  #section-ministry .mf-inline-in:focus{ outline:none; border-color:var(--mfBlue); box-shadow:0 0 0 2px var(--mfBlueSoft); }
+  #section-ministry .mf-inline-num{ text-align:center; font-variant-numeric:tabular-nums; }
+  #section-ministry .mf-inline-date{ display:flex; align-items:center; gap:2px; }
+  #section-ministry .mf-inline-date input{ min-width:0; }
+  #section-ministry .mf-inline-date button{ background:none; border:none; cursor:pointer; font-size:11px; padding:0 2px; flex-shrink:0; }
+  #section-ministry .mf-ok, #section-ministry .mf-cancel{ width:22px; height:22px; border-radius:50%; border:none; cursor:pointer;
+    font-size:12px; font-weight:900; display:inline-flex; align-items:center; justify-content:center; }
+  #section-ministry .mf-ok{ background:var(--mfOk); color:#fff; margin-inline-end:3px; }
+  #section-ministry .mf-ok:hover{ filter:brightness(1.1); }
+  #section-ministry .mf-cancel{ background:var(--mfSurf3); color:var(--mfDang); border:1px solid var(--mfBorderS); }
+  #section-ministry .mf-cancel:hover{ background:var(--mfDangBg); border-color:#f6b8b8; }
 
   #section-ministry tr.mf-det td{ background:var(--mfSurf2) !important; cursor:default !important; max-width:none !important;
     white-space:normal !important; padding:0 !important; }
@@ -6165,7 +6184,9 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.106";
+var CLIENT_APP_VERSION = "4.107";
+// 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
+(function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
 // 🩺 تشخيص الصفحة البيضاء بعد تسجيل الدخول (V3.57):
 // قبل هذا التعديل كانت استدعاءات google.script.run الأساسية (تحميل القوائم/الحجوزات/لوحة التحكم)
@@ -10158,19 +10179,23 @@ function _mfTripChip_(t) {
     days = Math.ceil((dep - t0.getTime()) / 86400000);
   }
   var soon = (days !== null && days <= 3 && days >= 0);
+  var openJs = "if(typeof switchPage==='function'){switchPage('ministry');" +
+    (links.length === 1 ? ("setTimeout(function(){if(typeof mfSelect==='function')mfSelect('" + links[0].id + "');if(typeof mfToggleDetail==='function')mfToggleDetail('" + links[0].id + "');},300);") : "") + "}";
   if (!links.length) {
     return '<span class="badge ' + (soon ? 'bg-danger' : 'bg-light text-muted border') + '" style="font-size:10px;"' +
       ' title="' + (soon ? 'لم تُربط بملف مراجعة وزارة وباقٍ ' + days + ' يوم على السفر' : 'غير مرتبطة بملف مراجعة وزارة') + '">' +
       (soon ? '⚠️ بلا ملف وزارة' : 'ملف وزارة') + '</span>';
   }
+  // 🏛️ (V4.107) تُعرض دائماً أرقام كل الملفات المرتبطة — ✓ للمُراجَع و⏳ لغير المُراجَع، بدل إخفاء
+  // الأرقام حتى تكتمل مراجعة الكل
   var reviewed = links.filter(function (x) { return x.reviewed; });
-  if (reviewed.length === links.length) {
-    var nos = reviewed.map(function (x) { return x.fileNo || '—'; }).join('، ');
-    return '<span class="badge bg-success" style="font-size:10px;" title="مرتبطة بملف مراجعة وزارة تمت مراجعته">🏛️ ملف ' + escapeHtml_(nos) + ' ✓</span>';
-  }
-  return '<span class="badge ' + (soon ? 'bg-danger' : 'bg-warning text-dark') + '" style="font-size:10px;"' +
-    ' title="' + (soon ? 'مرتبطة بملف مراجعة لم يُراجع وباقٍ ' + days + ' يوم على السفر' : 'مرتبطة بملف مراجعة لم يُراجع بعد') + '">' +
-    (soon ? '⚠️ ' : '') + '🏛️ لم يُراجع</span>';
+  var allReviewed = reviewed.length === links.length;
+  var nos = links.map(function (x) { return (x.fileNo || '—') + (x.reviewed ? ' ✓' : ' ⏳'); }).join('، ');
+  var cls = allReviewed ? 'bg-success' : (soon ? 'bg-danger' : 'bg-warning text-dark');
+  var tip = allReviewed ? 'كل ملفات المراجعة المرتبطة تمت مراجعتها'
+    : ((soon ? 'باقٍ ' + days + ' يوم على السفر و' : '') + 'بعض ملفات المراجعة المرتبطة لم تُراجع بعد');
+  return '<span class="badge ' + cls + '" style="font-size:10px;cursor:pointer;" title="' + escapeHtml_(tip) + '" onclick="event.stopPropagation();' + openJs + '">' +
+    (soon && !allReviewed ? '⚠️ ' : '') + '🏛️ ' + escapeHtml_(nos) + '</span>';
 }
 function _mfLoadTripLinks_() {
   if (window._mfTripLinksLoading) return;
@@ -25370,7 +25395,7 @@ function openGlobalSearch() {
       '<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden;">' +
         '<div class="d-flex align-items-center gap-2 p-2" style="background:#1e3d59;">' +
           '<i class="fas fa-search text-white"></i>' +
-          '<input id="globalSearchInput" class="form-control form-control-sm" placeholder="اكتب اسماً أو رقم جواز أو رقم إشعار أو اسم رحلة..." autocomplete="off" spellcheck="false">' +
+          '<input id="globalSearchInput" class="form-control form-control-sm" placeholder="اكتب اسماً أو رقم جواز أو رقم إشعار أو اسم رحلة أو رقم ملف وزارة..." autocomplete="off" spellcheck="false">' +
           '<button class="btn btn-sm btn-outline-light" onclick="closeGlobalSearch()">✖</button>' +
         '</div>' +
         '<div id="globalSearchResults" style="max-height:60vh;overflow-y:auto;"></div>' +
@@ -25388,7 +25413,7 @@ function openGlobalSearch() {
   }
   ov.style.display = 'flex';
   document.getElementById('globalSearchResults').innerHTML =
-    '<div class="text-muted small text-center p-3">اكتب حرفين على الأقل للبحث في: الإشعارات 📄 والرحلات 🧳 والسجل العام 📖</div>';
+    '<div class="text-muted small text-center p-3">اكتب حرفين على الأقل للبحث في: الإشعارات 📄 والرحلات 🧳 والسجل العام 📖 وملفات مراجعة الوزارة 🏛️</div>';
   var inp = document.getElementById('globalSearchInput');
   inp.value = '';
   setTimeout(function() { inp.focus(); }, 60);
@@ -25408,6 +25433,24 @@ function openGlobalSearch() {
     // "is not a function" (نفس النمط الصحيح مستخدَم بالفعل في _ensureRegistryCache أعلاه)
     google.script.run.withSuccessHandler(function(r) { window._registryCache = (r && r.pilgrims) || []; _runGlobalSearch(); })
       .withFailureHandler(function() {}).getGlobalPilgrimsRegistry(window.authToken);
+  }
+  // 🏛️ (V4.107) تسخين كاش ملفات مراجعة الوزارة — يتيح البحث برقم الملف/العميل/المشرف حتى لو لم
+  // تُفتح شاشة مراجعة ملفات الوزارة بعد، وربط نتائج السجل العام برقم ملف مراجعتها
+  if (hasPermission('admin') || hasPermission('ministry.view')) {
+    if (!MF.loaded && !window._mfGsLoading) {
+      window._mfGsLoading = true;
+      google.script.run.withSuccessHandler(function(res) {
+        window._mfGsLoading = false;
+        if (res && res.success) {
+          MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
+          MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
+          MF.balances = res.balances || {}; MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
+          MF.files.forEach(function(f) { f._c = mfCalc(f); });
+          MF.loaded = true;
+        }
+        _runGlobalSearch();
+      }).withFailureHandler(function() { window._mfGsLoading = false; }).getMinistryBootstrap(window.authToken);
+    }
   }
 }
 function closeGlobalSearch() {
@@ -25431,7 +25474,7 @@ function _runGlobalSearch() {
   var q = (document.getElementById('globalSearchInput').value || '').trim();
   q = (typeof _toWesternDigits === 'function') ? _toWesternDigits(q) : q;
   if (q.length < 2) {
-    box.innerHTML = '<div class="text-muted small text-center p-3">اكتب حرفين على الأقل للبحث في: الإشعارات 📄 والرحلات 🧳 والسجل العام 📖</div>';
+    box.innerHTML = '<div class="text-muted small text-center p-3">اكتب حرفين على الأقل للبحث في: الإشعارات 📄 والرحلات 🧳 والسجل العام 📖 وملفات مراجعة الوزارة 🏛️</div>';
     return;
   }
   var qq = _normalizeArabic_(q);
@@ -25466,20 +25509,48 @@ function _runGlobalSearch() {
     });
   }
 
-  // 📖 السجل العام
+  // 📖 السجل العام — مع ربط اسم/جواز/رحلة المعتمر برقم ملف مراجعة الوزارة إن وُجد
   var rHits = (window._registryCache || []).filter(function(r) {
     return has(r.name) || has(r.passport) || has(r.latinName) || has(r.client);
   }).slice(0, 8);
   if (rHits.length) {
     html += _gsHeader_('📖 السجل العام للمعتمرين', rHits.length);
     rHits.forEach(function(r) {
+      var mfFiles = (MF.files || []).filter(function(f) { return f.tripName && f.tripName === r.client; });
+      var mfTxt = mfFiles.length
+        ? (' • 🏛️ ' + mfFiles.map(function(f) { return (f.fileNo ? 'ملف ' + f.fileNo : 'بدون رقم') + (f.reviewDate ? ' ✓' : ' ⏳'); }).join('، '))
+        : '';
       html += _gsRow_('👤', esc1(r.name),
-        esc1((r.passport ? '🛂 ' + r.passport : '') + (r.client ? ' • ' + r.client : '')),
+        esc1((r.passport ? '🛂 ' + r.passport : '') + (r.client ? ' • ' + r.client : '')) + esc1(mfTxt),
         "_gsOpenRegistry('" + escJs(r.name) + "')");
     });
   }
 
+  // 🏛️ ملفات مراجعة الوزارة — رقم الملف / العميل / الشركة / الوكيل / الرحلة / المشرف
+  if (hasPermission('admin') || hasPermission('ministry.view')) {
+    var mHits = (MF.files || []).filter(function(f) {
+      return has(f.fileNo) || has(f.clientLabel) || has(f.company) || has(f.agent) || has(f.tripName) ||
+        has(f.ref) || has(f.eInvoice) || has(mfRaw('supNames', f));
+    }).slice(0, 8);
+    if (mHits.length) {
+      html += _gsHeader_('🏛️ ملفات مراجعة الوزارة', mHits.length);
+      mHits.forEach(function(f) {
+        html += _gsRow_('🏛️', esc1((f.fileNo ? 'ملف ' + f.fileNo : 'بدون رقم ملف') + ' — ' + (f.clientLabel || '')),
+          esc1(f.company + (f.reviewDate ? ' • رُوجع ' + f.reviewDate : ' • لم تُراجع بعد') + (f.supCount ? ' • ' + mfRaw('supNames', f) : '')),
+          "_gsOpenMinistry('" + escJs(f.id) + "')");
+      });
+    }
+  }
+
   box.innerHTML = html || '<div class="text-muted small text-center p-3">لا توجد نتائج مطابقة لـ«' + esc1(q) + '»</div>';
+}
+function _gsOpenMinistry(id) {
+  closeGlobalSearch();
+  switchPage('ministry');
+  setTimeout(function() {
+    if (typeof mfSelect === 'function') mfSelect(id);
+    if (typeof mfToggleDetail === 'function') mfToggleDetail(id);
+  }, 300);
 }
 function _gsOpenBooking(id) {
   closeGlobalSearch();
@@ -31879,7 +31950,7 @@ var MF = {
   files: [], receipts: [], sups: [], companies: [], trips: [], clients: [],
   balances: {}, cfg: {}, can: {}, today: '', loaded: false,
   hidden: {}, colFilters: {}, facets: {}, sort: { key: 'seq', dir: 1 },
-  selId: null, openId: null
+  selId: null, openId: null, editRowId: null
 };
 
 /* ---------- أدوات ---------- */
@@ -31987,32 +32058,32 @@ function mfBalanceOf(company) {
 
 /* ---------- تعريف الأعمدة ---------- */
 var MF_COLS = [
-  { k: 'act',    g: 'بيانات الملف',      l: '⚙',                     w: 38,  pin: 1, nof: 1 },
+  { k: 'act',    g: 'بيانات الملف',      l: '⚙',                     w: 96,  pin: 1, nof: 1 },
   { k: 'seq',    g: 'بيانات الملف',      l: 'م',                      w: 54,  pin: 1 },
   { k: 'approved', g: 'بيانات الملف',    l: 'معتمد',                  w: 56,  pin: 1 },
-  { k: 'fileNo', g: 'بيانات الملف',      l: 'رقم الملف',              w: 74,  pin: 1 },
+  { k: 'fileNo', g: 'بيانات الملف',      l: 'رقم الملف',              w: 74,  pin: 1, edit: 'text' },
   { k: 'clientLabel', g: 'بيانات الملف', l: 'العميل',                 w: 160, pin: 1, txt: 1 },
-  { k: 'eInvoice', g: 'بيانات الملف',    l: 'فاتورة إلكترونية',       w: 108 },
-  { k: 'ref',    g: 'بيانات الملف',      l: 'القيد',                  w: 84 },
-  { k: 'company', g: 'الشركة والمراجعة', l: 'الشركة المصرية',         w: 120, txt: 1 },
-  { k: 'agent',  g: 'الشركة والمراجعة',  l: 'الوكيل السعودي',         w: 140, txt: 1 },
-  { k: 'reviewDate', g: 'الشركة والمراجعة', l: 'تاريخ المراجعة',      w: 100 },
-  { k: 'reviewType', g: 'الشركة والمراجعة', l: 'نوع المراجعة',        w: 96 },
-  { k: 'travelMode', g: 'الشركة والمراجعة', l: 'وسيلة السفر',         w: 82 },
-  { k: 'goDate', g: 'العميل والمعتمرون', l: 'تاريخ الذهاب',           w: 96 },
-  { k: 'retDate', g: 'العميل والمعتمرون', l: 'تاريخ العودة',          w: 96 },
-  { k: 'pilgrims', g: 'العميل والمعتمرون', l: 'معتمرين',              w: 66,  sum: 1 },
+  { k: 'eInvoice', g: 'بيانات الملف',    l: 'فاتورة إلكترونية',       w: 108, edit: 'text' },
+  { k: 'ref',    g: 'بيانات الملف',      l: 'القيد',                  w: 84,  edit: 'text' },
+  { k: 'company', g: 'الشركة والمراجعة', l: 'الشركة المصرية',         w: 120, txt: 1, edit: 'company' },
+  { k: 'agent',  g: 'الشركة والمراجعة',  l: 'الوكيل السعودي',         w: 140, txt: 1, edit: 'text' },
+  { k: 'reviewDate', g: 'الشركة والمراجعة', l: 'تاريخ المراجعة',      w: 100, edit: 'date' },
+  { k: 'reviewType', g: 'الشركة والمراجعة', l: 'نوع المراجعة',        w: 96,  edit: 'sel', opts: ['عادية', 'VIP', 'تجديد باركود'] },
+  { k: 'travelMode', g: 'الشركة والمراجعة', l: 'وسيلة السفر',         w: 82,  edit: 'sel', opts: ['طيران', 'بري', 'بواخر'] },
+  { k: 'goDate', g: 'العميل والمعتمرون', l: 'تاريخ الذهاب',           w: 96,  edit: 'date' },
+  { k: 'retDate', g: 'العميل والمعتمرون', l: 'تاريخ العودة',          w: 96,  edit: 'date' },
+  { k: 'pilgrims', g: 'العميل والمعتمرون', l: 'معتمرين',              w: 66,  sum: 1, edit: 'num' },
   { k: 'supCount', g: 'العميل والمعتمرون', l: 'مشرفين',               w: 62,  sum: 1 },
   { k: 'supNames', g: 'العميل والمعتمرون', l: 'المشرف',               w: 150, txt: 1 },
   { k: 'supTypes', g: 'العميل والمعتمرون', l: 'نوع المشرف',           w: 106, txt: 1 },
-  { k: 'progPrice', g: 'التسعير (للفرد)', l: 'سعر البرنامج',          w: 92 },
+  { k: 'progPrice', g: 'التسعير (للفرد)', l: 'سعر البرنامج',          w: 92,  edit: 'num' },
   { k: 'revenue', g: 'التسعير (للفرد)',  l: 'الإيراد',                w: 100, sum: 1, calc: 1 },
-  { k: 'ticket', g: 'التسعير (للفرد)',   l: 'التذكرة',                w: 82 },
-  { k: 'roomFee', g: 'التسعير (للفرد)',  l: 'رسوم الغرفة/فرد',        w: 106 },
-  { k: 'adminFee', g: 'التسعير (للفرد)', l: 'رسوم إدارية/فرد',        w: 100 },
+  { k: 'ticket', g: 'التسعير (للفرد)',   l: 'التذكرة',                w: 82,  edit: 'num' },
+  { k: 'roomFee', g: 'التسعير (للفرد)',  l: 'رسوم الغرفة/فرد',        w: 106, edit: 'num' },
+  { k: 'adminFee', g: 'التسعير (للفرد)', l: 'رسوم إدارية/فرد',        w: 100, edit: 'num' },
   { k: 'accDir', g: 'التسعير (للفرد)',   l: 'التوجيه المحاسبي',       w: 132, txt: 1 },
   { k: 'clearanceSAR', g: 'التحويل والمخالصة', l: 'المخالصة بالريال', w: 106, calc: 1 },
-  { k: 'fxRate', g: 'التحويل والمخالصة', l: 'سعر صرف الريال',         w: 100 },
+  { k: 'fxRate', g: 'التحويل والمخالصة', l: 'سعر صرف الريال',         w: 100, edit: 'num' },
   { k: 'totalTickets', g: 'الإجماليات',  l: 'إجمالي التذاكر',         w: 108, sum: 1, calc: 1 },
   { k: 'totalRoomFee', g: 'الإجماليات',  l: 'إجمالي رسوم الغرفة',     w: 122, sum: 1, calc: 1 },
   { k: 'totalSAR', g: 'الإجماليات',      l: 'إجمالي الريال',          w: 100, sum: 1, calc: 1 },
@@ -32020,15 +32091,15 @@ var MF_COLS = [
   { k: 'totalExp', g: 'الإجماليات',      l: 'إجمالي المصروف',         w: 112, sum: 1, calc: 1 },
   { k: 'margin', g: 'الإجماليات',        l: 'هامش الربح',             w: 100, sum: 1, calc: 1 },
   { k: 'perPersonMargin', g: 'الإجماليات', l: 'هامش الفرد',           w: 90,  calc: 1 },
-  { k: 'pct',    g: 'الإجماليات',        l: 'النسبة',                 w: 68 },
-  { k: 'madinahHotel', g: 'السكن',       l: 'فندق المدينة',           w: 130, txt: 1 },
-  { k: 'madinahIn', g: 'السكن',          l: 'دخول المدينة',           w: 96 },
-  { k: 'madinahOut', g: 'السكن',         l: 'خروج المدينة',           w: 96 },
-  { k: 'makkahHotel', g: 'السكن',        l: 'فندق مكة',               w: 130, txt: 1 },
-  { k: 'makkahIn', g: 'السكن',           l: 'دخول مكة',               w: 92 },
-  { k: 'makkahOut', g: 'السكن',          l: 'خروج مكة',               w: 92 },
-  { k: 'transport', g: 'اللوجستيات',     l: 'شركة النقل',             w: 120, txt: 1 },
-  { k: 'notes',  g: 'اللوجستيات',        l: 'ملاحظات',                w: 170, txt: 1 },
+  { k: 'pct',    g: 'الإجماليات',        l: 'النسبة',                 w: 68,  edit: 'num' },
+  { k: 'madinahHotel', g: 'السكن',       l: 'فندق المدينة',           w: 130, txt: 1, edit: 'text' },
+  { k: 'madinahIn', g: 'السكن',          l: 'دخول المدينة',           w: 96,  edit: 'date' },
+  { k: 'madinahOut', g: 'السكن',         l: 'خروج المدينة',           w: 96,  edit: 'date' },
+  { k: 'makkahHotel', g: 'السكن',        l: 'فندق مكة',               w: 130, txt: 1, edit: 'text' },
+  { k: 'makkahIn', g: 'السكن',           l: 'دخول مكة',               w: 92,  edit: 'date' },
+  { k: 'makkahOut', g: 'السكن',          l: 'خروج مكة',               w: 92,  edit: 'date' },
+  { k: 'transport', g: 'اللوجستيات',     l: 'شركة النقل',             w: 120, txt: 1, edit: 'text' },
+  { k: 'notes',  g: 'اللوجستيات',        l: 'ملاحظات',                w: 170, txt: 1, edit: 'text' },
   { k: 'created', g: 'سجل التتبع',       l: 'الإنشاء (بواسطة · التاريخ)', w: 200, txt: 1 },
   { k: 'updated', g: 'سجل التتبع',       l: 'آخر تعديل',              w: 200, txt: 1 }
 ];
@@ -32055,7 +32126,12 @@ function mfRaw(k, f) {
 }
 function mfCell(col, f) {
   var k = col.k, c = f._c || (f._c = mfCalc(f));
-  if (k === 'act') return '<button class="mf-rowbtn" title="سجل التعديلات" onclick="event.stopPropagation();mfHistory(\'' + f.id + '\')">📜</button>';
+  if (k === 'act') {
+    var b = '<button class="mf-rowbtn" title="سجل التعديلات" onclick="event.stopPropagation();mfHistory(\'' + f.id + '\')">📜</button>';
+    if (MF.can.edit) b += ' <button class="mf-rowbtn" title="تعديل الملف (نموذج كامل)" onclick="event.stopPropagation();mfEditFile(\'' + f.id + '\')">✏️</button>';
+    if (MF.can.del) b += ' <button class="mf-rowbtn" title="حذف الملف" style="color:#dc2626;" onclick="event.stopPropagation();mfDeleteFile(\'' + f.id + '\')">🗑️</button>';
+    return b;
+  }
   if (k === 'seq') return '<button class="mf-exp" title="عرض التفاصيل" onclick="event.stopPropagation();mfToggleDetail(\'' + f.id + '\')">▸</button> ' + mfL(f.seq);
   if (k === 'approved') return '<span class="mf-tog ' + (f.approved ? 'on' : '') + '" title="' + (f.approved ? 'معتمد' : 'غير معتمد') + '" onclick="event.stopPropagation();mfToggleApproved(\'' + f.id + '\')"></span>';
   if (k === 'fileNo') return mfStr(f.fileNo) ? mfL(f.fileNo) : '<span class="mf-badge off">لم تُراجع</span>';
@@ -32215,8 +32291,11 @@ function mfRender() {
   }
   list.forEach(function (f) {
     f._c = mfCalc(f);
+    if (MF.editRowId === f.id) { h += mfBuildEditRow(f); return; }
+    var dbl = MF.can.edit ? (' ondblclick="mfInlineEdit(\'' + f.id + '\')"') : '';
     h += '<tr class="mf-row mf-s' + mfStatus(f) + (MF.selId === f.id ? ' mf-sel' : '') + (MF.openId === f.id ? ' mf-open' : '') +
-      '" data-id="' + f.id + '" onclick="mfSelect(\'' + f.id + '\')">';
+      '" data-id="' + f.id + '" onclick="mfSelect(\'' + f.id + '\')"' + dbl +
+      (MF.can.edit ? ' title="ضغطتان لتعديل سريع في مكانه"' : '') + '>';
     MF_COLS.forEach(function (c, ci) {
       var cls = c.txt ? 'mf-txt' : 'mf-num', st = '';
       if (c.pin) { cls += ' mf-fz'; if (!MF_COLS[ci + 1] || !MF_COLS[ci + 1].pin) cls += ' mf-edge'; st = ' style="right:' + mfFrozenOffset(ci) + 'px"'; }
@@ -32407,6 +32486,85 @@ function mfPayload(f) {
     transport: f.transport, notes: f.notes, selected: f.selected,
     _manualType: !!f._manualType
   };
+}
+
+/* ---------- التعديل السريع في مكانه (ضغطتان على الصف) ----------
+   يفتح كل الحقول القابلة للتعديل (edit: 'text'|'num'|'date'|'sel'|'company') داخل نفس الصف —
+   الأعمدة المحسوبة (calc) والمركّبة (العميل/المشرف) تبقى للقراءة فقط وتُفتح من زر ✏️ (نموذج كامل).
+   ✓ أخضر أو Enter = اعتماد · ✕ أو Esc = إلغاء. */
+var _mfInlineDraft = null;
+function mfInlineEdit(id) {
+  if (!MF.can.edit) return;
+  if (MF.editRowId === id) return;
+  MF.openId = null;
+  MF.editRowId = id;
+  _mfInlineDraft = JSON.parse(JSON.stringify(mfPayload(mfGet(id))));
+  mfRender();
+  setTimeout(function () {
+    var row = document.querySelector('#section-ministry tr.mf-editrow[data-id="' + id + '"]');
+    var first = row && row.querySelector('input,select');
+    if (first) first.focus();
+  }, 30);
+}
+function mfInlineCancel() { MF.editRowId = null; _mfInlineDraft = null; mfRender(); }
+function mfInlineSet(k, v, isNum) { if (_mfInlineDraft) _mfInlineDraft[k] = isNum ? mfNum(v) : mfStr(v); }
+function mfInlineKey(e, id) {
+  if (e.key === 'Enter') { e.preventDefault(); mfInlineSave(id); }
+  else if (e.key === 'Escape') { e.preventDefault(); mfInlineCancel(); }
+}
+function mfInlineSave(id) {
+  var d = _mfInlineDraft; if (!d) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      MF.editRowId = null; _mfInlineDraft = null;
+      _showPopup('تم اعتماد التعديل', 'success');
+      mfLoad(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveMinistryFile(window.authToken, d);
+}
+function mfInlineDateBtn(ev, id, k) {
+  mfPickDate('mfIn_' + k, ev, function (val) { mfInlineSet(k, val); });
+}
+function mfBuildEditRow(f) {
+  var d = _mfInlineDraft || mfPayload(f);
+  var h = '<tr class="mf-row mf-editrow mf-s' + mfStatus(f) + '" data-id="' + f.id + '" onkeydown="mfInlineKey(event,\'' + f.id + '\')">';
+  MF_COLS.forEach(function (c, ci) {
+    var cls = c.txt ? 'mf-txt' : 'mf-num', st = '';
+    if (c.pin) { cls += ' mf-fz'; if (!MF_COLS[ci + 1] || !MF_COLS[ci + 1].pin) cls += ' mf-edge'; st = ' style="right:' + mfFrozenOffset(ci) + 'px"'; }
+    if (MF.hidden[c.k]) cls += ' mf-hide';
+    var inner;
+    if (c.k === 'act') {
+      inner = '<button class="mf-ok" title="اعتماد التعديل (Enter)" onclick="event.stopPropagation();mfInlineSave(\'' + f.id + '\')">✓</button>' +
+        '<button class="mf-cancel" title="إلغاء (Esc)" onclick="event.stopPropagation();mfInlineCancel()">✕</button>';
+    } else if (c.k === 'seq') {
+      inner = mfL(f.seq);
+    } else if (c.k === 'approved') {
+      inner = mfCell(c, f);
+    } else if (c.edit === 'text') {
+      inner = '<input class="mf-inline-in" value="' + mfEsc(d[c.k]) + '" oninput="mfInlineSet(\'' + c.k + '\',this.value)">';
+    } else if (c.edit === 'num') {
+      inner = '<input class="mf-inline-in mf-inline-num" value="' + mfEsc(d[c.k]) + '" oninput="mfInlineSet(\'' + c.k + '\',this.value,true)">';
+    } else if (c.edit === 'sel') {
+      inner = '<select class="mf-inline-in" onchange="mfInlineSet(\'' + c.k + '\',this.value)">' +
+        (c.opts || []).map(function (o) { return '<option value="' + mfEsc(o) + '"' + (o === d[c.k] ? ' selected' : '') + '>' + mfEsc(o) + '</option>'; }).join('') + '</select>';
+    } else if (c.edit === 'company') {
+      inner = '<select class="mf-inline-in" onchange="mfInlineSet(\'company\',this.value)">' +
+        [''].concat((MF.companies || []).map(function (x) { return x.company; })).map(function (o) {
+          return '<option value="' + mfEsc(o) + '"' + (o === d.company ? ' selected' : '') + '>' + (o || '—') + '</option>';
+        }).join('') + '</select>';
+    } else if (c.edit === 'date') {
+      inner = '<div class="mf-inline-date"><input class="mf-inline-in" id="mfIn_' + c.k + '" maxlength="10" value="' + mfEsc(d[c.k]) + '"' +
+        ' oninput="mfInlineSet(\'' + c.k + '\',this.value)" onblur="this.value=mfDate(this.value);mfInlineSet(\'' + c.k + '\',this.value)">' +
+        '<button type="button" onclick="event.stopPropagation();mfInlineDateBtn(event,\'' + f.id + '\',\'' + c.k + '\')">📅</button></div>';
+    } else {
+      // عمود محسوب أو مركّب — للقراءة فقط أثناء التعديل السريع
+      inner = mfCell(c, f);
+    }
+    h += '<td class="' + cls + '"' + st + '>' + inner + '</td>';
+  });
+  return h + '</tr>';
 }
 
 /* ---------- بطاقة التفاصيل ---------- */
@@ -32853,7 +33011,7 @@ function mfModal(title, body, foot, wide) {
   return ov;
 }
 function mfCloseModal() { var o = document.getElementById('mfModalOv'); if (o && o.parentNode) o.parentNode.removeChild(o); }
-document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { mfCloseModal(); mfDpClose(); mfCloseColWin(); } });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { mfCloseModal(); mfDpClose(); mfCloseColWin(); if (MF.editRowId) mfInlineCancel(); } });
 
 /* ---------- نموذج ملف المراجعة (إضافة/تعديل) ---------- */
 function mfNewFile() {
