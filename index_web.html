@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.108 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.109 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.108)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.109)', diag);
 }, 6000);
 </script>
 
@@ -1491,7 +1491,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.108</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.109</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6185,7 +6185,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.108";
+var CLIENT_APP_VERSION = "4.109";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -33044,12 +33044,17 @@ function mfCloseModal() { var o = document.getElementById('mfModalOv'); if (o &&
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { mfCloseModal(); mfDpClose(); mfCloseColWin(); if (MF.editRowId) mfInlineCancel(); } });
 
 /* ---------- نموذج ملف المراجعة (إضافة/تعديل) ---------- */
+// 🛡️ (V4.109) MF.can يبدأ فارغاً {} ولا يُملأ إلا بعد رد getMinistryBootstrap — زر «ملف جديد» بالشريط
+// العلوي مرئي فوراً بمجرد فتح الشاشة (قبل اكتمال هذا التحميل)، فكان الضغط عليه في تلك الثواني
+// القليلة يُرفض بخطأ "لا تملك صلاحية" رغم أن المستخدم يملكها فعلاً — لمجرد أن البيانات لم تصل بعد.
 function mfNewFile() {
+  if (!MF.loaded) { _showPopup('البيانات لا تزال قيد التحميل — حاول خلال لحظة', 'info'); return; }
   if (!MF.can.add) { _showPopup('لا تملك صلاحية إضافة ملفات مراجعة', 'error'); return; }
   mfEditFile(null);
 }
 function mfEditFile(id) {
   var f = id ? mfGet(id) : null;
+  if (id && !MF.loaded) { _showPopup('البيانات لا تزال قيد التحميل — حاول خلال لحظة', 'info'); return; }
   if (id && !MF.can.edit) { _showPopup('لا تملك صلاحية تعديل ملفات المراجعة', 'error'); return; }
   var d = f ? JSON.parse(JSON.stringify(mfPayload(f))) : {
     id: '', fileNo: '', approved: false, eInvoice: '', ref: '', company: '', agent: '',

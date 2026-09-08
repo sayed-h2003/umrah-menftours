@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.108";
+var APP_VERSION = "4.109";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6642,7 +6642,8 @@ var ALL_CACHE_KEYS = [
   'dashboard_cache',
   'folder_meta_cache',
   'trips_list_cache',   // قائمة الرحلات (تقرأ 3 شيتات — تُمسح مع أي تعديل رحلة/كشف)
-  'registry_cache'      // السجل العام للمعتمرين
+  'registry_cache',     // السجل العام للمعتمرين
+  'ministry_bootstrap_cache' // 🏛️ (V4.109) بيانات شاشة مراجعة ملفات الوزارة المشتركة بين المستخدمين
 ];
 
 function clearAllCache() {
@@ -7557,6 +7558,22 @@ function doPost(e) {
         return;
       }
 
+      // 📅 (V4.109) زر «تحركات بتاريخ معيّن» — يبدأ محادثة قصيرة تنتظر التاريخ من المستخدم
+      if (callbackData === 'moves_bydate') {
+        try {
+          _tgMoveSetState_(chatId, cq.from.id, { step: 'awaitingDate' });
+          _tgbnSend_(chatId, "📅 اكتب <b>التاريخ</b> المطلوب معرفة تحركاته.\nيقبل الصيغة القصيرة مثل <code>12/9</code> (تُكمَّل السنة الحالية تلقائياً) أو الكاملة <code>12/9/2026</code>.", [[{ text: '✖️ إلغاء', callback_data: 'mvq_cancel' }]]);
+        } catch (mvErr) {
+          sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + mvErr.toString() + "</code>");
+        }
+        return;
+      }
+      if (callbackData === 'mvq_cancel') {
+        _tgMoveClearState_(chatId, cq.from.id);
+        sendTelegramMessageDirect(chatId, "✔️ تم الإلغاء.");
+        return;
+      }
+
       // تنفيذ جلب التقارير مع حماية كشف الأخطاء
       try {
         if (callbackData === 'moves_today')      sendTelegramArrivalAlerts_Custom('today', chatId);
@@ -7586,6 +7603,25 @@ function doPost(e) {
     // 2️⃣ استدعاء دالة القائمة عند كتابة /menu أو /start
     if (cmd === '/menu' || cmd === '/start') {
       sendTelegramMenu(chatId);
+      return;
+    }
+
+    // 📅 (V4.109) رد على سؤال «تحركات بتاريخ معيّن» — محادثة منفصلة تماماً عن بوت تسجيل الإشعارات
+    // (مفتاح كاش خاص بها mvq_) حتى لا تتصادم الحالتان لو كان المستخدم في منتصف محادثة أخرى
+    var mvState = msg.from ? _tgMoveGetState_(chatId, msg.from.id) : null;
+    if (mvState && mvState.step === 'awaitingDate') {
+      try {
+        var mvDate = _tgMoveParseShortOrFullDate_(text);
+        if (!mvDate) {
+          _tgbnSend_(chatId, "⚠️ صيغة تاريخ غير صحيحة. اكتب مثل <code>12/9</code> أو <code>12/9/2026</code>، أو ألغِ الطلب.", [[{ text: '✖️ إلغاء', callback_data: 'mvq_cancel' }]]);
+        } else {
+          _tgMoveClearState_(chatId, msg.from.id);
+          sendTelegramMovementsByDate_(mvDate, chatId);
+        }
+      } catch (mvErr) {
+        _tgMoveClearState_(chatId, msg.from.id);
+        sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + mvErr.toString() + "</code>");
+      }
       return;
     }
 
@@ -7621,6 +7657,9 @@ function sendTelegramMenu(chatId) {
         [
           { "text": "🛫 وصول اليوم", "callback_data": "arrival_today" },
           { "text": "🛬 وصول الغد", "callback_data": "arrival_tomorrow" }
+        ],
+        [
+          { "text": "📅 تحركات بتاريخ معيّن", "callback_data": "moves_bydate" }
         ]
       ]
     })
@@ -19767,9 +19806,11 @@ function saveRoomFeeReceipt(authToken, rec) {
       if (!rec._allowUpdate) return { success: false, error: 'رقم الإيصال ' + no + ' مسجَّل من قبل لشركة ' + dup.company };
       sh.getRange(dup._row, 1, 1, MF_REC_HEADERS.length).setValues([row]);
       logChange_(session.username, 'تعديل إيصال رسوم غرفة', no, 'المبلغ', dup.amount, amount);
+      _mfClearBootstrapCache_();
     } else {
       sh.appendRow(row);
       logChange_(session.username, 'تسجيل إيصال رسوم غرفة', no, company, '-', amount + ' ج');
+      _mfClearBootstrapCache_();
     }
     SpreadsheetApp.flush();
     return { success: true };
@@ -19785,6 +19826,7 @@ function deleteRoomFeeReceipt(authToken, receiptNo) {
   sh.deleteRow(hit._row);
   SpreadsheetApp.flush();
   logChange_(session.username, 'حذف إيصال رسوم غرفة', hit.receiptNo, hit.company, hit.amount, '-');
+  _mfClearBootstrapCache_();
   return { success: true };
 }
 
@@ -19831,6 +19873,7 @@ function saveMinistrySupervisor(authToken, sup) {
     logChange_(session.username, 'إضافة مشرف', name, '-', '-', row[1] + ' / ' + home);
   }
   SpreadsheetApp.flush();
+  _mfClearBootstrapCache_();
   return { success: true };
 }
 function deleteMinistrySupervisor(authToken, name) {
@@ -19841,6 +19884,7 @@ function deleteMinistrySupervisor(authToken, name) {
   sh.deleteRow(hit._row);
   SpreadsheetApp.flush();
   logChange_(session.username, 'حذف مشرف', hit.name, '-', hit.name, '-');
+  _mfClearBootstrapCache_();
   return { success: true };
 }
 
@@ -19904,8 +19948,29 @@ function suggestMinistrySupervisors(authToken, opts) {
 }
 
 /* ---------- تحميل كل بيانات الشاشة في نداء واحد ---------- */
+// 🚀 (V4.109) الجزء المشترك بين كل المستخدمين (لا يتضمن can/user الخاصَّين بالجلسة) يُخزَّن في
+// الكاش 5 دقائق — كان يُعاد قراءة 6 شيتات كاملة عند كل فتح للشاشة، وأي بحث عام، وأي اقتراح مشرف،
+// وهو ما ساهم في تباطؤ التطبيق كله تحت الاستخدام المتزامن. يُمسح تلقائياً مع أي حفظ/حذف بالشاشة.
+var MF_BOOTSTRAP_CACHE_KEY = 'ministry_bootstrap_cache';
 function getMinistryBootstrap(authToken) {
   var session = _mfPerm_(authToken, 'view');
+  var shared = getCachedData(MF_BOOTSTRAP_CACHE_KEY);
+  if (!shared) {
+    shared = _mfBuildSharedBootstrap_();
+    setCachedData(MF_BOOTSTRAP_CACHE_KEY, shared);
+  }
+  var out = {};
+  for (var k in shared) out[k] = shared[k];
+  out.success = true;
+  out.user = session.username;
+  out.can = {
+    add: _sessionHasPerm_(session, 'ministry.add'),
+    edit: _sessionHasPerm_(session, 'ministry.edit'),
+    del: _sessionHasPerm_(session, 'ministry.delete')
+  };
+  return out;
+}
+function _mfBuildSharedBootstrap_() {
   var files = _mfReadAll_();
   var receipts = _mfReadReceipts_();
   var supervisors = _mfReadSupervisors_();
@@ -19968,16 +20033,14 @@ function getMinistryBootstrap(authToken) {
   } catch (e) {}
 
   return {
-    success: true, files: files, receipts: receipts, supervisors: supervisors,
+    files: files, receipts: receipts, supervisors: supervisors,
     companies: companies, trips: trips, clients: clients,
-    balances: balances, cfg: cfg, today: _mfToday_(),
-    user: session.username,
-    can: {
-      add: _sessionHasPerm_(session, 'ministry.add'),
-      edit: _sessionHasPerm_(session, 'ministry.edit'),
-      del: _sessionHasPerm_(session, 'ministry.delete')
-    }
+    balances: balances, cfg: cfg, today: _mfToday_()
   };
+}
+// تُستدعى بعد أي حفظ/حذف في شاشة مراجعة ملفات الوزارة حتى لا يرى المستخدمون بيانات قديمة من الكاش
+function _mfClearBootstrapCache_() {
+  try { CacheService.getScriptCache().remove(MF_BOOTSTRAP_CACHE_KEY); } catch (e) {}
 }
 
 /* ---------- حفظ ملف مراجعة (إضافة/تعديل) ---------- */
@@ -20071,6 +20134,7 @@ function saveMinistryFile(authToken, data) {
       }
     }
     if (entries.length) logChangesBatch_(session.username, entries);
+    _mfClearBootstrapCache_();
 
     var allAfter = _mfReadAll_();
     var balances = _mfBalances_(allAfter, _mfReadReceipts_());
@@ -20087,6 +20151,7 @@ function deleteMinistryFile(authToken, id) {
   if (!hit) return { success: false, error: 'الملف غير موجود' };
   sh.deleteRow(hit._row);
   SpreadsheetApp.flush();
+  _mfClearBootstrapCache_();
   logChange_(session.username, 'حذف ملف مراجعة وزارة', 'MF:' + hit.id, '-',
     (hit.fileNo ? 'ملف رقم ' + hit.fileNo : 'بدون رقم') + ' — ' + hit.clientLabel, '-');
   return { success: true };
@@ -20255,6 +20320,65 @@ function importMinistryFilesBatch(authToken, rows) {
     if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, MF_HEADERS.length).setValues(out);
     SpreadsheetApp.flush();
     logChange_(session.username, 'استيراد ملفات مراجعة من إكسيل', '-', 'عدد الصفوف', '-', String(out.length));
+    _mfClearBootstrapCache_();
     return { success: true, imported: out.length };
   } finally { lock.releaseLock(); }
+}
+
+/* ==================================================================================
+   📅 (V4.109) بوت تليجرام — الاستعلام عن تحركات بتاريخ معيّن
+   محادثة قصيرة مستقلة (مفتاح كاش mvq_) — تقبل صيغة قصيرة يوم/شهر وتُكمل السنة الحالية تلقائياً.
+   ================================================================================== */
+function _tgMoveStateKey_(chatId, userId) { return 'mvq_' + chatId + '_' + userId; }
+function _tgMoveGetState_(chatId, userId) {
+  var raw = CacheService.getScriptCache().get(_tgMoveStateKey_(chatId, userId));
+  return raw ? JSON.parse(raw) : null;
+}
+function _tgMoveSetState_(chatId, userId, state) {
+  CacheService.getScriptCache().put(_tgMoveStateKey_(chatId, userId), JSON.stringify(state), 600); // 10 دقائق
+}
+function _tgMoveClearState_(chatId, userId) {
+  CacheService.getScriptCache().remove(_tgMoveStateKey_(chatId, userId));
+}
+
+// يقبل يوم/شهر (يُكمِّل السنة الحالية) أو يوم/شهر/سنة كاملة — بأرقام عربية أو لاتينية وأي فاصل شائع
+function _tgMoveParseShortOrFullDate_(s) {
+  var v = String(s || '').trim()
+    .replace(/[٠-٩]/g, function (d) { return String.fromCharCode(d.charCodeAt(0) - 0x0660 + 48); })
+    .replace(/[۰-۹]/g, function (d) { return String.fromCharCode(d.charCodeAt(0) - 0x06F0 + 48); })
+    .replace(/[\-.]/g, '/');
+  var dd, mm, yy;
+  var mFull = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  var mShort = v.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (mFull) {
+    dd = parseInt(mFull[1], 10); mm = parseInt(mFull[2], 10); yy = parseInt(mFull[3], 10);
+    if (mFull[3].length === 2) yy += 2000;
+  } else if (mShort) {
+    dd = parseInt(mShort[1], 10); mm = parseInt(mShort[2], 10); yy = new Date().getFullYear();
+  } else {
+    return null;
+  }
+  if (dd < 1 || dd > 31 || mm < 1 || mm > 12 || yy < 2020 || yy > 2100) return null;
+  var dt = new Date(yy, mm - 1, dd);
+  if (dt.getDate() !== dd || dt.getMonth() !== mm - 1) return null;
+  return ('0' + dd).slice(-2) + '/' + ('0' + mm).slice(-2) + '/' + yy;
+}
+
+// يعرض كل التحركات المسجَّلة في تاريخ بعينه — نفس تنسيق أزرار «تحركات اليوم/الغد» (غير مُصفّاة)
+function sendTelegramMovementsByDate_(dateStr, chatId) {
+  var movements = getAllMovements();
+  var filtered = movements.filter(function (m) { return m.movementDate && String(m.movementDate).trim() === dateStr; });
+
+  var msg = "🚌 <b>تحركات بتاريخ (" + dateStr + ")</b> 📋 العدد: (" + filtered.length + ")\n━━━━━━━━━━━━━━━━━━\n";
+  if (filtered.length === 0) {
+    msg += "⚪ لا توجد تحركات مسجَّلة في هذا التاريخ.";
+  } else {
+    filtered.forEach(function (m, i) {
+      var _lbl = _tgMovementLabel_(m.movementType);
+      var _title = _lbl ? (_lbl + " : " + m.movementType) : m.movementType;
+      msg += "🔹 <b>(" + (i + 1) + ") " + _title + "</b>\n🎫 <b>الإشعار:</b> <code>" + (m.bookingId || "—") + "</code>\n👥 <b>العميل:</b> " + (m.client || "—") + "\n⏰ <b>الساعة:</b> " + (m.movementTime || "—") + "\n🚌 <b>الباصات:</b> " + (m.buses || "—") + "  |  🧑‍🤝‍🧑 <b>العدد:</b> " + (m.count || "—") + " معتمر\n🏢 <b>الشركة:</b> " + (m.company || "—") + "\n🇸🇦 <b>الوكيل:</b> " + (m.agent || "—") + "\n";
+      if (i < filtered.length - 1) msg += "▪️\n";
+    });
+  }
+  sendTelegramMessageDirect(chatId, msg);
 }
