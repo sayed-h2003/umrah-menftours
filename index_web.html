@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.115 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.116 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.115)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.116)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.115</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.116</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6375,7 +6375,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.115";
+var CLIENT_APP_VERSION = "4.116";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -18514,6 +18514,7 @@ function _mhConfirmPick_() {
 
 function _mhOpen_(tripNames, city, hotel) {
   window._mhMeta = { tripNames: tripNames, city: city, hotel: hotel, label: tripNames.join(' + ') + ' — 🏨 ' + hotel };
+  window._mhTripDates = null;   // 📅 تواريخ الإقامة تُعاد بناؤها حسب مدينة هذا الدمج
   document.getElementById('mhTitleLabel').textContent = window._mhMeta.label;
   document.getElementById('mhCardsArea').innerHTML = '<div class="text-center text-muted p-4">⏳ جاري تحميل بيانات المعتمرين...</div>';
   new bootstrap.Modal(document.getElementById('mhModal')).show();
@@ -18594,6 +18595,65 @@ function _mhBuildFromPilgrims_(pilgrimsRaw, city, defaultHotel) {
   window._mhRooms = combinedRooms;
 }
 
+/* 📅 (V4.115) تواريخ إقامة الغرفة في التسكين المدموج — الرحلات مدموجة فقد تختلف تواريخها،
+   فتأخذ الغرفة **أبكر تاريخ دخول** و**آخر تاريخ خروج** بين رحلات ساكنيها لمدينة التسكين الحالية.
+   المصدر: كاش الرحلات المحمَّل بشاشة الرحلات؛ ولو لم يكن محمَّلاً يُجلب مرة واحدة ثم تُعاد الرسم. */
+function _mhTripStayMap_() {
+  if (window._mhTripDates) return window._mhTripDates;
+  var city = (window._mhMeta && window._mhMeta.city) === 'makkah' ? 'makkah' : 'madinah';
+  var map = {};
+  (window.tripsCache || []).forEach(function (t) {
+    if (!t || !t.name) return;
+    map[t.name] = {
+      inD: (city === 'makkah' ? t.makkahCheckIn : t.madinahCheckIn) || '',
+      outD: (city === 'makkah' ? t.makkahCheckOut : t.madinahCheckOut) || ''
+    };
+  });
+  if (Object.keys(map).length) { window._mhTripDates = map; return map; }
+  // الكاش فارغ (فُتحت الشاشة من مسار آخر) — نجلب الرحلات مرة واحدة ثم نُعيد الرسم
+  if (!window._mhTripDatesLoading) {
+    window._mhTripDatesLoading = true;
+    google.script.run
+      .withSuccessHandler(function (list) {
+        window._mhTripDatesLoading = false;
+        window.tripsCache = (window.tripsCache && window.tripsCache.length) ? window.tripsCache : (list || []);
+        window._mhTripDates = null;
+        if (document.getElementById('mhCardsArea') && (window._mhRooms || []).length) _mhRenderCards_();
+      })
+      .withFailureHandler(function () { window._mhTripDatesLoading = false; })
+      .getTripsList(window.authToken);
+  }
+  return map;
+}
+function _mhRoomStay_(room) {
+  var map = _mhTripStayMap_();
+  var toMs = function (d) {
+    var m = String(d || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : NaN;
+  };
+  var inBest = null, outBest = null;
+  var seen = {};
+  (room.members || []).forEach(function (m) {
+    var tn = m && m.tripName;
+    if (!tn || seen[tn]) return;
+    seen[tn] = 1;
+    var d = map[tn]; if (!d) return;
+    var im = toMs(d.inD), om = toMs(d.outD);
+    if (!isNaN(im) && (inBest === null || im < inBest.ms)) inBest = { ms: im, txt: d.inD };
+    if (!isNaN(om) && (outBest === null || om > outBest.ms)) outBest = { ms: om, txt: d.outD };
+  });
+  if (!inBest && !outBest) return null;
+  return {
+    inD: inBest ? inBest.txt : '-',
+    outD: outBest ? outBest.txt : '-',
+    multi: Object.keys(seen).length > 1
+  };
+}
+function _mhStayText_(room) {
+  var st = _mhRoomStay_(room);
+  if (!st) return '';
+  return '📅 ' + st.inD + ' → ' + st.outD + (st.multi ? ' (أبكر دخول / آخر خروج)' : '');
+}
 function _mhRenderCards_() {
   var area = document.getElementById('mhCardsArea');
   var rooms = window._mhRooms || [];
@@ -18633,7 +18693,12 @@ function _mhRenderCards_() {
     }
     var shortageWarn = room.shortage ? (' <span class="badge bg-warning text-dark">⚠️ ناقصة ' + room.shortageCount + ' سرير</span>') : '';
     var cardBorderStyle = room.shortage ? ' style="border:2px solid #f59e0b;"' : '';
-    var hotelBadge = room.hotel ? ('<div style="font-size:10.5px; opacity:0.9;">🏨 ' + escapeHtml_(room.hotel) + '</div>') : '';
+    // 📅 (V4.115) تاريخا الدخول والخروج أسفل اسم الفندق مباشرةً — أبكر دخول وآخر خروج بين الرحلات المدموجة
+    var stayTxt = _mhStayText_(room);
+    var hotelBadge = (room.hotel || stayTxt)
+      ? ('<div style="font-size:10.5px; opacity:0.9;">' + (room.hotel ? ('🏨 ' + escapeHtml_(room.hotel)) : '') +
+         (stayTxt ? ('<div style="font-size:10px; opacity:0.95;">' + escapeHtml_(stayTxt) + '</div>') : '') + '</div>')
+      : '';
     var headerColor = _hotelColor_(room.hotel);
     html += '<div class="col-md-6 col-lg-4">' +
       '<div class="card shadow-sm h-100 housing-card"' + cardBorderStyle + ' data-room-idx="' + roomIdx + '" ondragover="event.preventDefault(); event.stopPropagation(); this.classList.add(\'border-primary\');" ondragleave="this.classList.remove(\'border-primary\');" ondrop="event.stopPropagation(); _mhOnDrop_(event, ' + roomIdx + '); this.classList.remove(\'border-primary\');">' +
@@ -18869,7 +18934,9 @@ function _mhPrintableHtml_() {
     var bedsCount = room.members.filter(function(m){ return !m.noBed; }).length;
     // أنماط مضمَّنة أيضاً (بجانب CSS الطباعة) لأن محوّل PDF بجوجل يتجاهل كثيراً من قواعد الكلاسات
     var hTh = 'border:1px solid #cbd5e1; padding:1.5px 3px; background-color:#e2e8f0; text-align:center; white-space:nowrap;';
-    var footerText = (room.hotel ? ('🏨 ' + room.hotel) : 'بلا فندق محدد') + (room.shortage ? (' | 🛏️ سرير فارغ: ' + room.shortageCount) : '');
+    var stayTxtP = _mhStayText_(room);
+    var footerText = (room.hotel ? ('🏨 ' + room.hotel) : 'بلا فندق محدد') +
+      (stayTxtP ? (' | ' + stayTxtP) : '') + (room.shortage ? (' | 🛏️ سرير فارغ: ' + room.shortageCount) : '');
     var cardHeaderColor = _hotelColor_(room.hotel);
     var shortageBadge = room.shortage ? (' <span style="background-color:#f59e0b; color:#7c2d12; border-radius:3px; padding:1px 5px; font-size:9.5px; font-weight:bold;">⚠️ ناقصة ' + room.shortageCount + ' سرير</span>') : '';
     var pHasM = room.members.some(function(m){ return m.type === 'ذكر'; });
