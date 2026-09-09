@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.117 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.118 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.117)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.118)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.117</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.118</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4492,8 +4492,10 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry table.mf-tab thead tr.mf-cols th{ background:var(--mfNavy); color:#fff; font-size:10.5px;
     font-weight:700; position:sticky; top:0; z-index:11; padding:4px 5px; cursor:grab; }
   #section-ministry table.mf-tab thead tr.mf-cols th.mf-dragover{ background:var(--mfBlue); box-shadow:inset 3px 0 0 #fff; }
-  /* ↔️ (V4.114) مقبض تغيير عرض العمود بالماوس — على حافة نهاية كل رأس عمود */
-  #section-ministry table.mf-tab thead tr.mf-cols th{ position:relative; }
+  /* ↔️ (V4.114) مقبض تغيير عرض العمود بالماوس — على حافة نهاية كل رأس عمود
+     🛡️ (V4.118) لا نضع هنا position:relative على رأس العمود: كان يتغلّب على position:sticky
+     أعلاه (نفس الأولوية ويأتي بعده) فتتوقّف رؤوس الأعمدة عن التثبيت عند التمرير. العنصر
+     الملتصق (sticky) هو أصلاً حاوية للعناصر المطلقة بداخله، فالمقبض يعمل بلا هذه القاعدة. */
   #section-ministry .mf-rsz{ position:absolute; top:0; bottom:0; inset-inline-end:-3px; width:7px;
     cursor:col-resize; z-index:3; }
   #section-ministry .mf-rsz::after{ content:""; position:absolute; top:5px; bottom:5px; inset-inline-end:3px;
@@ -6375,7 +6377,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.117";
+var CLIENT_APP_VERSION = "4.118";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -26388,8 +26390,31 @@ function _gsOpenMinistry(id) {
     if (typeof mfToggleDetail === 'function') mfToggleDetail(id);
   }, 300);
 }
+/* 📄 (V4.118) الضغط على رقم الإشعار يفتح **بيانات الإشعار نفسه** مباشرةً (نافذة التفاصيل)
+   بدل فتح شاشة سجل/بحث الإشعارات وترك المستخدم يبحث عنه. لو كان كاش الإشعارات غير محمَّل بعد
+   (فُتح الرابط من شاشة أخرى) يُجلب أولاً ثم تُفتح النافذة، ولا نلجأ للبحث إلا لو تعذّر ذلك. */
 function _gsOpenBooking(id) {
   closeGlobalSearch();
+  var wanted = String(id);
+  var openIt = function () {
+    if (typeof viewDetailedBooking !== 'function') return false;
+    var found = (localBookingsCache || []).some(function (x) { return String(x.id) === wanted; });
+    if (!found) return false;
+    try { viewDetailedBooking(wanted); return true; } catch (e) { return false; }
+  };
+  if (openIt()) return;
+  if (!(window.google && google.script && google.script.run)) { _gsOpenBookingFallback_(wanted); return; }
+  google.script.run
+    .withSuccessHandler(function (b) {
+      localBookingsCache = b || [];
+      if (openIt()) return;
+      _gsOpenBookingFallback_(wanted);
+    })
+    .withFailureHandler(function () { _gsOpenBookingFallback_(wanted); })
+    .getAllBookingsAuth(window.authToken);
+}
+// المسار الاحتياطي القديم: شاشة البحث برقم الإشعار
+function _gsOpenBookingFallback_(id) {
   switchPage('search');
   setTimeout(function() {
     var el = document.getElementById('searchBookingId');
@@ -33031,7 +33056,11 @@ function mfCell(col, f) {
     if (f.reviewType === 'تجديد باركود') return '<span class="mf-badge renew">تجديد باركود</span>';
     return '<span class="mf-badge norm">عادية</span>';
   }
-  if (k === 'clientLabel') return (mfStr(f.tripName) ? '<span class="mf-badge link">🔗</span> ' : '') + mfEsc(f.clientLabel || '—');
+  // 🧳 (V4.118) شارة الربط تفتح الرحلة نفسها مباشرةً (كشف معتمريها) بدل شاشة سجل الرحلات
+  if (k === 'clientLabel') return (mfStr(f.tripName)
+    ? ('<span class="mf-badge link" style="cursor:pointer;" title="فتح الرحلة: ' + mfEsc(f.tripName) + '"' +
+       ' onclick="event.stopPropagation();mfGoTrip(\'' + mfEsc(f.tripName).replace(/'/g, "\\'") + '\')">🔗</span> ')
+    : '') + mfEsc(f.clientLabel || '—');
   if (k === 'supNames') {
     var nm = mfRaw('supNames', f);
     return (mfHasFlag(f, 'SUP50') || mfHasFlag(f, 'RECEP') ? '<span class="mf-badge warn">⚠️</span> ' : '') + mfEsc(nm);
@@ -33048,6 +33077,13 @@ function mfCell(col, f) {
   }
   if (k === 'totalRoomFee') return mfL(mfFmt(c.totalRoomFee)) + (mfHasFlag(f, 'NOBAL') ? ' <span class="mf-badge warn">🏦</span>' : '');
   if (k === 'accDir') return '<span class="mf-badge link">📑</span> ' + mfEsc(mfRaw('accDir', f));
+  // 📄 (V4.118) رقم الإشعار يفتح بيانات الإشعار نفسه مباشرةً
+  if (k === 'bookingNo') {
+    var bn = mfBookingNo(f);
+    if (!bn) return '—';
+    return '<span class="mf-badge link" style="cursor:pointer;" title="فتح بيانات الإشعار"' +
+      ' onclick="event.stopPropagation();_gsOpenBooking(\'' + mfEsc(bn).replace(/'/g, "\\'") + '\')">📄 ' + mfEsc(bn) + '</span>';
+  }
   if (k === 'pct') return f.pct ? mfL(Number(f.pct).toFixed(2) + '%') : '—';
   if (col.calc || ['progPrice', 'ticket', 'adminFee', 'fxRate'].indexOf(k) >= 0) {
     var v = (c[k] !== undefined) ? c[k] : f[k];
@@ -33226,13 +33262,13 @@ function mfRender() {
     if (MF.hidden[c.k]) cls += ' mf-hide';
     var si = MF.sort.key === c.k ? (MF.sort.dir > 0 ? '▲' : '▼') : '⇅';
     var ics = c.nof ? '' :
-      '<button class="mf-thic' + (MF.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">\U0001f53d</button>' +
+      '<button class="mf-thic' + (MF.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">🔽</button>' +
       '<button class="mf-thic' + (MF.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();mfSort(\'' + c.k + '\')">' + si + '</button>';
     h += '<th class="' + cls + '" style="' + st + '" draggable="true" data-key="' + c.k + '"' +
       ' title="' + mfEsc(c.g) + ' · ' + mfEsc(c.l) + '"' +
       ' ondragstart="mfDragStart(event,\'' + c.k + '\')" ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)"' +
       ' ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
-      '<div class="mf-thin">' + (c.pin ? '<span style="font-size:8.5px;color:#ffd77a;">\U0001f4cc</span>' : '') +
+      '<div class="mf-thin">' + (c.pin ? '<span style="font-size:8.5px;color:#ffd77a;">📌</span>' : '') +
       '<span>' + mfEsc(c.l) + '</span>' + ics + '</div>' +
       '<span class="mf-rsz" title="اسحب لتغيير عرض العمود · ضغطتان = العرض الافتراضي"' +
       ' onmousedown="mfRszStart(event,\'' + c.k + '\')" ondblclick="mfRszReset(event,\'' + c.k + '\')"></span></th>';
@@ -33816,14 +33852,17 @@ function mfDetail(f) {
   return h + '</div></div>';
 }
 function mfKV(k, v) { return '<tr><td style="color:#5c6b83;">' + k + '</td><td style="text-align:end;font-weight:700;" class="mf-latin">' + v + '</td></tr>'; }
+/* 🧳 (V4.118) الضغط على اسم الرحلة يفتح **الرحلة نفسها** (كشف معتمريها وبياناتها) مباشرةً
+   بدل فتح شاشة سجل الرحلات مع تصفية بالاسم فقط. */
 function mfGoTrip(name) {
   try {
     if (typeof switchPage === 'function') switchPage('trips');
     setTimeout(function () {
+      if (typeof openTripPilgrims === 'function') { openTripPilgrims(name); return; }
       var box = document.getElementById('tripsSearchInput') || document.querySelector('#section-trips input[type="search"]');
       if (box) { box.value = name; box.dispatchEvent(new Event('input', { bubbles: true })); }
-    }, 400);
-  } catch (e) { _showPopup('تعذّر فتح شاشة الرحلات: ' + (e.message || e), 'error'); }
+    }, 350);
+  } catch (e) { _showPopup('تعذّر فتح الرحلة: ' + (e.message || e), 'error'); }
 }
 
 /* ---------- التلميح على النص الطويل ---------- */
