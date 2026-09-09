@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.112 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.113 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.112)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.113)', diag);
 }, 6000);
 </script>
 
@@ -1491,7 +1491,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.112</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.113</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2927,8 +2927,9 @@ input[type="date"]:not(:focus):not(:valid) {
         <div class="row g-2 mb-3">
           <div class="col-md-4"><label class="form-label small fw-bold mb-1">رسوم غرفة المشرف (ج — لكل مشرف مرافق)</label>
             <input type="number" id="accCfgSupFee" class="form-control form-control-sm" placeholder="200"></div>
-          <div class="col-md-4"><label class="form-label small fw-bold mb-1">زيادة رسوم غرفة المراجعة VIP (ج — للمعتمر فقط)</label>
-            <input type="number" id="accCfgVip" class="form-control form-control-sm" placeholder="100"></div>
+          <!-- 🏛️ (V4.113) إجمالي ثابت للفرد عند مراجعة VIP (وليس رسوم الغرفة + زيادة) -->
+          <div class="col-md-4"><label class="form-label small fw-bold mb-1">إجمالي رسوم غرفة المعتمر عند المراجعة VIP (ج)</label>
+            <input type="number" id="accCfgVip" class="form-control form-control-sm" placeholder="3100"></div>
         </div>
         <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-success btn-sm" onclick="saveAccPricingCfg(this)">💾 حفظ التسعير</button>
@@ -4476,7 +4477,7 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry .mf-clearall{ font-size:10.5px; font-weight:800; color:var(--mfDang); background:var(--mfDangBg);
     border:1px solid #f6b8b8; border-radius:99px; padding:3px 10px; cursor:pointer; }
 
-  #section-ministry .mf-tablewrap{ overflow:auto; max-height:58vh; position:relative; border-radius:12px; }
+  #section-ministry .mf-tablewrap{ overflow:auto; max-height:66vh; position:relative; border-radius:12px; }
   #section-ministry table.mf-tab{ border-collapse:separate; border-spacing:0; width:max-content; min-width:100%; font-size:11.5px; }
   #section-ministry table.mf-tab th, #section-ministry table.mf-tab td{ border-bottom:1px solid var(--mfBorder);
     border-inline-start:1px solid var(--mfBorder); text-align:center; white-space:nowrap; }
@@ -4534,6 +4535,7 @@ input[type="date"]:not(:focus):not(:valid) {
     border-radius:50%; background:#fff; transition:.15s; }
   #section-ministry .mf-tog.on, .mf-dlg .mf-tog.on{ background:var(--mfOk); }
   #section-ministry .mf-tog.on::after, .mf-dlg .mf-tog.on::after{ inset-inline-start:16px; }
+  #section-ministry .mf-tog-locked, .mf-dlg .mf-tog-locked{ cursor:not-allowed; opacity:.5; }
   #section-ministry .mf-rowbtn, .mf-dlg .mf-rowbtn{ background:none; border:1px solid var(--mfBorderS); border-radius:6px; font-size:10px;
     padding:1px 5px; cursor:pointer; color:var(--mfMuted); }
   #section-ministry .mf-rowbtn:hover, .mf-dlg .mf-rowbtn:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
@@ -4566,7 +4568,12 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry .mf-mini, .mf-dlg .mf-mini{ width:100%; border-collapse:collapse; font-size:11px; }
   #section-ministry .mf-mini th, .mf-dlg .mf-mini th{ background:var(--mfSurf3); font-weight:800; padding:4px 6px; text-align:start;
     border-bottom:1px solid var(--mfBorder); white-space:nowrap; }
-  #section-ministry .mf-mini td, .mf-dlg .mf-mini td{ padding:4px 6px; border-bottom:1px solid var(--mfBorder); }
+  #section-ministry .mf-mini td, .mf-dlg .mf-mini td{ padding:5px 6px; border-bottom:1px solid var(--mfBorder); vertical-align:middle; }
+  /* 🎨 (V4.113) تخطيط أوضح لأعمدة الجداول المصغَّرة (كشوف الحركة والإيصالات) — تشريط بديل للصفوف
+     ورأس ملتصق بحدّ سفلي واضح، حتى تبقى الأعمدة متسقة بصرياً مع رؤوسها عند التمرير */
+  #section-ministry .mf-mini tbody tr:nth-child(even), .mf-dlg .mf-mini tbody tr:nth-child(even){ background:#fafbfd; }
+  #section-ministry .mf-mini thead th, .mf-dlg .mf-mini thead th{ border-bottom:2px solid var(--mfNavyD); }
+  #section-ministry .mf-mini .mf-latin, .mf-dlg .mf-mini .mf-latin{ white-space:nowrap; }
   #section-ministry .mf-mini tfoot td, .mf-dlg .mf-mini tfoot td{ background:var(--mfSurf3); font-weight:800; }
   #section-ministry .mf-note, .mf-dlg .mf-note{ display:flex; gap:6px; align-items:flex-start; border-radius:8px; padding:7px 9px;
     font-size:11px; font-weight:600; margin-bottom:6px; line-height:1.6; }
@@ -4615,6 +4622,8 @@ input[type="date"]:not(:focus):not(:valid) {
   #mfColWin .ci:hover{ background:#f8fafc; }
   #mfColWin .ci.mf-dragover{ background:#dbeafe; box-shadow:inset 0 2px 0 #2563eb; }
   #mfColWin .ci .nm{ flex:1; }
+  /* وسم القسم الحالي بجوار اسم العمود في تبويب الترتيب العام — معلومة فقط */
+  #mfColWin .mf-cisec{ font-size:9px; font-weight:600; color:#94a3b8; margin-inline-start:5px; }
   #mfColWin .pin{ background:none; border:1px solid #e2e8f0; border-radius:6px; font-size:10px; padding:0 5px;
     cursor:pointer; color:#94a3b8; }
   #mfColWin .pin.on{ background:#fef3e2; border-color:#f6d199; color:#c2670a; }
@@ -4782,7 +4791,8 @@ input[type="date"]:not(:focus):not(:valid) {
   }
 </style>
 
-<div id="section-ministry" class="page-section container-fluid my-3 px-3">
+<!-- 📐 (V4.113) هوامش مخفَّضة عن باقي الشاشات (my-2 px-2 بدل my-3 px-3) لإتاحة أكبر مساحة لعرض جدول الملفات -->
+<div id="section-ministry" class="page-section container-fluid my-2 px-2">
   <div id="mfPrintHead">
     <h1>مراجعة ملفات الوزارة — منظومة منف للسياحة</h1>
     <div class="sub" id="mfPrintSub"></div>
@@ -6340,7 +6350,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.112";
+var CLIENT_APP_VERSION = "4.113";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -6544,6 +6554,7 @@ function _buildPermMatrixHtml(prefix) {
     '<div class="d-flex flex-wrap gap-3 align-items-center mt-1">' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="bookings.print" id="' + prefix + '-x-print"><label class="form-check-label small" for="' + prefix + '-x-print">🖨️ طباعة</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="bookings.approve" id="' + prefix + '-x-approve"><label class="form-check-label small" for="' + prefix + '-x-approve">✅ اعتماد الإشعار</label></div>' +
+      '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="ministry.approve" id="' + prefix + '-x-mfApprove"><label class="form-check-label small" for="' + prefix + '-x-mfApprove" title="اعتماد ملف مراجعة الوزارة يدوياً — الاعتماد التلقائي بسبب رقم القيد لا يحتاج هذه الصلاحية">✅ اعتماد ملف مراجعة الوزارة</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="settings_basic" id="' + prefix + '-x-settingsBasic"><label class="form-check-label small" for="' + prefix + '-x-settingsBasic" title="الشركات والوكلاء واللوجوهات + تنبيه البريد اليومي + تنبيه تيليجرام اليومي + الحقول الإلزامية في الإشعار">⚙️ إعدادات أساسية</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="trips.client_link" id="' + prefix + '-x-clientLink"><label class="form-check-label small" for="' + prefix + '-x-clientLink" title="إنشاء/إلغاء روابط قراءة-فقط لعملاء الرحلة">🔗 رابط العميل</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="r70.sim" id="' + prefix + '-x-r70sim"><label class="form-check-label small" for="' + prefix + '-x-r70sim" title="فتح نموذج محاكاة افتراضية لقاعدة عودة الـ70% (بدون أي تأثير على البيانات)">🧪 محاكاة قاعدة الـ70%</label></div>' +
@@ -6619,7 +6630,8 @@ function _permsSummaryHtml(permString) {
     if (caps.length) parts.push('<span class="badge bg-light text-dark border me-1 mb-1" style="font-weight:500;">' + s.label + ': ' + caps.join('/') + '</span>');
   });
   if (set['bookings.print']) parts.push('<span class="badge bg-secondary me-1 mb-1">طباعة</span>');
-  if (set['bookings.approve']) parts.push('<span class="badge bg-secondary me-1 mb-1">اعتماد</span>');
+  if (set['bookings.approve']) parts.push('<span class="badge bg-secondary me-1 mb-1">اعتماد الإشعار</span>');
+  if (set['ministry.approve']) parts.push('<span class="badge bg-secondary me-1 mb-1">اعتماد ملف الوزارة</span>');
   if (set['settings_basic']) parts.push('<span class="badge bg-secondary me-1 mb-1">⚙️ إعدادات أساسية</span>');
   if (set['trips.client_link']) parts.push('<span class="badge bg-secondary me-1 mb-1">🔗 رابط العميل</span>');
   return parts.length ? parts.join('') : '<span class="text-muted small">— بلا صلاحيات</span>';
@@ -8295,7 +8307,7 @@ function loadAccPricingCfg() {
       if (bc) bc.innerHTML = bcp.length ? bcp.map(_accRfRowHtml_).join('') : _accRfRowHtml_({});
       document.getElementById('accCfgSupFee').value = cfg.supRoomFee || 200;
       var vipEl = document.getElementById('accCfgVip');
-      if (vipEl) vipEl.value = (cfg.vipSurcharge === undefined ? 100 : cfg.vipSurcharge);
+      if (vipEl) vipEl.value = (cfg.vipRoomFee === undefined ? 3100 : cfg.vipRoomFee);
       var badge = document.getElementById('svcBadge-accPricing');
       if (badge) {
         badge.textContent = periods.length ? periods.length + ' فترة' : 'بلا فترات';
@@ -8322,7 +8334,7 @@ function saveAccPricingCfg(btn) {
   var vipEl = document.getElementById('accCfgVip');
   var cfg = { roomFeePeriods: periods, barcodePeriods: barcodePeriods,
     supRoomFee: parseFloat(document.getElementById('accCfgSupFee').value) || 200,
-    vipSurcharge: vipEl ? (parseFloat(vipEl.value) || 0) : 100 };
+    vipRoomFee: vipEl ? (parseFloat(vipEl.value) || 3100) : 3100 };
   var orig = btn.innerHTML;
   btn.disabled = true; btn.innerHTML = '⏳...';
   google.script.run
@@ -17279,11 +17291,15 @@ function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
   // من سقف الذاكرة الآمن أصلاً)، مع إبقاء سقف iOS كما هو (قيد نظام تشغيل حقيقي غير قابل للتفاوض)
   // 🔍 (V4.106) الدقة تُحسب الآن من حدّين معاً: المساحة الكلية **وأقصى بُعد** — فيخرج التقرير
   // دائماً في صورة واحدة غير مقسّمة (لأن الطول والعرض يبقيان تحت حد المتصفح)، وبأعلى دقة يسمح بها.
-  var MAX_AREA = IS_IOS_ ? 16000000 : 180000000; // بكسل² (4 بايت/بكسل RGBA بالذاكرة)
-  var MAX_DIM  = IS_IOS_ ? 8192 : 16384;         // أقصى بعد لأي canvas واحد (حد المتصفح الفعلي)
+  // 🛡️ (V4.113) سقف أقل من السابق (كان 180 مليون) — التقارير الطويلة (كشوف حركة/إيصالات بعشرات
+  // الصفوف) عند foreignObjectRendering بمقياس عالٍ كانت تُحمِّل المعالج بشدة وتُعلِّق المتصفح
+  // («الصفحة لا تستجيب») أو تخرج صورة بيضاء بعد انتظار طويل. سقف أقل = رسم أسرع وأكثر موثوقية
+  // مقابل دقة أقل قليلاً — لا يزال أعلى من دقة الشاشة العادية بكثير.
+  var MAX_AREA = IS_IOS_ ? 16000000 : 110000000; // بكسل² (4 بايت/بكسل RGBA بالذاكرة)
+  var MAX_DIM  = IS_IOS_ ? 8192 : 14000;         // أقصى بعد لأي canvas واحد
   var byArea = Math.sqrt(MAX_AREA / (cssW * cssH));
   var byDim  = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
-  var scale = Math.min(8, byArea, byDim);
+  var scale = Math.min(5, byArea, byDim);
   if (!(scale > 0) || scale < 1) scale = 1;
 
   html2pdf().set({
@@ -17299,7 +17315,7 @@ function _sliceCanvasToPngFiles_(full, fileNameBase, cb) {
   // (V4.106) الحد الفعلي لبُعد الـcanvas في المتصفحات — التقسيم صار حالة قصوى نادرة لا الوضع الطبيعي
   var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  var MAX_DIM = IS_IOS_ ? 8192 : 16384;
+  var MAX_DIM = IS_IOS_ ? 8192 : 14000;
   var pieces = [], total = full.height;
   var sliceH = Math.min(MAX_DIM, total) || total;
   for (var y = 0; y < total; y += sliceH) {
@@ -17360,10 +17376,29 @@ function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb) {
   var capture = function() {
     _captureElementAsPngFiles_(host, fileNameBase, function(files, err) { cleanup(); cb(files, err); });
   };
+  // 🛡️ (V4.113) بعض التقارير (كالإشعارات) تتضمّن شعار الشركة كصورة <img> — لو التُقطت الصفحة
+  // قبل اكتمال تحميلها يخرج التصدير صورة بيضاء فارغة بلا أي خطأ (نفس عرَض foreignObjectRendering
+  // الصامت). ننتظر تحميل كل الصور داخل المحتوى (أو فشلها) أولاً، بسقف أمان قصير حتى لا نُعلِّق
+  // التصدير إلى الأبد لو تعذّر تحميل صورة (رابط ميت مثلاً).
+  var waitImages = function(done) {
+    var imgs = host.querySelectorAll('img');
+    if (!imgs.length) { done(); return; }
+    var left = imgs.length, finished = false;
+    var finish = function() { if (finished) return; finished = true; done(); };
+    var one = function() { if (--left <= 0) finish(); };
+    imgs.forEach(function(img) {
+      if (img.complete) { one(); return; }
+      img.addEventListener('load', one, { once: true });
+      img.addEventListener('error', one, { once: true });
+    });
+    setTimeout(finish, 4000); // سقف أمان — لا يُعلَّق التصدير لصورة لا تُحمَّل أبداً
+  };
   try {
-    if (document.fonts && document.fonts.ready) {
-      document.fonts.ready.then(function() { setTimeout(capture, 120); }).catch(function() { setTimeout(capture, 300); });
-    } else { setTimeout(capture, 300); }
+    waitImages(function() {
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function() { setTimeout(capture, 120); }).catch(function() { setTimeout(capture, 300); });
+      } else { setTimeout(capture, 300); }
+    });
   } catch (e) { setTimeout(capture, 300); }
 }
 
@@ -17419,7 +17454,17 @@ function exportReportAsImage(getFullHtmlFn, fileNameBase, btn) {
   if (!fullHtml) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
   var orig = btn ? btn.innerHTML : null;
   if (btn) { btn.disabled = true; btn.innerHTML = '⏳...'; }
+  // 🛡️ (V4.113) حارس زمني: لو لم يستجب المسار الكامل خلال 35 ثانية (جهاز ضعيف/تقرير ضخم) نُعيد
+  // الزر لحالته الطبيعية ونُظهر رسالة واضحة بدل تركه معلَّقاً «⏳...» إلى الأبد بلا أي أثر.
+  var settled = false;
+  var watchdog = setTimeout(function() {
+    if (settled) return; settled = true;
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    showToast('⚠️ التصدير يستغرق وقتاً طويلاً — قد يكون التقرير كبيراً جداً. أعد المحاولة أو صغِّر نطاق البيانات.', true);
+  }, 35000);
   _exportFullHtmlAsImage_(fullHtml, fileNameBase || 'تقرير', function(files, err) {
+    if (settled) return; settled = true;
+    clearTimeout(watchdog);
     if (btn) { btn.disabled = false; btn.innerHTML = orig; }
     if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
     _shareOrSaveImageFiles_(files);
@@ -32428,12 +32473,16 @@ function mfHasFlag(f, code) { return (f.flags || []).some(function (x) { return 
 // محرك الحسابات — نسخة مطابقة تماماً لـ _mfCompute_ بالسيرفر
 function mfCalc(f) {
   var cfg = MF.cfg || {};
-  var N = mfNum(f.pilgrims), O = mfNum(f.supCount), heads = N + O;
-  var vipAdd = (f.reviewType === 'VIP') ? (mfNum(cfg.vipSurcharge) || 100) : 0;
-  var S = mfNum(f.roomFee) + vipAdd;
-  var supFee = mfNum(cfg.supRoomFee) || 200;
+  var N = mfNum(f.pilgrims);
   var sups = f.sups || [];
+  // 🧑‍✈️ (V4.113) «مرافق» فقط يُحتسب ضمن الأعداد وله رسوم غرفة — «استقبال» (سواء مشرف فعلي أو
+  // الوكيل السعودي نفسه) لا يُحسب أصلاً — نفس منطق _mfCompute_ بالسيرفر تماماً.
   var murafiq = sups.filter(function (s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+  var O = murafiq, heads = N + O;
+  // 🏛️ (V4.113) رسوم غرفة VIP إجمالي ثابت للفرد من الإعدادات (افتراضياً 3,100) — وليست الرسوم
+  // المسجَّلة + 100 كما كان سابقاً؛ لا تُطبَّق على تجديد الباركود إطلاقاً
+  var S = (f.reviewType === 'VIP') ? (mfNum(cfg.vipRoomFee) || 3100) : mfNum(f.roomFee);
+  var supFee = mfNum(cfg.supRoomFee) || 200;
   var R = mfNum(f.ticket), T = mfNum(f.adminFee), V = mfNum(f.fxRate), AC = mfNum(f.pct) / 100;
   var barcode = (f.reviewType === 'تجديد باركود') ? mfBarcodeFee(f.reviewDate) * N : 0;
   var Q = N * mfNum(f.progPrice);
@@ -32487,6 +32536,14 @@ function mfAutoType(reviewDate, goDate, current) {
     if (!isNaN(g)) { var diff = Math.ceil((g - mfMs(d)) / 86400000); if (diff <= 3 && diff >= 0) return 'VIP'; }
   }
   return current === 'VIP' ? 'VIP' : 'عادية';
+}
+// 📅 (V4.113) اسم يوم الأسبوع بالعربي بجوار أي تاريخ dd/mm/yyyy — عرض فقط
+var MF_DOW_NAMES = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+function mfDowName(dateStr) {
+  var d = mfDate(dateStr);
+  var ms = d ? mfMs(d) : NaN;
+  if (isNaN(ms)) return '';
+  return MF_DOW_NAMES[new Date(ms).getDay()];
 }
 function mfBalanceOf(company) {
   var b = MF.balances[mfStr(company)];
@@ -32571,7 +32628,13 @@ function mfCell(col, f) {
     return b;
   }
   if (k === 'seq') return '<button class="mf-exp" title="عرض التفاصيل" onclick="event.stopPropagation();mfToggleDetail(\'' + f.id + '\')">▸</button> ' + mfL(f.seq);
-  if (k === 'approved') return '<span class="mf-tog ' + (f.approved ? 'on' : '') + '" title="' + (f.approved ? 'معتمد' : 'غير معتمد') + '" onclick="event.stopPropagation();mfToggleApproved(\'' + f.id + '\')"></span>';
+  if (k === 'approved') {
+    // 🔒 (V4.113) لا يظهر قابلاً للضغط لمن لا يملك صلاحية الاعتماد المنفصلة (ما لم يكن معتمداً بالفعل بسبب رقم قيد)
+    var canTouch = MF.can.approve || f.approved || mfStr(f.ref);
+    return '<span class="mf-tog ' + (f.approved ? 'on' : '') + (canTouch ? '' : ' mf-tog-locked') + '"' +
+      ' title="' + (f.approved ? 'معتمد' : (canTouch ? 'غير معتمد' : 'غير معتمد — يحتاج صلاحية الاعتماد')) + '"' +
+      ' onclick="event.stopPropagation();mfToggleApproved(\'' + f.id + '\')"></span>';
+  }
   if (k === 'fileNo') return mfStr(f.fileNo) ? mfL(f.fileNo) : '<span class="mf-badge off">لم تُراجع</span>';
   if (k === 'reviewType') {
     if (f.reviewType === 'VIP') return '<span class="mf-badge vip" title="' + mfEsc(f.vipReason || 'تلقائي') + '">VIP</span>';
@@ -32583,7 +32646,10 @@ function mfCell(col, f) {
     var nm = mfRaw('supNames', f);
     return (mfHasFlag(f, 'SUP50') || mfHasFlag(f, 'RECEP') ? '<span class="mf-badge warn">⚠️</span> ' : '') + mfEsc(nm);
   }
-  if (k === 'roomFee') return mfL(mfFmt(f.roomFee)) + (f.reviewType === 'VIP' ? ' <span class="mf-badge vip">+' + ((MF.cfg && MF.cfg.vipSurcharge) || 100) + '</span>' : '');
+  // 🏛️ (V4.113) VIP: إجمالي ثابت للفرد من الإعدادات — يُعرض بدل الرسوم المسجَّلة
+  if (k === 'roomFee') return (f.reviewType === 'VIP')
+    ? (mfL(mfFmt((MF.cfg && MF.cfg.vipRoomFee) || 3100)) + ' <span class="mf-badge vip">VIP ثابت</span>')
+    : mfL(mfFmt(f.roomFee));
   if (k === 'totalRoomFee') return mfL(mfFmt(c.totalRoomFee)) + (mfHasFlag(f, 'NOBAL') ? ' <span class="mf-badge warn">🏦</span>' : '');
   if (k === 'accDir') return '<span class="mf-badge link">📑</span> ' + mfEsc(mfRaw('accDir', f));
   if (k === 'pct') return f.pct ? mfL(Number(f.pct).toFixed(2) + '%') : '—';
@@ -32751,10 +32817,15 @@ function mfRender() {
   var list = mfVisible();
   var h = '<table class="mf-tab"><thead><tr class="mf-grp">';
   var i = 0;
+  // 🛡️ (V4.113) عنوان القسم المُدمَج (colspan) كان يُحسب حسب القسم فقط، فلو تثبَّت بعض أعمدة
+  // القسم دون بعضها كانت خلية العنوان الواحدة تحاول أن تلتصق (position:sticky) بإزاحة أول عمود
+  // فقط بينما تغطي أعمدة غير مثبَّتة أيضاً — فتنفصل رؤوس الأقسام عن رؤوس الأعمدة تحتها عند
+  // التمرير الأفقي. الحل: لا تُدمَج خلية العنوان إلا لأعمدة متتالية من نفس القسم **ونفس حالة
+  // التثبيت معاً** — فتبقى كل خلية عنوان متجانسة (كلها مثبَّتة أو كلها غير مثبَّتة).
   while (i < MF_COLS.length) {
-    var g = MF_COLS[i].g, span = 0, j = i;
-    while (j < MF_COLS.length && MF_COLS[j].g === g) { span++; j++; }
-    var fr = MF_COLS[i].pin ? ' class="mf-fz' + ((!MF_COLS[j] || !MF_COLS[j].pin) ? ' mf-edge' : '') + '" style="right:' + mfFrozenOffset(i) + 'px"' : '';
+    var g = MF_COLS[i].g, pinFlag = !!MF_COLS[i].pin, span = 0, j = i;
+    while (j < MF_COLS.length && MF_COLS[j].g === g && !!MF_COLS[j].pin === pinFlag) { span++; j++; }
+    var fr = pinFlag ? ' class="mf-fz' + ((!MF_COLS[j] || !MF_COLS[j].pin) ? ' mf-edge' : '') + '" style="right:' + mfFrozenOffset(i) + 'px"' : '';
     h += '<th colspan="' + span + '"' + fr + '>' + mfEsc(g) + '</th>';
     i = j;
   }
@@ -32781,7 +32852,7 @@ function mfRender() {
     f._c = mfCalc(f);
     if (MF.editRowId === f.id) { h += mfBuildEditRow(f); return; }
     var dbl = MF.can.edit ? (' ondblclick="mfInlineEdit(\'' + f.id + '\')"') : '';
-    h += '<tr class="mf-row mf-s' + mfStatus(f) + (MF.selId === f.id ? ' mf-sel' : '') + (MF.openId === f.id ? ' mf-open' : '') +
+    h += '<tr class="mf-row mf-s' + mfStatus(f) + (MF.selId === f.id ? ' mf-sel' : '') +
       '" data-id="' + f.id + '" onclick="mfSelect(\'' + f.id + '\')"' + dbl +
       (MF.can.edit ? ' title="ضغطتان لتعديل سريع في مكانه"' : '') + '>';
     MF_COLS.forEach(function (c, ci) {
@@ -32791,8 +32862,6 @@ function mfRender() {
       h += '<td class="' + cls + '"' + st + ' data-full="' + mfEsc(mfRaw(c.k, f)) + '">' + mfCell(c, f) + '</td>';
     });
     h += '</tr>';
-    h += '<tr class="mf-det" id="mfDet-' + f.id + '" style="display:' + (MF.openId === f.id ? 'table-row' : 'none') + ';">' +
-      '<td colspan="' + MF_COLS.length + '"><div class="mf-detin">' + (MF.openId === f.id ? mfDetail(f) : '') + '</div></td></tr>';
   });
   h += '</tbody><tfoot class="mf-tot"><tr>';
   var sums = {};
@@ -32880,7 +32949,7 @@ function mfRenderActBar() {
     '<button class="mf-btn sm" onclick="mfShowFilePilgrims(\'' + f.id + '\')">👥 المعتمرون</button>' +
     (MF.can.edit ? '<button class="mf-btn sm" onclick="mfQuickLinkTrip(\'' + f.id + '\')">🔗 ربط برحلة</button>' : '') +
     '<button class="mf-btn sm" onclick="mfHistory(\'' + f.id + '\')">📜 السجل</button>' +
-    '<button class="mf-btn sm" onclick="mfToggleDetail(\'' + f.id + '\')">📋 ' + (MF.openId === f.id ? 'إخفاء التفاصيل' : 'التفاصيل') + '</button>' +
+    '<button class="mf-btn sm" onclick="mfToggleDetail(\'' + f.id + '\')">📋 التفاصيل</button>' +
     (MF.can.del ? '<button class="mf-btn sm dgr" onclick="mfDeleteFile(\'' + f.id + '\')">🗑️ حذف</button>' : '') +
     '</div>';
 }
@@ -33022,15 +33091,21 @@ function mfSelect(id, scroll) {
   if (scroll && tr) tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
   mfRenderActBar();
 }
+// 🪟 (V4.113) التفاصيل تُفتح الآن في نافذة منسّقة فوق الشاشة (بخلفية مموَّهة) بدل التمدد أسفل
+// الصف داخل الجدول — أوضح بصرياً ولا يُحرِّك بقية الصفوف.
 function mfToggleDetail(id) {
-  var was = (MF.openId === id);
-  MF.openId = was ? null : id;
+  var f = mfGet(id); if (!f) return;
   mfSelect(id);
-  mfRender();
+  var title = '📋 تفاصيل الملف ' + (mfStr(f.fileNo) ? mfEsc(f.fileNo) : '(بدون رقم)') +
+    (f.clientLabel ? ' — ' + mfEsc(f.clientLabel) : '');
+  mfModal(title, mfDetail(f),
+    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إغلاق</button>', 1040);
 }
 function mfToggleApproved(id) {
   var f = mfGet(id); if (!f) return;
   if (!MF.can.edit) { _showPopup('لا تملك صلاحية تعديل ملفات المراجعة', 'error'); return; }
+  // 🔒 (V4.113) اعتماد الملف يدوياً صلاحية فرعية منفصلة — الاعتماد التلقائي بسبب رقم القيد يبقى مسموحاً دائماً
+  if (!f.approved && !mfStr(f.ref) && !MF.can.approve) { _showPopup('لا تملك صلاحية اعتماد ملفات مراجعة الوزارة', 'error'); return; }
   var next = !f.approved;
   google.script.run
     .withSuccessHandler(function (res) {
@@ -33087,7 +33162,6 @@ function mfApplySaved(res, opts) {
 function mfRemoveLocal(id) {
   MF.files = MF.files.filter(function (x) { return x.id !== id; });
   if (MF.selId === id) MF.selId = null;
-  if (MF.openId === id) MF.openId = null;
   mfRender();
 }
 /* ---------- (V4.111) ربط سريع بالرحلة من شريط الإجراءات (بلا فتح نموذج التعديل) ---------- */
@@ -33173,7 +33247,6 @@ var _mfInlineDraft = null;
 function mfInlineEdit(id) {
   if (!MF.can.edit) return;
   if (MF.editRowId === id) return;
-  MF.openId = null;
   MF.editRowId = id;
   _mfInlineDraft = JSON.parse(JSON.stringify(mfPayload(mfGet(id))));
   mfRender();
@@ -33252,6 +33325,12 @@ function mfDetail(f) {
     ? '<div class="mf-trip">🔗 مرتبط بالرحلة: ' + mfEsc(f.tripName) +
       '<button class="mf-btn ms-auto" style="font-size:10px;" onclick="event.stopPropagation();mfGoTrip(\'' + mfEsc(f.tripName).replace(/'/g, "\\'") + '\')">فتح الرحلة ⬅</button></div>'
     : '<div class="mf-note bad">✖<div>هذا الملف <b>غير مرتبط بأي رحلة</b> — يظهر التنبيه في شاشة الرحلات أيضاً.</div></div>';
+  // 📅 (V4.113) أسماء أيام المراجعة والسفر والعودة بجوار التاريخ — عرض فقط
+  h += '<table class="mf-mini"><tbody>' +
+    mfKV('تاريخ المراجعة', (f.reviewDate ? (mfL(f.reviewDate) + (mfDowName(f.reviewDate) ? ' — يوم ' + mfDowName(f.reviewDate) : '')) : '—')) +
+    mfKV('تاريخ الذهاب', (f.goDate ? (mfL(f.goDate) + (mfDowName(f.goDate) ? ' — يوم ' + mfDowName(f.goDate) : '')) : '—')) +
+    mfKV('تاريخ العودة', (f.retDate ? (mfL(f.retDate) + (mfDowName(f.retDate) ? ' — يوم ' + mfDowName(f.retDate) : '')) : '—')) +
+    '</tbody></table>';
   h += '<h6>📑 التوجيه المحاسبي (موحّد مع توجيه رسوم غرفة المشرف)</h6>';
   h += '<table class="mf-mini"><thead><tr><th>بند التوجيه</th><th>معتمرين</th><th>مشرفين</th><th>رسوم الغرفة</th><th>ملاحظات</th></tr></thead><tbody>';
   var tp = 0, ts = 0, tv = 0;
@@ -33302,7 +33381,7 @@ function mfDetail(f) {
   }
   if (f.reviewType === 'VIP') {
     h += '<div class="mf-note good">⭐ نوع المراجعة VIP' + (mfStr(f.vipReason) ? ' — ' + mfEsc(f.vipReason) : ' (تلقائي: جمعة/سبت أو أقل من 3 أيام على السفر)') +
-      ' · تُضاف ' + mfL((MF.cfg.vipSurcharge || 100)) + ' ج لرسوم غرفة المعتمر فقط دون المشرف.</div>';
+      ' · رسوم الغرفة الإجمالية للمعتمر ' + mfL(mfFmt((MF.cfg && MF.cfg.vipRoomFee) || 3100)) + ' ج ثابتة من الإعدادات (بدل الرسوم المسجَّلة) — للمعتمر فقط دون المشرف.</div>';
   }
   if (mfReviewed(f)) {
     h += '<div class="mf-note good">🏦 سُحب <b>' + mfL(mfFmt(c.totalRoomFee)) + '</b> من رصيد رسوم الغرفة لشركة ' +
@@ -33528,7 +33607,6 @@ function mfBindTA(id, getList, onPick) {
 }
 
 /* ---------- تخصيص الأعمدة: إظهار/إخفاء + تثبيت + سحب ---------- */
-var MF_colGrpClosed = {};
 // 🗂️ (V4.111) تبويب ثانٍ داخل نافذة تخصيص الأعمدة لنقل عمود من قسم إلى قسم بالسحب والإفلات
 var MF_colWinTab = 'order';
 function mfColWinSetTab(t) {
@@ -33548,41 +33626,24 @@ function mfBuildColWin() {
   body.innerHTML = tabs + (MF_colWinTab === 'sections' ? mfColWinSectionsHtml() : mfColWinOrderHtml());
   if (body.parentNode) body.parentNode.scrollTop = scroll;
 }
+// 🗂️ (V4.113) صار الترتيب هنا عاماً لكل الأعمدة بغضّ النظر عن قسمها — أزرار إظهار/إخفاء
+// القسم كاملاً موجودة فقط في الشاشة الرئيسية (شريط «أقسام الأعمدة» أعلى الجدول) ولم تعد
+// مكرَّرة هنا؛ كل عمود يحمل وسماً صغيراً باسم قسمه الحالي كمعلومة فقط.
 function mfColWinOrderHtml() {
-  var gs = mfColGroups();
-  var h = '';
-  gs.forEach(function (g, gi) {
-    var cols = MF_COLS.filter(function (c) { return c.g === g; });
-    var onCnt = cols.filter(function (c) { return !MF.hidden[c.k]; }).length;
-    var gq = mfEsc(g).replace(/'/g, "\\'");
-    var closed = !!MF_colGrpClosed[g];
-    // 🗂️ (V4.111) رأس القسم: زر واحد بشكل رقاقة يُظهر/يُخفي القسم كاملاً (مثل «بدون قيد»)،
-    // وتحته أسماء أعمدة القسم لتعرف ما يشمله قبل إخفائه.
-    h += '<div class="g"><div class="gh" onclick="if(!event.target.closest(\'.lk\'))mfColGrpToggle(\'' + gq + '\')">' +
-      '<span class="car">' + (closed ? '▸' : '▾') + '</span>' + mfEsc(g) +
-      ' <span style="font-weight:600;color:#94a3b8;font-size:10px;">(' + onCnt + '/' + cols.length + ' ظاهر)</span>' +
-      '<span class="lk"><button type="button" class="mf-grpbtn' + (onCnt ? ' on' : '') +
-      '" title="' + (onCnt ? 'إخفاء' : 'إظهار') + ' كل أعمدة هذا القسم"' +
-      ' onclick="mfToggleGroupCols(\'' + gq + '\')">' + (onCnt ? '👁️ إخفاء القسم' : '🚫 إظهار القسم') + '</button></span></div>';
-    h += '<div style="font-size:9.5px;color:#94a3b8;padding:4px 9px;border-top:1px solid #e2e8f0;line-height:1.7;">' +
-      'يشمل: ' + mfEsc(cols.map(function (c) { return c.l; }).join(' · ')) + '</div>';
-    if (!closed) {
-      cols.forEach(function (c) {
-        var gi2 = -1; MF_COLS.forEach(function (x, ix) { if (x.k === c.k) gi2 = ix; });
-        h += '<div class="ci" draggable="true" data-key="' + c.k + '" ondragstart="mfDragStart(event,\'' + c.k + '\')"' +
-          ' ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)" ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
-          '<span style="color:#94a3b8;font-size:11px;">⠿</span>' +
-          '<input type="checkbox" ' + (MF.hidden[c.k] ? '' : 'checked') + ' onchange="mfSetCol(\'' + c.k + '\',this.checked)">' +
-          '<span class="nm">' + mfEsc(c.l) + '</span>' +
-          '<button type="button" class="pin' + (c.pin ? ' on' : '') + '" title="تثبيت العمود عند التمرير الأفقي" onclick="mfTogglePin(\'' + c.k + '\')">📌</button>' +
-          // ⬆️⬇️ (V4.111) إعادة الترتيب بالأسهم إلى جانب السحب والإفلات
-          '<span class="ar"><button type="button" title="تحريك لأعلى" ' + (gi2 <= 0 ? 'disabled' : '') +
-          ' onclick="mfNudgeCol(\'' + c.k + '\',-1)">▲</button>' +
-          '<button type="button" title="تحريك لأسفل" ' + (gi2 >= MF_COLS.length - 1 ? 'disabled' : '') +
-          ' onclick="mfNudgeCol(\'' + c.k + '\',1)">▼</button></span></div>';
-      });
-    }
-    h += '</div>';
+  var h = '<div style="font-size:9.5px;color:#94a3b8;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;' +
+    'padding:5px 8px;margin-bottom:8px;line-height:1.6;">↕️ ترتيب عام لكل الأعمدة — لإظهار/إخفاء قسم كامل استخدم ' +
+    'أزرار «أقسام الأعمدة» أعلى الجدول بالشاشة الرئيسية.</div>';
+  MF_COLS.forEach(function (c, ci) {
+    h += '<div class="ci" draggable="true" data-key="' + c.k + '" ondragstart="mfDragStart(event,\'' + c.k + '\')"' +
+      ' ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)" ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
+      '<span style="color:#94a3b8;font-size:11px;">⠿</span>' +
+      '<input type="checkbox" ' + (MF.hidden[c.k] ? '' : 'checked') + ' onchange="mfSetCol(\'' + c.k + '\',this.checked)">' +
+      '<span class="nm">' + mfEsc(c.l) + ' <span class="mf-cisec">' + mfEsc(c.g) + '</span></span>' +
+      '<button type="button" class="pin' + (c.pin ? ' on' : '') + '" title="تثبيت العمود عند التمرير الأفقي" onclick="mfTogglePin(\'' + c.k + '\')">📌</button>' +
+      '<span class="ar"><button type="button" title="تحريك لأعلى" ' + (ci <= 0 ? 'disabled' : '') +
+      ' onclick="mfNudgeCol(\'' + c.k + '\',-1)">▲</button>' +
+      '<button type="button" title="تحريك لأسفل" ' + (ci >= MF_COLS.length - 1 ? 'disabled' : '') +
+      ' onclick="mfNudgeCol(\'' + c.k + '\',1)">▼</button></span></div>';
   });
   return h;
 }
@@ -33609,8 +33670,14 @@ function mfColWinSectionsHtml() {
   return h + '</div>';
 }
 var _mfSecDragKey = null;
+// 🛡️ (V4.113) بعض المتصفحات تُطلق mousedown/click على مستند غير متوقَّع أثناء أو مباشرة بعد
+// عملية سحب-وإفلات HTML5 (خصوصاً بعد أن يستبدل mfBuildColWin محتوى النافذة بالكامل أثناء
+// السحب) — وهذا ما كان يجعل مستمع «الضغط خارج النافذة» يُغلقها فوراً بعد أي نقل عمود بين
+// الأقسام. هذا العلم يُسكِت ذلك المستمع طوال أي سحب فعلي ولحظات قليلة بعده.
+var _mfColDragActive = false;
 function mfSecDragStart(e, k) {
   _mfSecDragKey = k;
+  _mfColDragActive = true;
   if (e.currentTarget.classList) e.currentTarget.classList.add('mf-dragging');
   e.dataTransfer.effectAllowed = 'move';
   try { e.dataTransfer.setData('text/plain', k); } catch (x) {}
@@ -33623,7 +33690,10 @@ function mfSecDrop(e, g) {
   if (_mfSecDragKey) mfMoveColToGroup(_mfSecDragKey, g);
   _mfSecDragKey = null;
 }
-function mfSecDragEnd() { document.querySelectorAll('.mf-secover,.mf-dragging').forEach(function (x) { x.classList.remove('mf-secover', 'mf-dragging'); }); }
+function mfSecDragEnd() {
+  document.querySelectorAll('.mf-secover,.mf-dragging').forEach(function (x) { x.classList.remove('mf-secover', 'mf-dragging'); });
+  setTimeout(function () { _mfColDragActive = false; }, 260);
+}
 // ينقل عموداً إلى قسم آخر — يُدرَج في نهاية أعمدة ذلك القسم بترتيب MF_COLS الكلي
 function mfMoveColToGroup(k, targetG) {
   var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
@@ -33638,7 +33708,6 @@ function mfMoveColToGroup(k, targetG) {
   mfRender(); mfBuildColWin();
   _showPopup('تم نقل عمود «' + col.l + '» إلى قسم «' + targetG + '»', 'success');
 }
-function mfColGrpToggle(g) { MF_colGrpClosed[g] = !MF_colGrpClosed[g]; mfBuildColWin(); }
 // تحريك عمود خطوة واحدة أعلى/أسفل بترتيب الأعمدة الكلي
 function mfNudgeCol(k, dir) {
   var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
@@ -33648,7 +33717,6 @@ function mfNudgeCol(k, dir) {
   mfRender(); mfBuildColWin();
 }
 function mfSetCol(k, on) { MF.hidden[k] = !on; mfRender(); mfBuildColWin(); }
-function mfSetGroup(g, on) { MF_COLS.filter(function (c) { return c.g === g; }).forEach(function (c) { MF.hidden[c.k] = !on; }); mfRender(); mfBuildColWin(); }
 function mfTogglePin(k) {
   var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
   if (i < 0) return;
@@ -33673,11 +33741,14 @@ function mfMoveCol(from, to) {
   mfRender(); mfBuildColWin();
 }
 var _mfDragKey = null;
-function mfDragStart(e, k) { _mfDragKey = k; if (e.currentTarget.classList) e.currentTarget.classList.add('mf-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch (x) {} }
+function mfDragStart(e, k) { _mfDragKey = k; _mfColDragActive = true; if (e.currentTarget.classList) e.currentTarget.classList.add('mf-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch (x) {} }
 function mfDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('mf-dragover'); }
 function mfDragLeave(e) { e.currentTarget.classList.remove('mf-dragover'); }
 function mfDrop(e, k) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('mf-dragover'); if (_mfDragKey && _mfDragKey !== k) mfMoveCol(_mfDragKey, k); _mfDragKey = null; }
-function mfDragEnd() { document.querySelectorAll('.mf-dragover,.mf-dragging').forEach(function (x) { x.classList.remove('mf-dragover', 'mf-dragging'); }); }
+function mfDragEnd() {
+  document.querySelectorAll('.mf-dragover,.mf-dragging').forEach(function (x) { x.classList.remove('mf-dragover', 'mf-dragging'); });
+  setTimeout(function () { _mfColDragActive = false; }, 260);
+}
 function mfResetCols() {
   MF.hidden = {};
   MF_COLS.sort(function (a, b) { return MF_COLS_ORDER.indexOf(a.k) - MF_COLS_ORDER.indexOf(b.k); });
@@ -33735,7 +33806,7 @@ function mfCloseColWin() { document.getElementById('mfColWin').classList.remove(
   document.addEventListener('mousedown', function (e) {
     var pop = document.getElementById('mfColFilterPop');
     if (pop && pop.classList.contains('show') && !pop.contains(e.target) && !(e.target.closest && e.target.closest('.mf-thic'))) pop.classList.remove('show');
-    if (_mfColWinOpen) {
+    if (_mfColWinOpen && !_mfColDragActive) {
       var w = document.getElementById('mfColWin');
       if (w && !w.contains(e.target)) mfCloseColWin();
     }
@@ -33785,8 +33856,9 @@ function mfModal(title, body, foot, wide) {
   // 999999 يجعلها تُرسَم فعلياً لكنها مختفية خلف كامل التطبيق (لا خطأ يظهر لأن الكود لم يفشل، فقط
   // غير مرئي). نفس الرقم المستخدم بالفعل لكل نافذة أخرى تُلحَق بـ body مباشرة بهذا التطبيق
   // (globalSearchOverlay وغيرها) — وليس رقماً عشوائياً.
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,24,.5);z-index:2147482000;display:flex;' +
-    'align-items:center;justify-content:center;padding:16px;';
+  // 🌫️ (V4.113) تمويه الخلفية خلف أي نافذة ملفات مراجعة الوزارة — يقلّل التشتت البصري
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,24,.5);backdrop-filter:blur(3px);' +
+    '-webkit-backdrop-filter:blur(3px);z-index:2147482000;display:flex;align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML = '<div class="mf-dlg" style="background:#fff;border-radius:14px;width:min(' + (wide || 880) + 'px,100%);' +
     'max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35);direction:rtl;font-size:13px;">' +
     // 🎨 (V4.111) شريط عنوان بهوية الشاشة يتسع لملخّص الملف (رقم الملف + الرحلة + التواريخ)
@@ -33892,7 +33964,12 @@ function mfFormRender() {
   h += mfFld('رقم القيد (مرجع)', '<input class="form-control form-control-sm" value="' + mfEsc(d.ref) + '" oninput="mfDraftRef(this.value)">' +
     '<div class="mf-hint' + (mfStr(d.ref) ? ' auto' : '') + '">' + (mfStr(d.ref) ? '✅ له رقم قيد ⇒ الملف معتمد تلقائياً' : 'بلا رقم قيد ⇒ يظهر في العرض الافتراضي') + '</div>', 2);
   h += mfFld('فاتورة إلكترونية', '<input class="form-control form-control-sm" value="' + mfEsc(d.eInvoice) + '" oninput="mfDraftSet(\'eInvoice\',this.value)">', 2);
-  h += mfFld('معتمد', '<div class="pt-1"><span class="mf-tog ' + (d.approved ? 'on' : '') + '" onclick="mfDraftSet(\'approved\',!MF._draft.approved);mfFormRender()"></span></div>', 2);
+  // 🔒 (V4.113) اعتماد الملف يدوياً صلاحية فرعية منفصلة — القيد يعتمده تلقائياً بلا حاجة لها
+  var canApproveManually = MF.can.approve || d.approved || mfStr(d.ref);
+  h += mfFld('معتمد', '<div class="pt-1"><span class="mf-tog ' + (d.approved ? 'on' : '') + (canApproveManually ? '' : ' mf-tog-locked') + '"' +
+    ' title="' + (canApproveManually ? '' : 'يحتاج صلاحية اعتماد ملفات مراجعة الوزارة') + '"' +
+    ' onclick="' + (canApproveManually ? 'mfDraftSet(\'approved\',!MF._draft.approved);mfFormRender()' :
+      "_showPopup('لا تملك صلاحية اعتماد ملفات مراجعة الوزارة','error')") + '"></span></div>', 2);
   h += mfFld('وسيلة السفر', mfSel('mfd_travelMode', ['طيران', 'بري', 'بواخر'], d.travelMode, 'mfDraftSet(\'travelMode\',this.value)'), 2);
   h += mfFld('نوع المراجعة', mfSel('mfd_reviewType', ['عادية', 'VIP', 'تجديد باركود'], d.reviewType, 'mfDraftType(this.value)'), 2);
   h += mfFld('الشركة المصرية', mfSel('mfd_company', comps, d.company, 'mfDraftCompany(this.value)'), 3);
@@ -33905,10 +33982,16 @@ function mfFormRender() {
     (mfStr(d.tripName) ? '✅ مرتبط — تُجلب بيانات الرحلة استرشادياً' : 'اتركه فارغاً لملف غير مرتبط برحلة') + '</div>', 4);
   h += mfFld('العميل (العنوان الظاهر)', '<input class="form-control form-control-sm" value="' + mfEsc(d.clientLabel) + '" oninput="mfDraftSet(\'clientLabel\',this.value)" placeholder="يُملأ تلقائياً من بنود العميل">', 4);
   h += mfFld('تاريخ المراجعة', mfDateFld('mfd_reviewDate', d.reviewDate, 'mfDraftReviewDate') +
-    '<div class="mf-hint">الجمعة/السبت ⇒ VIP تلقائياً</div>', 2);
-  h += mfFld('سبب VIP اليدوي', mfSel('mfd_vipReason', ['', 'إجازة رسمية', 'مراجعة بعد الساعة 4 عصراً', 'أخرى'], d.vipReason, 'mfDraftSet(\'vipReason\',this.value)'), 3);
-  h += mfFld('تاريخ الذهاب', mfDateFld('mfd_goDate', d.goDate, 'mfDraftGo'), 2);
-  h += mfFld('تاريخ العودة', mfDateFld('mfd_retDate', d.retDate, 'mfDraftRet'), 2);
+    '<div class="mf-hint">' + (mfDowName(d.reviewDate) ? ('يوم ' + mfDowName(d.reviewDate) + ' — ') : '') + 'الجمعة/السبت ⇒ VIP تلقائياً</div>', 2);
+  // 🏛️ (V4.113) سبب VIP: نص حر + قائمة اقتراحات (datalist) بدل قائمة مغلقة، مع سبب جديد للمراجعة قبل السفر بأقل من 3 أيام
+  h += mfFld('سبب VIP', '<input class="form-control form-control-sm" list="mfVipReasons" value="' + mfEsc(d.vipReason) +
+    '" placeholder="اختر أو اكتب سبباً..." oninput="mfDraftSet(\'vipReason\',this.value)">' +
+    '<datalist id="mfVipReasons"><option value="إجازة رسمية"><option value="مراجعة بعد الساعة 4 عصراً">' +
+    '<option value="المراجعة خلال أقل من 3 أيام من تاريخ السفر"><option value="جمعة أو سبت"><option value="أخرى"></datalist>', 3);
+  h += mfFld('تاريخ الذهاب', mfDateFld('mfd_goDate', d.goDate, 'mfDraftGo') +
+    (mfDowName(d.goDate) ? ('<div class="mf-hint">يوم ' + mfDowName(d.goDate) + '</div>') : ''), 2);
+  h += mfFld('تاريخ العودة', mfDateFld('mfd_retDate', d.retDate, 'mfDraftRet') +
+    (mfDowName(d.retDate) ? ('<div class="mf-hint">يوم ' + mfDowName(d.retDate) + '</div>') : ''), 2);
   h += '</div></div>';
 
   /* ---------- 2) بنود العميل والمعتمرون ---------- */
@@ -33947,7 +34030,7 @@ function mfFormRender() {
     var isAgent = mfStr(s.name) && mfStr(s.name) === mfStr(d.agent);
     h += '<tr><td><input class="form-control form-control-sm" list="mfSupList" value="' + mfEsc(s.name) + '" oninput="mfSupSet(' + i + ',\'name\',this.value)">' +
       (isAgent ? '<div class="mf-hint auto">✅ يطابق الوكيل السعودي ⇒ النوع «استقبال»</div>' : '') + '</td>' +
-      '<td>' + mfSel('', ['مرافق', 'استقبال', 'الوكيل'], s.type, 'mfSupSet(' + i + ',\'type\',this.value)') + '</td>' +
+      '<td>' + mfSel('', ['مرافق', 'استقبال'], s.type, 'mfSupSet(' + i + ',\'type\',this.value)') + '</td>' +
       '<td>' + mfSel('', opts, s.directTo, 'mfSupSet(' + i + ',\'directTo\',this.value)') + '</td>' +
       '<td><button class="mf-btn sm dgr" onclick="mfSupDel(' + i + ')">✕</button></td></tr>';
   });
@@ -33961,8 +34044,12 @@ function mfFormRender() {
   h += '<div class="mf-step' + (cur === 3 ? ' on' : '') + '"><div class="row g-2">';
   h += mfFld('سعر البرنامج (للفرد)', mfNumFld('progPrice', d.progPrice), 2);
   h += mfFld('سعر التذكرة (للفرد)', mfNumFld('ticket', d.ticket) + '<div class="mf-hint">موحّد للرحلة — قابل للتغيير</div>', 2);
-  h += mfFld('رسوم الغرفة (للفرد)', mfNumFld('roomFee', d.roomFee) + '<div class="mf-hint">' +
-    (d.reviewType === 'VIP' ? ('VIP: +' + ((MF.cfg.vipSurcharge) || 100) + ' ج للمعتمر') : 'من الإعدادات حسب التاريخ') + '</div>', 2);
+  // 🏛️ (V4.113) في حالة VIP: رسوم الغرفة إجمالي ثابت من الإعدادات — الحقل يُعرض للقراءة فقط
+  h += mfFld('رسوم الغرفة (للفرد)',
+    (d.reviewType === 'VIP'
+      ? ('<input class="form-control form-control-sm" value="' + mfFmt((MF.cfg.vipRoomFee) || 3100) + '" disabled>' +
+         '<div class="mf-hint auto">VIP: إجمالي ثابت من الإعدادات (بدل الرسوم المسجَّلة)</div>')
+      : (mfNumFld('roomFee', d.roomFee) + '<div class="mf-hint">من الإعدادات حسب التاريخ</div>')), 2);
   h += mfFld('رسوم إدارية (للفرد)', mfNumFld('adminFee', d.adminFee), 2);
   h += mfFld('النسبة %', mfNumFld('pct', d.pct) + '<div class="mf-hint">افتراضي ' + mfDefaultPct(d.pilgrims).toFixed(2) + '% حسب العدد</div>', 2);
   h += mfFld('سعر صرف الريال',
@@ -34145,8 +34232,8 @@ function mfDraftRef(v) {
 function mfDraftAgent(v) { MF._draft.agent = mfStr(v); mfApplyAgentRule(); mfFormValidate(); }
 function mfApplyAgentRule() {
   var d = MF._draft, ag = mfStr(d.agent);
-  if (!ag) return;
-  (d.sups || []).forEach(function (s) { if (mfStr(s.name) && mfStr(s.name) === ag) s.type = 'استقبال'; });
+  if (ag) (d.sups || []).forEach(function (s) { if (mfStr(s.name) && mfStr(s.name) === ag) s.type = 'استقبال'; });
+  d.supCount = mfMurafiqCount(d.sups);
 }
 function mfDraftTrip(v) {
   var d = MF._draft;
@@ -34204,14 +34291,17 @@ function mfBdSet(i, k, v) {
   if (k === 'count' || k === 'sups') mfSyncCounts();
   mfFormValidate();
 }
-function mfSupAdd() { MF._draft.sups = MF._draft.sups || []; MF._draft.sups.push({ name: '', type: 'مرافق', directTo: '' }); MF._draft.supCount = MF._draft.sups.length; mfFormRender(); }
-function mfSupDel(i) { MF._draft.sups.splice(i, 1); MF._draft.supCount = MF._draft.sups.length; mfFormRender(); }
+// 🧑‍✈️ (V4.113) عدد المشرفين المُعتَد به = «مرافق» فقط — «استقبال» (مشرف فعلي أو الوكيل نفسه) صفر
+function mfMurafiqCount(sups) {
+  return (sups || []).filter(function (s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+}
+function mfSupAdd() { MF._draft.sups = MF._draft.sups || []; MF._draft.sups.push({ name: '', type: 'مرافق', directTo: '' }); MF._draft.supCount = mfMurafiqCount(MF._draft.sups); mfFormRender(); }
+function mfSupDel(i) { MF._draft.sups.splice(i, 1); MF._draft.supCount = mfMurafiqCount(MF._draft.sups); mfFormRender(); }
 function mfSupSet(i, k, v) {
   MF._draft.sups[i][k] = mfStr(v);
-  MF._draft.supCount = MF._draft.sups.length;
   // لا نُعيد رسم النموذج أثناء الكتابة (يفقد التركيز) — القاعدة تُطبَّق على البيانات فوراً
   // وتظهر بصرياً عند أول إعادة رسم أو عند الحفظ.
-  if (k === 'name') mfApplyAgentRule();
+  mfApplyAgentRule();   // يُعيد أيضاً حساب عدد المشرفين (مرافق فقط)
   mfFormValidate();
 }
 function mfSyncCounts() {
@@ -34227,6 +34317,7 @@ function mfFormValidate() {
   // حد المشرف المرافق 50 معتمر إجمالاً على الملفات المتطابقة في تاريخي السفر والعودة
   (d.sups || []).forEach(function (s) {
     if (String(s.type || '').indexOf('مرافق') < 0 || !mfStr(s.name)) return;
+    if (mfStr(d.agent) && mfStr(s.name) === mfStr(d.agent)) return;   // الوكيل = لا يوجد مشرف أصلاً
     var tot = mfNum(d.pilgrims);
     MF.files.forEach(function (o) {
       if (o.id === d.id) return;
@@ -34422,7 +34513,7 @@ function mfSupEdit(name) {
   var comps = (MF.companies || []).map(function (c) { return c.company; });
   var h = '<div class="row g-2">' +
     mfFld('اسم المشرف', '<input class="form-control form-control-sm" id="mfsu_name" value="' + mfEsc(s ? s.name : '') + '">', 6) +
-    mfFld('النوع', mfSel('mfsu_type', ['مرافق', 'استقبال', 'الوكيل'], s ? s.type : 'مرافق', ''), 6) +
+    mfFld('النوع', mfSel('mfsu_type', ['مرافق', 'استقبال'], s ? s.type : 'مرافق', ''), 6) +
     mfFld('الشركة الأساسية', mfSel('mfsu_home', [''].concat(comps).concat(['الكل']), s ? s.home : '', ''), 6) +
     mfFld('رقم الجوال', '<input class="form-control form-control-sm" id="mfsu_mobile" value="' + mfEsc(s ? s.mobile : '') + '">', 6) +
     '<div class="col-12"><label style="font-size:9.5px;font-weight:800;color:#94a3b8;">مشاركة في شركات أخرى</label><div class="d-flex gap-3 flex-wrap">' +
@@ -34593,7 +34684,7 @@ function mfRecTab(t) {
     return true;
   });
   var h = '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">🔽 اضغط أيقونة التصفية في رأس أي عمود — يظهر حقل الإدخال أسفل رأس العمود داخل الجدول مباشرةً، وصف الإجماليات يتغيّر مع الفلاتر.</div>';
-  h += '<div style="max-height:330px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;">' +
+  h += '<div class="mf-scrollbox" style="max-height:330px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;">' +
     '<table class="mf-mini" style="background:#fff;"><thead><tr>';
   MF_REC_COLS.forEach(function (c) {
     h += '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;"><span style="display:flex;align-items:center;gap:4px;">' +
@@ -35004,7 +35095,7 @@ function mfLedgerRender() {
       var h = '<div class="d-flex gap-2 align-items-end mb-2">' +
         '<div class="mf-fld"><label>الشركة</label>' + mfSel('mfLedComp', comps, MF._ledComp || 'كل الشركات', 'MF._ledComp=this.value;mfLedgerRender()') + '</div></div>' +
         '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">كشف زمني: الإيداعات (+) والمسحوب للملفات التي سُجِّل لها تاريخ مراجعة (−) مع الرصيد بعد كل حركة.</div>' +
-        '<div style="max-height:330px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;">' +
+        '<div class="mf-scrollbox" style="max-height:330px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;">' +
         '<table class="mf-mini" style="background:#fff;"><thead><tr>' +
         ['التاريخ', 'الشركة', 'البيان', 'إيداع', 'سحب', 'الرصيد بعد الحركة'].map(function (t) {
           return '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;">' + t + '</th>';
@@ -35114,6 +35205,9 @@ function mfPrintFragment(elId, title) {
     'table{width:100%;border-collapse:collapse;font-size:11px;} th,td{border:1px solid #cbd5e1;padding:4px 6px;text-align:center;}' +
     'thead th{background:#1e3d59 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
     'tfoot td{background:#e2e8f0 !important;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    // 🖨️ (V4.113) الصندوق القابل للتمرير على الشاشة (مثل جدول إيصالات رسوم الغرفة) يُطبَع كاملاً
+    // بلا شريط تمرير ولا قصّ للارتفاع — كان يُطبَع بارتفاعه المحدود على الشاشة فقط
+    '.mf-scrollbox{max-height:none !important;overflow:visible !important;}' +
     'button{display:none;} @page{size:A4;margin:10mm;}</style></head><body><div class="t">' + title + '</div>' +
     el.innerHTML + '</body></html>');
   w.document.close();
@@ -35126,6 +35220,7 @@ function mfImageFragment(elId, title, btn) {
       'body{font-family:"Cairo",Tahoma,sans-serif;padding:10mm;background:#fff;} .t{font-size:16px;font-weight:900;color:#1e3d59;margin-bottom:8px;}' +
       'table{width:100%;border-collapse:collapse;font-size:11px;} th,td{border:1px solid #cbd5e1;padding:4px 6px;text-align:center;}' +
       'thead th{background:#1e3d59;color:#fff;} tfoot td{background:#e2e8f0;font-weight:900;} button{display:none;}' +
+      '.mf-scrollbox{max-height:none !important;overflow:visible !important;}' +
       '@media screen{ body{min-width:1100px;} }</style></head><body><div id="rptRoot"><div class="t">' + title + '</div>' +
       el.innerHTML + '</div></body></html>';
   };

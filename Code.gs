@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.112";
+var APP_VERSION = "4.113";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12941,8 +12941,9 @@ function getAllClientsSummary(authToken) {
 // ---------- إعدادات التسعير (رسوم الغرف بفترات + ثوابت) ----------
 function _accPricing_() {
   // ملاحظة: أسعار التذاكر ليست تسعيرًا عامًا — تُدخل داخل بنود كل رحلة على حدة (بطلب صريح)
-  // 🏛️ (V4.106) barcodePeriods = رسوم تجديد الباركود بفترات صلاحية · vipSurcharge = زيادة رسوم غرفة المعتمر في VIP
-  var d = { roomFeePeriods: [], supRoomFee: 200, barcodePeriods: [], vipSurcharge: 100 };
+  // 🏛️ (V4.106) barcodePeriods = رسوم تجديد الباركود بفترات صلاحية · vipSurcharge = زيادة رسوم غرفة المعتمر في VIP (قديم)
+  // 🏛️ (V4.113) vipRoomFee = إجمالي رسوم غرفة المعتمر الثابت عند المراجعة VIP (بدل روم فى + الزيادة)
+  var d = { roomFeePeriods: [], supRoomFee: 200, barcodePeriods: [], vipSurcharge: 100, vipRoomFee: 3100 };
   try {
     var raw = PropertiesService.getScriptProperties().getProperty('ACC_PRICING');
     if (!raw) return d;
@@ -12951,6 +12952,7 @@ function _accPricing_() {
     if (!Array.isArray(c.barcodePeriods)) c.barcodePeriods = [];
     if (c.supRoomFee === undefined) c.supRoomFee = d.supRoomFee;
     if (c.vipSurcharge === undefined) c.vipSurcharge = d.vipSurcharge;
+    if (c.vipRoomFee === undefined) c.vipRoomFee = d.vipRoomFee;
     return c;
   } catch (e) { return d; }
 }
@@ -12966,7 +12968,8 @@ function saveAccPricing(authToken, cfg) {
     roomFeePeriods: [],
     supRoomFee: _accNum_(cfg && cfg.supRoomFee) || 200,
     barcodePeriods: [],
-    vipSurcharge: (cfg && cfg.vipSurcharge !== undefined) ? _accNum_(cfg.vipSurcharge) : 100
+    vipSurcharge: (cfg && cfg.vipSurcharge !== undefined) ? _accNum_(cfg.vipSurcharge) : 100,
+    vipRoomFee: (cfg && cfg.vipRoomFee !== undefined) ? (_accNum_(cfg.vipRoomFee) || 3100) : 3100
   };
   ((cfg && cfg.roomFeePeriods) || []).forEach(function(p) {
     var from = String(p.from || '').trim(), to = String(p.to || '').trim();
@@ -19563,14 +19566,18 @@ function _mfBarcodeFeeAt_(dateStr) {
 ------------------------------------------------------------------- */
 function _mfCompute_(f, cfg) {
   cfg = cfg || _accPricing_();
-  var N = _mfNum_(f.pilgrims), O = _mfNum_(f.supCount);
-  var heads = N + O;
-  var vipAdd = (f.reviewType === 'VIP') ? (_mfNum_(cfg.vipSurcharge) || 100) : 0;
-  var S = _mfNum_(f.roomFee) + vipAdd;                       // رسوم غرفة المعتمر (VIP تزيد للمعتمر فقط)
-  var supFee = _mfNum_(cfg.supRoomFee) || 200;
+  var N = _mfNum_(f.pilgrims);
   var sups = Array.isArray(f.sups) ? f.sups : [];
-  // المشرف «مرافق» فقط له رسوم غرفة — استقبال والوكيل بدون رسوم غرفة ولا مخالصة
+  // 🧑‍✈️ (V4.113) المشرف «مرافق» فقط يُحتسب ضمن عدد المشرفين وله رسوم غرفة — «استقبال» (سواء
+  // مشرف فعلي أو الوكيل السعودي نفسه) لا يُحسب أصلاً: لا رسوم غرفة ولا مخالصة ولا يدخل ضمن الأعداد.
   var murafiq = sups.filter(function(s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+  var O = murafiq;
+  var heads = N + O;
+  // 🏛️ (V4.113) رسوم غرفة المراجعة VIP إجمالي ثابت للفرد (من الإعدادات — افتراضياً 3,100 ج)،
+  // وليست رسوم الغرفة المسجَّلة + 100 ج كما كان سابقاً. لا تُطبَّق إطلاقاً على تجديد الباركود
+  // (نوعا المراجعة متنافيان أصلاً).
+  var S = (f.reviewType === 'VIP') ? (_mfNum_(cfg.vipRoomFee) || 3100) : _mfNum_(f.roomFee);
+  var supFee = _mfNum_(cfg.supRoomFee) || 200;
   var R = _mfNum_(f.ticket), T = _mfNum_(f.adminFee), V = _mfNum_(f.fxRate);
   var AC = _mfNum_(f.pct) / 100;
   var barcode = (f.reviewType === 'تجديد باركود') ? _mfBarcodeFeeAt_(f.reviewDate) * N : 0;
@@ -19618,9 +19625,14 @@ function _mfRules_(f, allFiles, balances) {
   var reviewed = !!_mfStr_(f.reviewDate);
   var hasFileNo = !!_mfStr_(f.fileNo);
 
+  // 🧑‍✈️ (V4.113) المشرف الذي يطابق اسمه الوكيل السعودي = لا يوجد مشرف أصلاً — لا تُطبَّق عليه
+  // أي قاعدة من قواعد المشرفين إطلاقاً (لا حد الـ50 ولا شرط عودة الاستقبال).
+  var agentName = _mfStr_(f.agent);
+
   // 1) حد المشرف المرافق: 50 معتمر إجمالاً على الملفات المتطابقة في تاريخي السفر والعودة
   sups.forEach(function(s) {
     if (String(s.type || '').indexOf('مرافق') < 0) return;
+    if (agentName && _mfStr_(s.name) === agentName) return;
     var total = 0;
     (allFiles || []).forEach(function(o) {
       if (o.id === f.id) return;
@@ -19637,6 +19649,7 @@ function _mfRules_(f, allFiles, balances) {
   // 2) مشرف الاستقبال: تاريخ سفر الملف يجب أن يكون في يوم عودته من رحلته الحالية أو بعده
   sups.forEach(function(s) {
     if (String(s.type || '').indexOf('استقبال') < 0) return;
+    if (agentName && _mfStr_(s.name) === agentName) return;
     var busy = _mfStr_(s.busyTo);
     if (!busy) return;
     var g = _mfMs_(_mfStr_(f.goDate)), b = _mfMs_(busy);
@@ -20009,7 +20022,8 @@ function getMinistryBootstrap(authToken) {
   out.can = {
     add: _sessionHasPerm_(session, 'ministry.add'),
     edit: _sessionHasPerm_(session, 'ministry.edit'),
-    del: _sessionHasPerm_(session, 'ministry.delete')
+    del: _sessionHasPerm_(session, 'ministry.delete'),
+    approve: _sessionHasPerm_(session, 'ministry.approve')
   };
   return out;
 }
@@ -20125,7 +20139,7 @@ function saveMinistryFile(authToken, data) {
       clientLabel: _mfStr_(data.clientLabel) || bd.map(function(b) { return b.name; }).join(' + '),
       breakdown: bd, tripName: _mfStr_(data.tripName),
       goDate: _mfDate_(data.goDate), retDate: _mfDate_(data.retDate),
-      pilgrims: pilg, supCount: (data.supCount === undefined ? sups.length : _mfNum_(data.supCount)),
+      pilgrims: pilg, supCount: 0,   // 🧑‍✈️ (V4.113) يُحتسب أدناه بعد تطبيق قاعدة الوكيل ⇒ استقبال (مرافق فقط يُحتسب)
       sups: sups,
       progPrice: _mfNum_(data.progPrice), ticket: _mfNum_(data.ticket),
       roomFee: _mfNum_(data.roomFee) || _mfNum_(_accRoomFeeAt_(_mfDate_(data.reviewDate) || _mfToday_())),
@@ -20146,15 +20160,24 @@ function saveMinistryFile(authToken, data) {
     // 🧾 (V4.111) الملف الذي له رقم قيد مسجَّل يُعتبر معتمداً تلقائياً
     if (_mfStr_(f.ref)) f.approved = true;
     // 🧑‍✈️ (V4.111) المشرف الذي يطابق اسمه الوكيل السعودي نوعه «استقبال» تلقائياً
-    if (_mfStr_(f.agent)) {
+    var agentNm = _mfStr_(f.agent);
+    if (agentNm) {
       f.sups.forEach(function(s) {
-        if (_mfStr_(s.name) && _mfStr_(s.name) === _mfStr_(f.agent)) s.type = 'استقبال';
+        if (_mfStr_(s.name) && _mfStr_(s.name) === agentNm) s.type = 'استقبال';
       });
     }
-    // شركة النقل الافتراضية: اسم الوكيل، و«بدون» لو نوع المشرف = الوكيل
+    // 🧑‍✈️ (V4.113) «عدد المشرفين» يعكس فقط من نوعه «مرافق» — «استقبال» (مشرف فعلي أو الوكيل نفسه)
+    // لا يُحسب ضمن العدد، ولا رسوم غرفة له ولا مخالصة (نفس منطق _mfCompute_)
+    f.supCount = f.sups.filter(function(s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+    // شركة النقل الافتراضية: اسم الوكيل، و«بدون» لو المشرف هو الوكيل نفسه (لا يوجد مشرف حقيقي أصلاً)
     if (!f.transport) {
-      var isAgentSup = sups.some(function(s) { return s.type.indexOf('الوكيل') >= 0; });
+      var isAgentSup = agentNm && f.sups.some(function(s) { return _mfStr_(s.name) === agentNm; });
       f.transport = isAgentSup ? 'بدون' : f.agent;
+    }
+    // 🔒 (V4.113) اعتماد الملف يدوياً صلاحية فرعية منفصلة عن التعديل — الاعتماد التلقائي بسبب رقم
+    // القيد (أعلاه) يبقى مسموحاً دائماً بلا هذه الصلاحية.
+    if (data.approved && !_mfStr_(f.ref) && !(old && old.approved) && !_sessionHasPerm_(session, 'ministry.approve')) {
+      f.approved = false;
     }
 
     var row = _mfObjToRow_(f);
