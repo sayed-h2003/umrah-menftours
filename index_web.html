@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.111 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.112 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.111)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.112)', diag);
 }, 6000);
 </script>
 
@@ -1491,7 +1491,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.111</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.112</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4594,8 +4594,11 @@ input[type="date"]:not(:focus):not(:valid) {
 
   /* نافذة تخصيص الأعمدة العائمة */
   #mfColWin{ position:fixed; z-index:2147482500; width:330px; max-width:94vw; background:#fff; border:1px solid #cbd5e1;
-    border-radius:12px; box-shadow:0 18px 50px rgba(15,23,42,.28); display:none; flex-direction:column; max-height:76vh; }
+    border-radius:12px; box-shadow:0 18px 50px rgba(15,23,42,.28); display:none; flex-direction:column; max-height:76vh;
+    transition:width .15s ease; }
   #mfColWin.show{ display:flex; }
+  /* 🗂️ (V4.111) تبويب نقل الأعمدة بين الأقسام يحتاج مساحة أفقية أكبر لعرض بطاقات الأقسام جنباً لجنب */
+  #mfColWin.wide{ width:660px; }
   #mfColWin .h{ padding:10px 13px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; gap:7px;
     cursor:move; background:#eef1f6; border-radius:11px 11px 0 0; user-select:none; }
   #mfColWin .h b{ font-size:12.5px; }
@@ -4714,6 +4717,25 @@ input[type="date"]:not(:focus):not(:valid) {
   #mfColWin .ci .ar button:hover{ background:var(--mfBlueSoft); color:var(--mfBlue); border-color:var(--mfBlue); }
   #mfColWin .ci .ar button[disabled]{ opacity:.3; cursor:not-allowed; }
   #mfColWin .gh .car{ font-size:9px; color:var(--mfMuted); }
+  /* تبويبا نافذة تخصيص الأعمدة: الترتيب/التثبيت مقابل نقل الأعمدة بين الأقسام */
+  #mfColWin .mf-cwtabs{ display:flex; border:1px solid #e2e8f0; border-radius:9px; overflow:hidden; margin-bottom:9px; }
+  #mfColWin .mf-cwtabs button{ flex:1; border:none; background:#fff; font-family:inherit; font-size:11px; font-weight:800;
+    padding:7px 6px; cursor:pointer; color:var(--mfMuted); border-inline-start:1px solid #e2e8f0; }
+  #mfColWin .mf-cwtabs button:first-child{ border-inline-start:none; }
+  #mfColWin .mf-cwtabs button.on{ background:var(--mfNavy); color:#fff; }
+  /* لوحة الأقسام (كانبان) — بطاقة لكل قسم، رقاقات الأعمدة تُسحب من بطاقة لأخرى */
+  #mfColWin .mf-secboard{ display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; }
+  #mfColWin .mf-seccard{ border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; padding:7px; min-height:64px;
+    transition:background .12s,box-shadow .12s; }
+  #mfColWin .mf-seccard.mf-secover{ background:var(--mfBlueSoft); box-shadow:inset 0 0 0 2px var(--mfBlue); }
+  #mfColWin .mf-sechd{ font-size:10.5px; font-weight:800; color:var(--mfNavy); margin-bottom:6px; }
+  #mfColWin .mf-sechd span{ font-weight:600; color:#94a3b8; }
+  #mfColWin .mf-secbody{ display:flex; flex-wrap:wrap; gap:5px; min-height:22px; }
+  #mfColWin .mf-secchip{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:700;
+    background:#fff; border:1px solid #cbd5e1; border-radius:99px; padding:3px 9px 3px 7px; cursor:grab; color:var(--mfText); }
+  #mfColWin .mf-secchip:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
+  #mfColWin .mf-secchip.mf-dragging{ opacity:.4; }
+  #mfColWin .mf-secchip .gr{ color:#94a3b8; font-size:10px; }
   /* زر إظهار/إخفاء القسم كاملاً — بنفس شكل رقاقات الفلاتر بالشاشة الرئيسية */
   #mfColWin .mf-grpbtn{ font-size:10px; font-weight:800; border:1px solid var(--mfBorderS); border-radius:99px;
     padding:2px 10px; background:#fff; color:var(--mfMuted); cursor:pointer; white-space:nowrap; font-family:inherit; }
@@ -6318,7 +6340,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.111";
+var CLIENT_APP_VERSION = "4.112";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -33507,10 +33529,26 @@ function mfBindTA(id, getList, onPick) {
 
 /* ---------- تخصيص الأعمدة: إظهار/إخفاء + تثبيت + سحب ---------- */
 var MF_colGrpClosed = {};
+// 🗂️ (V4.111) تبويب ثانٍ داخل نافذة تخصيص الأعمدة لنقل عمود من قسم إلى قسم بالسحب والإفلات
+var MF_colWinTab = 'order';
+function mfColWinSetTab(t) {
+  MF_colWinTab = t;
+  var w = document.getElementById('mfColWin');
+  if (w) w.classList.toggle('wide', t === 'sections');
+  mfBuildColWin();
+}
 function mfBuildColWin() {
   var body = document.getElementById('mfColWinBody');
   if (!body) return;
   var scroll = body.parentNode ? body.parentNode.scrollTop : 0;   // لا يقفز المكان عند كل تعديل
+  var tabs = '<div class="mf-cwtabs">' +
+    '<button type="button" class="' + (MF_colWinTab === 'order' ? 'on' : '') + '" onclick="mfColWinSetTab(\'order\')">↕️ الترتيب والتثبيت</button>' +
+    '<button type="button" class="' + (MF_colWinTab === 'sections' ? 'on' : '') + '" onclick="mfColWinSetTab(\'sections\')">🗂️ نقل الأعمدة بين الأقسام</button>' +
+    '</div>';
+  body.innerHTML = tabs + (MF_colWinTab === 'sections' ? mfColWinSectionsHtml() : mfColWinOrderHtml());
+  if (body.parentNode) body.parentNode.scrollTop = scroll;
+}
+function mfColWinOrderHtml() {
   var gs = mfColGroups();
   var h = '';
   gs.forEach(function (g, gi) {
@@ -33546,8 +33584,59 @@ function mfBuildColWin() {
     }
     h += '</div>';
   });
-  body.innerHTML = h;
-  if (body.parentNode) body.parentNode.scrollTop = scroll;
+  return h;
+}
+/* 🗂️ (V4.111) لوحة نقل الأعمدة بين الأقسام — بطاقة لكل قسم تحتوي رقاقات الأعمدة، واسحب
+   رقاقة من بطاقة إلى أخرى لنقل هذا العمود إلى القسم الجديد (وليس فقط إعادة ترتيبه). */
+function mfColWinSectionsHtml() {
+  var gs = mfColGroups();
+  var h = '<div style="font-size:10px;color:#5c6b83;background:#eef1f6;border-radius:8px;padding:6px 9px;margin-bottom:8px;line-height:1.6;">' +
+    '🖐️ اسحب أي عمود من بطاقة قسم إلى بطاقة قسم آخر لنقله إليه. عمود «⚙» إجراءات الصف ثابت في «بيانات الملف» ولا يُنقل.</div>';
+  h += '<div class="mf-secboard">';
+  gs.forEach(function (g) {
+    var cols = MF_COLS.filter(function (c) { return c.g === g && c.k !== 'act'; });
+    var gq = mfEsc(g).replace(/'/g, "\\'");
+    h += '<div class="mf-seccard" data-g="' + gq + '" ondragover="mfSecDragOver(event)" ondragleave="mfSecDragLeave(event)" ondrop="mfSecDrop(event,\'' + gq + '\')">' +
+      '<div class="mf-sechd">' + mfEsc(g) + ' <span>(' + cols.length + ')</span></div><div class="mf-secbody">';
+    cols.forEach(function (c) {
+      h += '<span class="mf-secchip" draggable="true" data-key="' + c.k + '"' +
+        ' ondragstart="mfSecDragStart(event,\'' + c.k + '\')" ondragend="mfSecDragEnd(event)">' +
+        '<span class="gr">⠿</span>' + mfEsc(c.l) + '</span>';
+    });
+    if (!cols.length) h += '<span style="font-size:10px;color:#94a3b8;">اسحب عموداً هنا</span>';
+    h += '</div></div>';
+  });
+  return h + '</div>';
+}
+var _mfSecDragKey = null;
+function mfSecDragStart(e, k) {
+  _mfSecDragKey = k;
+  if (e.currentTarget.classList) e.currentTarget.classList.add('mf-dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', k); } catch (x) {}
+}
+function mfSecDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('mf-secover'); }
+function mfSecDragLeave(e) { e.currentTarget.classList.remove('mf-secover'); }
+function mfSecDrop(e, g) {
+  e.preventDefault(); e.stopPropagation();
+  e.currentTarget.classList.remove('mf-secover');
+  if (_mfSecDragKey) mfMoveColToGroup(_mfSecDragKey, g);
+  _mfSecDragKey = null;
+}
+function mfSecDragEnd() { document.querySelectorAll('.mf-secover,.mf-dragging').forEach(function (x) { x.classList.remove('mf-secover', 'mf-dragging'); }); }
+// ينقل عموداً إلى قسم آخر — يُدرَج في نهاية أعمدة ذلك القسم بترتيب MF_COLS الكلي
+function mfMoveColToGroup(k, targetG) {
+  var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
+  if (i < 0) return;
+  var col = MF_COLS[i];
+  if (col.g === targetG) return;
+  MF_COLS.splice(i, 1);
+  var last = -1;
+  MF_COLS.forEach(function (c, ix) { if (c.g === targetG) last = ix; });
+  col.g = targetG;
+  MF_COLS.splice(last < 0 ? MF_COLS.length : last + 1, 0, col);
+  mfRender(); mfBuildColWin();
+  _showPopup('تم نقل عمود «' + col.l + '» إلى قسم «' + targetG + '»', 'success');
 }
 function mfColGrpToggle(g) { MF_colGrpClosed[g] = !MF_colGrpClosed[g]; mfBuildColWin(); }
 // تحريك عمود خطوة واحدة أعلى/أسفل بترتيب الأعمدة الكلي
