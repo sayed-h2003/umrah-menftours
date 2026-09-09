@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.114 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.115 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.114)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.115)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.114</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.115</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4488,10 +4488,9 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry table.mf-tab th, #section-ministry table.mf-tab td{ border-bottom:1px solid var(--mfBorder);
     border-inline-start:1px solid var(--mfBorder); text-align:center; white-space:nowrap; }
   #section-ministry table.mf-tab td{ padding:5px 8px; max-width:200px; overflow:hidden; text-overflow:ellipsis; }
-  #section-ministry table.mf-tab thead tr.mf-grp th{ background:var(--mfNavyD); color:#dce8fb; font-size:10px;
-    font-weight:800; position:sticky; top:0; z-index:12; padding:3px 7px; border-inline-start:2px solid rgba(255,255,255,.13); }
+  /* 🧷 (V4.115) لم يعد هناك صف أقسام أعلى الجدول — صف رؤوس الأعمدة نفسه هو المثبَّت عند top:0 */
   #section-ministry table.mf-tab thead tr.mf-cols th{ background:var(--mfNavy); color:#fff; font-size:10.5px;
-    font-weight:700; position:sticky; top:22px; z-index:11; padding:4px 5px; cursor:grab; }
+    font-weight:700; position:sticky; top:0; z-index:11; padding:4px 5px; cursor:grab; }
   #section-ministry table.mf-tab thead tr.mf-cols th.mf-dragover{ background:var(--mfBlue); box-shadow:inset 3px 0 0 #fff; }
   /* ↔️ (V4.114) مقبض تغيير عرض العمود بالماوس — على حافة نهاية كل رأس عمود */
   #section-ministry table.mf-tab thead tr.mf-cols th{ position:relative; }
@@ -4507,7 +4506,6 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry .mf-thic.on, .mf-dlg .mf-thic.on{ color:#ffd77a; }
   #section-ministry th.mf-fz, #section-ministry td.mf-fz{ position:sticky; z-index:8; }
   #section-ministry thead th.mf-fz{ z-index:15; }
-  #section-ministry thead tr.mf-grp th.mf-fz{ z-index:16; }
   #section-ministry .mf-edge{ box-shadow:-7px 0 8px -7px rgba(0,0,0,.28); }
   #section-ministry tbody tr.mf-row{ background:var(--mfSurf); }
   #section-ministry tbody tr.mf-row td.mf-fz{ background:var(--mfSurf); }
@@ -6377,7 +6375,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.114";
+var CLIENT_APP_VERSION = "4.115";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -9258,11 +9256,18 @@ function _registryTripChips(r) {
     }
   } catch (e) {}
   if (!(r.trips || []).length) return '<span class="badge bg-danger">🚷 بدون رحلة</span>' + mf;
+  // 🔗 (V4.115) لكل رحلة: اسمها ورقمها المرجعي + رقم الإشعار المرتبط — بجوارها ملفات الوزارة أدناه
   return r.trips.map(function(t) {
-    var label = escapeHtml_(t.name) + (t.depart ? ' <span style="opacity:.75;">(' + escapeHtml_(t.depart) + ')</span>' : '');
-    return t.active
+    var label = escapeHtml_(t.name) +
+      (t.tripRef ? ' <span style="opacity:.75;">#' + escapeHtml_(t.tripRef) + '</span>' : '') +
+      (t.depart ? ' <span style="opacity:.75;">(' + escapeHtml_(t.depart) + ')</span>' : '');
+    var bk = t.bookingId
+      ? ' <span class="badge bg-info text-dark mb-1" style="cursor:pointer;" title="فتح الإشعار المرتبط"' +
+        ' onclick="event.stopPropagation();_gsOpenBooking(\'' + escapeHtml_(String(t.bookingId)) + '\')">📄 إشعار #' + escapeHtml_(String(t.bookingId)) + '</span>'
+      : '';
+    return (t.active
       ? '<span class="badge bg-success mb-1" title="الرحلة الجارية الآن">▶ ' + label + '</span>'
-      : '<span class="badge bg-light text-dark border mb-1">' + label + '</span>';
+      : '<span class="badge bg-light text-dark border mb-1">' + label + '</span>') + bk;
   }).join(' ') + mf;
 }
 
@@ -10447,7 +10452,11 @@ function _mfLoadTripLinks_() {
       if (!res || !res.success) return;
       window._mfTripLinks = res.links || {};
       window._mfTripAlerts = res.alerts || [];
+      // 🔗 (V4.115) الربط الثلاثي: اسم الرحلة → {رقم الإشعار، الرقم المرجعي} + عكسه (إشعار → رحلة)
+      window._mfTripInfo = res.tripInfo || {};
+      window._mfBookingTrip = res.byBooking || {};
       if ((window.tripsCache || []).length && typeof _tripsRerender_ === 'function') _tripsRerender_();
+      if (typeof MF !== 'undefined' && MF.loaded && typeof mfRender === 'function') mfRender();
     })
     .withFailureHandler(function () { window._mfTripLinksLoading = false; })
     .getMinistryTripLinks(window.authToken);
@@ -17829,7 +17838,12 @@ function _buildSingleHotelStatsTable_(rooms, title) {
 
 // إحصائية التسكين على مستوى كل فندق جنباً لجنب (لأن التسكين الآن على مستوى المدينة كلها بكل فنادقها) + إجمالي كلي
 function _buildHousingStatsHtml_() {
-  var rooms = window._housingRooms || [];
+  return _buildHousingStatsForRooms_(window._housingRooms || []);
+}
+/* 🏨 (V4.115) نفس ملخّص التسكين لكل فندق + الإجمالي الكلي، لكن لأي مجموعة غرف تُمرَّر —
+   يُستخدم لكشف الرحلة الواحدة وكذلك للتسكين المدموج (فيجمع فنادق الرحلتين معاً بنفس النظام). */
+function _buildHousingStatsForRooms_(rooms) {
+  rooms = rooms || [];
   var byHotel = {};
   var hotelOrder = [];
   rooms.forEach(function(r) {
@@ -18653,7 +18667,11 @@ function _mhRenderCards_() {
   });
   html += '</div>';
 
-  html += '<div class="p-3"><h6 class="fw-bold">📊 إحصائية التسكين المدموج</h6>' + _buildSingleHotelStatsTable_(rooms, '').html + '</div>';
+  // 🏨 (V4.115) ملخّص التسكين لكل فندق مجمَّعاً على مستوى الرحلتين معاً + الإجمالي الكلي —
+  // بنفس نظام ملخّص تسكين الرحلة الواحدة تماماً، لكن على مستوى كل الرحلات المدموجة.
+  html += '<div class="p-3"><h6 class="fw-bold mb-2">📊 ملخص التسكين المدموج — لكل فندق' +
+    (window._mhMeta && window._mhMeta.label ? ' <span class="text-muted small fw-normal">(' + escapeHtml_(window._mhMeta.label) + ')</span>' : '') +
+    '</h6>' + _buildHousingStatsForRooms_(rooms) + '</div>';
   html += '<div class="text-muted small px-3 pb-3">💡 اسحب أي اسم وأفلته على كارت غرفة أخرى لنقله، أو أفلته في مساحة فارغة لفتح غرفة جديدة/إخراجه من التسكين. هذا الترتيب منفصل تمامًا عن تسكين كل رحلة الأصلي.</div>';
   area.innerHTML = html;
   area.ondragover = function(ev) { ev.preventDefault(); };
@@ -18849,7 +18867,8 @@ function _mhPrintableHtml_() {
   rooms.forEach(function(room, roomIdx) {
     var roomLabel = 'غرفة ' + (roomIdx + 1);
     var bedsCount = room.members.filter(function(m){ return !m.noBed; }).length;
-    var hTh = 'border:1px solid #cbd5e1; padding:3px 5px; background-color:#e2e8f0; text-align:center;';
+    // أنماط مضمَّنة أيضاً (بجانب CSS الطباعة) لأن محوّل PDF بجوجل يتجاهل كثيراً من قواعد الكلاسات
+    var hTh = 'border:1px solid #cbd5e1; padding:1.5px 3px; background-color:#e2e8f0; text-align:center; white-space:nowrap;';
     var footerText = (room.hotel ? ('🏨 ' + room.hotel) : 'بلا فندق محدد') + (room.shortage ? (' | 🛏️ سرير فارغ: ' + room.shortageCount) : '');
     var cardHeaderColor = _hotelColor_(room.hotel);
     var shortageBadge = room.shortage ? (' <span style="background-color:#f59e0b; color:#7c2d12; border-radius:3px; padding:1px 5px; font-size:9.5px; font-weight:bold;">⚠️ ناقصة ' + room.shortageCount + ' سرير</span>') : '';
@@ -18861,17 +18880,22 @@ function _mhPrintableHtml_() {
     else if (pHasM && !pHasF) pGenderBadge = ' <span style="background-color:#2563eb; color:#fff; border-radius:3px; padding:1px 5px; font-size:9.5px; font-weight:bold;">رجال</span>';
     else if (pHasF && !pHasM) pGenderBadge = ' <span style="background-color:#0891b2; color:#fff; border-radius:3px; padding:1px 5px; font-size:9.5px; font-weight:bold;">سيدات</span>';
     cardsHtml += '<div class="hcard" style="border:' + (room.shortage ? '2px solid #f59e0b' : '1px solid #94a3b8') + '; border-radius:6px; overflow:hidden;"><div class="hcard-head" style="background-color:' + cardHeaderColor + '; color:#ffffff; padding:4px 8px; font-size:12px; font-weight:bold;">' + roomLabel + pGenderBadge + ' — ' + escapeHtml_(_dynamicRoomType_(room)) + ' (' + bedsCount + ' سرير)' + shortageBadge + '</div>' +
-      '<table style="width:100%; border-collapse:collapse; font-size:10.5px;"><thead><tr><th style="' + hTh + ' width:26px;">م</th><th style="' + hTh + '">الاسم</th><th style="' + hTh + '">النوع</th><th style="' + hTh + '">العميل</th><th style="' + hTh + '">الرحلة</th></tr></thead><tbody>';
+      '<table style="width:100%; border-collapse:collapse; font-size:8.6px; table-layout:fixed;">' +
+      '<colgroup><col class="c-seq" style="width:22px;"><col><col class="c-typ" style="width:40px;">' +
+      '<col class="c-cli" style="width:21%;"><col class="c-trp" style="width:21%;"></colgroup>' +
+      '<thead><tr><th style="' + hTh + '">م</th><th style="' + hTh + '">الاسم</th><th style="' + hTh + '">النوع</th><th style="' + hTh + '">العميل</th><th style="' + hTh + '">الرحلة</th></tr></thead><tbody>';
     var bedSeqPr = 0;
     room.members.forEach(function(m, mi) {
       if (!m.noBed) bedSeqPr++;
-      var cTd = 'border:1px solid #cbd5e1; padding:3px 5px; text-align:center;' + (m.noBed ? ' background-color:#fef9c3;' : '');
+      var cTd = 'border:1px solid #cbd5e1; padding:1.5px 3px; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;' +
+        (m.noBed ? ' background-color:#fef9c3;' : '');
       cardsHtml += '<tr><td style="' + cTd + '">' + (m.noBed ? escapeHtml_(m.type || 'طفل') : bedSeqPr) + '</td>' +
-        '<td style="' + cTd + ' text-align:right;">' + escapeHtml_(m.name) + (m.noBed ? ' (بدون سرير)' : '') + '</td>' +
-        '<td style="' + cTd + '">' + escapeHtml_(m.type) + '</td><td style="' + cTd + ' white-space:nowrap;">' + escapeHtml_(m.client || '-') + '</td>' +
-        '<td style="' + cTd + ' white-space:nowrap;">' + escapeHtml_(m.tripName || '-') + '</td></tr>';
+        '<td style="' + cTd + ' text-align:right;" title="' + escapeHtml_(m.name) + '">' + escapeHtml_(m.name) + (m.noBed ? ' (بدون سرير)' : '') + '</td>' +
+        '<td style="' + cTd + '">' + escapeHtml_(m.type) + '</td>' +
+        '<td style="' + cTd + '" title="' + escapeHtml_(m.client || '-') + '">' + escapeHtml_(m.client || '-') + '</td>' +
+        '<td style="' + cTd + '" title="' + escapeHtml_(m.tripName || '-') + '">' + escapeHtml_(m.tripName || '-') + '</td></tr>';
     });
-    cardsHtml += '</tbody><tfoot><tr><td colspan="5" style="border:1px solid #cbd5e1; padding:3px 5px; font-size:9.5px; background-color:#f8fafc; text-align:center;">' + escapeHtml_(footerText) + '</td></tr></tfoot></table></div>';
+    cardsHtml += '</tbody><tfoot><tr><td colspan="5" style="border:1px solid #cbd5e1; padding:1.5px 3px; font-size:8.4px; background-color:#f8fafc; text-align:center; white-space:nowrap;">' + escapeHtml_(footerText) + '</td></tr></tfoot></table></div>';
   });
 
   var unhoused = window._mhUnhoused || [];
@@ -18893,11 +18917,17 @@ function _mhPrintableHtml_() {
       .title { text-align:center; font-size: 17px; font-weight: 800; margin-bottom: 10px; }
       .cards { display: flex; flex-wrap: wrap; gap: 8px; }
       .hcard { width: calc(50% - 4px); border: 1px solid #94a3b8; border-radius: 6px; overflow: hidden; page-break-inside: avoid; }
-      .hcard-head { background-color:#0F766E; color:white; padding: 4px 8px; font-size: 12px; font-weight: bold; }
-      .hcard table { width:100%; border-collapse: collapse; font-size: 10.5px; }
-      .hcard th, .hcard td { border: 1px solid #cbd5e1; padding: 3px 5px; text-align:center; }
+      .hcard-head { background-color:#0F766E; color:white; padding: 3px 7px; font-size: 11px; font-weight: bold;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* 🖨️ (V4.115) كل صف معتمر داخل الغرفة على سطر واحد فقط بكل الأعمدة (م/الاسم/النوع/العميل/الرحلة)
+         — تخطيط ثابت بأعمدة محدَّدة العرض وخط أصغر بدل التفاف النص، تماماً مثل طباعة تسكين الرحلة. */
+      .hcard table { width:100%; border-collapse: collapse; font-size: 8.6px; table-layout: fixed; }
+      .hcard th, .hcard td { border: 1px solid #cbd5e1; padding: 1.5px 3px; text-align:center;
+        white-space: nowrap !important; overflow: hidden; text-overflow: ellipsis; line-height: 1.45; }
       .hcard th { background-color:#e2e8f0; }
-      .hcard tfoot td { font-size: 9.5px; background-color:#f8fafc; }
+      .hcard col.c-seq { width: 22px; } .hcard col.c-typ { width: 40px; }
+      .hcard col.c-cli { width: 21%; } .hcard col.c-trp { width: 21%; }
+      .hcard tfoot td { font-size: 8.4px; background-color:#f8fafc; white-space: nowrap; }
       .stats-section { margin-top: 14px; page-break-inside: avoid; }
       .stats-section h3 { font-size: 13px; margin: 8px 0 4px; }
       .stats-section table { border-collapse: collapse; font-size: 11px; }
@@ -18913,7 +18943,7 @@ function _mhPrintableHtml_() {
     <div class="title">🏨 تسكين مدموج — ${escapeHtml_(meta.label || '')} (${cityLabel})</div>
     <div class="cards">${cardsHtml}</div>
     ${unhousedHtml}
-    <div class="stats-section"><h3>📊 إحصائية التسكين المدموج</h3>${_buildSingleHotelStatsTable_(rooms, '').html}</div>
+    <div class="stats-section"><h3>📊 ملخص التسكين المدموج — لكل فندق</h3>${_buildHousingStatsForRooms_(rooms)}</div>
     </body></html>`;
 }
 
@@ -26085,8 +26115,12 @@ function _runGlobalSearch() {
     html += _gsHeader_('📖 السجل العام للمعتمرين', rHits.length);
     rHits.forEach(function(r) {
       // 🔎 (V4.111) يعرض للمعتمر كل الرحلات المسجَّل بها + ملفات مراجعة الوزارة الخاصة بها
+      // 🔗 (V4.115) لكل رحلة: الاسم + الرقم المرجعي + رقم الإشعار المرتبط
       var tripsTxt = (r.trips || []).length
-        ? (' • 🧳 ' + (r.trips || []).map(function(t) { return t.name + (t.depart ? ' (' + t.depart + ')' : ''); }).join('، '))
+        ? (' • 🧳 ' + (r.trips || []).map(function(t) {
+            return t.name + (t.tripRef ? ' #' + t.tripRef : '') + (t.depart ? ' (' + t.depart + ')' : '') +
+              (t.bookingId ? ' — 📄 إشعار ' + t.bookingId : '');
+          }).join('، '))
         : (r.client ? ' • ' + r.client : '');
       var mfTxt = _mfFilesForPilgrim_(r).map(function(f) {
         return (f.fileNo ? 'ملف ' + f.fileNo : 'بدون رقم') + (f.reviewed ? ' ✓' : ' ⏳');
@@ -26106,14 +26140,39 @@ function _runGlobalSearch() {
     if (mHits.length) {
       html += _gsHeader_('🏛️ ملفات مراجعة الوزارة', mHits.length);
       mHits.forEach(function(f) {
+        // 🔗 (V4.115) يظهر مع الملف: الرحلة المرتبطة ورقم إشعارها (الربط الثلاثي)
+        var bkNo = (typeof mfBookingNo === 'function') ? mfBookingNo(f) : '';
         html += _gsRow_('🏛️', esc1((f.fileNo ? 'ملف ' + f.fileNo : 'بدون رقم ملف') + ' — ' + (f.clientLabel || '')),
-          esc1(f.company + (f.reviewDate ? ' • رُوجع ' + f.reviewDate : ' • لم تُراجع بعد') + (f.supCount ? ' • ' + mfRaw('supNames', f) : '')),
+          esc1(f.company + (f.reviewDate ? ' • رُوجع ' + f.reviewDate : ' • لم تُراجع بعد') +
+            (f.tripName ? ' • 🧳 ' + f.tripName : '') + (bkNo ? ' • 📄 إشعار ' + bkNo : '') +
+            (f.supCount ? ' • ' + mfRaw('supNames', f) : '')),
           "_gsOpenMinistry('" + escJs(f.id) + "')");
       });
     }
   }
 
   box.innerHTML = html || '<div class="text-muted small text-center p-3">لا توجد نتائج مطابقة لـ«' + esc1(q) + '»</div>';
+}
+/* 🔗 (V4.115) شارات الربط الثلاثي داخل صف الإشعار: اسم الرحلة المرتبطة + أرقام ملفات مراجعة
+   الوزارة لتلك الرحلة (✓ رُوجعت · ⏳ لم تُراجع) — فيكتمل الربط من جهة الإشعار أيضاً. */
+function _bkTripMfChips_(b) {
+  try {
+    var trip = (b && b.tripName) || (window._mfBookingTrip && window._mfBookingTrip[String(b && b.id)]) || '';
+    if (!trip) return '';
+    var out = ' · <span style="cursor:pointer;" title="فتح الرحلة" onclick="event.stopPropagation();' +
+      "if(typeof _gsOpenTrip==='function')_gsOpenTrip('" + escapeHtml_(String(trip)).replace(/'/g, "\\'") + "');" +
+      '">🧳 ' + escapeHtml_(String(trip)) + '</span>';
+    var files = (window._mfTripLinks && window._mfTripLinks[trip]) || [];
+    if (files.length) {
+      out += ' · <span style="cursor:pointer;color:#1e3d59;font-weight:700;" title="فتح ملف مراجعة الوزارة"' +
+        ' onclick="event.stopPropagation();switchPage(\'ministry\');setTimeout(function(){if(typeof mfSelect===\'function\')mfSelect(\'' +
+        files[0].id + '\',true);},400);">🏛️ ' +
+        escapeHtml_(files.map(function (x) { return (x.fileNo || '—') + (x.reviewed ? ' ✓' : ' ⏳'); }).join('، ')) + '</span>';
+    } else {
+      out += ' · <span style="color:#c2670a;">🏛️ بلا ملف وزارة</span>';
+    }
+    return out;
+  } catch (e) { return ''; }
 }
 /* 🏛️ (V4.111) ملفات مراجعة الوزارة الخاصة بمعتمر معيّن — عبر رحلاته المسجَّلة.
    يعتمد window._mfTripLinks (يُحمَّل مع شاشة الرحلات والبحث العام) فيعمل حتى لو لم
@@ -27124,7 +27183,7 @@ function selectBookingRow(id, evt) {
       '<td class="text-start font-weight-bold cell-1line" title="' + (b.agent || '') + '">' + b.agent + '</td>' +
       '<td class="text-start cell-1line" title="' + (b.company || '') + '">' + b.company + '</td>' +
       '<td class="text-start fw-semibold cell-2line" title="' + (b.client || '') + botTitle + ' — مجموعات: ' + (b.groupNumbers || '') + (b.groupName ? ' — 🏷️ ' + b.groupName : '') + '">' +
-        '<span class="line1">' + botBadge + b.client + '</span><span class="line2 text-muted small">مجموعات: ' + b.groupNumbers + (b.groupName ? ' · 🏷️ ' + b.groupName : '') + '</span>' +
+        '<span class="line1">' + botBadge + b.client + '</span><span class="line2 text-muted small">مجموعات: ' + b.groupNumbers + (b.groupName ? ' · 🏷️ ' + b.groupName : '') + _bkTripMfChips_(b) + '</span>' +
       '</td>' +
       '<td class="cell-1line"><span class="badge bg-light text-dark border">' + b.count + '</span></td>' +
       '<td class="text-success fw-bold cell-1line">' + b.arrivalDate + '</td>' +
@@ -27320,6 +27379,8 @@ function selectBookingRow(id, evt) {
   // 🔽↕️ (V4.96) يُعيد رسم الأقسام الثلاثة من الكاش المحمَّل بالفعل (بلا أي طلب شبكة) — يُستدعى عند
   // كل تغيير بالتصفية/الترتيب لعمود، وأيضاً من loadBookingsTable بعد كل تحميل فعلي من السيرفر
   function _bkRenderSections_() {
+    // 🔗 (V4.115) نضمن تحميل خريطة الربط (رحلة ⇄ إشعار ⇄ ملف وزارة) لعرضها داخل صفوف الإشعارات
+    if (!window._mfTripLinks && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_();
     var area = document.getElementById('bookingsSectionsArea');
     var bookings = localBookingsCache || [];
     if (!bookings.length) {
@@ -32600,7 +32661,9 @@ function mfCalc(f) {
   var O = murafiq, heads = N + O;
   // 🏛️ (V4.113) رسوم غرفة VIP إجمالي ثابت للفرد من الإعدادات (افتراضياً 3,100) — وليست الرسوم
   // المسجَّلة + 100 كما كان سابقاً؛ لا تُطبَّق على تجديد الباركود إطلاقاً
-  var S = (f.reviewType === 'VIP') ? (mfNum(cfg.vipRoomFee) || 3100) : mfNum(f.roomFee);
+  // 🏛️ (V4.115) أقل من 4 معتمرين ⇒ رسوم غرفة VIP أيضاً (نفس قاعدة السيرفر تماماً)
+  var vipByCount = (N > 0 && N < 4 && f.reviewType !== 'تجديد باركود');
+  var S = (f.reviewType === 'VIP' || vipByCount) ? (mfNum(cfg.vipRoomFee) || 3100) : mfNum(f.roomFee);
   var supFee = mfNum(cfg.supRoomFee) || 200;
   var R = mfNum(f.ticket), T = mfNum(f.adminFee), V = mfNum(f.fxRate), AC = mfNum(f.pct) / 100;
   var barcode = (f.reviewType === 'تجديد باركود') ? mfBarcodeFee(f.reviewDate) * N : 0;
@@ -32612,7 +32675,7 @@ function mfCalc(f) {
   var Y = U * heads;
   var AA = (Y * V) + W + X + Z + barcode;
   var AB = Q - AA;
-  return { heads: heads, murafiq: murafiq, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode,
+  return { heads: heads, murafiq: murafiq, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode, vipByCount: vipByCount,
     revenue: Q, totalTickets: W, totalRoomFee: X, otherExp: Z, clearanceSAR: U, totalSAR: Y,
     totalExp: Math.round(AA), margin: Math.round(AB), perPersonMargin: N > 0 ? Math.round(AB / N) : 0 };
 }
@@ -32658,6 +32721,22 @@ function mfAutoType(reviewDate, goDate, current) {
 }
 // 📅 (V4.113) اسم يوم الأسبوع بالعربي بجوار أي تاريخ dd/mm/yyyy — عرض فقط
 var MF_DOW_NAMES = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+/* 🔗 (V4.115) رقم الإشعار المرتبط بالرحلة المرتبطة بهذا الملف — يُكمل الربط الثلاثي
+   (الرحلة ⇄ رقم الإشعار ⇄ رقم ملف الوزارة) فتظهر الثلاثة معاً من أي شاشة. */
+function mfBookingNo(f) {
+  var t = mfStr(f && f.tripName);
+  if (!t) return '';
+  var info = (window._mfTripInfo && window._mfTripInfo[t]) || null;
+  if (info && info.bookingId) return String(info.bookingId);
+  // احتياطي: من كاش الرحلات المحمَّل بشاشة الرحلات
+  var tr = (window.tripsCache || []).filter(function (x) { return x.name === t; })[0];
+  return (tr && tr.linkedBookingId) ? String(tr.linkedBookingId) : '';
+}
+function mfTripRef(f) {
+  var t = mfStr(f && f.tripName);
+  var info = (t && window._mfTripInfo && window._mfTripInfo[t]) || null;
+  return info && info.tripRef ? String(info.tripRef) : '';
+}
 function mfDowName(dateStr) {
   var d = mfDate(dateStr);
   var ms = d ? mfMs(d) : NaN;
@@ -32678,9 +32757,10 @@ var MF_COLS = [
   { k: 'clientLabel', g: 'بيانات الملف', l: 'العميل',                 w: 138, txt: 1 },
   { k: 'ref',    g: 'التوجيه المحاسبي',  l: 'رقم القيد',              w: 66,  edit: 'text' },
   { k: 'eInvoice', g: 'التوجيه المحاسبي', l: 'فاتورة إلكترونية',      w: 92,  edit: 'text' },
-  { k: 'accDir', g: 'التوجيه المحاسبي',  l: 'التوجيه المحاسبي',       w: 118, txt: 1 },
   { k: 'company', g: 'الشركة والمراجعة', l: 'الشركة المصرية',         w: 104, txt: 1, edit: 'company' },
   { k: 'agent',  g: 'الشركة والمراجعة',  l: 'الوكيل السعودي',         w: 112, txt: 1, edit: 'text' },
+  // 🔗 (V4.115) رقم الإشعار المرتبط بالرحلة — الربط الثلاثي (رحلة ⇄ إشعار ⇄ ملف وزارة)
+  { k: 'bookingNo', g: 'الشركة والمراجعة', l: 'رقم الإشعار',           w: 78,  calcTxt: 1 },
   { k: 'reviewDate', g: 'الشركة والمراجعة', l: 'تاريخ المراجعة',      w: 84,  edit: 'date' },
   { k: 'reviewType', g: 'الشركة والمراجعة', l: 'نوع المراجعة',        w: 82,  edit: 'sel', opts: ['عادية', 'VIP', 'تجديد باركود'] },
   { k: 'travelMode', g: 'الشركة والمراجعة', l: 'وسيلة السفر',         w: 68,  edit: 'sel', opts: ['طيران', 'بري', 'بواخر'] },
@@ -32733,6 +32813,7 @@ function mfRaw(k, f) {
     case 'supNames': return (f.sups || []).map(function (s) { return s.name; }).filter(String).join('، ') || '—';
     case 'supTypes': return (f.sups || []).map(function (s) { return s.type; }).filter(String).join(' + ') || '—';
     case 'accDir': return (f.breakdown || []).map(function (b) { return b.name; }).filter(String).join(' + ') || (f.clientLabel || '—');
+    case 'bookingNo': return mfBookingNo(f) || '—';
     case 'created': return mfWho(f.createdBy, f.createdAt);
     case 'updated': return mfWho(f.updatedBy, f.updatedAt);
     case 'pct': return f.pct ? (Number(f.pct).toFixed(2) + '%') : '';
@@ -32769,9 +32850,15 @@ function mfCell(col, f) {
     return (mfHasFlag(f, 'SUP50') || mfHasFlag(f, 'RECEP') ? '<span class="mf-badge warn">⚠️</span> ' : '') + mfEsc(nm);
   }
   // 🏛️ (V4.113) VIP: إجمالي ثابت للفرد من الإعدادات — يُعرض بدل الرسوم المسجَّلة
-  if (k === 'roomFee') return (f.reviewType === 'VIP')
-    ? (mfL(mfFmt((MF.cfg && MF.cfg.vipRoomFee) || 3100)) + ' <span class="mf-badge vip">VIP ثابت</span>')
-    : mfL(mfFmt(f.roomFee));
+  if (k === 'roomFee') {
+    var cc = f._c || (f._c = mfCalc(f));
+    if (f.reviewType === 'VIP' || cc.vipByCount) {
+      return mfL(mfFmt((MF.cfg && MF.cfg.vipRoomFee) || 3100)) +
+        ' <span class="mf-badge vip" title="' + (cc.vipByCount && f.reviewType !== 'VIP' ? 'أقل من 4 معتمرين ⇒ سعر VIP' : 'مراجعة VIP') + '">VIP' +
+        (cc.vipByCount && f.reviewType !== 'VIP' ? ' &lt;4' : '') + '</span>';
+    }
+    return mfL(mfFmt(f.roomFee));
+  }
   if (k === 'totalRoomFee') return mfL(mfFmt(c.totalRoomFee)) + (mfHasFlag(f, 'NOBAL') ? ' <span class="mf-badge warn">🏦</span>' : '');
   if (k === 'accDir') return '<span class="mf-badge link">📑</span> ' + mfEsc(mfRaw('accDir', f));
   if (k === 'pct') return f.pct ? mfL(Number(f.pct).toFixed(2) + '%') : '—';
@@ -32802,6 +32889,8 @@ function mfInit() {
   mfAttachDateInputs();
   mfAttachTypeaheads();
   mfWarmPilgrimSearch();
+  // 🔗 (V4.115) خريطة الربط الثلاثي (رحلة ⇄ إشعار ⇄ ملف) — يحتاجها عمود «رقم الإشعار» وبطاقة التفاصيل
+  if (!window._mfTripInfo && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_();
   var ib = document.getElementById('mfImportBtn');
   if (ib) ib.style.display = hasPermission('admin') ? '' : 'none';
 }
@@ -32937,21 +33026,11 @@ function mfRender() {
   var wrap = document.getElementById('mfTableWrap');
   if (!wrap) return;
   var list = mfVisible();
-  var h = '<table class="mf-tab"><thead><tr class="mf-grp">';
-  var i = 0;
-  // 🛡️ (V4.113) عنوان القسم المُدمَج (colspan) كان يُحسب حسب القسم فقط، فلو تثبَّت بعض أعمدة
-  // القسم دون بعضها كانت خلية العنوان الواحدة تحاول أن تلتصق (position:sticky) بإزاحة أول عمود
-  // فقط بينما تغطي أعمدة غير مثبَّتة أيضاً — فتنفصل رؤوس الأقسام عن رؤوس الأعمدة تحتها عند
-  // التمرير الأفقي. الحل: لا تُدمَج خلية العنوان إلا لأعمدة متتالية من نفس القسم **ونفس حالة
-  // التثبيت معاً** — فتبقى كل خلية عنوان متجانسة (كلها مثبَّتة أو كلها غير مثبَّتة).
-  while (i < MF_COLS.length) {
-    var g = MF_COLS[i].g, pinFlag = !!MF_COLS[i].pin, span = 0, j = i;
-    while (j < MF_COLS.length && MF_COLS[j].g === g && !!MF_COLS[j].pin === pinFlag) { span++; j++; }
-    var fr = pinFlag ? ' class="mf-fz' + ((!MF_COLS[j] || !MF_COLS[j].pin) ? ' mf-edge' : '') + '" style="right:' + mfFrozenOffset(i) + 'px"' : '';
-    h += '<th colspan="' + span + '"' + fr + '>' + mfEsc(g) + '</th>';
-    i = j;
-  }
-  h += '</tr><tr class="mf-cols">';
+  // 🧷 (V4.115) أُلغي صف أسماء الأقسام أعلى الجدول (كان يزاحم المساحة ويُربك التثبيت) —
+  // وصار صف رؤوس الأعمدة نفسه هو المثبَّت أعلى الجدول عند التمرير الرأسي.
+  // 🧷 (V4.115) أُلغي صف أسماء الأقسام أعلى الجدول (كان يزاحم المساحة ويُربك التثبيت) —
+  // وصار صف رؤوس الأعمدة الظاهرة نفسه هو المثبَّت أعلى الجدول عند التمرير الرأسي.
+  var h = '<table class="mf-tab"><thead><tr class="mf-cols">';
   MF_COLS.forEach(function (c, ci) {
     // ↔️ (V4.114) عرض صريح لكل عمود (width+min+max) حتى يستجيب فعلاً لسحب مقبض التحجيم في الاتجاهين
     var cw = (c.w || 100);
@@ -32960,12 +33039,13 @@ function mfRender() {
     if (MF.hidden[c.k]) cls += ' mf-hide';
     var si = MF.sort.key === c.k ? (MF.sort.dir > 0 ? '▲' : '▼') : '⇅';
     var ics = c.nof ? '' :
-      '<button class="mf-thic' + (MF.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="mf-thic' + (MF.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">\U0001f53d</button>' +
       '<button class="mf-thic' + (MF.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();mfSort(\'' + c.k + '\')">' + si + '</button>';
     h += '<th class="' + cls + '" style="' + st + '" draggable="true" data-key="' + c.k + '"' +
+      ' title="' + mfEsc(c.g) + ' · ' + mfEsc(c.l) + '"' +
       ' ondragstart="mfDragStart(event,\'' + c.k + '\')" ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)"' +
       ' ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
-      '<div class="mf-thin">' + (c.pin ? '<span style="font-size:8.5px;color:#ffd77a;">📌</span>' : '') +
+      '<div class="mf-thin">' + (c.pin ? '<span style="font-size:8.5px;color:#ffd77a;">\U0001f4cc</span>' : '') +
       '<span>' + mfEsc(c.l) + '</span>' + ics + '</div>' +
       '<span class="mf-rsz" title="اسحب لتغيير عرض العمود · ضغطتان = العرض الافتراضي"' +
       ' onmousedown="mfRszStart(event,\'' + c.k + '\')" ondblclick="mfRszReset(event,\'' + c.k + '\')"></span></th>';
@@ -33450,8 +33530,12 @@ function mfDetail(f) {
   var c = f._c || mfCalc(f), rb = c.roomFeeEffective, bal = mfBalanceOf(f.company);
   var h = '<div class="mf-dgrid"><div><div class="mf-dcard">';
   h += mfStr(f.tripName)
-    ? '<div class="mf-trip">🔗 مرتبط بالرحلة: ' + mfEsc(f.tripName) +
-      '<button class="mf-btn ms-auto" style="font-size:10px;" onclick="event.stopPropagation();mfGoTrip(\'' + mfEsc(f.tripName).replace(/'/g, "\\'") + '\')">فتح الرحلة ⬅</button></div>'
+    ? ('<div class="mf-trip">🔗 مرتبط بالرحلة: ' + mfEsc(f.tripName) +
+      // 🔗 (V4.115) الربط الثلاثي مرئي هنا: رقم ملف الوزارة + الرحلة + رقم الإشعار المرتبط بها
+      (mfTripRef(f) ? ' <span class="mf-badge off">رقم الرحلة ' + mfEsc(mfTripRef(f)) + '</span>' : '') +
+      (mfBookingNo(f) ? ' <span class="mf-badge link" style="cursor:pointer;" title="فتح الإشعار المرتبط"' +
+        ' onclick="event.stopPropagation();_gsOpenBooking(\'' + mfEsc(mfBookingNo(f)).replace(/'/g, "\\'") + '\')">📄 إشعار #' + mfEsc(mfBookingNo(f)) + '</span>' : '') +
+      '<button class="mf-btn ms-auto" style="font-size:10px;" onclick="event.stopPropagation();mfGoTrip(\'' + mfEsc(f.tripName).replace(/'/g, "\\'") + '\')">فتح الرحلة ⬅</button></div>')
     : '<div class="mf-note bad">✖<div>هذا الملف <b>غير مرتبط بأي رحلة</b> — يظهر التنبيه في شاشة الرحلات أيضاً.</div></div>';
   // 📅 (V4.113) أسماء أيام المراجعة والسفر والعودة بجوار التاريخ — عرض فقط
   h += '<table class="mf-mini"><tbody>' +
@@ -34229,6 +34313,7 @@ function mfEditFile(id) {
   };
   MF._draft = d;
   MF._step = 0;
+  MF._tripPick = null; MF._tripPickLoading = false;   // قائمة المعتمرين تخصّ هذا الملف وحده
   mfEditFileFromDraft(d);
 }
 
@@ -34427,6 +34512,7 @@ function mfFormRender() {
       }
     });
   }
+  mfEnsureTripPick();   // 👥 (V4.115) أسماء معتمري الملف تبقى ظاهرة داخل النموذج
   mfFormValidate();
 }
 
@@ -34456,9 +34542,22 @@ function mfFetchFx() {
 }
 
 /* 👤 جلب أسماء معتمري الرحلة — والمُسجَّلون في ملف آخر لنفس الرحلة يظهرون باهتين (اختياري) */
-function mfPullTripPilgrims() {
+/* 👥 (V4.115) قائمة معتمري الملف تبقى ظاهرة داخل نموذج التسجيل/التعديل دائماً — تُجلب تلقائياً
+   عند فتح أي ملف مرتبط برحلة وله معتمرون مُختارون، وتُعاد رسمها مع كل إعادة رسم للنموذج، فلا
+   تختفي الأسماء بعد اختيارها ولا تحتاج الضغط على «جلب أسماء الرحلة» في كل مرة. */
+function mfEnsureTripPick() {
   var d = MF._draft;
-  if (!mfStr(d.tripName)) { _showPopup('اربط الملف برحلة أولاً', 'error'); return; }
+  if (!d || !mfStr(d.tripName)) return;
+  var P = MF._tripPick;
+  if (P && P.trip === mfStr(d.tripName) && P.fileId === d.id) { mfTripPickRender(); return; }
+  if (!(d.selected || []).length) return;      // بلا اختيار سابق — لا نُحمِّل إلا بطلب المستخدم
+  if (MF._tripPickLoading) return;
+  MF._tripPickLoading = true;
+  mfPullTripPilgrims(true);
+}
+function mfPullTripPilgrims(quiet) {
+  var d = MF._draft;
+  if (!mfStr(d.tripName)) { if (!quiet) _showPopup('اربط الملف برحلة أولاً', 'error'); return; }
   var box = document.getElementById('mfTripPickBox');
   if (box) box.innerHTML = '<div class="text-muted small p-2">⏳ جاري تحميل معتمري الرحلة…</div>';
   google.script.run
@@ -34470,15 +34569,17 @@ function mfPullTripPilgrims() {
         if (o.id === d.id || mfStr(o.tripName) !== mfStr(d.tripName)) return;
         (o.selected || []).forEach(function (k) { used[k] = (mfStr(o.fileNo) || ('مسلسل ' + o.seq)); });
       });
-      MF._tripPick = { list: list, used: used, sel: {} };
+      MF._tripPick = { trip: mfStr(d.tripName), fileId: d.id, list: list, used: used, sel: {} };
       (d.selected || []).forEach(function (k) { MF._tripPick.sel[k] = true; });
-      // لو لم يُعدَّل الإجمالي يدوياً نبدأ بتحديد كل غير المستخدَم
-      if (!mfNum(d.pilgrims)) {
+      // لو لم يُعدَّل الإجمالي يدوياً نبدأ بتحديد كل غير المستخدَم (لا يحدث في وضع العرض الصامت)
+      if (!quiet && !mfNum(d.pilgrims)) {
         list.forEach(function (p, i) { var k = mfPickKey(p, i); if (!used[k]) MF._tripPick.sel[k] = true; });
       }
+      MF._tripPickLoading = false;
       mfTripPickRender();
     })
     .withFailureHandler(function (e) {
+      MF._tripPickLoading = false;
       if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>';
     })
     .getTripPilgrims(window.authToken, MF._draft.tripName);
@@ -34565,6 +34666,7 @@ function mfApplyAgentRule() {
 }
 function mfDraftTrip(v) {
   var d = MF._draft;
+  if (mfStr(v) !== mfStr(d.tripName)) { MF._tripPick = null; MF._tripPickLoading = false; }
   d.tripName = mfStr(v);
   var t = (MF.trips || []).filter(function (x) { return x.name === d.tripName; })[0];
   if (t) {

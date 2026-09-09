@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.114";
+var APP_VERSION = "4.115";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -16557,7 +16557,10 @@ function getGlobalPilgrimsRegistry(authToken) {
   var tripDates = {};
   tData.forEach(function(r) {
     var n = String(T(r, 'name') || "").trim();
-    if (n) tripDates[n] = { depart: _tripFormatDate_(T(r, 'departDate')), ret: _tripFormatDate_(T(r, 'returnDate')) };
+    // 🔗 (V4.115) نحمل أيضاً رقم الإشعار المرتبط والرقم المرجعي للرحلة — لعرض الربط الثلاثي
+    // (المعتمر ⇄ الرحلة ⇄ الإشعار ⇄ ملف الوزارة) في السجل العام والبحث العام
+    if (n) tripDates[n] = { depart: _tripFormatDate_(T(r, 'departDate')), ret: _tripFormatDate_(T(r, 'returnDate')),
+      bookingId: String(T(r, 'linkedBookingId') || "").trim(), tripRef: String(T(r, 'tripRef') || "").trim() };
   });
 
   var today = new Date(); today.setHours(0, 0, 0, 0);
@@ -16594,7 +16597,10 @@ function getGlobalPilgrimsRegistry(authToken) {
       var d = tripDates[trip] || {};
       var from = parseDmy(d.depart), to = parseDmy(d.ret);
       var active = !!(from && to && today >= from && today <= to);
-      rec.trips.push({ name: trip, depart: d.depart || "", ret: d.ret || "", active: active });
+      // رقم الإشعار: من صف المعتمر نفسه إن وُجد، وإلا من الإشعار المرتبط بالرحلة
+      var bId = String(P(r, 'bookingId') || "").trim() || (d.bookingId || "");
+      rec.trips.push({ name: trip, depart: d.depart || "", ret: d.ret || "", active: active,
+        bookingId: bId, tripRef: d.tripRef || "" });
     }
   });
 
@@ -19576,7 +19582,10 @@ function _mfCompute_(f, cfg) {
   // 🏛️ (V4.113) رسوم غرفة المراجعة VIP إجمالي ثابت للفرد (من الإعدادات — افتراضياً 3,100 ج)،
   // وليست رسوم الغرفة المسجَّلة + 100 ج كما كان سابقاً. لا تُطبَّق إطلاقاً على تجديد الباركود
   // (نوعا المراجعة متنافيان أصلاً).
-  var S = (f.reviewType === 'VIP') ? (_mfNum_(cfg.vipRoomFee) || 3100) : _mfNum_(f.roomFee);
+  // 🏛️ (V4.115) قاعدة إضافية: الملف الذي عدد معتمريه أقل من 4 أفراد تُحتسب له رسوم غرفة VIP
+  // أيضاً (بغضّ النظر عن نوع المراجعة) — عدا تجديد الباركود الذي له تسعيره الخاص.
+  var vipByCount = (N > 0 && N < 4 && f.reviewType !== 'تجديد باركود');
+  var S = (f.reviewType === 'VIP' || vipByCount) ? (_mfNum_(cfg.vipRoomFee) || 3100) : _mfNum_(f.roomFee);
   var supFee = _mfNum_(cfg.supRoomFee) || 200;
   var R = _mfNum_(f.ticket), T = _mfNum_(f.adminFee), V = _mfNum_(f.fxRate);
   var AC = _mfNum_(f.pct) / 100;
@@ -19595,6 +19604,7 @@ function _mfCompute_(f, cfg) {
 
   return {
     heads: heads, murafiq: murafiq, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode,
+    vipByCount: vipByCount,
     revenue: Q, totalTickets: W, totalRoomFee: X, otherExp: Z,
     clearanceSAR: U, totalSAR: Y, totalExp: Math.round(AA), margin: Math.round(AB),
     perPersonMargin: Math.round(AL)
@@ -19610,7 +19620,7 @@ function _mfRoomFeeDetail_(f, c) {
   var parts = [];
   if (N > 0) {
     parts.push(N + ' × ' + fmt(c.roomFeeEffective) + ' ج' +
-      (f.reviewType === 'VIP' ? ' (شامل زيادة VIP)' : ''));
+      (f.reviewType === 'VIP' ? ' (سعر VIP)' : (c.vipByCount ? ' (سعر VIP — أقل من 4 أفراد)' : '')));
   }
   if (c.murafiq > 0) parts.push(c.murafiq + ' مشرف × ' + fmt(c.supRoomFee) + ' ج');
   if (c.barcodeFee > 0) parts.push(N + ' باركود × ' + fmt(c.barcodeFee / (N || 1)) + ' ج');
@@ -20283,7 +20293,26 @@ function getMinistryTripLinks(authToken) {
         days: days, linked: !!_mfStr_(f.tripName), fileNo: f.fileNo });
     }
   });
-  return { success: true, links: links, alerts: alerts };
+  // 🔗 (V4.115) الربط الثلاثي: الرحلة ⇄ رقم الإشعار ⇄ رقم ملف الوزارة.
+  // نُرجع لكل رحلة رقم إشعارها المرتبط ورقمها المرجعي، فتستطيع كل الشاشات (الرحلات، الإشعارات،
+  // السجل العام، البحث العام، وملفات الوزارة) عرض الثلاثة معاً أياً كانت نقطة البداية.
+  var tripInfo = {}, byBooking = {};
+  try {
+    var tsh = getSpreadsheet_().getSheetByName(TRIPS_SHEET_NAME_);
+    if (tsh && tsh.getLastRow() > 1) {
+      var tmap = _robustColMap_(tsh, TRIPS_HEADERS_);
+      var rd = _cellReader_(tmap, TRIPS_COL_);
+      tsh.getRange(2, 1, tsh.getLastRow() - 1, tsh.getLastColumn()).getValues().forEach(function(row) {
+        var nm = _mfStr_(rd(row, 'name'));
+        if (!nm) return;
+        var bk = _mfStr_(rd(row, 'linkedBookingId'));
+        var rf = _mfStr_(rd(row, 'tripRef'));
+        tripInfo[nm] = { bookingId: bk, tripRef: rf };
+        if (bk) byBooking[bk] = nm;   // رقم الإشعار → اسم الرحلة (لشاشة الإشعارات)
+      });
+    }
+  } catch (e) {}
+  return { success: true, links: links, alerts: alerts, tripInfo: tripInfo, byBooking: byBooking };
 }
 
 /* ==================================================================================
