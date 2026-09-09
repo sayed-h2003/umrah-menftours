@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.121 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.122 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.121)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.122)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.121</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.122</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6387,7 +6387,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.121";
+var CLIENT_APP_VERSION = "4.122";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -36004,61 +36004,97 @@ function mfLedgerRender() {
 }
 
 /* ============================================================
-   📊 (V4.121) تصدير Excel — بنفس ترتيب وأعمدة النموذج الأصلي (MF_COLS)، مع تطبيق الفلاتر
-   الحالية على الصفوف (mfVisible)، وأعمدة الإجماليات تُصدَّر كمعادلات إكسيل حقيقية (وليست أرقاماً
-   ثابتة) فتتحدّث تلقائياً عند تعديل أي رقم مؤثِّر عليها داخل الملف بعد التصدير — تماماً كما تعمل
-   في التطبيق (نفس معادلات _mfCompute_/mfCalc حرفاً بحرف، فيما عدا رسوم الباركود التي تُطوى داخل
-   المخالصة العكسية بلا تغيير على الصافي عملياً).
+   📊 (V4.122) تصدير Excel — مطابق حرفياً لترتيب وأعمدة وتنسيق ملف الإكسيل الأصلي المرفق («بيان
+   ملفات عمرة … منف للسياحة الدولية»): نفس تسميات الـ34 عمود وترتيبها (A→AH)، نفس ألوان رؤوس
+   الأعمدة (أزرق/أخضر/أحمر/بنفسجي)، نفس الأعمدة المخفية افتراضياً فيه، ونفس معادلات أعمدة
+   الإجماليات حرفاً بحرف (وليست قيماً ثابتة) فتتحدّث تلقائياً عند التعديل داخل إكسيل بعد التصدير.
+   يُصدَّر فقط الصفوف المطابقة للفلاتر الحالية (mfVisible)، وصف الإجماليات أسفله بصيغ
+   SUBTOTAL(9,...) تماماً كالملف الأصلي (يبقى صحيحاً حتى لو صُفِّيت صفوف داخل إكسيل نفسه لاحقاً).
    يعتمد مكتبة SheetJS (XLSX) المحمَّلة بالفعل بالتطبيق — بلا أي نداء للسيرفر، بالكامل بالمتصفح.
    ============================================================ */
+var MF_HDR_COLORS = {
+  blue:      { bg: 'FF8EAADB', fg: 'FF000000', bold: true },
+  blueLight: { bg: 'FF8EAADB', fg: 'FF000000', bold: false },
+  green:     { bg: 'FF92D050', fg: 'FF000000', bold: true },
+  red:       { bg: 'FFC00000', fg: 'FFFFFFFF', bold: true },
+  purple:    { bg: 'FF7030A0', fg: 'FFFFFFFF', bold: true }
+};
+// 🧾 نفس أعمدة الملف الأصلي بالضبط، بنفس الترتيب (A→AH) — كل عمود يرتبط بحقل بياناتنا المقابل له
 var MF_EXPORT_COLS = [
-  { k: 'seq', l: 'م', t: 'num' },
-  { k: 'approved', l: 'معتمد', t: 'txt' },
-  { k: 'fileNo', l: 'رقم الملف', t: 'txt' },
-  { k: 'clientLabel', l: 'العميل', t: 'txt' },
-  { k: 'ref', l: 'رقم القيد', t: 'txt' },
-  { k: 'eInvoice', l: 'فاتورة إلكترونية', t: 'txt' },
-  { k: 'company', l: 'الشركة المصرية', t: 'txt' },
-  { k: 'agent', l: 'الوكيل السعودي', t: 'txt' },
-  { k: 'bookingNo', l: 'رقم الإشعار', t: 'txt' },
-  { k: 'reviewDate', l: 'تاريخ المراجعة', t: 'txt' },
-  { k: 'reviewType', l: 'نوع المراجعة', t: 'txt' },
-  { k: 'travelMode', l: 'وسيلة السفر', t: 'txt' },
-  { k: 'goDate', l: 'تاريخ الذهاب', t: 'txt' },
-  { k: 'retDate', l: 'تاريخ العودة', t: 'txt' },
-  { k: 'pilgrims', l: 'معتمرين', t: 'num' },
-  { k: 'supCount', l: 'مشرفين (مرافق)', t: 'num' },
-  { k: 'supNames', l: 'المشرف', t: 'txt' },
-  { k: 'supTypes', l: 'نوع المشرف', t: 'txt' },
-  { k: 'progPrice', l: 'سعر البرنامج', t: 'num' },
-  { k: 'revenue', l: 'الإيراد', t: 'formula' },
-  { k: 'ticket', l: 'التذكرة', t: 'num' },
-  { k: 'roomFee', l: 'رسوم الغرفة/فرد', t: 'num' },
-  { k: 'adminFee', l: 'رسوم إدارية/فرد', t: 'num' },
-  { k: 'clearanceSAR', l: 'المخالصة بالريال', t: 'formula' },
-  { k: 'fxRate', l: 'سعر صرف الريال', t: 'num' },
-  { k: 'totalTickets', l: 'إجمالي التذاكر', t: 'formula' },
-  { k: 'totalRoomFee', l: 'إجمالي رسوم الغرفة', t: 'formula' },
-  { k: 'totalSAR', l: 'إجمالي الريال', t: 'formula' },
-  { k: 'otherExp', l: 'مصروفات أخرى', t: 'formula' },
-  { k: 'totalExp', l: 'إجمالي المصروف', t: 'formula' },
-  { k: 'margin', l: 'هامش الربح', t: 'formula' },
-  { k: 'perPersonMargin', l: 'هامش الفرد', t: 'formula' },
-  { k: 'pct', l: 'النسبة %', t: 'num' },
-  { k: 'madinahHotel', l: 'فندق المدينة', t: 'txt' },
-  { k: 'madinahIn', l: 'دخول المدينة', t: 'txt' },
-  { k: 'madinahOut', l: 'خروج المدينة', t: 'txt' },
-  { k: 'makkahHotel', l: 'فندق مكة', t: 'txt' },
-  { k: 'makkahIn', l: 'دخول مكة', t: 'txt' },
-  { k: 'makkahOut', l: 'خروج مكة', t: 'txt' },
-  { k: 'transport', l: 'شركة النقل', t: 'txt' },
-  { k: 'notes', l: 'ملاحظات', t: 'txt' },
-  { k: 'created', l: 'الإنشاء (بواسطة · التاريخ)', t: 'txt' },
-  { k: 'updated', l: 'آخر تعديل', t: 'txt' }
+  { k: 'eInvoice',       l: 'فواتير الكترونية',   w: 9.14,  hdr: 'blue' },
+  { k: 'seq',            l: 'م',                    w: 5,     hdr: 'blue', formula: 1 },
+  { k: 'company',        l: 'الشركة',               w: 10.86, hdr: 'blue', hidden: 1 },
+  { k: 'agent',          l: 'الوكيل',               w: 11.43, hdr: 'blue' },
+  { k: 'fileNo',         l: 'رقم الملف',            w: 8.14,  hdr: 'blue' },
+  { k: 'reviewDate',     l: 'ت المراجعة',           w: 12.71, hdr: 'blue', date: 1 },
+  { k: 'travelMode',     l: 'وسيلة السفر',          w: 7.43,  hdr: 'blue' },
+  { k: 'goDate',         l: 'سفر',                  w: 11.14, hdr: 'blue', date: 1 },
+  { k: 'retDate',        l: 'عوده',                 w: 11.14, hdr: 'blue', date: 1 },
+  { k: 'pilgrims',       l: 'معتمرين',              w: 8.86,  hdr: 'green' },
+  { k: 'supCount',       l: 'مشرفين',               w: 8.57,  hdr: 'green' },
+  { k: 'progPrice',      l: 'سعر البرنامج',         w: 9.14,  hdr: 'green', money: 1 },
+  { k: 'revenue',        l: 'الايراد',              w: 10,    hdr: 'green', formula: 1, money: 1 },
+  { k: 'ticket',         l: 'التذكرة',              w: 8.57,  hdr: 'blue', money: 1 },
+  { k: 'roomFee',        l: 'رسوم الغرفة',          w: 9.43,  hdr: 'blue', money: 1 },
+  { k: 'adminFee',       l: 'رسوم ادارية للفرد',    w: 12.14, hdr: 'blue', hidden: 1, money: 1 },
+  { k: 'clearanceSAR',   l: 'المخالصة بالريال',     w: 10,    hdr: 'blue', money: 1 },
+  { k: 'fxRate',         l: 'سعر الريال',           w: 8.86,  hdr: 'red', rate: 1 },
+  { k: 'totalTickets',   l: 'اجمالي التذاكر',       w: 9.43,  hdr: 'red', formula: 1, money: 1 },
+  { k: 'totalRoomFee',   l: 'اجمالي\nرسوم الغرفة',  w: 10.14, hdr: 'red', formula: 1, money: 1 },
+  { k: 'totalSAR',       l: 'اجمالي الريال',        w: 9.43,  hdr: 'red', formula: 1, money: 1 },
+  { k: 'totalExp',       l: 'المصروف',              w: 10,    hdr: 'red', formula: 1, money: 1 },
+  { k: 'margin',         l: 'هامش الربح',           w: 8.57,  hdr: 'purple', formula: 1, money: 1 },
+  { k: 'pct',            l: 'النسبة',               w: 7.71,  hdr: 'purple', formula: 1, pct: 1 },
+  { k: 'madinahHotel',   l: 'سكن مدينة',            w: 11.86, hdr: 'blue', hidden: 1 },
+  { k: 'madinahIn',      l: 'من',                   w: 11.14, hdr: 'blue', hidden: 1, date: 1 },
+  { k: 'madinahOut',     l: 'الى',                  w: 11,    hdr: 'blue', hidden: 1, date: 1 },
+  { k: 'makkahHotel',    l: 'سكن مكة',              w: 11,    hdr: 'blue', hidden: 1 },
+  { k: 'makkahIn',       l: 'من',                   w: 11.14, hdr: 'blue', hidden: 1, date: 1 },
+  { k: 'makkahOut',      l: 'الى',                  w: 11.86, hdr: 'blue', hidden: 1, date: 1 },
+  { k: 'transport',      l: 'الشركة النقل',         w: 8.43,  hdr: 'blue', hidden: 1 },
+  { k: 'supNames',       l: 'المشرف',               w: 15.29, hdr: 'blue' },
+  { k: 'perPersonMargin', l: 'الربح للفرد',         w: 9,     hdr: 'blueLight', formula: 1, money: 1 },
+  { k: 'clientLabel',    l: 'العميل',               w: 16.86, hdr: 'blue', hidden: 1 }
 ];
 function _xlColLetter(n) {
   var s = '';
   while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+// تاريخ dd/mm/yyyy (أو أي صيغة يفهمها mfDate) → رقم تسلسلي إكسيل حقيقي بحساب UTC مباشر (بلا أي
+// انزياح توقيت محلي) — تُصبح الخلية تاريخاً فعلياً في إكسيل قابلاً للفرز والحساب، لا نصاً فقط
+function _mfXlSerial(v) {
+  var d = mfDate(v); var m = String(d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  var utcMs = Date.UTC(+m[3], +m[2] - 1, +m[1]);
+  return Math.round((utcMs - Date.UTC(1899, 11, 30)) / 86400000);
+}
+function _mfXlBorder() {
+  var e = { style: 'thin', color: { rgb: 'FF000000' } };
+  return { top: e, bottom: e, left: e, right: e };
+}
+function _mfXlHeaderStyle(hdr) {
+  var c = MF_HDR_COLORS[hdr] || MF_HDR_COLORS.blue;
+  return {
+    font: { name: 'Arial', sz: 11, bold: c.bold, color: { rgb: c.fg } },
+    fill: { fgColor: { rgb: c.bg } },
+    border: _mfXlBorder(),
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
+  };
+}
+function _mfXlDataStyle(numFmt) {
+  var s = { font: { name: 'Arial', sz: 11 }, border: _mfXlBorder(), alignment: { horizontal: 'center', vertical: 'center' } };
+  if (numFmt) s.numFmt = numFmt;
+  return s;
+}
+function _mfXlTotalsStyle(numFmt) {
+  var s = {
+    font: { name: 'Arial', sz: 12, bold: true, color: { rgb: 'FFFFFFFF' } },
+    fill: { fgColor: { rgb: 'FF7030A0' } },
+    border: _mfXlBorder(),
+    alignment: { horizontal: 'center', vertical: 'center' }
+  };
+  if (numFmt) s.numFmt = numFmt;
   return s;
 }
 function mfExportExcel() {
@@ -36066,133 +36102,140 @@ function mfExportExcel() {
   var list = mfVisible();
   if (!list.length) { _showPopup('لا توجد ملفات مطابقة للفلاتر الحالية لتصديرها', 'error'); return; }
 
-  // فهارس الأعمدة (1-based) وحروفها — تُحسَب آلياً بدل الكتابة اليدوية لتفادي أي خطأ حروف
+  // فهارس الأعمدة (1-based) وحروفها — نفس ترتيب A→AH بالضبط كالملف الأصلي
   var idxOf = {}; MF_EXPORT_COLS.forEach(function (c, i) { idxOf[c.k] = i + 1; });
   var L = {}; Object.keys(idxOf).forEach(function (k) { L[k] = _xlColLetter(idxOf[k]); });
+  var nCols = MF_EXPORT_COLS.length;
+  var lastColLetter = _xlColLetter(nCols);
 
-  var cfg = MF.cfg || {};
-  var supFeeVal = mfNum(cfg.supRoomFee) || 200;
+  // 🏗️ نفس هيكل صفوف الملف الأصلي (0-based): صف0 فارغ، صف1 عنوان مدمج، صف2 رؤوس الأعمدة، صف3+ بيانات
+  var R_TITLE = 1, R_HEADER = 2, R_DATA0 = 3, ROW_OFFSET = R_HEADER + 1; // = 3 (لمعادلة "ROW()-3")
+  var moneyFmt = '#,##0', dateFmt = 'm/d/yyyy', pctFmt = '0.00%', rateFmt = '0.00';
+  var ws = {};
+  var range = { s: { r: 0, c: 0 }, e: { r: 0, c: nCols - 1 } };
+  function setCell(r, c, val, style, extra) {
+    var ref = XLSX.utils.encode_cell({ r: r, c: c });
+    var cell = {};
+    if (extra) { for (var k in extra) cell[k] = extra[k]; }
+    if (typeof val === 'number') { cell.t = 'n'; cell.v = val; }
+    else { cell.t = 's'; cell.v = String(val == null ? '' : val); }
+    if (style) cell.s = style;
+    ws[ref] = cell;
+    if (r > range.e.r) range.e.r = r;
+    if (c > range.e.c) range.e.c = c;
+  }
 
-  var header = MF_EXPORT_COLS.map(function (c) { return c.l; });
-  var aoa = [header];
-  var rowMeta = []; // { row, formulas: {key: {f, v}} } — نُطبِّقها بعد بناء الورقة
+  // العنوان — صف مدمج عبر كل الأعمدة
+  var stamp = (MF.today || '').replace(/\//g, '-') || new Date().toISOString().slice(0, 10);
+  setCell(R_TITLE, 0, 'بيان ملفات مراجعة الوزارة — شركة منف للسياحة الدولية — ' + stamp, {
+    font: { name: 'Arial', sz: 14, bold: true, color: { rgb: 'FF000000' } },
+    alignment: { horizontal: 'center', vertical: 'center' }
+  });
 
+  // رؤوس الأعمدة — نفس نصوص وألوان الملف الأصلي حرفياً
+  MF_EXPORT_COLS.forEach(function (col, ci) { setCell(R_HEADER, ci, col.l, _mfXlHeaderStyle(col.hdr)); });
+
+  // بيانات الصفوف — القيم المباشرة كما هي، وأعمدة الإجماليات كصيغ إكسيل حقيقية بنفس معادلات
+  // الملف الأصلي حرفاً بحرف (وليست معادلات محرك التسعير الداخلي بالتطبيق)
   list.forEach(function (f, ri) {
     var c = f._c || mfCalc(f);
-    var xr = ri + 2; // رقم صف إكسيل (1 = رأس الأعمدة)
-    var row = MF_EXPORT_COLS.map(function (col) {
+    var r = R_DATA0 + ri, xr = r + 1; // xr = رقم صف إكسيل 1-based، يُستخدم داخل نصوص المعادلات
+
+    // 🧮 نحسب القيم يدوياً بنفس سلسلة معادلات الملف الأصلي (لا معادلات _mfCompute_ الأكثر تعقيداً)
+    // كي تُطابق القيمة الظاهرة (قبل أول إعادة حساب لإكسيل) الصيغة المكتوبة تماماً
+    var pilgrims = mfNum(f.pilgrims), sup = mfNum(f.supCount), progPrice = mfNum(f.progPrice);
+    var ticket = mfNum(f.ticket), roomFee = mfNum(c.roomFeeEffective), fxRate = mfNum(f.fxRate);
+    var clearanceSAR = mfNum(c.clearanceSAR);
+    var revenueV = pilgrims * progPrice;
+    var totalTicketsV = ticket * (pilgrims + sup);
+    var totalRoomFeeV = pilgrims * roomFee + sup * 200;
+    var totalSARV = clearanceSAR * (sup + pilgrims);
+    var totalExpV = totalSARV * fxRate + totalTicketsV + totalRoomFeeV;
+    var marginV = revenueV - totalExpV;
+    var pctV = revenueV ? (marginV / revenueV) : 0;
+    var perPersonMarginV = pilgrims ? (marginV / pilgrims) : 0;
+
+    MF_EXPORT_COLS.forEach(function (col, ci) {
+      var numFmt = col.date ? dateFmt : (col.pct ? pctFmt : (col.rate ? rateFmt : (col.money ? moneyFmt : null)));
+      var style = _mfXlDataStyle(numFmt);
       switch (col.k) {
-        case 'seq': return mfNum(f.seq);
-        case 'approved': return f.approved ? 'نعم' : 'لا';
-        case 'fileNo': return mfStr(f.fileNo);
-        case 'clientLabel': return mfStr(f.clientLabel);
-        case 'ref': return mfStr(f.ref);
-        case 'eInvoice': return mfStr(f.eInvoice);
-        case 'company': return mfStr(f.company);
-        case 'agent': return mfStr(f.agent);
-        case 'bookingNo': return mfBookingNo(f);
-        case 'reviewDate': return mfStr(f.reviewDate);
-        case 'reviewType': return mfStr(f.reviewType);
-        case 'travelMode': return mfStr(f.travelMode);
-        case 'goDate': return mfStr(f.goDate);
-        case 'retDate': return mfStr(f.retDate);
-        case 'pilgrims': return mfNum(f.pilgrims);
-        case 'supCount': return mfNum(f.supCount);
-        case 'supNames': return mfRaw('supNames', f);
-        case 'supTypes': return mfRaw('supTypes', f);
-        case 'progPrice': return mfNum(f.progPrice);
-        // 🏛️ (V4.121) قيمة رسوم الغرفة المُصدَّرة هي القيمة الفعلية المُطبَّقة فعلاً (بعد قاعدتَي
-        // VIP وأقل من 4 أفراد) — تعديلها لاحقاً في إكسيل يُحدِّث الإجماليات مباشرةً، لكن تبديل نص
-        // «نوع المراجعة» وحده لن يُعيد اشتقاقها تلقائياً (القاعدة نفسها ليست معادلة إكسيل).
-        case 'roomFee': return mfNum(c.roomFeeEffective);
-        case 'adminFee': return mfNum(f.adminFee);
-        case 'fxRate': return mfNum(f.fxRate);
-        case 'pct': return mfNum(f.pct);
-        case 'madinahHotel': return mfStr(f.madinahHotel);
-        case 'madinahIn': return mfStr(f.madinahIn);
-        case 'madinahOut': return mfStr(f.madinahOut);
-        case 'makkahHotel': return mfStr(f.makkahHotel);
-        case 'makkahIn': return mfStr(f.makkahIn);
-        case 'makkahOut': return mfStr(f.makkahOut);
-        case 'transport': return mfStr(f.transport);
-        case 'notes': return mfStr(f.notes);
-        case 'created': return mfWho(f.createdBy, f.createdAt);
-        case 'updated': return mfWho(f.updatedBy, f.updatedAt);
-        default: return 0; // أعمدة الإجماليات (formula) — تُملأ لاحقاً كصيغ فعلية
+        case 'seq': setCell(r, ci, 0, style, { f: 'IF(' + L.company + xr + '="",,ROW()-' + ROW_OFFSET + ')', v: mfNum(f.seq) }); return;
+        case 'eInvoice': setCell(r, ci, mfStr(f.eInvoice), style); return;
+        case 'company': setCell(r, ci, mfStr(f.company), style); return;
+        case 'agent': setCell(r, ci, mfStr(f.agent), style); return;
+        case 'fileNo': setCell(r, ci, mfStr(f.fileNo), style); return;
+        case 'reviewDate': { var sd = _mfXlSerial(f.reviewDate); sd != null ? setCell(r, ci, sd, style) : setCell(r, ci, mfStr(f.reviewDate), style); return; }
+        case 'travelMode': setCell(r, ci, mfStr(f.travelMode), style); return;
+        case 'goDate': { var sg = _mfXlSerial(f.goDate); sg != null ? setCell(r, ci, sg, style) : setCell(r, ci, mfStr(f.goDate), style); return; }
+        case 'retDate': { var sr = _mfXlSerial(f.retDate); sr != null ? setCell(r, ci, sr, style) : setCell(r, ci, mfStr(f.retDate), style); return; }
+        case 'pilgrims': setCell(r, ci, pilgrims, style); return;
+        case 'supCount': setCell(r, ci, sup, style); return;
+        case 'progPrice': setCell(r, ci, progPrice, style); return;
+        case 'revenue': setCell(r, ci, 0, style, { f: L.pilgrims + xr + '*' + L.progPrice + xr, v: revenueV }); return;
+        case 'ticket': setCell(r, ci, ticket, style); return;
+        // 🏛️ رسوم الغرفة المُصدَّرة هي القيمة الفعلية المُطبَّقة فعلاً (بعد قاعدتَي VIP وأقل من 4
+        // أفراد) — تعديلها لاحقاً في إكسيل يُحدِّث الإجماليات مباشرةً
+        case 'roomFee': setCell(r, ci, roomFee, style); return;
+        case 'adminFee': setCell(r, ci, mfNum(f.adminFee), style); return;
+        case 'clearanceSAR': setCell(r, ci, clearanceSAR, style); return;
+        case 'fxRate': setCell(r, ci, fxRate, style); return;
+        case 'totalTickets': setCell(r, ci, 0, style, { f: L.ticket + xr + '*(' + L.pilgrims + xr + '+' + L.supCount + xr + ')', v: totalTicketsV }); return;
+        case 'totalRoomFee': setCell(r, ci, 0, style, { f: L.pilgrims + xr + '*' + L.roomFee + xr + '+' + L.supCount + xr + '*200', v: totalRoomFeeV }); return;
+        case 'totalSAR': setCell(r, ci, 0, style, { f: L.clearanceSAR + xr + '*(' + L.supCount + xr + '+' + L.pilgrims + xr + ')', v: totalSARV }); return;
+        case 'totalExp': setCell(r, ci, 0, style, { f: L.totalSAR + xr + '*' + L.fxRate + xr + '+' + L.totalTickets + xr + '+' + L.totalRoomFee + xr, v: totalExpV }); return;
+        case 'margin': setCell(r, ci, 0, style, { f: L.revenue + xr + '-' + L.totalExp + xr, v: marginV }); return;
+        case 'pct': setCell(r, ci, 0, style, { f: L.margin + xr + '/' + L.revenue + xr, v: pctV }); return;
+        case 'madinahHotel': setCell(r, ci, mfStr(f.madinahHotel), style); return;
+        case 'madinahIn': { var s4 = _mfXlSerial(f.madinahIn); s4 != null ? setCell(r, ci, s4, style) : setCell(r, ci, mfStr(f.madinahIn), style); return; }
+        case 'madinahOut': { var s5 = _mfXlSerial(f.madinahOut); s5 != null ? setCell(r, ci, s5, style) : setCell(r, ci, mfStr(f.madinahOut), style); return; }
+        case 'makkahHotel': setCell(r, ci, mfStr(f.makkahHotel), style); return;
+        case 'makkahIn': { var s6 = _mfXlSerial(f.makkahIn); s6 != null ? setCell(r, ci, s6, style) : setCell(r, ci, mfStr(f.makkahIn), style); return; }
+        case 'makkahOut': { var s7 = _mfXlSerial(f.makkahOut); s7 != null ? setCell(r, ci, s7, style) : setCell(r, ci, mfStr(f.makkahOut), style); return; }
+        case 'transport': setCell(r, ci, mfStr(f.transport), style); return;
+        case 'supNames': setCell(r, ci, mfRaw('supNames', f), style); return;
+        case 'perPersonMargin': setCell(r, ci, 0, style, { f: L.margin + xr + '/' + L.pilgrims + xr, v: perPersonMarginV }); return;
+        case 'clientLabel': setCell(r, ci, mfStr(f.clientLabel), style); return;
       }
     });
-    aoa.push(row);
-
-    // 🧮 صيغ إكسيل حقيقية لأعمدة الإجماليات — نفس معادلات mfCalc/_mfCompute_ بالضبط، مرجعيةً
-    // لخلايا نفس الصف (تتحدّث تلقائياً عند تعديل أي رقم مؤثِّر بعد فتح الملف في إكسيل)
-    var P = L.pilgrims + xr, O_ = L.supCount + xr, PP = L.progPrice + xr, TCK = L.ticket + xr,
-      RF = L.roomFee + xr, ADF = L.adminFee + xr, PCT = L.pct + xr, FX = L.fxRate + xr,
-      REV = L.revenue + xr, TT = L.totalTickets + xr, TRF = L.totalRoomFee + xr,
-      CSAR = L.clearanceSAR + xr, TSAR = L.totalSAR + xr, OE = L.otherExp + xr, TE = L.totalExp + xr,
-      MG = L.margin + xr;
-    var heads = '(' + P + '+' + O_ + ')';
-    var formulas = {
-      revenue: { f: P + '*' + PP, v: c.revenue },
-      totalTickets: { f: TCK + '*' + heads, v: c.totalTickets },
-      totalRoomFee: { f: '(' + P + '*' + RF + ')+(' + O_ + '*Settings!$B$2)', v: c.totalRoomFee },
-      otherExp: { f: ADF + '*' + heads, v: c.otherExp },
-      clearanceSAR: {
-        f: 'IF(AND(' + heads + '>0,' + FX + '>0),ROUND((' + REV + '-' + TT + '-' + TRF + '-' + OE +
-          '-(' + REV + '*' + PCT + '/100))/(' + heads + '*' + FX + '),0),0)',
-        v: c.clearanceSAR
-      },
-      totalSAR: { f: CSAR + '*' + heads, v: c.totalSAR },
-      totalExp: { f: 'ROUND((' + TSAR + '*' + FX + ')+' + TT + '+' + TRF + '+' + OE + ',0)', v: c.totalExp },
-      margin: { f: REV + '-' + TE, v: c.margin },
-      perPersonMargin: { f: 'IF(' + P + '>0,ROUND(' + MG + '/' + P + ',0),0)', v: c.perPersonMargin }
-    };
-    rowMeta.push({ row: xr, formulas: formulas });
   });
 
-  // صف الإجماليات أسفل الجدول — SUM() حقيقية على مدى صفوف البيانات (تمتد تلقائياً لو أضفت صفوفاً داخل النطاق)
-  var lastRow = list.length + 1;
-  var totalsRow = MF_EXPORT_COLS.map(function (col) {
-    if (['pilgrims', 'supCount', 'revenue', 'totalTickets', 'totalRoomFee', 'totalSAR', 'otherExp', 'totalExp', 'margin'].indexOf(col.k) >= 0) return 0;
-    return col.k === 'clientLabel' ? 'الإجمالي' : '';
-  });
-  aoa.push(totalsRow);
-  var totalsXr = lastRow + 1;
-
-  var ws = XLSX.utils.aoa_to_sheet(aoa);
-  rowMeta.forEach(function (rm) {
-    Object.keys(rm.formulas).forEach(function (k) {
-      var ref = L[k] + rm.row, fo = rm.formulas[k];
-      ws[ref] = { t: 'n', v: fo.v, f: fo.f };
-    });
-  });
-  ['pilgrims', 'supCount', 'revenue', 'totalTickets', 'totalRoomFee', 'totalSAR', 'otherExp', 'totalExp', 'margin'].forEach(function (k) {
-    var col = L[k];
-    ws[col + totalsXr] = { t: 'n', v: 0, f: 'SUM(' + col + '2:' + col + lastRow + ')' };
+  // صف الإجماليات أسفل الجدول مباشرة — بصيغ SUBTOTAL(9,...) تماماً كالملف الأصلي (تبقى صحيحة حتى
+  // لو صُفِّيت صفوف داخل إكسيل نفسه لاحقاً، على عكس SUM التي تتجاهل هذا الإخفاء)
+  var lastXr = R_DATA0 + list.length;      // رقم آخر صف بيانات (1-based)
+  var totalsR = R_DATA0 + list.length;     // صف الإجماليات (0-based) — مباشرة بعد آخر صف بيانات
+  var totalsXr = totalsR + 1;
+  var SUBTOTAL_KEYS = ['pilgrims', 'supCount', 'revenue', 'totalRoomFee', 'totalSAR', 'totalExp', 'margin'];
+  MF_EXPORT_COLS.forEach(function (col, ci) {
+    var numFmt = col.money ? moneyFmt : (col.pct ? pctFmt : null);
+    if (SUBTOTAL_KEYS.indexOf(col.k) >= 0) {
+      setCell(totalsR, ci, 0, _mfXlTotalsStyle(numFmt), { f: 'SUBTOTAL(9,' + L[col.k] + R_DATA0 + ':' + L[col.k] + lastXr + ')', v: 0 });
+    } else if (col.k === 'pct') {
+      setCell(totalsR, ci, 0, _mfXlTotalsStyle(pctFmt), { f: L.margin + totalsXr + '/' + L.revenue + totalsXr, v: 0 });
+    } else if (col.k === 'retDate') {
+      setCell(totalsR, ci, 'الإجمالي', _mfXlTotalsStyle(null));
+    } else {
+      setCell(totalsR, ci, '', _mfXlTotalsStyle(null));
+    }
   });
 
-  // عرض الأعمدة، تجميد صف الرأس، فلتر تلقائي — كلها ميزات مدعومة في نسخة SheetJS المجانية المحمَّلة
-  ws['!cols'] = MF_EXPORT_COLS.map(function (c) { return { wch: Math.max(8, Math.round((c.l.length + 4) * 1.15)) }; });
-  var lastColLetter = _xlColLetter(MF_EXPORT_COLS.length);
-  try { ws['!views'] = [{ state: 'frozen', ySplit: 1, xSplit: 0, rightToLeft: true }]; } catch (e) {}
-  try { ws['!autofilter'] = { ref: 'A1:' + lastColLetter + '1' }; } catch (e) {}
-
-  var wsSettings = XLSX.utils.aoa_to_sheet([
-    ['الإعداد', 'القيمة', 'ملاحظة'],
-    ['رسوم غرفة المشرف (مرافق) — جنيه', supFeeVal, 'يُستخدم في معادلة «إجمالي رسوم الغرفة» — غيّره هنا فتتحدّث كل الصفوف'],
-    ['رسوم غرفة VIP الثابتة للفرد — جنيه', mfNum(cfg.vipRoomFee) || 3100, 'مُطبَّقة سلفاً داخل عمود «رسوم الغرفة/فرد» لكل ملف VIP — للاطّلاع فقط']
-  ]);
-  wsSettings['!cols'] = [{ wch: 38 }, { wch: 12 }, { wch: 60 }];
-  try { wsSettings['!views'] = [{ rightToLeft: true }]; } catch (e) {}
+  ws['!ref'] = XLSX.utils.encode_range(range);
+  ws['!merges'] = [{ s: { r: R_TITLE, c: 0 }, e: { r: R_TITLE, c: nCols - 1 } }];
+  ws['!cols'] = MF_EXPORT_COLS.map(function (c) { return { wch: c.w, hidden: !!c.hidden }; });
+  var rowsArr = [];
+  for (var ri2 = 0; ri2 <= totalsR; ri2++) {
+    rowsArr[ri2] = { hpt: ri2 === R_TITLE ? 24.75 : (ri2 === R_HEADER ? 34.5 : (ri2 >= R_DATA0 ? 21.75 : 15)) };
+  }
+  ws['!rows'] = rowsArr;
+  try { ws['!views'] = [{ state: 'frozen', ySplit: R_DATA0, xSplit: 0, rightToLeft: true }]; } catch (e) {}
+  try { ws['!autofilter'] = { ref: 'A' + (R_HEADER + 1) + ':' + lastColLetter + (R_HEADER + 1) }; } catch (e) {}
 
   var wb = XLSX.utils.book_new();
   try { wb.Workbook = { Views: [{ RTL: true }] }; } catch (e) {}
-  XLSX.utils.book_append_sheet(wb, ws, 'ملفات المراجعة');
-  XLSX.utils.book_append_sheet(wb, wsSettings, 'الإعدادات المستخدمة');
+  XLSX.utils.book_append_sheet(wb, ws, 'ملفات عمرة');
 
-  var stamp = (MF.today || '').replace(/\//g, '-') || new Date().toISOString().slice(0, 10);
-  var fname = 'مراجعة ملفات الوزارة - ' + stamp + '.xlsx';
+  var fname = 'بيان ملفات مراجعة الوزارة - ' + stamp + '.xlsx';
   try {
-    XLSX.writeFile(wb, fname);
+    XLSX.writeFile(wb, fname, { cellStyles: true });
     _showPopup('تم تصدير ' + list.length + ' ملفاً — أعمدة الإجماليات معادلات حيّة قابلة للتعديل', 'success');
   } catch (e) {
     _showPopup('تعذّر إنشاء ملف الإكسيل: ' + (e && e.message ? e.message : e), 'error');
