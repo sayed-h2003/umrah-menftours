@@ -4714,6 +4714,11 @@ input[type="date"]:not(:focus):not(:valid) {
   #mfColWin .ci .ar button:hover{ background:var(--mfBlueSoft); color:var(--mfBlue); border-color:var(--mfBlue); }
   #mfColWin .ci .ar button[disabled]{ opacity:.3; cursor:not-allowed; }
   #mfColWin .gh .car{ font-size:9px; color:var(--mfMuted); }
+  /* زر إظهار/إخفاء القسم كاملاً — بنفس شكل رقاقات الفلاتر بالشاشة الرئيسية */
+  #mfColWin .mf-grpbtn{ font-size:10px; font-weight:800; border:1px solid var(--mfBorderS); border-radius:99px;
+    padding:2px 10px; background:#fff; color:var(--mfMuted); cursor:pointer; white-space:nowrap; font-family:inherit; }
+  #mfColWin .mf-grpbtn:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
+  #mfColWin .mf-grpbtn.on{ background:var(--mfNavy); border-color:var(--mfNavy); color:#fff; }
 
   /* الطباعة: عرض ملائم + ترقيم حقيقي + تذييل بكل صفحة + سطر الفلاتر */
   #mfPrintHead, #mfPrintFoot{ display:none; }
@@ -32817,11 +32822,17 @@ function mfGroupOn(g) {
 }
 function mfRenderSecToggles() {
   var box = document.getElementById('mfSecToggles'); if (!box) return;
+  // 🗂️ (V4.111) أزرار الأقسام بنفس شكل رقاقات الفلاتر («بدون قيد» / «لم تُراجع بعد») —
+  // ضغطة واحدة تُظهر أو تُخفي كل أعمدة القسم.
   var h = '<span style="font-size:10px;font-weight:800;color:#94a3b8;align-self:center;">أقسام الأعمدة:</span>';
   mfColGroups().forEach(function (g) {
-    var on = mfGroupOn(g);
-    h += '<button class="mf-btn sm' + (on ? ' pri' : '') + '" title="إظهار/إخفاء كل أعمدة هذا القسم"' +
-      ' onclick="mfToggleGroupCols(\'' + mfEsc(g).replace(/'/g, "\\'") + '\')">' + mfEsc(g) + '</button>';
+    var cols = MF_COLS.filter(function (c) { return c.g === g; });
+    var onCnt = cols.filter(function (c) { return !MF.hidden[c.k]; }).length;
+    var gq = mfEsc(g).replace(/'/g, "\\'");
+    h += '<button class="mf-facet' + (onCnt ? ' on' : '') + '" title="' +
+      (onCnt ? 'إخفاء' : 'إظهار') + ' كل أعمدة قسم «' + mfEsc(g) + '»: ' + mfEsc(cols.map(function (c) { return c.l; }).join('، ')) + '"' +
+      ' onclick="mfToggleGroupCols(\'' + gq + '\')">' + (onCnt ? '👁️ ' : '🚫 ') + mfEsc(g) +
+      ' <span style="opacity:.75;font-size:9.5px;">' + onCnt + '/' + cols.length + '</span></button>';
   });
   box.innerHTML = h;
 }
@@ -33507,13 +33518,16 @@ function mfBuildColWin() {
     var onCnt = cols.filter(function (c) { return !MF.hidden[c.k]; }).length;
     var gq = mfEsc(g).replace(/'/g, "\\'");
     var closed = !!MF_colGrpClosed[g];
-    h += '<div class="g"><div class="gh" onclick="if(!event.target.closest(\'.lk\')&&event.target.tagName!==\'INPUT\')mfColGrpToggle(\'' + gq + '\')">' +
-      '<span class="car">' + (closed ? '▸' : '▾') + '</span>' +
-      '<input type="checkbox" ' + (onCnt === cols.length ? 'checked' : '') +
-      ' onchange="mfSetGroup(\'' + gq + '\',this.checked)"> ' + mfEsc(g) +
-      ' <span style="font-weight:600;color:#94a3b8;font-size:10px;">(' + onCnt + '/' + cols.length + ')</span>' +
-      '<span class="lk"><button type="button" onclick="mfSetGroup(\'' + gq + '\',true)">الكل</button>' +
-      '<button type="button" onclick="mfSetGroup(\'' + gq + '\',false)">لا شيء</button></span></div>';
+    // 🗂️ (V4.111) رأس القسم: زر واحد بشكل رقاقة يُظهر/يُخفي القسم كاملاً (مثل «بدون قيد»)،
+    // وتحته أسماء أعمدة القسم لتعرف ما يشمله قبل إخفائه.
+    h += '<div class="g"><div class="gh" onclick="if(!event.target.closest(\'.lk\'))mfColGrpToggle(\'' + gq + '\')">' +
+      '<span class="car">' + (closed ? '▸' : '▾') + '</span>' + mfEsc(g) +
+      ' <span style="font-weight:600;color:#94a3b8;font-size:10px;">(' + onCnt + '/' + cols.length + ' ظاهر)</span>' +
+      '<span class="lk"><button type="button" class="mf-grpbtn' + (onCnt ? ' on' : '') +
+      '" title="' + (onCnt ? 'إخفاء' : 'إظهار') + ' كل أعمدة هذا القسم"' +
+      ' onclick="mfToggleGroupCols(\'' + gq + '\')">' + (onCnt ? '👁️ إخفاء القسم' : '🚫 إظهار القسم') + '</button></span></div>';
+    h += '<div style="font-size:9.5px;color:#94a3b8;padding:4px 9px;border-top:1px solid #e2e8f0;line-height:1.7;">' +
+      'يشمل: ' + mfEsc(cols.map(function (c) { return c.l; }).join(' · ')) + '</div>';
     if (!closed) {
       cols.forEach(function (c) {
         var gi2 = -1; MF_COLS.forEach(function (x, ix) { if (x.k === c.k) gi2 = ix; });
