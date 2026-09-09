@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.110";
+var APP_VERSION = "4.111";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -19500,6 +19500,31 @@ function _mfToday_() {
 function _mfStamp_() {
   return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
 }
+// 🕓 (V4.111) خانات الإنشاء/آخر تعديل تُخزَّن كنص «dd/MM/yyyy HH:mm»، لكن جوجل شيت يحوّلها تلقائياً
+// إلى كائن Date، فكان _mfStr_ يُخرجها بالشكل الخام (Tue Sep 08 2026 23:57:00 GMT+0300 …) كما ظهر
+// للمستخدم بعمودَي الإنشاء والتعديل. هذه الدالة تُعيدها دائماً بالصيغة المطلوبة.
+function _mfDateTime_(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
+  }
+  var s = _mfStr_(v);
+  if (!s) return '';
+  // نص خام من متصفح/تاريخ JS (Tue Sep 08 2026 23:57:00 GMT+0300 …) → صيغة موحّدة
+  if (/^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d/.test(s)) {
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      return Utilities.formatDate(d, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
+    }
+  }
+  return s;
+}
+// وقت الإيصال — يقبل Date (يحوّله لصيغة 12 ساعة) أو نصاً كما هو
+function _mfTime_(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    return Utilities.formatDate(v, Session.getScriptTimeZone() || 'Asia/Riyadh', 'hh:mm a');
+  }
+  return _mfStr_(v);
+}
 function _mfJson_(v, fallback) {
   try { var o = JSON.parse(String(v || '')); return o || fallback; } catch (e) { return fallback; }
 }
@@ -19567,6 +19592,22 @@ function _mfCompute_(f, cfg) {
     clearanceSAR: U, totalSAR: Y, totalExp: Math.round(AA), margin: Math.round(AB),
     perPersonMargin: Math.round(AL)
   };
+}
+
+// 🧾 (V4.111) تفاصيل حساب رسوم الغرفة بين قوسين داخل بيان كشف الحركة — مثل:
+// «42 × 3,000 ج + 1 مشرف × 200 ج» أو مع زيادة VIP ورسوم تجديد الباركود
+function _mfRoomFeeDetail_(f, c) {
+  c = c || _mfCompute_(f);
+  var fmt = function(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); };
+  var N = _mfNum_(f.pilgrims);
+  var parts = [];
+  if (N > 0) {
+    parts.push(N + ' × ' + fmt(c.roomFeeEffective) + ' ج' +
+      (f.reviewType === 'VIP' ? ' (شامل زيادة VIP)' : ''));
+  }
+  if (c.murafiq > 0) parts.push(c.murafiq + ' مشرف × ' + fmt(c.supRoomFee) + ' ج');
+  if (c.barcodeFee > 0) parts.push(N + ' باركود × ' + fmt(c.barcodeFee / (N || 1)) + ' ج');
+  return parts.length ? parts.join(' + ') : '';
 }
 
 /* ---------- فحص قواعد العمل ---------- */
@@ -19680,8 +19721,8 @@ function _mfRowToObj_(r) {
     madinahHotel: _mfStr_(r[26]), madinahIn: _mfDate_(r[27]), madinahOut: _mfDate_(r[28]),
     makkahHotel: _mfStr_(r[29]), makkahIn: _mfDate_(r[30]), makkahOut: _mfDate_(r[31]),
     transport: _mfStr_(r[32]), notes: _mfStr_(r[33]), selected: _mfJson_(r[34], []),
-    createdBy: _mfStr_(r[35]), createdAt: _mfStr_(r[36]),
-    updatedBy: _mfStr_(r[37]), updatedAt: _mfStr_(r[38])
+    createdBy: _mfStr_(r[35]), createdAt: _mfDateTime_(r[36]),
+    updatedBy: _mfStr_(r[37]), updatedAt: _mfDateTime_(r[38])
   };
 }
 function _mfObjToRow_(f) {
@@ -19731,10 +19772,10 @@ function _mfReadReceipts_() {
   for (var i = 0; i < vals.length; i++) {
     if (!_mfStr_(vals[i][0]) && !_mfStr_(vals[i][3])) continue;
     out.push({
-      receiptNo: _mfStr_(vals[i][0]), date: _mfDate_(vals[i][1]), time: _mfStr_(vals[i][2]),
+      receiptNo: _mfStr_(vals[i][0]), date: _mfDate_(vals[i][1]), time: _mfTime_(vals[i][2]),
       company: _mfStr_(vals[i][3]), licence: _mfStr_(vals[i][4]), amount: _mfNum_(vals[i][5]),
       depositor: _mfStr_(vals[i][6]), source: _mfStr_(vals[i][7]) || 'يدوي', notes: _mfStr_(vals[i][8]),
-      createdBy: _mfStr_(vals[i][9]), createdAt: _mfStr_(vals[i][10]), _row: i + 2
+      createdBy: _mfStr_(vals[i][9]), createdAt: _mfDateTime_(vals[i][10]), _row: i + 2
     });
   }
   return out;
@@ -19768,9 +19809,11 @@ function getRoomFeeLedger(authToken, company) {
   });
   files.forEach(function(f) {
     if (!_mfStr_(f.reviewDate)) return;
+    var c = _mfCompute_(f, cfg);
     mv.push({ date: f.reviewDate, ms: _mfMs_(f.reviewDate), company: f.company,
       desc: 'سحب رسوم غرفة — ملف رقم ' + (f.fileNo || '—') + (f.clientLabel ? ' (' + f.clientLabel + ')' : ''),
-      inn: 0, out: _mfCompute_(f, cfg).totalRoomFee });
+      detail: _mfRoomFeeDetail_(f, c),
+      inn: 0, out: c.totalRoomFee });
   });
   var comp = _mfStr_(company);
   if (comp && comp !== 'الكل') mv = mv.filter(function(m) { return m.company === comp; });
@@ -20100,6 +20143,14 @@ function saveMinistryFile(authToken, data) {
 
     // نوع المراجعة التلقائي (جمعة/سبت أو أقل من 3 أيام) — ما لم يُثبّته الموظف يدوياً
     if (!data._manualType) f.reviewType = _mfAutoReviewType_(f.reviewDate, f.goDate, f.reviewType);
+    // 🧾 (V4.111) الملف الذي له رقم قيد مسجَّل يُعتبر معتمداً تلقائياً
+    if (_mfStr_(f.ref)) f.approved = true;
+    // 🧑‍✈️ (V4.111) المشرف الذي يطابق اسمه الوكيل السعودي نوعه «استقبال» تلقائياً
+    if (_mfStr_(f.agent)) {
+      f.sups.forEach(function(s) {
+        if (_mfStr_(s.name) && _mfStr_(s.name) === _mfStr_(f.agent)) s.type = 'استقبال';
+      });
+    }
     // شركة النقل الافتراضية: اسم الوكيل، و«بدون» لو نوع المشرف = الوكيل
     if (!f.transport) {
       var isAgentSup = sups.some(function(s) { return s.type.indexOf('الوكيل') >= 0; });
@@ -20192,8 +20243,12 @@ function getMinistryTripLinks(authToken) {
     var t = _mfStr_(f.tripName);
     if (!t) return;
     if (!links[t]) links[t] = [];
-    links[t].push({ id: f.id, fileNo: f.fileNo, reviewDate: f.reviewDate,
-      reviewed: !!_mfStr_(f.reviewDate), approved: f.approved, pilgrims: f.pilgrims });
+    links[t].push({ id: f.id, fileNo: f.fileNo, seq: f.seq, reviewDate: f.reviewDate,
+      reviewed: !!_mfStr_(f.reviewDate), approved: f.approved, pilgrims: f.pilgrims,
+      // 🔎 (V4.111) clientLabel + selected يتيحان للبحث العام والسجل العام عرض ملفات
+      // المراجعة الخاصة بكل معتمر (وليس الرحلات فقط)
+      clientLabel: f.clientLabel, company: f.company, ref: f.ref,
+      selected: Array.isArray(f.selected) ? f.selected : [] });
   });
   files.forEach(function(f) {
     if (_mfStr_(f.reviewDate)) return;
@@ -20233,7 +20288,9 @@ function extractRoomFeeReceiptImage(authToken, base64Data, mimeType) {
     "Numbers must be Latin digits only (convert Arabic-Indic ٠-٩ to 0-9). Empty string if a field is unreadable.";
 
   var payload = { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType || 'image/jpeg', data: base64Data } }] }] };
-  var MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
+  // ⚠️ (V4.111) حُذف gemini-1.5-pro — أوقفته جوجل على v1beta وكان يُظهر للمستخدم رسالة
+  // «models/gemini-1.5-pro is not found for API version v1beta» بعد إبطاء المحاولة لكل مفتاح.
+  var MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
   var rawText = '', lastErr = '';
   for (var ki = 0; ki < GKEYS.length && !rawText; ki++) {
     for (var mi = 0; mi < MODELS.length; mi++) {
@@ -20273,7 +20330,171 @@ function extractRoomFeeReceiptImage(authToken, base64Data, mimeType) {
     }
   } catch (e) {}
   out.company = comp || '';
+  out.engine = 'ai';
   return { success: true, data: out };
+}
+
+/* ==================================================================================
+   ⚡ (V4.111) استخلاص إيصال رسوم الغرفة بلا ذكاء اصطناعي
+   إيصال بنك مصر صيغته ثابتة ومعروفة الحقول، والذكاء الاصطناعي كان بطيئاً ويفشل أحياناً،
+   فصار المسار: محلّل نصي محلي فوري أولاً (على النص الملصق أو الناتج من OCR درايف)،
+   والذكاء الاصطناعي احتياطي لا يُستدعى إلا عند فشل المحلّل.
+   ================================================================================== */
+function _mfParseReceiptText_(raw) {
+  var t = _mfLatin_(String(raw || '')).replace(/\r/g, '\n');
+  if (!t.trim()) return null;
+  var lines = t.split('\n').map(function(x) { return x.trim(); }).filter(String);
+
+  // يلتقط قيمة حقل معنون: يقبل القيمة على نفس السطر بعد النقطتين/المسافة أو في السطر التالي
+  function pick(labels, valueRe) {
+    for (var li = 0; li < lines.length; li++) {
+      for (var k = 0; k < labels.length; k++) {
+        var idx = lines[li].indexOf(labels[k]);
+        if (idx < 0) continue;
+        var after = lines[li].slice(idx + labels[k].length).replace(/^[\s:：\-–]+/, '');
+        var m = after.match(valueRe);
+        if (m) return m[0];
+        if (lines[li + 1]) {
+          var m2 = lines[li + 1].match(valueRe);
+          if (m2) return m2[0];
+        }
+      }
+    }
+    return '';
+  }
+
+  var out = {
+    // «الرقم المرجعى» يُكتب أحياناً «المرجعي» — الحرفان مقبولان
+    receiptNo: pick(['الرقم المرجعى', 'الرقم المرجعي', 'رقم المرجع', 'Reference'], /[A-Za-z0-9\-\/]{4,}/),
+    licence: (pick(['كود العميل', 'كود العميل/', 'Customer Code'], /[0-9\/\-]{2,}/) || '').replace(/\D/g, ''),
+    amount: _mfNum_((pick(['المبلغ بالارقام', 'المبلغ بالأرقام', 'المبلغ', 'Amount'], /[0-9][0-9,\.]*/) || '').replace(/,/g, '')),
+    date: _mfDate_(pick(['التاريخ', 'تاريخ', 'Date'], /\d{1,2}\s*[\/\-\.]\s*\d{1,2}\s*[\/\-\.]\s*\d{2,4}/)),
+    time: pick(['التاريخ', 'الوقت', 'Time'], /\d{1,2}:\d{2}\s*(AM|PM|ص|م)?/i),
+    depositor: ''
+  };
+  // اسم المودع: نص عربي بعد العنوان مباشرةً على نفس السطر أو السطر التالي
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf('اسم المودع') < 0 && lines[i].indexOf('المودع') < 0) continue;
+    if (lines[i].indexOf('لحساب') >= 0) continue;
+    var rest = lines[i].replace(/.*?(اسم\s*المودع|المودع)/, '').replace(/^[\s:：\-–]+/, '');
+    if (!rest && lines[i + 1]) rest = lines[i + 1];
+    rest = rest.replace(/[^؀-ۿ\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (rest.length >= 3) { out.depositor = rest; break; }
+  }
+  // بلا مبلغ لا فائدة من النتيجة — يتحوّل النداء للذكاء الاصطناعي
+  if (!out.amount) return null;
+  return out;
+}
+
+function _mfMatchCompanyByLicence_(licence) {
+  if (!licence) return '';
+  try {
+    var ash = getSpreadsheet_().getSheetByName('Agents_Settings');
+    if (!ash || ash.getLastRow() < 2) return '';
+    var av = ash.getRange(2, 1, ash.getLastRow() - 1, Math.max(4, ash.getLastColumn())).getValues();
+    for (var i = 0; i < av.length; i++) {
+      if (_mfStr_(av[i][3]) === _mfStr_(licence)) return _mfStr_(av[i][1]);
+    }
+  } catch (e) {}
+  return '';
+}
+
+// استخلاص من نص ملصق — فوري تماماً وبلا أي نداء خارجي
+function extractRoomFeeReceiptText(authToken, text) {
+  _mfPerm_(authToken, 'add');
+  var d = _mfParseReceiptText_(text);
+  if (!d) return { success: false, error: 'تعذّر قراءة المبلغ من النص — تأكد من لصق نص الإيصال كاملاً' };
+  d.company = _mfMatchCompanyByLicence_(d.licence);
+  d.engine = 'local';
+  return { success: true, data: d };
+}
+
+// استخلاص من صورة/PDF: OCR مجاني عبر جوجل درايف ثم المحلّل المحلي، والذكاء الاصطناعي احتياطي
+function extractRoomFeeReceiptSmart(authToken, base64Data, mimeType, aiFallback) {
+  _mfPerm_(authToken, 'add');
+  if (!base64Data) return { success: false, error: 'لا يوجد ملف' };
+  var localErr = '';
+  try {
+    var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType || 'image/jpeg', 'receipt');
+    var file = Drive.Files.insert({ title: 'mf_ocr_' + new Date().getTime() }, blob,
+      { ocr: true, ocrLanguage: 'ar', convert: true });
+    var doc = DocumentApp.openById(file.id);
+    var txt = doc.getBody().getText();
+    try { DriveApp.getFileById(file.id).setTrashed(true); } catch (e) {}
+    var d = _mfParseReceiptText_(txt);
+    if (d) {
+      d.company = _mfMatchCompanyByLicence_(d.licence);
+      d.engine = 'ocr';
+      return { success: true, data: d };
+    }
+    localErr = 'قرأ النص لكن لم يجد المبلغ';
+  } catch (e) {
+    // خدمة درايف المتقدمة غير مفعّلة أو تعذّر التحويل — نكمل بالذكاء الاصطناعي
+    localErr = String(e && e.message ? e.message : e);
+  }
+  if (aiFallback === false) {
+    return { success: false, error: 'تعذّر الاستخلاص المحلي (' + localErr + ')' };
+  }
+  return extractRoomFeeReceiptImage(authToken, base64Data, mimeType);
+}
+
+/* ==================================================================================
+   💱 (V4.111) سعر بيع الريال السعودي من بنك مصر بتاريخ تسجيل الملف — استرشادي فقط
+   يُقرَّب لرقمين عشريين، ويُخزَّن مؤقتاً بالكاش ليوم واحد لتقليل النداءات.
+   ================================================================================== */
+function fetchSarSellRate(authToken, dateStr) {
+  _mfPerm_(authToken, 'view');
+  var day = _mfDate_(dateStr) || _mfToday_();
+  var cacheKey = 'sar_sell_' + day.replace(/\//g, '_');
+  var cache = CacheService.getScriptCache();
+  try {
+    var hit = cache.get(cacheKey);
+    if (hit) {
+      var c = JSON.parse(hit);
+      return { success: true, rate: c.rate, source: c.source, date: day, cached: true };
+    }
+  } catch (e) {}
+
+  var urls = [
+    'https://www.banquemisr.com/en/exchange-rates',
+    'https://www.banquemisr.com/ar/%D8%A3%D8%B3%D8%B9%D8%A7%D8%B1-%D8%A7%D9%84%D8%B5%D8%B1%D9%81'
+  ];
+  var lastErr = '';
+  for (var i = 0; i < urls.length; i++) {
+    try {
+      var resp = UrlFetchApp.fetch(urls[i], { muteHttpExceptions: true, followRedirects: true,
+        headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (resp.getResponseCode() !== 200) { lastErr = 'HTTP ' + resp.getResponseCode(); continue; }
+      var html = String(resp.getContentText()).replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
+      var rate = _mfPickSarSell_(html);
+      if (rate) {
+        var out = { rate: rate, source: 'بنك مصر — سعر البيع' };
+        try { cache.put(cacheKey, JSON.stringify(out), 86400); } catch (e2) {}
+        return { success: true, rate: rate, source: out.source, date: day };
+      }
+      lastErr = 'لم يُعثر على سطر الريال السعودي بالصفحة';
+    } catch (e) { lastErr = String(e && e.message ? e.message : e); }
+  }
+  return { success: false, error: 'تعذّر جلب سعر الريال من بنك مصر (' + lastErr + ') — أدخله يدوياً' };
+}
+
+// يلتقط سعر البيع من نص صفحة أسعار الصرف: أول رقمين بعد اسم الريال السعودي = شراء ثم بيع
+function _mfPickSarSell_(text) {
+  var t = _mfLatin_(String(text || '')).replace(/\s+/g, ' ');
+  var labels = ['Saudi Riyal', 'SAR', 'الريال السعودي', 'ريال سعودي'];
+  for (var i = 0; i < labels.length; i++) {
+    var idx = t.indexOf(labels[i]);
+    while (idx >= 0) {
+      var seg = t.substr(idx, 160);
+      var nums = seg.match(/\d+\.\d{2,6}/g) || [];
+      // نتجاهل القيم غير المنطقية لسعر الريال مقابل الجنيه
+      var ok = nums.filter(function(n) { var v = parseFloat(n); return v > 3 && v < 60; });
+      if (ok.length >= 2) return Math.round(parseFloat(ok[1]) * 100) / 100;   // الثاني = البيع
+      if (ok.length === 1) return Math.round(parseFloat(ok[0]) * 100) / 100;
+      idx = t.indexOf(labels[i], idx + 1);
+    }
+  }
+  return 0;
 }
 
 /* ==================================================================================

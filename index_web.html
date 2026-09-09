@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.110 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.111 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.110)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.111)', diag);
 }, 6000);
 </script>
 
@@ -1491,7 +1491,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.110</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.111</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2920,9 +2920,15 @@ input[type="date"]:not(:focus):not(:valid) {
         <label class="form-label small fw-bold mb-1">🛏️ فترات رسوم الغرفة (للفرد كبير/طفل — الرضيع بلا رسوم). اترك «إلى» فارغة = سارية حتى إشعار آخر:</label>
         <div id="accRfRows"></div>
         <button class="btn btn-outline-primary btn-sm mb-3" onclick="document.getElementById('accRfRows').insertAdjacentHTML('beforeend', _accRfRowHtml_({}))">➕ فترة جديدة</button>
+        <!-- 🏛️ (V4.111) رسوم غرفة تجديد الباركود — بنفس نظام الفترات المتبع في رسوم الغرفة -->
+        <label class="form-label small fw-bold mb-1">🔖 فترات رسوم غرفة تجديد الباركود (تُطبَّق على ملفات المراجعة من نوع «تجديد باركود» — للمعتمر الواحد). اترك «إلى» فارغة = سارية حتى إشعار آخر:</label>
+        <div id="accBcRows"></div>
+        <button class="btn btn-outline-primary btn-sm mb-3" onclick="document.getElementById('accBcRows').insertAdjacentHTML('beforeend', _accRfRowHtml_({}))">➕ فترة باركود جديدة</button>
         <div class="row g-2 mb-3">
           <div class="col-md-4"><label class="form-label small fw-bold mb-1">رسوم غرفة المشرف (ج — لكل مشرف مرافق)</label>
             <input type="number" id="accCfgSupFee" class="form-control form-control-sm" placeholder="200"></div>
+          <div class="col-md-4"><label class="form-label small fw-bold mb-1">زيادة رسوم غرفة المراجعة VIP (ج — للمعتمر فقط)</label>
+            <input type="number" id="accCfgVip" class="form-control form-control-sm" placeholder="100"></div>
         </div>
         <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-success btn-sm" onclick="saveAccPricingCfg(this)">💾 حفظ التسعير</button>
@@ -4406,33 +4412,67 @@ input[type="date"]:not(:focus):not(:valid) {
     --mfSt3:#e6f6f4; --mfSt3L:#0d9488; --mfSt4:#e8f6ea; --mfSt4L:#16a34a;
     --mfSel:#d7e4f6; --mfSelL:#1e3d59;
     font-size:13px; }
+  /* النوافذ المنبثقة تُلحق بـ body خارج #section-ministry، فتحتاج نفس المتغيّرات لتُطابقها بصرياً */
+  .mf-dlg, #mfColWin, #mfDatePick, #mfColFilterPop, #mfTypeahead{
+    --mfNavy:#1e3d59; --mfNavyD:#152c42; --mfBlue:#2563eb; --mfBlueSoft:#dbeafe;
+    --mfBorder:#e2e8f0; --mfBorderS:#cbd5e1; --mfText:#0f172a; --mfMuted:#5c6b83; --mfFaint:#94a3b8;
+    --mfSurf:#fff; --mfSurf2:#f8fafc; --mfSurf3:#eef1f6;
+    --mfOk:#0e9f6e; --mfOkBg:#e5f9f1; --mfWarn:#c2670a; --mfWarnBg:#fef3e2; --mfDang:#dc2626; --mfDangBg:#fef2f2;
+    --mfIndigo:#6d28d9; --mfIndigoBg:#f1ebfe; --mfSel:#d7e4f6; --mfSelL:#1e3d59; }
+  .mf-dlg .mf-latin{ direction:ltr; unicode-bidi:embed; display:inline-block; font-variant-numeric:tabular-nums; }
   #section-ministry .mf-latin{ direction:ltr; unicode-bidi:embed; display:inline-block; font-variant-numeric:tabular-nums; }
   #section-ministry .mf-bar{ background:var(--mfSurf); border:1px solid var(--mfBorder); border-radius:12px;
     padding:9px 12px; box-shadow:0 1px 2px rgba(15,23,42,.04),0 6px 18px rgba(15,23,42,.05); }
-  #section-ministry .mf-btn{ font-size:11.5px; font-weight:700; border-radius:9px; padding:6px 11px; cursor:pointer;
-    border:1px solid var(--mfBorderS); background:var(--mfSurf); color:var(--mfText); display:inline-flex;
-    align-items:center; gap:5px; white-space:nowrap; }
-  #section-ministry .mf-btn:hover{ border-color:var(--mfBlue); color:var(--mfBlue); background:var(--mfBlueSoft); }
-  #section-ministry .mf-btn.pri{ background:var(--mfNavy); border-color:var(--mfNavy); color:#fff; }
-  #section-ministry .mf-btn.pri:hover{ background:var(--mfNavyD); color:#fff; }
-  #section-ministry .mf-btn.gold{ background:var(--mfWarnBg); border-color:#f6d199; color:var(--mfWarn); }
-  #section-ministry .mf-sep{ width:1px; align-self:stretch; background:var(--mfBorder); margin:0 3px; }
-  #section-ministry .mf-fld{ display:flex; flex-direction:column; gap:3px; position:relative; }
-  #section-ministry .mf-fld > label{ font-size:9.5px; font-weight:800; color:var(--mfFaint); padding-inline-start:2px; margin:0; }
-  #section-ministry .mf-fld input, #section-ministry .mf-fld select{ font-size:11.5px; padding:5px 8px; border-radius:8px;
+  /* 🎨 (V4.111) نظام أزرار موحّد لكل شاشة ملفات المراجعة وشاشاتها الفرعية — خمسة مستويات
+     بصرية واضحة (أساسي/ذهبي/نجاح/خطر/محايد) بدل أزرار رمادية متساوية الوزن، مع حركة رفع
+     خفيفة عند التحويم ومؤشر تركيز واضح للوحة المفاتيح. مطبَّق أيضاً داخل النوافذ (.mf-dlg). */
+  #section-ministry .mf-btn, .mf-dlg .mf-btn{ font-size:11.5px; font-weight:700; border-radius:9px; padding:6px 12px;
+    cursor:pointer; border:1px solid var(--mfBorderS); background:var(--mfSurf); color:var(--mfText); display:inline-flex;
+    align-items:center; gap:5px; white-space:nowrap; font-family:inherit; line-height:1.7;
+    transition:transform .12s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease; }
+  #section-ministry .mf-btn:hover, .mf-dlg .mf-btn:hover{ border-color:var(--mfBlue); color:var(--mfBlue);
+    background:var(--mfBlueSoft); transform:translateY(-1px); box-shadow:0 4px 10px rgba(15,23,42,.12); }
+  #section-ministry .mf-btn:active, .mf-dlg .mf-btn:active{ transform:translateY(0); box-shadow:none; }
+  #section-ministry .mf-btn:focus-visible, .mf-dlg .mf-btn:focus-visible{ outline:2px solid var(--mfBlue); outline-offset:2px; }
+  #section-ministry .mf-btn.pri, .mf-dlg .mf-btn.pri{ background:linear-gradient(135deg,var(--mfNavy),var(--mfNavyD));
+    border-color:transparent; color:#fff; }
+  #section-ministry .mf-btn.pri:hover, .mf-dlg .mf-btn.pri:hover{ color:#fff; background:linear-gradient(135deg,#26506f,var(--mfNavyD));
+    box-shadow:0 6px 16px rgba(30,61,89,.35); }
+  #section-ministry .mf-btn.gold, .mf-dlg .mf-btn.gold{ background:linear-gradient(135deg,#e0b357,#c08c2c);
+    border-color:transparent; color:#2f2408; }
+  #section-ministry .mf-btn.gold:hover, .mf-dlg .mf-btn.gold:hover{ color:#2f2408; background:linear-gradient(135deg,#e8c073,#c9962f);
+    box-shadow:0 6px 16px rgba(192,140,44,.32); }
+  #section-ministry .mf-btn.ok, .mf-dlg .mf-btn.ok{ background:var(--mfOkBg); border-color:#a7e8cf; color:var(--mfOk); }
+  #section-ministry .mf-btn.ok:hover, .mf-dlg .mf-btn.ok:hover{ background:#d6f4e8; border-color:var(--mfOk); color:var(--mfOk); }
+  #section-ministry .mf-btn.dgr, .mf-dlg .mf-btn.dgr{ background:var(--mfDangBg); border-color:#f6b8b8; color:var(--mfDang); }
+  #section-ministry .mf-btn.dgr:hover, .mf-dlg .mf-btn.dgr:hover{ background:#fbdcdc; border-color:var(--mfDang); color:var(--mfDang); }
+  #section-ministry .mf-btn.sm, .mf-dlg .mf-btn.sm{ font-size:10.5px; padding:4px 9px; border-radius:7px; }
+  #section-ministry .mf-btn[disabled], .mf-dlg .mf-btn[disabled]{ opacity:.45; cursor:not-allowed; transform:none; box-shadow:none; }
+  /* مجموعة أزرار متلاصقة (تبويبات فرعية داخل النوافذ) */
+  .mf-dlg .mf-bgrp, #section-ministry .mf-bgrp{ display:inline-flex; border:1px solid var(--mfBorderS); border-radius:9px;
+    overflow:hidden; background:var(--mfSurf); }
+  .mf-dlg .mf-bgrp button, #section-ministry .mf-bgrp button{ border:none; border-radius:0; background:transparent;
+    font-family:inherit; font-size:11.5px; font-weight:700; padding:6px 14px; cursor:pointer; color:var(--mfMuted);
+    border-inline-start:1px solid var(--mfBorder); }
+  .mf-dlg .mf-bgrp button:first-child, #section-ministry .mf-bgrp button:first-child{ border-inline-start:none; }
+  .mf-dlg .mf-bgrp button.on, #section-ministry .mf-bgrp button.on{ background:var(--mfNavy); color:#fff; }
+  #section-ministry .mf-sep, .mf-dlg .mf-sep{ width:1px; align-self:stretch; background:var(--mfBorder); margin:0 3px; }
+  #section-ministry .mf-fld, .mf-dlg .mf-fld{ display:flex; flex-direction:column; gap:3px; position:relative; }
+  #section-ministry .mf-fld > label, .mf-dlg .mf-fld > label{ font-size:9.5px; font-weight:800; color:var(--mfFaint); padding-inline-start:2px; margin:0; }
+  #section-ministry .mf-fld input, .mf-dlg .mf-fld input, #section-ministry .mf-fld select, .mf-dlg .mf-fld select{ font-size:11.5px; padding:5px 8px; border-radius:8px;
     border:1px solid var(--mfBorder); background:var(--mfSurf2); color:var(--mfText); min-width:118px; font-family:inherit; }
-  #section-ministry .mf-fld input:focus{ border-color:var(--mfBlue); outline:none; }
-  #section-ministry .mf-date{ display:flex; align-items:center; gap:2px; background:var(--mfSurf2);
+  #section-ministry .mf-fld input:focus, .mf-dlg .mf-fld input:focus{ border-color:var(--mfBlue); outline:none; }
+  #section-ministry .mf-date, .mf-dlg .mf-date{ display:flex; align-items:center; gap:2px; background:var(--mfSurf2);
     border:1px solid var(--mfBorder); border-radius:8px; padding-inline-end:4px; }
-  #section-ministry .mf-date input{ border:none !important; background:none !important; min-width:92px !important; }
-  #section-ministry .mf-date button{ background:none; border:none; cursor:pointer; font-size:12px; color:var(--mfMuted); padding:2px 3px; }
+  #section-ministry .mf-date input, .mf-dlg .mf-date input{ border:none !important; background:none !important; min-width:92px !important; }
+  #section-ministry .mf-date button, .mf-dlg .mf-date button{ background:none; border:none; cursor:pointer; font-size:12px; color:var(--mfMuted); padding:2px 3px; }
   #section-ministry .mf-facet{ font-size:10.5px; font-weight:700; border:1px solid var(--mfBorder); border-radius:99px;
     padding:4px 10px; color:var(--mfMuted); cursor:pointer; background:var(--mfSurf); white-space:nowrap; }
   #section-ministry .mf-facet:hover{ border-color:var(--mfBlue); }
   #section-ministry .mf-facet.on{ background:var(--mfNavy); border-color:var(--mfNavy); color:#fff; }
-  #section-ministry .mf-chip{ display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700;
+  #section-ministry .mf-chip, .mf-dlg .mf-chip{ display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700;
     background:var(--mfBlueSoft); color:var(--mfBlue); border:1px solid var(--mfBlue); border-radius:99px; padding:3px 5px 3px 10px; }
-  #section-ministry .mf-chip button{ background:none; border:none; color:inherit; cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
+  #section-ministry .mf-chip button, .mf-dlg .mf-chip button{ background:none; border:none; color:inherit; cursor:pointer; font-size:12px; line-height:1; padding:0 2px; }
   #section-ministry .mf-clearall{ font-size:10.5px; font-weight:800; color:var(--mfDang); background:var(--mfDangBg);
     border:1px solid #f6b8b8; border-radius:99px; padding:3px 10px; cursor:pointer; }
 
@@ -4447,9 +4487,9 @@ input[type="date"]:not(:focus):not(:valid) {
     font-weight:700; position:sticky; top:22px; z-index:11; padding:4px 5px; cursor:grab; }
   #section-ministry table.mf-tab thead tr.mf-cols th.mf-dragover{ background:var(--mfBlue); box-shadow:inset 3px 0 0 #fff; }
   #section-ministry .mf-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
-  #section-ministry .mf-thic{ background:none; border:none; color:#a9c1e2; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
-  #section-ministry .mf-thic:hover{ color:#fff; background:rgba(255,255,255,.16); }
-  #section-ministry .mf-thic.on{ color:#ffd77a; }
+  #section-ministry .mf-thic, .mf-dlg .mf-thic{ background:none; border:none; color:#a9c1e2; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
+  #section-ministry .mf-thic:hover, .mf-dlg .mf-thic:hover{ color:#fff; background:rgba(255,255,255,.16); }
+  #section-ministry .mf-thic.on, .mf-dlg .mf-thic.on{ color:#ffd77a; }
   #section-ministry th.mf-fz, #section-ministry td.mf-fz{ position:sticky; z-index:8; }
   #section-ministry thead th.mf-fz{ z-index:15; }
   #section-ministry thead tr.mf-grp th.mf-fz{ z-index:16; }
@@ -4479,24 +4519,24 @@ input[type="date"]:not(:focus):not(:valid) {
     color:var(--mfMuted); cursor:pointer; padding:0 3px; }
   #section-ministry .mf-exp:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
   #section-ministry tr.mf-open .mf-exp{ color:var(--mfBlue); border-color:var(--mfBlue); }
-  #section-ministry .mf-badge{ display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:800;
+  #section-ministry .mf-badge, .mf-dlg .mf-badge{ display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:800;
     padding:1px 7px; border-radius:99px; border:1px solid transparent; }
-  #section-ministry .mf-badge.ok{ background:var(--mfOkBg); color:var(--mfOk); border-color:#a7e8cf; }
-  #section-ministry .mf-badge.off{ background:var(--mfSurf3); color:var(--mfFaint); border-color:var(--mfBorder); }
-  #section-ministry .mf-badge.vip{ background:var(--mfWarnBg); color:var(--mfWarn); border-color:#f6d199; }
-  #section-ministry .mf-badge.norm{ background:var(--mfSurf3); color:var(--mfMuted); border-color:var(--mfBorder); }
-  #section-ministry .mf-badge.renew{ background:var(--mfIndigoBg); color:var(--mfIndigo); border-color:#d9c8fb; }
-  #section-ministry .mf-badge.warn{ background:var(--mfDangBg); color:var(--mfDang); border-color:#f6b8b8; }
-  #section-ministry .mf-badge.link{ background:var(--mfBlueSoft); color:var(--mfBlue); border-color:var(--mfBlue); }
-  #section-ministry .mf-tog{ width:30px; height:16px; border-radius:99px; background:var(--mfBorderS); position:relative;
+  #section-ministry .mf-badge.ok, .mf-dlg .mf-badge.ok{ background:var(--mfOkBg); color:var(--mfOk); border-color:#a7e8cf; }
+  #section-ministry .mf-badge.off, .mf-dlg .mf-badge.off{ background:var(--mfSurf3); color:var(--mfFaint); border-color:var(--mfBorder); }
+  #section-ministry .mf-badge.vip, .mf-dlg .mf-badge.vip{ background:var(--mfWarnBg); color:var(--mfWarn); border-color:#f6d199; }
+  #section-ministry .mf-badge.norm, .mf-dlg .mf-badge.norm{ background:var(--mfSurf3); color:var(--mfMuted); border-color:var(--mfBorder); }
+  #section-ministry .mf-badge.renew, .mf-dlg .mf-badge.renew{ background:var(--mfIndigoBg); color:var(--mfIndigo); border-color:#d9c8fb; }
+  #section-ministry .mf-badge.warn, .mf-dlg .mf-badge.warn{ background:var(--mfDangBg); color:var(--mfDang); border-color:#f6b8b8; }
+  #section-ministry .mf-badge.link, .mf-dlg .mf-badge.link{ background:var(--mfBlueSoft); color:var(--mfBlue); border-color:var(--mfBlue); }
+  #section-ministry .mf-tog, .mf-dlg .mf-tog{ width:30px; height:16px; border-radius:99px; background:var(--mfBorderS); position:relative;
     cursor:pointer; display:inline-block; border:none; vertical-align:middle; }
-  #section-ministry .mf-tog::after{ content:""; position:absolute; top:2px; inset-inline-start:2px; width:12px; height:12px;
+  #section-ministry .mf-tog::after, .mf-dlg .mf-tog::after{ content:""; position:absolute; top:2px; inset-inline-start:2px; width:12px; height:12px;
     border-radius:50%; background:#fff; transition:.15s; }
-  #section-ministry .mf-tog.on{ background:var(--mfOk); }
-  #section-ministry .mf-tog.on::after{ inset-inline-start:16px; }
-  #section-ministry .mf-rowbtn{ background:none; border:1px solid var(--mfBorderS); border-radius:6px; font-size:10px;
+  #section-ministry .mf-tog.on, .mf-dlg .mf-tog.on{ background:var(--mfOk); }
+  #section-ministry .mf-tog.on::after, .mf-dlg .mf-tog.on::after{ inset-inline-start:16px; }
+  #section-ministry .mf-rowbtn, .mf-dlg .mf-rowbtn{ background:none; border:1px solid var(--mfBorderS); border-radius:6px; font-size:10px;
     padding:1px 5px; cursor:pointer; color:var(--mfMuted); }
-  #section-ministry .mf-rowbtn:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
+  #section-ministry .mf-rowbtn:hover, .mf-dlg .mf-rowbtn:hover{ border-color:var(--mfBlue); color:var(--mfBlue); }
   /* التعديل السريع في مكانه (ضغطتان على الصف) */
   #section-ministry tr.mf-editrow{ background:var(--mfBlueSoft) !important; box-shadow:inset 0 2px 0 var(--mfBlue), inset 0 -2px 0 var(--mfBlue); }
   #section-ministry tr.mf-editrow td{ padding:3px 4px; cursor:default; }
@@ -4520,24 +4560,24 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry .mf-detin{ padding:12px 14px; text-align:start; }
   #section-ministry .mf-dgrid{ display:grid; grid-template-columns:1.25fr 1fr; gap:11px; align-items:start; }
   @media (max-width:1100px){ #section-ministry .mf-dgrid{ grid-template-columns:1fr; } }
-  #section-ministry .mf-dcard{ background:var(--mfSurf); border:1px solid var(--mfBorder); border-radius:10px; padding:10px 12px; }
-  #section-ministry .mf-dcard + .mf-dcard{ margin-top:8px; }
-  #section-ministry .mf-dcard h6{ font-size:11.5px; font-weight:800; color:var(--mfNavy); margin:0 0 6px; }
-  #section-ministry .mf-mini{ width:100%; border-collapse:collapse; font-size:11px; }
-  #section-ministry .mf-mini th{ background:var(--mfSurf3); font-weight:800; padding:4px 6px; text-align:start;
+  #section-ministry .mf-dcard, .mf-dlg .mf-dcard{ background:var(--mfSurf); border:1px solid var(--mfBorder); border-radius:10px; padding:10px 12px; }
+  #section-ministry .mf-dcard + .mf-dcard, .mf-dlg .mf-dcard + .mf-dcard{ margin-top:8px; }
+  #section-ministry .mf-dcard h6, .mf-dlg .mf-dcard h6{ font-size:11.5px; font-weight:800; color:var(--mfNavy); margin:0 0 6px; }
+  #section-ministry .mf-mini, .mf-dlg .mf-mini{ width:100%; border-collapse:collapse; font-size:11px; }
+  #section-ministry .mf-mini th, .mf-dlg .mf-mini th{ background:var(--mfSurf3); font-weight:800; padding:4px 6px; text-align:start;
     border-bottom:1px solid var(--mfBorder); white-space:nowrap; }
-  #section-ministry .mf-mini td{ padding:4px 6px; border-bottom:1px solid var(--mfBorder); }
-  #section-ministry .mf-mini tfoot td{ background:var(--mfSurf3); font-weight:800; }
-  #section-ministry .mf-note{ display:flex; gap:6px; align-items:flex-start; border-radius:8px; padding:7px 9px;
+  #section-ministry .mf-mini td, .mf-dlg .mf-mini td{ padding:4px 6px; border-bottom:1px solid var(--mfBorder); }
+  #section-ministry .mf-mini tfoot td, .mf-dlg .mf-mini tfoot td{ background:var(--mfSurf3); font-weight:800; }
+  #section-ministry .mf-note, .mf-dlg .mf-note{ display:flex; gap:6px; align-items:flex-start; border-radius:8px; padding:7px 9px;
     font-size:11px; font-weight:600; margin-bottom:6px; line-height:1.6; }
-  #section-ministry .mf-note.bad{ background:var(--mfDangBg); border:1px solid #f6b8b8; }
-  #section-ministry .mf-note.good{ background:var(--mfOkBg); border:1px solid #a7e8cf; }
-  #section-ministry .mf-note.info{ background:var(--mfBlueSoft); border:1px solid var(--mfBlue); }
-  #section-ministry .mf-trip{ display:flex; align-items:center; gap:6px; background:var(--mfBlueSoft); border:1px solid var(--mfBlue);
+  #section-ministry .mf-note.bad, .mf-dlg .mf-note.bad{ background:var(--mfDangBg); border:1px solid #f6b8b8; }
+  #section-ministry .mf-note.good, .mf-dlg .mf-note.good{ background:var(--mfOkBg); border:1px solid #a7e8cf; }
+  #section-ministry .mf-note.info, .mf-dlg .mf-note.info{ background:var(--mfBlueSoft); border:1px solid var(--mfBlue); }
+  #section-ministry .mf-trip, .mf-dlg .mf-trip{ display:flex; align-items:center; gap:6px; background:var(--mfBlueSoft); border:1px solid var(--mfBlue);
     border-radius:9px; padding:6px 10px; font-size:11.5px; font-weight:700; color:var(--mfBlue); margin-bottom:8px; }
-  #section-ministry .mf-legend{ display:flex; gap:12px; flex-wrap:wrap; padding:8px 12px; font-size:10.5px;
+  #section-ministry .mf-legend, .mf-dlg .mf-legend{ display:flex; gap:12px; flex-wrap:wrap; padding:8px 12px; font-size:10.5px;
     color:var(--mfMuted); border-top:1px solid var(--mfBorder); }
-  #section-ministry .mf-sw{ width:20px; height:11px; border-radius:3px; display:inline-block; border-inline-start:3px solid; }
+  #section-ministry .mf-sw, .mf-dlg .mf-sw{ width:20px; height:11px; border-radius:3px; display:inline-block; border-inline-start:3px solid; }
 
   #section-ministry .mf-stats{ display:grid; grid-template-columns:1fr 1fr; gap:11px; }
   @media (max-width:820px){ #section-ministry .mf-stats{ grid-template-columns:1fr; } }
@@ -4545,15 +4585,15 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry .mf-bar-row .nm{ font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #section-ministry .mf-track{ height:14px; background:var(--mfSurf3); border-radius:4px; overflow:hidden; }
   #section-ministry .mf-fill{ height:100%; background:#2f6ea8; border-radius:0 4px 4px 0; }
-  #section-ministry .mf-bal{ display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:8px; margin-bottom:12px; }
-  #section-ministry .mf-balc{ background:var(--mfSurf); border:1px solid var(--mfBorder); border-radius:10px;
+  #section-ministry .mf-bal, .mf-dlg .mf-bal{ display:grid; grid-template-columns:repeat(auto-fit,minmax(185px,1fr)); gap:8px; margin-bottom:12px; }
+  #section-ministry .mf-balc, .mf-dlg .mf-balc{ background:var(--mfSurf); border:1px solid var(--mfBorder); border-radius:10px;
     padding:9px 11px; border-top:3px solid var(--mfOk); }
-  #section-ministry .mf-balc.low{ border-top-color:var(--mfDang); }
-  #section-ministry .mf-balc .v{ font-size:16px; font-weight:900; color:var(--mfOk); }
-  #section-ministry .mf-balc.low .v{ color:var(--mfDang); }
+  #section-ministry .mf-balc.low, .mf-dlg .mf-balc.low{ border-top-color:var(--mfDang); }
+  #section-ministry .mf-balc .v, .mf-dlg .mf-balc .v{ font-size:16px; font-weight:900; color:var(--mfOk); }
+  #section-ministry .mf-balc.low .v, .mf-dlg .mf-balc.low .v{ color:var(--mfDang); }
 
   /* نافذة تخصيص الأعمدة العائمة */
-  #mfColWin{ position:fixed; z-index:2000; width:330px; max-width:94vw; background:#fff; border:1px solid #cbd5e1;
+  #mfColWin{ position:fixed; z-index:2147482500; width:330px; max-width:94vw; background:#fff; border:1px solid #cbd5e1;
     border-radius:12px; box-shadow:0 18px 50px rgba(15,23,42,.28); display:none; flex-direction:column; max-height:76vh; }
   #mfColWin.show{ display:flex; }
   #mfColWin .h{ padding:10px 13px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; gap:7px;
@@ -4577,7 +4617,7 @@ input[type="date"]:not(:focus):not(:valid) {
   #mfColWin .pin.on{ background:#fef3e2; border-color:#f6d199; color:#c2670a; }
 
   /* التقويم المخصص — لا يعتمد على showPicker المحجوب داخل إطار Apps Script */
-  #mfDatePick{ position:fixed; z-index:2100; background:#fff; border:1px solid #cbd5e1; border-radius:11px;
+  #mfDatePick{ position:fixed; z-index:2147483000; background:#fff; border:1px solid #cbd5e1; border-radius:11px;
     box-shadow:0 18px 50px rgba(15,23,42,.28); padding:9px; display:none; width:248px; }
   #mfDatePick.show{ display:block; }
   #mfDatePick .dh{ display:flex; align-items:center; gap:4px; margin-bottom:7px; }
@@ -4598,23 +4638,82 @@ input[type="date"]:not(:focus):not(:valid) {
     border:1px solid #cbd5e1; background:#fff; cursor:pointer; }
   #mfDatePick .dn{ font-size:9.5px; color:#c2670a; font-weight:700; text-align:center; margin-top:5px; }
 
-  #mfCellTip{ position:fixed; z-index:2200; background:#152c42; color:#fff; font-size:11.5px; font-weight:600;
+  #mfCellTip{ position:fixed; z-index:2147483200; background:#152c42; color:#fff; font-size:11.5px; font-weight:600;
     padding:5px 10px; border-radius:8px; max-width:340px; box-shadow:0 10px 30px rgba(0,0,0,.3); display:none;
     pointer-events:none; line-height:1.5; }
   #mfCellTip.show{ display:block; }
-  #mfTypeahead{ position:fixed; z-index:2150; background:#fff; border:1px solid #cbd5e1; border-radius:9px;
+  #mfTypeahead{ position:fixed; z-index:2147483000; background:#fff; border:1px solid #cbd5e1; border-radius:9px;
     box-shadow:0 12px 34px rgba(15,23,42,.22); max-height:200px; overflow:auto; display:none; min-width:150px; }
   #mfTypeahead.show{ display:block; }
   #mfTypeahead .ti{ padding:5px 10px; font-size:11.5px; cursor:pointer; white-space:nowrap; }
   #mfTypeahead .ti:hover, #mfTypeahead .ti.on{ background:#dbeafe; color:#2563eb; }
   #mfTypeahead .ti .hl{ font-weight:800; color:#2563eb; }
   #mfTypeahead .te{ padding:7px 10px; font-size:11px; color:#94a3b8; }
-  #mfColFilterPop{ position:fixed; z-index:2150; background:#fff; border:1px solid #cbd5e1; border-radius:10px;
+  #mfColFilterPop{ position:fixed; z-index:2147483000; background:#fff; border:1px solid #cbd5e1; border-radius:10px;
     box-shadow:0 12px 34px rgba(15,23,42,.22); padding:8px; display:none; min-width:175px; }
   #mfColFilterPop.show{ display:block; }
   #mfColFilterPop .ph{ font-size:9.5px; font-weight:800; color:#94a3b8; margin-bottom:4px; }
   #mfColFilterPop input{ width:100%; font-size:11.5px; padding:5px 8px; border-radius:7px; border:1px solid #e2e8f0;
     background:#f8fafc; outline:none; font-family:inherit; }
+
+  /* ===== (V4.111) أقسام الشاشة القابلة للطي + وميض التنبيهات ===== */
+  #section-ministry .mf-sec{ border:1px solid var(--mfBorder); border-radius:12px; background:var(--mfSurf);
+    margin-bottom:8px; overflow:hidden; }
+  #section-ministry .mf-sec > .sh{ display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer;
+    background:var(--mfSurf3); font-size:12px; font-weight:800; color:var(--mfNavy); user-select:none; }
+  #section-ministry .mf-sec > .sh .car{ font-size:10px; color:var(--mfMuted); width:12px; }
+  #section-ministry .mf-sec > .sh .cnt{ font-size:10px; font-weight:700; color:var(--mfMuted); }
+  #section-ministry .mf-sec > .sh .acts{ margin-inline-start:auto; display:flex; gap:5px; align-items:center; }
+  #section-ministry .mf-sec > .sb{ padding:10px 12px; border-top:1px solid var(--mfBorder); }
+  #section-ministry .mf-sec.alert > .sh{ background:var(--mfWarnBg); color:var(--mfWarn); border-inline-start:4px solid var(--mfWarn); }
+  @keyframes mfPulse{ 0%,100%{ box-shadow:inset 0 0 0 0 rgba(194,103,10,.5); } 50%{ box-shadow:inset 0 0 0 3px rgba(194,103,10,.35); } }
+  #section-ministry .mf-sec.blink > .sh{ animation:mfPulse 1.8s ease-in-out infinite; }
+  @media (prefers-reduced-motion:reduce){ #section-ministry .mf-sec.blink > .sh{ animation:none; box-shadow:inset 0 0 0 3px rgba(194,103,10,.45); } }
+
+  /* ===== شريط إجراءات الملف المحدَّد ===== */
+  #section-ministry .mf-actbar{ display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    background:linear-gradient(135deg,var(--mfNavy),var(--mfNavyD)); color:#fff; border-radius:11px; padding:7px 11px;
+    box-shadow:0 6px 18px rgba(15,23,42,.18); margin-bottom:8px; }
+  #section-ministry .mf-actbar .id{ font-size:11.5px; font-weight:800; display:flex; align-items:center; gap:7px; }
+  #section-ministry .mf-actbar .id small{ color:#bfd2e2; font-weight:600; }
+  #section-ministry .mf-actbar .mf-btn{ background:rgba(255,255,255,.13); border-color:rgba(255,255,255,.22); color:#fff; }
+  #section-ministry .mf-actbar .mf-btn:hover{ background:rgba(255,255,255,.26); color:#fff; border-color:rgba(255,255,255,.4); }
+  #section-ministry .mf-actbar .mf-btn.dgr{ background:rgba(220,38,38,.3); border-color:rgba(220,38,38,.55); color:#ffdada; }
+  #section-ministry .mf-actbar .mf-btn.dgr:hover{ background:rgba(220,38,38,.45); color:#fff; }
+
+  /* ===== النموذج متعدد الخطوات + ملخّص شريط العنوان ===== */
+  .mf-dlg .mf-crumbs{ display:flex; flex-wrap:wrap; gap:12px; margin-top:5px; font-size:10.5px; color:#bfd2e2; }
+  .mf-dlg .mf-crumbs b{ color:#fff; font-weight:800; }
+  .mf-dlg .mf-steps{ display:flex; background:#fff; border:1px solid var(--mfBorder); border-radius:10px;
+    overflow:hidden; margin-bottom:11px; }
+  .mf-dlg .mf-steps button{ flex:1; border:none; background:transparent; font-family:inherit; font-size:11px;
+    font-weight:700; color:var(--mfMuted); padding:8px 5px; cursor:pointer; border-inline-start:1px solid var(--mfBorder);
+    display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .mf-dlg .mf-steps button:first-child{ border-inline-start:none; }
+  .mf-dlg .mf-steps button .n{ width:18px; height:18px; border-radius:50%; background:var(--mfSurf3); color:var(--mfMuted);
+    font-size:10px; display:flex; align-items:center; justify-content:center; font-weight:900; }
+  .mf-dlg .mf-steps button.on{ background:var(--mfBlueSoft); color:var(--mfNavy); }
+  .mf-dlg .mf-steps button.on .n{ background:var(--mfNavy); color:#fff; }
+  .mf-dlg .mf-step{ display:none; } .mf-dlg .mf-step.on{ display:block; }
+  .mf-dlg .mf-sub{ font-size:11.5px; font-weight:800; color:var(--mfNavy); margin:2px 0 7px;
+    display:flex; align-items:center; gap:7px; }
+  .mf-dlg .mf-hint{ font-size:9.5px; color:var(--mfFaint); }
+  .mf-dlg .mf-hint.auto{ color:var(--mfOk); font-weight:700; }
+
+  /* ===== اختيار المعتمرين: الباهت = مُسجَّل في ملف آخر لنفس الرحلة ===== */
+  .mf-dlg .mf-pk{ display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:5px; }
+  .mf-dlg .mf-pkc{ display:flex; align-items:center; gap:7px; border:1px solid var(--mfBorder); border-radius:8px;
+    padding:4px 8px; background:#fff; font-size:11px; cursor:pointer; }
+  .mf-dlg .mf-pkc.used{ opacity:.45; background:var(--mfSurf3); }
+  .mf-dlg .mf-pkc.on{ border-color:var(--mfNavy); background:var(--mfBlueSoft); }
+
+  /* ===== تخصيص الأعمدة: أقسام + أسهم ترتيب ===== */
+  #mfColWin .ci .ar{ display:flex; gap:2px; }
+  #mfColWin .ci .ar button{ border:1px solid var(--mfBorder); background:#fff; border-radius:5px; width:20px; height:20px;
+    cursor:pointer; font-size:9px; line-height:1; color:var(--mfMuted); font-family:inherit; padding:0; }
+  #mfColWin .ci .ar button:hover{ background:var(--mfBlueSoft); color:var(--mfBlue); border-color:var(--mfBlue); }
+  #mfColWin .ci .ar button[disabled]{ opacity:.3; cursor:not-allowed; }
+  #mfColWin .gh .car{ font-size:9px; color:var(--mfMuted); }
 
   /* الطباعة: عرض ملائم + ترقيم حقيقي + تذييل بكل صفحة + سطر الفلاتر */
   #mfPrintHead, #mfPrintFoot{ display:none; }
@@ -4650,8 +4749,8 @@ input[type="date"]:not(:focus):not(:valid) {
     body.mf-printing #section-ministry tbody tr.mf-s4{ background:#e8f6ea !important; }
     body.mf-printing #section-ministry tbody tr.mf-row.mf-sel{ background:inherit !important; box-shadow:none !important; }
     body.mf-printing #section-ministry tr.mf-det{ display:none !important; }
-    body.mf-printing #section-ministry .mf-thic, body.mf-printing #section-ministry .mf-exp,
-    body.mf-printing #section-ministry .mf-rowbtn{ display:none !important; }
+    body.mf-printing #section-ministry .mf-thic, .mf-dlg .mf-thic, body.mf-printing #section-ministry .mf-exp,
+    body.mf-printing #section-ministry .mf-rowbtn, .mf-dlg .mf-rowbtn{ display:none !important; }
     @page{ size:A4 landscape; margin:10mm 6mm 14mm; }
   }
 </style>
@@ -4683,9 +4782,18 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="mf-btn" id="mfImportBtn" style="display:none;" onclick="mfOpenImport()">📤 استيراد ملفات قديمة (إكسيل)</button>
     </div>
 
-    <div id="mfAlerts"></div>
+    <!-- 🔔 (V4.111) قسم التنبيهات — مطويّ افتراضياً ويومض عند وجود تنبيهات -->
+    <div class="mf-sec" id="mfSecAlerts" style="display:none;">
+      <div class="sh" onclick="mfToggleSec('mfSecAlerts')"><span class="car">▸</span><span>⚠️ التنبيهات</span>
+        <span class="cnt" id="mfAlertsCnt"></span>
+        <span class="acts"><span class="mf-badge warn">اضغط للفتح</span></span></div>
+      <div class="sb" style="display:none;"><div id="mfAlerts"></div></div>
+    </div>
 
-    <div class="mf-bar mb-2">
+    <div class="mf-sec" id="mfSecFilters">
+      <div class="sh" onclick="mfToggleSec('mfSecFilters')"><span class="car">▸</span><span>🔎 الفلاتر والبحث</span>
+        <span class="cnt" id="mfFiltersCnt"></span></div>
+      <div class="sb" style="display:none;">
       <div class="d-flex align-items-end gap-2 flex-wrap">
         <div class="mf-fld" style="flex:1 1 170px;"><label>بحث شامل</label>
           <input id="mfSearch" placeholder="ابحث في كل الأعمدة أو باسم معتمر/رقم جوازه..." autocomplete="off" title="يبحث أيضاً بأسماء وأرقام جوازات معتمري الرحلة المرتبطة بكل ملف"></div>
@@ -4702,6 +4810,7 @@ input[type="date"]:not(:focus):not(:valid) {
           <div class="mf-date"><input id="mfF_retTo" maxlength="10" placeholder=""><button type="button" onclick="mfPickDate('mfF_retTo',event)">📅</button></div></div>
       </div>
       <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" style="border-top:1px dashed var(--mfBorder);">
+        <button class="mf-facet" data-q="needsWork" onclick="mfToggleFacet(this)">🎯 يحتاج متابعة (الافتراضي)</button>
         <button class="mf-facet" data-q="unreviewed" onclick="mfToggleFacet(this)">🕓 لم تُراجع بعد</button>
         <button class="mf-facet" data-q="flag" onclick="mfToggleFacet(this)">⚠️ به تنبيه قاعدة</button>
         <button class="mf-facet" data-q="approved" onclick="mfToggleFacet(this)">✅ معتمد</button>
@@ -4712,8 +4821,11 @@ input[type="date"]:not(:focus):not(:valid) {
         <button class="mf-facet" data-q="urgent" onclick="mfToggleFacet(this)">⏰ سفر خلال 3 أيام</button>
         <button class="mf-facet" data-q="nobal" onclick="mfToggleFacet(this)">🏦 بلا رصيد كافٍ</button>
       </div>
-      <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" id="mfApplied" style="border-top:1px dashed var(--mfBorder);"></div>
+      </div>
     </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-2" id="mfApplied"></div>
+    <div class="d-flex align-items-center gap-1 flex-wrap mb-2" id="mfSecToggles"></div>
+    <div id="mfActBarBox"></div>
   </div>
 
   <div class="card border-0 shadow-sm" style="border-radius:13px; overflow:hidden;">
@@ -4738,8 +4850,10 @@ input[type="date"]:not(:focus):not(:valid) {
 
   <div id="mfPrintFoot"><span class="pg"></span><span id="mfPrintStamp"></span></div>
 
-  <div class="mf-noprint mt-3">
-    <h6 class="fw-bold mb-2" style="color:#1e3d59;">📊 إحصائية أعداد المعتمرين <span class="small text-muted fw-normal">— تتحدّث مع الفلاتر</span></h6>
+  <div class="mf-noprint mt-3 mf-sec" id="mfSecStats">
+    <div class="sh" onclick="mfToggleSec('mfSecStats')"><span class="car">▸</span><span>📊 إحصائية أعداد المعتمرين</span>
+      <span class="cnt">— تتحدّث مع الفلاتر</span></div>
+    <div class="sb" style="display:none;">
     <div class="mf-stats">
       <div class="mf-bar" style="padding:12px 14px;">
         <div class="fw-bold" style="font-size:12.5px;">حسب الشركة المصرية</div>
@@ -4757,6 +4871,7 @@ input[type="date"]:not(:focus):not(:valid) {
         <div class="small text-muted pt-2 mt-1" style="border-top:1px solid var(--mfBorder); font-size:10.5px;" id="mfCliFoot"></div>
       </div>
     </div>
+    </div>
   </div>
 </div>
 
@@ -4767,7 +4882,9 @@ input[type="date"]:not(:focus):not(:valid) {
   <div class="b">
     <div style="font-size:10px; color:#5c6b83; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;
       padding:5px 8px; margin-bottom:8px; line-height:1.6;">
-      ☑️ إظهار/إخفاء · 📌 تثبيت العمود عند التمرير الأفقي · ⠿ اسحب لإعادة الترتيب</div>
+      ☑️ إظهار/إخفاء · 📌 تثبيت العمود (بلا تثبيت افتراضياً) · ▲▼ أو ⠿ السحب لإعادة الترتيب<br>
+      🗂️ الأعمدة موزَّعة على أقسام — اضغط عنوان القسم لطيّه، و«الكل / لا شيء» لإظهار أو إخفاء القسم كاملاً.<br>
+      🔒 النافذة تبقى مفتوحة حتى تغلقها يدوياً أو تضغط خارجها.</div>
     <div id="mfColWinBody"></div>
   </div>
   <div class="f">
@@ -6196,7 +6313,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.110";
+var CLIENT_APP_VERSION = "4.111";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -8145,7 +8262,13 @@ function loadAccPricingCfg() {
       var cfg = (res && res.cfg) || {};
       var periods = cfg.roomFeePeriods || [];
       rows.innerHTML = periods.length ? periods.map(_accRfRowHtml_).join('') : _accRfRowHtml_({});
+      // 🏛️ (V4.111) فترات رسوم غرفة تجديد الباركود
+      var bc = document.getElementById('accBcRows');
+      var bcp = cfg.barcodePeriods || [];
+      if (bc) bc.innerHTML = bcp.length ? bcp.map(_accRfRowHtml_).join('') : _accRfRowHtml_({});
       document.getElementById('accCfgSupFee').value = cfg.supRoomFee || 200;
+      var vipEl = document.getElementById('accCfgVip');
+      if (vipEl) vipEl.value = (cfg.vipSurcharge === undefined ? 100 : cfg.vipSurcharge);
       var badge = document.getElementById('svcBadge-accPricing');
       if (badge) {
         badge.textContent = periods.length ? periods.length + ' فترة' : 'بلا فترات';
@@ -8164,7 +8287,15 @@ function saveAccPricingCfg(btn) {
     periods.push({ from: r.querySelector('.rf-from').value.trim(), to: r.querySelector('.rf-to').value.trim(),
       price: parseFloat(r.querySelector('.rf-price').value) || 0 });
   });
-  var cfg = { roomFeePeriods: periods, supRoomFee: parseFloat(document.getElementById('accCfgSupFee').value) || 200 };
+  var barcodePeriods = [];
+  document.querySelectorAll('#accBcRows .acc-rf-row').forEach(function(r) {
+    barcodePeriods.push({ from: r.querySelector('.rf-from').value.trim(), to: r.querySelector('.rf-to').value.trim(),
+      price: parseFloat(r.querySelector('.rf-price').value) || 0 });
+  });
+  var vipEl = document.getElementById('accCfgVip');
+  var cfg = { roomFeePeriods: periods, barcodePeriods: barcodePeriods,
+    supRoomFee: parseFloat(document.getElementById('accCfgSupFee').value) || 200,
+    vipSurcharge: vipEl ? (parseFloat(vipEl.value) || 0) : 100 };
   var orig = btn.innerHTML;
   btn.disabled = true; btn.innerHTML = '⏳...';
   google.script.run
@@ -9046,13 +9177,27 @@ function _registryFilteredRows() {
 }
 
 function _registryTripChips(r) {
-  if (!(r.trips || []).length) return '<span class="badge bg-danger">🚷 بدون رحلة</span>';
+  // 🏛️ (V4.111) إلى جانب رحلات المعتمر تظهر ملفات مراجعة الوزارة الخاصة به (✓ رُوجعت · ⏳ لم تُراجع)
+  var mf = '';
+  try {
+    if (!window._mfTripLinks && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_();
+    var fs = (typeof _mfFilesForPilgrim_ === 'function') ? _mfFilesForPilgrim_(r) : [];
+    if (fs.length) {
+      mf = ' ' + fs.map(function(f) {
+        return '<span class="badge ' + (f.reviewed ? 'bg-success' : 'bg-warning text-dark') + ' mb-1"' +
+          ' style="cursor:pointer;" title="ملف مراجعة وزارة — اضغط للفتح"' +
+          ' onclick="event.stopPropagation();switchPage(\'ministry\');setTimeout(function(){if(typeof mfSelect===\'function\')mfSelect(\'' + f.id + '\',true);},400);">' +
+          '🏛️ ' + escapeHtml_(f.fileNo || 'بلا رقم') + (f.reviewed ? ' ✓' : ' ⏳') + '</span>';
+      }).join(' ');
+    }
+  } catch (e) {}
+  if (!(r.trips || []).length) return '<span class="badge bg-danger">🚷 بدون رحلة</span>' + mf;
   return r.trips.map(function(t) {
     var label = escapeHtml_(t.name) + (t.depart ? ' <span style="opacity:.75;">(' + escapeHtml_(t.depart) + ')</span>' : '');
     return t.active
       ? '<span class="badge bg-success mb-1" title="الرحلة الجارية الآن">▶ ' + label + '</span>'
       : '<span class="badge bg-light text-dark border mb-1">' + label + '</span>';
-  }).join(' ');
+  }).join(' ') + mf;
 }
 
 // سطر الفلاتر المطبَّقة الحالية مع × لإلغاء كل فلتر أو إلغاء الكل
@@ -10242,6 +10387,50 @@ function _mfLoadTripLinks_() {
     .getMinistryTripLinks(window.authToken);
 }
 
+/* 🏛️ (V4.111) بانر تنبيه ملفات مراجعة الوزارة أعلى شاشة الرحلات */
+function _mfPaintTripsAlert_(trips, parseD) {
+  var area = document.getElementById('tripsListArea');
+  if (!area || !area.parentNode) return;
+  var box = document.getElementById('mfTripsAlertBox');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'mfTripsAlertBox';
+    box.style.marginBottom = '10px';
+    area.parentNode.insertBefore(box, area);
+  }
+  var links = window._mfTripLinks || {};
+  var t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  var hits = (trips || []).filter(function (t) {
+    var d = parseD(t.departDate);
+    if (!d) return false;
+    var days = Math.ceil((d.getTime() - t0.getTime()) / 86400000);
+    if (days > 3 || days < 0) return false;
+    var ls = links[t.name] || [];
+    return !ls.length || ls.some(function (x) { return !x.reviewed; });
+  });
+  if (!hits.length) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="background:#fef2f2;border:1px solid #f6b8b8;border-inline-start:5px solid #dc2626;' +
+    'border-radius:11px;padding:10px 13px;animation:mfTripsPulse 1.9s ease-in-out infinite;">' +
+    '<div style="font-weight:800;color:#dc2626;font-size:12.5px;margin-bottom:6px;">🏛️ ' + hits.length +
+    ' رحلة باقٍ لها 3 أيام أو أقل على السفر بلا ملف مراجعة وزارة أو بملف لم يُراجع بعد ' +
+    '<span style="font-weight:600;color:#7f1d1d;font-size:10.5px;">— نوع المراجعة الافتراضي لها VIP</span></div>' +
+    '<div class="d-flex gap-2 flex-wrap">' + hits.map(function (t) {
+      var ls = links[t.name] || [];
+      var lbl = ls.length ? ('ملفات: ' + ls.map(function (x) { return (x.fileNo || '—') + (x.reviewed ? ' ✓' : ' ⏳'); }).join('، ')) : 'بلا ملف وزارة';
+      var js = ls.length === 1
+        ? ("switchPage('ministry');setTimeout(function(){if(typeof mfSelect==='function')mfSelect('" + ls[0].id + "',true);},400);")
+        : "switchPage('ministry');";
+      return '<button class="btn btn-sm" style="background:#fff;border:1px solid #f6b8b8;color:#7f1d1d;font-size:10.5px;font-weight:700;"' +
+        ' onclick="' + js + '">' + escapeHtml_(t.name) + ' — سفر ' + escapeHtml_(t.departDate || '—') + ' · ' + escapeHtml_(lbl) + '</button>';
+    }).join('') + '</div></div>';
+  if (!document.getElementById('mfTripsPulseCss')) {
+    var st = document.createElement('style');
+    st.id = 'mfTripsPulseCss';
+    st.textContent = '@keyframes mfTripsPulse{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.35)}50%{box-shadow:0 0 0 6px rgba(220,38,38,0)}}' +
+      '@media (prefers-reduced-motion:reduce){#mfTripsAlertBox > div{animation:none !important;}}';
+    document.head.appendChild(st);
+  }
+}
 function _tripsRenderList_(trips) {
   if (!window._mfTripLinks) _mfLoadTripLinks_();
   var area = document.getElementById('tripsListArea');
@@ -10279,6 +10468,9 @@ function _tripsRenderList_(trips) {
       });
       window._urgentTrips72 = urgent72;
       _paintUrgentCard();
+      // 🏛️ (V4.111) تنبيه ملفات مراجعة الوزارة: رحلات باقٍ لها 3 أيام أو أقل على السفر
+      // وليس لها ملف مراجعة أصلاً أو لها ملف لم يُراجع بعد — بانر ظاهر أعلى قائمة الرحلات.
+      _mfPaintTripsAlert_(trips, parseD);
 
       // 🔽 (V4.99) فلاتر أعمدة الرحلة (الرحلة/الشركة-الوكيل/الذهاب/العودة/العدد) — قبل التصنيف
       // الثلاثي عمداً حتى تنعكس على كل الأعداد والرقاقات التالية (الكل/مفتوحة/جارية/مؤرشفة...)
@@ -25617,6 +25809,8 @@ function openGlobalSearch() {
     google.script.run.withSuccessHandler(function(r) { window._registryCache = (r && r.pilgrims) || []; _runGlobalSearch(); })
       .withFailureHandler(function() {}).getGlobalPilgrimsRegistry(window.authToken);
   }
+  // 🏛️ (V4.111) خريطة ربط الرحلات بملفات المراجعة — خفيفة وتكفي لعرض ملفات كل معتمر
+  if (!window._mfTripLinks && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_();
   // 🏛️ (V4.107) تسخين كاش ملفات مراجعة الوزارة — يتيح البحث برقم الملف/العميل/المشرف حتى لو لم
   // تُفتح شاشة مراجعة ملفات الوزارة بعد، وربط نتائج السجل العام برقم ملف مراجعتها
   if (hasPermission('admin') || hasPermission('ministry.view')) {
@@ -25699,12 +25893,15 @@ function _runGlobalSearch() {
   if (rHits.length) {
     html += _gsHeader_('📖 السجل العام للمعتمرين', rHits.length);
     rHits.forEach(function(r) {
-      var mfFiles = (MF.files || []).filter(function(f) { return f.tripName && f.tripName === r.client; });
-      var mfTxt = mfFiles.length
-        ? (' • 🏛️ ' + mfFiles.map(function(f) { return (f.fileNo ? 'ملف ' + f.fileNo : 'بدون رقم') + (f.reviewDate ? ' ✓' : ' ⏳'); }).join('، '))
-        : '';
+      // 🔎 (V4.111) يعرض للمعتمر كل الرحلات المسجَّل بها + ملفات مراجعة الوزارة الخاصة بها
+      var tripsTxt = (r.trips || []).length
+        ? (' • 🧳 ' + (r.trips || []).map(function(t) { return t.name + (t.depart ? ' (' + t.depart + ')' : ''); }).join('، '))
+        : (r.client ? ' • ' + r.client : '');
+      var mfTxt = _mfFilesForPilgrim_(r).map(function(f) {
+        return (f.fileNo ? 'ملف ' + f.fileNo : 'بدون رقم') + (f.reviewed ? ' ✓' : ' ⏳');
+      });
       html += _gsRow_('👤', esc1(r.name),
-        esc1((r.passport ? '🛂 ' + r.passport : '') + (r.client ? ' • ' + r.client : '')) + esc1(mfTxt),
+        esc1((r.passport ? '🛂 ' + r.passport : '') + tripsTxt + (mfTxt.length ? (' • 🏛️ ' + mfTxt.join('، ')) : ' • 🏛️ بلا ملف وزارة')),
         "_gsOpenRegistry('" + escJs(r.name) + "')");
     });
   }
@@ -25726,6 +25923,25 @@ function _runGlobalSearch() {
   }
 
   box.innerHTML = html || '<div class="text-muted small text-center p-3">لا توجد نتائج مطابقة لـ«' + esc1(q) + '»</div>';
+}
+/* 🏛️ (V4.111) ملفات مراجعة الوزارة الخاصة بمعتمر معيّن — عبر رحلاته المسجَّلة.
+   يعتمد window._mfTripLinks (يُحمَّل مع شاشة الرحلات والبحث العام) فيعمل حتى لو لم
+   تُفتح شاشة ملفات المراجعة في هذه الجلسة أصلاً. */
+function _mfFilesForPilgrim_(r) {
+  var links = window._mfTripLinks || {};
+  var names = ((r.trips || []).map(function(t) { return t.name; }));
+  if (r.client && names.indexOf(r.client) < 0) names.push(r.client);
+  var seen = {}, out = [];
+  names.forEach(function(n) {
+    (links[n] || []).forEach(function(f) {
+      if (seen[f.id]) return;
+      // لو الملف اختار معتمرين بعينهم نتحقّق من رقم الجواز، وإلا فالرحلة كلها ضمن الملف
+      if ((f.selected || []).length && r.passport && f.selected.indexOf(r.passport) < 0 &&
+          f.selected.indexOf('P:' + r.passport) < 0) return;
+      seen[f.id] = 1; out.push(f);
+    });
+  });
+  return out;
 }
 function _gsOpenMinistry(id) {
   closeGlobalSearch();
@@ -32169,6 +32385,17 @@ function mfStatus(f) {
   return 1;                              // لم تُراجع بعد
 }
 function mfReviewed(f) { return !!mfStr(f.reviewDate); }
+// 🕓 (V4.111) أي طابع زمني (نص خام من JS أو Date أو نص جاهز) → dd/mm/yyyy hh:mm
+function mfStamp(v) {
+  if (v == null || v === '') return '';
+  var s = String(v).trim();
+  if (/^\d{2}\/\d{2}\/\d{4}(\s+\d{2}:\d{2})?/.test(mfLatin(s))) return mfLatin(s);
+  var d = (v instanceof Date) ? v : new Date(s);
+  if (isNaN(d.getTime())) return mfLatin(s);
+  var p = function (n) { return (n < 10 ? '0' : '') + n; };
+  return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function mfWho(who, when) { return (mfStr(who) || '—') + ' · ' + (mfStamp(when) || '—'); }
 function mfHasFlag(f, code) { return (f.flags || []).some(function (x) { return code ? x.code === code : true; }); }
 
 // محرك الحسابات — نسخة مطابقة تماماً لـ _mfCompute_ بالسيرفر
@@ -32241,51 +32468,52 @@ function mfBalanceOf(company) {
 
 /* ---------- تعريف الأعمدة ---------- */
 var MF_COLS = [
-  { k: 'act',    g: 'بيانات الملف',      l: '⚙',                     w: 96,  pin: 1, nof: 1 },
-  { k: 'seq',    g: 'بيانات الملف',      l: 'م',                      w: 54,  pin: 1 },
-  { k: 'approved', g: 'بيانات الملف',    l: 'معتمد',                  w: 56,  pin: 1 },
-  { k: 'fileNo', g: 'بيانات الملف',      l: 'رقم الملف',              w: 74,  pin: 1, edit: 'text' },
-  { k: 'clientLabel', g: 'بيانات الملف', l: 'العميل',                 w: 160, pin: 1, txt: 1 },
-  { k: 'eInvoice', g: 'بيانات الملف',    l: 'فاتورة إلكترونية',       w: 108, edit: 'text' },
-  { k: 'ref',    g: 'بيانات الملف',      l: 'القيد',                  w: 84,  edit: 'text' },
-  { k: 'company', g: 'الشركة والمراجعة', l: 'الشركة المصرية',         w: 120, txt: 1, edit: 'company' },
-  { k: 'agent',  g: 'الشركة والمراجعة',  l: 'الوكيل السعودي',         w: 140, txt: 1, edit: 'text' },
-  { k: 'reviewDate', g: 'الشركة والمراجعة', l: 'تاريخ المراجعة',      w: 100, edit: 'date' },
-  { k: 'reviewType', g: 'الشركة والمراجعة', l: 'نوع المراجعة',        w: 96,  edit: 'sel', opts: ['عادية', 'VIP', 'تجديد باركود'] },
-  { k: 'travelMode', g: 'الشركة والمراجعة', l: 'وسيلة السفر',         w: 82,  edit: 'sel', opts: ['طيران', 'بري', 'بواخر'] },
-  { k: 'goDate', g: 'العميل والمعتمرون', l: 'تاريخ الذهاب',           w: 96,  edit: 'date' },
-  { k: 'retDate', g: 'العميل والمعتمرون', l: 'تاريخ العودة',          w: 96,  edit: 'date' },
-  { k: 'pilgrims', g: 'العميل والمعتمرون', l: 'معتمرين',              w: 66,  sum: 1, edit: 'num' },
-  { k: 'supCount', g: 'العميل والمعتمرون', l: 'مشرفين',               w: 62,  sum: 1 },
-  { k: 'supNames', g: 'العميل والمعتمرون', l: 'المشرف',               w: 150, txt: 1 },
-  { k: 'supTypes', g: 'العميل والمعتمرون', l: 'نوع المشرف',           w: 106, txt: 1 },
-  { k: 'progPrice', g: 'التسعير (للفرد)', l: 'سعر البرنامج',          w: 92,  edit: 'num' },
-  { k: 'revenue', g: 'التسعير (للفرد)',  l: 'الإيراد',                w: 100, sum: 1, calc: 1 },
-  { k: 'ticket', g: 'التسعير (للفرد)',   l: 'التذكرة',                w: 82,  edit: 'num' },
-  { k: 'roomFee', g: 'التسعير (للفرد)',  l: 'رسوم الغرفة/فرد',        w: 106, edit: 'num' },
-  { k: 'adminFee', g: 'التسعير (للفرد)', l: 'رسوم إدارية/فرد',        w: 100, edit: 'num' },
-  { k: 'accDir', g: 'التسعير (للفرد)',   l: 'التوجيه المحاسبي',       w: 132, txt: 1 },
-  { k: 'clearanceSAR', g: 'التحويل والمخالصة', l: 'المخالصة بالريال', w: 106, calc: 1 },
-  { k: 'fxRate', g: 'التحويل والمخالصة', l: 'سعر صرف الريال',         w: 100, edit: 'num' },
-  { k: 'totalTickets', g: 'الإجماليات',  l: 'إجمالي التذاكر',         w: 108, sum: 1, calc: 1 },
-  { k: 'totalRoomFee', g: 'الإجماليات',  l: 'إجمالي رسوم الغرفة',     w: 122, sum: 1, calc: 1 },
-  { k: 'totalSAR', g: 'الإجماليات',      l: 'إجمالي الريال',          w: 100, sum: 1, calc: 1 },
-  { k: 'otherExp', g: 'الإجماليات',      l: 'مصروفات أخرى',           w: 100, sum: 1, calc: 1 },
-  { k: 'totalExp', g: 'الإجماليات',      l: 'إجمالي المصروف',         w: 112, sum: 1, calc: 1 },
-  { k: 'margin', g: 'الإجماليات',        l: 'هامش الربح',             w: 100, sum: 1, calc: 1 },
-  { k: 'perPersonMargin', g: 'الإجماليات', l: 'هامش الفرد',           w: 90,  calc: 1 },
-  { k: 'pct',    g: 'الإجماليات',        l: 'النسبة',                 w: 68,  edit: 'num' },
-  { k: 'madinahHotel', g: 'السكن',       l: 'فندق المدينة',           w: 130, txt: 1, edit: 'text' },
-  { k: 'madinahIn', g: 'السكن',          l: 'دخول المدينة',           w: 96,  edit: 'date' },
-  { k: 'madinahOut', g: 'السكن',         l: 'خروج المدينة',           w: 96,  edit: 'date' },
-  { k: 'makkahHotel', g: 'السكن',        l: 'فندق مكة',               w: 130, txt: 1, edit: 'text' },
-  { k: 'makkahIn', g: 'السكن',           l: 'دخول مكة',               w: 92,  edit: 'date' },
-  { k: 'makkahOut', g: 'السكن',          l: 'خروج مكة',               w: 92,  edit: 'date' },
-  { k: 'transport', g: 'اللوجستيات',     l: 'شركة النقل',             w: 120, txt: 1, edit: 'text' },
-  { k: 'notes',  g: 'اللوجستيات',        l: 'ملاحظات',                w: 170, txt: 1, edit: 'text' },
-  { k: 'created', g: 'سجل التتبع',       l: 'الإنشاء (بواسطة · التاريخ)', w: 200, txt: 1 },
-  { k: 'updated', g: 'سجل التتبع',       l: 'آخر تعديل',              w: 200, txt: 1 }
+  { k: 'act',    g: 'بيانات الملف',      l: '⚙',                     w: 78,  nof: 1 },
+  { k: 'seq',    g: 'بيانات الملف',      l: 'م',                      w: 46 },
+  { k: 'approved', g: 'بيانات الملف',    l: 'معتمد',                  w: 48 },
+  { k: 'fileNo', g: 'بيانات الملف',      l: 'رقم الملف',              w: 62,  edit: 'text' },
+  { k: 'clientLabel', g: 'بيانات الملف', l: 'العميل',                 w: 138, txt: 1 },
+  { k: 'ref',    g: 'التوجيه المحاسبي',  l: 'رقم القيد',              w: 66,  edit: 'text' },
+  { k: 'eInvoice', g: 'التوجيه المحاسبي', l: 'فاتورة إلكترونية',      w: 92,  edit: 'text' },
+  { k: 'accDir', g: 'التوجيه المحاسبي',  l: 'التوجيه المحاسبي',       w: 118, txt: 1 },
+  { k: 'company', g: 'الشركة والمراجعة', l: 'الشركة المصرية',         w: 104, txt: 1, edit: 'company' },
+  { k: 'agent',  g: 'الشركة والمراجعة',  l: 'الوكيل السعودي',         w: 112, txt: 1, edit: 'text' },
+  { k: 'reviewDate', g: 'الشركة والمراجعة', l: 'تاريخ المراجعة',      w: 84,  edit: 'date' },
+  { k: 'reviewType', g: 'الشركة والمراجعة', l: 'نوع المراجعة',        w: 82,  edit: 'sel', opts: ['عادية', 'VIP', 'تجديد باركود'] },
+  { k: 'travelMode', g: 'الشركة والمراجعة', l: 'وسيلة السفر',         w: 68,  edit: 'sel', opts: ['طيران', 'بري', 'بواخر'] },
+  { k: 'goDate', g: 'العميل والمعتمرون', l: 'الذهاب',                 w: 80,  edit: 'date' },
+  { k: 'retDate', g: 'العميل والمعتمرون', l: 'العودة',                w: 80,  edit: 'date' },
+  { k: 'pilgrims', g: 'العميل والمعتمرون', l: 'معتمرين',              w: 56,  sum: 1, edit: 'num' },
+  { k: 'supCount', g: 'العميل والمعتمرون', l: 'مشرفين',               w: 52,  sum: 1 },
+  { k: 'supNames', g: 'العميل والمعتمرون', l: 'المشرف',               w: 122, txt: 1 },
+  { k: 'supTypes', g: 'العميل والمعتمرون', l: 'نوع المشرف',           w: 84,  txt: 1 },
+  { k: 'progPrice', g: 'التسعير (للفرد)', l: 'سعر البرنامج',          w: 78,  edit: 'num' },
+  { k: 'revenue', g: 'التسعير (للفرد)',  l: 'الإيراد',                w: 86,  sum: 1, calc: 1 },
+  { k: 'ticket', g: 'التسعير (للفرد)',   l: 'التذكرة',                w: 70,  edit: 'num' },
+  { k: 'roomFee', g: 'التسعير (للفرد)',  l: 'رسوم الغرفة/فرد',        w: 88,  edit: 'num' },
+  { k: 'adminFee', g: 'التسعير (للفرد)', l: 'رسوم إدارية/فرد',        w: 82,  edit: 'num' },
+  { k: 'clearanceSAR', g: 'التحويل والمخالصة', l: 'المخالصة بالريال', w: 88,  calc: 1 },
+  { k: 'fxRate', g: 'التحويل والمخالصة', l: 'سعر صرف الريال',         w: 82,  edit: 'num' },
+  { k: 'totalTickets', g: 'الإجماليات',  l: 'إجمالي التذاكر',         w: 92,  sum: 1, calc: 1 },
+  { k: 'totalRoomFee', g: 'الإجماليات',  l: 'إجمالي رسوم الغرفة',     w: 104, sum: 1, calc: 1 },
+  { k: 'totalSAR', g: 'الإجماليات',      l: 'إجمالي الريال',          w: 88,  sum: 1, calc: 1 },
+  { k: 'otherExp', g: 'الإجماليات',      l: 'مصروفات أخرى',           w: 88,  sum: 1, calc: 1 },
+  { k: 'totalExp', g: 'الإجماليات',      l: 'إجمالي المصروف',         w: 96,  sum: 1, calc: 1 },
+  { k: 'margin', g: 'الإجماليات',        l: 'هامش الربح',             w: 88,  sum: 1, calc: 1 },
+  { k: 'perPersonMargin', g: 'الإجماليات', l: 'هامش الفرد',           w: 76,  calc: 1 },
+  { k: 'pct',    g: 'الإجماليات',        l: 'النسبة',                 w: 58,  edit: 'num' },
+  { k: 'madinahHotel', g: 'السكن',       l: 'فندق المدينة',           w: 116, txt: 1, edit: 'text' },
+  { k: 'madinahIn', g: 'السكن',          l: 'دخول المدينة',           w: 82,  edit: 'date' },
+  { k: 'madinahOut', g: 'السكن',         l: 'خروج المدينة',           w: 82,  edit: 'date' },
+  { k: 'makkahHotel', g: 'السكن',        l: 'فندق مكة',               w: 116, txt: 1, edit: 'text' },
+  { k: 'makkahIn', g: 'السكن',           l: 'دخول مكة',               w: 78,  edit: 'date' },
+  { k: 'makkahOut', g: 'السكن',          l: 'خروج مكة',               w: 78,  edit: 'date' },
+  { k: 'transport', g: 'اللوجستيات',     l: 'شركة النقل',             w: 104, txt: 1, edit: 'text' },
+  { k: 'notes',  g: 'اللوجستيات',        l: 'ملاحظات',                w: 150, txt: 1, edit: 'text' },
+  { k: 'created', g: 'سجل التتبع',       l: 'الإنشاء (بواسطة · التاريخ)', w: 150, txt: 1 },
+  { k: 'updated', g: 'سجل التتبع',       l: 'آخر تعديل',              w: 150, txt: 1 }
 ];
+// وضع افتراضي: لا يُثبَّت أي عمود (V4.111)
 var MF_COLS_ORDER = MF_COLS.map(function (c) { return c.k; });
 var MF_COLS_PIN = MF_COLS.map(function (c) { return !!c.pin; });
 
@@ -32299,8 +32527,8 @@ function mfRaw(k, f) {
     case 'supNames': return (f.sups || []).map(function (s) { return s.name; }).filter(String).join('، ') || '—';
     case 'supTypes': return (f.sups || []).map(function (s) { return s.type; }).filter(String).join(' + ') || '—';
     case 'accDir': return (f.breakdown || []).map(function (b) { return b.name; }).filter(String).join(' + ') || (f.clientLabel || '—');
-    case 'created': return (f.createdBy || '—') + ' · ' + (f.createdAt || '—');
-    case 'updated': return (f.updatedBy || '—') + ' · ' + (f.updatedAt || '—');
+    case 'created': return mfWho(f.createdBy, f.createdAt);
+    case 'updated': return mfWho(f.updatedBy, f.updatedAt);
     case 'pct': return f.pct ? (Number(f.pct).toFixed(2) + '%') : '';
     default:
       if (c[k] !== undefined) return String(c[k]);
@@ -32342,7 +32570,18 @@ function mfCell(col, f) {
 }
 
 /* ---------- تحميل البيانات ---------- */
+// 🛡️ (V4.111) #mainAppContainer يأخذ z-index:999999 بعد الدخول فيصنع سياق تراكب مستقل: أي عنصر
+// داخله لا يمكنه أبداً الظهور فوق نافذة مُلحَقة بـ body (z-index 2147482000) مهما كان رقمه — وهذا
+// هو سبب عدم عمل أيقونات التقويم والبحث التنبؤي وتصفية الأعمدة داخل نماذج الشاشة. الحل: نقلها
+// لتصبح أبناءً مباشرين لـ body مثل النوافذ تماماً.
+function mfDetachFloats() {
+  ['mfDatePick', 'mfCellTip', 'mfTypeahead', 'mfColFilterPop', 'mfColWin'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && el.parentNode !== document.body) document.body.appendChild(el);
+  });
+}
 function mfInit() {
+  mfDetachFloats();
   if (!MF.loaded) mfLoad(false);
   else { mfRender(); }
   mfAttachDateInputs();
@@ -32376,6 +32615,14 @@ function mfLoad(force) {
       MF.files.forEach(function (f) { f._c = mfCalc(f); });
       MF.loaded = true;
       mfRestoreColPrefs();
+      // 👁️ (V4.111) الوضع الافتراضي عند أول فتح: ما يحتاج متابعة فقط — لم تُراجع بعد أو بلا رقم
+      // ملف أو بلا رقم قيد أو لم تسافر بعد. يظهر شريط الفلاتر المطبَّقة ويمكن مسحه بضغطة.
+      if (!MF._defaultsApplied) {
+        MF._defaultsApplied = true;
+        MF.facets.needsWork = true;
+        var b = document.querySelector('#section-ministry .mf-facet[data-q="needsWork"]');
+        if (b) b.classList.add('on');
+      }
       mfRender();
       mfAttachTypeaheads();
     })
@@ -32428,7 +32675,17 @@ function mfMatch(f) {
   if (MF.facets.vip && f.reviewType !== 'VIP') return false;
   if (MF.facets.urgent && !mfHasFlag(f, 'URGENT')) return false;
   if (MF.facets.nobal && !mfHasFlag(f, 'NOBAL')) return false;
+  // 👁️ (V4.111) العرض الافتراضي: يحتاج متابعة = لم تُراجع أو بلا رقم ملف أو بلا رقم قيد أو لم يسافر بعد
+  if (MF.facets.needsWork && !mfNeedsWork(f)) return false;
   return true;
+}
+function mfNeedsWork(f) {
+  if (!mfReviewed(f)) return true;
+  if (!mfStr(f.fileNo)) return true;
+  if (!mfStr(f.ref)) return true;
+  var g = mfMs(f.goDate);
+  if (!isNaN(g) && g >= mfMs(MF.today || '')) return true;   // لم تسافر بعد
+  return false;
 }
 function mfVisible() {
   var list = MF.files.filter(mfMatch);
@@ -32529,7 +32786,70 @@ function mfRender() {
   mfRenderApplied(list);
   mfRenderAlerts();
   mfRenderCharts(list);
+  mfRenderSecToggles();
+  // 🔎 (V4.111) البحث باسم معتمر/رقم جواز يحدِّد الملف الذي يحتويه ويقفز إليه مباشرةً
+  var q = mfFV('mfSearch');
+  if (q && list.length) {
+    var inList = list.some(function (x) { return x.id === MF.selId; });
+    if (!inList || MF._lastQ !== q) { MF._lastQ = q; mfSelect(list[0].id, true); }
+  } else if (!q) { MF._lastQ = ''; }
+  mfRenderActBar();
   mfAttachTips();
+}
+
+/* ---------- (V4.111) أقسام الشاشة القابلة للطي ---------- */
+function mfToggleSec(id) {
+  var sec = document.getElementById(id); if (!sec) return;
+  var body = sec.querySelector(':scope > .sb'), car = sec.querySelector(':scope > .sh .car');
+  if (!body) return;
+  var hidden = (body.style.display === 'none');
+  body.style.display = hidden ? '' : 'none';
+  if (car) car.textContent = hidden ? '▾' : '▸';
+  if (hidden) sec.classList.remove('blink');
+}
+/* ---------- (V4.111) أزرار إظهار/إخفاء أقسام الأعمدة ---------- */
+function mfColGroups() {
+  var gs = []; MF_COLS.forEach(function (c) { if (gs.indexOf(c.g) < 0) gs.push(c.g); });
+  return gs;
+}
+function mfGroupOn(g) {
+  return MF_COLS.filter(function (c) { return c.g === g; }).some(function (c) { return !MF.hidden[c.k]; });
+}
+function mfRenderSecToggles() {
+  var box = document.getElementById('mfSecToggles'); if (!box) return;
+  var h = '<span style="font-size:10px;font-weight:800;color:#94a3b8;align-self:center;">أقسام الأعمدة:</span>';
+  mfColGroups().forEach(function (g) {
+    var on = mfGroupOn(g);
+    h += '<button class="mf-btn sm' + (on ? ' pri' : '') + '" title="إظهار/إخفاء كل أعمدة هذا القسم"' +
+      ' onclick="mfToggleGroupCols(\'' + mfEsc(g).replace(/'/g, "\\'") + '\')">' + mfEsc(g) + '</button>';
+  });
+  box.innerHTML = h;
+}
+function mfToggleGroupCols(g) {
+  var on = mfGroupOn(g);
+  MF_COLS.filter(function (c) { return c.g === g; }).forEach(function (c) { MF.hidden[c.k] = on; });
+  mfRender();
+  if (_mfColWinOpen) mfBuildColWin();
+}
+/* ---------- (V4.111) شريط إجراءات الملف المحدَّد ---------- */
+function mfRenderActBar() {
+  var box = document.getElementById('mfActBarBox'); if (!box) return;
+  var f = MF.selId ? mfGet(MF.selId) : null;
+  if (!f) { box.innerHTML = ''; return; }
+  var st = mfStatus(f);
+  var badge = ['', 'لم تُراجع', 'تمت المراجعة', 'معتمد', 'له رقم قيد'][st];
+  box.innerHTML = '<div class="mf-actbar">' +
+    '<span class="id">📄 ' + (mfStr(f.fileNo) ? ('ملف ' + mfL(f.fileNo)) : ('مسلسل ' + mfL(f.seq))) +
+    ' <small>' + mfEsc(f.clientLabel || f.tripName || '—') + ' · ' + mfL(mfNum(f.pilgrims)) + ' معتمراً</small></span>' +
+    '<span class="mf-badge ' + (st >= 3 ? 'ok' : (st === 2 ? 'link' : 'off')) + '">' + badge + '</span>' +
+    '<span style="flex:1;"></span>' +
+    (MF.can.edit ? '<button class="mf-btn sm" onclick="mfEditFile(\'' + f.id + '\')">✏️ تعديل</button>' : '') +
+    '<button class="mf-btn sm" onclick="mfShowFilePilgrims(\'' + f.id + '\')">👥 المعتمرون</button>' +
+    (MF.can.edit ? '<button class="mf-btn sm" onclick="mfQuickLinkTrip(\'' + f.id + '\')">🔗 ربط برحلة</button>' : '') +
+    '<button class="mf-btn sm" onclick="mfHistory(\'' + f.id + '\')">📜 السجل</button>' +
+    '<button class="mf-btn sm" onclick="mfToggleDetail(\'' + f.id + '\')">📋 ' + (MF.openId === f.id ? 'إخفاء التفاصيل' : 'التفاصيل') + '</button>' +
+    (MF.can.del ? '<button class="mf-btn sm dgr" onclick="mfDeleteFile(\'' + f.id + '\')">🗑️ حذف</button>' : '') +
+    '</div>';
 }
 function mfRenderApplied(list) {
   var box = document.getElementById('mfApplied'); if (!box) return;
@@ -32546,7 +32866,7 @@ function mfRenderApplied(list) {
     var c = MF_COLS.filter(function (x) { return x.k === k; })[0];
     chips.push({ l: '🔽 ' + (c ? c.l : k) + ': ' + MF.colFilters[k], f: function () { delete MF.colFilters[k]; } });
   });
-  var FL = { unreviewed: 'لم تُراجع بعد', flag: 'به تنبيه قاعدة', approved: 'معتمد', notapproved: 'غير معتمد',
+  var FL = { needsWork: 'يحتاج متابعة', unreviewed: 'لم تُراجع بعد', flag: 'به تنبيه قاعدة', approved: 'معتمد', notapproved: 'غير معتمد',
     posted: 'له رقم قيد', noref: 'بدون قيد', vip: 'VIP', urgent: 'سفر خلال 3 أيام', nobal: 'بلا رصيد كافٍ' };
   Object.keys(MF.facets).forEach(function (k) {
     if (!MF.facets[k]) return;
@@ -32566,6 +32886,8 @@ function mfRenderApplied(list) {
   h += '<span class="ms-auto" style="font-size:10.5px;color:#94a3b8;font-weight:700;">عرض ' + mfL(list.length) +
     ' من ' + mfL(MF.files.length) + ' ملف · معتمرين: ' + mfL(tot) + '</span>';
   box.innerHTML = h;
+  var fc = document.getElementById('mfFiltersCnt');
+  if (fc) fc.textContent = chips.length ? ('(' + chips.length + ' فلتر مفعَّل)') : '(بدون فلاتر)';
   var ph = document.getElementById('mfPrintFilters');
   if (ph) ph.textContent = 'الفلاتر المطبقة: ' + (chips.length ? chips.map(function (c) { return c.l; }).join('  ·  ') : 'بدون فلاتر — كل الملفات');
   var ps = document.getElementById('mfPrintSub');
@@ -32600,6 +32922,17 @@ function mfRenderAlerts() {
       '</div></div>';
   }
   box.innerHTML = h;
+  // 🔔 (V4.111) قسم التنبيهات يظهر ويومض فقط عند وجود تنبيهات فعلية
+  var sec = document.getElementById('mfSecAlerts');
+  var cnt = urgent.length + low.length;
+  if (sec) {
+    sec.style.display = cnt ? '' : 'none';
+    var body = sec.querySelector(':scope > .sb');
+    var open = body && body.style.display !== 'none';
+    sec.classList.toggle('blink', !!cnt && !open);
+    var lbl = document.getElementById('mfAlertsCnt');
+    if (lbl) lbl.textContent = cnt ? ('(' + cnt + ' تنبيه يحتاج إجراء)') : '';
+  }
 }
 function mfRenderCharts(list) {
   var byComp = {}, byCli = {};
@@ -32654,6 +32987,7 @@ function mfSelect(id, scroll) {
   if (el) el.innerHTML = f ? (mfL('#' + f.seq) + ' · ' + (mfStr(f.fileNo) ? 'ملف ' + mfL(f.fileNo) : 'بدون رقم ملف') +
     ' · ' + mfEsc(f.clientLabel || '—') + ' · ' + mfEsc(f.company || '—')) : '—';
   if (scroll && tr) tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  mfRenderActBar();
 }
 function mfToggleDetail(id) {
   var was = (MF.openId === id);
@@ -32692,6 +33026,112 @@ function mfPayload(f) {
   };
 }
 
+/* ---------- (V4.111) تحديث تزايدي بدل إعادة تحميل كل الملفات ----------
+   saveMinistryFile تُعيد الملف بعد الحفظ + أرصدة كل الشركات، فلا داعي لنداء
+   getMinistryBootstrap كاملاً (6 شيتات) بعد كل تعديل صغير. */
+function mfApplySaved(res, opts) {
+  opts = opts || {};
+  if (!res || !res.file) { mfLoad(true); return; }
+  var f = res.file;
+  f._c = mfCalc(f);
+  var i = -1;
+  MF.files.forEach(function (x, ix) { if (x.id === f.id) i = ix; });
+  if (i >= 0) MF.files[i] = f; else MF.files.push(f);
+  if (res.balances) MF.balances = res.balances;
+  // سجل المشرفين يُستنتج من الملفات، فأي مشرف جديد يُضاف للقائمة المحلية حتى التحميل التالي
+  (f.sups || []).forEach(function (s) {
+    if (!mfStr(s.name)) return;
+    if (!(MF.sups || []).some(function (x) { return mfStr(x.name) === mfStr(s.name); })) {
+      MF.sups.push({ name: s.name, type: s.type, home: f.company, shared: [], mobile: '', notes: '' });
+    }
+  });
+  MF.selId = f.id;
+  mfRender();
+  if (!opts.silent) _showPopup('تم الحفظ وتحديث الصف فقط', 'success');
+  // تحديث شارات شاشة الرحلات بالخلفية دون إعادة تحميل هذه الشاشة
+  if (typeof _mfLoadTripLinks_ === 'function') { window._mfTripLinksLoading = false; _mfLoadTripLinks_(); }
+}
+function mfRemoveLocal(id) {
+  MF.files = MF.files.filter(function (x) { return x.id !== id; });
+  if (MF.selId === id) MF.selId = null;
+  if (MF.openId === id) MF.openId = null;
+  mfRender();
+}
+/* ---------- (V4.111) ربط سريع بالرحلة من شريط الإجراءات (بلا فتح نموذج التعديل) ---------- */
+function mfQuickLinkTrip(id) {
+  var f = mfGet(id); if (!f) return;
+  if (!MF.can.edit) { _showPopup('لا تملك صلاحية التعديل', 'error'); return; }
+  var h = '<div class="mf-note info"><span>🔗</span><div>اختر الرحلة بالبحث التنبؤي — يكفي حرفان. الربط لا يغيّر بيانات الملف الأخرى.</div></div>' +
+    '<div class="mf-fld"><label>الرحلة</label><input id="mfQlTrip" class="form-control form-control-sm" autocomplete="off"' +
+    ' value="' + mfEsc(f.tripName || '') + '" placeholder="اكتب جزءاً من اسم الرحلة..."></div>' +
+    '<div id="mfQlInfo" style="font-size:11px;color:#5c6b83;margin-top:7px;"></div>';
+  mfModal('🔗 ربط الملف برحلة', h,
+    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="mfQuickLinkSave(\'' + id + '\')">💾 اعتماد الربط</button>', 560);
+  setTimeout(function () {
+    mfBindTA('mfQlTrip', function () { return (MF.trips || []).map(function (t) { return t.name; }); }, mfQuickLinkInfo);
+    mfQuickLinkInfo();
+  }, 40);
+}
+function mfQuickLinkInfo() {
+  var el = document.getElementById('mfQlInfo'); if (!el) return;
+  var name = mfStr((document.getElementById('mfQlTrip') || {}).value);
+  var t = (MF.trips || []).filter(function (x) { return x.name === name; })[0];
+  el.innerHTML = t
+    ? ('✅ ' + mfEsc(t.name) + ' — سفر ' + mfL(t.goDate || '—') + ' · عودة ' + mfL(t.retDate || '—') +
+       (t.company ? ' · ' + mfEsc(t.company) : ''))
+    : (name ? '<span style="color:#c2670a;">لا توجد رحلة بهذا الاسم بالضبط — اختر من القائمة</span>' : 'اترك الحقل فارغاً لفكّ الارتباط.');
+}
+function mfQuickLinkSave(id) {
+  var f = mfGet(id); if (!f) return;
+  var name = mfStr(document.getElementById('mfQlTrip').value);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      mfCloseModal(); mfApplySaved(res);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveMinistryFile(window.authToken, Object.assign({}, mfPayload(f), { tripName: name }));
+}
+/* ---------- (V4.111) عرض معتمري الملف ---------- */
+function mfShowFilePilgrims(id) {
+  var f = mfGet(id); if (!f) return;
+  var keys = f.selected || [];
+  mfModal('👥 معتمرو الملف ' + (mfStr(f.fileNo) ? mfEsc(f.fileNo) : '(بدون رقم)'),
+    '<div id="mfFpBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>',
+    '<span style="font-size:11px;color:#5c6b83;">المُختارون في هذا الملف: ' + mfL(keys.length) + ' من إجمالي ' + mfL(mfNum(f.pilgrims)) + '</span>' +
+    '<div style="flex:1;"></div>' +
+    (MF.can.edit ? '<button class="mf-btn pri" onclick="mfPickPilgrims(\'' + id + '\')">✏️ تعديل الاختيار</button>' : ''), 720);
+  if (!mfStr(f.tripName)) {
+    document.getElementById('mfFpBox').innerHTML =
+      '<div class="mf-note bad">✖<div>الملف غير مرتبط برحلة — اربطه أولاً حتى تظهر أسماء المعتمرين.</div></div>';
+    return;
+  }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var list = (res && res.pilgrims) ? res.pilgrims : (Array.isArray(res) ? res : []);
+      var sel = {}; keys.forEach(function (k) { sel[k] = 1; });
+      var picked = list.filter(function (p, i) { return sel[mfPickKey(p, i)]; });
+      var box = document.getElementById('mfFpBox'); if (!box) return;
+      if (!picked.length) {
+        box.innerHTML = '<div class="mf-note info">ℹ️<div>لم يُحدَّد معتمرون بعينهم لهذا الملف بعد — اضغط «تعديل الاختيار».</div></div>';
+        return;
+      }
+      var h = '<table class="mf-mini" style="background:#fff;"><thead><tr><th>#</th><th>الاسم</th><th>رقم الجواز</th><th>العميل</th></tr></thead><tbody>';
+      picked.forEach(function (p, i) {
+        h += '<tr><td class="mf-latin">' + (i + 1) + '</td><td>' + mfEsc(p.name || p.pilgrimName || '—') + '</td>' +
+          '<td class="mf-latin">' + mfEsc(p.passportNo || p.passport || '—') + '</td>' +
+          '<td>' + mfEsc(p.clientName || p.client || '—') + '</td></tr>';
+      });
+      box.innerHTML = h + '</tbody></table>';
+    })
+    .withFailureHandler(function (e) {
+      var box = document.getElementById('mfFpBox');
+      if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>';
+    })
+    .getTripPilgrims(window.authToken, f.tripName);
+}
+
 /* ---------- التعديل السريع في مكانه (ضغطتان على الصف) ----------
    يفتح كل الحقول القابلة للتعديل (edit: 'text'|'num'|'date'|'sel'|'company') داخل نفس الصف —
    الأعمدة المحسوبة (calc) والمركّبة (العميل/المشرف) تبقى للقراءة فقط وتُفتح من زر ✏️ (نموذج كامل).
@@ -32723,7 +33163,7 @@ function mfInlineSave(id) {
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
       MF.editRowId = null; _mfInlineDraft = null;
       _showPopup('تم اعتماد التعديل', 'success');
-      mfLoad(true);
+      mfApplySaved(res, { silent: true });
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveMinistryFile(window.authToken, d);
@@ -32802,8 +33242,10 @@ function mfDetail(f) {
   h += '<div class="d-flex gap-2 flex-wrap mt-2">' +
     '<button class="mf-btn pri" onclick="event.stopPropagation();mfEditFile(\'' + f.id + '\')">✏️ تعديل الملف</button>' +
     '<button class="mf-btn" onclick="event.stopPropagation();mfPickPilgrims(\'' + f.id + '\')">👥 اختيار المعتمرين</button>' +
+    '<button class="mf-btn" onclick="event.stopPropagation();mfShowFilePilgrims(\'' + f.id + '\')">📋 عرض معتمري الملف</button>' +
+    '<button class="mf-btn" onclick="event.stopPropagation();mfQuickLinkTrip(\'' + f.id + '\')">🔗 ربط الملف برحلة</button>' +
     '<button class="mf-btn" onclick="event.stopPropagation();mfHistory(\'' + f.id + '\')">📜 سجل التعديلات</button>' +
-    (MF.can.del ? '<button class="mf-btn" style="color:#dc2626;" onclick="event.stopPropagation();mfDeleteFile(\'' + f.id + '\')">🗑️ حذف</button>' : '') +
+    (MF.can.del ? '<button class="mf-btn dgr" onclick="event.stopPropagation();mfDeleteFile(\'' + f.id + '\')">🗑️ حذف</button>' : '') +
     '</div></div>';
 
   if ((f.sups || []).length) {
@@ -32858,8 +33300,8 @@ function mfDetail(f) {
     '</tbody></table></div>';
 
   h += '<div class="mf-dcard"><h6>📜 التتبع</h6><div style="font-size:11px;color:#5c6b83;line-height:1.9;">' +
-    '<b>أنشئ بواسطة:</b> ' + mfEsc(f.createdBy || '—') + ' · ' + mfL(f.createdAt || '—') + '<br>' +
-    '<b>آخر تعديل:</b> ' + mfEsc(f.updatedBy || '—') + ' · ' + mfL(f.updatedAt || '—') + '</div></div>';
+    '<b>أنشئ بواسطة:</b> ' + mfEsc(f.createdBy || '—') + ' · ' + mfL(mfStamp(f.createdAt) || '—') + '<br>' +
+    '<b>آخر تعديل:</b> ' + mfEsc(f.updatedBy || '—') + ' · ' + mfL(mfStamp(f.updatedAt) || '—') + '</div></div>';
   return h + '</div></div>';
 }
 function mfKV(k, v) { return '<tr><td style="color:#5c6b83;">' + k + '</td><td style="text-align:end;font-weight:700;" class="mf-latin">' + v + '</td></tr>'; }
@@ -33035,7 +33477,8 @@ function mfBindTA(id, getList, onPick) {
           e.preventDefault();
           inp.value = el.getAttribute('data-v');
           box.classList.remove('show');
-          if (onPick) onPick();
+          // true = اختيار فعلي من القائمة · false = مجرد كتابة (يفيد النماذج كي لا تُعيد الرسم أثناء الكتابة)
+          if (onPick) onPick(true);
         });
       });
     }
@@ -33046,34 +33489,60 @@ function mfBindTA(id, getList, onPick) {
     box.classList.add('show');
     box._mfOwner = id;
   }
-  inp.addEventListener('input', function () { inp.value = mfLatin(inp.value); draw(); if (onPick) onPick(); });
+  inp.addEventListener('input', function () { inp.value = mfLatin(inp.value); draw(); if (onPick) onPick(false); });
   inp.addEventListener('focus', draw);
   inp.addEventListener('blur', function () { setTimeout(function () { if (box._mfOwner === id) box.classList.remove('show'); }, 140); });
 }
 
 /* ---------- تخصيص الأعمدة: إظهار/إخفاء + تثبيت + سحب ---------- */
+var MF_colGrpClosed = {};
 function mfBuildColWin() {
-  var gs = [];
-  MF_COLS.forEach(function (c) { if (gs.indexOf(c.g) < 0) gs.push(c.g); });
+  var body = document.getElementById('mfColWinBody');
+  if (!body) return;
+  var scroll = body.parentNode ? body.parentNode.scrollTop : 0;   // لا يقفز المكان عند كل تعديل
+  var gs = mfColGroups();
   var h = '';
-  gs.forEach(function (g) {
+  gs.forEach(function (g, gi) {
     var cols = MF_COLS.filter(function (c) { return c.g === g; });
-    var allOn = cols.every(function (c) { return !MF.hidden[c.k]; });
-    h += '<div class="g"><div class="gh"><input type="checkbox" ' + (allOn ? 'checked' : '') +
-      ' onchange="mfSetGroup(\'' + mfEsc(g).replace(/'/g, "\\'") + '\',this.checked)"> ' + mfEsc(g) +
-      '<span class="lk"><button type="button" onclick="mfSetGroup(\'' + mfEsc(g).replace(/'/g, "\\'") + '\',true)">الكل</button>' +
-      '<button type="button" onclick="mfSetGroup(\'' + mfEsc(g).replace(/'/g, "\\'") + '\',false)">لا شيء</button></span></div>';
-    cols.forEach(function (c) {
-      h += '<div class="ci" draggable="true" data-key="' + c.k + '" ondragstart="mfDragStart(event,\'' + c.k + '\')"' +
-        ' ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)" ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
-        '<span style="color:#94a3b8;font-size:11px;">⠿</span>' +
-        '<input type="checkbox" ' + (MF.hidden[c.k] ? '' : 'checked') + ' onchange="mfSetCol(\'' + c.k + '\',this.checked)">' +
-        '<span class="nm">' + mfEsc(c.l) + '</span>' +
-        '<button type="button" class="pin' + (c.pin ? ' on' : '') + '" title="تثبيت العمود عند التمرير الأفقي" onclick="mfTogglePin(\'' + c.k + '\')">📌</button></div>';
-    });
+    var onCnt = cols.filter(function (c) { return !MF.hidden[c.k]; }).length;
+    var gq = mfEsc(g).replace(/'/g, "\\'");
+    var closed = !!MF_colGrpClosed[g];
+    h += '<div class="g"><div class="gh" onclick="if(!event.target.closest(\'.lk\')&&event.target.tagName!==\'INPUT\')mfColGrpToggle(\'' + gq + '\')">' +
+      '<span class="car">' + (closed ? '▸' : '▾') + '</span>' +
+      '<input type="checkbox" ' + (onCnt === cols.length ? 'checked' : '') +
+      ' onchange="mfSetGroup(\'' + gq + '\',this.checked)"> ' + mfEsc(g) +
+      ' <span style="font-weight:600;color:#94a3b8;font-size:10px;">(' + onCnt + '/' + cols.length + ')</span>' +
+      '<span class="lk"><button type="button" onclick="mfSetGroup(\'' + gq + '\',true)">الكل</button>' +
+      '<button type="button" onclick="mfSetGroup(\'' + gq + '\',false)">لا شيء</button></span></div>';
+    if (!closed) {
+      cols.forEach(function (c) {
+        var gi2 = -1; MF_COLS.forEach(function (x, ix) { if (x.k === c.k) gi2 = ix; });
+        h += '<div class="ci" draggable="true" data-key="' + c.k + '" ondragstart="mfDragStart(event,\'' + c.k + '\')"' +
+          ' ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)" ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
+          '<span style="color:#94a3b8;font-size:11px;">⠿</span>' +
+          '<input type="checkbox" ' + (MF.hidden[c.k] ? '' : 'checked') + ' onchange="mfSetCol(\'' + c.k + '\',this.checked)">' +
+          '<span class="nm">' + mfEsc(c.l) + '</span>' +
+          '<button type="button" class="pin' + (c.pin ? ' on' : '') + '" title="تثبيت العمود عند التمرير الأفقي" onclick="mfTogglePin(\'' + c.k + '\')">📌</button>' +
+          // ⬆️⬇️ (V4.111) إعادة الترتيب بالأسهم إلى جانب السحب والإفلات
+          '<span class="ar"><button type="button" title="تحريك لأعلى" ' + (gi2 <= 0 ? 'disabled' : '') +
+          ' onclick="mfNudgeCol(\'' + c.k + '\',-1)">▲</button>' +
+          '<button type="button" title="تحريك لأسفل" ' + (gi2 >= MF_COLS.length - 1 ? 'disabled' : '') +
+          ' onclick="mfNudgeCol(\'' + c.k + '\',1)">▼</button></span></div>';
+      });
+    }
     h += '</div>';
   });
-  document.getElementById('mfColWinBody').innerHTML = h;
+  body.innerHTML = h;
+  if (body.parentNode) body.parentNode.scrollTop = scroll;
+}
+function mfColGrpToggle(g) { MF_colGrpClosed[g] = !MF_colGrpClosed[g]; mfBuildColWin(); }
+// تحريك عمود خطوة واحدة أعلى/أسفل بترتيب الأعمدة الكلي
+function mfNudgeCol(k, dir) {
+  var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
+  var j = i + dir;
+  if (i < 0 || j < 0 || j >= MF_COLS.length) return;
+  var t = MF_COLS[i]; MF_COLS[i] = MF_COLS[j]; MF_COLS[j] = t;
+  mfRender(); mfBuildColWin();
 }
 function mfSetCol(k, on) { MF.hidden[k] = !on; mfRender(); mfBuildColWin(); }
 function mfSetGroup(g, on) { MF_COLS.filter(function (c) { return c.g === g; }).forEach(function (c) { MF.hidden[c.k] = !on; }); mfRender(); mfBuildColWin(); }
@@ -33089,8 +33558,8 @@ function mfTogglePin(k) {
     var item = MF_COLS.splice(i, 1)[0];
     MF_COLS.splice(last < i ? last + 1 : last, 0, item);
   }
+  // 🧩 (V4.111) بلا رسالة منبثقة عند كل تثبيت — كانت تُشتّت وتُوحي بأن النافذة أُغلقت
   mfRender(); mfBuildColWin();
-  _showPopup(c.pin ? ('تم تثبيت العمود «' + c.l + '»') : ('تم إلغاء تثبيت العمود «' + c.l + '»'), 'success');
 }
 function mfMoveCol(from, to) {
   var fi = -1, ti = -1;
@@ -33149,6 +33618,14 @@ function mfOpenColWin(ev) {
   var w = document.getElementById('mfColWin');
   if (!w.style.top) { w.style.top = '140px'; w.style.left = '24px'; }
   w.classList.add('show'); _mfColWinOpen = true; mfBuildColWin();
+  // 🧩 (V4.111) النافذة لا تُغلق إلا يدوياً أو بالضغط خارجها — نمنع أي حدث بداخلها من الوصول
+  // للمستمع العام الذي يغلقها، فتبقى مفتوحة مع كل إظهار/إخفاء/تثبيت/إعادة ترتيب.
+  if (!w._mfGuard) {
+    w._mfGuard = true;
+    ['mousedown', 'click'].forEach(function (ev) {
+      w.addEventListener(ev, function (e) { e.stopPropagation(); });
+    });
+  }
 }
 function mfCloseColWin() { document.getElementById('mfColWin').classList.remove('show'); _mfColWinOpen = false; }
 (function () {
@@ -33209,9 +33686,12 @@ function mfModal(title, body, foot, wide) {
     'align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML = '<div class="mf-dlg" style="background:#fff;border-radius:14px;width:min(' + (wide || 880) + 'px,100%);' +
     'max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35);direction:rtl;font-size:13px;">' +
-    '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;">' +
-    '<b style="font-size:14px;">' + title + '</b>' +
-    '<button type="button" class="btn-close ms-auto" onclick="mfCloseModal()"></button></div>' +
+    // 🎨 (V4.111) شريط عنوان بهوية الشاشة يتسع لملخّص الملف (رقم الملف + الرحلة + التواريخ)
+    '<div style="padding:11px 16px;background:linear-gradient(135deg,#1e3d59,#152c42);color:#fff;' +
+    'display:flex;align-items:flex-start;gap:8px;">' +
+    '<div class="mf-dlghead" style="flex:1;font-size:13.5px;font-weight:800;line-height:1.6;">' + title + '</div>' +
+    '<button type="button" onclick="mfCloseModal()" title="إغلاق" style="background:rgba(255,255,255,.15);border:none;' +
+    'color:#fff;width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;">✕</button></div>' +
     '<div style="padding:14px 16px;overflow:auto;background:#f8fafc;flex:1;" id="mfModalBody">' + body + '</div>' +
     (foot ? '<div style="padding:11px 16px;border-top:1px solid #e2e8f0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + foot + '</div>' : '') +
     '</div>';
@@ -33245,37 +33725,97 @@ function mfEditFile(id) {
     transport: '', notes: '', selected: []
   };
   MF._draft = d;
-  mfModal((id ? '✏️ تعديل ملف مراجعة' : '➕ ملف مراجعة جديد'), '<div id="mfFormBox"></div>',
+  MF._step = 0;
+  mfEditFileFromDraft(d);
+}
+
+/* ================= (V4.111) نموذج الملف بعد إعادة الهيكلة =================
+   خمس خطوات بدل شاشة واحدة طويلة، شريط عنوان يحمل ملخّص الملف (رقم الملف + الرحلة +
+   تاريخا السفر والعودة + الأعداد)، أزرار بنظام المستويات، بحث تنبؤي للرحلة، جلب سعر
+   بيع الريال من بنك مصر بتاريخ المراجعة، وقواعد تلقائية (الوكيل ⇒ استقبال، القيد ⇒ معتمد). */
+var MF_STEPS = [
+  { t: 'أساسية', id: 'mfS1' },
+  { t: 'العميل والمعتمرون', id: 'mfS2' },
+  { t: 'المشرفون', id: 'mfS3' },
+  { t: 'المالية', id: 'mfS4' },
+  { t: 'الإقامة والنقل', id: 'mfS5' }
+];
+function mfFormTitle(d) {
+  var t = (d.id ? '✏️ تعديل ملف مراجعة' : '➕ ملف مراجعة جديد');
+  var bits = [];
+  bits.push('رقم الملف <b>' + (mfStr(d.fileNo) ? mfEsc(d.fileNo) : '—') + '</b>');
+  if (mfStr(d.tripName)) bits.push('الرحلة <b>' + mfEsc(d.tripName) + '</b>');
+  bits.push('السفر <b>' + (mfStr(d.goDate) || '—') + '</b>');
+  bits.push('العودة <b>' + (mfStr(d.retDate) || '—') + '</b>');
+  bits.push('المعتمرون <b>' + mfNum(d.pilgrims) + '</b> · مشرفون <b>' + (d.sups || []).length + '</b>');
+  if (mfStr(d.ref)) bits.push('<b style="color:#7ef0c0;">معتمد تلقائياً — له رقم قيد</b>');
+  return '<div>' + t + '</div><div class="mf-crumbs">' + bits.map(function (x) { return '<span>' + x + '</span>'; }).join('') + '</div>';
+}
+function mfEditFileFromDraft(d) {
+  MF._draft = d;
+  if (MF._step === undefined || MF._step === null) MF._step = 0;
+  mfModal(mfFormTitle(d), '<div id="mfFormBox"></div>',
     '<span id="mfFormWarn" style="font-size:11px;color:#c2670a;font-weight:700;"></span>' +
     '<div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfStepGo(MF._step-1)">◀ السابق</button>' +
+    '<button class="mf-btn" onclick="mfStepGo(MF._step+1)">التالي ▶</button>' +
     '<button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
-    '<button class="mf-btn pri" onclick="mfSaveDraft()">💾 حفظ الملف</button>', 1000);
+    '<button class="mf-btn pri" onclick="mfSaveDraft()">💾 حفظ الملف</button>', 1020);
   mfFormRender();
+}
+function mfStepGo(i) {
+  MF._step = Math.max(0, Math.min(MF_STEPS.length - 1, i));
+  mfFormRender();
+}
+function mfFormHead(d) {
+  var el = document.querySelector('#mfModalOv .mf-dlg .mf-dlghead');
+  if (el) el.innerHTML = mfFormTitle(d);
 }
 function mfFormRender() {
   var d = MF._draft;
   var comps = (MF.companies || []).map(function (c) { return c.company; });
   var tripNames = (MF.trips || []).map(function (t) { return t.name; });
   var c = mfCalc(d);
-  var h = '<div class="row g-2">';
-  h += mfFld('رقم الملف', '<input class="form-control form-control-sm" id="mfd_fileNo" value="' + mfEsc(d.fileNo) + '" oninput="mfDraftSet(\'fileNo\',this.value)">', 2);
-  h += mfFld('فاتورة إلكترونية', '<input class="form-control form-control-sm" id="mfd_eInvoice" value="' + mfEsc(d.eInvoice) + '" oninput="mfDraftSet(\'eInvoice\',this.value)">', 2);
-  h += mfFld('القيد (مرجع)', '<input class="form-control form-control-sm" id="mfd_ref" value="' + mfEsc(d.ref) + '" oninput="mfDraftSet(\'ref\',this.value)">', 2);
+  var cur = MF._step || 0;
+
+  var h = '<div class="mf-steps">' + MF_STEPS.map(function (s, i) {
+    return '<button type="button" class="' + (i === cur ? 'on' : '') + '" onclick="mfStepGo(' + i + ')">' +
+      '<span class="n">' + (i + 1) + '</span>' + s.t + '</button>';
+  }).join('') + '</div>';
+
+  /* ---------- 1) بيانات أساسية ---------- */
+  h += '<div class="mf-step' + (cur === 0 ? ' on' : '') + '"><div class="row g-2">';
+  h += mfFld('رقم الملف', '<input class="form-control form-control-sm" value="' + mfEsc(d.fileNo) + '" oninput="mfDraftSet(\'fileNo\',this.value)">', 2);
+  h += mfFld('رقم القيد (مرجع)', '<input class="form-control form-control-sm" value="' + mfEsc(d.ref) + '" oninput="mfDraftRef(this.value)">' +
+    '<div class="mf-hint' + (mfStr(d.ref) ? ' auto' : '') + '">' + (mfStr(d.ref) ? '✅ له رقم قيد ⇒ الملف معتمد تلقائياً' : 'بلا رقم قيد ⇒ يظهر في العرض الافتراضي') + '</div>', 2);
+  h += mfFld('فاتورة إلكترونية', '<input class="form-control form-control-sm" value="' + mfEsc(d.eInvoice) + '" oninput="mfDraftSet(\'eInvoice\',this.value)">', 2);
   h += mfFld('معتمد', '<div class="pt-1"><span class="mf-tog ' + (d.approved ? 'on' : '') + '" onclick="mfDraftSet(\'approved\',!MF._draft.approved);mfFormRender()"></span></div>', 2);
-  h += mfFld('الشركة المصرية', mfSel('mfd_company', comps, d.company, 'mfDraftCompany(this.value)'), 3);
-  h += mfFld('الوكيل السعودي', '<input class="form-control form-control-sm" id="mfd_agent" value="' + mfEsc(d.agent) + '" oninput="mfDraftSet(\'agent\',this.value)">', 3);
-  h += mfFld('الرحلة المرتبطة', mfSel('mfd_trip', [''].concat(tripNames), d.tripName, 'mfDraftTrip(this.value)'), 4);
-  h += mfFld('العميل (العنوان الظاهر)', '<input class="form-control form-control-sm" value="' + mfEsc(d.clientLabel) + '" oninput="mfDraftSet(\'clientLabel\',this.value)" placeholder="يُملأ تلقائياً من بنود العميل">', 4);
-  h += mfFld('تاريخ المراجعة', mfDateFld('mfd_reviewDate', d.reviewDate, 'mfDraftReviewDate'), 2);
-  h += mfFld('نوع المراجعة', mfSel('mfd_reviewType', ['عادية', 'VIP', 'تجديد باركود'], d.reviewType, 'mfDraftType(this.value)'), 2);
-  h += mfFld('سبب VIP اليدوي', mfSel('mfd_vipReason', ['', 'إجازة رسمية', 'مراجعة بعد الساعة 4 عصراً', 'أخرى'], d.vipReason, 'mfDraftSet(\'vipReason\',this.value)'), 3);
   h += mfFld('وسيلة السفر', mfSel('mfd_travelMode', ['طيران', 'بري', 'بواخر'], d.travelMode, 'mfDraftSet(\'travelMode\',this.value)'), 2);
+  h += mfFld('نوع المراجعة', mfSel('mfd_reviewType', ['عادية', 'VIP', 'تجديد باركود'], d.reviewType, 'mfDraftType(this.value)'), 2);
+  h += mfFld('الشركة المصرية', mfSel('mfd_company', comps, d.company, 'mfDraftCompany(this.value)'), 3);
+  h += mfFld('الوكيل السعودي', '<input class="form-control form-control-sm" value="' + mfEsc(d.agent) + '" oninput="mfDraftAgent(this.value)">' +
+    '<div class="mf-hint">يُملأ تلقائياً من الشركة · المشرف المطابق له يصبح «استقبال»</div>', 3);
+  // 🔎 بحث تنبؤي للرحلة بدل القائمة المنسدلة
+  h += mfFld('الرحلة المرتبطة (بحث تنبؤي)',
+    '<input class="form-control form-control-sm" id="mfd_trip" autocomplete="off" value="' + mfEsc(d.tripName) + '" placeholder="اكتب حرفين من اسم الرحلة...">' +
+    '<div class="mf-hint' + (mfStr(d.tripName) ? ' auto' : '') + '" id="mfd_tripHint">' +
+    (mfStr(d.tripName) ? '✅ مرتبط — تُجلب بيانات الرحلة استرشادياً' : 'اتركه فارغاً لملف غير مرتبط برحلة') + '</div>', 4);
+  h += mfFld('العميل (العنوان الظاهر)', '<input class="form-control form-control-sm" value="' + mfEsc(d.clientLabel) + '" oninput="mfDraftSet(\'clientLabel\',this.value)" placeholder="يُملأ تلقائياً من بنود العميل">', 4);
+  h += mfFld('تاريخ المراجعة', mfDateFld('mfd_reviewDate', d.reviewDate, 'mfDraftReviewDate') +
+    '<div class="mf-hint">الجمعة/السبت ⇒ VIP تلقائياً</div>', 2);
+  h += mfFld('سبب VIP اليدوي', mfSel('mfd_vipReason', ['', 'إجازة رسمية', 'مراجعة بعد الساعة 4 عصراً', 'أخرى'], d.vipReason, 'mfDraftSet(\'vipReason\',this.value)'), 3);
   h += mfFld('تاريخ الذهاب', mfDateFld('mfd_goDate', d.goDate, 'mfDraftGo'), 2);
   h += mfFld('تاريخ العودة', mfDateFld('mfd_retDate', d.retDate, 'mfDraftRet'), 2);
-  h += '</div>';
+  h += '</div></div>';
 
-  h += '<hr class="my-2"><div class="d-flex align-items-center gap-2 mb-1"><b style="font-size:12px;">👥 بنود العميل (عميل / عدد معتمرين / عدد مشرفين / ملاحظات)</b>' +
-    '<button class="mf-btn ms-auto" onclick="mfBdAdd()">➕ إضافة بند</button></div>';
+  /* ---------- 2) بنود العميل والمعتمرون ---------- */
+  h += '<div class="mf-step' + (cur === 1 ? ' on' : '') + '">';
+  h += '<div class="mf-sub">👥 بنود العميل' +
+    '<span class="mf-badge ' + ((d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.count); }, 0) === mfNum(d.pilgrims) ? 'ok' : 'warn') + '">' +
+    'الإجمالي ' + (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.count); }, 0) + ' / معتمرون ' + mfNum(d.pilgrims) + '</span>' +
+    '<span style="flex:1;"></span>' +
+    (mfStr(d.tripName) ? '<button class="mf-btn sm gold" onclick="mfPullTripPilgrims()">👤 جلب أسماء الرحلة</button>' : '') +
+    '<button class="mf-btn sm" onclick="mfBdAdd()">➕ إضافة بند</button></div>';
   h += '<table class="mf-mini" style="background:#fff;"><thead><tr><th style="width:34%;">العميل / الرحلة</th><th style="width:13%;">معتمرين</th>' +
     '<th style="width:13%;">مشرفين</th><th>ملاحظات</th><th style="width:36px;"></th></tr></thead><tbody>';
   (d.breakdown || []).forEach(function (b, i) {
@@ -33283,56 +33823,190 @@ function mfFormRender() {
       '<td><input class="form-control form-control-sm" value="' + mfEsc(b.count) + '" oninput="mfBdSet(' + i + ',\'count\',this.value)"></td>' +
       '<td><input class="form-control form-control-sm" value="' + mfEsc(b.sups) + '" oninput="mfBdSet(' + i + ',\'sups\',this.value)"></td>' +
       '<td><input class="form-control form-control-sm" value="' + mfEsc(b.note) + '" oninput="mfBdSet(' + i + ',\'note\',this.value)"></td>' +
-      '<td><button class="mf-btn" style="color:#dc2626;" onclick="mfBdDel(' + i + ')">✕</button></td></tr>';
+      '<td><button class="mf-btn sm dgr" onclick="mfBdDel(' + i + ')">✕</button></td></tr>';
   });
   if (!(d.breakdown || []).length) h += '<tr><td colspan="5" style="color:#94a3b8;">لا توجد بنود — أضف بنداً واحداً على الأقل</td></tr>';
   h += '</tbody><tfoot><tr><td>الإجمالي</td><td class="mf-latin">' + mfNum(d.pilgrims) + '</td><td class="mf-latin">' +
     (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.sups); }, 0) + '</td><td colspan="2"></td></tr></tfoot></table>';
   h += '<datalist id="mfCliList">' + (MF.clients || []).concat(tripNames).map(function (x) { return '<option value="' + mfEsc(x) + '">'; }).join('') + '</datalist>';
+  h += '<div id="mfTripPickBox" class="mt-2"></div>';
+  h += '</div>';
 
-  h += '<hr class="my-2"><div class="d-flex align-items-center gap-2 mb-1"><b style="font-size:12px;">🧑‍✈️ المشرفون</b>' +
-    '<button class="mf-btn ms-auto" onclick="mfSupAdd()">➕ إضافة مشرف</button>' +
-    '<button class="mf-btn" onclick="mfOpenSuggest(true)">🎯 اقتراح</button></div>';
+  /* ---------- 3) المشرفون ---------- */
+  h += '<div class="mf-step' + (cur === 2 ? ' on' : '') + '">';
+  h += '<div class="mf-sub">🧑‍✈️ المشرفون<span style="flex:1;"></span>' +
+    '<button class="mf-btn sm gold" onclick="mfOpenSuggest(true)">🎯 اقتراح مشرف</button>' +
+    '<button class="mf-btn sm" onclick="mfSupAdd()">➕ إضافة مشرف</button></div>';
   h += '<table class="mf-mini" style="background:#fff;"><thead><tr><th style="width:36%;">المشرف</th><th style="width:22%;">النوع</th>' +
     '<th>يُحمَّل على بند التوجيه</th><th style="width:36px;"></th></tr></thead><tbody>';
   (d.sups || []).forEach(function (s, i) {
     var opts = [''].concat((d.breakdown || []).map(function (b) { return b.name; }));
-    h += '<tr><td><input class="form-control form-control-sm" list="mfSupList" value="' + mfEsc(s.name) + '" oninput="mfSupSet(' + i + ',\'name\',this.value)"></td>' +
+    var isAgent = mfStr(s.name) && mfStr(s.name) === mfStr(d.agent);
+    h += '<tr><td><input class="form-control form-control-sm" list="mfSupList" value="' + mfEsc(s.name) + '" oninput="mfSupSet(' + i + ',\'name\',this.value)">' +
+      (isAgent ? '<div class="mf-hint auto">✅ يطابق الوكيل السعودي ⇒ النوع «استقبال»</div>' : '') + '</td>' +
       '<td>' + mfSel('', ['مرافق', 'استقبال', 'الوكيل'], s.type, 'mfSupSet(' + i + ',\'type\',this.value)') + '</td>' +
       '<td>' + mfSel('', opts, s.directTo, 'mfSupSet(' + i + ',\'directTo\',this.value)') + '</td>' +
-      '<td><button class="mf-btn" style="color:#dc2626;" onclick="mfSupDel(' + i + ')">✕</button></td></tr>';
+      '<td><button class="mf-btn sm dgr" onclick="mfSupDel(' + i + ')">✕</button></td></tr>';
   });
   if (!(d.sups || []).length) h += '<tr><td colspan="4" style="color:#94a3b8;">لا يوجد مشرفون</td></tr>';
   h += '</tbody></table><datalist id="mfSupList">' + (MF.sups || []).map(function (s) { return '<option value="' + mfEsc(s.name) + '">'; }).join('') + '</datalist>';
-
-  h += '<hr class="my-2"><div class="row g-2">';
-  h += mfFld('سعر البرنامج (للفرد)', mfNumFld('progPrice', d.progPrice), 2);
-  h += mfFld('سعر التذكرة (للفرد)', mfNumFld('ticket', d.ticket) + '<div style="font-size:9.5px;color:#94a3b8;">افتراضي من الرحلة — قابل للتغيير</div>', 2);
-  h += mfFld('رسوم الغرفة (للفرد)', mfNumFld('roomFee', d.roomFee) + '<div style="font-size:9.5px;color:#94a3b8;">' +
-    (d.reviewType === 'VIP' ? ('VIP: +' + ((MF.cfg.vipSurcharge) || 100) + ' ج للمعتمر') : 'من الإعدادات حسب التاريخ') + '</div>', 2);
-  h += mfFld('رسوم إدارية (للفرد)', mfNumFld('adminFee', d.adminFee), 2);
-  h += mfFld('النسبة %', mfNumFld('pct', d.pct) + '<div style="font-size:9.5px;color:#94a3b8;">افتراضي ' + mfDefaultPct(d.pilgrims).toFixed(2) + '% حسب العدد</div>', 2);
-  h += mfFld('سعر صرف الريال', mfNumFld('fxRate', d.fxRate) + '<div style="font-size:9.5px;color:#94a3b8;">سعر بيع بنك مصر</div>', 2);
-  h += mfFld('فندق المدينة', mfTxtFld('madinahHotel', d.madinahHotel), 3);
-  h += mfFld('دخول المدينة', mfDateFld('mfd_madinahIn', d.madinahIn, 'mfDraftDate:madinahIn'), 2);
-  h += mfFld('خروج المدينة', mfDateFld('mfd_madinahOut', d.madinahOut, 'mfDraftDate:madinahOut'), 2);
-  h += mfFld('فندق مكة', mfTxtFld('makkahHotel', d.makkahHotel), 3);
-  h += mfFld('دخول مكة', mfDateFld('mfd_makkahIn', d.makkahIn, 'mfDraftDate:makkahIn'), 2);
-  h += mfFld('خروج مكة', mfDateFld('mfd_makkahOut', d.makkahOut, 'mfDraftDate:makkahOut'), 2);
-  h += mfFld('شركة النقل', mfTxtFld('transport', d.transport) + '<div style="font-size:9.5px;color:#94a3b8;">افتراضي: اسم الوكيل · «بدون» لو المشرف هو الوكيل</div>', 3);
-  h += mfFld('ملاحظات', mfTxtFld('notes', d.notes), 5);
+  h += '<div class="mf-note info mt-2"><span>⚖️</span><div>المشرف «مرافق» فقط له رسوم غرفة (' +
+    mfL(mfFmt(c.supRoomFee)) + ' ج) والحد الأقصى 50 معتمراً لكل مرافق · «استقبال» و«الوكيل» بلا رسوم غرفة ولا مخالصة.</div></div>';
   h += '</div>';
 
+  /* ---------- 4) المالية ---------- */
+  h += '<div class="mf-step' + (cur === 3 ? ' on' : '') + '"><div class="row g-2">';
+  h += mfFld('سعر البرنامج (للفرد)', mfNumFld('progPrice', d.progPrice), 2);
+  h += mfFld('سعر التذكرة (للفرد)', mfNumFld('ticket', d.ticket) + '<div class="mf-hint">موحّد للرحلة — قابل للتغيير</div>', 2);
+  h += mfFld('رسوم الغرفة (للفرد)', mfNumFld('roomFee', d.roomFee) + '<div class="mf-hint">' +
+    (d.reviewType === 'VIP' ? ('VIP: +' + ((MF.cfg.vipSurcharge) || 100) + ' ج للمعتمر') : 'من الإعدادات حسب التاريخ') + '</div>', 2);
+  h += mfFld('رسوم إدارية (للفرد)', mfNumFld('adminFee', d.adminFee), 2);
+  h += mfFld('النسبة %', mfNumFld('pct', d.pct) + '<div class="mf-hint">افتراضي ' + mfDefaultPct(d.pilgrims).toFixed(2) + '% حسب العدد</div>', 2);
+  h += mfFld('سعر صرف الريال',
+    '<div style="display:flex;gap:4px;align-items:center;">' +
+    '<input class="form-control form-control-sm" id="mfd_fx" value="' + mfEsc(d.fxRate || '') + '" oninput="mfDraftNum(\'fxRate\',this.value)">' +
+    '<button class="mf-btn sm" id="mfFxBtn" title="جلب سعر بيع الريال من بنك مصر بتاريخ المراجعة" onclick="mfFetchFx()">🔄</button></div>' +
+    '<div class="mf-hint" id="mfd_fxHint">🏦 بنك مصر — سعر البيع (استرشادي، رقمان عشريان)</div>', 2);
+  h += '</div>';
   h += '<div class="mf-note info mt-2"><span>🧮</span><div style="flex:1;">' +
     'الإيراد ' + mfL(mfFmt(c.revenue)) + ' · إجمالي التذاكر ' + mfL(mfFmt(c.totalTickets)) +
-    ' · إجمالي رسوم الغرفة ' + mfL(mfFmt(c.totalRoomFee)) + ' · <b>المخالصة للفرد ' + mfL(mfFmt(c.clearanceSAR)) + ' ريال</b>' +
+    ' · إجمالي رسوم الغرفة ' + mfL(mfFmt(c.totalRoomFee)) +
+    ' <span style="color:#5c6b83;">(' + mfNum(d.pilgrims) + ' × ' + mfFmt(c.roomFeeEffective) + ' ج' +
+    (c.murafiq ? (' + ' + c.murafiq + ' مشرف × ' + mfFmt(c.supRoomFee) + ' ج') : '') + ')</span>' +
+    ' · <b>المخالصة للفرد ' + mfL(mfFmt(c.clearanceSAR)) + ' ريال</b>' +
     ' · إجمالي المصروف ' + mfL(mfFmt(c.totalExp)) + ' · <b>هامش الربح ' + mfL(mfFmt(c.margin)) + '</b>' +
     ' · هامش الفرد ' + mfL(mfFmt(c.perPersonMargin)) + '</div></div>';
+  h += '</div>';
+
+  /* ---------- 5) الإقامة والنقل ---------- */
+  h += '<div class="mf-step' + (cur === 4 ? ' on' : '') + '"><div class="row g-2">';
+  h += mfFld('فندق المدينة', mfTxtFld('madinahHotel', d.madinahHotel), 4);
+  h += mfFld('دخول المدينة', mfDateFld('mfd_madinahIn', d.madinahIn, 'mfDraftDate:madinahIn'), 2);
+  h += mfFld('خروج المدينة', mfDateFld('mfd_madinahOut', d.madinahOut, 'mfDraftDate:madinahOut'), 2);
+  h += mfFld('شركة النقل', mfTxtFld('transport', d.transport) + '<div class="mf-hint">افتراضي: اسم الوكيل · «بدون» لو المشرف هو الوكيل</div>', 4);
+  h += mfFld('فندق مكة', mfTxtFld('makkahHotel', d.makkahHotel), 4);
+  h += mfFld('دخول مكة', mfDateFld('mfd_makkahIn', d.makkahIn, 'mfDraftDate:makkahIn'), 2);
+  h += mfFld('خروج مكة', mfDateFld('mfd_makkahOut', d.makkahOut, 'mfDraftDate:makkahOut'), 2);
+  h += mfFld('ملاحظات', mfTxtFld('notes', d.notes), 4);
+  h += '</div></div>';
 
   document.getElementById('mfFormBox').innerHTML = h;
+  mfFormHead(d);
   mfAttachDateInputs();
+  // البحث التنبؤي للرحلة داخل النموذج
+  var ti = document.getElementById('mfd_trip');
+  if (ti) {
+    ti._mfTA = false;
+    mfBindTA('mfd_trip', function () { return tripNames; }, function (picked) {
+      var v = mfStr(document.getElementById('mfd_trip').value);
+      if (picked) { mfDraftTrip(v); return; }            // اختيار من القائمة ⇒ جلب بيانات الرحلة
+      MF._draft.tripName = v;                            // مجرد كتابة ⇒ لا نُعيد الرسم كي لا يضيع التركيز
+      var hn = document.getElementById('mfd_tripHint');
+      if (hn) {
+        var ok = tripNames.indexOf(v) >= 0;
+        hn.className = 'mf-hint' + (ok ? ' auto' : '');
+        hn.textContent = v ? (ok ? '✅ اختر من القائمة لجلب بيانات الرحلة وعدد معتمريها' : 'اكتب حرفين واختر من القائمة') : 'اتركه فارغاً لملف غير مرتبط برحلة';
+      }
+    });
+  }
   mfFormValidate();
 }
+
+/* 💱 جلب سعر بيع الريال من بنك مصر بتاريخ المراجعة — استرشادي وقابل للتعديل */
+function mfFetchFx() {
+  var btn = document.getElementById('mfFxBtn'), hint = document.getElementById('mfd_fxHint');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  if (hint) { hint.className = 'mf-hint'; hint.textContent = 'جارٍ الجلب من بنك مصر…'; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
+      if (!res || !res.success) {
+        if (hint) { hint.className = 'mf-hint'; hint.style.color = '#c2670a'; hint.textContent = (res && res.error) || 'تعذّر الجلب — أدخله يدوياً'; }
+        return;
+      }
+      var v = Math.round(mfNum(res.rate) * 100) / 100;   // رقمان عشريان بحد أقصى
+      MF._draft.fxRate = v;
+      var inp = document.getElementById('mfd_fx'); if (inp) inp.value = v;
+      if (hint) { hint.className = 'mf-hint auto'; hint.style.color = ''; hint.textContent = '🏦 ' + (res.source || 'بنك مصر') + ' بتاريخ ' + (res.date || '') + ' — استرشادي'; }
+      mfFormRender();
+    })
+    .withFailureHandler(function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
+      if (hint) { hint.style.color = '#c2670a'; hint.textContent = 'تعذّر الجلب: ' + (e && e.message ? e.message : e); }
+    })
+    .fetchSarSellRate(window.authToken, MF._draft.reviewDate || MF.today);
+}
+
+/* 👤 جلب أسماء معتمري الرحلة — والمُسجَّلون في ملف آخر لنفس الرحلة يظهرون باهتين (اختياري) */
+function mfPullTripPilgrims() {
+  var d = MF._draft;
+  if (!mfStr(d.tripName)) { _showPopup('اربط الملف برحلة أولاً', 'error'); return; }
+  var box = document.getElementById('mfTripPickBox');
+  if (box) box.innerHTML = '<div class="text-muted small p-2">⏳ جاري تحميل معتمري الرحلة…</div>';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var list = (res && res.pilgrims) ? res.pilgrims : (Array.isArray(res) ? res : []);
+      // المفاتيح المستخدَمة في ملفات أخرى لنفس الرحلة
+      var used = {};
+      MF.files.forEach(function (o) {
+        if (o.id === d.id || mfStr(o.tripName) !== mfStr(d.tripName)) return;
+        (o.selected || []).forEach(function (k) { used[k] = (mfStr(o.fileNo) || ('مسلسل ' + o.seq)); });
+      });
+      MF._tripPick = { list: list, used: used, sel: {} };
+      (d.selected || []).forEach(function (k) { MF._tripPick.sel[k] = true; });
+      // لو لم يُعدَّل الإجمالي يدوياً نبدأ بتحديد كل غير المستخدَم
+      if (!mfNum(d.pilgrims)) {
+        list.forEach(function (p, i) { var k = mfPickKey(p, i); if (!used[k]) MF._tripPick.sel[k] = true; });
+      }
+      mfTripPickRender();
+    })
+    .withFailureHandler(function (e) {
+      if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>';
+    })
+    .getTripPilgrims(window.authToken, MF._draft.tripName);
+}
+function mfTripPickRender() {
+  var box = document.getElementById('mfTripPickBox'); if (!box) return;
+  var P = MF._tripPick; if (!P) return;
+  var n = Object.keys(P.sel).filter(function (k) { return P.sel[k]; }).length;
+  var dim = Object.keys(P.used).length;
+  var h = '<div class="mf-note info"><span>👥</span><div style="flex:1;">' +
+    'معتمرو الرحلة: <b>' + P.list.length + '</b> · المُختار الآن: <b>' + n + '</b>' +
+    (dim ? (' · <b style="color:#c2670a;">' + dim + '</b> منهم مسجَّلون في ملف آخر لنفس الرحلة (يظهرون باهتين — الاختيار اختياري ولا يمنع)') : '') +
+    '</div><button class="mf-btn sm" onclick="mfTripPickAll(true)">تحديد الكل</button>' +
+    '<button class="mf-btn sm" onclick="mfTripPickAll(false)">إفراغ</button>' +
+    '<button class="mf-btn sm pri" onclick="mfTripPickApply()">✅ اعتماد الأسماء</button></div>';
+  h += '<div class="mf-pk">';
+  P.list.forEach(function (p, i) {
+    var k = mfPickKey(p, i), on = !!P.sel[k], u = P.used[k];
+    h += '<label class="mf-pkc' + (u ? ' used' : '') + (on ? ' on' : '') + '" title="' + (u ? ('مسجَّل في ملف ' + mfEsc(u)) : '') + '">' +
+      '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="mfTripPickOne(\'' + mfEsc(k).replace(/'/g, "\\'") + '\',this.checked)">' +
+      '<span style="flex:1;">' + mfEsc(p.name || p.pilgrimName || ('معتمر ' + (i + 1))) +
+      '<div style="font-size:9.5px;color:#94a3b8;" class="mf-latin">' + mfEsc(p.passportNo || p.passport || '') +
+      (u ? (' — ملف ' + mfEsc(u)) : '') + '</div></span></label>';
+  });
+  box.innerHTML = h + '</div>';
+}
+function mfTripPickOne(k, on) { MF._tripPick.sel[k] = on; mfTripPickRender(); }
+function mfTripPickAll(on) {
+  var P = MF._tripPick;
+  P.list.forEach(function (p, i) { P.sel[mfPickKey(p, i)] = on; });
+  mfTripPickRender();
+}
+function mfTripPickApply() {
+  var P = MF._tripPick, d = MF._draft;
+  var keys = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
+  d.selected = keys;
+  // البند المرتبط بالرحلة يأخذ العدد المُختار (يبقى قابلاً للتعديل يدوياً)
+  d.breakdown = d.breakdown || [];
+  var row = d.breakdown.filter(function (b) { return mfStr(b.name) === mfStr(d.tripName); })[0];
+  if (!row) { row = { name: d.tripName, count: 0, sups: 0, note: 'من الرحلة', isTrip: true }; d.breakdown.push(row); }
+  row.count = keys.length;
+  mfSyncCounts();
+  _showPopup('تم اعتماد ' + keys.length + ' معتمراً من الرحلة', 'success');
+  mfFormRender();
+}
+
 function mfFld(label, inner, cols) {
   return '<div class="col-md-' + (cols || 3) + '"><label style="font-size:9.5px;font-weight:800;color:#94a3b8;">' + label + '</label>' + inner + '</div>';
 }
@@ -33348,13 +34022,28 @@ function mfDateFld(id, v, cb) {
     '<button type="button" onclick="mfPickDate(\'' + id + '\',event,function(val){' +
     (cb.indexOf('mfDraftDate:') === 0 ? ('mfDraftSet(\'' + cb.split(':')[1] + '\',val)') : (cb + '(val)')) + ';})">📅</button></div>';
 }
-function mfDraftSet(k, v) { MF._draft[k] = (typeof v === 'boolean') ? v : mfStr(v); mfFormValidate(); }
+function mfDraftSet(k, v) { MF._draft[k] = (typeof v === 'boolean') ? v : mfStr(v); mfFormHead(MF._draft); mfFormValidate(); }
 function mfDraftNum(k, v) { MF._draft[k] = mfNum(v); mfFormValidate(); }
 function mfDraftCompany(v) {
   MF._draft.company = mfStr(v);
   var c = (MF.companies || []).filter(function (x) { return x.company === MF._draft.company; })[0];
   if (c && c.agent) MF._draft.agent = c.agent;   // الوكيل يُختار تلقائياً حسب الشركة
+  mfApplyAgentRule();
   mfFormRender();
+}
+// 🧾 (V4.111) رقم القيد ⇒ الملف معتمد تلقائياً
+function mfDraftRef(v) {
+  MF._draft.ref = mfStr(v);
+  if (MF._draft.ref) MF._draft.approved = true;
+  mfFormHead(MF._draft);   // تحديث الملخّص فقط — إعادة الرسم أثناء الكتابة تُفقد التركيز
+  mfFormValidate();
+}
+// 🧑‍✈️ (V4.111) المشرف الذي يطابق اسمه الوكيل السعودي نوعه «استقبال» تلقائياً
+function mfDraftAgent(v) { MF._draft.agent = mfStr(v); mfApplyAgentRule(); mfFormValidate(); }
+function mfApplyAgentRule() {
+  var d = MF._draft, ag = mfStr(d.agent);
+  if (!ag) return;
+  (d.sups || []).forEach(function (s) { if (mfStr(s.name) && mfStr(s.name) === ag) s.type = 'استقبال'; });
 }
 function mfDraftTrip(v) {
   var d = MF._draft;
@@ -33378,6 +34067,20 @@ function mfDraftTrip(v) {
     if (prev) { if (!mfNum(d.ticket)) d.ticket = prev.ticket; if (!mfNum(d.progPrice)) d.progPrice = prev.progPrice; }
     if (!(d.breakdown || []).length) d.breakdown = [{ name: t.name, count: 0, sups: 0, note: 'من الرحلة', isTrip: true }];
     if (!d.clientLabel) d.clientLabel = t.name;
+    // 👥 (V4.111) جلب عدد معتمري الرحلة، وإن لم يُعدَّل الإجمالي يدوياً نعرض جلب الأسماء
+    var cnt = mfNum(t.seats || t.pilgrims || 0);
+    if (cnt && !mfNum(d.pilgrims)) {
+      var row = d.breakdown.filter(function (b) { return mfStr(b.name) === mfStr(t.name); })[0];
+      if (row) row.count = cnt;
+      mfSyncCounts();
+      MF._step = 1;
+      setTimeout(function () {
+        if (confirm('الرحلة «' + t.name + '» بها ' + cnt + ' معتمراً.\n\nهل تجلب كل الأسماء الآن؟\n' +
+          'الأسماء المسجَّلة في ملف آخر لنفس الرحلة ستظهر باهتة، ويمكنك إلغاء تحديد من تريد.')) {
+          mfPullTripPilgrims();
+        }
+      }, 120);
+    }
   }
   mfFormRender();
 }
@@ -33400,7 +34103,14 @@ function mfBdSet(i, k, v) {
 }
 function mfSupAdd() { MF._draft.sups = MF._draft.sups || []; MF._draft.sups.push({ name: '', type: 'مرافق', directTo: '' }); MF._draft.supCount = MF._draft.sups.length; mfFormRender(); }
 function mfSupDel(i) { MF._draft.sups.splice(i, 1); MF._draft.supCount = MF._draft.sups.length; mfFormRender(); }
-function mfSupSet(i, k, v) { MF._draft.sups[i][k] = mfStr(v); MF._draft.supCount = MF._draft.sups.length; mfFormValidate(); }
+function mfSupSet(i, k, v) {
+  MF._draft.sups[i][k] = mfStr(v);
+  MF._draft.supCount = MF._draft.sups.length;
+  // لا نُعيد رسم النموذج أثناء الكتابة (يفقد التركيز) — القاعدة تُطبَّق على البيانات فوراً
+  // وتظهر بصرياً عند أول إعادة رسم أو عند الحفظ.
+  if (k === 'name') mfApplyAgentRule();
+  mfFormValidate();
+}
 function mfSyncCounts() {
   var d = MF._draft;
   d.pilgrims = (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.count); }, 0);
@@ -33442,7 +34152,7 @@ function mfSaveDraft() {
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); mfFormValidate(); return; }
       mfCloseModal();
       _showPopup('تم حفظ ملف المراجعة', 'success');
-      mfLoad(true);
+      mfApplySaved(res, { silent: true });
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); mfFormValidate(); })
     .saveMinistryFile(window.authToken, d);
@@ -33453,7 +34163,7 @@ function mfDeleteFile(id) {
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
-      _showPopup('تم حذف الملف', 'success'); MF.openId = null; mfLoad(true);
+      _showPopup('تم حذف الملف', 'success'); mfRemoveLocal(id);
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .deleteMinistryFile(window.authToken, id);
@@ -33541,7 +34251,7 @@ function mfPickSave(id) {
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
-      mfCloseModal(); _showPopup('تم اعتماد اختيار المعتمرين (' + keys.length + ')', 'success'); mfLoad(true);
+      mfCloseModal(); _showPopup('تم اعتماد اختيار المعتمرين (' + keys.length + ')', 'success'); mfApplySaved(res, { silent: true });
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveMinistryFile(window.authToken, Object.assign({}, mfPayload(f), { selected: keys }));
@@ -33557,8 +34267,8 @@ function mfHistory(id) {
       var box = document.getElementById('mfHistBox'); if (!box) return;
       var h = '';
       if (f) h += '<div class="mf-dcard" style="margin-bottom:10px;"><div style="font-size:11.5px;line-height:1.9;">' +
-        '<b>أنشئ بواسطة:</b> ' + mfEsc(f.createdBy || '—') + ' · ' + mfL(f.createdAt || '—') +
-        '<br><b>آخر تعديل:</b> ' + mfEsc(f.updatedBy || '—') + ' · ' + mfL(f.updatedAt || '—') + '</div></div>';
+        '<b>أنشئ بواسطة:</b> ' + mfEsc(f.createdBy || '—') + ' · ' + mfL(mfStamp(f.createdAt) || '—') +
+        '<br><b>آخر تعديل:</b> ' + mfEsc(f.updatedBy || '—') + ' · ' + mfL(mfStamp(f.updatedAt) || '—') + '</div></div>';
       var es = (res && res.entries) || [];
       if (!es.length) h += '<div class="text-muted small">لا توجد تعديلات مسجَّلة.</div>';
       else {
@@ -33726,16 +34436,6 @@ function mfFormBack() {
   var d = MF._draft;
   mfEditFileFromDraft(d);
 }
-function mfEditFileFromDraft(d) {
-  MF._draft = d;
-  mfModal((d.id ? '✏️ تعديل ملف مراجعة' : '➕ ملف مراجعة جديد'), '<div id="mfFormBox"></div>',
-    '<span id="mfFormWarn" style="font-size:11px;color:#c2670a;font-weight:700;"></span>' +
-    '<div style="flex:1;"></div>' +
-    '<button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
-    '<button class="mf-btn pri" onclick="mfSaveDraft()">💾 حفظ الملف</button>', 1000);
-  mfFormRender();
-}
-
 /* ---------- إيصالات رسوم الغرفة + الأرصدة + كشف الحركة ---------- */
 var MF_REC_COLS = [
   { k: 'date', l: 'التاريخ' }, { k: 'time', l: 'الوقت' }, { k: 'receiptNo', l: 'رقم الإيصال' },
@@ -33746,16 +34446,18 @@ var MF_recF = {};
 function mfOpenReceipts() {
   mfModal('🏦 إيصالات رسوم الغرفة وحركتها',
     '<div id="mfRecBalBox"></div>' +
-    '<div class="d-flex gap-2 flex-wrap mb-2">' +
+    '<div class="d-flex gap-2 flex-wrap align-items-center mb-2">' +
       '<button class="mf-btn pri" onclick="mfRecEdit(null)">➕ تسجيل إيصال</button>' +
       '<button class="mf-btn gold" onclick="mfRecFromBank()">📷 استخلاص من إيصال البنك</button>' +
-      '<button class="mf-btn" onclick="mfRecTab(\'rec\')">🧾 الإيصالات</button>' +
-      '<button class="mf-btn" onclick="mfRecTab(\'led\')">📒 كشف حركة رسوم الغرفة</button>' +
+      '<div class="mf-bgrp" id="mfRecTabs">' +
+        '<button class="on" data-t="rec" onclick="mfRecTab(\'rec\')">🧾 الإيصالات</button>' +
+        '<button data-t="led" onclick="mfRecTab(\'led\')">📒 كشف الحركة</button>' +
+      '</div>' +
       '<div style="flex:1;"></div>' +
-      '<button class="mf-btn" onclick="mfPrintFragment(\'mfRecPane\',\'إيصالات رسوم الغرفة\')">🖨️ طباعة</button>' +
-      '<button class="mf-btn" onclick="mfImageFragment(\'mfRecPane\',\'إيصالات رسوم الغرفة\',this)">📸 صورة HD</button>' +
+      '<button class="mf-btn sm" onclick="mfPrintFragment(\'mfRecPane\',\'إيصالات رسوم الغرفة\')">🖨️ طباعة</button>' +
+      '<button class="mf-btn sm" onclick="mfImageFragment(\'mfRecPane\',\'إيصالات رسوم الغرفة\',this)">📸 صورة HD</button>' +
     '</div>' +
-    '<div id="mfRecPane"></div>', '', 980);
+    '<div id="mfRecPane" style="position:relative;"></div>', '', 1000);
   mfRecTab('rec');
 }
 function mfRecBalances() {
@@ -33774,7 +34476,10 @@ function mfRecBalances() {
   return h + '</div>';
 }
 function mfRecTab(t) {
+  MF._recTab = t;
   document.getElementById('mfRecBalBox').innerHTML = mfRecBalances();
+  var tabs = document.getElementById('mfRecTabs');
+  if (tabs) tabs.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); });
   var pane = document.getElementById('mfRecPane');
   if (t === 'led') { mfLedgerRender(); return; }
   var list = (MF.receipts || []).filter(function (x) {
@@ -33784,38 +34489,76 @@ function mfRecTab(t) {
     }
     return true;
   });
-  var h = '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">🔽 اضغط أيقونة التصفية في رأس أي عمود — صف الإجماليات يتغيّر مع الفلاتر.</div>';
-  h += '<div style="max-height:320px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;">' +
+  var h = '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">🔽 اضغط أيقونة التصفية في رأس أي عمود — يظهر حقل الإدخال أسفل رأس العمود داخل الجدول مباشرةً، وصف الإجماليات يتغيّر مع الفلاتر.</div>';
+  h += '<div style="max-height:330px;overflow:auto;border:1px solid #e2e8f0;border-radius:10px;">' +
     '<table class="mf-mini" style="background:#fff;"><thead><tr>';
   MF_REC_COLS.forEach(function (c) {
     h += '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;"><span style="display:flex;align-items:center;gap:4px;">' +
-      mfEsc(c.l) + '<button class="mf-thic' + (MF_recF[c.k] ? ' on' : '') + '" onclick="mfRecFilter(\'' + c.k + '\')">🔽</button></span></th>';
+      mfEsc(c.l) + '<button class="mf-thic' + (MF_recF[c.k] ? ' on' : '') + '" title="تصفية هذا العمود"' +
+      ' onclick="event.stopPropagation();mfRecFilter(event,\'' + c.k + '\')">🔽</button></span></th>';
   });
-  h += '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;width:70px;"></th></tr></thead><tbody>';
+  h += '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;width:78px;"></th></tr></thead><tbody>';
   list.forEach(function (x) {
     h += '<tr><td class="mf-latin">' + mfEsc(x.date) + '</td><td class="mf-latin">' + mfEsc(x.time || '—') + '</td>' +
       '<td class="mf-latin">' + mfEsc(x.receiptNo) + '</td><td>' + mfEsc(x.company) + '</td>' +
       '<td class="mf-latin">' + mfEsc(x.licence || '—') + '</td>' +
       '<td class="mf-latin" style="color:#0e9f6e;font-weight:800;">' + mfFmt(x.amount) + '</td>' +
       '<td>' + mfEsc(x.depositor || '—') + '</td>' +
-      '<td><span class="mf-badge ' + (x.source === 'إيصال بنك' ? 'link' : 'off') + '">' + mfEsc(x.source) + '</span></td>' +
-      '<td><button class="mf-btn" onclick="mfRecEdit(\'' + mfEsc(x.receiptNo).replace(/'/g, "\\'") + '\')">✏️</button> ' +
-      (MF.can.del ? '<button class="mf-btn" style="color:#dc2626;" onclick="mfRecDel(\'' + mfEsc(x.receiptNo).replace(/'/g, "\\'") + '\')">🗑️</button>' : '') + '</td></tr>';
+      '<td><span class="mf-badge ' + (String(x.source).indexOf('بنك') >= 0 ? 'link' : 'off') + '">' + mfEsc(x.source) + '</span></td>' +
+      '<td style="white-space:nowrap;"><button class="mf-btn sm" title="تعديل" onclick="mfRecEdit(\'' + mfEsc(x.receiptNo).replace(/'/g, "\\'") + '\')">✏️</button> ' +
+      (MF.can.del ? '<button class="mf-btn sm dgr" title="حذف" onclick="mfRecDel(\'' + mfEsc(x.receiptNo).replace(/'/g, "\\'") + '\')">🗑️</button>' : '') + '</td></tr>';
   });
   if (!list.length) h += '<tr><td colspan="9" style="color:#94a3b8;padding:16px;text-align:center;">لا توجد إيصالات مطابقة</td></tr>';
   var tot = list.reduce(function (a, x) { return a + mfNum(x.amount); }, 0);
   h += '</tbody><tfoot><tr><td colspan="5" style="position:sticky;bottom:0;background:#eef1f6;font-weight:800;">الإجمالي (' + mfL(list.length) + ' إيصال)</td>' +
     '<td class="mf-latin" style="position:sticky;bottom:0;background:#eef1f6;font-weight:800;">' + mfFmt(tot) + '</td>' +
     '<td colspan="3" style="position:sticky;bottom:0;background:#eef1f6;"></td></tr></tfoot></table></div>';
+  // سطر الفلاتر المطبَّقة داخل اللوحة نفسها
+  var ks = Object.keys(MF_recF).filter(function (k) { return MF_recF[k]; });
+  if (ks.length) {
+    h += '<div class="d-flex gap-2 flex-wrap align-items-center mt-2">' +
+      '<span style="font-size:10.5px;font-weight:800;color:#94a3b8;">الفلاتر المطبقة:</span>' +
+      ks.map(function (k) {
+        var c = MF_REC_COLS.filter(function (x) { return x.k === k; })[0];
+        return '<span class="mf-chip">' + mfEsc((c ? c.l : k) + ': ' + MF_recF[k]) +
+          '<button onclick="delete MF_recF[\'' + k + '\'];mfRecTab(\'rec\')">✕</button></span>';
+      }).join('') +
+      '<button class="mf-clearall" onclick="MF_recF={};mfRecTab(\'rec\')">✕ مسح الكل</button></div>';
+  }
   pane.innerHTML = h;
 }
-function mfRecFilter(k) {
+/* 🔽 (V4.111) التصفية صارت لوحة صغيرة أسفل رأس العمود داخل الجدول — بدل prompt() الذي كان
+   يظهر كصندوق إدخال في شريط عنوان المتصفح خارج الشاشة تماماً. */
+function mfRecFilter(ev, k) {
   var c = MF_REC_COLS.filter(function (x) { return x.k === k; })[0];
-  var v = prompt('تصفية عمود «' + c.l + '» — اترك الحقل فارغاً لإلغاء الفلتر:', MF_recF[k] || '');
-  if (v === null) return;
-  v = mfStr(v);
-  if (v) MF_recF[k] = v; else delete MF_recF[k];
-  mfRecTab('rec');
+  var pane = document.getElementById('mfRecPane');
+  var old = document.getElementById('mfRecFPop');
+  if (old) old.remove();
+  if (old && old.getAttribute('data-k') === k) return;   // نفس الزر ⇒ إغلاق
+  var pop = document.createElement('div');
+  pop.id = 'mfRecFPop';
+  pop.setAttribute('data-k', k);
+  pop.style.cssText = 'position:absolute;z-index:30;background:#fff;border:1px solid #cbd5e1;border-radius:10px;' +
+    'box-shadow:0 12px 34px rgba(15,23,42,.22);padding:8px;width:212px;';
+  pop.innerHTML = '<div style="font-size:9.5px;font-weight:800;color:#94a3b8;margin-bottom:4px;">تصفية عمود «' + mfEsc(c.l) + '»</div>' +
+    '<input id="mfRecFInp" class="form-control form-control-sm" placeholder="اكتب للتصفية الفورية..." value="' + mfEsc(MF_recF[k] || '') + '">' +
+    '<div class="d-flex gap-2 mt-2"><button class="mf-btn sm pri" style="flex:1;justify-content:center;" onclick="document.getElementById(\'mfRecFPop\').remove()">تم</button>' +
+    '<button class="mf-btn sm" style="flex:1;justify-content:center;" onclick="delete MF_recF[\'' + k + '\'];mfRecTab(\'rec\')">مسح</button></div>';
+  pane.appendChild(pop);
+  var pr = pane.getBoundingClientRect(), r = ev.currentTarget.getBoundingClientRect();
+  pop.style.top = (r.bottom - pr.top + 4) + 'px';
+  pop.style.insetInlineStart = Math.max(0, Math.min(pr.width - 216, pr.right - r.right)) + 'px';
+  var inp = document.getElementById('mfRecFInp');
+  inp.focus();
+  inp.oninput = function () {
+    var v = mfStr(inp.value);
+    if (v) MF_recF[k] = v; else delete MF_recF[k];
+    var caret = inp.selectionStart;
+    mfRecTab('rec');
+    // إعادة فتح اللوحة على نفس العمود مع الاحتفاظ بالنص
+    var btn = document.querySelectorAll('#mfRecPane th .mf-thic')[MF_REC_COLS.map(function (x) { return x.k; }).indexOf(k)];
+    if (btn) { mfRecFilter({ currentTarget: btn }, k); var i2 = document.getElementById('mfRecFInp'); if (i2) { i2.value = v; i2.setSelectionRange(caret, caret); } }
+  };
 }
 function mfRecEdit(no) {
   var r = no ? (MF.receipts || []).filter(function (x) { return x.receiptNo === no; })[0] : null;
@@ -33878,54 +34621,71 @@ function mfRecDel(no) {
     .deleteRoomFeeReceipt(window.authToken, no);
 }
 function mfRecFromBank() {
-  var h = '<div style="font-size:11.5px;line-height:1.9;background:#fff;border:1px dashed #cbd5e1;border-radius:10px;padding:11px 13px;">' +
-    '<div style="font-weight:800;margin-bottom:5px;">🏦 خريطة الاستخلاص من إيصال بنك مصر (صيغة موحدة):</div>' +
-    'حقل «<b style="color:#2563eb;">كود العميل</b>» ← <b>رقم الترخيص</b> ← تُطابَق به الشركة تلقائياً<br>' +
-    'حقل «<b style="color:#2563eb;">الرقم المرجعى</b>» ← <b>رقم الإيصال</b><br>' +
-    'حقل «<b style="color:#2563eb;">المبلغ بالارقام</b>» ← <b>المبلغ</b><br>' +
-    'حقل «<b style="color:#2563eb;">التاريخ</b>» ← <b>تاريخ وساعة الإيداع</b><br>' +
-    'حقل «<b style="color:#2563eb;">اسم المودع</b>» ← <b>اسم المودع</b>' +
-    '</div>' +
-    '<div class="mt-2 mb-1" style="font-size:11.5px;font-weight:800;">📎 ارفع عدة إيصالات دفعة واحدة (صور أو PDF) — يُستخلص كل إيصال تلقائياً بالذكاء الاصطناعي:</div>' +
+  var h = '<div class="mf-note info"><span>🏦</span><div style="flex:1;">' +
+    '<b>خريطة الاستخلاص من إيصال بنك مصر (صيغة موحدة):</b><br>' +
+    '«<b>كود العميل</b>» ← رقم الترخيص ← تُطابَق به الشركة تلقائياً · ' +
+    '«<b>الرقم المرجعى</b>» ← رقم الإيصال · «<b>المبلغ بالارقام</b>» ← المبلغ · ' +
+    '«<b>التاريخ</b>» ← تاريخ وساعة الإيداع · «<b>اسم المودع</b>» ← اسم المودع</div></div>' +
+    '<div class="mf-note good"><span>⚡</span><div style="flex:1;">' +
+    'بيانات الإيصال قليلة ومحدَّدة، لذلك يعمل <b>محلّل محلي فوري بلا ذكاء اصطناعي</b> أولاً ' +
+    '(نص ملصق مباشرةً، أو قراءة ضوئية مجانية للصورة عبر درايف)، ولا يُستدعى الذكاء الاصطناعي إلا عند فشله.</div></div>' +
+    '<div class="mf-sub mt-2">📋 لصق نص الإيصال (الأسرع — بلا ذكاء اصطناعي)</div>' +
+    '<textarea id="mfBankText" class="form-control form-control-sm" rows="4" placeholder="ألصق نص الإيصال هنا ثم اضغط «استخلاص النص»..."></textarea>' +
+    '<div class="d-flex gap-2 mt-2"><button class="mf-btn pri" onclick="mfBankParse()">⚡ استخلاص النص الملصق</button></div>' +
+    '<div id="mfBankOut" class="mt-2"></div>' +
+    '<hr class="my-3">' +
+    '<div class="mf-sub">📎 أو ارفع عدة إيصالات دفعة واحدة (صور أو PDF)' +
+    '<span style="flex:1;"></span>' +
+    '<label style="font-size:10.5px;font-weight:700;display:flex;gap:5px;align-items:center;">' +
+    '<input type="checkbox" id="mfBankAi" checked> السماح بالذكاء الاصطناعي عند فشل المحلّل</label></div>' +
     '<input type="file" id="mfBankFiles" class="form-control form-control-sm" accept="image/*,.pdf" multiple onchange="mfBankFilesPicked(this.files)">' +
-    '<div id="mfBankQueue" class="mt-2"></div>' +
-    '<hr class="my-2">' +
-    '<div style="font-size:11.5px;">أو ألصق نص الإيصال يدوياً (بلا ذكاء اصطناعي):</div>' +
-    '<textarea id="mfBankText" class="form-control form-control-sm mt-1" rows="4" placeholder="ألصق نص الإيصال هنا..."></textarea>' +
-    '<div id="mfBankOut" class="mt-2"></div>';
-  mfModal('📷 استخلاص من إيصال البنك', h,
-    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfOpenReceipts()">إلغاء</button>' +
-    '<button class="mf-btn pri" onclick="mfBankParse()">🔎 استخلاص النص الملصق</button>', 760);
+    '<div id="mfBankQueue" class="mt-2"></div>';
+  mfModal('📷 استخلاص إيصالات رسوم الغرفة', h,
+    '<span id="mfBankFoot" style="font-size:11px;color:#5c6b83;"></span><div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfOpenReceipts()">⬅ عودة للإيصالات</button>' +
+    '<button class="mf-btn sm" id="mfBankRetryAll" style="display:none;" onclick="mfBankRetryAll()">🔄 إعادة محاولة الفاشل</button>', 800);
 }
 
-/* ---------- استخلاص عدة إيصالات دفعة واحدة (صور/PDF) بالذكاء الاصطناعي ---------- */
+/* ---------- طابور الاستخلاص: محلي أولاً ثم الذكاء الاصطناعي احتياطياً + إعادة المحاولة ---------- */
 function mfBankFilesPicked(files) {
   if (!files || !files.length) return;
   var arr = Array.prototype.slice.call(files);
-  MF._bankQueue = arr.map(function (f) { return { file: f, status: 'pending', data: null, err: '' }; });
+  MF._bankQueue = arr.map(function (f) { return { file: f, status: 'pending', data: null, err: '', engine: '' }; });
   mfBankQueueRender();
   mfBankQueueRun(0);
+}
+function mfBankEngineLabel(e) {
+  return e === 'local' ? '<span class="mf-badge ok">محلي</span>'
+    : (e === 'ocr' ? '<span class="mf-badge ok">قراءة ضوئية</span>'
+    : (e === 'ai' ? '<span class="mf-badge link">ذكاء اصطناعي</span>' : ''));
 }
 function mfBankQueueRender() {
   var box = document.getElementById('mfBankQueue'); if (!box) return;
   var q = MF._bankQueue || [];
   var done = q.filter(function (x) { return x.status === 'ok' || x.status === 'error'; }).length;
-  var h = '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">جاري الاستخلاص — ' + done + ' من ' + q.length + ' ملفات</div>';
+  var failed = q.filter(function (x) { return x.status === 'error'; }).length;
+  var h = '<div style="font-size:11px;color:#5c6b83;margin-bottom:6px;">تمّ ' + done + ' من ' + q.length + ' ملفات' +
+    (failed ? (' · <b style="color:#dc2626;">' + failed + ' فشل</b>') : '') + '</div>';
   q.forEach(function (x, i) {
     var icon = x.status === 'pending' ? '⏳' : (x.status === 'ok' ? '✅' : (x.status === 'error' ? '❌' : '⏳'));
-    h += '<div style="display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:11px;background:#fff;border:1px solid #e2e8f0;border-radius:7px;margin-bottom:4px;">' +
+    h += '<div style="display:flex;align-items:center;gap:8px;padding:5px 9px;font-size:11px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:4px;">' +
       '<span>' + icon + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + mfEsc(x.file.name) + '</span>' +
-      (x.status === 'ok' ? ('<span class="mf-latin" style="color:#0e9f6e;font-weight:700;">' + mfFmt(x.data.amount) + ' — ' + mfEsc(x.data.company || 'بلا شركة مطابقة') + '</span>') : '') +
-      (x.status === 'error' ? ('<span style="color:#dc2626;">' + mfEsc(x.err) + '</span>') : '') + '</div>';
+      (x.status === 'ok' ? (mfBankEngineLabel(x.engine) + ' <span class="mf-latin" style="color:#0e9f6e;font-weight:700;">' +
+        mfFmt(x.data.amount) + ' — ' + mfEsc(x.data.company || 'بلا شركة مطابقة') + '</span>') : '') +
+      (x.status === 'error' ? ('<span style="color:#dc2626;flex:1;">' + mfEsc(x.err) + '</span>' +
+        '<button class="mf-btn sm" onclick="mfBankRetry(' + i + ')">🔄 إعادة المحاولة</button>') : '') + '</div>';
   });
+  var rb = document.getElementById('mfBankRetryAll');
+  if (rb) rb.style.display = failed ? '' : 'none';
   if (done === q.length && q.length) {
     var ok = q.filter(function (x) { return x.status === 'ok'; });
     if (ok.length) {
-      h += '<table class="mf-mini" style="background:#fff;margin-top:6px;"><thead><tr><th>الملف</th><th>رقم الإيصال</th><th>الشركة</th><th>المبلغ</th><th>التاريخ</th></tr></thead><tbody>';
-      ok.forEach(function (x, i) {
+      h += '<table class="mf-mini" style="background:#fff;margin-top:6px;"><thead><tr><th>الملف</th><th>رقم الإيصال</th><th>الشركة</th><th>المبلغ</th><th>التاريخ</th><th>المصدر</th></tr></thead><tbody>';
+      ok.forEach(function (x) {
         h += '<tr><td>' + mfEsc(x.file.name) + '</td><td class="mf-latin">' + mfEsc(x.data.receiptNo || '—') + '</td>' +
           '<td>' + (x.data.company ? mfEsc(x.data.company) : '<span style="color:#dc2626;">غير مطابقة</span>') + '</td>' +
-          '<td class="mf-latin">' + mfFmt(x.data.amount) + '</td><td class="mf-latin">' + mfEsc(x.data.date || '—') + '</td></tr>';
+          '<td class="mf-latin">' + mfFmt(x.data.amount) + '</td><td class="mf-latin">' + mfEsc(x.data.date || '—') + '</td>' +
+          '<td>' + mfBankEngineLabel(x.engine) + '</td></tr>';
       });
       h += '</tbody></table><button class="mf-btn pri mt-2" onclick="mfBankQueueSaveAll()">💾 حفظ كل الإيصالات المستخلَصة (' + ok.length + ')</button>';
     }
@@ -33935,34 +34695,47 @@ function mfBankQueueRender() {
 function mfBankQueueRun(i) {
   var q = MF._bankQueue || [];
   if (i >= q.length) return;
-  var item = q[i];
+  mfBankOne(i, function () { mfBankQueueRun(i + 1); });
+}
+function mfBankOne(i, done) {
+  var q = MF._bankQueue || [], item = q[i];
+  if (!item) { if (done) done(); return; }
+  item.status = 'pending'; item.err = '';
+  mfBankQueueRender();
+  var aiEl = document.getElementById('mfBankAi');
+  var allowAi = aiEl ? aiEl.checked : true;
   var reader = new FileReader();
   reader.onload = function (e) {
     var base64 = String(e.target.result).split(',')[1] || '';
     google.script.run
       .withSuccessHandler(function (res) {
-        if (res && res.success) { item.status = 'ok'; item.data = res.data; }
+        if (res && res.success) { item.status = 'ok'; item.data = res.data; item.engine = (res.data && res.data.engine) || 'ai'; }
         else { item.status = 'error'; item.err = (res && res.error) || 'تعذّر الاستخلاص'; }
         mfBankQueueRender();
-        mfBankQueueRun(i + 1);
+        if (done) done();
       })
       .withFailureHandler(function (err) {
         item.status = 'error'; item.err = err && err.message ? err.message : String(err);
         mfBankQueueRender();
-        mfBankQueueRun(i + 1);
+        if (done) done();
       })
-      .extractRoomFeeReceiptImage(window.authToken, base64, item.file.type || 'image/jpeg');
+      .extractRoomFeeReceiptSmart(window.authToken, base64, item.file.type || 'image/jpeg', allowAi);
   };
-  reader.onerror = function () { item.status = 'error'; item.err = 'تعذّر قراءة الملف'; mfBankQueueRender(); mfBankQueueRun(i + 1); };
+  reader.onerror = function () { item.status = 'error'; item.err = 'تعذّر قراءة الملف'; mfBankQueueRender(); if (done) done(); };
   reader.readAsDataURL(item.file);
+}
+function mfBankRetry(i) { mfBankOne(i); }
+function mfBankRetryAll() {
+  (MF._bankQueue || []).forEach(function (x, i) { if (x.status === 'error') mfBankOne(i); });
 }
 function mfBankQueueSaveAll() {
   var ok = (MF._bankQueue || []).filter(function (x) { return x.status === 'ok'; });
   if (!ok.length) return;
   var writes = ok.map(function (x) { return {
-    receiptNo: x.data.receiptNo || ('AI' + Date.now() + Math.floor(Math.random() * 1000)),
+    receiptNo: x.data.receiptNo || ('RF' + Date.now() + Math.floor(Math.random() * 1000)),
     date: x.data.date, time: x.data.time, company: x.data.company, licence: x.data.licence,
-    amount: x.data.amount, depositor: x.data.depositor, source: 'إيصال بنك (AI)', notes: 'مستخلَص من ' + x.file.name
+    amount: x.data.amount, depositor: x.data.depositor,
+    source: 'إيصال بنك (' + (x.engine === 'ai' ? 'AI' : 'محلي') + ')', notes: 'مستخلَص من ' + x.file.name
   }; });
   var i = 0, saved = 0, failed = 0;
   function next() {
@@ -34137,7 +34910,9 @@ function mfLedgerRender() {
       mv.forEach(function (m) {
         ti += mfNum(m.inn); to += mfNum(m.out);
         h += '<tr><td class="mf-latin">' + mfEsc(m.date) + '</td><td>' + mfEsc(m.company) + '</td>' +
-          '<td style="text-align:start;">' + mfEsc(m.desc) + '</td>' +
+          // 🧾 (V4.111) تفاصيل الحساب بين قوسين داخل البيان — 42 × 3,000 ج + 1 مشرف × 200 ج
+          '<td style="text-align:start;">' + mfEsc(m.desc) +
+          (m.detail ? (' <b style="color:#1e3d59;">(' + mfEsc(m.detail) + ')</b>') : '') + '</td>' +
           '<td class="mf-latin" style="color:#0e9f6e;font-weight:800;">' + (mfNum(m.inn) ? mfFmt(m.inn) : '—') + '</td>' +
           '<td class="mf-latin" style="color:#dc2626;font-weight:800;">' + (mfNum(m.out) ? mfFmt(m.out) : '—') + '</td>' +
           '<td class="mf-latin" style="font-weight:800;' + (mfNum(m.balance) < 0 ? 'color:#dc2626;' : '') + '">' + mfFmt(m.balance) + '</td></tr>';
@@ -34171,11 +34946,16 @@ function mfBuildPrintDoc() {
   var list = mfVisible();
   var cols = MF_COLS.filter(function (c) { return !MF.hidden[c.k] && c.k !== 'act'; });
   var sums = {}; MF_COLS.forEach(function (c) { if (c.sum) sums[c.k] = 0; });
+  // 🖨️ (V4.111) كل ملف في سطر واحد (سطران بحد أقصى) — نُصغّر الخط تلقائياً كلما زادت الأعمدة،
+  // ونمنع التفاف النص بقصّه بثلاث نقاط مع بقاء القيمة كاملة في تلميح الطباعة.
+  var fs = cols.length > 34 ? 5.2 : (cols.length > 26 ? 5.8 : (cols.length > 18 ? 6.6 : 7.6));
   var body = list.map(function (f) {
     f._c = mfCalc(f);
     Object.keys(sums).forEach(function (k) { sums[k] += mfNum(f._c[k] !== undefined ? f._c[k] : f[k]); });
     return '<tr class="s' + mfStatus(f) + '">' + cols.map(function (c) {
-      return '<td>' + mfEsc(mfRaw(c.k, f)) + '</td>';
+      var v = mfRaw(c.k, f);
+      if (c.k === 'created' || c.k === 'updated') v = mfWho(f[c.k === 'created' ? 'createdBy' : 'updatedBy'], f[c.k === 'created' ? 'createdAt' : 'updatedAt']);
+      return '<td title="' + mfEsc(v) + '">' + mfEsc(v) + '</td>';
     }).join('') + '</tr>';
   }).join('');
   var foot = '<tr>' + cols.map(function (c) {
@@ -34184,22 +34964,31 @@ function mfBuildPrintDoc() {
   var flt = document.getElementById('mfPrintFilters');
   var sub = document.getElementById('mfPrintSub');
   return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>مراجعة ملفات الوزارة</title><style>' +
-    '*{box-sizing:border-box;} body{font-family:"Cairo",Tahoma,sans-serif;margin:0;padding:8mm 6mm;}' +
-    '.t{font-size:17px;font-weight:900;color:#1e3d59;} .s{font-size:10px;color:#64748b;margin-top:2px;}' +
-    '.f{font-size:9.5px;color:#333;background:#f1f5f9;border:1px solid #ccc;border-radius:3px;padding:3px 6px;margin:5px 0 8px;}' +
-    'table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px;}' +
-    'th,td{border:1px solid #999;padding:2px 3px;text-align:center;word-break:break-word;}' +
-    'thead th{background:#1e3d59 !important;color:#fff !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    '*{box-sizing:border-box;} body{font-family:"Cairo",Tahoma,sans-serif;margin:0;padding:8mm 6mm 14mm;}' +
+    '.t{font-size:16px;font-weight:900;color:#1e3d59;} .s{font-size:9.5px;color:#64748b;margin-top:2px;}' +
+    '.f{font-size:9px;color:#333;background:#f1f5f9;border:1px solid #ccc;border-radius:3px;padding:3px 6px;margin:5px 0 7px;}' +
+    'table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:' + fs + 'pt;}' +
+    // سطر واحد فقط لكل خلية: بلا التفاف، والزائد يُقصّ بثلاث نقاط
+    'th,td{border:1px solid #999;padding:1.5px 2px;text-align:center;white-space:nowrap;overflow:hidden;' +
+    'text-overflow:ellipsis;max-width:0;line-height:1.35;}' +
+    'thead th{background:#1e3d59 !important;color:#fff !important;white-space:normal;line-height:1.2;' +
+    '-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
     'tfoot td{background:#e8edf4 !important;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
     'tr.s1{background:#fef6e7;} tr.s2{background:#eaf3fe;} tr.s3{background:#e6f6f4;} tr.s4{background:#e8f6ea;}' +
-    'tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
-    '@media screen{ body{min-width:1500px;} }' +
+    'tr{-webkit-print-color-adjust:exact;print-color-adjust:exact;break-inside:avoid;}' +
+    // 📄 ترقيم حقيقي للصفحات «صفحة 1 من 3» بتذييل يتكرّر في كل صفحة
+    '.pgfoot{position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:space-between;' +
+    'font-size:8px;color:#444;border-top:1px solid #bbb;padding-top:2px;background:#fff;}' +
+    '.pgfoot .pg::after{content:"صفحة " counter(page) " من " counter(pages);}' +
+    '@media screen{ body{min-width:1500px;} .pgfoot{position:static;margin-top:10px;} }' +
     '@media print{ @page{size:A4 landscape;margin:9mm 6mm 13mm;} body{min-width:0;} thead{display:table-header-group;} }' +
     '</style></head><body><div class="t">🏛️ مراجعة ملفات الوزارة — منظومة منف للسياحة</div>' +
     '<div class="s">' + mfEsc(sub ? sub.textContent : '') + ' — طُبع في ' + mfEsc(_formatPrintTimestamp ? _formatPrintTimestamp() : '') + '</div>' +
     '<div class="f">' + mfEsc(flt ? flt.textContent : '') + '</div>' +
     '<table><thead><tr>' + cols.map(function (c) { return '<th>' + mfEsc(c.l) + '</th>'; }).join('') + '</tr></thead>' +
-    '<tbody>' + body + '</tbody><tfoot>' + foot + '</tfoot></table></body></html>';
+    '<tbody>' + body + '</tbody><tfoot>' + foot + '</tfoot></table>' +
+    '<div class="pgfoot"><span>منظومة منف للسياحة — مراجعة ملفات الوزارة</span><span class="pg"></span></div>' +
+    '</body></html>';
 }
 function mfExportPdf() {
   var html = mfBuildPrintDoc();
