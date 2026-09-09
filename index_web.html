@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.118 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.119 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.118)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.119)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.118</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.119</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4738,6 +4738,9 @@ input[type="date"]:not(:focus):not(:valid) {
     display:flex; align-items:center; gap:7px; }
   .mf-dlg .mf-hint{ font-size:9.5px; color:var(--mfFaint); }
   .mf-dlg .mf-hint.auto{ color:var(--mfOk); font-weight:700; }
+  /* 🧮 (V4.119) حقول محسوبة تلقائياً (للقراءة فقط) — تُميَّز بصرياً عن حقول الإدخال */
+  .mf-dlg .mf-calcfld{ background:#eef7f4 !important; border-color:#a7e8cf !important; color:#0e7a57 !important;
+    font-weight:800; text-align:center; font-variant-numeric:tabular-nums; cursor:default; }
 
   /* ===== اختيار المعتمرين: الباهت = مُسجَّل في ملف آخر لنفس الرحلة ===== */
   .mf-dlg .mf-pk{ display:grid; grid-template-columns:repeat(auto-fill,minmax(215px,1fr)); gap:5px; }
@@ -6377,7 +6380,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.118";
+var CLIENT_APP_VERSION = "4.119";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -34696,15 +34699,17 @@ function mfFormRender() {
     '<input class="form-control form-control-sm" id="mfd_fx" value="' + mfEsc(d.fxRate || '') + '" oninput="mfDraftNum(\'fxRate\',this.value)">' +
     '<button class="mf-btn sm" id="mfFxBtn" title="جلب سعر بيع الريال من بنك مصر بتاريخ المراجعة" onclick="mfFetchFx()">🔄</button></div>' +
     '<div class="mf-hint" id="mfd_fxHint">🏦 بنك مصر — سعر البيع (استرشادي، رقمان عشريان)</div>', 2);
+  // 💱 (V4.119) المخالصة بالريال — حقل محسوب بالمعادلة العكسية، للقراءة فقط، ويتحدّث لحظياً
+  // مع أي تغيير يؤثر عليه (سعر الصرف، سعر البرنامج، التذكرة، رسوم الغرفة، الرسوم الإدارية،
+  // النسبة، الأعداد، نوع المراجعة) بلا إعادة رسم النموذج كي لا يضيع تركيز الكتابة.
+  h += mfFld('المخالصة بالريال (للفرد)',
+    '<input class="form-control form-control-sm mf-calcfld" id="mfd_clearance" readonly value="' + mfFmt(c.clearanceSAR) + '">' +
+    '<div class="mf-hint auto" id="mfd_clearanceHint">محسوبة تلقائياً — معادلة عكسية</div>', 2);
+  h += mfFld('إجمالي الريال (كل الأفراد)',
+    '<input class="form-control form-control-sm mf-calcfld" id="mfd_totalSar" readonly value="' + mfFmt(c.totalSAR) + '">' +
+    '<div class="mf-hint">المخالصة × ' + mfNum(c.heads) + ' فرد</div>', 2);
   h += '</div>';
-  h += '<div class="mf-note info mt-2"><span>🧮</span><div style="flex:1;">' +
-    'الإيراد ' + mfL(mfFmt(c.revenue)) + ' · إجمالي التذاكر ' + mfL(mfFmt(c.totalTickets)) +
-    ' · إجمالي رسوم الغرفة ' + mfL(mfFmt(c.totalRoomFee)) +
-    ' <span style="color:#5c6b83;">(' + mfNum(d.pilgrims) + ' × ' + mfFmt(c.roomFeeEffective) + ' ج' +
-    (c.murafiq ? (' + ' + c.murafiq + ' مشرف × ' + mfFmt(c.supRoomFee) + ' ج') : '') + ')</span>' +
-    ' · <b>المخالصة للفرد ' + mfL(mfFmt(c.clearanceSAR)) + ' ريال</b>' +
-    ' · إجمالي المصروف ' + mfL(mfFmt(c.totalExp)) + ' · <b>هامش الربح ' + mfL(mfFmt(c.margin)) + '</b>' +
-    ' · هامش الفرد ' + mfL(mfFmt(c.perPersonMargin)) + '</div></div>';
+  h += '<div class="mf-note info mt-2" id="mfCalcNote"><span>🧮</span><div style="flex:1;">' + mfCalcNoteHtml(d, c) + '</div></div>';
   h += '</div>';
 
   /* ---------- 5) الإقامة والنقل ---------- */
@@ -34742,6 +34747,39 @@ function mfFormRender() {
   mfFormValidate();
 }
 
+/* 🧮 (V4.119) ملخّص الحساب أسفل تبويب المالية + إعادة الحساب اللحظية.
+   المخالصة بالريال تُحسب بالمعادلة العكسية داخل mfCalc (نفس معادلة السيرفر حرفاً بحرف)،
+   ونُحدِّث هنا الحقول المحسوبة والملخّص في مكانها فقط — بلا إعادة رسم النموذج، فلا يفقد
+   المستخدم موضع الكتابة أثناء إدخال الأرقام. */
+function mfCalcNoteHtml(d, c) {
+  c = c || mfCalc(d);
+  return 'الإيراد ' + mfL(mfFmt(c.revenue)) + ' · إجمالي التذاكر ' + mfL(mfFmt(c.totalTickets)) +
+    ' · إجمالي رسوم الغرفة ' + mfL(mfFmt(c.totalRoomFee)) +
+    ' <span style="color:#5c6b83;">(' + mfNum(d.pilgrims) + ' × ' + mfFmt(c.roomFeeEffective) + ' ج' +
+    (c.murafiq ? (' + ' + c.murafiq + ' مشرف × ' + mfFmt(c.supRoomFee) + ' ج') : '') +
+    (c.vipByCount && d.reviewType !== 'VIP' ? ' — سعر VIP لأقل من 4 أفراد' : '') + ')</span>' +
+    ' · <b>المخالصة للفرد ' + mfL(mfFmt(c.clearanceSAR)) + ' ريال</b>' +
+    ' · إجمالي المصروف ' + mfL(mfFmt(c.totalExp)) + ' · <b>هامش الربح ' + mfL(mfFmt(c.margin)) + '</b>' +
+    ' · هامش الفرد ' + mfL(mfFmt(c.perPersonMargin));
+}
+function mfFormLiveCalc() {
+  var d = MF._draft; if (!d) return;
+  var box = document.getElementById('mfFormBox'); if (!box) return;
+  var c = mfCalc(d);
+  var cl = document.getElementById('mfd_clearance');
+  if (cl) cl.value = mfFmt(c.clearanceSAR);
+  var ts = document.getElementById('mfd_totalSar');
+  if (ts) ts.value = mfFmt(c.totalSAR);
+  var hint = document.getElementById('mfd_clearanceHint');
+  if (hint) {
+    hint.className = 'mf-hint' + (mfNum(d.fxRate) > 0 ? ' auto' : '');
+    hint.textContent = mfNum(d.fxRate) > 0
+      ? ('محسوبة تلقائياً — معادلة عكسية على ' + mfNum(c.heads) + ' فرد')
+      : 'أدخل سعر صرف الريال لتُحتسب المخالصة';
+  }
+  var note = document.getElementById('mfCalcNote');
+  if (note) note.innerHTML = '<span>🧮</span><div style="flex:1;">' + mfCalcNoteHtml(d, c) + '</div>';
+}
 /* 💱 جلب سعر بيع الريال من بنك مصر بتاريخ المراجعة — استرشادي وقابل للتعديل */
 function mfFetchFx() {
   var btn = document.getElementById('mfFxBtn'), hint = document.getElementById('mfd_fxHint');
@@ -34758,7 +34796,8 @@ function mfFetchFx() {
       MF._draft.fxRate = v;
       var inp = document.getElementById('mfd_fx'); if (inp) inp.value = v;
       if (hint) { hint.className = 'mf-hint auto'; hint.style.color = ''; hint.textContent = '🏦 ' + (res.source || 'بنك مصر') + ' بتاريخ ' + (res.date || '') + ' — استرشادي'; }
-      mfFormRender();
+      mfFormLiveCalc();   // 💱 المخالصة بالريال تتحدّث فوراً مع سعر الصرف الجديد
+      mfFormValidate();
     })
     .withFailureHandler(function (e) {
       if (btn) { btn.disabled = false; btn.textContent = '🔄'; }
@@ -34867,8 +34906,8 @@ function mfDateFld(id, v, cb) {
     '<button type="button" onclick="mfPickDate(\'' + id + '\',event,function(val){' +
     (cb.indexOf('mfDraftDate:') === 0 ? ('mfDraftSet(\'' + cb.split(':')[1] + '\',val)') : (cb + '(val)')) + ';})">📅</button></div>';
 }
-function mfDraftSet(k, v) { MF._draft[k] = (typeof v === 'boolean') ? v : mfStr(v); mfFormHead(MF._draft); mfFormValidate(); }
-function mfDraftNum(k, v) { MF._draft[k] = mfNum(v); mfFormValidate(); }
+function mfDraftSet(k, v) { MF._draft[k] = (typeof v === 'boolean') ? v : mfStr(v); mfFormHead(MF._draft); mfFormLiveCalc(); mfFormValidate(); }
+function mfDraftNum(k, v) { MF._draft[k] = mfNum(v); mfFormLiveCalc(); mfFormValidate(); }
 function mfDraftCompany(v) {
   MF._draft.company = mfStr(v);
   var c = (MF.companies || []).filter(function (x) { return x.company === MF._draft.company; })[0];
@@ -34945,6 +34984,7 @@ function mfBdDel(i) { MF._draft.breakdown.splice(i, 1); mfSyncCounts(); mfFormRe
 function mfBdSet(i, k, v) {
   MF._draft.breakdown[i][k] = (k === 'count' || k === 'sups') ? mfNum(v) : mfStr(v);
   if (k === 'count' || k === 'sups') mfSyncCounts();
+  mfFormLiveCalc();
   mfFormValidate();
 }
 // 🧑‍✈️ (V4.113) عدد المشرفين المُعتَد به = «مرافق» فقط — «استقبال» (مشرف فعلي أو الوكيل نفسه) صفر
@@ -34958,6 +34998,7 @@ function mfSupSet(i, k, v) {
   // لا نُعيد رسم النموذج أثناء الكتابة (يفقد التركيز) — القاعدة تُطبَّق على البيانات فوراً
   // وتظهر بصرياً عند أول إعادة رسم أو عند الحفظ.
   mfApplyAgentRule();   // يُعيد أيضاً حساب عدد المشرفين (مرافق فقط)
+  mfFormLiveCalc();
   mfFormValidate();
 }
 function mfSyncCounts() {
