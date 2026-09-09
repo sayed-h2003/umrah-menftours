@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.119 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.120 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.119)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.120)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.119</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.120</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -3615,6 +3615,12 @@ input[type="date"]:not(:focus):not(:valid) {
             <input type="text" id="regFilterDate" class="form-control form-control-sm" dir="ltr" placeholder="تاريخ السفر dd/mm/yyyy" oninput="renderRegistryTable()" onchange="renderRegistryTable()">
           </div>
         </div>
+      </div>
+      <!-- 🔗 (V4.120) تصفية إضافية بالربط: رقم ملف مراجعة الوزارة ورقم الإشعار -->
+      <div class="row g-2 mb-2 p-2 pilgrims-toolbar mx-0 flex-md-nowrap">
+        <div class="col-md-3"><input id="regFilterMfFile" class="form-control form-control-sm" dir="ltr" placeholder="🏛️ رقم ملف الوزارة..." oninput="renderRegistryTable()"></div>
+        <div class="col-md-3"><input id="regFilterBooking" class="form-control form-control-sm" dir="ltr" placeholder="📄 رقم الإشعار..." oninput="renderRegistryTable()"></div>
+        <div class="col-md-6 d-flex align-items-center"><span class="text-muted small">تُطابَق عبر رحلات المعتمر — يظهر بجوار كل رحلة رقم إشعارها ورقم ملف الوزارة الخاص بها.</span></div>
       </div>
       <datalist id="regNamesDatalist"></datalist>
       <datalist id="regPassportsDatalist"></datalist>
@@ -6380,7 +6386,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.119";
+var CLIENT_APP_VERSION = "4.120";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -9018,7 +9024,7 @@ function _disableCleanupSchedule(btn) {
 // 🧹 تصفير فلاتر كل الشاشات عند مغادرتها (تُطبَّق من جديد عند العودة عبر محمّل كل شاشة)
 function _resetAllScreenFilters() {
   // سجل عام المعتمرين: الفلاتر + فلتر الجوازات + التحديد المجمع
-  ['regFilterName', 'regFilterPassport', 'regFilterTrip', 'regFilterClient', 'regFilterDate'].forEach(function(id) {
+  ['regFilterName', 'regFilterPassport', 'regFilterTrip', 'regFilterClient', 'regFilterDate', 'regFilterMfFile', 'regFilterBooking'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) { el.value = ''; if (el._flatpickr) el._flatpickr.clear(); }
   });
@@ -9222,7 +9228,12 @@ function _registryFilteredRows() {
   var fTrip = (document.getElementById('regFilterTrip') || {}).value || '';
   var fClient = (document.getElementById('regFilterClient') || {}).value || '';
   var fDate = (document.getElementById('regFilterDate') || {}).value || '';
+  // 🔗 (V4.120) تصفية برقم ملف مراجعة الوزارة أو رقم الإشعار — عبر رحلات المعتمر
+  var fMf = (document.getElementById('regFilterMfFile') || {}).value || '';
+  var fBk = (document.getElementById('regFilterBooking') || {}).value || '';
   fName = fName.trim(); fPass = fPass.trim(); fTrip = fTrip.trim(); fClient = fClient.trim(); fDate = _toWesternDigits(fDate.trim());
+  fMf = _toWesternDigits(fMf.trim()); fBk = _toWesternDigits(fBk.trim());
+  if ((fMf || fBk) && !window._mfTripLinks && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_();
 
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var soonLimit = new Date(today.getTime() + 180 * 86400000);
@@ -9235,6 +9246,15 @@ function _registryFilteredRows() {
     if (fTrip && !(r.trips || []).some(function(t) { return _normalizeArabic_(t.name).indexOf(_normalizeArabic_(fTrip)) !== -1; })) return false;
     if (fClient && _normalizeArabic_(r.client || '').indexOf(_normalizeArabic_(fClient)) === -1) return false;
     if (fDate && !(r.trips || []).some(function(t) { return (t.depart || '').indexOf(fDate) !== -1 || (t.ret || '').indexOf(fDate) !== -1; })) return false;
+    if (fBk && !(r.trips || []).some(function(t) { return String(t.bookingId || '').indexOf(fBk) !== -1; })) return false;
+    if (fMf) {
+      var hit = (r.trips || []).some(function(t) {
+        var fs = [];
+        try { fs = _mfFilesForTrip_(t.name, r.passport); } catch (e) {}
+        return fs.some(function(f) { return String(f.fileNo || '').indexOf(fMf) !== -1; });
+      });
+      if (!hit) return false;
+    }
     if (window._regExpiryFilter) {
       var d = parseD(r.expiryDate);
       if (!d) return false;
@@ -9245,35 +9265,95 @@ function _registryFilteredRows() {
   });
 }
 
+/* 🔗 (V4.120) ملفات مراجعة الوزارة لرحلة بعينها ولهذا المعتمر تحديداً — لو الملف اختار
+   معتمرين بأعيانهم نتحقّق من رقم الجواز، وإلا فكل معتمري الرحلة ضمنه. */
+function _mfFilesForTrip_(tripName, passport) {
+  var links = (window._mfTripLinks && window._mfTripLinks[tripName]) || [];
+  return links.filter(function (f) {
+    if (!(f.selected || []).length) return true;
+    if (!passport) return true;
+    return f.selected.indexOf(passport) >= 0 || f.selected.indexOf('P:' + passport) >= 0;
+  });
+}
+function _mfFileChipHtml_(f) {
+  return '<span class="badge ' + (f.reviewed ? 'bg-success' : 'bg-warning text-dark') + '"' +
+    ' style="cursor:pointer;" title="ملف مراجعة الوزارة — اضغط لفتحه"' +
+    ' onclick="event.stopPropagation();if(typeof mfCloseModal===\'function\')mfCloseModal();switchPage(\'ministry\');' +
+    'setTimeout(function(){if(typeof mfSelect===\'function\')mfSelect(\'' + f.id + '\',true);},400);">' +
+    '🏛️ ملف ' + escapeHtml_(f.fileNo || 'بلا رقم') + (f.reviewed ? ' ✓' : ' ⏳') + '</span>';
+}
+function _bkChipHtml_(bookingId) {
+  if (!bookingId) return '';
+  return '<span class="badge bg-info text-dark" style="cursor:pointer;" title="فتح بيانات الإشعار"' +
+    ' onclick="event.stopPropagation();if(typeof mfCloseModal===\'function\')mfCloseModal();' +
+    '_gsOpenBooking(\'' + escapeHtml_(String(bookingId)) + '\')">📄 إشعار ' + escapeHtml_(String(bookingId)) + '</span>';
+}
+/* 🧳 (V4.120) كل رحلة للمعتمر تُعرض كمجموعة واحدة: اسم الرحلة ورقمها + رقم إشعارها + رقم ملف
+   الوزارة الخاص بها — بدل عرض الملفات مجمَّعة في نهاية السطر بلا ارتباط بأي رحلة. */
 function _registryTripChips(r) {
-  // 🏛️ (V4.111) إلى جانب رحلات المعتمر تظهر ملفات مراجعة الوزارة الخاصة به (✓ رُوجعت · ⏳ لم تُراجع)
-  var mf = '';
-  try {
-    if (!window._mfTripLinks && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_();
-    var fs = (typeof _mfFilesForPilgrim_ === 'function') ? _mfFilesForPilgrim_(r) : [];
-    if (fs.length) {
-      mf = ' ' + fs.map(function(f) {
-        return '<span class="badge ' + (f.reviewed ? 'bg-success' : 'bg-warning text-dark') + ' mb-1"' +
-          ' style="cursor:pointer;" title="ملف مراجعة وزارة — اضغط للفتح"' +
-          ' onclick="event.stopPropagation();switchPage(\'ministry\');setTimeout(function(){if(typeof mfSelect===\'function\')mfSelect(\'' + f.id + '\',true);},400);">' +
-          '🏛️ ' + escapeHtml_(f.fileNo || 'بلا رقم') + (f.reviewed ? ' ✓' : ' ⏳') + '</span>';
-      }).join(' ');
-    }
-  } catch (e) {}
-  if (!(r.trips || []).length) return '<span class="badge bg-danger">🚷 بدون رحلة</span>' + mf;
-  // 🔗 (V4.115) لكل رحلة: اسمها ورقمها المرجعي + رقم الإشعار المرتبط — بجوارها ملفات الوزارة أدناه
-  return r.trips.map(function(t) {
-    var label = escapeHtml_(t.name) +
-      (t.tripRef ? ' <span style="opacity:.75;">#' + escapeHtml_(t.tripRef) + '</span>' : '') +
-      (t.depart ? ' <span style="opacity:.75;">(' + escapeHtml_(t.depart) + ')</span>' : '');
-    var bk = t.bookingId
-      ? ' <span class="badge bg-info text-dark mb-1" style="cursor:pointer;" title="فتح الإشعار المرتبط"' +
-        ' onclick="event.stopPropagation();_gsOpenBooking(\'' + escapeHtml_(String(t.bookingId)) + '\')">📄 إشعار #' + escapeHtml_(String(t.bookingId)) + '</span>'
+  try { if (!window._mfTripLinks && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_(); } catch (e) {}
+  if (!(r.trips || []).length) return '<span class="badge bg-danger">🚷 بدون رحلة</span>';
+  return r.trips.map(function (t) {
+    // 🧳 (V4.120) اسم الرحلة + رقمها + تاريخا الذهاب والعودة — والضغط عليها يفتح الرحلة نفسها
+    var dates = (t.depart || t.ret)
+      ? ' <span style="opacity:.75;" dir="ltr">(' + escapeHtml_(t.depart || '—') + ' → ' + escapeHtml_(t.ret || '—') + ')</span>'
       : '';
-    return (t.active
-      ? '<span class="badge bg-success mb-1" title="الرحلة الجارية الآن">▶ ' + label + '</span>'
-      : '<span class="badge bg-light text-dark border mb-1">' + label + '</span>') + bk;
-  }).join(' ') + mf;
+    var label = escapeHtml_(t.name) +
+      (t.tripRef ? ' <span style="opacity:.75;">#' + escapeHtml_(t.tripRef) + '</span>' : '') + dates;
+    var openTrip = 'event.stopPropagation();if(typeof mfCloseModal===\'function\')mfCloseModal();' +
+      "if(typeof mfGoTrip==='function'){mfGoTrip('" + escapeHtml_(t.name).replace(/'/g, "\\'") + "');}" +
+      "else if(typeof _gsOpenTrip==='function'){_gsOpenTrip('" + escapeHtml_(t.name).replace(/'/g, "\\'") + "');}";
+    var tripChip = t.active
+      ? '<span class="badge bg-success" style="cursor:pointer;" title="الرحلة الجارية الآن — اضغط لفتحها" onclick="' + openTrip + '">▶ ' + label + '</span>'
+      : '<span class="badge bg-light text-dark border" style="cursor:pointer;" title="اضغط لفتح الرحلة" onclick="' + openTrip + '">' + label + '</span>';
+    var files = [];
+    try { files = _mfFilesForTrip_(t.name, r.passport); } catch (e) {}
+    var mfChips = files.length
+      ? files.map(_mfFileChipHtml_).join(' ')
+      : '<span class="badge bg-light text-muted border" title="لا يوجد ملف مراجعة وزارة لهذه الرحلة">🏛️ بلا ملف</span>';
+    return '<span class="d-inline-flex align-items-center flex-wrap gap-1 mb-1" ' +
+      'style="border:1px dashed #cbd5e1;border-radius:8px;padding:2px 4px;">' +
+      tripChip + _bkChipHtml_(t.bookingId) + mfChips + '</span>';
+  }).join(' ');
+}
+/* 📋 (V4.120) نافذة «روابط المعتمر»: كل رحلاته، ولكل رحلة رقمها وتاريخاها ورقم إشعارها
+   وأرقام ملفات مراجعة الوزارة الخاصة بها — كل شيء قابل للضغط للانتقال إليه. */
+function _regPilgrimLinks_(key) {
+  var r = (window._registryCache || []).find(function (x) { return (x.passport || x.name) === key; });
+  if (!r) { showToast('❌ لم يُعثر على بيانات المعتمر', true); return; }
+  try { if (!window._mfTripLinks && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_(); } catch (e) {}
+  var rows = (r.trips || []).map(function (t) {
+    var files = [];
+    try { files = _mfFilesForTrip_(t.name, r.passport); } catch (e) {}
+    return '<tr>' +
+      '<td style="text-align:right;font-weight:600;">' +
+        '<span style="cursor:pointer;color:#1e3d59;text-decoration:underline;" title="اضغط لفتح الرحلة"' +
+        ' onclick="' + "if(typeof mfCloseModal==='function')mfCloseModal();if(typeof mfGoTrip==='function'){mfGoTrip('" + escapeHtml_(t.name).replace(/'/g, "\\'") + "');}" +
+        "else if(typeof _gsOpenTrip==='function'){_gsOpenTrip('" + escapeHtml_(t.name).replace(/'/g, "\\'") + "');}" + '">' +
+        escapeHtml_(t.name) + '</span>' +
+        (t.tripRef ? ' <span class="text-muted">#' + escapeHtml_(t.tripRef) + '</span>' : '') +
+        (t.active ? ' <span class="badge bg-success">جارية</span>' : '') + '</td>' +
+      '<td dir="ltr">' + escapeHtml_(t.depart || '—') + '</td>' +
+      '<td dir="ltr">' + escapeHtml_(t.ret || '—') + '</td>' +
+      '<td>' + (t.bookingId ? _bkChipHtml_(t.bookingId) : '<span class="text-muted">—</span>') + '</td>' +
+      '<td>' + (files.length ? files.map(_mfFileChipHtml_).join(' ') : '<span class="text-muted">— بلا ملف وزارة</span>') + '</td>' +
+      '</tr>';
+  }).join('');
+  var html = '<div class="mb-2" style="font-size:13px;">' +
+    '<b>' + escapeHtml_(r.name) + '</b>' +
+    (r.passport ? ' <span class="text-muted" dir="ltr">🛂 ' + escapeHtml_(r.passport) + '</span>' : '') +
+    (r.client ? ' <span class="text-muted">· ' + escapeHtml_(r.client) + '</span>' : '') + '</div>' +
+    (rows
+      ? ('<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0" style="font-size:12.5px;">' +
+         '<thead class="table-light"><tr><th style="text-align:right;">الرحلة</th><th>الذهاب</th><th>العودة</th>' +
+         '<th>رقم الإشعار</th><th>ملف مراجعة الوزارة</th></tr></thead><tbody>' + rows + '</tbody></table></div>')
+      : '<div class="alert alert-warning small mb-0">هذا المعتمر غير مسجَّل في أي رحلة حتى الآن.</div>');
+  if (typeof mfModal === 'function') {
+    mfModal('🔗 رحلات المعتمر وروابطها (إشعار / ملف وزارة)', html,
+      '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إغلاق</button>', 820);
+  } else {
+    showElegantConfirm({ title: 'روابط المعتمر', html: html, buttons: [{ label: 'إغلاق', class: 'btn-secondary', onClick: function () {} }] });
+  }
 }
 
 // سطر الفلاتر المطبَّقة الحالية مع × لإلغاء كل فلتر أو إلغاء الكل
@@ -9285,7 +9365,9 @@ function _renderRegistryActiveFilters() {
     { id: 'regFilterPassport', label: 'الجواز' },
     { id: 'regFilterTrip', label: 'الرحلة' },
     { id: 'regFilterClient', label: 'العميل' },
-    { id: 'regFilterDate', label: 'تاريخ السفر' }
+    { id: 'regFilterDate', label: 'تاريخ السفر' },
+    { id: 'regFilterMfFile', label: 'ملف الوزارة' },
+    { id: 'regFilterBooking', label: 'رقم الإشعار' }
   ];
   var chips = [];
   defs.forEach(function(d) {
@@ -9308,7 +9390,7 @@ function _clearRegFilter(id) {
   renderRegistryTable();
 }
 function _clearAllRegFilters() {
-  ['regFilterName', 'regFilterPassport', 'regFilterTrip', 'regFilterClient', 'regFilterDate'].forEach(function(id) {
+  ['regFilterName', 'regFilterPassport', 'regFilterTrip', 'regFilterClient', 'regFilterDate', 'regFilterMfFile', 'regFilterBooking'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.value = '';
   });
   if (window._regNoTripOnly) {
@@ -9389,6 +9471,7 @@ function renderRegistryTable() {
       '<td dir="ltr">' + escapeHtml_(returns) + '</td>' +
       '<td style="text-align:right;' + (_isWarnNote_(r.notes) ? 'color:#dc2626;font-weight:700;' : '') + '">' + escapeHtml_(r.notes || '') + '</td>' +
       '<td class="text-nowrap">' +
+        '<button class="btn btn-outline-dark btn-sm py-0 me-1" title="رحلاته وروابطها (إشعار / ملف وزارة)" onclick="event.stopPropagation(); _regPilgrimLinks_(\'' + escapeHtml_(key).replace(/'/g, "\\'") + '\')">🔗</button>' +
         '<button class="btn btn-outline-success btn-sm py-0 me-1" title="تخصيص لرحلة" onclick="event.stopPropagation(); _regAssignToTrip(\'' + escapeHtml_(key).replace(/'/g, "\\'") + '\')">🧳+</button>' +
         '<button class="btn btn-outline-primary btn-sm py-0" title="تعديل البيانات (شاشة منبثقة)" onclick="event.stopPropagation(); _regEditPilgrim(\'' + escapeHtml_(key).replace(/'/g, "\\'") + '\')">✏️</button>' +
       '</td>' +
@@ -9754,7 +9837,9 @@ function printGlobalRegistry() {
     { id: 'regFilterPassport', label: 'الجواز' },
     { id: 'regFilterTrip', label: 'الرحلة' },
     { id: 'regFilterClient', label: 'العميل' },
-    { id: 'regFilterDate', label: 'تاريخ السفر' }
+    { id: 'regFilterDate', label: 'تاريخ السفر' },
+    { id: 'regFilterMfFile', label: 'ملف الوزارة' },
+    { id: 'regFilterBooking', label: 'رقم الإشعار' }
   ];
   var _fltParts = [];
   _fltDefs.forEach(function(d) {
