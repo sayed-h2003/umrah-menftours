@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.116";
+var APP_VERSION = "4.117";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -16527,6 +16527,48 @@ function getMergedHousing(authToken, tripNames, city) {
     }
   }
   return { success: true, rooms: null };
+}
+
+/* ============================================================
+   📝 (V4.117) ملاحظات وتوضيحات كشف التسكين — نص حر يكتبه المستخدم على أي تسكين
+   (رحلة واحدة أو تسكين مدموج لعدة رحلات) ويُطبَع ضمن الكشف بشكل منسّق.
+   المفتاح نفس مفتاح التسكين المدموج: «المدينة::أسماء الرحلات مرتبةً» — فيصلح للحالتين
+   بلا أي تعارض، ومخزَّن في شيت مستقل لا يمسّ بيانات الغرف ولا كشوف المعتمرين.
+   ============================================================ */
+var HOUSING_NOTES_SHEET_ = 'HousingNotes';
+var HOUSING_NOTES_HEADERS_ = ['المفتاح', 'الرحلات', 'المدينة', 'الملاحظات', 'آخر تحديث', 'آخر مستخدم'];
+function saveHousingNote(authToken, tripNames, city, note) {
+  var session = requireAuth_(authToken);
+  var sh = _accSheet_(HOUSING_NOTES_SHEET_, HOUSING_NOTES_HEADERS_);
+  var key = _mhKey_(tripNames, city);
+  var txt = String(note == null ? '' : note).slice(0, 4000);
+  var lastRow = sh.getLastRow();
+  var rowIdx = -1;
+  if (lastRow >= 2) {
+    var keys = sh.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var i = 0; i < keys.length; i++) if (String(keys[i][0]) === key) { rowIdx = i + 2; break; }
+  }
+  var rowVals = [key, JSON.stringify(tripNames || []), city, txt, new Date(), session.username || ''];
+  if (rowIdx === -1) sh.appendRow(rowVals); else sh.getRange(rowIdx, 1, 1, rowVals.length).setValues([rowVals]);
+  return { success: true, note: txt };
+}
+function getHousingNote(authToken, tripNames, city) {
+  requireAuth_(authToken);
+  var sh = _accSheet_(HOUSING_NOTES_SHEET_, HOUSING_NOTES_HEADERS_);
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return { success: true, note: '' };
+  var key = _mhKey_(tripNames, city);
+  var data = sh.getRange(2, 1, lastRow - 1, 6).getValues();
+  for (var i = 0; i < data.length; i++) {
+    if (String(data[i][0]) === key) {
+      return { success: true, note: String(data[i][3] || ''),
+        by: String(data[i][5] || ''),
+        at: (data[i][4] instanceof Date)
+          ? Utilities.formatDate(data[i][4], Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm')
+          : String(data[i][4] || '') };
+    }
+  }
+  return { success: true, note: '' };
 }
 
 /* ============================================================

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.116 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.117 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.116)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.117)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.116</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.117</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6375,7 +6375,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.116";
+var CLIENT_APP_VERSION = "4.117";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -17756,6 +17756,9 @@ function generateHousing(city) {
   window._housingRoomsByCity[city] = combinedRooms;
   window._housingRooms = combinedRooms;
   _renderHousingCards();
+  // 📝 (V4.117) ملاحظات هذا الكشف (حسب الرحلة + المدينة) — تُحمَّل ثم تُعاد الكروت لعرضها
+  window._hnCache['trip'] = { note: '', by: '', at: '' };
+  _hnLoad_('trip', function () { if (document.getElementById('housingCardsArea')) _renderHousingCards(); });
   var modalTitle = (window.currentTripName || '') + ' — 🏨 تسكين ' + cityLabel;
   document.getElementById('housingTripNameLabel').textContent = modalTitle;
   new bootstrap.Modal(document.getElementById('housingModal')).show();
@@ -17910,6 +17913,95 @@ function _buildTripSummaryHtml_() {
     '</tbody></table>';
 }
 
+/* ============================================================
+   📝 (V4.117) ملاحظات وتوضيحات كشف التسكين — تعمل بنفس الطريقة في تسكين الرحلة الواحدة
+   وفي التسكين المدموج لعدة رحلات، وتُطبَع ضمن الكشف (طباعة/PDF/صورة) في لوحة منسّقة.
+   ============================================================ */
+window._hnCache = window._hnCache || {};          // { 'trip'|'merged': {note, by, at} }
+function _hnScopeMeta_(scope) {
+  if (scope === 'merged') {
+    var m = window._mhMeta || {};
+    return { trips: m.tripNames || [], city: m.city || 'madinah' };
+  }
+  return { trips: [window.currentTripName || ''], city: window._activeHousingCity || 'madinah' };
+}
+function _hnGet_(scope) { return (window._hnCache[scope] || { note: '', by: '', at: '' }); }
+// لوحة الكتابة داخل الشاشة (قابلة للطي، وتفتح تلقائياً لو بها نص)
+function _hnPanelHtml_(scope) {
+  var d = _hnGet_(scope);
+  var has = !!String(d.note || '').trim();
+  return '<div class="card mb-2" id="hnPanel_' + scope + '" style="border:1px solid #cbd5e1;">' +
+    '<div class="card-header py-1 px-2 d-flex align-items-center gap-2" style="background:#eef2f7;cursor:pointer;font-size:12.5px;"' +
+    ' onclick="_hnToggle_(\'' + scope + '\')">' +
+    '<b>📝 ملاحظات وتوضيحات الكشف</b>' +
+    (has ? '<span class="badge bg-success">مكتوبة</span>' : '<span class="badge bg-light text-muted border">فارغة</span>') +
+    (d.at ? '<span class="text-muted small ms-auto">آخر تعديل: ' + escapeHtml_(d.by || '') + ' · ' + escapeHtml_(d.at) + '</span>' : '<span class="text-muted small ms-auto">تُطبَع أعلى الكشف</span>') +
+    '</div>' +
+    '<div class="card-body p-2" id="hnBody_' + scope + '" style="display:' + (has ? 'block' : 'none') + ';">' +
+    '<textarea id="hnText_' + scope + '" class="form-control form-control-sm" rows="3" style="font-size:12.5px;"' +
+    ' placeholder="اكتب هنا أي توضيحات تخصّ هذا التسكين — تُطبَع مع الكشف بشكل منسّق (مثال: الغرف 4 و7 بطلب خاص من العميل · تعديل التسكين بعد وصول المجموعة الثانية)">' +
+    escapeHtml_(d.note || '') + '</textarea>' +
+    '<div class="d-flex gap-2 mt-2">' +
+    '<button class="btn btn-success btn-sm" onclick="_hnSave_(\'' + scope + '\', this)">💾 حفظ الملاحظات</button>' +
+    '<button class="btn btn-outline-secondary btn-sm" onclick="_hnClear_(\'' + scope + '\')">🗑️ مسح</button>' +
+    '<span class="text-muted small align-self-center">تظهر في الطباعة و PDF والصورة أعلى الكشف مباشرةً.</span>' +
+    '</div></div></div>';
+}
+function _hnToggle_(scope) {
+  var b = document.getElementById('hnBody_' + scope);
+  if (b) b.style.display = (b.style.display === 'none') ? 'block' : 'none';
+}
+function _hnClear_(scope) {
+  var t = document.getElementById('hnText_' + scope);
+  if (t) { t.value = ''; t.focus(); }
+}
+function _hnSave_(scope, btn) {
+  var t = document.getElementById('hnText_' + scope);
+  var note = t ? t.value : '';
+  var meta = _hnScopeMeta_(scope);
+  var orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ حفظ…'; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+      if (!res || !res.success) { showToast('❌ تعذّر حفظ الملاحظات', true); return; }
+      window._hnCache[scope] = { note: res.note || '', by: (window.currentUser && window.currentUser.username) || '', at: '' };
+      showToast('✅ تم حفظ ملاحظات الكشف — ستظهر في الطباعة');
+      if (scope === 'merged') { if (typeof _mhRenderCards_ === 'function') _mhRenderCards_(); }
+      else { if (typeof _renderHousingCards === 'function') _renderHousingCards(); }
+    })
+    .withFailureHandler(function (err) {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+      if (_handleSessErr_(err)) return;
+      showToast('❌ ' + (err.message || err), true);
+    })
+    .saveHousingNote(window.authToken, meta.trips, meta.city, note);
+}
+// تحميل الملاحظات عند فتح أي شاشة تسكين (مرة لكل توليفة رحلات+مدينة)
+function _hnLoad_(scope, cb) {
+  var meta = _hnScopeMeta_(scope);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      window._hnCache[scope] = { note: (res && res.note) || '', by: (res && res.by) || '', at: (res && res.at) || '' };
+      if (cb) cb();
+    })
+    .withFailureHandler(function () { window._hnCache[scope] = { note: '', by: '', at: '' }; if (cb) cb(); })
+    .getHousingNote(window.authToken, meta.trips, meta.city);
+}
+/* 🖨️ لوحة الملاحظات داخل مستندات الطباعة/PDF/الصورة — أنماط مضمَّنة كي يحافظ عليها محوّل PDF */
+function _hnPrintBlock_(scope) {
+  var note = String(_hnGet_(scope).note || '').trim();
+  if (!note) return '';
+  var lines = note.split(/\r?\n/).filter(function (x) { return x.trim() !== ''; });
+  var body = (lines.length > 1)
+    ? ('<ul style="margin:0; padding-inline-start:18px;">' +
+        lines.map(function (l) { return '<li style="margin:1px 0;">' + escapeHtml_(l.trim()) + '</li>'; }).join('') + '</ul>')
+    : ('<div>' + escapeHtml_(lines[0] || '') + '</div>');
+  return '<div style="border:1px solid #0F766E; border-right:5px solid #0F766E; border-radius:6px; ' +
+    'background-color:#f0fdfa; padding:6px 10px; margin:0 0 8px; font-size:11.5px; line-height:1.75; page-break-inside:avoid;">' +
+    '<div style="font-weight:bold; color:#0F766E; margin-bottom:2px; font-size:12px;">📝 ملاحظات وتوضيحات</div>' +
+    body + '</div>';
+}
 function _renderHousingCards() {
   var area = document.getElementById('housingCardsArea');
   var t = window._currentTripData || {};
@@ -17923,7 +18015,8 @@ function _renderHousingCards() {
 
   // 🔔 شريط الملخص أعلى الشاشة: عداد الغرف الناقصة + قائمة غير المسكَّنين (إن وُجدوا)
   var shortageRoomsCount = rooms.filter(function(r) { return r.shortage; }).length;
-  var summaryHtml = '';
+  // 📝 (V4.117) لوحة ملاحظات الكشف أعلى الشاشة — تُطبَع مع الكشف
+  var summaryHtml = _hnPanelHtml_('trip');
   if (shortageRoomsCount > 0) {
     summaryHtml += '<div class="alert alert-warning py-2 px-3 mb-2 d-flex align-items-center gap-2" style="font-size:13px;">' +
       '<span>🔔 <b>' + shortageRoomsCount + '</b> غرفة ناقصة سرير — راجع الكروت ذات الحد البرتقالي أدناه لإبلاغ المبيعات بإكمالها</span>' +
@@ -18515,6 +18608,9 @@ function _mhConfirmPick_() {
 function _mhOpen_(tripNames, city, hotel) {
   window._mhMeta = { tripNames: tripNames, city: city, hotel: hotel, label: tripNames.join(' + ') + ' — 🏨 ' + hotel };
   window._mhTripDates = null;   // 📅 تواريخ الإقامة تُعاد بناؤها حسب مدينة هذا الدمج
+  // 📝 (V4.117) ملاحظات هذا التسكين المدموج (حسب توليفة الرحلات + المدينة)
+  window._hnCache['merged'] = { note: '', by: '', at: '' };
+  _hnLoad_('merged', function () { if ((window._mhRooms || []).length) _mhRenderCards_(); });
   document.getElementById('mhTitleLabel').textContent = window._mhMeta.label;
   document.getElementById('mhCardsArea').innerHTML = '<div class="text-center text-muted p-4">⏳ جاري تحميل بيانات المعتمرين...</div>';
   new bootstrap.Modal(document.getElementById('mhModal')).show();
@@ -18660,7 +18756,8 @@ function _mhRenderCards_() {
   var unhoused = window._mhUnhoused || [];
   var roomLabels = rooms.map(function(room, i) { return 'غرفة ' + (i + 1); });
 
-  var summaryHtml = '';
+  // 📝 (V4.117) لوحة ملاحظات التسكين المدموج — تُطبَع مع الكشف
+  var summaryHtml = _hnPanelHtml_('merged');
   var shortageRoomsCount = rooms.filter(function(r) { return r.shortage; }).length;
   if (shortageRoomsCount > 0) {
     summaryHtml += '<div class="alert alert-warning py-2 px-3 mb-2" style="font-size:13px;">🔔 <b>' + shortageRoomsCount + '</b> غرفة ناقصة سرير</div>';
@@ -19008,6 +19105,7 @@ function _mhPrintableHtml_() {
       }
     </style></head><body>
     <div class="title">🏨 تسكين مدموج — ${escapeHtml_(meta.label || '')} (${cityLabel})</div>
+    ${_hnPrintBlock_('merged')}
     <div class="cards">${cardsHtml}</div>
     ${unhousedHtml}
     <div class="stats-section"><h3>📊 ملخص التسكين المدموج — لكل فندق</h3>${_buildHousingStatsForRooms_(rooms)}</div>
@@ -19049,12 +19147,33 @@ function _mhSharePdf_(btn) {
 
 // 📸 (V4.104) صورة HD لكارت التسكين المدموج — التقاط مباشر للعنصر المعروض حياً على الشاشة
 // (لا يوجد بعد مستند PDF منفصل لهذه الشاشة، فنلتقط #mhCardsArea بنفس محتواه الظاهر بالضبط)
+/* 📝 (V4.117) أثناء التقاط الصورة نستبدل لوحة كتابة الملاحظات التفاعلية (مربع نص وأزرار)
+   بلوحة الملاحظات المنسّقة نفسها المستخدَمة في الطباعة — فتخرج الصورة احترافية بلا عناصر إدخال. */
+function _hnSwapForCapture_(scope) {
+  var panel = document.getElementById('hnPanel_' + scope);
+  if (!panel) return function () {};
+  var prev = panel.style.display;
+  var block = _hnPrintBlock_(scope);
+  var tmp = null;
+  if (block) {
+    tmp = document.createElement('div');
+    tmp.innerHTML = block;
+    panel.parentNode.insertBefore(tmp, panel);
+  }
+  panel.style.display = 'none';
+  return function () {
+    panel.style.display = prev;
+    if (tmp && tmp.parentNode) tmp.parentNode.removeChild(tmp);
+  };
+}
 function _mhExportImage_(btn) {
   var root = document.getElementById('mhCardsArea');
   if (!root || !root.innerHTML.trim()) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
   var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳...';
   var fileNameBase = 'تسكين مدموج — ' + (window._mhMeta ? window._mhMeta.label : '');
+  var restore = _hnSwapForCapture_('merged');
   _captureElementAsPngFiles_(root, fileNameBase, function(files, err) {
+    restore();
     btn.disabled = false; btn.innerHTML = orig;
     if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
     _shareOrSaveImageFiles_(files);
@@ -19147,6 +19266,7 @@ function _housingPrintableHtml() {
       }
     \u003C/style>\u003C/head>\u003Cbody>
     <div class="title">🏨 تسكين ${cityLabel} — رحلة: ${escapeHtml_(t.name || window.currentTripName || '')}</div>
+    ${_hnPrintBlock_('trip')}
     <div class="cards">${cardsHtml}</div>
     ${unhousedHtml}
     <div class="stats-section"><h3>📊 إحصائية التسكين (لكل فندق)</h3>${_buildHousingStatsHtml_()}</div>
