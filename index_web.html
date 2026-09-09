@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.120 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.121 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.120)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.121)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.120</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.121</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4851,6 +4851,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="mf-btn" onclick="mfPrint()">🖨️ طباعة</button>
       <button class="mf-btn" onclick="mfExportPdf()">📄 PDF</button>
       <button class="mf-btn" onclick="mfExportImage(this)">📸 صورة HD</button>
+      <button class="mf-btn gold" onclick="mfExportExcel()">📊 تصدير Excel</button>
       <button class="mf-btn" onclick="mfLoad(true)">🔄 تحديث</button>
       <button class="mf-btn" id="mfImportBtn" style="display:none;" onclick="mfOpenImport()">📤 استيراد ملفات قديمة (إكسيل)</button>
     </div>
@@ -6386,7 +6387,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.120";
+var CLIENT_APP_VERSION = "4.121";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -28530,6 +28531,94 @@ function _showBlockingError_(title, msgHtml) {
   }
 }
 
+/* ============================================================
+   🔁 (V4.121) تنبيه الإشعار المكرَّر — عند تسجيل إشعار وصول جديد بنفس بيانات الذهاب والعودة
+   والرحلة المرتبطة، وبنفس بيانات التذكرة المسحوبة أيضاً، يُعرَض إشعار سابق مطابق للمقارنة
+   ويُترَك القرار للمستخدم: إلغاء التسجيل والعودة للنموذج، أو المتابعة كإشعار منفصل فعلاً.
+   ============================================================ */
+function _bkTicketSig_(b) {
+  return String((b && (b.ticketFileId || b.ticketUrl)) || '').trim();
+}
+function _findDuplicateBooking_(bookingObj) {
+  var trip = String(bookingObj.tripName || '').trim();
+  var arr = String(bookingObj.arrivalDate || '').trim();
+  var dep = String(bookingObj.departureDate || '').trim();
+  if (!trip || !arr || !dep) return null;   // الشرط يتطلب الرحلة المرتبطة + الذهاب + العودة معاً
+  var sig = _bkTicketSig_(bookingObj);
+  return (localBookingsCache || []).filter(function (b) {
+    if (!b || String(b.id) === String(bookingObj.id || '')) return false;
+    if (String(b.tripName || '').trim() !== trip) return false;
+    if (String(b.arrivalDate || '').trim() !== arr) return false;
+    if (String(b.departureDate || '').trim() !== dep) return false;
+    var bSig = _bkTicketSig_(b);
+    // «نفس بيانات التذكرة» — تطابق فعلي لو كلاهما له تذكرة، أو تطابق (لا تذكرة على الإطلاق) للطرفين
+    return sig ? (sig === bSig) : !bSig;
+  })[0] || null;
+}
+function _maybeWarnDuplicateBooking_(bookingObj, proceed) {
+  var run = function () {
+    var dup = _findDuplicateBooking_(bookingObj);
+    if (!dup) { proceed(); return; }
+    _showDuplicateBookingDialog_(dup, bookingObj, proceed);
+  };
+  if (!(localBookingsCache || []).length) {
+    google.script.run
+      .withSuccessHandler(function (b) { localBookingsCache = b || []; run(); })
+      .withFailureHandler(function () { proceed(); })   // تعذّر التحقق — لا نمنع الحفظ
+      .getAllBookingsAuth(window.authToken);
+    return;
+  }
+  run();
+}
+function _showDuplicateBookingDialog_(dup, bookingObj, proceed) {
+  var old = document.getElementById('dupBookingOverlay');
+  if (old) old.remove();
+  var row = function (label, oldVal, newVal) {
+    return '<tr><td style="color:#5c6b83;font-weight:700;white-space:nowrap;">' + escapeHtml_(label) + '</td>' +
+      '<td>' + escapeHtml_(String(oldVal || '—')) + '</td><td>' + escapeHtml_(String(newVal || '—')) + '</td></tr>';
+  };
+  var ticketNote = _bkTicketSig_(bookingObj)
+    ? 'نفس بيانات التذكرة المسحوبة'
+    : 'كلاهما بلا تذكرة مرفقة';
+  var html =
+    '<div style="font-size:11.5px;color:#5c6b83;margin-bottom:8px;">قد يكون هذا الإشعار <b>مكرَّراً</b> — إشعار سابق بنفس الرحلة المرتبطة وتاريخي الذهاب والعودة، و' + ticketNote + ':</div>' +
+    '<div class="table-responsive"><table class="table table-sm table-bordered mb-2" style="font-size:12px;">' +
+    '<thead class="table-light"><tr><th></th><th>الإشعار السابق #' + escapeHtml_(dup.id) + '</th><th>الإشعار الجديد (قيد التسجيل)</th></tr></thead><tbody>' +
+    row('الرحلة المرتبطة', dup.tripName, bookingObj.tripName) +
+    row('العميل / المجموعة', dup.client, bookingObj.client) +
+    row('العدد', dup.count, bookingObj.count) +
+    row('المشرف', dup.supervisor, bookingObj.supervisor) +
+    row('تاريخ الذهاب', dup.arrivalDate, bookingObj.arrivalDate) +
+    row('رحلة الوصول', dup.arrivalFlight, bookingObj.arrivalFlight) +
+    row('تاريخ العودة', dup.departureDate, bookingObj.departureDate) +
+    row('رحلة المغادرة', dup.departureFlight, bookingObj.departureFlight) +
+    row('حالة الإشعار', dup.status, 'قيد المراجعة') +
+    '</tbody></table></div>' +
+    '<div style="font-size:11px;color:#94a3b8;">راجع الفرق قبل اتخاذ القرار — إلغاء التسجيل يبقيك في النموذج بلا فقد أي بيانات مكتوبة.</div>';
+
+  var ov = document.createElement('div');
+  ov.id = 'dupBookingOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483640;background:rgba(15,23,42,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;direction:rtl;';
+  var card = document.createElement('div');
+  card.style.cssText = 'background:#fff;border-radius:14px;max-width:680px;width:100%;max-height:86vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.35);border-top:6px solid #c2670a;';
+  card.innerHTML =
+    '<div style="padding:16px 18px 4px;display:flex;align-items:center;gap:8px;">' +
+    '<span style="font-size:24px;">🔁</span><b style="font-size:15px;color:#c2670a;">تنبيه: إشعار مكرَّر محتمل</b></div>' +
+    '<div style="padding:8px 18px 14px;">' + html + '</div>' +
+    '<div style="padding:0 18px 16px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' +
+    '<button id="dupBookingViewBtn" class="btn btn-outline-secondary btn-sm">👁️ عرض الإشعار السابق</button>' +
+    '<button id="dupBookingCancelBtn" class="btn btn-outline-danger btn-sm">🚫 إلغاء التسجيل — العودة للنموذج</button>' +
+    '<button id="dupBookingProceedBtn" class="btn btn-warning btn-sm fw-bold">✅ تسجيل كإشعار منفصل رغم ذلك</button>' +
+    '</div>';
+  ov.appendChild(card);
+  document.body.appendChild(ov);
+  document.getElementById('dupBookingCancelBtn').onclick = function () { ov.remove(); };
+  document.getElementById('dupBookingProceedBtn').onclick = function () { ov.remove(); proceed(); };
+  document.getElementById('dupBookingViewBtn').onclick = function () {
+    if (typeof viewDetailedBooking === 'function') viewDetailedBooking(dup.id);
+  };
+}
+
 function submitForm(event) {
   event.preventDefault();
   try {
@@ -28724,9 +28813,19 @@ bookingObj.allMovements = buildMovements(bookingObj);
     bookingObj.madinahHotel = [bookingObj.madinahHotel].concat(bookingObj.madinahHotelsExtra || []).filter(Boolean).join(' / ');
     bookingObj.makkahHotel = [bookingObj.makkahHotel].concat(bookingObj.makkahHotelsExtra || []).filter(Boolean).join(' / ');
 
+    // 🔁 (V4.121) تنبيه الإشعار المكرَّر — فقط عند تسجيل إشعار جديد (بلا رقم بعد)، وليس عند تعديل
+    // إشعار موجود. لو وُجد تطابق يُعرَض قرار للمستخدم قبل المتابعة للحفظ الفعلي.
+    if (!bookingObj.id) {
+      _maybeWarnDuplicateBooking_(bookingObj, function () { _proceedSaveBooking_(bookingObj); });
+      return;
+    }
+    _proceedSaveBooking_(bookingObj);
+  }
+
+function _proceedSaveBooking_(bookingObj) {
     document.getElementById('submitBtn').setAttribute("disabled", "disabled");
     document.getElementById('submitBtn').innerHTML = "⏳ جاري حفظ البيانات ورفع المرفقات بالسيرفر ...";
-    
+
     google.script.run.withSuccessHandler(function(res) {
 
   document.getElementById('submitBtn').removeAttribute("disabled");
@@ -35902,6 +36001,202 @@ function mfLedgerRender() {
     })
     .withFailureHandler(function (e) { pane.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>'; })
     .getRoomFeeLedger(window.authToken, MF._ledComp || 'كل الشركات');
+}
+
+/* ============================================================
+   📊 (V4.121) تصدير Excel — بنفس ترتيب وأعمدة النموذج الأصلي (MF_COLS)، مع تطبيق الفلاتر
+   الحالية على الصفوف (mfVisible)، وأعمدة الإجماليات تُصدَّر كمعادلات إكسيل حقيقية (وليست أرقاماً
+   ثابتة) فتتحدّث تلقائياً عند تعديل أي رقم مؤثِّر عليها داخل الملف بعد التصدير — تماماً كما تعمل
+   في التطبيق (نفس معادلات _mfCompute_/mfCalc حرفاً بحرف، فيما عدا رسوم الباركود التي تُطوى داخل
+   المخالصة العكسية بلا تغيير على الصافي عملياً).
+   يعتمد مكتبة SheetJS (XLSX) المحمَّلة بالفعل بالتطبيق — بلا أي نداء للسيرفر، بالكامل بالمتصفح.
+   ============================================================ */
+var MF_EXPORT_COLS = [
+  { k: 'seq', l: 'م', t: 'num' },
+  { k: 'approved', l: 'معتمد', t: 'txt' },
+  { k: 'fileNo', l: 'رقم الملف', t: 'txt' },
+  { k: 'clientLabel', l: 'العميل', t: 'txt' },
+  { k: 'ref', l: 'رقم القيد', t: 'txt' },
+  { k: 'eInvoice', l: 'فاتورة إلكترونية', t: 'txt' },
+  { k: 'company', l: 'الشركة المصرية', t: 'txt' },
+  { k: 'agent', l: 'الوكيل السعودي', t: 'txt' },
+  { k: 'bookingNo', l: 'رقم الإشعار', t: 'txt' },
+  { k: 'reviewDate', l: 'تاريخ المراجعة', t: 'txt' },
+  { k: 'reviewType', l: 'نوع المراجعة', t: 'txt' },
+  { k: 'travelMode', l: 'وسيلة السفر', t: 'txt' },
+  { k: 'goDate', l: 'تاريخ الذهاب', t: 'txt' },
+  { k: 'retDate', l: 'تاريخ العودة', t: 'txt' },
+  { k: 'pilgrims', l: 'معتمرين', t: 'num' },
+  { k: 'supCount', l: 'مشرفين (مرافق)', t: 'num' },
+  { k: 'supNames', l: 'المشرف', t: 'txt' },
+  { k: 'supTypes', l: 'نوع المشرف', t: 'txt' },
+  { k: 'progPrice', l: 'سعر البرنامج', t: 'num' },
+  { k: 'revenue', l: 'الإيراد', t: 'formula' },
+  { k: 'ticket', l: 'التذكرة', t: 'num' },
+  { k: 'roomFee', l: 'رسوم الغرفة/فرد', t: 'num' },
+  { k: 'adminFee', l: 'رسوم إدارية/فرد', t: 'num' },
+  { k: 'clearanceSAR', l: 'المخالصة بالريال', t: 'formula' },
+  { k: 'fxRate', l: 'سعر صرف الريال', t: 'num' },
+  { k: 'totalTickets', l: 'إجمالي التذاكر', t: 'formula' },
+  { k: 'totalRoomFee', l: 'إجمالي رسوم الغرفة', t: 'formula' },
+  { k: 'totalSAR', l: 'إجمالي الريال', t: 'formula' },
+  { k: 'otherExp', l: 'مصروفات أخرى', t: 'formula' },
+  { k: 'totalExp', l: 'إجمالي المصروف', t: 'formula' },
+  { k: 'margin', l: 'هامش الربح', t: 'formula' },
+  { k: 'perPersonMargin', l: 'هامش الفرد', t: 'formula' },
+  { k: 'pct', l: 'النسبة %', t: 'num' },
+  { k: 'madinahHotel', l: 'فندق المدينة', t: 'txt' },
+  { k: 'madinahIn', l: 'دخول المدينة', t: 'txt' },
+  { k: 'madinahOut', l: 'خروج المدينة', t: 'txt' },
+  { k: 'makkahHotel', l: 'فندق مكة', t: 'txt' },
+  { k: 'makkahIn', l: 'دخول مكة', t: 'txt' },
+  { k: 'makkahOut', l: 'خروج مكة', t: 'txt' },
+  { k: 'transport', l: 'شركة النقل', t: 'txt' },
+  { k: 'notes', l: 'ملاحظات', t: 'txt' },
+  { k: 'created', l: 'الإنشاء (بواسطة · التاريخ)', t: 'txt' },
+  { k: 'updated', l: 'آخر تعديل', t: 'txt' }
+];
+function _xlColLetter(n) {
+  var s = '';
+  while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+function mfExportExcel() {
+  if (typeof XLSX === 'undefined') { _showPopup('مكتبة تصدير الإكسيل غير محمَّلة — أعد تحميل الصفحة', 'error'); return; }
+  var list = mfVisible();
+  if (!list.length) { _showPopup('لا توجد ملفات مطابقة للفلاتر الحالية لتصديرها', 'error'); return; }
+
+  // فهارس الأعمدة (1-based) وحروفها — تُحسَب آلياً بدل الكتابة اليدوية لتفادي أي خطأ حروف
+  var idxOf = {}; MF_EXPORT_COLS.forEach(function (c, i) { idxOf[c.k] = i + 1; });
+  var L = {}; Object.keys(idxOf).forEach(function (k) { L[k] = _xlColLetter(idxOf[k]); });
+
+  var cfg = MF.cfg || {};
+  var supFeeVal = mfNum(cfg.supRoomFee) || 200;
+
+  var header = MF_EXPORT_COLS.map(function (c) { return c.l; });
+  var aoa = [header];
+  var rowMeta = []; // { row, formulas: {key: {f, v}} } — نُطبِّقها بعد بناء الورقة
+
+  list.forEach(function (f, ri) {
+    var c = f._c || mfCalc(f);
+    var xr = ri + 2; // رقم صف إكسيل (1 = رأس الأعمدة)
+    var row = MF_EXPORT_COLS.map(function (col) {
+      switch (col.k) {
+        case 'seq': return mfNum(f.seq);
+        case 'approved': return f.approved ? 'نعم' : 'لا';
+        case 'fileNo': return mfStr(f.fileNo);
+        case 'clientLabel': return mfStr(f.clientLabel);
+        case 'ref': return mfStr(f.ref);
+        case 'eInvoice': return mfStr(f.eInvoice);
+        case 'company': return mfStr(f.company);
+        case 'agent': return mfStr(f.agent);
+        case 'bookingNo': return mfBookingNo(f);
+        case 'reviewDate': return mfStr(f.reviewDate);
+        case 'reviewType': return mfStr(f.reviewType);
+        case 'travelMode': return mfStr(f.travelMode);
+        case 'goDate': return mfStr(f.goDate);
+        case 'retDate': return mfStr(f.retDate);
+        case 'pilgrims': return mfNum(f.pilgrims);
+        case 'supCount': return mfNum(f.supCount);
+        case 'supNames': return mfRaw('supNames', f);
+        case 'supTypes': return mfRaw('supTypes', f);
+        case 'progPrice': return mfNum(f.progPrice);
+        // 🏛️ (V4.121) قيمة رسوم الغرفة المُصدَّرة هي القيمة الفعلية المُطبَّقة فعلاً (بعد قاعدتَي
+        // VIP وأقل من 4 أفراد) — تعديلها لاحقاً في إكسيل يُحدِّث الإجماليات مباشرةً، لكن تبديل نص
+        // «نوع المراجعة» وحده لن يُعيد اشتقاقها تلقائياً (القاعدة نفسها ليست معادلة إكسيل).
+        case 'roomFee': return mfNum(c.roomFeeEffective);
+        case 'adminFee': return mfNum(f.adminFee);
+        case 'fxRate': return mfNum(f.fxRate);
+        case 'pct': return mfNum(f.pct);
+        case 'madinahHotel': return mfStr(f.madinahHotel);
+        case 'madinahIn': return mfStr(f.madinahIn);
+        case 'madinahOut': return mfStr(f.madinahOut);
+        case 'makkahHotel': return mfStr(f.makkahHotel);
+        case 'makkahIn': return mfStr(f.makkahIn);
+        case 'makkahOut': return mfStr(f.makkahOut);
+        case 'transport': return mfStr(f.transport);
+        case 'notes': return mfStr(f.notes);
+        case 'created': return mfWho(f.createdBy, f.createdAt);
+        case 'updated': return mfWho(f.updatedBy, f.updatedAt);
+        default: return 0; // أعمدة الإجماليات (formula) — تُملأ لاحقاً كصيغ فعلية
+      }
+    });
+    aoa.push(row);
+
+    // 🧮 صيغ إكسيل حقيقية لأعمدة الإجماليات — نفس معادلات mfCalc/_mfCompute_ بالضبط، مرجعيةً
+    // لخلايا نفس الصف (تتحدّث تلقائياً عند تعديل أي رقم مؤثِّر بعد فتح الملف في إكسيل)
+    var P = L.pilgrims + xr, O_ = L.supCount + xr, PP = L.progPrice + xr, TCK = L.ticket + xr,
+      RF = L.roomFee + xr, ADF = L.adminFee + xr, PCT = L.pct + xr, FX = L.fxRate + xr,
+      REV = L.revenue + xr, TT = L.totalTickets + xr, TRF = L.totalRoomFee + xr,
+      CSAR = L.clearanceSAR + xr, TSAR = L.totalSAR + xr, OE = L.otherExp + xr, TE = L.totalExp + xr,
+      MG = L.margin + xr;
+    var heads = '(' + P + '+' + O_ + ')';
+    var formulas = {
+      revenue: { f: P + '*' + PP, v: c.revenue },
+      totalTickets: { f: TCK + '*' + heads, v: c.totalTickets },
+      totalRoomFee: { f: '(' + P + '*' + RF + ')+(' + O_ + '*Settings!$B$2)', v: c.totalRoomFee },
+      otherExp: { f: ADF + '*' + heads, v: c.otherExp },
+      clearanceSAR: {
+        f: 'IF(AND(' + heads + '>0,' + FX + '>0),ROUND((' + REV + '-' + TT + '-' + TRF + '-' + OE +
+          '-(' + REV + '*' + PCT + '/100))/(' + heads + '*' + FX + '),0),0)',
+        v: c.clearanceSAR
+      },
+      totalSAR: { f: CSAR + '*' + heads, v: c.totalSAR },
+      totalExp: { f: 'ROUND((' + TSAR + '*' + FX + ')+' + TT + '+' + TRF + '+' + OE + ',0)', v: c.totalExp },
+      margin: { f: REV + '-' + TE, v: c.margin },
+      perPersonMargin: { f: 'IF(' + P + '>0,ROUND(' + MG + '/' + P + ',0),0)', v: c.perPersonMargin }
+    };
+    rowMeta.push({ row: xr, formulas: formulas });
+  });
+
+  // صف الإجماليات أسفل الجدول — SUM() حقيقية على مدى صفوف البيانات (تمتد تلقائياً لو أضفت صفوفاً داخل النطاق)
+  var lastRow = list.length + 1;
+  var totalsRow = MF_EXPORT_COLS.map(function (col) {
+    if (['pilgrims', 'supCount', 'revenue', 'totalTickets', 'totalRoomFee', 'totalSAR', 'otherExp', 'totalExp', 'margin'].indexOf(col.k) >= 0) return 0;
+    return col.k === 'clientLabel' ? 'الإجمالي' : '';
+  });
+  aoa.push(totalsRow);
+  var totalsXr = lastRow + 1;
+
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  rowMeta.forEach(function (rm) {
+    Object.keys(rm.formulas).forEach(function (k) {
+      var ref = L[k] + rm.row, fo = rm.formulas[k];
+      ws[ref] = { t: 'n', v: fo.v, f: fo.f };
+    });
+  });
+  ['pilgrims', 'supCount', 'revenue', 'totalTickets', 'totalRoomFee', 'totalSAR', 'otherExp', 'totalExp', 'margin'].forEach(function (k) {
+    var col = L[k];
+    ws[col + totalsXr] = { t: 'n', v: 0, f: 'SUM(' + col + '2:' + col + lastRow + ')' };
+  });
+
+  // عرض الأعمدة، تجميد صف الرأس، فلتر تلقائي — كلها ميزات مدعومة في نسخة SheetJS المجانية المحمَّلة
+  ws['!cols'] = MF_EXPORT_COLS.map(function (c) { return { wch: Math.max(8, Math.round((c.l.length + 4) * 1.15)) }; });
+  var lastColLetter = _xlColLetter(MF_EXPORT_COLS.length);
+  try { ws['!views'] = [{ state: 'frozen', ySplit: 1, xSplit: 0, rightToLeft: true }]; } catch (e) {}
+  try { ws['!autofilter'] = { ref: 'A1:' + lastColLetter + '1' }; } catch (e) {}
+
+  var wsSettings = XLSX.utils.aoa_to_sheet([
+    ['الإعداد', 'القيمة', 'ملاحظة'],
+    ['رسوم غرفة المشرف (مرافق) — جنيه', supFeeVal, 'يُستخدم في معادلة «إجمالي رسوم الغرفة» — غيّره هنا فتتحدّث كل الصفوف'],
+    ['رسوم غرفة VIP الثابتة للفرد — جنيه', mfNum(cfg.vipRoomFee) || 3100, 'مُطبَّقة سلفاً داخل عمود «رسوم الغرفة/فرد» لكل ملف VIP — للاطّلاع فقط']
+  ]);
+  wsSettings['!cols'] = [{ wch: 38 }, { wch: 12 }, { wch: 60 }];
+  try { wsSettings['!views'] = [{ rightToLeft: true }]; } catch (e) {}
+
+  var wb = XLSX.utils.book_new();
+  try { wb.Workbook = { Views: [{ RTL: true }] }; } catch (e) {}
+  XLSX.utils.book_append_sheet(wb, ws, 'ملفات المراجعة');
+  XLSX.utils.book_append_sheet(wb, wsSettings, 'الإعدادات المستخدمة');
+
+  var stamp = (MF.today || '').replace(/\//g, '-') || new Date().toISOString().slice(0, 10);
+  var fname = 'مراجعة ملفات الوزارة - ' + stamp + '.xlsx';
+  try {
+    XLSX.writeFile(wb, fname);
+    _showPopup('تم تصدير ' + list.length + ' ملفاً — أعمدة الإجماليات معادلات حيّة قابلة للتعديل', 'success');
+  } catch (e) {
+    _showPopup('تعذّر إنشاء ملف الإكسيل: ' + (e && e.message ? e.message : e), 'error');
+  }
 }
 
 /* ---------- الطباعة والتصدير ---------- */
