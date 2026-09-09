@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.113 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.114 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.113)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.114)', diag);
 }, 6000);
 </script>
 
@@ -118,6 +118,12 @@ setTimeout(function () {
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- 📸 (V4.104) تصدير أي تقرير كصورة HD (حفظ/مشاركة) — html2pdf.js يضمّن html2canvas داخلياً -->
+  <!-- 🛡️ (V4.114) نُحمِّل html2canvas مستقلاً أيضاً: حزمة html2pdf تُغلّف المكتبة داخل نظام وحدات
+       فلا تُتيحها دائماً كـwindow.html2canvas، وبدونها كان الالتقاط يمرّ عبر غلاف html2pdf الذي
+       يفرض عرض صفحة A4 على المحتوى (≈794px) فيسحق التقارير العريضة أو يقصّها. الاستدعاء المباشر
+       لـhtml2canvas يلتقط التقرير بعرضه الحقيقي بلا أي قصّ. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>try { window.__h2cStandalone = window.html2canvas; } catch (e) {}</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     body { background-color: #f1f5f9; font-family: 'Cairo', sans-serif; font-size: 0.9rem; }
@@ -1491,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.113</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.114</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4487,6 +4493,14 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-ministry table.mf-tab thead tr.mf-cols th{ background:var(--mfNavy); color:#fff; font-size:10.5px;
     font-weight:700; position:sticky; top:22px; z-index:11; padding:4px 5px; cursor:grab; }
   #section-ministry table.mf-tab thead tr.mf-cols th.mf-dragover{ background:var(--mfBlue); box-shadow:inset 3px 0 0 #fff; }
+  /* ↔️ (V4.114) مقبض تغيير عرض العمود بالماوس — على حافة نهاية كل رأس عمود */
+  #section-ministry table.mf-tab thead tr.mf-cols th{ position:relative; }
+  #section-ministry .mf-rsz{ position:absolute; top:0; bottom:0; inset-inline-end:-3px; width:7px;
+    cursor:col-resize; z-index:3; }
+  #section-ministry .mf-rsz::after{ content:""; position:absolute; top:5px; bottom:5px; inset-inline-end:3px;
+    width:1px; background:rgba(255,255,255,.28); }
+  #section-ministry .mf-rsz:hover::after{ background:#ffd77a; width:2px; }
+  body.mf-resizing, body.mf-resizing *{ cursor:col-resize !important; user-select:none !important; }
   #section-ministry .mf-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
   #section-ministry .mf-thic, .mf-dlg .mf-thic{ background:none; border:none; color:#a9c1e2; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
   #section-ministry .mf-thic:hover, .mf-dlg .mf-thic:hover{ color:#fff; background:rgba(255,255,255,.16); }
@@ -4650,6 +4664,19 @@ input[type="date"]:not(:focus):not(:valid) {
     border:1px solid #cbd5e1; background:#fff; cursor:pointer; }
   #mfDatePick .dn{ font-size:9.5px; color:#c2670a; font-weight:700; text-align:center; margin-top:5px; }
 
+  /* 🪟 (V4.114) شريط النوافذ المصغَّرة أسفل الشاشة */
+  #mfTaskbar{ position:fixed; inset-inline-start:0; inset-inline-end:0; bottom:0; z-index:2147483300;
+    background:linear-gradient(135deg,#152c42,#1e3d59); color:#fff; display:flex; align-items:center;
+    gap:7px; padding:6px 12px; flex-wrap:wrap; box-shadow:0 -6px 20px rgba(15,23,42,.28); direction:rtl; }
+  #mfTaskbar .lbl{ font-size:10.5px; font-weight:800; color:#bfd2e2; }
+  #mfTaskbar .mf-tbchip{ display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.22); border-radius:8px; padding:4px 6px 4px 10px; font-size:11.5px;
+    cursor:pointer; max-width:330px; transition:background .12s; }
+  #mfTaskbar .mf-tbchip:hover{ background:rgba(255,255,255,.28); }
+  #mfTaskbar .mf-tbchip b{ font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #mfTaskbar .mf-tbchip button{ background:rgba(255,255,255,.18); border:none; color:#fff; width:18px; height:18px;
+    border-radius:5px; cursor:pointer; font-size:10px; line-height:1; flex-shrink:0; }
+  #mfTaskbar .mf-tbchip button:hover{ background:rgba(220,38,38,.65); }
   #mfCellTip{ position:fixed; z-index:2147483200; background:#152c42; color:#fff; font-size:11.5px; font-weight:600;
     padding:5px 10px; border-radius:8px; max-width:340px; box-shadow:0 10px 30px rgba(0,0,0,.3); display:none;
     pointer-events:none; line-height:1.5; }
@@ -6350,7 +6377,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.113";
+var CLIENT_APP_VERSION = "4.114";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -17278,44 +17305,127 @@ function _renderShareSheet_(o) {
    الجهاز، ويقسّم أي طول يتجاوز الحد الأقصى لعدة صور بدل فشل الرسم.
    ============================================================ */
 
-// 📐 يلتقط عنصر DOM من الصفحة الحالية نفسها (بلا iframe) — لتقارير تُعرض مباشرة على الشاشة
-// (لوحة الإحصائيات، دمج التسكين) وينتج ملفات PNG (قد تكون أكثر من ملف لو تجاوز الطول حد المتصفح)
+// 📐 يلتقط عنصر DOM من الصفحة الحالية نفسها (بلا iframe) وينتج ملفات PNG.
+/* 🛡️ (V4.114) إعادة بناء جذرية لمحرّك الالتقاط — كان يُجمِّد المتصفح ويُخرج صوراً بيضاء:
+   1) المقياس: كان السقف يسمح بلوحة (canvas) تصل إلى 110–180 مليون بكسل. كل بكسل 4 بايت في
+      الذاكرة، أي **440 ميجابايت إلى 720 ميجابايت للوحة الواحدة** — بخلاف اللوحات الوسيطة التي
+      تُنشئها المكتبة. هذا وحده كافٍ لتعليق التبويب («الصفحة لا تستجيب») أو إفشال الرسم صامتاً.
+      السقف الآن ≈ 26 مليون بكسل (~104 ميجابايت) والمقياس ≤ 2.5 — دقة عالية جداً وآمنة.
+   2) الأسلوب: كان يعتمد foreignObjectRendering (يُسلسِل الصفحة داخل SVG ثم يرسمها كصورة) — وهو
+      معروف بأنه يفشل صامتاً بلوحة بيضاء في متصفحات/أحجام معيّنة، وهو سبب «الصورة الفارغة».
+      الآن الأساس هو المُحرِّك القياسي لـhtml2canvas (رسم تدريجي بلا SVG)، وforeignObject صار
+      خطة احتياطية لا تُستدعى إلا لو خرجت اللوحة بيضاء فعلاً.
+   3) كشف اللوحة البيضاء: تُفحص عيّنة بكسلات قبل الحفظ — فلا يُسلَّم للمستخدم ملف فارغ بصمت.
+   4) واجهة انتظار مرئية + إفساح المجال للمتصفح ليرسمها قبل بدء العمل الثقيل. */
+function _capOverlay_(show, msg) {
+  var id = '_capBusyOverlay';
+  var el = document.getElementById(id);
+  if (!show) { if (el && el.parentNode) el.parentNode.removeChild(el); return; }
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:rgba(10,14,24,.55);' +
+      'backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);display:flex;align-items:center;' +
+      'justify-content:center;direction:rtl;font-family:inherit;';
+    el.innerHTML = '<div style="background:#fff;border-radius:14px;padding:18px 26px;text-align:center;' +
+      'box-shadow:0 20px 60px rgba(0,0,0,.35);min-width:250px;">' +
+      '<div style="font-size:26px;margin-bottom:6px;">🖼️</div>' +
+      '<div id="_capBusyMsg" style="font-size:13px;font-weight:800;color:#1e3d59;">جاري إنشاء الصورة…</div>' +
+      '<div style="font-size:10.5px;color:#5c6b83;margin-top:5px;line-height:1.7;">قد تستغرق ثوانيَ حسب حجم التقرير<br>لا تُغلق الصفحة</div></div>';
+    document.body.appendChild(el);
+  }
+  var m = document.getElementById('_capBusyMsg');
+  if (m && msg) m.textContent = msg;
+}
+
+// هل اللوحة بيضاء بالكامل؟ (عيّنة مصغَّرة — رخيصة جداً)
+function _canvasLooksBlank_(cv) {
+  try {
+    if (!cv || !cv.width || !cv.height) return true;
+    var w = Math.min(72, cv.width), h = Math.min(72, cv.height);
+    var s = document.createElement('canvas');
+    s.width = w; s.height = h;
+    var ctx = s.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(cv, 0, 0, cv.width, cv.height, 0, 0, w, h);
+    var d = ctx.getImageData(0, 0, w, h).data;
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i] < 244 || d[i + 1] < 244 || d[i + 2] < 244) return false;   // وُجد بكسل غير أبيض
+    }
+    return true;
+  } catch (e) { return false; }   // لوحة ملوَّثة (canvas tainted) — لا يمكن الفحص، نُكمل
+}
+
 function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
-  if (!window.html2pdf || !rootEl) { cb(null, 'html2pdf.js غير محمَّل أو لا يوجد محتوى'); return; }
-  var cssW = rootEl.scrollWidth || rootEl.offsetWidth || 794;
-  var cssH = rootEl.scrollHeight || rootEl.offsetHeight || 1000;
+  var H2C = window.__h2cStandalone || window.html2canvas || null;
+  if (!rootEl) { _capOverlay_(false); cb(null, 'لا يوجد محتوى لالتقاطه'); return; }
+  if (!H2C && !window.html2pdf) { _capOverlay_(false); cb(null, 'مكتبة الالتقاط غير محمَّلة'); return; }
+
+  var cssW = Math.ceil(rootEl.scrollWidth || rootEl.offsetWidth || 794);
+  var cssH = Math.ceil(rootEl.scrollHeight || rootEl.offsetHeight || 1000);
+  if (cssW < 2 || cssH < 2) { _capOverlay_(false); cb(null, 'المحتوى بلا أبعاد قابلة للالتقاط'); return; }
 
   var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  // 🔍 (V4.104) سقف أعلى قليلاً من الأصل لتقارير الصفحة الواحدة (كشوف الحسابات/التسكين عادة أصغر
-  // من سقف الذاكرة الآمن أصلاً)، مع إبقاء سقف iOS كما هو (قيد نظام تشغيل حقيقي غير قابل للتفاوض)
-  // 🔍 (V4.106) الدقة تُحسب الآن من حدّين معاً: المساحة الكلية **وأقصى بُعد** — فيخرج التقرير
-  // دائماً في صورة واحدة غير مقسّمة (لأن الطول والعرض يبقيان تحت حد المتصفح)، وبأعلى دقة يسمح بها.
-  // 🛡️ (V4.113) سقف أقل من السابق (كان 180 مليون) — التقارير الطويلة (كشوف حركة/إيصالات بعشرات
-  // الصفوف) عند foreignObjectRendering بمقياس عالٍ كانت تُحمِّل المعالج بشدة وتُعلِّق المتصفح
-  // («الصفحة لا تستجيب») أو تخرج صورة بيضاء بعد انتظار طويل. سقف أقل = رسم أسرع وأكثر موثوقية
-  // مقابل دقة أقل قليلاً — لا يزال أعلى من دقة الشاشة العادية بكثير.
-  var MAX_AREA = IS_IOS_ ? 16000000 : 110000000; // بكسل² (4 بايت/بكسل RGBA بالذاكرة)
-  var MAX_DIM  = IS_IOS_ ? 8192 : 14000;         // أقصى بعد لأي canvas واحد
+  var MAX_AREA = IS_IOS_ ? 12000000 : 26000000;   // بكسل² — 4 بايت لكل بكسل بالذاكرة
+  var MAX_DIM  = IS_IOS_ ? 8192 : 12000;
   var byArea = Math.sqrt(MAX_AREA / (cssW * cssH));
   var byDim  = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
-  var scale = Math.min(5, byArea, byDim);
-  if (!(scale > 0) || scale < 1) scale = 1;
+  var scale = Math.min(2.5, byArea, byDim);
+  if (!(scale > 0)) scale = 1;
+  if (scale < 0.4) scale = 0.4;                   // تقرير ضخم جداً — دقة أقل خير من فشل كامل
 
-  html2pdf().set({
-    html2canvas: { scale: scale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true, logging: false,
-      width: cssW, windowWidth: cssW, scrollX: 0, scrollY: 0 }
-  }).from(rootEl).toCanvas().get('canvas').then(function(full) {
-    _sliceCanvasToPngFiles_(full, fileNameBase, cb);
-  }).catch(function(err) { cb(null, err); });
+  _capOverlay_(true, 'جاري إنشاء الصورة…');
+
+  // محاولتان: المُحرِّك القياسي أولاً، ثم foreignObject بمقياس أقل لو خرجت اللوحة بيضاء
+  var attempts = [
+    { fo: false, scale: scale, label: 'جاري إنشاء الصورة…' },
+    { fo: true,  scale: Math.min(scale, 1.5), label: 'إعادة المحاولة بأسلوب بديل…' }
+  ];
+
+  function finish(files, err) { _capOverlay_(false); cb(files, err); }
+
+  function shoot(i) {
+    if (i >= attempts.length) { finish(null, 'خرجت الصورة فارغة بكل الأساليب المتاحة'); return; }
+    var at = attempts[i];
+    _capOverlay_(true, at.label);
+    // إفساح المجال للمتصفح ليرسم شاشة الانتظار قبل بدء العمل الثقيل
+    requestAnimationFrame(function () { setTimeout(function () {
+      var opts = {
+        scale: at.scale, useCORS: true, allowTaint: false, backgroundColor: '#ffffff',
+        foreignObjectRendering: at.fo, logging: false, imageTimeout: 8000,
+        width: cssW, height: cssH, windowWidth: cssW, windowHeight: cssH
+      };
+      var p;
+      try {
+        // الغلاف الاحتياطي يفرض عرض صفحة على المحتوى — نُعطيه مقاس صفحة مطابقاً لأبعاد التقرير
+        // الحقيقية حتى لا يسحق التقارير العريضة (كان سبب الصور المقصوصة/المقسّمة سابقاً)
+        p = H2C ? H2C(rootEl, opts)
+                : html2pdf().set({
+                    html2canvas: opts,
+                    jsPDF: { unit: 'px', format: [cssW, cssH], orientation: (cssW > cssH ? 'l' : 'p') }
+                  }).from(rootEl).toCanvas().get('canvas');
+      } catch (e) { finish(null, e && e.message ? e.message : e); return; }
+
+      Promise.resolve(p).then(function (full) {
+        if (!full || !full.width || !full.height) { shoot(i + 1); return; }
+        if (_canvasLooksBlank_(full)) { shoot(i + 1); return; }   // لوحة بيضاء ⇒ جرّب الأسلوب التالي
+        _capOverlay_(true, 'جاري حفظ الصورة…');
+        _sliceCanvasToPngFiles_(full, fileNameBase, finish);
+      }).catch(function (err) {
+        if (i + 1 < attempts.length) { shoot(i + 1); return; }
+        finish(null, (err && err.message) ? err.message : err);
+      });
+    }, 40); });
+  }
+  shoot(0);
 }
 
 // ✂️ تقسيم أي طول يتجاوز الحد الأقصى لعدة قطع رأسية (صور متعددة) بدل فشل الرسم — PNG بلا فقد دائماً
 function _sliceCanvasToPngFiles_(full, fileNameBase, cb) {
-  // (V4.106) الحد الفعلي لبُعد الـcanvas في المتصفحات — التقسيم صار حالة قصوى نادرة لا الوضع الطبيعي
   var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  var MAX_DIM = IS_IOS_ ? 8192 : 14000;
+  var MAX_DIM = IS_IOS_ ? 8192 : 12000;
   var pieces = [], total = full.height;
   var sliceH = Math.min(MAX_DIM, total) || total;
   for (var y = 0; y < total; y += sliceH) {
@@ -17327,11 +17437,14 @@ function _sliceCanvasToPngFiles_(full, fileNameBase, cb) {
     ctx.drawImage(full, 0, y, full.width, hh, 0, 0, full.width, hh);
     pieces.push(c);
   }
-  var blobs = [], done = 0;
+  var blobs = [], done = 0, failed = false;
   pieces.forEach(function(c, idx) {
     c.toBlob(function(b) {
+      // 🛡️ (V4.114) لوحة ملوَّثة بصورة من نطاق آخر تُرجع blob فارغاً — كان يُنتَج ملف PNG تالف
+      // بلا أي رسالة. الآن نُبلِّغ بخطأ واضح بدل تسليم ملف لا يفتح.
+      if (!b) { if (!failed) { failed = true; cb(null, 'تعذّر حفظ الصورة (قد تحتوي على صورة من نطاق خارجي)'); } return; }
       blobs[idx] = b;
-      if (++done === pieces.length) {
+      if (++done === pieces.length && !failed) {
         var files = blobs.map(function(b2, i) {
           return new File([b2], fileNameBase + (blobs.length > 1 ? ' - ' + (i + 1) : '') + '.png', { type: 'image/png' });
         });
@@ -17358,8 +17471,13 @@ function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb) {
   // لآلاف البكسل خارج الشاشة (إحداثيات متطرفة قد تُربك حساب مواضع foreignObjectRendering في بعض
   // المتصفحات) ولا نُظهره ولو للحظة: الغلاف صفري الارتفاع فلا يشغل أي مساحة مرئية إطلاقاً، بينما
   // العنصر الداخلي يحتفظ بحجمه الطبيعي الكامل (القيد البصري لغلاف خارجي لا يُقلِّص تخطيط ابنه).
+  // 🛡️ (V4.114) الغلاف كان `overflow:hidden` — والمُحرِّك القياسي لـhtml2canvas (الذي صار الأساس)
+  // يستنسخ المستند كاملاً بأسلافه، فقد يقصّ الأصلُ المقصوصُ المحتوى ويُخرج صورة فارغة. الآن
+  // الغلاف بلا قصّ إطلاقاً ومخفيّ بالطبقة فقط (z-index سالب خلف حاوية التطبيق المعتمة)، فيبقى
+  // المحتوى مُخطَّطاً بكامل ارتفاعه وغير مرئي للمستخدم ولا يزيح شيئاً في الصفحة.
   var wrap = document.createElement('div');
-  wrap.style.cssText = 'position:fixed; top:0; left:0; width:1600px; height:0; overflow:hidden;';
+  wrap.style.cssText = 'position:fixed; top:0; left:0; width:1600px; height:0; overflow:visible; ' +
+    'z-index:-9999; pointer-events:none;';
   var host = document.createElement('div');
   host.id = 'rptRoot';
   host.style.cssText = 'width:1600px; background:#ffffff; direction:rtl;';
@@ -17459,9 +17577,10 @@ function exportReportAsImage(getFullHtmlFn, fileNameBase, btn) {
   var settled = false;
   var watchdog = setTimeout(function() {
     if (settled) return; settled = true;
+    if (typeof _capOverlay_ === 'function') _capOverlay_(false);
     if (btn) { btn.disabled = false; btn.innerHTML = orig; }
     showToast('⚠️ التصدير يستغرق وقتاً طويلاً — قد يكون التقرير كبيراً جداً. أعد المحاولة أو صغِّر نطاق البيانات.', true);
-  }, 35000);
+  }, 60000);
   _exportFullHtmlAsImage_(fullHtml, fileNameBase || 'تقرير', function(files, err) {
     if (settled) return; settled = true;
     clearTimeout(watchdog);
@@ -32600,6 +32719,9 @@ var MF_COLS = [
 // وضع افتراضي: لا يُثبَّت أي عمود (V4.111)
 var MF_COLS_ORDER = MF_COLS.map(function (c) { return c.k; });
 var MF_COLS_PIN = MF_COLS.map(function (c) { return !!c.pin; });
+// ↔️ (V4.114) العروض الافتراضية — للرجوع إليها بضغطتين على مقبض التحجيم أو بإعادة التعيين
+var MF_COLS_W = MF_COLS.map(function (c) { return c.w || 100; });
+var MF_COLS_G = MF_COLS.map(function (c) { return c.g; });
 
 // قيمة العمود كنص خام (للفرز والتصفية والتلميح)
 function mfRaw(k, f) {
@@ -32831,7 +32953,9 @@ function mfRender() {
   }
   h += '</tr><tr class="mf-cols">';
   MF_COLS.forEach(function (c, ci) {
-    var cls = '', st = 'min-width:' + (c.w || 100) + 'px;';
+    // ↔️ (V4.114) عرض صريح لكل عمود (width+min+max) حتى يستجيب فعلاً لسحب مقبض التحجيم في الاتجاهين
+    var cw = (c.w || 100);
+    var cls = '', st = 'width:' + cw + 'px;min-width:' + cw + 'px;max-width:' + cw + 'px;';
     if (c.pin) { cls += 'mf-fz'; if (!MF_COLS[ci + 1] || !MF_COLS[ci + 1].pin) cls += ' mf-edge'; st += 'right:' + mfFrozenOffset(ci) + 'px;'; }
     if (MF.hidden[c.k]) cls += ' mf-hide';
     var si = MF.sort.key === c.k ? (MF.sort.dir > 0 ? '▲' : '▼') : '⇅';
@@ -32842,7 +32966,9 @@ function mfRender() {
       ' ondragstart="mfDragStart(event,\'' + c.k + '\')" ondragover="mfDragOver(event)" ondragleave="mfDragLeave(event)"' +
       ' ondrop="mfDrop(event,\'' + c.k + '\')" ondragend="mfDragEnd(event)">' +
       '<div class="mf-thin">' + (c.pin ? '<span style="font-size:8.5px;color:#ffd77a;">📌</span>' : '') +
-      '<span>' + mfEsc(c.l) + '</span>' + ics + '</div></th>';
+      '<span>' + mfEsc(c.l) + '</span>' + ics + '</div>' +
+      '<span class="mf-rsz" title="اسحب لتغيير عرض العمود · ضغطتان = العرض الافتراضي"' +
+      ' onmousedown="mfRszStart(event,\'' + c.k + '\')" ondblclick="mfRszReset(event,\'' + c.k + '\')"></span></th>';
   });
   h += '</tr></thead><tbody>';
   if (!list.length) {
@@ -32856,10 +32982,12 @@ function mfRender() {
       '" data-id="' + f.id + '" onclick="mfSelect(\'' + f.id + '\')"' + dbl +
       (MF.can.edit ? ' title="ضغطتان لتعديل سريع في مكانه"' : '') + '>';
     MF_COLS.forEach(function (c, ci) {
-      var cls = c.txt ? 'mf-txt' : 'mf-num', st = '';
-      if (c.pin) { cls += ' mf-fz'; if (!MF_COLS[ci + 1] || !MF_COLS[ci + 1].pin) cls += ' mf-edge'; st = ' style="right:' + mfFrozenOffset(ci) + 'px"'; }
+      var cls = c.txt ? 'mf-txt' : 'mf-num';
+      // ↔️ (V4.114) نفس عرض رأس العمود يُطبَّق على خلايا البيانات أيضاً (وإلا بقي max-width العام 200px يحدّ التوسيع)
+      var stv = 'max-width:' + (c.w || 100) + 'px;';
+      if (c.pin) { cls += ' mf-fz'; if (!MF_COLS[ci + 1] || !MF_COLS[ci + 1].pin) cls += ' mf-edge'; stv += 'right:' + mfFrozenOffset(ci) + 'px;'; }
       if (MF.hidden[c.k]) cls += ' mf-hide';
-      h += '<td class="' + cls + '"' + st + ' data-full="' + mfEsc(mfRaw(c.k, f)) + '">' + mfCell(c, f) + '</td>';
+      h += '<td class="' + cls + '" style="' + stv + '" data-full="' + mfEsc(mfRaw(c.k, f)) + '">' + mfCell(c, f) + '</td>';
     });
     h += '</tr>';
   });
@@ -33709,6 +33837,65 @@ function mfMoveColToGroup(k, targetG) {
   _showPopup('تم نقل عمود «' + col.l + '» إلى قسم «' + targetG + '»', 'success');
 }
 // تحريك عمود خطوة واحدة أعلى/أسفل بترتيب الأعمدة الكلي
+/* ↔️ (V4.114) تغيير عرض العمود بالماوس — اسحب المقبض على حافة رأس أي عمود.
+   يعمل باتجاه RTL بشكل صحيح (السحب لليسار يُوسِّع)، والتحديث لحظي على رأس العمود وخلاياه
+   بلا إعادة رسم الجدول كله (سلس حتى مع مئات الصفوف)، ثم يُثبَّت العرض عند إفلات الزر. */
+var MF_RSZ = null;
+function mfRszStart(ev, k) {
+  ev.preventDefault(); ev.stopPropagation();
+  var th = ev.currentTarget.parentNode;
+  var col = MF_COLS.filter(function (c) { return c.k === k; })[0];
+  if (!th || !col) return;
+  var tbl = th.closest('table');
+  var rtl = true;
+  try { rtl = getComputedStyle(tbl || document.body).direction === 'rtl'; } catch (e) {}
+  MF_RSZ = { k: k, col: col, th: th, startX: ev.clientX, startW: (col.w || 100), rtl: rtl, wasDrag: th.getAttribute('draggable') };
+  th.setAttribute('draggable', 'false');            // كي لا يبدأ سحب إعادة ترتيب الأعمدة بدل التحجيم
+  document.body.classList.add('mf-resizing');
+  document.addEventListener('mousemove', mfRszMove);
+  document.addEventListener('mouseup', mfRszEnd);
+}
+function mfRszMove(ev) {
+  var R = MF_RSZ; if (!R) return;
+  var delta = R.rtl ? (R.startX - ev.clientX) : (ev.clientX - R.startX);
+  var w = Math.max(38, Math.min(700, Math.round(R.startW + delta)));
+  R.live = w;
+  R.th.style.width = w + 'px';
+  R.th.style.minWidth = w + 'px';
+  R.th.style.maxWidth = w + 'px';
+  // تحديث خلايا نفس العمود لحظياً (نفس ترتيب الأعمدة في كل صف)
+  var idx = -1; MF_COLS.forEach(function (c, i) { if (c.k === R.k) idx = i; });
+  if (idx >= 0) {
+    var rows = R.th.closest('table').querySelectorAll('tbody tr.mf-row, tfoot tr');
+    for (var i = 0; i < rows.length; i++) {
+      var cell = rows[i].children[idx];
+      if (cell) cell.style.maxWidth = w + 'px';
+    }
+  }
+}
+function mfRszEnd() {
+  var R = MF_RSZ;
+  document.removeEventListener('mousemove', mfRszMove);
+  document.removeEventListener('mouseup', mfRszEnd);
+  document.body.classList.remove('mf-resizing');
+  MF_RSZ = null;
+  if (!R) return;
+  if (R.wasDrag !== null) R.th.setAttribute('draggable', R.wasDrag); else R.th.removeAttribute('draggable');
+  if (R.live && R.live !== R.startW) {
+    R.col.w = R.live;
+    mfRender();                                     // إعادة رسم واحدة عند الإفلات (لضبط إزاحات التثبيت)
+    if (_mfColWinOpen) mfBuildColWin();
+  }
+}
+// ضغطتان على المقبض = إعادة العمود لعرضه الافتراضي
+function mfRszReset(ev, k) {
+  ev.preventDefault(); ev.stopPropagation();
+  var i = MF_COLS_ORDER.indexOf(k);
+  var col = MF_COLS.filter(function (c) { return c.k === k; })[0];
+  if (!col || i < 0) return;
+  col.w = MF_COLS_W[i] || col.w;
+  mfRender();
+}
 function mfNudgeCol(k, dir) {
   var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
   var j = i + dir;
@@ -33753,6 +33940,7 @@ function mfResetCols() {
   MF.hidden = {};
   MF_COLS.sort(function (a, b) { return MF_COLS_ORDER.indexOf(a.k) - MF_COLS_ORDER.indexOf(b.k); });
   MF_COLS.forEach(function (c) { c.pin = MF_COLS_PIN[MF_COLS_ORDER.indexOf(c.k)] ? 1 : 0; });
+  MF_COLS.forEach(function (c) { var i = MF_COLS_ORDER.indexOf(c.k); if (i >= 0) { c.w = MF_COLS_W[i]; c.g = MF_COLS_G[i]; } });
   mfRender(); mfBuildColWin();
   _showPopup('تمت إعادة الأعمدة للوضع الافتراضي', 'success');
 }
@@ -33765,9 +33953,12 @@ function mfSaveColPrefs() {
     localStorage.setItem(mfColPrefsKey(), JSON.stringify({
       order: MF_COLS.map(function (c) { return c.k; }),
       pin: MF_COLS.filter(function (c) { return c.pin; }).map(function (c) { return c.k; }),
-      hidden: Object.keys(MF.hidden).filter(function (k) { return MF.hidden[k]; })
+      hidden: Object.keys(MF.hidden).filter(function (k) { return MF.hidden[k]; }),
+      // ↔️ (V4.114) عرض كل عمود بعد التحجيم بالماوس + قسمه الحالي
+      w: MF_COLS.reduce(function (o, c) { o[c.k] = c.w || 100; return o; }, {}),
+      g: MF_COLS.reduce(function (o, c) { o[c.k] = c.g; return o; }, {})
     }));
-    _showPopup('تم حفظ ترتيب الأعمدة وتثبيتها وإظهارها كافتراضي لهذا المستخدم', 'success');
+    _showPopup('تم حفظ ترتيب الأعمدة وعروضها وأقسامها وتثبيتها كافتراضي لهذا المستخدم', 'success');
   } catch (e) { _showPopup('تعذّر الحفظ محلياً: ' + (e.message || e), 'error'); }
 }
 function mfRestoreColPrefs() {
@@ -33782,6 +33973,9 @@ function mfRestoreColPrefs() {
       });
     }
     if (Array.isArray(p.pin)) MF_COLS.forEach(function (c) { c.pin = p.pin.indexOf(c.k) >= 0 ? 1 : 0; });
+    // ↔️ (V4.114) استعادة العروض المحجّمة بالماوس وأقسام الأعمدة المنقولة
+    if (p.w) MF_COLS.forEach(function (c) { var v = parseInt(p.w[c.k], 10); if (v > 20 && v < 900) c.w = v; });
+    if (p.g) MF_COLS.forEach(function (c) { if (p.g[c.k]) c.g = p.g[c.k]; });
     MF.hidden = {};
     if (Array.isArray(p.hidden)) p.hidden.forEach(function (k) { MF.hidden[k] = true; });
   } catch (e) {}
@@ -33865,6 +34059,9 @@ function mfModal(title, body, foot, wide) {
     '<div style="padding:11px 16px;background:linear-gradient(135deg,#1e3d59,#152c42);color:#fff;' +
     'display:flex;align-items:flex-start;gap:8px;">' +
     '<div class="mf-dlghead" style="flex:1;font-size:13.5px;font-weight:800;line-height:1.6;">' + title + '</div>' +
+    // ➖ (V4.114) تصغير النافذة لشريط أسفل الشاشة (مثل نوافذ ويندوز) مع بقاء كل البيانات والحالة كما هي
+    '<button type="button" onclick="mfMinimizeModal()" title="تصغير لشريط النوافذ أسفل الشاشة" style="background:rgba(255,255,255,.15);border:none;' +
+    'color:#fff;width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:15px;line-height:1;flex-shrink:0;margin-inline-end:4px;">−</button>' +
     '<button type="button" onclick="mfCloseModal()" title="إغلاق" style="background:rgba(255,255,255,.15);border:none;' +
     'color:#fff;width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;">✕</button></div>' +
     '<div style="padding:14px 16px;overflow:auto;background:#f8fafc;flex:1;" id="mfModalBody">' + body + '</div>' +
@@ -33876,6 +34073,137 @@ function mfModal(title, body, foot, wide) {
   return ov;
 }
 function mfCloseModal() { var o = document.getElementById('mfModalOv'); if (o && o.parentNode) o.parentNode.removeChild(o); }
+
+/* ============================================================
+   🪟 (V4.114) تصغير النوافذ لشريط أسفل الشاشة — مثل نوافذ ويندوز
+   النافذة المصغَّرة تبقى في الـDOM كما هي تماماً (نُخفيها بالعرض فقط ونُغيّر مُعرِّفها حتى لا
+   تمسحها نافذة جديدة)، فلا يضيع أي حقل مكتوب ولا تتغيّر أي حالة عند العودة إليها.
+   ============================================================ */
+var MF_MIN = [];      // [{ id, title, el }]
+var _mfMinSeq = 0;
+function mfMinimizeModal(ov) {
+  ov = ov || document.getElementById('mfModalOv');
+  if (!ov) return;
+  var head = ov.querySelector('.mf-dlghead');
+  var title = head ? (head.textContent || '').replace(/\s+/g, ' ').trim() : 'نافذة';
+  if (title.length > 42) title = title.slice(0, 42) + '…';
+  var id = 'mfMinWin_' + (++_mfMinSeq);
+  ov.id = id;                                  // يخرج من نطاق mfModalOv فلا تُغلقه نافذة جديدة
+  ov.style.display = 'none';
+  MF_MIN.push({ id: id, title: title || 'نافذة', el: ov });
+  mfRenderTaskbar();
+}
+/* 🪟 (V4.114) نفس الميزة لكل نوافذ التطبيق العادية (Bootstrap) — التصغير هنا يستخدم إخفاء
+   Bootstrap القياسي الذي يُبقي محتوى النافذة وكل قيم حقولها كما هي في الـDOM، والاستعادة تُعيد
+   إظهارها بنفس الحالة تماماً. يُضاف الزر تلقائياً لرأس أي نافذة تُفتح. */
+function mfMinimizeBsModal(modalEl) {
+  if (!modalEl) return;
+  var t = modalEl.querySelector('.modal-title');
+  var title = t ? (t.textContent || '').replace(/\s+/g, ' ').trim() : 'نافذة';
+  if (title.length > 42) title = title.slice(0, 42) + '…';
+  var id = 'mfMinWin_' + (++_mfMinSeq);
+  modalEl.setAttribute('data-mf-min-id', id);
+  MF_MIN.push({ id: id, title: title || 'نافذة', el: modalEl, kind: 'bs' });
+  try {
+    var inst = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
+      ? (bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl)) : null;
+    if (inst) inst.hide(); else modalEl.classList.remove('show');
+  } catch (e) {}
+  mfRenderTaskbar();
+}
+(function () {
+  // حقن زر التصغير في رأس أي نافذة Bootstrap عند فتحها (مرة واحدة لكل نافذة)
+  document.addEventListener('shown.bs.modal', function (e) {
+    try {
+      var el = e.target;
+      if (!el) return;
+      // لو أُعيد فتحها من مكان آخر وهي مصغَّرة — تُزال من شريط النوافذ المصغَّرة
+      var minId = el.getAttribute && el.getAttribute('data-mf-min-id');
+      if (minId) {
+        el.removeAttribute('data-mf-min-id');
+        MF_MIN = MF_MIN.filter(function (w) { return w.id !== minId; });
+        mfRenderTaskbar();
+      }
+      if (el._mfMinBtn) return;
+      var hd = el.querySelector('.modal-header');
+      if (!hd) return;
+      el._mfMinBtn = true;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-sm';
+      b.title = 'تصغير لشريط النوافذ أسفل الشاشة';
+      b.textContent = '−';
+      b.style.cssText = 'font-size:17px;line-height:1;padding:0 9px;margin-inline-start:auto;margin-inline-end:6px;' +
+        'background:rgba(0,0,0,.08);border:none;border-radius:6px;color:inherit;';
+      b.onclick = function () { mfMinimizeBsModal(el); };
+      var closeBtn = hd.querySelector('.btn-close');
+      if (closeBtn) hd.insertBefore(b, closeBtn); else hd.appendChild(b);
+    } catch (x) {}
+  }, true);
+})();
+function mfRestoreMin(id) {
+  var i = -1;
+  MF_MIN.forEach(function (w, ix) { if (w.id === id) i = ix; });
+  if (i < 0) return;
+  var w = MF_MIN[i];
+  MF_MIN.splice(i, 1);
+  var el = w.el;
+  if (!el || !el.parentNode) { mfRenderTaskbar(); return; }
+  if (w.kind === 'bs') {
+    try {
+      el.removeAttribute('data-mf-min-id');
+      var inst = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
+        ? bootstrap.Modal.getOrCreateInstance(el) : null;
+      if (inst) inst.show(); else el.classList.add('show');
+    } catch (e) {}
+    mfRenderTaskbar();
+    return;
+  }
+  // ترفع النافذة المُستعادة فوق أي نافذة مفتوحة حالياً
+  el.style.zIndex = String(2147482000 + 20 + _mfMinSeq);
+  el.style.display = 'flex';
+  el.id = 'mfModalOv';                         // تعود نافذةً نشطة عادية (يغلقها ✕ و Esc)
+  var other = document.querySelectorAll('#mfModalOv');
+  if (other.length > 1) {                      // نافذة أخرى مفتوحة بنفس المُعرِّف — نُصغّرها بدل التعارض
+    for (var j = 0; j < other.length; j++) if (other[j] !== el) mfMinimizeModal(other[j]);
+  }
+  mfRenderTaskbar();
+  mfAttachDateInputs();
+}
+function mfCloseMin(id, ev) {
+  if (ev && ev.stopPropagation) ev.stopPropagation();
+  var i = -1;
+  MF_MIN.forEach(function (w, ix) { if (w.id === id) i = ix; });
+  if (i < 0) return;
+  var w = MF_MIN[i], el = w.el;
+  if (w.kind === 'bs') {
+    // نوافذ Bootstrap لا تُحذف من الـDOM (قد تُعاد فتحها لاحقاً من مكان آخر) — نُسقطها من الشريط فقط
+    if (el) el.removeAttribute('data-mf-min-id');
+  } else if (el && el.parentNode) {
+    el.parentNode.removeChild(el);
+  }
+  MF_MIN.splice(i, 1);
+  mfRenderTaskbar();
+}
+function mfRenderTaskbar() {
+  var bar = document.getElementById('mfTaskbar');
+  if (!MF_MIN.length) { if (bar && bar.parentNode) bar.parentNode.removeChild(bar); return; }
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'mfTaskbar';
+    document.body.appendChild(bar);
+  }
+  // يجلس فوق فوتر العلامة التجارية المثبَّت أسفل الشاشة بدل أن يُغطّيه
+  try {
+    var bf = document.getElementById('appBrandFooter');
+    bar.style.bottom = (bf && bf.offsetHeight ? (bf.offsetHeight + 2) : 0) + 'px';
+  } catch (e) {}
+  bar.innerHTML = '<span class="lbl">🪟 نوافذ مصغَّرة</span>' + MF_MIN.map(function (w) {
+    return '<span class="mf-tbchip" title="استعادة النافذة" onclick="mfRestoreMin(\'' + w.id + '\')">' +
+      '<b>' + escapeHtml_(w.title) + '</b>' +
+      '<button type="button" title="إغلاق نهائي" onclick="mfCloseMin(\'' + w.id + '\',event)">✕</button></span>';
+  }).join('');
+}
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { mfCloseModal(); mfDpClose(); mfCloseColWin(); if (MF.editRowId) mfInlineCancel(); } });
 
 /* ---------- نموذج ملف المراجعة (إضافة/تعديل) ---------- */
