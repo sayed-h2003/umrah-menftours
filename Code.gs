@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.122";
+var APP_VERSION = "4.123";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6847,6 +6847,17 @@ function getAllMovements() {
     });
   }
 
+  // 🚌 (V4.123) توسيم كل تحرك بـ hasTransport (نفس شرط تنبيهات تليجرام: وكيل نقل + باصات فعلية،
+  // وليس "بمعرفة العميل") — يتيح للوحة التحكم عرض تحركات اليوم/الغد التي لها نقل افتراضياً بلا
+  // أي نداء سيرفر إضافي، مع زر تبديل لإظهار الباقي أيضاً
+  try {
+    var _byId = {};
+    getAllBookings().forEach(function(b) { _byId[b.id] = b; });
+    result.forEach(function(m) { m.hasTransport = _tgHasTransport_(m, _byId); });
+  } catch (e) {
+    result.forEach(function(m) { m.hasTransport = true; }); // تعذّر التوسيم — لا نُخفي شيئاً افتراضياً
+  }
+
   // احفظ في Cache
   setCachedData('movements_cache', result);
   return result;
@@ -7323,23 +7334,27 @@ function _tgMovementLabel_(type) {
   if (/^التحرك من /.test(type)) return 'تحرك داخلي';
   return '';
 }
+// 🚌 (V4.123) الشرط المشترك لـ"له نقل فعلي" (وكيل + باصات) — مُستخرَج هنا ليُستخدم في مكانين:
+// فلترة تنبيهات تليجرام (كما كان)، وتوسيم كل تحرك بحقل hasTransport في getAllMovements حتى
+// تقدر شاشة لوحة التحكم تعرض نفس تصفية تليجرام افتراضياً بدون أي نداء سيرفر إضافي
+function _tgHasTransport_(m, byId) {
+  var b = byId[String(m.bookingId)];
+  if (!b) return true; // إشعار غير موجود (محذوف؟) — لا نستبعد ما لا نعرفه
+  var tc = String(b.transportCompany || '').trim();
+  if (!tc) return false;                          // بدون شركة نقل
+  if (tc.indexOf('بمعرفة العميل') > -1) return false; // النقل بمعرفة العميل (شركة النقل)
+  // 🚫 (V4.71) بطلب صريح: استبعاد إضافي لو عمود «عدد الباصات» نفسه نصّاً = «النقل بمعرفة العميل»
+  // (يحدث عند إسكان استضافة حيث يُكتَب النص في خانة عدد الباصات بدل رقم فعلي)
+  var busVal = String(b.busCount || b.buses || '').trim();
+  if (busVal.indexOf('بمعرفة العميل') > -1) return false;
+  return true;
+}
 function _tgAlertableMovements_(movements) {
   var byId = {};
   try {
     getAllBookings().forEach(function(b) { byId[b.id] = b; });
   } catch (e) { return movements; } // تعذّر جلب الإشعارات — لا نُسقط التنبيهات كلها بسبب الفلتر
-  return movements.filter(function(m) {
-    var b = byId[String(m.bookingId)];
-    if (!b) return true; // إشعار غير موجود (محذوف؟) — لا نستبعد ما لا نعرفه
-    var tc = String(b.transportCompany || '').trim();
-    if (!tc) return false;                          // بدون شركة نقل
-    if (tc.indexOf('بمعرفة العميل') > -1) return false; // النقل بمعرفة العميل (شركة النقل)
-    // 🚫 (V4.71) بطلب صريح: استبعاد إضافي لو عمود «عدد الباصات» نفسه نصّاً = «النقل بمعرفة العميل»
-    // (يحدث عند إسكان استضافة حيث يُكتَب النص في خانة عدد الباصات بدل رقم فعلي)
-    var busVal = String(b.busCount || b.buses || '').trim();
-    if (busVal.indexOf('بمعرفة العميل') > -1) return false;
-    return true;
-  });
+  return movements.filter(function(m) { return _tgHasTransport_(m, byId); });
 }
 
 // 📣 (V4.18) إعدادات جروبات تنبيهات الحركات — تعدُّد جروبات، كلٌّ بشركاته الخاصة (فارغة = كل الشركات)
@@ -15145,9 +15160,12 @@ function getTripAccountsSummary(authToken, tripName) {
       if (qty) txt = it.desc + ' ' + qty + ' ' + curTxt;
       else if (it.price) txt = it.desc + ' ' + it.price + ' ' + curTxt;
       else txt = it.desc + ' ' + _accNum_(it.value) + ' ' + curTxt;
-      // 🩹 (V4.105) لا تُكرَّر كلمة "خصم" لو كان بيان البند نفسه مكتوباً أصلاً بادئاً بها
-      // (مثال: بند وصفه "خصم عرض توحيد" كان يظهر "خصم خصم عرض توحيد" بيان الحساب)
-      if (it.isDiscount && !/^\s*خصم\b/.test(it.desc)) txt = 'خصم ' + txt;
+      // 🩹 (V4.105 / V4.123) لا تُكرَّر كلمة "خصم" لو كان بيان البند نفسه مكتوباً أصلاً بادئاً بها
+      // (مثال: بند وصفه "خصم عرض توحيد" كان يظهر "خصم خصم عرض توحيد" بيان الحساب) — الفحص يتجاهل
+      // أي مسافات أو علامات اتجاه غير مرئية (RLM/LRM/ALM) أو شرطات بادئة قد تُفلت من \s العادية
+      // وتُبطل التطابق فيتكرر "خصم" رغم أن البند يبدأ به فعلاً
+      var descNorm = String(it.desc || '').replace(/^[\s‎‏؜\-–—]+/, '');
+      if (it.isDiscount && !/^خصم\b/.test(descNorm)) txt = 'خصم ' + txt;
       out += (idx === 0 ? '' : (it.isDiscount ? ' − ' : ' + ')) + txt;
     });
     return out;
@@ -20150,6 +20168,55 @@ function _mfBuildSharedBootstrap_() {
 // تُستدعى بعد أي حفظ/حذف في شاشة مراجعة ملفات الوزارة حتى لا يرى المستخدمون بيانات قديمة من الكاش
 function _mfClearBootstrapCache_() {
   try { CacheService.getScriptCache().remove(MF_BOOTSTRAP_CACHE_KEY); } catch (e) {}
+}
+
+/* ============================================================
+   🏨 (V4.123) مستويات تسكين رحلة — لتنبيه المستخدم عند ربط ملف مراجعة جديد برحلة بها أكثر من
+   مستوى تسكين (كل فندق × طبيعة تسكين تُعتبر مستوى، ما عدا الرباعي والخماسي وما فوقهما فتُجمَع
+   معاً كمستوى "عادي" واحد لكل فندق — نفس تجميع _accClientBreakdown_ بالضبط، لكن على مستوى
+   الرحلة كلها بلا فلترة بعميل بعينه)، فيسأله هل يراجع كل المستويات في ملف واحد أم يُنشئ ملفاً
+   منفصلاً لكل مستوى (بسكنه وسعر بيعه الخاص من جدول تسعير الرحلة إن وُجد).
+   ============================================================ */
+function getTripAccommodationLevels(authToken, tripName) {
+  _mfPerm_(authToken, 'view');
+  tripName = String(tripName || '').trim();
+  if (!tripName) return { success: true, levels: [] };
+  var pSheet = _getPilgrimsSheet_();
+  if (!pSheet || pSheet.getLastRow() < 2) return { success: true, levels: [] };
+  var C = _robustColMap_(pSheet, PILGRIMS_HEADERS_);
+  var P = _cellReader_(C, PILGRIMS_COL_);
+  var groups = {}, order = [];
+  pSheet.getRange(2, 1, pSheet.getLastRow() - 1, pSheet.getLastColumn()).getValues().forEach(function(r) {
+    if (String(P(r, 'tripName') || '').trim() !== tripName) return;
+    if (!String(P(r, 'name') || '').trim()) return;
+    var type = String(P(r, 'type') || '').trim();
+    if (type === 'رضيع') return; // لا يُحتسب مستوى مستقل
+    var acc = String(P(r, 'accommodation') || '').trim();
+    // 🛏️ نفس قاعدة _accClientBreakdown_: الرباعي/الخماسي/السداسي بلا تفرقة = مستوى "عادي" واحد؛
+    // الغرف المقفولة المميزة كمستوى منفصل هي سنجل/دابل/ثلاثي فقط
+    if (['رباعي', 'خماسي', 'سداسي', 'رباعي أسرة', 'خماسي أسرة'].indexOf(acc) > -1) acc = '';
+    var mHotel = String(P(r, 'hotelMakkah') || '').trim();
+    var dHotel = String(P(r, 'hotelMadinah') || '').trim();
+    var hotel = mHotel || dHotel;
+    var key = hotel + '|' + (acc || 'عادي');
+    if (!(key in groups)) {
+      groups[key] = { hotel: hotel, acc: acc || 'عادي', count: 0, madinahHotel: dHotel, makkahHotel: mHotel };
+      order.push(key);
+    }
+    groups[key].count++;
+  });
+  if (order.length < 2) return { success: true, levels: [] }; // مستوى واحد فقط — لا داعي للتنبيه
+  var pricing = _accTripPricing_(tripName);
+  var levels = order.map(function(key) {
+    var g = groups[key];
+    var priceRow = pricing ? (pricing.hotels || {})[g.hotel || ''] : null;
+    var price = priceRow ? _accNum_(priceRow[g.acc]) : 0;
+    return {
+      key: key, label: (g.hotel ? g.hotel + ' ' : '') + g.acc, count: g.count,
+      madinahHotel: g.madinahHotel, makkahHotel: g.makkahHotel, price: price
+    };
+  });
+  return { success: true, levels: levels };
 }
 
 /* ---------- حفظ ملف مراجعة (إضافة/تعديل) ---------- */

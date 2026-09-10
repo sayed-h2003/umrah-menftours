@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.122 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.123 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.122)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.123)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.122</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.123</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5539,13 +5539,18 @@ window._ccDbg_ = function() {}; // بديل صامت لبقايا استدعاء
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ar.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<!-- 🎨 (V4.123) ExcelJS — يكتب تنسيقاً فعلياً (ألوان/خطوط/حدود) داخل ملف الإكسيل، بخلاف نسخة
+     SheetJS المجانية التي تتجاهل أي تنسيق عند الكتابة (Pro-only) — يُستخدم فقط لتصدير ملفات
+     الوزارة المنسَّق؛ SheetJS تبقى كما هي لبقية عمليات الاستيراد بالتطبيق -->
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 
 <!-- 🩺 تحقق من وصول المكتبات الخارجية (لو الشبكة تقطع الاتصال بـ CDN ستفشل هنا) -->
 <script>
 window.__step('3️⃣ب المكتبات الخارجية',
   'Bootstrap: ' + (typeof bootstrap !== 'undefined' ? 'وصلت ✅' : 'مفقودة ❌') +
   ' | flatpickr: ' + (typeof flatpickr !== 'undefined' ? 'وصلت ✅' : 'مفقودة ❌') +
-  ' | XLSX: ' + (typeof XLSX !== 'undefined' ? 'وصلت ✅' : 'مفقودة ❌'));
+  ' | XLSX: ' + (typeof XLSX !== 'undefined' ? 'وصلت ✅' : 'مفقودة ❌') +
+  ' | ExcelJS: ' + (typeof ExcelJS !== 'undefined' ? 'وصلت ✅' : 'مفقودة ❌'));
 </script>
 
 <script>
@@ -6387,7 +6392,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.122";
+var CLIENT_APP_VERSION = "4.123";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -12366,15 +12371,15 @@ function _renderCateringChangeLog(rows) {
 // 🕘 (V4.90) سجل تعديلات كامل لحساب عميل — كل عملية بحساب هذا العميل (بند/دفعة/دمج/تسعير رحلة/تعليم
 // تنبيه مقروء...) من أول إنشاء الحساب حتى آخر تعديل، بنفس تصميم سجل تغييرات الرحلة/الاتفاقية أعلاه
 function _accHistoryOpen_() {
-  if (!_accData || !_accData.client) { alert('⚠️ حمّل حساب عميل أولاً'); return; }
-  document.getElementById('accHistoryClient').textContent = _accData.client;
+  if (!_accData || !(_accData && _accData.client)) { alert('⚠️ حمّل حساب عميل أولاً'); return; }
+  document.getElementById('accHistoryClient').textContent = (_accData && _accData.client);
   var body = document.getElementById('accHistoryBody');
   body.innerHTML = '<div class="text-center text-muted py-3">⏳ جاري التحميل...</div>';
   bootstrap.Modal.getOrCreateInstance(document.getElementById('accHistoryModal')).show();
   google.script.run
     .withSuccessHandler(function(rows){ _renderAccHistory_(rows || []); })
     .withFailureHandler(function(err){ body.innerHTML = '<div class="text-danger">تعذر التحميل: ' + (err.message || err) + '</div>'; })
-    .getClientAccountHistory(window.authToken, _accData.client);
+    .getClientAccountHistory(window.authToken, (_accData && _accData.client));
 }
 function _renderAccHistory_(rows) {
   var body = document.getElementById('accHistoryBody');
@@ -14492,6 +14497,9 @@ function _buildClientStatsHtml_(pilgrims, tableId, heading, showMadinah, compact
           '<label class="form-check-label small" for="' + tableId + '_printBal" style="' + (compact ? 'font-size:10.5px;' : '') + '" title="الافتراضي: الطباعة بلا أرصدة — فعّل هذا الخيار لإظهارها بالنسخة المطبوعة">💰 طباعة الأرصدة</label>' +
         '</div>' : '') +
         '<button type="button" class="btn btn-outline-dark btn-sm' + (compact ? ' py-0' : '') + '" style="' + (compact ? 'font-size:10.5px;' : '') + '" onclick="_printStatsTable_(\'' + tableId + '\', \'إحصائية العملاء\')">🖨️ طباعة الإحصائية</button>' +
+        // 📸 (V4.123) تصدير الإحصائية وحدها كصورة — تلتقط فقط صندوق الجدول (لا الشاشة كاملة) أياً
+        // كان مكان عرضها (كشف المعتمرين المفتوح أو مودال رحلة مستقلة)
+        '<button type="button" class="btn btn-outline-dark btn-sm' + (compact ? ' py-0' : '') + '" style="' + (compact ? 'font-size:10.5px;' : '') + '" onclick="_statsTableExportImage_(\'' + tableId + '\', this)">📸 صورة HD</button>' +
       '</div>' +
     '</div>' + tableHtml + '</div>';
 }
@@ -14551,6 +14559,20 @@ function _wireStatsTableInteractivity_(tableId) {
       var target = table.querySelector('tbody td[data-r="' + r + '"][data-c="' + c + '"]');
       if (target) target.click();
     });
+  });
+}
+
+// 📸 (V4.123) تصدير أي جدول إحصائي (بمُعرِّف tableId) كصورة HD — يلتقط فقط صندوق الإحصائية
+// (.stats-block المحيط بالجدول والعنوان وأزراره) لا الشاشة كاملة، أياً كان مكان ظهوره
+function _statsTableExportImage_(tableId, btn) {
+  var table = document.getElementById(tableId);
+  if (!table) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
+  var root = table.closest('.stats-block') || table;
+  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳...';
+  _captureElementAsPngFiles_(root, 'إحصائية العملاء', function(files, err) {
+    btn.disabled = false; btn.innerHTML = orig;
+    if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
+    _shareOrSaveImageFiles_(files);
   });
 }
 
@@ -17629,14 +17651,28 @@ function _saveImageFilesLocally_(files) {
     setTimeout(function() { URL.revokeObjectURL(a.href); }, 30000);
   });
 }
-// 📤 نقطة الاستدعاء الموحّدة لأي زر "📸 صورة HD": يلتقط ثم يشارك مباشرة (Web Share API) أو
-// يحفظ الملف/الملفات تلقائياً لو المشاركة غير متاحة بالجهاز/المتصفح.
+// 📋 (V4.123) نسخ الصورة الناتجة تلقائياً للحافظة (Clipboard) بنفس دقتها وجودتها — يتيح لصقها
+// فوراً في أي برنامج آخر (واتساب، وورد، ...) بلا حفظ وسيط. يعمل فقط لصورة واحدة (لا شرائح متعددة
+// لتقرير طويل جداً) ويتطلب دعم المتصفح لـ Clipboard API + ClipboardItem — فشل صامت تماماً لو غير
+// مدعوم فلا يؤثر إطلاقاً على مسار الحفظ/المشاركة المعتاد الذي يستمر بجانبه دوماً
+function _copyImageToClipboard_(files) {
+  try {
+    if (!files || files.length !== 1) return Promise.resolve(false);
+    if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') return Promise.resolve(false);
+    return navigator.clipboard.write([new ClipboardItem({ 'image/png': files[0] })]).then(function () { return true; }).catch(function () { return false; });
+  } catch (e) { return Promise.resolve(false); }
+}
+// 📤 نقطة الاستدعاء الموحّدة لأي زر "📸 صورة HD": ينسخ للحافظة تلقائياً بالتوازي، ثم يشارك مباشرة
+// (Web Share API) أو يحفظ الملف/الملفات تلقائياً لو المشاركة غير متاحة بالجهاز/المتصفح.
 // 🛡️ (V4.110) كانت `.catch(function(){})` تتجاهل أي رفض بصمت — فلو تعذّرت المشاركة (لا استجابة،
 // خطأ، أو رفض) كان المستخدم لا يرى شيئاً على الإطلاق ولا يُحفَظ الملف بديلاً. الآن نتابع ظهور/اختفاء
 // الصفحة (visibilitychange) بنفس أسلوب مشاركة PDF المُثبَت أعلاه: لو اختفت الصفحة فهذا دليل أن لوحة
 // المشاركة فُتحت فعلاً؛ ولو لم تستجب لوحة المشاركة إطلاقاً خلال مهلة معقولة، نحفظ الملف بديلاً بدل
 // ترك المستخدم أمام زر بلا أي أثر.
 function _shareOrSaveImageFiles_(files) {
+  _copyImageToClipboard_(files).then(function (copied) {
+    if (copied) showToast('📋 نُسخت الصورة أيضاً للحافظة — يمكن لصقها في أي برنامج آخر مباشرة');
+  });
   try {
     if (navigator.canShare && navigator.canShare({ files: files })) {
       var settled = false, wasHidden = false;
@@ -21805,7 +21841,7 @@ function _accUndoApplyItem_(entry, toBefore, cb) {
       .withFailureHandler(function(err) { cb(false, err.message || err); })
       .deleteAccItem(window.authToken, delId);
   } else if (other === null) {
-    var payload = Object.assign({}, target, { client: _accData.client });
+    var payload = Object.assign({}, target, { client: (_accData && _accData.client) });
     delete payload.id; delete payload.value; delete payload.isDiscount; delete payload.auto;
     google.script.run
       .withSuccessHandler(function(res) {
@@ -21818,7 +21854,7 @@ function _accUndoApplyItem_(entry, toBefore, cb) {
       .withFailureHandler(function(err) { cb(false, err.message || err); })
       .saveAccItem(window.authToken, payload);
   } else {
-    var payload2 = Object.assign({}, target, { client: _accData.client, id: other.id });
+    var payload2 = Object.assign({}, target, { client: (_accData && _accData.client), id: other.id });
     google.script.run
       .withSuccessHandler(function(res) {
         if (res && res.success) {
@@ -21846,7 +21882,7 @@ function _accUndoApplyPayment_(entry, toBefore, cb) {
       .withFailureHandler(function(err) { cb(false, err.message || err); })
       .deleteAccPayment(window.authToken, delId);
   } else if (other === null) {
-    var payload = Object.assign({}, target, { client: _accData.client });
+    var payload = Object.assign({}, target, { client: (_accData && _accData.client) });
     delete payload.id;
     google.script.run
       .withSuccessHandler(function(res) {
@@ -21859,7 +21895,7 @@ function _accUndoApplyPayment_(entry, toBefore, cb) {
       .withFailureHandler(function(err) { cb(false, err.message || err); })
       .saveAccPayment(window.authToken, payload);
   } else {
-    var payload2 = Object.assign({}, target, { client: _accData.client, id: other.id });
+    var payload2 = Object.assign({}, target, { client: (_accData && _accData.client), id: other.id });
     google.script.run
       .withSuccessHandler(function(res) {
         if (res && res.success) {
@@ -22106,8 +22142,8 @@ var _accCpState = null;      // {items:{key:{currency, periods:[{price,from,to}]
 var _accCpBase = [];         // البنود الأساسية من السيرفر
 
 function _accCpModal_() {
-  if (!_accData || !_accData.client) { alert('⚠️ حمّل حساب عميل أولًا'); return; }
-  document.getElementById('accCpClient').textContent = _accData.client;
+  if (!_accData || !(_accData && _accData.client)) { alert('⚠️ حمّل حساب عميل أولًا'); return; }
+  document.getElementById('accCpClient').textContent = (_accData && _accData.client);
   document.getElementById('accCpErr').textContent = '';
   document.getElementById('accCpBody').innerHTML = '<div class="text-center text-muted py-3">⏳ جاري تحميل أسعار العميل…</div>';
   if (!window._accCpBackdropWired) {
@@ -22129,7 +22165,7 @@ function _accCpModal_() {
     .withFailureHandler(function(err) {
       document.getElementById('accCpBody').innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(err.message || String(err)) + '</div>';
     })
-    .getClientPricing(window.authToken, _accData.client);
+    .getClientPricing(window.authToken, (_accData && _accData.client));
 }
 
 function _accCpRender_() {
@@ -22225,13 +22261,13 @@ function _accCpSave_(btn) {
       btn.disabled = false; btn.textContent = old;
       if (!res || !res.success) { errEl.textContent = '❌ ' + ((res && res.error) || 'فشل الحفظ'); return; }
       bootstrap.Modal.getInstance(document.getElementById('accCpModal')).hide();
-      showToast('✅ حُفظ تسعير بنود «' + _accData.client + '» (' + res.itemsCount + ' بند مسعَّر) — سيُطبَّق بالتوليد والمزامنة تلقائيًا حسب تاريخ كل رحلة');
+      showToast('✅ حُفظ تسعير بنود «' + (_accData && _accData.client) + '» (' + res.itemsCount + ' بند مسعَّر) — سيُطبَّق بالتوليد والمزامنة تلقائيًا حسب تاريخ كل رحلة');
     })
     .withFailureHandler(function(err) {
       btn.disabled = false; btn.textContent = old;
       errEl.textContent = '❌ ' + (err.message || err);
     })
-    .saveClientPricing(window.authToken, _accData.client, _accCpState);
+    .saveClientPricing(window.authToken, (_accData && _accData.client), _accCpState);
 }
 
 function _accRenderLegacy_() { // ⛔ النسخة القديمة قبل النموذج A — لم تعد تُستدعى (أُبقيت مرجعًا مؤقتًا)
@@ -22459,7 +22495,7 @@ function _accRenameTrip_(tripKey) {
       alert((res && res.error) || 'تعذر الحفظ');
     }
   }).withFailureHandler(function(e) { alert('خطأ: ' + e.message); })
-  .setAccDisplayName(window.authToken, _accData.client, tripKey, v);
+  .setAccDisplayName(window.authToken, (_accData && _accData.client), tripKey, v);
 }
 
 function _accRender_() {
@@ -22773,8 +22809,8 @@ function _accRun_(fnName, args, okMsg, localPatch) {
   runner[fnName].apply(runner, [window.authToken].concat(args));
 }
 
-function _accSetMode_(trip, mode) { _accRun_('setAccMode', [_accData.client, trip, mode]); }
-function _accAlertAction_(trip, action) { _accRun_('accResolveAlert', [_accData.client, trip, action]); }
+function _accSetMode_(trip, mode) { _accRun_('setAccMode', [(_accData && _accData.client), trip, mode]); }
+function _accAlertAction_(trip, action) { _accRun_('accResolveAlert', [(_accData && _accData.client), trip, action]); }
 // 🗑️ تأكيد حذف أنيق من داخل البرنامج (بدل نافذة المتصفح الخام)
 function _accConfirmDel_(msg, onYes) {
   showElegantConfirm({
@@ -22878,7 +22914,7 @@ function _accCfConfirm_(fromTrip) {
       } else if (errEl) errEl.textContent = '❌ ' + ((res && res.error) || 'فشل الترحيل');
     })
     .withFailureHandler(function(err) { if (errEl) errEl.textContent = '❌ ' + (err.message || err); })
-    .carryForwardTripBalance(window.authToken, _accData.client, fromTrip, toTrip);
+    .carryForwardTripBalance(window.authToken, (_accData && _accData.client), fromTrip, toTrip);
 }
 
 // 🔀 (V4.20) تخصيص عدة دفعات محددة دفعة واحدة لرحلة معينة
@@ -23104,7 +23140,7 @@ function _accPaysBulkSave_(btn) {
       else _showBlockingError_('❌ فشل حفظ الدفعات', escapeHtml_((res && res.error) || '؟'));
     })
     .withFailureHandler(function(err) { btn.disabled = false; _showBlockingError_('❌ فشل حفظ الدفعات', escapeHtml_(err.message || String(err))); })
-    .saveAccPaymentsBulk(window.authToken, _accData.client, _accPaysBulkTrip, list);
+    .saveAccPaymentsBulk(window.authToken, (_accData && _accData.client), _accPaysBulkTrip, list);
 }
 
 // ---------- ✏️ (V4.20) تعديل دفعات الرحلة كلها دفعة واحدة (فردية أو مجمّعة) ----------
@@ -23159,7 +23195,7 @@ function _accPayEditSave_(btn) {
       } else _showBlockingError_('❌ فشل الحفظ', escapeHtml_((res && res.error) || '؟'));
     })
     .withFailureHandler(function(err) { btn.disabled = false; _showBlockingError_('❌ فشل الحفظ', escapeHtml_(err.message || String(err))); })
-    .updateAccPaymentsBulk(window.authToken, _accData.client, _accPayEditTrip, list);
+    .updateAccPaymentsBulk(window.authToken, (_accData && _accData.client), _accPayEditTrip, list);
 }
 
 // ---------- مودال البند ----------
@@ -23238,7 +23274,7 @@ function _accItemSave_(btn) {
   var direct = document.getElementById('accItemDirect').checked;
   var item = {
     id: document.getElementById('accItemId').value || null,
-    client: _accData.client,
+    client: (_accData && _accData.client),
     trip: document.getElementById('accItemTrip').value,
     desc: document.getElementById('accItemDesc').value.trim(),
     cat: document.getElementById('accItemCat').value,
@@ -23317,9 +23353,9 @@ function _accFxItemSave_(btn) {
     ('تحويل مستحق ' + (from === 'SAR' ? 'ريال إلى جنيه' : 'جنيه إلى ريال'));
   var conv = Math.round(amt * rate * 100) / 100;
   var linkTag = '🔁' + Date.now();
-  var itemSrc = { client: _accData.client, trip: trip, desc: descBase, cat: 'خصم', currency: from,
+  var itemSrc = { client: (_accData && _accData.client), trip: trip, desc: descBase, cat: 'خصم', currency: from,
     count: 1, nights: 0, price: amt, company: '', notes: linkTag, isDirect: true };
-  var itemDst = { client: _accData.client, trip: trip, desc: descBase + ' (مقابل التحويل)', cat: 'أخرى', currency: to,
+  var itemDst = { client: (_accData && _accData.client), trip: trip, desc: descBase + ' (مقابل التحويل)', cat: 'أخرى', currency: to,
     count: 1, nights: 0, price: conv, company: '', notes: linkTag, isDirect: true };
   btn.disabled = true;
   google.script.run
@@ -23417,7 +23453,7 @@ function _accPaySave_(btn) {
   var fxSrc = document.getElementById('accPayCurrency').value;
   var p = {
     id: editId || null,
-    client: _accData.client,
+    client: (_accData && _accData.client),
     trip: document.getElementById('accPayTrip').value,
     ptype: type,
     date: document.getElementById('accPayDate').value.trim(),
@@ -23565,7 +23601,7 @@ function _accQuickPaySave_(btn) {
         bootstrap.Modal.getInstance(document.getElementById('accQuickPayModal')).hide();
         showToast('✅ سُجِّلت ' + res.count + ' دفعة عامة بنجاح');
         // 🔄 لو حساب أحد هؤلاء العملاء مفتوح حاليًا بالشاشة — نعيد تحميله ليظهر الرقم الحقيقي للدفعة فورًا
-        if (_accData && _accData.client && list.some(function(r) { return r.client === _accData.client; })) _accLoad_();
+        if (_accData && (_accData && _accData.client) && list.some(function(r) { return r.client === (_accData && _accData.client); })) _accLoad_();
       } else errEl.textContent = '❌ ' + ((res && res.error) || 'فشل الحفظ');
     })
     .withFailureHandler(function(err) { btn.disabled = false; errEl.textContent = '❌ ' + (err.message || err); })
@@ -23716,6 +23752,8 @@ function _tasRender_() {
       '<div class="d-flex gap-2">' +
         '<button class="btn btn-outline-dark btn-sm" onclick="_tasPrint_()">🖨️ طباعة / حفظ PDF</button>' +
         '<button class="btn btn-outline-dark btn-sm" onclick="exportReportAsImage(_tasBuildPrintDoc_, \'ملخص حسابات رحلة \' + (window._tasCache ? window._tasCache.trip : \'\'), this)">📸 صورة HD</button>' +
+        // 📊 (V4.123) إتاحة فتح/تصدير إحصائية العملاء مباشرة من داخل كشف الرحلة (كانت غير متاحة هنا)
+        '<button class="btn btn-outline-dark btn-sm" onclick="openTripClientStats(window._tasCache && window._tasCache.trip)">📊 إحصائية العملاء</button>' +
       '</div>' +
     '</div>' + _tasTableHtml_(false);
 }
@@ -25404,7 +25442,7 @@ function _accGen_(trip) {
         }).join('') + '</tbody></table></div>';
     })
     .withFailureHandler(function(err) { body.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(err.message || String(err)) + '</div>'; })
-    .accGenerateDraft(window.authToken, _accData.client, trip, meta.mode);
+    .accGenerateDraft(window.authToken, (_accData && _accData.client), trip, meta.mode);
 }
 function _accGenInsert_(btn) {
   var toSave = [];
@@ -25432,7 +25470,7 @@ function _accGenInsert_(btn) {
       else alert('❌ ' + ((res && res.error) || 'فشل الإدراج'));
     })
     .withFailureHandler(function(err) { btn.disabled = false; alert('❌ ' + (err.message || err)); })
-    .saveAccItemsBulk(window.authToken, _accData.client, _accGenTrip, toSave, true); // ⚙️ بنود مولّدة = تلقائية (تدخل المزامنة)
+    .saveAccItemsBulk(window.authToken, (_accData && _accData.client), _accGenTrip, toSave, true); // ⚙️ بنود مولّدة = تلقائية (تدخل المزامنة)
 }
 
 // ---------- ✏️ تعديل بنود الرحلة كلها دفعة واحدة ----------
@@ -25580,7 +25618,7 @@ function _accEditSave_(btn) {
       var src = creates[i];
       if (!src) return;
       _accData.items.push(Object.assign({}, src, {
-        id: c.id, value: c.value, isDiscount: c.isDiscount, auto: '', trip: _accEditTrip, client: _accData.client
+        id: c.id, value: c.value, isDiscount: c.isDiscount, auto: '', trip: _accEditTrip, client: (_accData && _accData.client)
       }));
     });
   };
@@ -25597,7 +25635,7 @@ function _accEditSave_(btn) {
         else finish(false, res && res.error);
       })
       .withFailureHandler(function(err) { finish(false, err.message || err); })
-      .saveAccItemsBulk(window.authToken, _accData.client, _accEditTrip, creates);
+      .saveAccItemsBulk(window.authToken, (_accData && _accData.client), _accEditTrip, creates);
   };
   if (updates.length) {
     google.script.run
@@ -25606,7 +25644,7 @@ function _accEditSave_(btn) {
         else finish(false, res && res.error);
       })
       .withFailureHandler(function(err) { finish(false, err.message || err); })
-      .updateAccItemsBulk(window.authToken, _accData.client, _accEditTrip, updates);
+      .updateAccItemsBulk(window.authToken, (_accData && _accData.client), _accEditTrip, updates);
   } else doCreates();
 }
 
@@ -25674,7 +25712,7 @@ function _accMergeSidebarOpen_() {
   if (!_accData || !_accData.trips || !_accData.trips.length) { alert('حمّل حساب عميل أولاً'); return; }
   var trips = _accData.trips;
   var esc = escapeHtml_;
-  var body = '<div class="p-3" style="background:#0f4c4c;color:#fff;font-weight:800;border-radius:12px 12px 0 0;">🔗 دمج حسابات رحلات — ' + esc(_accData.client) + '</div>' +
+  var body = '<div class="p-3" style="background:#0f4c4c;color:#fff;font-weight:800;border-radius:12px 12px 0 0;">🔗 دمج حسابات رحلات — ' + esc((_accData && _accData.client)) + '</div>' +
     '<div class="p-3">' +
     '<div class="small text-muted mb-2">اختر رحلتين أو أكثر لدمج حساباتهما — تُوزَّع المدفوعات تلقائياً بالأقدمية (FIFO)، وتظهر مدمجة بالشريط الجانبي وكشوف الطباعة حتى تُفكّ.</div>' +
     trips.map(function(r) {
@@ -25708,10 +25746,10 @@ function _accMergeSidebarSave_() {
       } else alert('❌ ' + ((res && res.error) || 'فشل الدمج'));
     })
     .withFailureHandler(function(err) { alert('❌ ' + (err.message || err)); })
-    .saveClientMergeGroup(window.authToken, _accData.client, picks);
+    .saveClientMergeGroup(window.authToken, (_accData && _accData.client), picks);
 }
 function _accUnmergeSidebar_() {
-  if (!_accData || !_accData.client) return;
+  if (!_accData || !(_accData && _accData.client)) return;
   if (!confirm('🔓 فك دمج حسابات الرحلات؟ (المدفوعات ستعود لكل رحلة حسب تخصيصها الأصلي)')) return;
   google.script.run
     .withSuccessHandler(function(res) {
@@ -25719,7 +25757,7 @@ function _accUnmergeSidebar_() {
       else alert('❌ ' + ((res && res.error) || 'فشل فك الدمج'));
     })
     .withFailureHandler(function(err) { alert('❌ ' + (err.message || err)); })
-    .clearClientMergeGroup(window.authToken, _accData.client);
+    .clearClientMergeGroup(window.authToken, (_accData && _accData.client));
 }
 
 // 🔓 (V4.31) فك الدمج الدائم المحفوظ لهذا العميل
@@ -25752,9 +25790,9 @@ function _accPrintAllPickGo_(mode) {
   if (!sel.length) { alert('⚠️ اختر رحلة واحدة على الأقل'); return; }
   if (merge && sel.length < 2) { alert('⚠️ الدمج يحتاج رحلتين على الأقل'); return; }
   // 🔗 (V4.31) الدمج يبقى محفوظًا دائمًا لهذا العميل حتى يُفكّ صراحةً — يُحفظ فور تفعيله هنا
-  if (merge && _accData && _accData.client) {
+  if (merge && _accData && (_accData && _accData.client)) {
     window._accMergeGroupCache = { trips: sel }; // ⚡ (V4.41) تحديث الكاش فورًا ليطابق الحالة الجديدة
-    google.script.run.withSuccessHandler(function() {}).withFailureHandler(function() {}).saveClientMergeGroup(window.authToken, _accData.client, sel);
+    google.script.run.withSuccessHandler(function() {}).withFailureHandler(function() {}).saveClientMergeGroup(window.authToken, (_accData && _accData.client), sel);
   }
   _accPrint_('all', null, mode || undefined, sel, merge, summaryOnly, showSettlement);
 }
@@ -31363,6 +31401,10 @@ function clearSingleFilter(fieldId) {
 
 function executeDynamicSearch() {
 
+  // 🚌 (V4.123) بحث يدوي جديد — يلغي وضع "زر تبديل النقل" الخاص بكروت اليوم/الغد (لا يظهر الزر
+  // على نتائج بحث عام لم تأتِ من هذه الكروت أصلاً)
+  window._dashToggle = null;
+
   renderActiveFilters();
 
   const movementDate =
@@ -32204,6 +32246,16 @@ function filterDashboard(type) {
     result = result.filter(m => m.movementType?.includes('رحلة') && String(m.movementDate).trim() === todayStr );
   }
 
+  // 🚌 (V4.123) كارتَي تحركات اليوم/الغد: الافتراضي عرض التحركات التي لها نقل فعلي فقط (نفس شرط
+  // تنبيه تليجرام — وكيل نقل + باصات، وليس "بمعرفة العميل") — بزر تبديل لإظهار الباقي أيضاً
+  if (type === 'today' || type === 'tomorrow') {
+    window._dashToggle = { all: result, type: type };
+    window._dashShowAll = false;
+    result = result.filter(m => m.hasTransport !== false);
+  } else {
+    window._dashToggle = null;
+  }
+
   window.lastSearchResults = result;
 
   // 🐛 إصلاح: هذا المسار (الدخول من كروت الداشبورد) كان لا يُفعّل movementMode أبداً،
@@ -32219,8 +32271,18 @@ function filterDashboard(type) {
   // 🔥 3. إضافة هذا السطر لإخفاء كارت الفلاتر تماماً كما طلبت
   const filterCard = document.getElementById('searchFilterCard');
   if (filterCard) {
-    filterCard.classList.add('hidden-search-card'); 
+    filterCard.classList.add('hidden-search-card');
   }
+}
+
+// 🚌 (V4.123) تبديل عرض كروت اليوم/الغد بين "التي لها نقل فقط" (الافتراضي) و"الكل" (بما فيها بلا
+// نقل/بمعرفة العميل) — يعيد الرسم من نفس المصدر المحفوظ بلا أي نداء سيرفر إضافي
+function _dashToggleTransport_() {
+  if (!window._dashToggle) return;
+  window._dashShowAll = !window._dashShowAll;
+  const list = window._dashShowAll ? window._dashToggle.all : window._dashToggle.all.filter(m => m.hasTransport !== false);
+  window.lastSearchResults = list;
+  renderMovementResults(list);
 }
 
 
@@ -32362,6 +32424,7 @@ let html = `
         <span class="badge bg-primary rounded-pill ms-1">${movements.length}</span>
       </div>
       <div class="d-flex gap-2">
+        ${window._dashToggle ? `<button class="btn btn-outline-primary btn-sm px-2 shadow-sm" onclick="_dashToggleTransport_()">${window._dashShowAll ? '🚌 التي لها نقل فقط' : '👥 عرض الكل (بلا نقل أيضاً)'}</button>` : ''}
         <button class="btn btn-outline-secondary btn-sm px-2 shadow-sm" onclick="openColumnsSettingsModal()" title="تخصيص أعمدة الجدول">
           ⚙️
         </button>
@@ -34726,6 +34789,7 @@ function mfEditFile(id) {
   };
   MF._draft = d;
   MF._step = 0;
+  MF._levels = null; MF._levelMode = 'single';   // 🏨 (V4.123) حالة مستويات التسكين تخصّ هذا الملف وحده
   MF._tripPick = null; MF._tripPickLoading = false;   // قائمة المعتمرين تخصّ هذا الملف وحده
   mfEditFileFromDraft(d);
 }
@@ -35150,6 +35214,32 @@ function mfDraftTrip(v) {
         }
       }, 120);
     }
+    // 🏨 (V4.123) تنبيه بمستويات التسكين المتعددة (فندق × طبيعة تسكين، مع تجميع الرباعي فأكبر
+    // كمستوى "عادي" واحد) — فقط عند إنشاء ملف جديد (لا عند تعديل ملف موجود بالفعل)
+    if (!d.id) {
+      var _lvlTrip = d.tripName;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (!res || !res.success || d.tripName !== _lvlTrip) return; // تغيّر اختيار الرحلة قبل رجوع الرد
+          MF._levels = (res.levels && res.levels.length > 1) ? res.levels : null;
+          MF._levelMode = 'single';
+          if (!MF._levels) return;
+          var listHtml = MF._levels.map(function (lv) {
+            return '<div style="padding:2px 0;">🏷️ ' + mfEsc(lv.label) + ' — ' + lv.count + ' معتمر' + (lv.price ? ' — سعر البيع ' + mfFmt(lv.price) + ' جنيه' : '') + '</div>';
+          }).join('');
+          showElegantConfirm({
+            icon: '🏨', title: 'هذه الرحلة بها ' + MF._levels.length + ' مستويات تسكين',
+            messageHtml: 'اكتُشف أكثر من مستوى تسكين مختلف بهذه الرحلة:<div style="text-align:right;margin-top:6px;">' + listHtml + '</div>' +
+              '<div style="margin-top:8px;">هل تراجع كل المستويات في ملف واحد، أم يُنشأ ملف مراجعة منفصل لكل مستوى (بسكنه وسعر بيعه الخاص تلقائياً من تسعير الرحلة)؟</div>',
+            buttons: [
+              { label: '📁 ملف منفصل لكل مستوى (' + MF._levels.length + ' ملفات)', class: 'btn-success', onClick: function () { MF._levelMode = 'split'; _showPopup('سيُنشأ ملف منفصل لكل مستوى عند الحفظ', 'info'); } },
+              { label: '📄 مراجعة الكل في ملف واحد', class: 'btn-secondary', onClick: function () { MF._levelMode = 'single'; } }
+            ]
+          });
+        })
+        .withFailureHandler(function () {})
+        .getTripAccommodationLevels(window.authToken, d.tripName);
+    }
   }
   mfFormRender();
 }
@@ -35222,6 +35312,14 @@ function mfSaveDraft() {
   if (!mfStr(d.clientLabel)) d.clientLabel = (d.breakdown || []).map(function (b) { return b.name; }).filter(String).join(' + ');
   var btnBox = document.getElementById('mfFormWarn');
   if (btnBox) btnBox.innerHTML = '⏳ جاري الحفظ…';
+
+  // 🏨 (V4.123) وضع "ملف منفصل لكل مستوى" — يُنشئ ملف مراجعة مستقل لكل مستوى تسكين مكتشَف (بعدد
+  // معتمريه الفعلي وسكنه وسعر بيعه الخاص) بدلاً من ملف واحد بكل معتمري الرحلة — فقط عند الإنشاء
+  if (MF._levelMode === 'split' && MF._levels && MF._levels.length > 1 && !d.id) {
+    mfSaveDraftSplit(d, MF._levels);
+    return;
+  }
+
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); mfFormValidate(); return; }
@@ -35231,6 +35329,38 @@ function mfSaveDraft() {
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); mfFormValidate(); })
     .saveMinistryFile(window.authToken, d);
+}
+// 🏨 (V4.123) حفظ متتابع لملف واحد لكل مستوى تسكين — كل ملف نسخة من البيانات المشتركة (الشركة،
+// الوكيل، التواريخ، نوع المراجعة...) لكن بعدد معتمري مستواه فقط وسكنه وسعر بيعه الخاصين
+function mfSaveDraftSplit(base, levels) {
+  var okCount = 0, failCount = 0, i = 0;
+  function next() {
+    if (i >= levels.length) {
+      mfCloseModal();
+      if (okCount) _showPopup('تم إنشاء ' + okCount + ' ملف مراجعة (ملف لكل مستوى تسكين)' + (failCount ? (' — فشل ' + failCount) : ''), failCount ? 'info' : 'success');
+      else _showPopup('تعذّر إنشاء أي ملف', 'error');
+      return;
+    }
+    var lv = levels[i];
+    var levelLabel = (base.clientLabel || base.tripName || '') + ' - ' + lv.label;
+    var payload = Object.assign({}, base, {
+      id: '', fileNo: '',
+      pilgrims: lv.count, supCount: 0, sups: [],
+      breakdown: [{ name: levelLabel, count: lv.count, sups: 0, note: 'مستوى تسكين: ' + lv.label, isTrip: true }],
+      clientLabel: levelLabel,
+      madinahHotel: lv.madinahHotel || base.madinahHotel,
+      makkahHotel: lv.makkahHotel || base.makkahHotel,
+      progPrice: lv.price || base.progPrice
+    });
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success) { okCount++; mfApplySaved(res, { silent: true }); } else failCount++;
+        i++; next();
+      })
+      .withFailureHandler(function () { failCount++; i++; next(); })
+      .saveMinistryFile(window.authToken, payload);
+  }
+  next();
 }
 function mfDeleteFile(id) {
   var f = mfGet(id); if (!f) return;
@@ -36004,13 +36134,15 @@ function mfLedgerRender() {
 }
 
 /* ============================================================
-   📊 (V4.122) تصدير Excel — مطابق حرفياً لترتيب وأعمدة وتنسيق ملف الإكسيل الأصلي المرفق («بيان
+   📊 (V4.123) تصدير Excel — مطابق حرفياً لترتيب وأعمدة وتنسيق ملف الإكسيل الأصلي المرفق («بيان
    ملفات عمرة … منف للسياحة الدولية»): نفس تسميات الـ34 عمود وترتيبها (A→AH)، نفس ألوان رؤوس
    الأعمدة (أزرق/أخضر/أحمر/بنفسجي)، نفس الأعمدة المخفية افتراضياً فيه، ونفس معادلات أعمدة
    الإجماليات حرفاً بحرف (وليست قيماً ثابتة) فتتحدّث تلقائياً عند التعديل داخل إكسيل بعد التصدير.
    يُصدَّر فقط الصفوف المطابقة للفلاتر الحالية (mfVisible)، وصف الإجماليات أسفله بصيغ
    SUBTOTAL(9,...) تماماً كالملف الأصلي (يبقى صحيحاً حتى لو صُفِّيت صفوف داخل إكسيل نفسه لاحقاً).
-   يعتمد مكتبة SheetJS (XLSX) المحمَّلة بالفعل بالتطبيق — بلا أي نداء للسيرفر، بالكامل بالمتصفح.
+   🛠️ (V4.123) نسخة SheetJS (XLSX) المجانية المحمَّلة بالتطبيق تتجاهل أي تنسيق (ألوان/خطوط/حدود)
+   عند الكتابة فعلياً (ميزة Pro-only) — لذلك أُعيد بناء هذه الدالة بمكتبة ExcelJS (مجانية بالكامل
+   وتكتب تنسيقاً حقيقياً) بدلاً من SheetJS، مع نفس منطق الأعمدة والمعادلات تماماً.
    ============================================================ */
 var MF_HDR_COLORS = {
   blue:      { bg: 'FF8EAADB', fg: 'FF000000', bold: true },
@@ -36070,35 +36202,49 @@ function _mfXlSerial(v) {
   return Math.round((utcMs - Date.UTC(1899, 11, 30)) / 86400000);
 }
 function _mfXlBorder() {
-  var e = { style: 'thin', color: { rgb: 'FF000000' } };
+  var e = { style: 'thin', color: { argb: 'FF000000' } };
   return { top: e, bottom: e, left: e, right: e };
 }
 function _mfXlHeaderStyle(hdr) {
   var c = MF_HDR_COLORS[hdr] || MF_HDR_COLORS.blue;
   return {
-    font: { name: 'Arial', sz: 11, bold: c.bold, color: { rgb: c.fg } },
-    fill: { fgColor: { rgb: c.bg } },
+    font: { name: 'Arial', size: 11, bold: c.bold, color: { argb: c.fg } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: c.bg } },
     border: _mfXlBorder(),
-    alignment: { horizontal: 'center', vertical: 'center', wrapText: true }
+    alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
   };
 }
-function _mfXlDataStyle(numFmt) {
-  var s = { font: { name: 'Arial', sz: 11 }, border: _mfXlBorder(), alignment: { horizontal: 'center', vertical: 'center' } };
-  if (numFmt) s.numFmt = numFmt;
-  return s;
+function _mfXlDataStyle() {
+  return { font: { name: 'Arial', size: 11 }, border: _mfXlBorder(), alignment: { horizontal: 'center', vertical: 'middle' } };
 }
-function _mfXlTotalsStyle(numFmt) {
-  var s = {
-    font: { name: 'Arial', sz: 12, bold: true, color: { rgb: 'FFFFFFFF' } },
-    fill: { fgColor: { rgb: 'FF7030A0' } },
+function _mfXlTotalsStyle() {
+  return {
+    font: { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7030A0' } },
     border: _mfXlBorder(),
-    alignment: { horizontal: 'center', vertical: 'center' }
+    alignment: { horizontal: 'center', vertical: 'middle' }
   };
-  if (numFmt) s.numFmt = numFmt;
-  return s;
 }
-function mfExportExcel() {
-  if (typeof XLSX === 'undefined') { _showPopup('مكتبة تصدير الإكسيل غير محمَّلة — أعد تحميل الصفحة', 'error'); return; }
+function _mfXlApplyStyle(cell, style) {
+  cell.font = style.font; cell.border = style.border; cell.alignment = style.alignment;
+  if (style.fill) cell.fill = style.fill;
+}
+// 📛 اسم ملف الإكسيل الناتج = اسم الشركة المصرية (لو كل الصفوف المصدَّرة لشركة واحدة، أو الفلتر
+// الحالي محدَّد بشركة بعينها) — وإلا اسم عام بالتاريخ لو تعددت الشركات بلا فلتر
+function _mfXlFileName(list, stamp) {
+  var companies = [];
+  list.forEach(function (f) { var c = mfStr(f.company); if (c && companies.indexOf(c) < 0) companies.push(c); });
+  var base;
+  if (companies.length === 1) base = companies[0];
+  else {
+    var flt = mfStr(document.getElementById('mfF_company') ? document.getElementById('mfF_company').value : '');
+    base = flt || 'بيان ملفات مراجعة الوزارة';
+  }
+  var safe = base.replace(/[\\/:*?"<>|]/g, '-').trim() || 'بيان ملفات مراجعة الوزارة';
+  return safe + ' - ' + stamp + '.xlsx';
+}
+async function mfExportExcel() {
+  if (typeof ExcelJS === 'undefined') { _showPopup('مكتبة تصدير الإكسيل غير محمَّلة — أعد تحميل الصفحة', 'error'); return; }
   var list = mfVisible();
   if (!list.length) { _showPopup('لا توجد ملفات مطابقة للفلاتر الحالية لتصديرها', 'error'); return; }
 
@@ -36108,38 +36254,35 @@ function mfExportExcel() {
   var nCols = MF_EXPORT_COLS.length;
   var lastColLetter = _xlColLetter(nCols);
 
-  // 🏗️ نفس هيكل صفوف الملف الأصلي (0-based): صف0 فارغ، صف1 عنوان مدمج، صف2 رؤوس الأعمدة، صف3+ بيانات
-  var R_TITLE = 1, R_HEADER = 2, R_DATA0 = 3, ROW_OFFSET = R_HEADER + 1; // = 3 (لمعادلة "ROW()-3")
+  // 🏗️ نفس هيكل صفوف الملف الأصلي (1-based، أرقام صفوف إكسيل مباشرة): صف1 فارغ، صف2 عنوان مدمج،
+  // صف3 رؤوس الأعمدة، صف4+ بيانات
+  var R_TITLE = 2, R_HEADER = 3, R_DATA0 = 4, ROW_OFFSET = R_HEADER; // = 3 (لمعادلة "ROW()-3")
   var moneyFmt = '#,##0', dateFmt = 'm/d/yyyy', pctFmt = '0.00%', rateFmt = '0.00';
-  var ws = {};
-  var range = { s: { r: 0, c: 0 }, e: { r: 0, c: nCols - 1 } };
-  function setCell(r, c, val, style, extra) {
-    var ref = XLSX.utils.encode_cell({ r: r, c: c });
-    var cell = {};
-    if (extra) { for (var k in extra) cell[k] = extra[k]; }
-    if (typeof val === 'number') { cell.t = 'n'; cell.v = val; }
-    else { cell.t = 's'; cell.v = String(val == null ? '' : val); }
-    if (style) cell.s = style;
-    ws[ref] = cell;
-    if (r > range.e.r) range.e.r = r;
-    if (c > range.e.c) range.e.c = c;
-  }
+
+  var wb = new ExcelJS.Workbook();
+  var ws = wb.addWorksheet('ملفات عمرة', { views: [{ rightToLeft: true, state: 'frozen', ySplit: R_DATA0 - 1 }] });
+  ws.columns = MF_EXPORT_COLS.map(function (c) { return { width: c.w }; });
+  MF_EXPORT_COLS.forEach(function (col, ci) { if (col.hidden) ws.getColumn(ci + 1).hidden = true; });
 
   // العنوان — صف مدمج عبر كل الأعمدة
   var stamp = (MF.today || '').replace(/\//g, '-') || new Date().toISOString().slice(0, 10);
-  setCell(R_TITLE, 0, 'بيان ملفات مراجعة الوزارة — شركة منف للسياحة الدولية — ' + stamp, {
-    font: { name: 'Arial', sz: 14, bold: true, color: { rgb: 'FF000000' } },
-    alignment: { horizontal: 'center', vertical: 'center' }
-  });
+  ws.mergeCells(R_TITLE, 1, R_TITLE, nCols);
+  var titleCell = ws.getCell(R_TITLE, 1);
+  titleCell.value = 'بيان ملفات مراجعة الوزارة — شركة منف للسياحة الدولية — ' + stamp;
+  titleCell.font = { name: 'Arial', size: 14, bold: true, color: { argb: 'FF000000' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
   // رؤوس الأعمدة — نفس نصوص وألوان الملف الأصلي حرفياً
-  MF_EXPORT_COLS.forEach(function (col, ci) { setCell(R_HEADER, ci, col.l, _mfXlHeaderStyle(col.hdr)); });
+  MF_EXPORT_COLS.forEach(function (col, ci) { _mfXlApplyStyle(ws.getCell(R_HEADER, ci + 1), _mfXlHeaderStyle(col.hdr)); ws.getCell(R_HEADER, ci + 1).value = col.l; });
+
+  ws.getRow(1).height = 15; ws.getRow(R_TITLE).height = 24.75; ws.getRow(R_HEADER).height = 34.5;
 
   // بيانات الصفوف — القيم المباشرة كما هي، وأعمدة الإجماليات كصيغ إكسيل حقيقية بنفس معادلات
   // الملف الأصلي حرفاً بحرف (وليست معادلات محرك التسعير الداخلي بالتطبيق)
   list.forEach(function (f, ri) {
     var c = f._c || mfCalc(f);
-    var r = R_DATA0 + ri, xr = r + 1; // xr = رقم صف إكسيل 1-based، يُستخدم داخل نصوص المعادلات
+    var xr = R_DATA0 + ri; // رقم صف إكسيل (1-based)
+    ws.getRow(xr).height = 21.75;
 
     // 🧮 نحسب القيم يدوياً بنفس سلسلة معادلات الملف الأصلي (لا معادلات _mfCompute_ الأكثر تعقيداً)
     // كي تُطابق القيمة الظاهرة (قبل أول إعادة حساب لإكسيل) الصيغة المكتوبة تماماً
@@ -36156,86 +36299,83 @@ function mfExportExcel() {
     var perPersonMarginV = pilgrims ? (marginV / pilgrims) : 0;
 
     MF_EXPORT_COLS.forEach(function (col, ci) {
-      var numFmt = col.date ? dateFmt : (col.pct ? pctFmt : (col.rate ? rateFmt : (col.money ? moneyFmt : null)));
-      var style = _mfXlDataStyle(numFmt);
+      var cell = ws.getCell(xr, ci + 1);
+      _mfXlApplyStyle(cell, _mfXlDataStyle());
+      if (col.date) cell.numFmt = dateFmt;
+      else if (col.pct) cell.numFmt = pctFmt;
+      else if (col.rate) cell.numFmt = rateFmt;
+      else if (col.money) cell.numFmt = moneyFmt;
       switch (col.k) {
-        case 'seq': setCell(r, ci, 0, style, { f: 'IF(' + L.company + xr + '="",,ROW()-' + ROW_OFFSET + ')', v: mfNum(f.seq) }); return;
-        case 'eInvoice': setCell(r, ci, mfStr(f.eInvoice), style); return;
-        case 'company': setCell(r, ci, mfStr(f.company), style); return;
-        case 'agent': setCell(r, ci, mfStr(f.agent), style); return;
-        case 'fileNo': setCell(r, ci, mfStr(f.fileNo), style); return;
-        case 'reviewDate': { var sd = _mfXlSerial(f.reviewDate); sd != null ? setCell(r, ci, sd, style) : setCell(r, ci, mfStr(f.reviewDate), style); return; }
-        case 'travelMode': setCell(r, ci, mfStr(f.travelMode), style); return;
-        case 'goDate': { var sg = _mfXlSerial(f.goDate); sg != null ? setCell(r, ci, sg, style) : setCell(r, ci, mfStr(f.goDate), style); return; }
-        case 'retDate': { var sr = _mfXlSerial(f.retDate); sr != null ? setCell(r, ci, sr, style) : setCell(r, ci, mfStr(f.retDate), style); return; }
-        case 'pilgrims': setCell(r, ci, pilgrims, style); return;
-        case 'supCount': setCell(r, ci, sup, style); return;
-        case 'progPrice': setCell(r, ci, progPrice, style); return;
-        case 'revenue': setCell(r, ci, 0, style, { f: L.pilgrims + xr + '*' + L.progPrice + xr, v: revenueV }); return;
-        case 'ticket': setCell(r, ci, ticket, style); return;
+        case 'seq': cell.value = { formula: 'IF(' + L.company + xr + '="",,ROW()-' + ROW_OFFSET + ')', result: mfNum(f.seq) }; return;
+        case 'eInvoice': cell.value = mfStr(f.eInvoice); return;
+        case 'company': cell.value = mfStr(f.company); return;
+        case 'agent': cell.value = mfStr(f.agent); return;
+        case 'fileNo': cell.value = mfStr(f.fileNo); return;
+        case 'reviewDate': { var sd = _mfXlSerial(f.reviewDate); cell.value = sd != null ? new Date(sd * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.reviewDate); return; }
+        case 'travelMode': cell.value = mfStr(f.travelMode); return;
+        case 'goDate': { var sg = _mfXlSerial(f.goDate); cell.value = sg != null ? new Date(sg * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.goDate); return; }
+        case 'retDate': { var sr = _mfXlSerial(f.retDate); cell.value = sr != null ? new Date(sr * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.retDate); return; }
+        case 'pilgrims': cell.value = pilgrims; return;
+        case 'supCount': cell.value = sup; return;
+        case 'progPrice': cell.value = progPrice; return;
+        case 'revenue': cell.value = { formula: L.pilgrims + xr + '*' + L.progPrice + xr, result: revenueV }; return;
+        case 'ticket': cell.value = ticket; return;
         // 🏛️ رسوم الغرفة المُصدَّرة هي القيمة الفعلية المُطبَّقة فعلاً (بعد قاعدتَي VIP وأقل من 4
         // أفراد) — تعديلها لاحقاً في إكسيل يُحدِّث الإجماليات مباشرةً
-        case 'roomFee': setCell(r, ci, roomFee, style); return;
-        case 'adminFee': setCell(r, ci, mfNum(f.adminFee), style); return;
-        case 'clearanceSAR': setCell(r, ci, clearanceSAR, style); return;
-        case 'fxRate': setCell(r, ci, fxRate, style); return;
-        case 'totalTickets': setCell(r, ci, 0, style, { f: L.ticket + xr + '*(' + L.pilgrims + xr + '+' + L.supCount + xr + ')', v: totalTicketsV }); return;
-        case 'totalRoomFee': setCell(r, ci, 0, style, { f: L.pilgrims + xr + '*' + L.roomFee + xr + '+' + L.supCount + xr + '*200', v: totalRoomFeeV }); return;
-        case 'totalSAR': setCell(r, ci, 0, style, { f: L.clearanceSAR + xr + '*(' + L.supCount + xr + '+' + L.pilgrims + xr + ')', v: totalSARV }); return;
-        case 'totalExp': setCell(r, ci, 0, style, { f: L.totalSAR + xr + '*' + L.fxRate + xr + '+' + L.totalTickets + xr + '+' + L.totalRoomFee + xr, v: totalExpV }); return;
-        case 'margin': setCell(r, ci, 0, style, { f: L.revenue + xr + '-' + L.totalExp + xr, v: marginV }); return;
-        case 'pct': setCell(r, ci, 0, style, { f: L.margin + xr + '/' + L.revenue + xr, v: pctV }); return;
-        case 'madinahHotel': setCell(r, ci, mfStr(f.madinahHotel), style); return;
-        case 'madinahIn': { var s4 = _mfXlSerial(f.madinahIn); s4 != null ? setCell(r, ci, s4, style) : setCell(r, ci, mfStr(f.madinahIn), style); return; }
-        case 'madinahOut': { var s5 = _mfXlSerial(f.madinahOut); s5 != null ? setCell(r, ci, s5, style) : setCell(r, ci, mfStr(f.madinahOut), style); return; }
-        case 'makkahHotel': setCell(r, ci, mfStr(f.makkahHotel), style); return;
-        case 'makkahIn': { var s6 = _mfXlSerial(f.makkahIn); s6 != null ? setCell(r, ci, s6, style) : setCell(r, ci, mfStr(f.makkahIn), style); return; }
-        case 'makkahOut': { var s7 = _mfXlSerial(f.makkahOut); s7 != null ? setCell(r, ci, s7, style) : setCell(r, ci, mfStr(f.makkahOut), style); return; }
-        case 'transport': setCell(r, ci, mfStr(f.transport), style); return;
-        case 'supNames': setCell(r, ci, mfRaw('supNames', f), style); return;
-        case 'perPersonMargin': setCell(r, ci, 0, style, { f: L.margin + xr + '/' + L.pilgrims + xr, v: perPersonMarginV }); return;
-        case 'clientLabel': setCell(r, ci, mfStr(f.clientLabel), style); return;
+        case 'roomFee': cell.value = roomFee; return;
+        case 'adminFee': cell.value = mfNum(f.adminFee); return;
+        case 'clearanceSAR': cell.value = clearanceSAR; return;
+        case 'fxRate': cell.value = fxRate; return;
+        case 'totalTickets': cell.value = { formula: L.ticket + xr + '*(' + L.pilgrims + xr + '+' + L.supCount + xr + ')', result: totalTicketsV }; return;
+        case 'totalRoomFee': cell.value = { formula: L.pilgrims + xr + '*' + L.roomFee + xr + '+' + L.supCount + xr + '*200', result: totalRoomFeeV }; return;
+        case 'totalSAR': cell.value = { formula: L.clearanceSAR + xr + '*(' + L.supCount + xr + '+' + L.pilgrims + xr + ')', result: totalSARV }; return;
+        case 'totalExp': cell.value = { formula: L.totalSAR + xr + '*' + L.fxRate + xr + '+' + L.totalTickets + xr + '+' + L.totalRoomFee + xr, result: totalExpV }; return;
+        case 'margin': cell.value = { formula: L.revenue + xr + '-' + L.totalExp + xr, result: marginV }; return;
+        case 'pct': cell.value = { formula: L.margin + xr + '/' + L.revenue + xr, result: pctV }; return;
+        case 'madinahHotel': cell.value = mfStr(f.madinahHotel); return;
+        case 'madinahIn': { var s4 = _mfXlSerial(f.madinahIn); cell.value = s4 != null ? new Date(s4 * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.madinahIn); return; }
+        case 'madinahOut': { var s5 = _mfXlSerial(f.madinahOut); cell.value = s5 != null ? new Date(s5 * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.madinahOut); return; }
+        case 'makkahHotel': cell.value = mfStr(f.makkahHotel); return;
+        case 'makkahIn': { var s6 = _mfXlSerial(f.makkahIn); cell.value = s6 != null ? new Date(s6 * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.makkahIn); return; }
+        case 'makkahOut': { var s7 = _mfXlSerial(f.makkahOut); cell.value = s7 != null ? new Date(s7 * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.makkahOut); return; }
+        case 'transport': cell.value = mfStr(f.transport); return;
+        case 'supNames': cell.value = mfRaw('supNames', f); return;
+        case 'perPersonMargin': cell.value = { formula: L.margin + xr + '/' + L.pilgrims + xr, result: perPersonMarginV }; return;
+        case 'clientLabel': cell.value = mfStr(f.clientLabel); return;
       }
     });
   });
 
   // صف الإجماليات أسفل الجدول مباشرة — بصيغ SUBTOTAL(9,...) تماماً كالملف الأصلي (تبقى صحيحة حتى
   // لو صُفِّيت صفوف داخل إكسيل نفسه لاحقاً، على عكس SUM التي تتجاهل هذا الإخفاء)
-  var lastXr = R_DATA0 + list.length;      // رقم آخر صف بيانات (1-based)
-  var totalsR = R_DATA0 + list.length;     // صف الإجماليات (0-based) — مباشرة بعد آخر صف بيانات
-  var totalsXr = totalsR + 1;
+  var lastXr = R_DATA0 + list.length - 1;  // رقم آخر صف بيانات (1-based)
+  var totalsXr = lastXr + 1;               // صف الإجماليات — مباشرة بعد آخر صف بيانات
+  ws.getRow(totalsXr).height = 21.75;
   var SUBTOTAL_KEYS = ['pilgrims', 'supCount', 'revenue', 'totalRoomFee', 'totalSAR', 'totalExp', 'margin'];
   MF_EXPORT_COLS.forEach(function (col, ci) {
-    var numFmt = col.money ? moneyFmt : (col.pct ? pctFmt : null);
+    var cell = ws.getCell(totalsXr, ci + 1);
+    _mfXlApplyStyle(cell, _mfXlTotalsStyle());
     if (SUBTOTAL_KEYS.indexOf(col.k) >= 0) {
-      setCell(totalsR, ci, 0, _mfXlTotalsStyle(numFmt), { f: 'SUBTOTAL(9,' + L[col.k] + R_DATA0 + ':' + L[col.k] + lastXr + ')', v: 0 });
+      cell.numFmt = col.money ? moneyFmt : null;
+      cell.value = { formula: 'SUBTOTAL(9,' + L[col.k] + R_DATA0 + ':' + L[col.k] + lastXr + ')', result: 0 };
     } else if (col.k === 'pct') {
-      setCell(totalsR, ci, 0, _mfXlTotalsStyle(pctFmt), { f: L.margin + totalsXr + '/' + L.revenue + totalsXr, v: 0 });
+      cell.numFmt = pctFmt;
+      cell.value = { formula: L.margin + totalsXr + '/' + L.revenue + totalsXr, result: 0 };
     } else if (col.k === 'retDate') {
-      setCell(totalsR, ci, 'الإجمالي', _mfXlTotalsStyle(null));
-    } else {
-      setCell(totalsR, ci, '', _mfXlTotalsStyle(null));
+      cell.value = 'الإجمالي';
     }
   });
 
-  ws['!ref'] = XLSX.utils.encode_range(range);
-  ws['!merges'] = [{ s: { r: R_TITLE, c: 0 }, e: { r: R_TITLE, c: nCols - 1 } }];
-  ws['!cols'] = MF_EXPORT_COLS.map(function (c) { return { wch: c.w, hidden: !!c.hidden }; });
-  var rowsArr = [];
-  for (var ri2 = 0; ri2 <= totalsR; ri2++) {
-    rowsArr[ri2] = { hpt: ri2 === R_TITLE ? 24.75 : (ri2 === R_HEADER ? 34.5 : (ri2 >= R_DATA0 ? 21.75 : 15)) };
-  }
-  ws['!rows'] = rowsArr;
-  try { ws['!views'] = [{ state: 'frozen', ySplit: R_DATA0, xSplit: 0, rightToLeft: true }]; } catch (e) {}
-  try { ws['!autofilter'] = { ref: 'A' + (R_HEADER + 1) + ':' + lastColLetter + (R_HEADER + 1) }; } catch (e) {}
+  ws.autoFilter = { from: { row: R_HEADER, column: 1 }, to: { row: R_HEADER, column: nCols } };
 
-  var wb = XLSX.utils.book_new();
-  try { wb.Workbook = { Views: [{ RTL: true }] }; } catch (e) {}
-  XLSX.utils.book_append_sheet(wb, ws, 'ملفات عمرة');
-
-  var fname = 'بيان ملفات مراجعة الوزارة - ' + stamp + '.xlsx';
+  var fname = _mfXlFileName(list, stamp);
   try {
-    XLSX.writeFile(wb, fname, { cellStyles: true });
+    var buf = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
     _showPopup('تم تصدير ' + list.length + ' ملفاً — أعمدة الإجماليات معادلات حيّة قابلة للتعديل', 'success');
   } catch (e) {
     _showPopup('تعذّر إنشاء ملف الإكسيل: ' + (e && e.message ? e.message : e), 'error');
