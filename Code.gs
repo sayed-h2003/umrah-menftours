@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.123";
+var APP_VERSION = "4.124";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -20390,6 +20390,8 @@ function getMinistryTripLinks(authToken) {
       // 🔎 (V4.111) clientLabel + selected يتيحان للبحث العام والسجل العام عرض ملفات
       // المراجعة الخاصة بكل معتمر (وليس الرحلات فقط)
       clientLabel: f.clientLabel, company: f.company, ref: f.ref,
+      // 🗓️ (V4.124) تاريخ إنشاء الملف — لعرضه ضمن خط سير الرحلة (إنشاء الملف ثم تاريخ مراجعته)
+      createdAt: f.createdAt,
       selected: Array.isArray(f.selected) ? f.selected : [] });
   });
   files.forEach(function(f) {

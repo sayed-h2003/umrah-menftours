@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.123 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.124 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.123)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.124)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.123</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.124</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -3494,8 +3494,14 @@ input[type="date"]:not(:focus):not(:valid) {
   <div class="modal fade" id="housingModal" tabindex="-1" data-bs-backdrop="static" style="z-index:2001;">
     <div class="modal-dialog modal-fullscreen">
       <div class="modal-content">
-        <div class="modal-header py-2" style="background:#0F766E; color:white;">
+        <div class="modal-header py-2 flex-wrap" style="background:#0F766E; color:white;">
           <h6 class="modal-title fw-bold">🏨 تسكين رحلة: <span id="housingTripNameLabel"></span></h6>
+          <!-- 🔀 (V4.124) تبويب مكة/المدينة داخل نفس شاشة التسكين — تسهيلاً للانتقال بينهما بلا إغلاق
+               وإعادة فتح، مع إبقاء بقية أزرار الشاشة وتصميمها ونظامها كما هي تماماً -->
+          <div class="btn-group btn-group-sm" id="housingCityTabs" role="group">
+            <button type="button" class="btn btn-light" onclick="generateHousing('makkah')" id="housingTabMakkah">🕋 مكة</button>
+            <button type="button" class="btn btn-outline-light" onclick="generateHousing('madinah')" id="housingTabMadinah">🕌 المدينة</button>
+          </div>
           <div class="d-flex gap-2">
             <button class="btn btn-success btn-sm" onclick="saveHousingToManifest()">💾 حفظ التسكين للكشف</button>
             <button class="btn btn-info btn-sm" onclick="printRoomBookingRequest()">🛎️ طلب حجز الغرف</button>
@@ -6392,7 +6398,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.123";
+var CLIENT_APP_VERSION = "4.124";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -10266,6 +10272,30 @@ function _tripTimelineStages_(t) {
     }
   } catch (e) { /* التحركات الإضافية اختيارية — أي عطل فيها لا يمنع بقية الخط */ }
 
+  // 🏛️ (V4.124) ملف مراجعة الوزارة: تاريخ الإنشاء + تاريخ المراجعة (من أول ملف مرتبط بهذه الرحلة
+  // إنشاءً/مراجعةً، أو الأقدم لو أكثر من ملف) — يعتمد window._mfTripLinks المحمَّل بالفعل مع شاشة
+  // الرحلات (بلا أي نداء سيرفر إضافي)
+  try {
+    var mfLinks = (typeof window !== 'undefined' && window._mfTripLinks && window._mfTripLinks[t.name]) || [];
+    if (mfLinks.length) {
+      var withCreated = mfLinks.filter(function(x) { return x.createdAt; })
+        .sort(function(a, b) { return String(a.createdAt).localeCompare(String(b.createdAt)); });
+      if (withCreated.length) {
+        var cdDate = String(withCreated[0].createdAt).split(' ')[0];
+        var cd = _tlParseDmy_(cdDate);
+        if (cd) stages.push({ ico: '🏛️', lbl: 'إنشاء ملف الوزارة', plain: 'إنشاء ملف مراجعة الوزارة',
+          sub: _tlDM_(cdDate), start: cd, end: cd, sort: cd.getTime() - 0.5 });
+      }
+      var withReview = mfLinks.filter(function(x) { return x.reviewDate; })
+        .sort(function(a, b) { return String(a.reviewDate).localeCompare(String(b.reviewDate)); });
+      if (withReview.length) {
+        var rd = _tlParseDmy_(withReview[0].reviewDate);
+        if (rd) stages.push({ ico: '📝', lbl: 'مراجعة الوزارة', plain: 'تاريخ مراجعة الوزارة',
+          sub: _tlDM_(withReview[0].reviewDate), start: rd, end: rd, sort: rd.getTime() - 0.3 });
+      }
+    }
+  } catch (e) { /* اختياري — أي عطل لا يمنع بقية خط السير */ }
+
   if (ret) stages.push({ ico: '🛫', lbl: 'مغادرة السعودية', plain: 'مغادرة السعودية', sub: _tlDM_(t.returnDate), start: ret, end: ret, sort: ret.getTime() + 3 });
   stages.sort(function(a, b) { return (a.sort || 0) - (b.sort || 0); });
   return stages;
@@ -10521,23 +10551,31 @@ function _mfTripChip_(t) {
     days = Math.ceil((dep - t0.getTime()) / 86400000);
   }
   var soon = (days !== null && days <= 3 && days >= 0);
+  // 🏛️ (V4.124) ملف واحد فقط: يفتح ويُحدَّد مباشرة كالسابق. أكثر من ملف: يفتح شاشة ملفات الوزارة
+  // مفلترة على ملفات هذه الرحلة فقط (بدل فتحها بلا فلتر) — عبر نفس مربع البحث العام بالشاشة
   var openJs = "if(typeof switchPage==='function'){switchPage('ministry');" +
-    (links.length === 1 ? ("setTimeout(function(){if(typeof mfSelect==='function')mfSelect('" + links[0].id + "');if(typeof mfToggleDetail==='function')mfToggleDetail('" + links[0].id + "');},300);") : "") + "}";
+    (links.length === 1
+      ? ("setTimeout(function(){if(typeof mfSelect==='function')mfSelect('" + links[0].id + "');if(typeof mfToggleDetail==='function')mfToggleDetail('" + links[0].id + "');},300);")
+      : ("setTimeout(function(){var el=document.getElementById('mfSearch');if(el){el.value='" + escapeHtml_(t.name).replace(/'/g, "\\'") + "';if(typeof mfRender==='function')mfRender();}},300);")
+    ) + "}";
   if (!links.length) {
     return '<span class="badge ' + (soon ? 'bg-danger' : 'bg-light text-muted border') + '" style="font-size:10px;"' +
       ' title="' + (soon ? 'لم تُربط بملف مراجعة وزارة وباقٍ ' + days + ' يوم على السفر' : 'غير مرتبطة بملف مراجعة وزارة') + '">' +
       (soon ? '⚠️ بلا ملف وزارة' : 'ملف وزارة') + '</span>';
   }
-  // 🏛️ (V4.107) تُعرض دائماً أرقام كل الملفات المرتبطة — ✓ للمُراجَع و⏳ لغير المُراجَع، بدل إخفاء
-  // الأرقام حتى تكتمل مراجعة الكل
+  // 🏛️ (V4.107) رقم كل الملفات المرتبطة يظهر بتلميح التحويم دوماً — ✓ للمُراجَع و⏳ لغير المُراجَع
+  // 🏛️ (V4.124) لكن نص الشارة نفسها يعرض رقم أول ملف فقط + "+N" لو أكثر من ملف (بدل تكبير حجم
+  // الخلية بكل الأرقام مجتمعة) — نفس فكرة شارة العدد المضغوطة، والتفاصيل الكاملة بالتحويم فقط
   var reviewed = links.filter(function (x) { return x.reviewed; });
   var allReviewed = reviewed.length === links.length;
   var nos = links.map(function (x) { return (x.fileNo || '—') + (x.reviewed ? ' ✓' : ' ⏳'); }).join('، ');
+  var badgeNos = escapeHtml_(links[0].fileNo || '—') + (links[0].reviewed ? ' ✓' : ' ⏳') + (links.length > 1 ? (' +' + (links.length - 1)) : '');
   var cls = allReviewed ? 'bg-success' : (soon ? 'bg-danger' : 'bg-warning text-dark');
-  var tip = allReviewed ? 'كل ملفات المراجعة المرتبطة تمت مراجعتها'
-    : ((soon ? 'باقٍ ' + days + ' يوم على السفر و' : '') + 'بعض ملفات المراجعة المرتبطة لم تُراجع بعد');
+  var tip = (allReviewed ? 'كل ملفات المراجعة المرتبطة تمت مراجعتها'
+    : ((soon ? 'باقٍ ' + days + ' يوم على السفر و' : '') + 'بعض ملفات المراجعة المرتبطة لم تُراجع بعد')) +
+    (links.length > 1 ? (' — أرقام الملفات: ' + nos) : '');
   return '<span class="badge ' + cls + '" style="font-size:10px;cursor:pointer;" title="' + escapeHtml_(tip) + '" onclick="event.stopPropagation();' + openJs + '">' +
-    (soon && !allReviewed ? '⚠️ ' : '') + '🏛️ ' + escapeHtml_(nos) + '</span>';
+    (soon && !allReviewed ? '⚠️ ' : '') + '🏛️ ' + badgeNos + '</span>';
 }
 function _mfLoadTripLinks_() {
   if (window._mfTripLinksLoading) return;
@@ -17478,14 +17516,36 @@ function _canvasLooksBlank_(cv) {
   } catch (e) { return false; }   // لوحة ملوَّثة (canvas tainted) — لا يمكن الفحص، نُكمل
 }
 
+// 📐 (V4.124) قبل أي التقاط: يُلغي مؤقتاً أي "overflow-x:auto/scroll" داخل العنصر الملتقَط (كجداول
+// الإحصائية العريضة بشريط تمرير أفقي) فيتّسع لعرضه الطبيعي الكامل بدل عرضه المرئي المقصوص — بدون
+// هذا كان rootEl.scrollWidth لا يعكس إطلاقاً عرض المحتوى الداخلي المتجاوز (كل تقرير له جدول عريض
+// داخل حاوية تمرير كان يخرج مقصوصاً من اليمين في الصورة الناتجة، مهما كبر مقياس اللقطة). يعيد كل
+// شيء لحالته الأصلية فور انتهاء الالتقاط (نجاحاً أو فشلاً) عبر الدالة المُرجَعة.
+function _expandScrollablesForCapture_(rootEl) {
+  var all = [rootEl].concat(Array.prototype.slice.call(rootEl.querySelectorAll('*')));
+  var saved = [];
+  all.forEach(function (el) {
+    var cs = window.getComputedStyle(el);
+    if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') {
+      saved.push({ el: el, overflowX: el.style.overflowX, width: el.style.width, maxWidth: el.style.maxWidth });
+      el.style.overflowX = 'visible';
+      el.style.width = 'max-content';
+      el.style.maxWidth = 'none';
+    }
+  });
+  return function _restore() {
+    saved.forEach(function (s) { s.el.style.overflowX = s.overflowX; s.el.style.width = s.width; s.el.style.maxWidth = s.maxWidth; });
+  };
+}
 function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
   var H2C = window.__h2cStandalone || window.html2canvas || null;
   if (!rootEl) { _capOverlay_(false); cb(null, 'لا يوجد محتوى لالتقاطه'); return; }
   if (!H2C && !window.html2pdf) { _capOverlay_(false); cb(null, 'مكتبة الالتقاط غير محمَّلة'); return; }
 
+  var _restoreScroll = _expandScrollablesForCapture_(rootEl);
   var cssW = Math.ceil(rootEl.scrollWidth || rootEl.offsetWidth || 794);
   var cssH = Math.ceil(rootEl.scrollHeight || rootEl.offsetHeight || 1000);
-  if (cssW < 2 || cssH < 2) { _capOverlay_(false); cb(null, 'المحتوى بلا أبعاد قابلة للالتقاط'); return; }
+  if (cssW < 2 || cssH < 2) { _restoreScroll(); _capOverlay_(false); cb(null, 'المحتوى بلا أبعاد قابلة للالتقاط'); return; }
 
   var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -17505,7 +17565,7 @@ function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
     { fo: true,  scale: Math.min(scale, 1.5), label: 'إعادة المحاولة بأسلوب بديل…' }
   ];
 
-  function finish(files, err) { _capOverlay_(false); cb(files, err); }
+  function finish(files, err) { _restoreScroll(); _capOverlay_(false); cb(files, err); }
 
   function shoot(i) {
     if (i >= attempts.length) { finish(null, 'خرجت الصورة فارغة بكل الأساليب المتاحة'); return; }
@@ -17771,6 +17831,12 @@ function generateHousing(city) {
   if (!pilgrims.length) { alert('الكشف فارغ'); return; }
 
   window._activeHousingCity = city;
+  // 🔀 (V4.124) تفعيل تبويب المدينة الحالية بصرياً أعلى شاشة التسكين
+  var _tabMk = document.getElementById('housingTabMakkah'), _tabMd = document.getElementById('housingTabMadinah');
+  if (_tabMk && _tabMd) {
+    _tabMk.className = 'btn ' + (city === 'makkah' ? 'btn-light' : 'btn-outline-light');
+    _tabMd.className = 'btn ' + (city === 'madinah' ? 'btn-light' : 'btn-outline-light');
+  }
 
   // فصل الأطفال/الرضّع (يتبعون محارمهم) عن البالغين — بلا فلترة فندق أولاً لحل المحرم من القائمة الكاملة
   var rows = Array.from(document.querySelectorAll('#pilgrimsTableBody .pilgrim-row'));
@@ -34920,7 +34986,7 @@ function mfFormRender() {
     var isAgent = mfStr(s.name) && mfStr(s.name) === mfStr(d.agent);
     h += '<tr><td><input class="form-control form-control-sm" list="mfSupList" value="' + mfEsc(s.name) + '" oninput="mfSupSet(' + i + ',\'name\',this.value)">' +
       (isAgent ? '<div class="mf-hint auto">✅ يطابق الوكيل السعودي ⇒ النوع «استقبال»</div>' : '') + '</td>' +
-      '<td>' + mfSel('', ['مرافق', 'استقبال'], s.type, 'mfSupSet(' + i + ',\'type\',this.value)') + '</td>' +
+      '<td>' + mfSel('', ['مرافق', 'استقبال', 'بدون مشرف'], s.type, 'mfSupSet(' + i + ',\'type\',this.value)') + '</td>' +
       '<td>' + mfSel('', opts, s.directTo, 'mfSupSet(' + i + ',\'directTo\',this.value)') + '</td>' +
       '<td><button class="mf-btn sm dgr" onclick="mfSupDel(' + i + ')">✕</button></td></tr>';
   });
@@ -36144,16 +36210,20 @@ function mfLedgerRender() {
    عند الكتابة فعلياً (ميزة Pro-only) — لذلك أُعيد بناء هذه الدالة بمكتبة ExcelJS (مجانية بالكامل
    وتكتب تنسيقاً حقيقياً) بدلاً من SheetJS، مع نفس منطق الأعمدة والمعادلات تماماً.
    ============================================================ */
+// 🅱️ (V4.124) الخط عريض (bold) في كل خلايا الملف بلا استثناء — رأساً وبياناتٍ وإجماليات — بطلب صريح
 var MF_HDR_COLORS = {
   blue:      { bg: 'FF8EAADB', fg: 'FF000000', bold: true },
-  blueLight: { bg: 'FF8EAADB', fg: 'FF000000', bold: false },
+  blueLight: { bg: 'FF8EAADB', fg: 'FF000000', bold: true },
   green:     { bg: 'FF92D050', fg: 'FF000000', bold: true },
   red:       { bg: 'FFC00000', fg: 'FFFFFFFF', bold: true },
   purple:    { bg: 'FF7030A0', fg: 'FFFFFFFF', bold: true }
 };
 // 🧾 نفس أعمدة الملف الأصلي بالضبط، بنفس الترتيب (A→AH) — كل عمود يرتبط بحقل بياناتنا المقابل له
+// 🎨 (V4.124) dataBg/dataFg: لون تعبئة/خط خلايا البيانات لهذا العمود (وليس فقط رأسه) — طبقاً
+// للملف الأصلي المرفق: أصفر لخلايا الإدخال المهمة (فاتورة/رسوم إدارية/المخالصة/النسبة)، أخضر
+// للإيراد، كريمي لسعر الريال، أحمر بخط أبيض للمصروف، بنفسجي بخط أبيض لهامش الربح
 var MF_EXPORT_COLS = [
-  { k: 'eInvoice',       l: 'فواتير الكترونية',   w: 9.14,  hdr: 'blue' },
+  { k: 'eInvoice',       l: 'فواتير الكترونية',   w: 9.14,  hdr: 'blue', dataBg: 'FFFFFF00' },
   { k: 'seq',            l: 'م',                    w: 5,     hdr: 'blue', formula: 1 },
   { k: 'company',        l: 'الشركة',               w: 10.86, hdr: 'blue', hidden: 1 },
   { k: 'agent',          l: 'الوكيل',               w: 11.43, hdr: 'blue' },
@@ -36165,18 +36235,18 @@ var MF_EXPORT_COLS = [
   { k: 'pilgrims',       l: 'معتمرين',              w: 8.86,  hdr: 'green' },
   { k: 'supCount',       l: 'مشرفين',               w: 8.57,  hdr: 'green' },
   { k: 'progPrice',      l: 'سعر البرنامج',         w: 9.14,  hdr: 'green', money: 1 },
-  { k: 'revenue',        l: 'الايراد',              w: 10,    hdr: 'green', formula: 1, money: 1 },
+  { k: 'revenue',        l: 'الايراد',              w: 10,    hdr: 'green', formula: 1, money: 1, dataBg: 'FF92D050' },
   { k: 'ticket',         l: 'التذكرة',              w: 8.57,  hdr: 'blue', money: 1 },
   { k: 'roomFee',        l: 'رسوم الغرفة',          w: 9.43,  hdr: 'blue', money: 1 },
-  { k: 'adminFee',       l: 'رسوم ادارية للفرد',    w: 12.14, hdr: 'blue', hidden: 1, money: 1 },
-  { k: 'clearanceSAR',   l: 'المخالصة بالريال',     w: 10,    hdr: 'blue', money: 1 },
-  { k: 'fxRate',         l: 'سعر الريال',           w: 8.86,  hdr: 'red', rate: 1 },
+  { k: 'adminFee',       l: 'رسوم ادارية للفرد',    w: 12.14, hdr: 'blue', hidden: 1, money: 1, dataBg: 'FFFFFF00' },
+  { k: 'clearanceSAR',   l: 'المخالصة بالريال',     w: 10,    hdr: 'blue', money: 1, dataBg: 'FFFFFF00' },
+  { k: 'fxRate',         l: 'سعر الريال',           w: 8.86,  hdr: 'red', rate: 1, dataBg: 'FFFCE5CD' },
   { k: 'totalTickets',   l: 'اجمالي التذاكر',       w: 9.43,  hdr: 'red', formula: 1, money: 1 },
   { k: 'totalRoomFee',   l: 'اجمالي\nرسوم الغرفة',  w: 10.14, hdr: 'red', formula: 1, money: 1 },
   { k: 'totalSAR',       l: 'اجمالي الريال',        w: 9.43,  hdr: 'red', formula: 1, money: 1 },
-  { k: 'totalExp',       l: 'المصروف',              w: 10,    hdr: 'red', formula: 1, money: 1 },
-  { k: 'margin',         l: 'هامش الربح',           w: 8.57,  hdr: 'purple', formula: 1, money: 1 },
-  { k: 'pct',            l: 'النسبة',               w: 7.71,  hdr: 'purple', formula: 1, pct: 1 },
+  { k: 'totalExp',       l: 'المصروف',              w: 10,    hdr: 'red', formula: 1, money: 1, dataBg: 'FFC00000', dataFg: 'FFFFFFFF' },
+  { k: 'margin',         l: 'هامش الربح',           w: 8.57,  hdr: 'purple', formula: 1, money: 1, dataBg: 'FF7030A0', dataFg: 'FFFFFFFF' },
+  { k: 'pct',            l: 'النسبة',               w: 7.71,  hdr: 'purple', formula: 1, pct: 1, dataBg: 'FFFFFF00' },
   { k: 'madinahHotel',   l: 'سكن مدينة',            w: 11.86, hdr: 'blue', hidden: 1 },
   { k: 'madinahIn',      l: 'من',                   w: 11.14, hdr: 'blue', hidden: 1, date: 1 },
   { k: 'madinahOut',     l: 'الى',                  w: 11,    hdr: 'blue', hidden: 1, date: 1 },
@@ -36214,8 +36284,25 @@ function _mfXlHeaderStyle(hdr) {
     alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
   };
 }
-function _mfXlDataStyle() {
-  return { font: { name: 'Arial', size: 11 }, border: _mfXlBorder(), alignment: { horizontal: 'center', vertical: 'middle' } };
+// 🎨 (V4.124) col.dataBg/dataFg (اختياري) يُلوِّن خلية هذا الصف لهذا العمود بالذات — مطابقةً
+// لتلوين أعمدة البيانات (لا الرؤوس فقط) في الملف الأصلي المرفق؛ الخط دوماً عريض (bold)
+function _mfXlDataStyle(col) {
+  var s = {
+    font: { name: 'Arial', size: 11, bold: true, color: { argb: (col && col.dataFg) || 'FF000000' } },
+    border: _mfXlBorder(), alignment: { horizontal: 'center', vertical: 'middle' }
+  };
+  if (col && col.dataBg) s.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: col.dataBg } };
+  return s;
+}
+// 🔴 (V4.124) صف الإجمالي الشهري (بعد كل مجموعة صفوف بنفس شهر تاريخ السفر) — أحمر بخط أبيض عريض،
+// تماماً كالملف الأصلي المرفق
+function _mfXlMonthTotalStyle() {
+  return {
+    font: { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } },
+    fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC00000' } },
+    border: _mfXlBorder(),
+    alignment: { horizontal: 'center', vertical: 'middle' }
+  };
 }
 function _mfXlTotalsStyle() {
   return {
@@ -36277,15 +36364,23 @@ async function mfExportExcel() {
 
   ws.getRow(1).height = 15; ws.getRow(R_TITLE).height = 24.75; ws.getRow(R_HEADER).height = 34.5;
 
-  // بيانات الصفوف — القيم المباشرة كما هي، وأعمدة الإجماليات كصيغ إكسيل حقيقية بنفس معادلات
-  // الملف الأصلي حرفاً بحرف (وليست معادلات محرك التسعير الداخلي بالتطبيق)
-  list.forEach(function (f, ri) {
-    var c = f._c || mfCalc(f);
-    var xr = R_DATA0 + ri; // رقم صف إكسيل (1-based)
-    ws.getRow(xr).height = 21.75;
+  // 📅 (V4.124) تجميع الصفوف حسب شهر تاريخ الذهاب (goDate) — بنفس ترتيب mfVisible مع تثبيت كل
+  // شهر مجموعة متتالية (بلا إعادة فرز داخل الشهر نفسه)، تماماً كهيكل الملف الأصلي المرفق
+  var GROUP_KEYS = ['pilgrims', 'supCount', 'revenue', 'totalTickets', 'totalRoomFee', 'totalSAR', 'totalExp', 'margin'];
+  var groups = [], groupOf = {};
+  list.forEach(function (f) {
+    var d = mfDate(f.goDate);
+    var m = String(d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    var key = m ? (m[3] + '-' + m[2]) : '';
+    if (!(key in groupOf)) { groupOf[key] = { rows: [] }; groups.push(groupOf[key]); }
+    groupOf[key].rows.push(f);
+  });
 
-    // 🧮 نحسب القيم يدوياً بنفس سلسلة معادلات الملف الأصلي (لا معادلات _mfCompute_ الأكثر تعقيداً)
-    // كي تُطابق القيمة الظاهرة (قبل أول إعادة حساب لإكسيل) الصيغة المكتوبة تماماً
+  // 🧮 يكتب صف بيانات ملف واحد في رقم صف إكسيل xr — القيم المباشرة كما هي، وأعمدة الإجماليات
+  // كصيغ إكسيل حقيقية بنفس معادلات الملف الأصلي حرفاً بحرف (وليست معادلات محرك التسعير الداخلي)
+  function writeFileRow(f, xr) {
+    var c = f._c || mfCalc(f);
+    ws.getRow(xr).height = 21.75;
     var pilgrims = mfNum(f.pilgrims), sup = mfNum(f.supCount), progPrice = mfNum(f.progPrice);
     var ticket = mfNum(f.ticket), roomFee = mfNum(c.roomFeeEffective), fxRate = mfNum(f.fxRate);
     var clearanceSAR = mfNum(c.clearanceSAR);
@@ -36300,7 +36395,7 @@ async function mfExportExcel() {
 
     MF_EXPORT_COLS.forEach(function (col, ci) {
       var cell = ws.getCell(xr, ci + 1);
-      _mfXlApplyStyle(cell, _mfXlDataStyle());
+      _mfXlApplyStyle(cell, _mfXlDataStyle(col));
       if (col.date) cell.numFmt = dateFmt;
       else if (col.pct) cell.numFmt = pctFmt;
       else if (col.rate) cell.numFmt = rateFmt;
@@ -36344,20 +36439,43 @@ async function mfExportExcel() {
         case 'clientLabel': cell.value = mfStr(f.clientLabel); return;
       }
     });
+  }
+
+  // ✍️ يكتب صفوف كل مجموعة شهرية، ثم صف إجمالي أحمر بخط أبيض أسفلها (SUM على مدى صفوف المجموعة
+  // فقط) — تماماً كالملف الأصلي المرفق؛ يُرجع رقم صف الإجمالي الشهري لاستخدامه بإجمالي الملف الكلي
+  function writeGroup(g, startXr) {
+    var xr = startXr;
+    g.rows.forEach(function (f) { writeFileRow(f, xr); xr++; });
+    var groupStartXr = startXr, groupEndXr = xr - 1, subXr = xr;
+    ws.getRow(subXr).height = 21.75;
+    MF_EXPORT_COLS.forEach(function (col, ci) {
+      var cell = ws.getCell(subXr, ci + 1);
+      _mfXlApplyStyle(cell, _mfXlMonthTotalStyle());
+      if (GROUP_KEYS.indexOf(col.k) >= 0) {
+        cell.numFmt = col.money ? moneyFmt : null;
+        cell.value = { formula: 'SUM(' + L[col.k] + groupStartXr + ':' + L[col.k] + groupEndXr + ')', result: 0 };
+      }
+    });
+    return subXr;
+  }
+
+  var xr = R_DATA0, groupTotalRows = [];
+  groups.forEach(function (g) {
+    var subXr = writeGroup(g, xr);
+    groupTotalRows.push(subXr);
+    xr = subXr + 1;
   });
 
-  // صف الإجماليات أسفل الجدول مباشرة — بصيغ SUBTOTAL(9,...) تماماً كالملف الأصلي (تبقى صحيحة حتى
-  // لو صُفِّيت صفوف داخل إكسيل نفسه لاحقاً، على عكس SUM التي تتجاهل هذا الإخفاء)
-  var lastXr = R_DATA0 + list.length - 1;  // رقم آخر صف بيانات (1-based)
-  var totalsXr = lastXr + 1;               // صف الإجماليات — مباشرة بعد آخر صف بيانات
+  // صف الإجمالي الكلي أسفل الجدول — مجموع صفوف إجماليات الأشهر تحديداً (وليس كل صفوف البيانات
+  // مباشرةً، لأن بينها صفوف إجماليات شهرية) — تماماً كمعادلة الملف الأصلي المرفق
+  var totalsXr = xr;
   ws.getRow(totalsXr).height = 21.75;
-  var SUBTOTAL_KEYS = ['pilgrims', 'supCount', 'revenue', 'totalRoomFee', 'totalSAR', 'totalExp', 'margin'];
   MF_EXPORT_COLS.forEach(function (col, ci) {
     var cell = ws.getCell(totalsXr, ci + 1);
     _mfXlApplyStyle(cell, _mfXlTotalsStyle());
-    if (SUBTOTAL_KEYS.indexOf(col.k) >= 0) {
+    if (GROUP_KEYS.indexOf(col.k) >= 0) {
       cell.numFmt = col.money ? moneyFmt : null;
-      cell.value = { formula: 'SUBTOTAL(9,' + L[col.k] + R_DATA0 + ':' + L[col.k] + lastXr + ')', result: 0 };
+      cell.value = { formula: 'SUM(' + groupTotalRows.map(function (r) { return L[col.k] + r; }).join(',') + ')', result: 0 };
     } else if (col.k === 'pct') {
       cell.numFmt = pctFmt;
       cell.value = { formula: L.margin + totalsXr + '/' + L.revenue + totalsXr, result: 0 };
