@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.124";
+var APP_VERSION = "4.125";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6898,6 +6898,9 @@ var NOTIFICATION_EMAIL = PropertiesService.getScriptProperties().getProperty('NO
  */
 function sendArrivalAlerts() {
 
+  // 🔕 (V4.125) مفتاح التفعيل من قسم التنبيهات بشاشة الإعدادات
+  if (!_notifEnabled_('email_tomorrow')) { Logger.log('email_tomorrow alert disabled from settings'); return { ok: true, sent: 0, disabled: true }; }
+
   try {
 
     // 🚫 (V4.71) نفس فلتر تنبيهات تيليجرام — استبعاد التحركات بشركة نقل أو عدد باصات = «النقل بمعرفة العميل»
@@ -7404,6 +7407,8 @@ function testTgAlertGroups(authToken) {
 }
 
 function sendTelegramArrivalAlerts() {
+  // 🔕 (V4.125) مفتاح التفعيل من قسم التنبيهات بشاشة الإعدادات
+  if (!_notifEnabled_('tg_tomorrow')) { Logger.log('tg_tomorrow alert disabled from settings'); return { sent: 0, disabled: true }; }
   try {
     var movements = _tgAlertableMovements_(getAllMovements());
     var now       = new Date();
@@ -12599,7 +12604,59 @@ function clearClientMergeGroup(authToken, client) {
 var NOTIF_SHEET   = 'Notifications';
 var NOTIF_HEADERS = ['المعرف', 'النوع', 'الرسالة', 'العميل', 'اسم الرحلة', 'الصلاحية المطلوبة', 'مقروء؟', 'أنشئ بواسطة', 'أنشئ في'];
 
+/* ============================================================
+   🔔 (V4.125) مركز التنبيهات بالإعدادات — مفتاح تفعيل/تعطيل مستقل لكل نوع تنبيه
+   يُحفظ في Script Properties (نفس أسلوب إعدادات جروبات تليجرام)، والافتراضي: الكل مُفعَّل،
+   فأي تنبيه لم يُسجَّل له مفتاح بعد يظل يعمل كما كان قبل هذه الميزة تماماً.
+   ============================================================ */
+var NOTIF_TYPES_ = [
+  { key: 'tg_tomorrow',    name: 'تليجرام: تحركات الغد',              desc: 'رسالة تليجرام اليومية بتحركات الغد (وصول/مغادرة) لجروبات التنبيهات' },
+  { key: 'email_tomorrow', name: 'إيميل: تحركات الغد',                desc: 'رسالة البريد اليومية بتحركات الغد لعناوين البريد المسجَّلة بالإعدادات' },
+  { key: 'tg_movements',   name: 'تليجرام: تحركات يوم محدَّد',         desc: 'إرسال تحركات تاريخ بعينه لتليجرام (يدوي أو من البوت)' },
+  { key: 'notif_new_client', name: 'جرس: عميل جديد على رحلة',         desc: 'تنبيه داخل البرنامج عند ظهور عميل جديد بكشف رحلة' },
+  { key: 'notif_acct_change', name: 'جرس: تغيّر تسكين/عدد/فندق',      desc: 'تنبيه داخل البرنامج عند تغيّر أعداد أو تسكين أو فندق عميل له حساب مسجَّل' },
+  { key: 'mf_urgent',      name: 'ملفات الوزارة العاجلة',             desc: 'تنبيه الملفات التي لم تُراجع وباقٍ على سفرها 3 أيام أو أقل' },
+  { key: 'trips_no_notice', name: 'رحلات بلا إشعار خلال 72 ساعة',     desc: 'كارت التنبيه الأحمر بلوحة التحكم للرحلات التي بلا إشعار وسفرها قريب' }
+];
+function _notifCfg_() {
+  var cfg = null;
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty('NOTIF_TOGGLES');
+    if (raw) cfg = JSON.parse(raw);
+  } catch (e) { cfg = null; }
+  return (cfg && typeof cfg === 'object') ? cfg : {};
+}
+// الافتراضي مُفعَّل دائماً — لا يُعطَّل تنبيه إلا لو عُطِّل صراحةً من شاشة الإعدادات
+function _notifEnabled_(key) {
+  var cfg = _notifCfg_();
+  return cfg[key] === false ? false : true;
+}
+function getNotifSettings(authToken) {
+  requireAuth_(authToken);
+  var cfg = _notifCfg_();
+  return {
+    success: true,
+    types: NOTIF_TYPES_.map(function(t) {
+      return { key: t.key, name: t.name, desc: t.desc, enabled: cfg[t.key] === false ? false : true };
+    })
+  };
+}
+function saveNotifSettings(authToken, settings) {
+  var session = requireAdminPermission_(authToken);
+  var clean = {};
+  NOTIF_TYPES_.forEach(function(t) {
+    if (settings && settings[t.key] === false) clean[t.key] = false;
+  });
+  PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(clean));
+  var offList = Object.keys(clean);
+  logChange_(session.username, 'تعديل إعدادات التنبيهات', 'الإعدادات', 'التنبيهات المعطَّلة', '-',
+    offList.length ? offList.join(', ') : 'لا يوجد (الكل مُفعَّل)');
+  return { success: true, disabled: offList };
+}
+
 function _notifPush_(type, message, client, trip, perm, username) {
+  // 🔕 (V4.125) احترام مفتاح التفعيل الخاص بهذا النوع من شاشة الإعدادات
+  if (!_notifEnabled_('notif_' + type)) return;
   try {
     var sh = _accSheet_(NOTIF_SHEET, NOTIF_HEADERS);
     sh.appendRow([_accId_('N'), type, message, client || '', trip || '', perm || '', 'لا', username || '', new Date()]);
@@ -15449,7 +15506,13 @@ function saveTrip(authToken, targetRow, tripData) {
     sheet.getRange(Number(targetRow), minI + 1, 1, slice.length).setValues([slice]);
     logChange_(session.username, "تعديل رحلة", name, "بيانات الرحلة", oldName, name);
     // لو اسم الرحلة اتغيّر، حدّث اسمها في كشف المعتمرين والإشعارات المرتبطة عشان الربط ما ينكسرش
-    if (oldName && oldName !== name) { _renameTripInPilgrims_(oldName, name); _renameTripInBookings_(oldName, name); }
+    // 🔗 (V4.125) الانتشار الكامل: كشف المعتمرين + الإشعارات + كل شيتات الحسابات والتسعير
+    // ومجموعات الدمج وملفات الوزارة وملاحظات التسكين — وإلا تفقد كلها ارتباطها بالرحلة بعد التسمية
+    if (oldName && oldName !== name) {
+      _renameTripInPilgrims_(oldName, name);
+      _renameTripInBookings_(oldName, name);
+      _cascadeTripRename_(oldName, name);
+    }
     _savedRow = Number(targetRow);
   } else {
     sheet.appendRow(rowArr);
@@ -15870,17 +15933,123 @@ function _renameTripInBookings_(oldName, newName) {
 }
 
 // تحديث اسم الرحلة في كل صفوف كشف المعتمرين المرتبطة (عند إعادة تسمية رحلة)
+// 🛡️ (V4.125) كانت تكتب على العمود رقم 9 بفهرس ثابت — لو أُعيد ترتيب أعمدة كشف المعتمرين (أو
+// أُضيف عمود قبله) كانت تكتب اسم الرحلة فوق عمود آخر تماماً فتتلف بيانات الكشف («تتلخبط وتصفّر»).
+// الآن تعتمد خريطة الأعمدة بالاسم مثل بقية النظام.
 function _renameTripInPilgrims_(oldName, newName) {
   var sheet = _getPilgrimsSheet_();
   var lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-  var range = sheet.getRange(2, 9, lastRow - 1, 1);
+  if (lastRow < 2) return 0;
+  var C = _robustColMap_(sheet, PILGRIMS_HEADERS_);
+  var col = C[PILGRIMS_COL_.tripName];
+  if (col === undefined) return 0;
+  var range = sheet.getRange(2, col + 1, lastRow - 1, 1);
   var values = range.getValues();
-  var changed = false;
+  var n = 0;
   for (var i = 0; i < values.length; i++) {
-    if (String(values[i][0] || "").trim() === oldName) { values[i][0] = newName; changed = true; }
+    if (String(values[i][0] || "").trim() === oldName) { values[i][0] = newName; n++; }
   }
-  if (changed) range.setValues(values);
+  if (n) range.setValues(values);
+  return n;
+}
+
+/* ============================================================
+   🔗 (V4.125) انتشار إعادة التسمية عبر كل الشيتات المرتبطة
+   اسم العميل واسم الرحلة مفتاحان رابطان بين شيتات كثيرة (الحسابات، الدفعات، التسعير، مجموعات
+   الدمج، ملفات الوزارة، الإشعارات، كشوف المعتمرين، ملاحظات التسكين). كان التعديل يغيّر الاسم في
+   مكانه فقط، فتفقد كل السجلات المرتبطة ارتباطها فوراً (حسابات العميل «تختفي» حتى يُعاد الاسم
+   القديم، وكشوف الرحلة «تتصفّر»). هذه الدوال تنشر التعديل على كل المواضع دفعةً واحدة.
+   ============================================================ */
+// إعادة تسمية قيمة نصية في عمود بعينه (بالاسم لا بالفهرس) داخل شيت بعينه — تُرجع عدد الصفوف المعدَّلة
+function _renameInSheetCol_(sheetName, headerName, oldVal, newVal) {
+  try {
+    var sh = getSpreadsheet_().getSheetByName(sheetName);
+    if (!sh || sh.getLastRow() < 2) return 0;
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var col = -1;
+    for (var i = 0; i < headers.length; i++) {
+      if (String(headers[i] || '').trim() === headerName) { col = i; break; }
+    }
+    if (col === -1) return 0;
+    var rng = sh.getRange(2, col + 1, sh.getLastRow() - 1, 1);
+    var vals = rng.getValues();
+    var n = 0;
+    for (var r = 0; r < vals.length; r++) {
+      if (String(vals[r][0] || '').trim() === oldVal) { vals[r][0] = newVal; n++; }
+    }
+    if (n) rng.setValues(vals);
+    return n;
+  } catch (e) {
+    Logger.log('_renameInSheetCol_ ' + sheetName + '/' + headerName + ' failed: ' + e);
+    return 0;
+  }
+}
+// إعادة التسمية داخل عمود يحفظ JSON: إما مصفوفة نصوص (["رحلة أ","رحلة ب"]) أو مصفوفة كائنات
+// يُطابَق فيها الحقل field (مثل بنود العميل بملف الوزارة: [{name:"عميل"}])
+function _renameInJsonCol_(sheetName, headerName, oldVal, newVal, field) {
+  try {
+    var sh = getSpreadsheet_().getSheetByName(sheetName);
+    if (!sh || sh.getLastRow() < 2) return 0;
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var col = -1;
+    for (var i = 0; i < headers.length; i++) {
+      if (String(headers[i] || '').trim() === headerName) { col = i; break; }
+    }
+    if (col === -1) return 0;
+    var rng = sh.getRange(2, col + 1, sh.getLastRow() - 1, 1);
+    var vals = rng.getValues();
+    var n = 0;
+    for (var r = 0; r < vals.length; r++) {
+      var raw = String(vals[r][0] || '').trim();
+      if (!raw) continue;
+      var arr;
+      try { arr = JSON.parse(raw); } catch (e2) { continue; }
+      if (!Array.isArray(arr)) continue;
+      var hit = false;
+      for (var k = 0; k < arr.length; k++) {
+        if (field) {
+          if (arr[k] && String(arr[k][field] || '').trim() === oldVal) { arr[k][field] = newVal; hit = true; }
+        } else if (String(arr[k] || '').trim() === oldVal) { arr[k] = newVal; hit = true; }
+      }
+      if (hit) { vals[r][0] = JSON.stringify(arr); n++; }
+    }
+    if (n) rng.setValues(vals);
+    return n;
+  } catch (e) {
+    Logger.log('_renameInJsonCol_ ' + sheetName + '/' + headerName + ' failed: ' + e);
+    return 0;
+  }
+}
+// كل مواضع اسم العميل خارج دليل العملاء نفسه وكشف المعتمرين (هما يُعالجان بمكانهما)
+function _cascadeClientRename_(oldName, newName) {
+  var n = 0;
+  n += _renameInSheetCol_(ACC_ITEMS_SHEET, 'العميل', oldName, newName);          // بنود الحساب
+  n += _renameInSheetCol_(ACC_PAY_SHEET, 'العميل', oldName, newName);            // الدفعات
+  n += _renameInSheetCol_(ACC_META_SHEET, 'العميل', oldName, newName);           // نمط الحساب واللقطات
+  n += _renameInSheetCol_(ACC_CLIENT_PRICES_SHEET, 'العميل', oldName, newName);  // تسعير العميل
+  n += _renameInSheetCol_(ACC_MERGE_SHEET, 'العميل', oldName, newName);          // مجموعات دمج الرحلات
+  n += _renameInSheetCol_('Bookings', 'العميل', oldName, newName);               // إشعارات الوصول
+  n += _renameInSheetCol_(MF_SHEET, 'العميل', oldName, newName);                 // ملفات الوزارة (لو الاسم مفرد)
+  n += _renameInJsonCol_(MF_SHEET, 'بنود العميل (JSON)', oldName, newName, 'name');
+  try { clearAllCache(); } catch (e) {}
+  try { _mfClearBootstrapCache_(); } catch (e) {}
+  return n;
+}
+// كل مواضع اسم الرحلة خارج شيت الرحلات نفسه (كشف المعتمرين والإشعارات لهما دالتاهما أعلاه)
+function _cascadeTripRename_(oldName, newName) {
+  var n = 0;
+  n += _renameInSheetCol_(ACC_ITEMS_SHEET, 'اسم الرحلة', oldName, newName);
+  n += _renameInSheetCol_(ACC_PAY_SHEET, 'اسم الرحلة', oldName, newName);
+  n += _renameInSheetCol_(ACC_META_SHEET, 'اسم الرحلة', oldName, newName);
+  n += _renameInSheetCol_(ACC_TRIP_PRICES_SHEET, 'اسم الرحلة', oldName, newName);
+  n += _renameInSheetCol_(MF_SHEET, 'الرحلة المرتبطة', oldName, newName);
+  // ملاحظات التسكين: مفتاحها مبنيّ من أسماء الرحلات — نُصلح عمود الرحلات للحالة المفردة
+  n += _renameInSheetCol_(HOUSING_NOTES_SHEET_, 'الرحلات', oldName, newName);
+  // مجموعات الدمج تحفظ الرحلات كمصفوفة نصوص JSON
+  n += _renameInJsonCol_(ACC_MERGE_SHEET, 'الرحلات (JSON)', oldName, newName, null);
+  try { clearAllCache(); } catch (e) {}
+  try { _mfClearBootstrapCache_(); } catch (e) {}
+  return n;
 }
 
 // يرجع كشف معتمرين رحلة معينة (بالمسلسل الأصلي)
@@ -15957,6 +16126,7 @@ function saveTripDraft(authToken, draft) {
       if (rowIdx !== -1) {
         _renameTripInPilgrims_(origName, name);
         _renameTripInBookings_(origName, name);
+        _cascadeTripRename_(origName, name);   // 🔗 (V4.125) نفس الانتشار الكامل لمسار حفظ المسودة
       }
     }
   }
@@ -16178,6 +16348,10 @@ function updateClientRecord(authToken, row, newName, mobile, notes) {
       }
       if (changed) pSheet.getRange(2, 1, pData.length, width).setValues(pData);
     }
+    // 🔗 (V4.125) الانتشار الكامل لبقية الشيتات: بنود الحساب والدفعات ونمط الحساب وتسعير العميل
+    // ومجموعات الدمج والإشعارات وملفات الوزارة — كانت حسابات العميل «تختفي» بعد التسمية لأن
+    // ارتباطها كان لا يزال بالاسم القديم وحده
+    renamedCount += _cascadeClientRename_(oldName, newName);
   }
 
   return { success: true, renamedCount: renamedCount };
@@ -20394,16 +20568,19 @@ function getMinistryTripLinks(authToken) {
       createdAt: f.createdAt,
       selected: Array.isArray(f.selected) ? f.selected : [] });
   });
-  files.forEach(function(f) {
-    if (_mfStr_(f.reviewDate)) return;
-    var g = _mfMs_(_mfStr_(f.goDate));
-    if (isNaN(g)) return;
-    var days = Math.ceil((g - todayMs) / 86400000);
-    if (days <= 3 && days >= 0) {
-      alerts.push({ id: f.id, tripName: f.tripName, client: f.clientLabel, goDate: f.goDate,
-        days: days, linked: !!_mfStr_(f.tripName), fileNo: f.fileNo });
-    }
-  });
+  // 🔕 (V4.125) تنبيه الملفات العاجلة يُعطَّل كلياً من قسم التنبيهات بشاشة الإعدادات
+  if (_notifEnabled_('mf_urgent')) {
+    files.forEach(function(f) {
+      if (_mfStr_(f.reviewDate)) return;
+      var g = _mfMs_(_mfStr_(f.goDate));
+      if (isNaN(g)) return;
+      var days = Math.ceil((g - todayMs) / 86400000);
+      if (days <= 3 && days >= 0) {
+        alerts.push({ id: f.id, tripName: f.tripName, client: f.clientLabel, goDate: f.goDate,
+          days: days, linked: !!_mfStr_(f.tripName), fileNo: f.fileNo });
+      }
+    });
+  }
   // 🔗 (V4.115) الربط الثلاثي: الرحلة ⇄ رقم الإشعار ⇄ رقم ملف الوزارة.
   // نُرجع لكل رحلة رقم إشعارها المرتبط ورقمها المرجعي، فتستطيع كل الشاشات (الرحلات، الإشعارات،
   // السجل العام، البحث العام، وملفات الوزارة) عرض الثلاثة معاً أياً كانت نقطة البداية.
@@ -20750,6 +20927,8 @@ function _tgMoveParseShortOrFullDate_(s) {
 
 // يعرض كل التحركات المسجَّلة في تاريخ بعينه — نفس تنسيق أزرار «تحركات اليوم/الغد» (غير مُصفّاة)
 function sendTelegramMovementsByDate_(dateStr, chatId) {
+  // 🔕 (V4.125) مفتاح التفعيل من قسم التنبيهات بشاشة الإعدادات
+  if (!_notifEnabled_('tg_movements')) return { sent: 0, disabled: true };
   var movements = getAllMovements();
   var filtered = movements.filter(function (m) { return m.movementDate && String(m.movementDate).trim() === dateStr; });
 

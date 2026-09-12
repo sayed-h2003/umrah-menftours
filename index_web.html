@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.124 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.125 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.124)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.125)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.124</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.125</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2415,6 +2415,28 @@ input[type="date"]:not(:focus):not(:valid) {
             </thead>
             <tbody id="companiesTableBody"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔔 (V4.125) مركز التنبيهات — مفتاح تفعيل/تعطيل مستقل لكل نوع تنبيه -->
+  <div class="card shadow-sm border-0 mb-3" id="svcCard-notifs">
+    <div class="card-body p-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h5 class="fw-bold mb-1" style="cursor:pointer;" onclick="toggleNotifsPanel()">🔔 التنبيهات</h5>
+          <p class="text-muted small mb-0">فعّل أو عطّل كل تنبيه على حدة — تليجرام، البريد، وجرس التنبيهات داخل البرنامج.</p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleNotifsPanel()" title="إظهار/إخفاء مفاتيح التنبيهات">
+          <i class="fas fa-bell" id="notifsPanelIcon"></i> إدارة التنبيهات
+        </button>
+      </div>
+      <div id="notifsPanelBody" class="d-none mt-3">
+        <div id="notifsListBox"><div class="text-muted small">⏳ جاري التحميل…</div></div>
+        <div class="mt-3 d-flex gap-2 align-items-center">
+          <button type="button" class="btn btn-primary btn-sm" onclick="saveNotifToggles(this)">💾 حفظ إعدادات التنبيهات</button>
+          <span class="text-muted" style="font-size:11px;">التعطيل يوقف إرسال/إظهار هذا التنبيه لكل المستخدمين.</span>
         </div>
       </div>
     </div>
@@ -6000,10 +6022,12 @@ function handleLogin(e) {
         'success: ' + (res && res.success) + ' | توكن: ' + (res && res.token ? 'موجود ✅' : 'مفقود ❌'));
       if (res && res.success) {
         // --- التعديل الجوهري: حفظ بيانات المستخدم في الذاكرة ---
-window.currentUser = res; 
+window.currentUser = res;
 window.authToken = res.token || null;
 try { sessionStorage.setItem('authToken', res.token || ''); } catch(e) {}
 try { localStorage.setItem('smartManagerUser', JSON.stringify(res)); } catch(e) {}
+// 🔔 (V4.125) مفاتيح تفعيل التنبيهات — تُحمَّل مبكراً فتحترمها التنبيهات المحسوبة بالواجهة
+try { if (typeof loadNotifSettings === 'function') loadNotifSettings(); } catch(e) {}
 
         var navUser =
   document.getElementById(
@@ -6398,7 +6422,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.124";
+var CLIENT_APP_VERSION = "4.125";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7666,6 +7690,80 @@ function toggleCompaniesPanel() {
   panel.classList.toggle('d-none');
   if (icon) icon.className = isHidden ? 'fas fa-chevron-up' : 'fas fa-table';
   if (isHidden) loadCompaniesTable();
+}
+
+/* ============================================================
+   🔔 (V4.125) مركز التنبيهات بشاشة الإعدادات — مفتاح تبديل لكل تنبيه
+   الحالة تُحفظ بالسيرفر (Script Properties) وتُقرأ مرة واحدة بعد الدخول، ويحتفظ بها
+   window._notifCfg لتستخدمها التنبيهات المحسوبة بالواجهة (مثل كارت رحلات بلا إشعار).
+   الافتراضي دائماً "مُفعَّل" — فأي تنبيه لم يُحمَّل بعد يعمل كما كان قبل هذه الميزة.
+   ============================================================ */
+window._notifCfg = null;
+function _notifOn_(key) {
+  if (!window._notifCfg) return true;
+  return window._notifCfg[key] === false ? false : true;
+}
+function loadNotifSettings(cb) {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (res && res.success) {
+        var map = {};
+        (res.types || []).forEach(function (t) { map[t.key] = t.enabled; });
+        window._notifCfg = map;
+        window._notifTypes = res.types || [];
+      }
+      if (cb) cb();
+    })
+    .withFailureHandler(function () { if (cb) cb(); })
+    .getNotifSettings(window.authToken);
+}
+function toggleNotifsPanel() {
+  var panel = document.getElementById('notifsPanelBody');
+  var icon = document.getElementById('notifsPanelIcon');
+  var isHidden = panel.classList.contains('d-none');
+  panel.classList.toggle('d-none');
+  if (icon) icon.className = isHidden ? 'fas fa-chevron-up' : 'fas fa-bell';
+  if (isHidden) loadNotifSettings(_renderNotifToggles_);
+}
+function _renderNotifToggles_() {
+  var box = document.getElementById('notifsListBox');
+  if (!box) return;
+  var types = window._notifTypes || [];
+  if (!types.length) { box.innerHTML = '<div class="alert alert-warning small mb-0">تعذّر تحميل قائمة التنبيهات</div>'; return; }
+  box.innerHTML = types.map(function (t) {
+    return '<div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 bg-light">' +
+      '<div style="min-width:0;">' +
+        '<div class="fw-bold" style="font-size:13px;">' + escapeHtml_(t.name) + '</div>' +
+        '<div class="text-muted" style="font-size:11px;">' + escapeHtml_(t.desc) + '</div>' +
+      '</div>' +
+      '<div class="form-check form-switch mb-0 ms-2" style="flex-shrink:0;">' +
+        '<input class="form-check-input notif-toggle" type="checkbox" role="switch"' +
+        ' data-key="' + escapeHtml_(t.key) + '"' + (t.enabled ? ' checked' : '') +
+        ' style="width:42px;height:22px;cursor:pointer;">' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+function saveNotifToggles(btn) {
+  var settings = {};
+  document.querySelectorAll('#notifsListBox .notif-toggle').forEach(function (el) {
+    settings[el.dataset.key] = !!el.checked;
+  });
+  var orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…'; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+      if (!res || !res.success) { showToast('❌ تعذّر حفظ إعدادات التنبيهات', true); return; }
+      window._notifCfg = settings;
+      var offN = (res.disabled || []).length;
+      showToast(offN ? ('✅ حُفظت الإعدادات — معطَّل حالياً ' + offN + ' تنبيه') : '✅ حُفظت الإعدادات — كل التنبيهات مُفعَّلة');
+    })
+    .withFailureHandler(function (e) {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+      showToast('❌ ' + ((e && e.message) || e), true);
+    })
+    .saveNotifSettings(window.authToken, settings);
 }
 
 /* ============================================================
@@ -10675,7 +10773,8 @@ function _tripsRenderList_(trips) {
         var hoursLeft = (d.getTime() - now) / 3600000;
         return hoursLeft > -24 && hoursLeft <= 72 && !(t.readiness && t.readiness.booking);
       });
-      window._urgentTrips72 = urgent72;
+      // 🔕 (V4.125) مفتاح التفعيل من قسم التنبيهات بشاشة الإعدادات
+      window._urgentTrips72 = _notifOn_('trips_no_notice') ? urgent72 : [];
       _paintUrgentCard();
       // 🏛️ (V4.111) تنبيه ملفات مراجعة الوزارة: رحلات باقٍ لها 3 أيام أو أقل على السفر
       // وليس لها ملف مراجعة أصلاً أو لها ملف لم يُراجع بعد — بانر ظاهر أعلى قائمة الرحلات.
