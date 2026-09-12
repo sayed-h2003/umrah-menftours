@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.126 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.127 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.126)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.127)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.126</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.127</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6424,7 +6424,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.126";
+var CLIENT_APP_VERSION = "4.127";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7758,6 +7758,10 @@ function saveNotifToggles(btn) {
       if (btn) { btn.disabled = false; btn.innerHTML = orig; }
       if (!res || !res.success) { showToast('❌ تعذّر حفظ إعدادات التنبيهات', true); return; }
       window._notifCfg = settings;
+      // 🔄 (V4.127) التنبيهات المحسوبة بالواجهة تُعاد لحظياً بلا إعادة تحميل الصفحة
+      try { if (typeof _tripsRerender_ === 'function' && (window.tripsCache || []).length) _tripsRerender_(); } catch (e) {}
+      try { if (typeof _renderRegistryExpiryAlert === 'function') _renderRegistryExpiryAlert(); } catch (e) {}
+      try { if (typeof _paintUrgentCard === 'function') _paintUrgentCard(); } catch (e) {}
       var offN = (res.disabled || []).length;
       showToast(offN ? ('✅ حُفظت الإعدادات — معطَّل حالياً ' + offN + ' تنبيه') : '✅ حُفظت الإعدادات — كل التنبيهات مُفعَّلة');
     })
@@ -9516,6 +9520,8 @@ function _clearAllRegFilters() {
 function _renderRegistryExpiryAlert() {
   var box = document.getElementById('regExpiryAlert');
   if (!box) return;
+  // 🔕 (V4.127) مفتاح «جوازات منتهية أو قاربت الانتهاء» من قسم التنبيهات بشاشة الإعدادات
+  if (!_notifOn_('passport_expiry')) { box.innerHTML = ''; return; }
   var today = new Date(); today.setHours(0, 0, 0, 0);
   var soonLimit = new Date(today.getTime() + 180 * 86400000);
   var expired = 0, soon = 0;
@@ -10693,7 +10699,9 @@ function _mfTripChip_(t) {
     var t0 = new Date(); t0.setHours(0, 0, 0, 0);
     days = Math.ceil((dep - t0.getTime()) / 86400000);
   }
-  var soon = (days !== null && days <= 3 && days >= 0);
+  // 🔕 (V4.127) التحذير الأحمر «بلا ملف وزارة» يتبع مفتاح «رحلات بلا ملف مراجعة وزارة» بالإعدادات —
+  // الشارة نفسها تبقى ظاهرة دائماً (فهي معلومة وليست تنبيهاً)، لكن بلا تصعيد أحمر عند تعطيل التنبيه
+  var soon = (days !== null && days <= 3 && days >= 0) && _notifOn_('mf_trips_no_file');
   // 🏛️ (V4.124) ملف واحد فقط: يفتح ويُحدَّد مباشرة كالسابق. أكثر من ملف: يفتح شاشة ملفات الوزارة
   // مفلترة على ملفات هذه الرحلة فقط (بدل فتحها بلا فلتر) — عبر نفس مربع البحث العام بالشاشة
   var openJs = "if(typeof switchPage==='function'){switchPage('ministry');" +
@@ -10744,6 +10752,8 @@ function _mfPaintTripsAlert_(trips, parseD) {
   var area = document.getElementById('tripsListArea');
   if (!area || !area.parentNode) return;
   var box = document.getElementById('mfTripsAlertBox');
+  // 🔕 (V4.127) مفتاح «رحلات بلا ملف مراجعة وزارة» من قسم التنبيهات بشاشة الإعدادات
+  if (!_notifOn_('mf_trips_no_file')) { if (box) box.innerHTML = ''; return; }
   if (!box) {
     box = document.createElement('div');
     box.id = 'mfTripsAlertBox';
@@ -10809,7 +10819,8 @@ function _tripsRenderList_(trips) {
       // 🚨 (V3.86) وسم الرحلات العاجلة — يغذّي رقاقة «عاجل 48س» النابضة بشريط التصفية
       // (حلّت محل بانر التنبيه الأحمر الكبير بطلب صريح — توفير المساحة العمودية للجدول)
       trips.forEach(function(t) { t._urgent48 = false; });
-      urgent.forEach(function(t) { t._urgent48 = true; });
+      // 🔕 (V4.127) مفتاح رقاقة «عاجل 48 ساعة» من قسم التنبيهات بشاشة الإعدادات
+      if (_notifOn_('trips_urgent48')) urgent.forEach(function(t) { t._urgent48 = true; });
 
       // ⏰ نفس الفكرة بحد 72 ساعة — لتحديث كارت التنبيه بالشريط العلوي
       var urgent72 = trips.filter(function(t) {
@@ -32561,7 +32572,9 @@ function _paintUrgentCard() {
   var card = document.getElementById('urgentTripsCard');
   var countEl = document.getElementById('urgentTripsCount');
   if (!card || !countEl) return;
-  var list = window._urgentTrips72 || [];
+  // 🔕 (V4.127) مفتاح «رحلات بلا إشعار خلال 72 ساعة» — يُفحص هنا أيضاً (لا عند الحساب فقط) حتى
+  // يختفي الكارت فوراً عند التعطيل من الإعدادات بلا انتظار إعادة تحميل قائمة الرحلات
+  var list = _notifOn_('trips_no_notice') ? (window._urgentTrips72 || []) : [];
   countEl.textContent = list.length;
   card.classList.toggle('d-none', !list.length);
   card.setAttribute('title', list.length
