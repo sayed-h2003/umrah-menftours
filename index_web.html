@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.125 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.126 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.125)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.126)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.125</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.126</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4903,6 +4903,8 @@ input[type="date"]:not(:focus):not(:valid) {
         <div class="mf-fld"><label>الشركة المصرية</label><input id="mfF_company" autocomplete="off"></div>
         <div class="mf-fld"><label>الوكيل السعودي</label><input id="mfF_agent" autocomplete="off"></div>
         <div class="mf-fld"><label>العميل</label><input id="mfF_clientLabel" autocomplete="off"></div>
+        <!-- 🧳 (V4.126) فلتر باسم الرحلة أو جزء منه -->
+        <div class="mf-fld"><label>الرحلة</label><input id="mfF_tripName" autocomplete="off" placeholder="اسم الرحلة أو جزء منه"></div>
         <div class="mf-fld"><label>المشرف</label><input id="mfF_supName" autocomplete="off"></div>
         <div class="mf-fld"><label>فندق المدينة</label><input id="mfF_madinahHotel" autocomplete="off"></div>
         <div class="mf-fld"><label>فندق مكة</label><input id="mfF_makkahHotel" autocomplete="off"></div>
@@ -6422,7 +6424,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.125";
+var CLIENT_APP_VERSION = "4.126";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -10236,20 +10238,59 @@ function _clearTripsFieldFilter() {
 // 📸 (V4.110) حفظ/مشاركة إحصائية عملاء الرحلة كصورة HD — التقاط مباشر لنفس العنصر المعروض حياً
 // (نفس مسار _mhExportImage_ المُثبَت: بلا iframe، مباشرة على DOM الصفحة الحالية)
 function _tripClientStatsExportImage_(btn) {
-  var root = document.getElementById('tripClientStatsArea');
-  if (!root || !root.innerHTML.trim()) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
-  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳...';
+  // 🖼️ (V4.126) نفس مسار مستند الطباعة المستقل بدل التقاط جسم المودال الحيّ (الذي كان يُدخِل أزرار
+  // الشاشة داخل الصورة ويقصّ الجدول العريض داخل حاوية التمرير)
+  if (!document.getElementById('tripClientStatsTable')) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
   var name = (document.getElementById('tripClientStatsTripName') || {}).textContent || 'رحلة';
-  _captureElementAsPngFiles_(root, 'إحصائية العملاء — ' + name, function(files, err) {
-    btn.disabled = false; btn.innerHTML = orig;
-    if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
-    _shareOrSaveImageFiles_(files);
-  });
+  exportReportAsImage(function () { return _buildStatsTablePrintDoc_('tripClientStatsTable', 'إحصائية العملاء'); },
+    'إحصائية العملاء — ' + name, btn);
 }
 
 // 📊 إحصائية عملاء رحلة مستقلة — تُفتَح من زر 📊 بجوار كل رحلة في شاشة قائمة الرحلات مباشرة،
 // بدون الحاجة لفتح كشف المعتمرين كاملاً أولاً. تجلب معتمري الرحلة من السيرفر وتبني نفس جدول
 // الإحصائية المستخدم داخل الكشف (_buildClientStatsHtml_) بنفس التفاعلية (تظليل + تنقل بالأسهم)
+/* 🏨 (V4.126) فتح تسكين رحلة (مكة/المدينة) مباشرةً من شاشة الرحلات — بلا فتح كشف المعتمرين،
+   تماماً مثل زر إحصائية العملاء. نُجهِّز نفس الحالة التي يعتمد عليها محرك التسكين (اسم الرحلة،
+   بيانات الرحلة، قوائم الفنادق، وصفوف المعتمرين داخل جدول الكشف المخفي) ثم نفتح نافذة التسكين
+   بتبويبَي مكة والمدينة كما هي. */
+function openTripHousingDirect(tripName, city, btn) {
+  if (!tripName) return;
+  city = city || 'makkah';
+  var orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+  var restore = function () { if (btn) { btn.disabled = false; btn.innerHTML = orig; } };
+
+  window.currentTripName = tripName;
+  var t = (window.tripsCache || []).find(function (x) { return x.name === tripName; }) || null;
+  window._currentTripData = t;
+  window._tripHotelsMadinah = [];
+  window._tripHotelsMakkah = [];
+
+  google.script.run
+    .withSuccessHandler(function (res) {
+      window._tripHotelsMadinah = (res && res.madinah) || [];
+      window._tripHotelsMakkah = (res && res.makkah) || [];
+      _loadClientSelectNames_(function () {
+        _loadTripPilgrimsRows(tripName, t, function (ok, err) {
+          restore();
+          if (!ok) { showToast('❌ تعذّر تحميل معتمري الرحلة' + (err ? (': ' + (err.message || err)) : ''), true); return; }
+          _applyDefaultHotelsToAllRows();
+          generateHousing(city);
+        });
+      });
+    })
+    .withFailureHandler(function () {
+      _loadClientSelectNames_(function () {
+        _loadTripPilgrimsRows(tripName, t, function (ok) {
+          restore();
+          if (!ok) { showToast('❌ تعذّر تحميل معتمري الرحلة', true); return; }
+          generateHousing(city);
+        });
+      });
+    })
+    .getTripHotelsList(window.authToken, tripName);
+}
+
 function openTripClientStats(tripName) {
   // 🛡️ نستخدم متغيّراً مخصصاً (_statsTripData) بدل الكتابة فوق window._currentTripData المشترك —
   // ده بيتجنّب إفساد حالة شاشة كشف المعتمرين المفتوحة (لو كانت مفتوحة لرحلة تانية في الخلفية)،
@@ -10370,27 +10411,31 @@ function _tripTimelineStages_(t) {
     }
   } catch (e) { /* التحركات الإضافية اختيارية — أي عطل فيها لا يمنع بقية الخط */ }
 
-  // 🏛️ (V4.124) ملف مراجعة الوزارة: تاريخ الإنشاء + تاريخ المراجعة (من أول ملف مرتبط بهذه الرحلة
-  // إنشاءً/مراجعةً، أو الأقدم لو أكثر من ملف) — يعتمد window._mfTripLinks المحمَّل بالفعل مع شاشة
-  // الرحلات (بلا أي نداء سيرفر إضافي)
+  // 🏛️ (V4.126) ملف مراجعة الوزارة داخل خط السير: تاريخا الإنشاء والمراجعة يخصّان **أول ملف
+  // مراجعة لهذه الرحلة** تحديداً (وليس أقدم تاريخ إنشاء مستقلاً عن أقدم تاريخ مراجعة) — «أول ملف»
+  // = أصغر مسلسل، وإن تساوى/غاب فالأقدم إنشاءً بمقارنة تاريخ حقيقية.
+  // 🛠️ كان الفرز بـ localeCompare على نص «dd/MM/yyyy HH:mm» فيرتّب باليوم قبل السنة (05/01/2027
+  // تسبق 10/09/2025) فيظهر ملف خاطئ تماماً — الآن المقارنة بقيمة زمنية حقيقية.
   try {
     var mfLinks = (typeof window !== 'undefined' && window._mfTripLinks && window._mfTripLinks[t.name]) || [];
     if (mfLinks.length) {
-      var withCreated = mfLinks.filter(function(x) { return x.createdAt; })
-        .sort(function(a, b) { return String(a.createdAt).localeCompare(String(b.createdAt)); });
-      if (withCreated.length) {
-        var cdDate = String(withCreated[0].createdAt).split(' ')[0];
-        var cd = _tlParseDmy_(cdDate);
-        if (cd) stages.push({ ico: '🏛️', lbl: 'إنشاء ملف الوزارة', plain: 'إنشاء ملف مراجعة الوزارة',
-          sub: _tlDM_(cdDate), start: cd, end: cd, sort: cd.getTime() - 0.5 });
-      }
-      var withReview = mfLinks.filter(function(x) { return x.reviewDate; })
-        .sort(function(a, b) { return String(a.reviewDate).localeCompare(String(b.reviewDate)); });
-      if (withReview.length) {
-        var rd = _tlParseDmy_(withReview[0].reviewDate);
-        if (rd) stages.push({ ico: '📝', lbl: 'مراجعة الوزارة', plain: 'تاريخ مراجعة الوزارة',
-          sub: _tlDM_(withReview[0].reviewDate), start: rd, end: rd, sort: rd.getTime() - 0.3 });
-      }
+      var _createdMs = function(x) {
+        var d = _tlParseDmy_(String(x && x.createdAt || '').split(' ')[0]);
+        return d ? d.getTime() : Infinity;
+      };
+      var first = mfLinks.slice().sort(function(a, b) {
+        var sa = Number(a.seq), sb = Number(b.seq);
+        if (!isNaN(sa) && !isNaN(sb) && sa !== sb) return sa - sb;
+        return _createdMs(a) - _createdMs(b);
+      })[0];
+      var fileTag = first && first.fileNo ? ' (ملف ' + escapeHtml_(first.fileNo) + ')' : '';
+      var cdDate = String(first && first.createdAt || '').split(' ')[0];
+      var cd = _tlParseDmy_(cdDate);
+      if (cd) stages.push({ ico: '🏛️', lbl: 'إنشاء ملف الوزارة', plain: 'إنشاء أول ملف مراجعة وزارة' + fileTag,
+        sub: _tlDM_(cdDate), start: cd, end: cd, sort: cd.getTime() - 0.5 });
+      var rd = _tlParseDmy_(String(first && first.reviewDate || ''));
+      if (rd) stages.push({ ico: '📝', lbl: 'مراجعة الوزارة', plain: 'تاريخ مراجعة أول ملف وزارة' + fileTag,
+        sub: _tlDM_(first.reviewDate), start: rd, end: rd, sort: rd.getTime() - 0.3 });
     }
   } catch (e) { /* اختياري — أي عطل لا يمنع بقية خط السير */ }
 
@@ -10942,6 +10987,8 @@ function _tripsRenderList_(trips) {
         var actionsHtml =
           (hasPermission('trips.edit') ? '<button class="btn btn-outline-primary btn-sm py-0" title="تعديل بيانات الرحلة (النموذج الكامل)" onclick="openTripInNotificationForm(\'' + jsName + '\')">✏️</button>' : '') +
           '<button class="btn btn-outline-success btn-sm py-0" title="إحصائية العملاء لهذه الرحلة" onclick="openTripClientStats(\'' + jsName + '\')">📊</button>' +
+          // 🏨 (V4.126) فتح تسكين مكة/المدينة مباشرةً بلا فتح كشف المعتمرين (تبويبا المدينتين داخل النافذة)
+          '<button class="btn btn-outline-warning btn-sm py-0" title="تسكين هذه الرحلة (مكة والمدينة) — بلا فتح الكشف" onclick="openTripHousingDirect(\'' + jsName + '\', \'makkah\', this)">🏨</button>' +
           (_tpPricCan_('edit') ? '<button class="btn ' + (t.pricingApplied ? 'btn-success' : 'btn-warning') + ' btn-sm py-0" title="' + (t.pricingApplied ? '💵 الرحلة مسعَّرة — الحسابات تتزامن تلقائياً (اضغط للتعديل)' : 'تسعير مستويات برامج الرحلة') + '" onclick="openTripPricingModal(\'' + jsName + '\')">💵</button>' : '') +
           '<button class="btn btn-outline-secondary btn-sm py-0" title="سجل تغييرات هذه الرحلة" onclick="openTripChangeLog(\'' + jsName + '\')">📜</button>' +
           // 🔄 زر "تحديث الإشعار" اليدوي محذوف بطلب صريح — المزامنة رحلة→إشعار تلقائية عند كل حفظ
@@ -13305,7 +13352,7 @@ function _onRegClientInputBlur(inp) {
   inp.dataset.prevValue = val;
 }
 
-function _loadTripPilgrimsRows(tripName, t) {
+function _loadTripPilgrimsRows(tripName, t, done) {
   google.script.run
     .withSuccessHandler(function(pilgrims) {
       pilgrims = pilgrims || [];
@@ -13347,10 +13394,12 @@ function _loadTripPilgrimsRows(tripName, t) {
       // 🔗 (V4.23) زر مقارنة بيانات الإشعار — يظهر فقط لو الرحلة مرتبطة بإشعار وله صلاحية تعديل الرحلات
       var _bkB = document.getElementById('tripBkCompareBtn');
       if (_bkB) _bkB.classList.toggle('d-none', !(hasPermission('trips.edit') && t && t.linkedBookingId));
+      if (typeof done === 'function') done(true);
     })
     .withFailureHandler(function(err) {
       if (_handleSessErr_(err)) return;
       document.getElementById('pilgrimsTableBody').innerHTML = '<tr><td colspan="9" class="text-danger py-3">❌ ' + (err.message || err) + '</td></tr>';
+      if (typeof done === 'function') done(false, err);
     })
     .getTripPilgrims(window.authToken, tripName);
 }
@@ -14702,22 +14751,32 @@ function _wireStatsTableInteractivity_(tableId) {
 // 📸 (V4.123) تصدير أي جدول إحصائي (بمُعرِّف tableId) كصورة HD — يلتقط فقط صندوق الإحصائية
 // (.stats-block المحيط بالجدول والعنوان وأزراره) لا الشاشة كاملة، أياً كان مكان ظهوره
 function _statsTableExportImage_(tableId, btn) {
-  var table = document.getElementById(tableId);
-  if (!table) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
-  var root = table.closest('.stats-block') || table;
-  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳...';
-  _captureElementAsPngFiles_(root, 'إحصائية العملاء', function(files, err) {
-    btn.disabled = false; btn.innerHTML = orig;
-    if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
-    _shareOrSaveImageFiles_(files);
-  });
+  // 🖼️ (V4.126) كان الالتقاط يتم من عنصر الشاشة الحيّ (.stats-block) فيخرج بأزرار الشاشة ومفاتيح
+  // العرض داخل الصورة، ومقصوصاً من الجانب لأن الجدول يعيش داخل حاوية تمرير أفقي. الآن نلتقط نفس
+  // مستند الطباعة المستقل (ترويسة + جدول نظيف بعرضه الكامل) — نفس مسار بقية تقارير البرنامج.
+  if (!document.getElementById(tableId)) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
+  exportReportAsImage(function () { return _buildStatsTablePrintDoc_(tableId, 'إحصائية العملاء'); },
+    'إحصائية العملاء', btn);
 }
 
 // 🖨️ طباعة احترافية لأي جدول إحصائي بمُعرِّف tableId — نسخة مستقلة بتصميم مطبعي أنظف من العرض
 // الحي على الشاشة (بدون شارات ملوّنة زخرفية، صفوف بتناوب لوني هادئ، ترويسة رسمية بشعار الشركة)
 function _printStatsTable_(tableId, title) {
+  var html = _buildStatsTablePrintDoc_(tableId, title);
+  if (!html) { alert('لا يوجد جدول للطباعة'); return; }
+  var w = window.open('', '_blank');
+  if (!w) { alert('اسمح بالنوافذ المنبثقة للطباعة'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.onload = function() { setTimeout(function() { w.focus(); w.print(); }, 400); };
+}
+
+/* 📄 (V4.126) بانى مستند الإحصائية المستقل — مُستخرَج من دالة الطباعة ليُعاد استخدامه أيضاً في
+   «صورة HD»: نفس ترويسة التقرير ونفس الجدول النظيف، بلا أزرار الشاشة ولا مفاتيح العرض، وبلا أي
+   حاوية تمرير أفقي (فلا تخرج الصورة مقصوصة كما كان يحدث عند التقاط عنصر الشاشة الحيّ). */
+function _buildStatsTablePrintDoc_(tableId, title) {
   var table = document.getElementById(tableId);
-  if (!table) { alert('لا يوجد جدول للطباعة'); return; }
+  if (!table) return null;
 
   var trip = window._statsTripData || window._currentTripData || null;
   var tripLabel = trip ? trip.name : (window._statsTripName || '');
@@ -14740,7 +14799,6 @@ function _printStatsTable_(tableId, title) {
   // لو الصفوف كتير جداً كمان، نضيّق الخط أكتر بدل ما نخلي الجدول يفيض لصفحة تانية
   if (rowCount > 22 && colCount > 8) fontSize = '8px';
 
-  var w = window.open('', '_blank');
   var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>' + escapeHtml_(title) + '</title>' +
     '<style>' +
     "body{font-family:'Cairo',Tahoma,sans-serif;margin:0;padding:16px;color:#1e293b;}" +
@@ -14775,9 +14833,7 @@ function _printStatsTable_(tableId, title) {
     })() +
     '<div class="p-footer">مُولَّد تلقائياً من منظومة منف للسياحة الدولية</div>' +
     '</body></html>';
-  w.document.write(html);
-  w.document.close();
-  w.onload = function() { setTimeout(function() { w.focus(); w.print(); }, 400); };
+  return html;
 }
 
 
@@ -17692,6 +17748,9 @@ function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
         if (!full || !full.width || !full.height) { shoot(i + 1); return; }
         if (_canvasLooksBlank_(full)) { shoot(i + 1); return; }   // لوحة بيضاء ⇒ جرّب الأسلوب التالي
         _capOverlay_(true, 'جاري حفظ الصورة…');
+        // 📋 (V4.126) نحتفظ باللوحة الكاملة قبل التقطيع لنسخة الحافظة — فتُنسَخ الصورة بنفس دقة
+        // الالتقاط الأصلية كاملةً (وحتى للتقارير الطويلة التي تُقسَّم لعدة ملفات، كانت تُتخطّى تماماً)
+        window.__lastCaptureCanvas = full;
         _sliceCanvasToPngFiles_(full, fileNameBase, finish);
       }).catch(function (err) {
         if (i + 1 < attempts.length) { shoot(i + 1); return; }
@@ -17816,9 +17875,31 @@ function _saveImageFilesLocally_(files) {
 // مدعوم فلا يؤثر إطلاقاً على مسار الحفظ/المشاركة المعتاد الذي يستمر بجانبه دوماً
 function _copyImageToClipboard_(files) {
   try {
-    if (!files || files.length !== 1) return Promise.resolve(false);
     if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') return Promise.resolve(false);
-    return navigator.clipboard.write([new ClipboardItem({ 'image/png': files[0] })]).then(function () { return true; }).catch(function () { return false; });
+    // 📋 (V4.126) المصدر المفضَّل = اللوحة الكاملة قبل التقطيع (نفس دقة الالتقاط تماماً، وبلا فقد
+    // أي جزء من التقارير الطويلة). نُنتج منها PNG بلا ضغط فاقد مباشرةً عبر toBlob.
+    // ملاحظة: بعض المتصفحات/أنظمة التشغيل تُحوِّل صورة الحافظة داخلياً لصيغة نقطية أقل جودة عند
+    // اللصق في برامج معيّنة — وهذا سلوك خارج نطاق الصفحة؛ ما نتحكم فيه هنا هو تسليم أعلى دقة ممكنة.
+    var canvas = window.__lastCaptureCanvas;
+    var blobP = null;
+    if (canvas && canvas.width && canvas.height && canvas.toBlob) {
+      blobP = new Promise(function (resolve) {
+        try { canvas.toBlob(function (b) { resolve(b || null); }, 'image/png'); }
+        catch (e) { resolve(null); }
+      });
+    }
+    if (!blobP) {
+      if (!files || files.length !== 1) return Promise.resolve(false);
+      blobP = Promise.resolve(files[0]);
+    }
+    return blobP.then(function (blob) {
+      if (!blob) {
+        if (!files || files.length !== 1) return false;
+        blob = files[0];
+      }
+      return navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        .then(function () { return true; }).catch(function () { return false; });
+    }).catch(function () { return false; });
   } catch (e) { return Promise.resolve(false); }
 }
 // 📤 نقطة الاستدعاء الموحّدة لأي زر "📸 صورة HD": ينسخ للحافظة تلقائياً بالتوازي، ثم يشارك مباشرة
@@ -33592,7 +33673,8 @@ function mfMatch(f) {
     if (hay.indexOf(q) < 0 && !mfPilgrimMatches(f, q)) return false;
   }
   var pairs = [['mfF_fileNo', 'fileNo'], ['mfF_company', 'company'], ['mfF_agent', 'agent'],
-    ['mfF_clientLabel', 'clientLabel'], ['mfF_madinahHotel', 'madinahHotel'], ['mfF_makkahHotel', 'makkahHotel']];
+    ['mfF_clientLabel', 'clientLabel'], ['mfF_tripName', 'tripName'],
+    ['mfF_madinahHotel', 'madinahHotel'], ['mfF_makkahHotel', 'makkahHotel']];
   for (var i = 0; i < pairs.length; i++) {
     var v = mfFV(pairs[i][0]);
     if (v && String(f[pairs[i][1]] || '').toLowerCase().indexOf(v.toLowerCase()) < 0) return false;
@@ -33644,7 +33726,7 @@ function mfVisible() {
 function mfToggleFacet(btn) { btn.classList.toggle('on'); MF.facets[btn.dataset.q] = btn.classList.contains('on'); mfRender(); }
 function mfSort(k) { if (MF.sort.key === k) MF.sort.dir *= -1; else { MF.sort.key = k; MF.sort.dir = 1; } mfRender(); }
 function mfClearFilters() {
-  ['mfSearch', 'mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_clientLabel', 'mfF_supName',
+  ['mfSearch', 'mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_clientLabel', 'mfF_tripName', 'mfF_supName',
     'mfF_madinahHotel', 'mfF_makkahHotel', 'mfF_goFrom', 'mfF_retTo'].forEach(function (id) {
       var e = document.getElementById(id); if (e) e.value = '';
     });
@@ -33804,6 +33886,7 @@ function mfRenderApplied(list) {
   var chips = [];
   var q = mfFV('mfSearch'); if (q) chips.push({ l: 'بحث: ' + q, f: function () { document.getElementById('mfSearch').value = ''; } });
   [['mfF_fileNo', 'رقم الملف'], ['mfF_company', 'الشركة'], ['mfF_agent', 'الوكيل'], ['mfF_clientLabel', 'العميل'],
+   ['mfF_tripName', 'الرحلة'],
    ['mfF_supName', 'المشرف'], ['mfF_madinahHotel', 'فندق المدينة'], ['mfF_makkahHotel', 'فندق مكة'],
    ['mfF_goFrom', 'سفر من'], ['mfF_retTo', 'عودة حتى']].forEach(function (p) {
     var v = mfFV(p[0]);
@@ -33953,16 +34036,23 @@ function mfToggleApproved(id) {
   // 🔒 (V4.113) اعتماد الملف يدوياً صلاحية فرعية منفصلة — الاعتماد التلقائي بسبب رقم القيد يبقى مسموحاً دائماً
   if (!f.approved && !mfStr(f.ref) && !MF.can.approve) { _showPopup('لا تملك صلاحية اعتماد ملفات مراجعة الوزارة', 'error'); return; }
   var next = !f.approved;
+  // ⚡ (V4.126) تبديل فوري بالواجهة (تفاؤلي) + مسار سيرفر خفيف يكتب خلية «معتمد» وحدها — بدل
+  // إرسال الملف كاملاً وإعادة حساب الأرصدة والقواعد في كل ضغطة (كان سبب البطء الشديد للاعتماد).
+  // لو فشل النداء نُرجع الحالة كما كانت ونُظهر الخطأ.
+  f.approved = next;
+  mfRender();
   google.script.run
     .withSuccessHandler(function (res) {
-      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
-      f.approved = next;
-      if (res.balances) MF.balances = res.balances;
-      if (res.file) { res.file._c = mfCalc(res.file); Object.keys(res.file).forEach(function (k) { f[k] = res.file[k]; }); }
-      mfRender();
+      if (!res || !res.success) {
+        f.approved = !next; mfRender();
+        _showPopup((res && res.error) || 'تعذّر الحفظ', 'error');
+      }
     })
-    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
-    .saveMinistryFile(window.authToken, Object.assign({}, mfPayload(f), { approved: next }));
+    .withFailureHandler(function (e) {
+      f.approved = !next; mfRender();
+      _showPopup(e && e.message ? e.message : e, 'error');
+    })
+    .setMinistryFileApproved(window.authToken, id, next);
 }
 function mfPayload(f) {
   return {
@@ -34096,28 +34186,65 @@ function mfInlineEdit(id) {
   MF.editRowId = id;
   _mfInlineDraft = JSON.parse(JSON.stringify(mfPayload(mfGet(id))));
   mfRender();
+  _mfInlineBar_(id);
   setTimeout(function () {
     var row = document.querySelector('#section-ministry tr.mf-editrow[data-id="' + id + '"]');
     var first = row && row.querySelector('input,select');
     if (first) first.focus();
   }, 30);
 }
-function mfInlineCancel() { MF.editRowId = null; _mfInlineDraft = null; mfRender(); }
+function mfInlineCancel() { MF.editRowId = null; _mfInlineDraft = null; _mfInlineBar_(null); mfRender(); }
+/* 🛠️ (V4.126) شريط عائم ثابت لأزرار «حفظ/إلغاء» أثناء التعديل السريع — عمود الإجراءات قد يكون
+   خارج مدى التمرير الأفقي للجدول العريض (أو مخفياً)، فكان المستخدم لا يجد زر الحفظ أصلاً.
+   هذا الشريط يظهر دائماً أعلى الشاشة طوال التعديل ويختفي فور الحفظ أو الإلغاء. */
+function _mfInlineBar_(id) {
+  var old = document.getElementById('mfInlineBar');
+  if (old) old.remove();
+  if (!id) return;
+  var bar = document.createElement('div');
+  bar.id = 'mfInlineBar';
+  bar.dir = 'rtl';
+  bar.style.cssText = 'position:fixed;z-index:2147483000;top:14px;left:50%;transform:translateX(-50%);' +
+    'background:#0f4c4c;color:#fff;border-radius:999px;padding:6px 10px;display:flex;align-items:center;' +
+    'gap:8px;box-shadow:0 10px 28px rgba(0,0,0,.3);font-size:12px;font-weight:700;';
+  bar.innerHTML = '<span>✏️ تعديل سريع للصف</span>' +
+    '<button type="button" class="btn btn-success btn-sm py-0 px-2" onclick="mfInlineSave(\'' + id + '\')">✓ حفظ (Enter)</button>' +
+    '<button type="button" class="btn btn-light btn-sm py-0 px-2" onclick="mfInlineCancel()">✕ إلغاء (Esc)</button>';
+  document.body.appendChild(bar);
+}
 function mfInlineSet(k, v, isNum) { if (_mfInlineDraft) _mfInlineDraft[k] = isNum ? mfNum(v) : mfStr(v); }
 function mfInlineKey(e, id) {
   if (e.key === 'Enter') { e.preventDefault(); mfInlineSave(id); }
   else if (e.key === 'Escape') { e.preventDefault(); mfInlineCancel(); }
 }
+var _mfInlineSaving = false;
 function mfInlineSave(id) {
   var d = _mfInlineDraft; if (!d) return;
+  // 🛠️ (V4.126) كان الضغط على Enter يرسل الحفظ بلا أي مؤشر انتظار، ومع بطء الحفظ كان يبدو
+  // «لا يحدث شيء / الشاشة واقفة»، كما كان تكرار Enter يرسل عدة نداءات متزامنة على نفس الصف.
+  // الآن: قفل ضد الإرسال المكرر + مؤشر انتظار مرئي على أزرار الصف.
+  if (_mfInlineSaving) return;
+  _mfInlineSaving = true;
+  var row = document.querySelector('#section-ministry tr.mf-editrow[data-id="' + id + '"]');
+  var okBtn = row && row.querySelector('.mf-ok');
+  var okOrig = okBtn ? okBtn.innerHTML : '';
+  if (okBtn) { okBtn.disabled = true; okBtn.innerHTML = '⏳'; }
+  var bar = document.getElementById('mfInlineBar');
+  if (bar) bar.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+  var done = function () {
+    _mfInlineSaving = false;
+    if (okBtn) { okBtn.disabled = false; okBtn.innerHTML = okOrig; }
+    if (bar) bar.querySelectorAll('button').forEach(function (b) { b.disabled = false; });
+  };
   google.script.run
     .withSuccessHandler(function (res) {
+      done();
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
-      MF.editRowId = null; _mfInlineDraft = null;
+      MF.editRowId = null; _mfInlineDraft = null; _mfInlineBar_(null);
       _showPopup('تم اعتماد التعديل', 'success');
       mfApplySaved(res, { silent: true });
     })
-    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .withFailureHandler(function (e) { done(); _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveMinistryFile(window.authToken, d);
 }
 function mfInlineDateBtn(ev, id, k) {
@@ -34129,7 +34256,9 @@ function mfBuildEditRow(f) {
   MF_COLS.forEach(function (c, ci) {
     var cls = c.txt ? 'mf-txt' : 'mf-num', st = '';
     if (c.pin) { cls += ' mf-fz'; if (!MF_COLS[ci + 1] || !MF_COLS[ci + 1].pin) cls += ' mf-edge'; st = ' style="right:' + mfFrozenOffset(ci) + 'px"'; }
-    if (MF.hidden[c.k]) cls += ' mf-hide';
+    // 🛠️ (V4.126) عمود الإجراءات يبقى ظاهراً دائماً أثناء التعديل السريع حتى لو كان مخفياً من
+    // تخصيص الأعمدة — وإلا يختفي زرّا الحفظ/الإلغاء تماماً فلا يجد المستخدم ما يضغطه
+    if (MF.hidden[c.k] && c.k !== 'act') cls += ' mf-hide';
     var inner;
     if (c.k === 'act') {
       inner = '<button class="mf-ok" title="اعتماد التعديل (Enter)" onclick="event.stopPropagation();mfInlineSave(\'' + f.id + '\')">✓</button>' +
@@ -34402,6 +34531,8 @@ function mfTaList(id) {
   if (id === 'mfF_fileNo') return mfUniq(function (f) { return f.fileNo; });
   if (id === 'mfF_clientLabel') return mfUniq(function (f) { return f.clientLabel; })
     .concat(MF.clients || []).concat((MF.trips || []).map(function (t) { return t.name; }));
+  if (id === 'mfF_tripName') return mfUniq(function (f) { return f.tripName; })
+    .concat((MF.trips || []).map(function (t) { return t.name; }));
   if (id === 'mfF_madinahHotel') return mfUniq(function (f) { return f.madinahHotel; });
   if (id === 'mfF_makkahHotel') return mfUniq(function (f) { return f.makkahHotel; });
   return [];
@@ -34412,7 +34543,7 @@ function mfUniq(fn) {
   return out;
 }
 function mfAttachTypeaheads() {
-  ['mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_clientLabel', 'mfF_supName', 'mfF_madinahHotel', 'mfF_makkahHotel']
+  ['mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_clientLabel', 'mfF_tripName', 'mfF_supName', 'mfF_madinahHotel', 'mfF_makkahHotel']
     .forEach(function (id) { mfBindTA(id, function () { return mfTaList(id); }, function () { mfRender(); }); });
   var s = document.getElementById('mfSearch');
   if (s && !s._mfBound) { s._mfBound = true; s.addEventListener('input', function () { mfRender(); }); }
@@ -35262,29 +35393,75 @@ function mfPullTripPilgrims(quiet) {
     })
     .getTripPilgrims(window.authToken, MF._draft.tripName);
 }
+/* 👥 (V4.126) قائمة اختيار معتمري الرحلة داخل ملف الوزارة:
+   • كل معتمر يظهر باسمه وجواز سفره **واسم عميله** (كما طُلب صراحةً).
+   • الأسماء مجمَّعة تحت عميلها، ولكل عميل زر «تحديد الكل» الخاص به بجانب الاختيار المفرد لكل اسم.
+   • 👶 الرضيع يظهر ويُختار ضمن الأسماء لكنه **لا يُحتسب ضمن الأعداد إطلاقاً** في ملفات الوزارة.
+   • عند الاعتماد تُبنى بنود العميل تلقائياً: سطر لكل عميل بعدد جوازاته المختارة (بلا الرضّع). */
+function mfPickIsInfant(p) { return String((p && p.type) || '').indexOf('رضيع') >= 0; }
+function mfPickClientOf(p) { return mfStr((p && (p.client || p.clientName)) || '') || '(بدون عميل)'; }
+function mfPickGroups() {
+  var P = MF._tripPick, groups = [], byName = {};
+  (P.list || []).forEach(function (p, i) {
+    var c = mfPickClientOf(p);
+    if (!byName[c]) { byName[c] = { client: c, rows: [] }; groups.push(byName[c]); }
+    byName[c].rows.push({ p: p, i: i, k: mfPickKey(p, i) });
+  });
+  return groups;
+}
 function mfTripPickRender() {
   var box = document.getElementById('mfTripPickBox'); if (!box) return;
   var P = MF._tripPick; if (!P) return;
-  var n = Object.keys(P.sel).filter(function (k) { return P.sel[k]; }).length;
+  var selKeys = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
   var dim = Object.keys(P.used).length;
+  // العدد المُحتسَب = المختار بلا الرضّع
+  var infantKeys = {};
+  (P.list || []).forEach(function (p, i) { if (mfPickIsInfant(p)) infantKeys[mfPickKey(p, i)] = true; });
+  var counted = selKeys.filter(function (k) { return !infantKeys[k]; }).length;
+  var infSel = selKeys.length - counted;
+
   var h = '<div class="mf-note info"><span>👥</span><div style="flex:1;">' +
-    'معتمرو الرحلة: <b>' + P.list.length + '</b> · المُختار الآن: <b>' + n + '</b>' +
-    (dim ? (' · <b style="color:#c2670a;">' + dim + '</b> منهم مسجَّلون في ملف آخر لنفس الرحلة (يظهرون باهتين — الاختيار اختياري ولا يمنع)') : '') +
+    'معتمرو الرحلة: <b>' + P.list.length + '</b> · المُختار: <b>' + selKeys.length + '</b>' +
+    ' · المُحتسَب بالأعداد: <b>' + counted + '</b>' +
+    (infSel ? (' · <b style="color:#0f766e;">' + infSel + ' رضيع</b> بالأسماء فقط بلا احتساب') : '') +
+    (dim ? (' · <b style="color:#c2670a;">' + dim + '</b> مسجَّلون في ملف آخر لنفس الرحلة (باهتون — الاختيار اختياري)') : '') +
     '</div><button class="mf-btn sm" onclick="mfTripPickAll(true)">تحديد الكل</button>' +
     '<button class="mf-btn sm" onclick="mfTripPickAll(false)">إفراغ</button>' +
     '<button class="mf-btn sm pri" onclick="mfTripPickApply()">✅ اعتماد الأسماء</button></div>';
-  h += '<div class="mf-pk">';
-  P.list.forEach(function (p, i) {
-    var k = mfPickKey(p, i), on = !!P.sel[k], u = P.used[k];
-    h += '<label class="mf-pkc' + (u ? ' used' : '') + (on ? ' on' : '') + '" title="' + (u ? ('مسجَّل في ملف ' + mfEsc(u)) : '') + '">' +
-      '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="mfTripPickOne(\'' + mfEsc(k).replace(/'/g, "\\'") + '\',this.checked)">' +
-      '<span style="flex:1;">' + mfEsc(p.name || p.pilgrimName || ('معتمر ' + (i + 1))) +
-      '<div style="font-size:9.5px;color:#94a3b8;" class="mf-latin">' + mfEsc(p.passportNo || p.passport || '') +
-      (u ? (' — ملف ' + mfEsc(u)) : '') + '</div></span></label>';
+
+  mfPickGroups().forEach(function (g) {
+    var onCount = g.rows.filter(function (r) { return P.sel[r.k]; }).length;
+    var gCounted = g.rows.filter(function (r) { return P.sel[r.k] && !mfPickIsInfant(r.p); }).length;
+    var allOn = onCount === g.rows.length;
+    h += '<div class="mf-pkg" style="margin-top:6px;">' +
+      '<div style="display:flex;align-items:center;gap:6px;padding:3px 6px;background:#f1f5f9;border-radius:6px;">' +
+        '<b style="font-size:11px;color:#0f4c4c;flex:1;">🧾 ' + mfEsc(g.client) + '</b>' +
+        '<span style="font-size:10px;color:#64748b;">' + onCount + '/' + g.rows.length + ' مختار · ' + gCounted + ' محتسَب</span>' +
+        '<button class="mf-btn sm" onclick="mfTripPickClient(\'' + mfEsc(g.client).replace(/'/g, "\\'") + '\',' + (allOn ? 'false' : 'true') + ')">' +
+          (allOn ? 'إلغاء تحديد العميل' : 'تحديد كل معتمري العميل') + '</button>' +
+      '</div><div class="mf-pk">';
+    g.rows.forEach(function (r) {
+      var on = !!P.sel[r.k], u = P.used[r.k], inf = mfPickIsInfant(r.p);
+      h += '<label class="mf-pkc' + (u ? ' used' : '') + (on ? ' on' : '') + '" title="' + (u ? ('مسجَّل في ملف ' + mfEsc(u)) : '') + '">' +
+        '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="mfTripPickOne(\'' + mfEsc(r.k).replace(/'/g, "\\'") + '\',this.checked)">' +
+        '<span style="flex:1;">' + mfEsc(r.p.name || r.p.pilgrimName || ('معتمر ' + (r.i + 1))) +
+        (inf ? ' <span class="mf-badge off" style="font-size:8.5px;">👶 رضيع — بلا احتساب</span>' : '') +
+        '<div style="font-size:9.5px;color:#94a3b8;" class="mf-latin">' + mfEsc(r.p.passportNo || r.p.passport || '') + '</div>' +
+        '<div style="font-size:9.5px;color:#0f766e;">🧾 ' + mfEsc(g.client) + (u ? (' — ملف ' + mfEsc(u)) : '') + '</div>' +
+        '</span></label>';
+    });
+    h += '</div></div>';
   });
-  box.innerHTML = h + '</div>';
+  box.innerHTML = h;
 }
 function mfTripPickOne(k, on) { MF._tripPick.sel[k] = on; mfTripPickRender(); }
+function mfTripPickClient(client, on) {
+  var P = MF._tripPick; if (!P) return;
+  (P.list || []).forEach(function (p, i) {
+    if (mfPickClientOf(p) === mfStr(client)) P.sel[mfPickKey(p, i)] = !!on;
+  });
+  mfTripPickRender();
+}
 function mfTripPickAll(on) {
   var P = MF._tripPick;
   P.list.forEach(function (p, i) { P.sel[mfPickKey(p, i)] = on; });
@@ -35294,13 +35471,33 @@ function mfTripPickApply() {
   var P = MF._tripPick, d = MF._draft;
   var keys = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
   d.selected = keys;
-  // البند المرتبط بالرحلة يأخذ العدد المُختار (يبقى قابلاً للتعديل يدوياً)
-  d.breakdown = d.breakdown || [];
-  var row = d.breakdown.filter(function (b) { return mfStr(b.name) === mfStr(d.tripName); })[0];
-  if (!row) { row = { name: d.tripName, count: 0, sups: 0, note: 'من الرحلة', isTrip: true }; d.breakdown.push(row); }
-  row.count = keys.length;
+
+  // 🧾 بنود العميل تُبنى تلقائياً: سطر لكل عميل بعدد جوازاته المختارة — بلا الرضّع (أسماء فقط)
+  var perClient = {}, order = [], infants = 0;
+  (P.list || []).forEach(function (p, i) {
+    var k = mfPickKey(p, i);
+    if (!P.sel[k]) return;
+    if (mfPickIsInfant(p)) { infants++; return; }
+    var c = mfPickClientOf(p);
+    if (!(c in perClient)) { perClient[c] = 0; order.push(c); }
+    perClient[c]++;
+  });
+
+  // نحافظ على أي بنود يدوية لا تخصّ عملاء الرحلة (مثل بنود أضافها المستخدم بنفسه)
+  var manual = (d.breakdown || []).filter(function (b) {
+    return !b.isTrip && order.indexOf(mfStr(b.name)) < 0 && mfStr(b.name) !== mfStr(d.tripName);
+  });
+  var built = order.map(function (c) {
+    var prev = (d.breakdown || []).filter(function (b) { return mfStr(b.name) === c; })[0] || {};
+    return { name: c, count: perClient[c], sups: mfNum(prev.sups), note: 'من الرحلة: ' + mfStr(d.tripName), isTrip: true };
+  });
+  d.breakdown = built.concat(manual);
+  if (!mfStr(d.clientLabel) || built.length) d.clientLabel = order.join(' + ');
+
   mfSyncCounts();
-  _showPopup('تم اعتماد ' + keys.length + ' معتمراً من الرحلة', 'success');
+  _showPopup('تم اعتماد ' + keys.length + ' اسماً — المُحتسَب ' + (keys.length - infants) +
+    (infants ? (' (استُبعد ' + infants + ' رضيع من الأعداد)') : '') +
+    ' على ' + order.length + ' عميل', 'success');
   mfFormRender();
 }
 

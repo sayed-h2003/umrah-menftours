@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.125";
+var APP_VERSION = "4.126";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -20503,12 +20503,64 @@ function saveMinistryFile(authToken, data) {
     if (entries.length) logChangesBatch_(session.username, entries);
     _mfClearBootstrapCache_();
 
-    var allAfter = _mfReadAll_();
+    // ⚡ (V4.126) كان هنا قراءة كاملة ثانية للشيت (_mfReadAll_) بعد الكتابة مباشرةً — أي أن كل حفظ
+    // (وكل ضغطة «اعتماد») كان يقرأ شيت الملفات مرتين كاملتين، وهو السبب الأساسي لبطء الحفظ
+    // والاعتماد. النسخة المقروءة أول الدالة كافية: نحدّثها في الذاكرة بالسجل المحفوظ بدل إعادة
+    // القراءة — نفس النتيجة تماماً بنصف زمن القراءة.
+    var allAfter = all.slice();
+    var _ix = -1;
+    for (var _ai = 0; _ai < allAfter.length; _ai++) { if (allAfter[_ai].id === f.id) { _ix = _ai; break; } }
+    if (_ix >= 0) allAfter[_ix] = f; else allAfter.push(f);
+
     var balances = _mfBalances_(allAfter, _mfReadReceipts_());
     f.calc = _mfCompute_(f);
     f.flags = _mfRules_(f, allAfter, balances);
     return { success: true, file: f, balances: balances };
   } finally { lock.releaseLock(); }
+}
+
+/* ⚡ (V4.126) اعتماد/إلغاء اعتماد ملف مراجعة — مسار خفيف مخصَّص بدل تمرير الملف كاملاً عبر
+   saveMinistryFile (الذي يقرأ الشيت ويعيد حساب الأرصدة والقواعد لكل الملفات في كل ضغطة).
+   هنا نكتب خلية «معتمد» وحدها فقط، فتتغيّر الحالة فوراً بدل الانتظار الطويل الذي اشتكى منه
+   المستخدم. نفس فحص الصلاحية الفرعية بالضبط: الاعتماد اليدوي يحتاج ministry.approve، أما الملف
+   الذي له رقم قيد أو كان معتمداً بالفعل فيُعامَل كما في saveMinistryFile تماماً. */
+function setMinistryFileApproved(authToken, id, approved) {
+  var session = _mfPerm_(authToken, 'edit');
+  id = _mfStr_(id);
+  approved = !!approved;
+  var sh = _accSheet_(MF_SHEET, MF_HEADERS);
+  var last = sh.getLastRow();
+  if (last < 2) return { success: false, error: 'الملف غير موجود' };
+
+  var ids = sh.getRange(2, 1, last - 1, 1).getValues();
+  var row = -1;
+  for (var i = 0; i < ids.length; i++) {
+    if (_mfStr_(ids[i][0]) === id) { row = i + 2; break; }
+  }
+  if (row === -1) return { success: false, error: 'الملف غير موجود' };
+
+  var iApproved = MF_HEADERS.indexOf('معتمد');
+  var iRef = MF_HEADERS.indexOf('القيد');
+  var iUpdBy = MF_HEADERS.indexOf('عُدّل بواسطة');
+  var iUpdAt = MF_HEADERS.indexOf('عُدّل في');
+  if (iApproved === -1) return { success: false, error: 'عمود الاعتماد غير موجود' };
+
+  var rowVals = sh.getRange(row, 1, 1, MF_HEADERS.length).getValues()[0];
+  var wasApproved = (_mfStr_(rowVals[iApproved]) === 'نعم');   // نفس تمثيل _mfRowToObj_ بالضبط
+  var ref = iRef === -1 ? '' : _mfStr_(rowVals[iRef]);
+  if (approved && !ref && !wasApproved && !_sessionHasPerm_(session, 'ministry.approve')) {
+    return { success: false, error: 'لا تملك صلاحية اعتماد ملفات مراجعة الوزارة' };
+  }
+  if (wasApproved === approved) return { success: true, approved: approved, unchanged: true };
+
+  sh.getRange(row, iApproved + 1).setValue(approved ? 'نعم' : 'لا');
+  if (iUpdBy !== -1) sh.getRange(row, iUpdBy + 1).setValue(session.username);
+  if (iUpdAt !== -1) sh.getRange(row, iUpdAt + 1).setValue(_mfStamp_());
+  _mfClearBootstrapCache_();
+  logChange_(session.username, approved ? 'اعتماد ملف مراجعة' : 'إلغاء اعتماد ملف مراجعة',
+    _mfStr_(rowVals[MF_HEADERS.indexOf('رقم الملف')]) || id, 'معتمد',
+    wasApproved ? 'نعم' : 'لا', approved ? 'نعم' : 'لا');
+  return { success: true, approved: approved };
 }
 
 function deleteMinistryFile(authToken, id) {
