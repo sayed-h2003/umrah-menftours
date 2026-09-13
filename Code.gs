@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.127";
+var APP_VERSION = "4.128";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -15220,12 +15220,14 @@ function getTripAccountsSummary(authToken, tripName) {
       if (qty) txt = it.desc + ' ' + qty + ' ' + curTxt;
       else if (it.price) txt = it.desc + ' ' + it.price + ' ' + curTxt;
       else txt = it.desc + ' ' + _accNum_(it.value) + ' ' + curTxt;
-      // 🩹 (V4.105 / V4.123) لا تُكرَّر كلمة "خصم" لو كان بيان البند نفسه مكتوباً أصلاً بادئاً بها
-      // (مثال: بند وصفه "خصم عرض توحيد" كان يظهر "خصم خصم عرض توحيد" بيان الحساب) — الفحص يتجاهل
-      // أي مسافات أو علامات اتجاه غير مرئية (RLM/LRM/ALM) أو شرطات بادئة قد تُفلت من \s العادية
-      // وتُبطل التطابق فيتكرر "خصم" رغم أن البند يبدأ به فعلاً
+      // 🩹 (V4.105 / V4.123 / V4.128) لا تُكرَّر كلمة "خصم" لو كان بيان البند نفسه بادئاً بها
+      // (مثال: بند وصفه "خصم فرق تذكرة" كان يظهر "خصم خصم فرق تذكرة" ببيان الحساب).
+      // 🐞 سبب استمرار العطل رغم محاولتَي الإصلاح السابقتين: كان الفحص /^خصم\b/ يستخدم حدّ الكلمة
+      // \b، وهو في جافاسكربت معرَّف على [A-Za-z0-9_] فقط — فلا يوجد "حدّ كلمة" بعد حرف عربي إطلاقاً،
+      // وبالتالي كان الشرط يفشل دائماً مع أي نص عربي فتُضاف "خصم" مرة ثانية في كل مرة.
+      // البديل: مطابقة بادئة صريحة (الكلمة وحدها، أو متبوعة بمسافة/علامة ترقيم).
       var descNorm = String(it.desc || '').replace(/^[\s‎‏؜\-–—]+/, '');
-      if (it.isDiscount && !/^خصم\b/.test(descNorm)) txt = 'خصم ' + txt;
+      if (it.isDiscount && !/^خصم(?:$|[\s:،.\-–—])/.test(descNorm)) txt = 'خصم ' + txt;
       out += (idx === 0 ? '' : (it.isDiscount ? ' − ' : ' + ')) + txt;
     });
     return out;
@@ -19003,7 +19005,7 @@ function _parsePassportMrz_(text, nameHint, latinHint) {
   // أكثر تسامحاً مع أخطاء OCR، إشارة نوع التأشيرة (عمرة/زيارة/حج...)، وحالة line2Standalone
   // المصحوبة بسياق تأشيرة سعودية نموذجي (بلا أي لغة "جواز سفر" تدل على أنه المستند الأساسي)
   var visaKeywordHit = /تأشير[ةه]|VISA|Umrah|Hajj|Personal\s*Visit|Family\s*Visit|Entry\s*Visa|رخصة\s*دخول/i.test(text);
-  var visaTypePhraseHit = /زيارة شخصية|زيارة عائلية|عمرة|سياح[ةي]+|حج\b/.test(text);
+  var visaTypePhraseHit = /زيارة شخصية|زيارة عائلية|عمرة|سياح[ةي]+|حج(?![\u0600-\u06FF])/.test(text);
   var looksLikePassportBook = /جواز\s*سفر|Passport\s*No|P<[A-Z]{3}/i.test(text);
   var isVisa = visaKeywordHit || visaTypePhraseHit || (line1 && !mrzIsPassport) ||
     (line2Standalone && !looksLikePassportBook && /السعودية|KSA|Saudi/i.test(text));
@@ -19177,7 +19179,7 @@ function _parsePassportMrz_(text, nameHint, latinHint) {
   // ===== 5) نوع التأشيرة =====
   var visaType = '';
   if (isVisa) {
-    var vm = text.match(/زيارة شخصية|زيارة عائلية|عمرة|سياح[ةي]+|حج\b|Umrah|Personal Visit|Family Visit|Hajj|Tourist/i);
+    var vm = text.match(/زيارة شخصية|زيارة عائلية|عمرة|سياح[ةي]+|حج(?![\u0600-\u06FF])|Umrah|Personal Visit|Family Visit|Hajj|Tourist/i);
     if (vm) {
       var v = vm[0];
       if (/Personal Visit/i.test(v)) v = 'زيارة شخصية';
@@ -20908,7 +20910,32 @@ function importMinistryFilesBatch(authToken, rows) {
     var sh = _accSheet_(MF_SHEET, MF_HEADERS);
     var out = [];
     var now = _mfStamp_();
+
+    /* 🚫 (V4.128) تجاهل الملفات المستوردة سابقاً: كان كل استيراد يُلحق كل الصفوف بلا أي فحص،
+       فإعادة رفع نفس ملف الإكسيل (أو ملف يتقاطع معه) تُنشئ نسخاً مكرَّرة. الآن نبني بصمة لكل ملف
+       موجود ونتخطّى أي صف يطابقها — والبصمة: «رقم الملف» وحده لأنه المعرِّف الفعلي للملف لدى
+       الوزارة، وإن كان فارغاً نستخدم بصمة مركَّبة (الشركة + الذهاب + العدد + سعر البرنامج). */
+    var sigOf = function (fileNo, company, goDate, pilgrims, progPrice) {
+      var fn = _mfStr_(fileNo);
+      if (fn) return 'F|' + fn;
+      return 'C|' + _mfStr_(company) + '|' + _mfDate_(goDate) + '|' + _mfNum_(pilgrims) + '|' + _mfNum_(progPrice);
+    };
+    var existing = {};
+    _mfReadAll_().forEach(function (o) {
+      existing[sigOf(o.fileNo, o.company, o.goDate, o.pilgrims, o.progPrice)] = true;
+    });
+
+    var skipped = 0, skippedNos = [];
     rows.forEach(function (r) {
+      // تخطٍّ مزدوج: ما هو مسجَّل بالفعل بالشيت، وما تكرَّر داخل دفعة الاستيراد نفسها
+      var sig = sigOf(r.fileNo, r.company, r.goDate, r.pilgrims, r.progPrice);
+      if (existing[sig]) {
+        skipped++;
+        if (skippedNos.length < 25 && _mfStr_(r.fileNo)) skippedNos.push(_mfStr_(r.fileNo));
+        return;
+      }
+      existing[sig] = true;
+
       var pilgrims = _mfNum_(r.pilgrims), supCount = _mfNum_(r.supCount);
       var clientLabel = _mfStr_(r.clientLabel) || ('مستورد — ملف ' + _mfStr_(r.fileNo));
       var breakdown = pilgrims ? [{ name: clientLabel, count: pilgrims, sups: supCount, note: 'مستورد من إكسيل — يحتاج ربط يدوي بالرحلة' }] : [];
@@ -20935,9 +20962,10 @@ function importMinistryFilesBatch(authToken, rows) {
     });
     if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, MF_HEADERS.length).setValues(out);
     SpreadsheetApp.flush();
-    logChange_(session.username, 'استيراد ملفات مراجعة من إكسيل', '-', 'عدد الصفوف', '-', String(out.length));
+    logChange_(session.username, 'استيراد ملفات مراجعة من إكسيل', '-', 'عدد الصفوف', '-',
+      String(out.length) + (skipped ? (' (تُخطّي ' + skipped + ' مكرَّر)') : ''));
     _mfClearBootstrapCache_();
-    return { success: true, imported: out.length };
+    return { success: true, imported: out.length, skipped: skipped, skippedNos: skippedNos };
   } finally { lock.releaseLock(); }
 }
 

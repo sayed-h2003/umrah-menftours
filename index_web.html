@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.127 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.128 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.127)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.128)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.127</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.128</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6424,7 +6424,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.127";
+var CLIENT_APP_VERSION = "4.128";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -10297,7 +10297,18 @@ function openTripHousingDirect(tripName, city, btn) {
     .getTripHotelsList(window.authToken, tripName);
 }
 
+/* 🩹 (V4.128) نوافذ الرحلات (الإحصائية/التسكين/الكشف/الملخص المجمَّع) مكتوبة داخل قسم الرحلات
+   (#section-trips) في الـHTML. وبما أن تبديل الشاشات يُخفي القسم كله بـdisplay:none، فأي محاولة
+   لفتح إحداها من شاشة أخرى (مثل زر «إحصائية العملاء» داخل ملخص حسابات الرحلة) كانت تنجح برمجياً
+   لكن لا يظهر شيء إطلاقاً — لأن العنصر نفسه داخل شجرة مخفية. الحل: نقل النافذة لـ<body> مرة واحدة
+   قبل فتحها، فتعمل من أي شاشة بلا أي تغيير في تصميمها أو سلوكها. */
+function _detachModalToBody_(modalId) {
+  var el = document.getElementById(modalId);
+  if (el && el.parentNode !== document.body) document.body.appendChild(el);
+  return el;
+}
 function openTripClientStats(tripName) {
+  _detachModalToBody_('tripClientStatsModal');
   // 🛡️ نستخدم متغيّراً مخصصاً (_statsTripData) بدل الكتابة فوق window._currentTripData المشترك —
   // ده بيتجنّب إفساد حالة شاشة كشف المعتمرين المفتوحة (لو كانت مفتوحة لرحلة تانية في الخلفية)،
   // لأن _currentTripData مستخدَم في أماكن حساسة زي التسكين وفحص تاريخ انتهاء الجوازات
@@ -10531,9 +10542,21 @@ function _showTripTlPopover_(tr) {
   pop.addEventListener('mouseleave', function() { pop.remove(); });
 }
 window._tlHoverTimer = null;
+/* 🖱️ (V4.128) لا يظهر خط السير عند التحويم على منطقة أزرار الإجراءات (تعديل/إحصائيات/تسعير/
+   تسكين/سجل/روابط…) — منعاً للتشتيت البصري أثناء استخدام الأزرار. يبقى ظاهراً على بقية سطر الرحلة
+   كما هو. يشمل التخطيطين: الجدول (.t-acts) وبطاقة الموبايل (.tfoot). */
+function _tlOverActions_(target) {
+  return !!(target && target.closest && target.closest('.t-acts, .tfoot'));
+}
 document.addEventListener('mouseover', function(ev) {
   var tr = ev.target && ev.target.closest ? ev.target.closest('[data-tlname]') : null;
   if (!tr) return;
+  if (_tlOverActions_(ev.target)) {
+    clearTimeout(window._tlHoverTimer);
+    var opened = document.getElementById('tripTlPopover');
+    if (opened) opened.remove();
+    return;
+  }
   var pop = document.getElementById('tripTlPopover');
   if (pop && pop.getAttribute('data-for') === tr.getAttribute('data-tlname')) return;
   clearTimeout(window._tlHoverTimer);
@@ -10551,7 +10574,8 @@ document.addEventListener('mouseout', function(ev) {
     if (!pop) return;
     var overPop = pop.matches(':hover');
     var overRow = document.querySelector('[data-tlname]:hover');
-    if (!overPop && !overRow) pop.remove();
+    var overActs = document.querySelector('.t-acts:hover, .tfoot:hover');
+    if (!overPop && (!overRow || overActs)) pop.remove();
   }, 140);
 });
 
@@ -17913,6 +17937,42 @@ function _copyImageToClipboard_(files) {
     }).catch(function () { return false; });
   } catch (e) { return Promise.resolve(false); }
 }
+/* 📋 (V4.128) زر «نسخ الصورة للحافظة» الاحتياطي — يظهر فقط عندما يرفض المتصفح النسخ التلقائي
+   لانتهاء مهلة تفعيل المستخدم أثناء الالتقاط. الصورة محفوظة بالفعل بالذاكرة، فالنقرة عليه تنسخها
+   فوراً بنفس دقة الملف المُصدَّر تماماً (بلا إعادة التقاط). يختفي تلقائياً بعد النسخ أو بعد دقيقة. */
+function _showClipboardFallbackBtn_(files) {
+  try {
+    if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') return;
+    var old = document.getElementById('_clipCopyBar'); if (old) old.remove();
+    var bar = document.createElement('div');
+    bar.id = '_clipCopyBar';
+    bar.dir = 'rtl';
+    bar.style.cssText = 'position:fixed;z-index:2147483000;bottom:18px;left:50%;transform:translateX(-50%);' +
+      'background:#0f4c4c;color:#fff;border-radius:999px;padding:8px 12px;display:flex;align-items:center;' +
+      'gap:8px;box-shadow:0 10px 28px rgba(0,0,0,.32);font-size:12px;font-weight:700;';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-light btn-sm py-0 px-2';
+    btn.textContent = '📋 نسخ الصورة للحافظة';
+    btn.onclick = function () {
+      btn.disabled = true; btn.textContent = '⏳ جاري النسخ…';
+      _copyImageToClipboard_(files).then(function (ok) {
+        bar.remove();
+        showToast(ok ? '📋 نُسخت الصورة للحافظة بنفس جودة الملف المُصدَّر'
+                     : '❌ تعذّر النسخ للحافظة — المتصفح لا يسمح بذلك هنا', !ok);
+      });
+    };
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'btn btn-outline-light btn-sm py-0 px-2';
+    close.textContent = '✕';
+    close.onclick = function () { bar.remove(); };
+    bar.appendChild(document.createTextNode('تم حفظ الصورة —'));
+    bar.appendChild(btn); bar.appendChild(close);
+    document.body.appendChild(bar);
+    setTimeout(function () { if (bar.parentNode) bar.remove(); }, 60000);
+  } catch (e) {}
+}
 // 📤 نقطة الاستدعاء الموحّدة لأي زر "📸 صورة HD": ينسخ للحافظة تلقائياً بالتوازي، ثم يشارك مباشرة
 // (Web Share API) أو يحفظ الملف/الملفات تلقائياً لو المشاركة غير متاحة بالجهاز/المتصفح.
 // 🛡️ (V4.110) كانت `.catch(function(){})` تتجاهل أي رفض بصمت — فلو تعذّرت المشاركة (لا استجابة،
@@ -17921,8 +17981,13 @@ function _copyImageToClipboard_(files) {
 // المشاركة فُتحت فعلاً؛ ولو لم تستجب لوحة المشاركة إطلاقاً خلال مهلة معقولة، نحفظ الملف بديلاً بدل
 // ترك المستخدم أمام زر بلا أي أثر.
 function _shareOrSaveImageFiles_(files) {
+  // 📋 (V4.128) المتصفح يشترط «تفعيل المستخدم» (نقرة حديثة) للكتابة في الحافظة، والتقاط الصورة
+  // يستغرق ثوانٍ — فكان النسخ التلقائي يُرفض بصمت في كل مرة تقريباً (ولهذا لم تُنسخ الصورة إطلاقاً
+  // رغم إضافة الميزة). الحل: نحاول النسخ التلقائي، وإن رُفض نعرض زر «نسخ للحافظة» جاهزاً — ضغطة
+  // واحدة عليه تمنح التفعيل المطلوب فتُنسخ الصورة فوراً بنفس الدقة (الصورة جاهزة بالذاكرة بالفعل).
   _copyImageToClipboard_(files).then(function (copied) {
     if (copied) showToast('📋 نُسخت الصورة أيضاً للحافظة — يمكن لصقها في أي برنامج آخر مباشرة');
+    else _showClipboardFallbackBtn_(files);
   });
   try {
     if (navigator.canShare && navigator.canShare({ files: files })) {
@@ -18145,6 +18210,8 @@ function generateHousing(city) {
   _hnLoad_('trip', function () { if (document.getElementById('housingCardsArea')) _renderHousingCards(); });
   var modalTitle = (window.currentTripName || '') + ' — 🏨 تسكين ' + cityLabel;
   document.getElementById('housingTripNameLabel').textContent = modalTitle;
+  // 🩹 (V4.128) تعمل الآن من أي شاشة (زر التسكين المباشر بقائمة الرحلات مثلاً) وليس من قسم الرحلات فقط
+  _detachModalToBody_('housingModal');
   new bootstrap.Modal(document.getElementById('housingModal')).show();
 }
 
@@ -36429,7 +36496,15 @@ function mfImportGo() {
     .withSuccessHandler(function (res) {
       btn.disabled = false; btn.textContent = '📤 استيراد الصفوف الصالحة';
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الاستيراد', 'error'); return; }
-      _showPopup('تم استيراد ' + res.imported + ' ملف — اربطها يدوياً بالرحلات من نموذج التعديل', 'success');
+      // 🚫 (V4.128) الملفات المسجَّلة سابقاً تُتخطّى تلقائياً — نوضّح عددها وأمثلة من أرقامها
+      var msg = res.imported
+        ? ('تم استيراد ' + res.imported + ' ملف — اربطها يدوياً بالرحلات من نموذج التعديل')
+        : 'لم يُستورد أي ملف جديد — كل الصفوف مسجَّلة بالفعل';
+      if (res.skipped) {
+        msg += '\n🚫 تُخطّي ' + res.skipped + ' ملف موجود مسبقاً' +
+          ((res.skippedNos || []).length ? (' (مثل: ' + res.skippedNos.slice(0, 8).join('، ') + ')') : '');
+      }
+      _showPopup(msg, res.imported ? 'success' : 'info');
       mfCloseModal(); mfLoad(true);
     })
     .withFailureHandler(function (e) { btn.disabled = false; btn.textContent = '📤 استيراد الصفوف الصالحة'; _showPopup(e && e.message ? e.message : e, 'error'); })
@@ -36532,29 +36607,29 @@ var MF_HDR_COLORS = {
 // للملف الأصلي المرفق: أصفر لخلايا الإدخال المهمة (فاتورة/رسوم إدارية/المخالصة/النسبة)، أخضر
 // للإيراد، كريمي لسعر الريال، أحمر بخط أبيض للمصروف، بنفسجي بخط أبيض لهامش الربح
 var MF_EXPORT_COLS = [
-  { k: 'eInvoice',       l: 'فواتير الكترونية',   w: 9.14,  hdr: 'blue', dataBg: 'FFFFFF00' },
+  { k: 'eInvoice',       l: 'فواتير الكترونية',   w: 12,    hdr: 'blue', dataBg: 'FFFFFF00', numeric: 1 },
   { k: 'seq',            l: 'م',                    w: 5,     hdr: 'blue', formula: 1 },
   { k: 'company',        l: 'الشركة',               w: 10.86, hdr: 'blue', hidden: 1 },
   { k: 'agent',          l: 'الوكيل',               w: 11.43, hdr: 'blue' },
-  { k: 'fileNo',         l: 'رقم الملف',            w: 8.14,  hdr: 'blue' },
+  { k: 'fileNo',         l: 'رقم الملف',            w: 10,    hdr: 'blue', numeric: 1 },
   { k: 'reviewDate',     l: 'ت المراجعة',           w: 12.71, hdr: 'blue', date: 1 },
   { k: 'travelMode',     l: 'وسيلة السفر',          w: 7.43,  hdr: 'blue' },
   { k: 'goDate',         l: 'سفر',                  w: 11.14, hdr: 'blue', date: 1 },
   { k: 'retDate',        l: 'عوده',                 w: 11.14, hdr: 'blue', date: 1 },
   { k: 'pilgrims',       l: 'معتمرين',              w: 8.86,  hdr: 'green' },
   { k: 'supCount',       l: 'مشرفين',               w: 8.57,  hdr: 'green' },
-  { k: 'progPrice',      l: 'سعر البرنامج',         w: 9.14,  hdr: 'green', money: 1 },
-  { k: 'revenue',        l: 'الايراد',              w: 10,    hdr: 'green', formula: 1, money: 1, dataBg: 'FF92D050' },
-  { k: 'ticket',         l: 'التذكرة',              w: 8.57,  hdr: 'blue', money: 1 },
-  { k: 'roomFee',        l: 'رسوم الغرفة',          w: 9.43,  hdr: 'blue', money: 1 },
+  { k: 'progPrice',      l: 'سعر البرنامج',         w: 12,    hdr: 'green', money: 1 },
+  { k: 'revenue',        l: 'الايراد',              w: 14,    hdr: 'green', formula: 1, money: 1, dataBg: 'FF92D050' },
+  { k: 'ticket',         l: 'التذكرة',              w: 11,    hdr: 'blue', money: 1 },
+  { k: 'roomFee',        l: 'رسوم الغرفة',          w: 12,    hdr: 'blue', money: 1 },
   { k: 'adminFee',       l: 'رسوم ادارية للفرد',    w: 12.14, hdr: 'blue', hidden: 1, money: 1, dataBg: 'FFFFFF00' },
-  { k: 'clearanceSAR',   l: 'المخالصة بالريال',     w: 10,    hdr: 'blue', money: 1, dataBg: 'FFFFFF00' },
+  { k: 'clearanceSAR',   l: 'المخالصة بالريال',     w: 13,    hdr: 'blue', money: 1, dataBg: 'FFFFFF00' },
   { k: 'fxRate',         l: 'سعر الريال',           w: 8.86,  hdr: 'red', rate: 1, dataBg: 'FFFCE5CD' },
-  { k: 'totalTickets',   l: 'اجمالي التذاكر',       w: 9.43,  hdr: 'red', formula: 1, money: 1 },
-  { k: 'totalRoomFee',   l: 'اجمالي\nرسوم الغرفة',  w: 10.14, hdr: 'red', formula: 1, money: 1 },
-  { k: 'totalSAR',       l: 'اجمالي الريال',        w: 9.43,  hdr: 'red', formula: 1, money: 1 },
-  { k: 'totalExp',       l: 'المصروف',              w: 10,    hdr: 'red', formula: 1, money: 1, dataBg: 'FFC00000', dataFg: 'FFFFFFFF' },
-  { k: 'margin',         l: 'هامش الربح',           w: 8.57,  hdr: 'purple', formula: 1, money: 1, dataBg: 'FF7030A0', dataFg: 'FFFFFFFF' },
+  { k: 'totalTickets',   l: 'اجمالي التذاكر',       w: 14,    hdr: 'red', formula: 1, money: 1 },
+  { k: 'totalRoomFee',   l: 'اجمالي\nرسوم الغرفة',  w: 14,    hdr: 'red', formula: 1, money: 1 },
+  { k: 'totalSAR',       l: 'اجمالي الريال',        w: 14,    hdr: 'red', formula: 1, money: 1 },
+  { k: 'totalExp',       l: 'المصروف',              w: 15,    hdr: 'red', formula: 1, money: 1, dataBg: 'FFC00000', dataFg: 'FFFFFFFF' },
+  { k: 'margin',         l: 'هامش الربح',           w: 14,    hdr: 'purple', formula: 1, money: 1, dataBg: 'FF7030A0', dataFg: 'FFFFFFFF' },
   { k: 'pct',            l: 'النسبة',               w: 7.71,  hdr: 'purple', formula: 1, pct: 1, dataBg: 'FFFFFF00' },
   { k: 'madinahHotel',   l: 'سكن مدينة',            w: 11.86, hdr: 'blue', hidden: 1 },
   { k: 'madinahIn',      l: 'من',                   w: 11.14, hdr: 'blue', hidden: 1, date: 1 },
@@ -36564,7 +36639,7 @@ var MF_EXPORT_COLS = [
   { k: 'makkahOut',      l: 'الى',                  w: 11.86, hdr: 'blue', hidden: 1, date: 1 },
   { k: 'transport',      l: 'الشركة النقل',         w: 8.43,  hdr: 'blue', hidden: 1 },
   { k: 'supNames',       l: 'المشرف',               w: 15.29, hdr: 'blue' },
-  { k: 'perPersonMargin', l: 'الربح للفرد',         w: 9,     hdr: 'blueLight', formula: 1, money: 1 },
+  { k: 'perPersonMargin', l: 'الربح للفرد',         w: 12,    hdr: 'blueLight', formula: 1, money: 1 },
   { k: 'clientLabel',    l: 'العميل',               w: 16.86, hdr: 'blue', hidden: 1 }
 ];
 function _xlColLetter(n) {
@@ -36579,6 +36654,19 @@ function _mfXlSerial(v) {
   if (!m) return null;
   var utcMs = Date.UTC(+m[3], +m[2] - 1, +m[1]);
   return Math.round((utcMs - Date.UTC(1899, 11, 30)) / 86400000);
+}
+// 🔢 (V4.128) أرقام الملفات والفواتير الإلكترونية تُخزَّن كأرقام حقيقية في إكسيل (كانت نصاً،
+// فلا تُفرز ولا تُجمَع ولا تُستخدم في المعادلات، وتظهر بعلامة «رقم مخزَّن كنص»). أي قيمة غير رقمية
+// بحتة (تحتوي حروفاً أو شرطة مثلاً) تبقى نصاً كما هي بلا أي فقد.
+function _mfXlMaybeNum(v) {
+  var t = mfStr(v);
+  if (t === '') return '';
+  if (/^\d+$/.test(t)) {
+    var n = parseInt(t, 10);
+    // أرقام أطول من حدّ الدقة الآمن في جافاسكربت تبقى نصاً حتى لا تتشوّه قيمتها
+    if (String(n) === t && n <= Number.MAX_SAFE_INTEGER) return n;
+  }
+  return t;
 }
 function _mfXlBorder() {
   var e = { style: 'thin', color: { argb: 'FF000000' } };
@@ -36653,7 +36741,8 @@ async function mfExportExcel() {
   // 🏗️ نفس هيكل صفوف الملف الأصلي (1-based، أرقام صفوف إكسيل مباشرة): صف1 فارغ، صف2 عنوان مدمج،
   // صف3 رؤوس الأعمدة، صف4+ بيانات
   var R_TITLE = 2, R_HEADER = 3, R_DATA0 = 4, ROW_OFFSET = R_HEADER; // = 3 (لمعادلة "ROW()-3")
-  var moneyFmt = '#,##0', dateFmt = 'm/d/yyyy', pctFmt = '0.00%', rateFmt = '0.00';
+  // 📅 (V4.128) صيغة التاريخ بالملف المُصدَّر dd/mm/yyyy بطلب صريح (كانت m/d/yyyy)
+  var moneyFmt = '#,##0', dateFmt = 'dd/mm/yyyy', pctFmt = '0.00%', rateFmt = '0.00';
 
   var wb = new ExcelJS.Workbook();
   var ws = wb.addWorksheet('ملفات عمرة', { views: [{ rightToLeft: true, state: 'frozen', ySplit: R_DATA0 - 1 }] });
@@ -36711,10 +36800,10 @@ async function mfExportExcel() {
       else if (col.money) cell.numFmt = moneyFmt;
       switch (col.k) {
         case 'seq': cell.value = { formula: 'IF(' + L.company + xr + '="",,ROW()-' + ROW_OFFSET + ')', result: mfNum(f.seq) }; return;
-        case 'eInvoice': cell.value = mfStr(f.eInvoice); return;
+        case 'eInvoice': cell.value = _mfXlMaybeNum(f.eInvoice); return;
         case 'company': cell.value = mfStr(f.company); return;
         case 'agent': cell.value = mfStr(f.agent); return;
-        case 'fileNo': cell.value = mfStr(f.fileNo); return;
+        case 'fileNo': cell.value = _mfXlMaybeNum(f.fileNo); return;
         case 'reviewDate': { var sd = _mfXlSerial(f.reviewDate); cell.value = sd != null ? new Date(sd * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.reviewDate); return; }
         case 'travelMode': cell.value = mfStr(f.travelMode); return;
         case 'goDate': { var sg = _mfXlSerial(f.goDate); cell.value = sg != null ? new Date(sg * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(f.goDate); return; }
