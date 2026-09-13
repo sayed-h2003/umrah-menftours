@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.128 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.129 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.128)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.129)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.128</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.129</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6424,7 +6424,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.128";
+var CLIENT_APP_VERSION = "4.129";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -6835,17 +6835,20 @@ function securePrintBooking(id, btn) {
 // 📸 (V4.104) صورة HD للإشعار — يجلب نفس مستند الطباعة/PDF من السيرفر (HTML خام) ثم يحوّله لصورة
 function _noticeExportImage_(id, btn) {
   if (!hasPermission("PRINT")) { alert("⛔ عذراً، لا تملك صلاحية طباعة/تصدير الإشعارات."); return; }
+  // (V4.129) فجوة غير متزامنة (نداء سيرفر) قبل استدعاء exportReportAsImage لاحقاً — نافذة تفعيل
+  // المستخدم لنسخ الحافظة يجب فتحها هنا فوراً، لا انتظار جاهزية HTML الإشعار من السيرفر
+  if (typeof _tryClipboardImageCopy_ === 'function') _tryClipboardImageCopy_();
   var b = localBookingsCache.find(function(x) { return x.id === id.toString(); });
-  if (b && b.status !== "معتمد") { alert("⚠️ تنبيه: هذا الإشعار غير معتمد ولا يمكن تصديره كصورة. يرجى اعتماده أولاً."); return; }
+  if (b && b.status !== "معتمد") { alert("⚠️ تنبيه: هذا الإشعار غير معتمد ولا يمكن تصديره كصورة. يرجى اعتماده أولاً."); if (typeof _rejectPendingClipboard_ === 'function') _rejectPendingClipboard_(); return; }
   var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳';
   google.script.run
     .withSuccessHandler(function(res) {
       btn.innerHTML = orig; // 🔁 يعيدها للأيقونة الأصلية قبل تسليم الزر لـexportReportAsImage —
       // التي تلتقط innerHTML الحالي كـ"orig" الخاص بها وتُعيده تلقائياً عند انتهاء الالتقاط
-      if (!res || !res.success || !res.html) { btn.disabled = false; showToast('❌ تعذّر جلب بيانات الإشعار', true); return; }
+      if (!res || !res.success || !res.html) { btn.disabled = false; showToast('❌ تعذّر جلب بيانات الإشعار', true); if (typeof _rejectPendingClipboard_ === 'function') _rejectPendingClipboard_(); return; }
       exportReportAsImage(function() { return res.html; }, res.fileName || ('إشعار ' + id), btn);
     })
-    .withFailureHandler(function(err) { btn.disabled = false; btn.innerHTML = orig; if (_handleSessErr_(err)) return; showToast('❌ ' + (err.message || err), true); })
+    .withFailureHandler(function(err) { btn.disabled = false; btn.innerHTML = orig; if (typeof _rejectPendingClipboard_ === 'function') _rejectPendingClipboard_(); if (_handleSessErr_(err)) return; showToast('❌ ' + (err.message || err), true); })
     .getBookingNoticeHtmlForImage(window.authToken, id);
 }
 
@@ -10304,8 +10307,23 @@ function openTripHousingDirect(tripName, city, btn) {
    قبل فتحها، فتعمل من أي شاشة بلا أي تغيير في تصميمها أو سلوكها. */
 function _detachModalToBody_(modalId) {
   var el = document.getElementById(modalId);
-  if (el && el.parentNode !== document.body) document.body.appendChild(el);
+  if (!el) return el;
+  if (el.parentNode !== document.body) document.body.appendChild(el);
+  // 🐞 (V4.129) السبب الحقيقي لعدم ظهور شيء بعد النقل: هذه النوافذ كانت تحمل z-index:2001 فقط،
+  // وهو كافٍ طالما تعيش داخل #mainAppContainer (الذي يحمل z-index:999999 بعد تسجيل الدخول — راجع
+  // اتفاقية طبقات الصفحة). فور نقلها إلى <body> تصبح شقيقة لـ#mainAppContainer مباشرة فتخسر أمامه
+  // بفارق هائل (2001 << 999999) وتُرسَم خلفه تماماً — "لا يحدث شيء" ظاهرياً رغم أن النافذة مفتوحة
+  // فعلياً وراء الشاشة. الحل: رفعها لنفس طبقة النوافذ العائمة الآمنة فوق كل شيء بالتطبيق.
+  el.style.zIndex = '2147483000';
   return el;
+}
+// نفس السبب أعلاه ينطبق على ستارة Bootstrap الخلفية (.modal-backdrop) التي يُنشئها تلقائياً عند كل
+// .show() كعنصر شقيق جديد في body بزاوية z-index منخفضة (~1050) — تُستدعى بعد .show() مباشرة
+function _liftModalBackdrop_() {
+  requestAnimationFrame(function () {
+    var backs = document.querySelectorAll('.modal-backdrop');
+    if (backs.length) backs[backs.length - 1].style.zIndex = '2147482990';
+  });
 }
 function openTripClientStats(tripName) {
   _detachModalToBody_('tripClientStatsModal');
@@ -10317,6 +10335,7 @@ function openTripClientStats(tripName) {
   document.getElementById('tripClientStatsTripName').textContent = tripName;
   document.getElementById('tripClientStatsArea').innerHTML = '<div class="text-center p-5 text-muted">⏳ جاري تحميل بيانات المعتمرين...</div>';
   new bootstrap.Modal(document.getElementById('tripClientStatsModal')).show();
+  _liftModalBackdrop_();
 
   // 🔒 (V4.16) لو فُتحت النافذة مرتين متتاليتين بسرعة (نقرتان)، نداء أقدم قد يرجع متأخراً
   // ويكتب بيانات ناقصة/رحلة سابقة فوق العرض الصحيح — نتجاهل أي رد لا يطابق آخر نداء أُرسل
@@ -17739,11 +17758,15 @@ function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
 
   var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  var MAX_AREA = IS_IOS_ ? 12000000 : 26000000;   // بكسل² — 4 بايت لكل بكسل بالذاكرة
+  // 🖼️ (V4.129) رفع سقف الدقة تدريجياً (لا لأقصى ما تسمح به الذاكرة نظرياً — راجع الشرح أعلى هذه
+  // الدالة عن أزمة تجمّد المتصفح الفعلية التي وقعت سابقاً بسقف 110-180 مليون بكسل): 26 مليون
+  // بكسل/2.5× كانت آمنة لكن دون FHD وضوحاً لتقارير كبيرة؛ 40 مليون/3.5× يعطي جودة أعلى بوضوح مع
+  // بقاء الذاكرة لكل لوحة ضمن ~160 ميجابايت (بعيداً كفاية عن نطاق التجمّد المُثبَت سابقاً)
+  var MAX_AREA = IS_IOS_ ? 16000000 : 40000000;   // بكسل² — 4 بايت لكل بكسل بالذاكرة
   var MAX_DIM  = IS_IOS_ ? 8192 : 12000;
   var byArea = Math.sqrt(MAX_AREA / (cssW * cssH));
   var byDim  = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
-  var scale = Math.min(2.5, byArea, byDim);
+  var scale = Math.min(3.5, byArea, byDim);
   if (!(scale > 0)) scale = 1;
   if (scale < 0.4) scale = 0.4;                   // تقرير ضخم جداً — دقة أقل خير من فشل كامل
 
@@ -17904,75 +17927,62 @@ function _saveImageFilesLocally_(files) {
     setTimeout(function() { URL.revokeObjectURL(a.href); }, 30000);
   });
 }
-// 📋 (V4.123) نسخ الصورة الناتجة تلقائياً للحافظة (Clipboard) بنفس دقتها وجودتها — يتيح لصقها
-// فوراً في أي برنامج آخر (واتساب، وورد، ...) بلا حفظ وسيط. يعمل فقط لصورة واحدة (لا شرائح متعددة
-// لتقرير طويل جداً) ويتطلب دعم المتصفح لـ Clipboard API + ClipboardItem — فشل صامت تماماً لو غير
-// مدعوم فلا يؤثر إطلاقاً على مسار الحفظ/المشاركة المعتاد الذي يستمر بجانبه دوماً
-function _copyImageToClipboard_(files) {
+/* ============================================================
+   📋 (V4.129) نسخ الصورة تلقائياً وبصمت إلى الحافظة — بلا أي زر يدوي، وبنفس جودة الملف
+   المُصدَّر HD كاملة. المشكلة التي حلّها هذا التصميم: navigator.clipboard.write() يشترط أن يُستدعى
+   ضمن نافذة «تفعيل المستخدم» (قريباً جداً من ضغطة فعلية)، بينما توليد صورة التقرير يمر بخطوات
+   غير متزامنة (رسم html2canvas، وأحياناً نداء سيرفر قبله) تستغرق ثوانٍ — فبحلول وقت جاهزية الصورة
+   يكون التفعيل قد انتهى ويُرفض النداء صامتاً (وهو السبب الذي جعل محاولتين سابقتين تفشلان: إحداهما
+   نسخت بعد الجاهزية مباشرة فرُفضت، والأخرى أضافت زراً يدوياً بديلاً بدل حل المشكلة الجذرية).
+   الحل: نستدعي navigator.clipboard.write() فوراً عند الضغطة نفسها (أول سطر بكل دالة تصدير)
+   بكائن Promise لم يُحل بعد كقيمة للصورة — المتصفح يقبل النداء فوراً (ضمن التفعيل) وينتظر حلّ
+   الـPromise بصبر مهما طال التوليد. بمجرد جهوز اللوحة الفعلية (نفس اللوحة كاملة الدقة المحفوظة في
+   window.__lastCaptureCanvas) نحلّ الـPromise فتُنسخ الصورة تلقائياً بصمت بلا أي تدخل من المستخدم.
+   ============================================================ */
+window._pendingClipDeferred = null;
+function _tryClipboardImageCopy_() {
   try {
-    if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') return Promise.resolve(false);
-    // 📋 (V4.126) المصدر المفضَّل = اللوحة الكاملة قبل التقطيع (نفس دقة الالتقاط تماماً، وبلا فقد
-    // أي جزء من التقارير الطويلة). نُنتج منها PNG بلا ضغط فاقد مباشرةً عبر toBlob.
-    // ملاحظة: بعض المتصفحات/أنظمة التشغيل تُحوِّل صورة الحافظة داخلياً لصيغة نقطية أقل جودة عند
-    // اللصق في برامج معيّنة — وهذا سلوك خارج نطاق الصفحة؛ ما نتحكم فيه هنا هو تسليم أعلى دقة ممكنة.
-    var canvas = window.__lastCaptureCanvas;
-    var blobP = null;
-    if (canvas && canvas.width && canvas.height && canvas.toBlob) {
-      blobP = new Promise(function (resolve) {
-        try { canvas.toBlob(function (b) { resolve(b || null); }, 'image/png'); }
-        catch (e) { resolve(null); }
-      });
-    }
-    if (!blobP) {
-      if (!files || files.length !== 1) return Promise.resolve(false);
-      blobP = Promise.resolve(files[0]);
-    }
-    return blobP.then(function (blob) {
-      if (!blob) {
-        if (!files || files.length !== 1) return false;
-        blob = files[0];
-      }
-      return navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-        .then(function () { return true; }).catch(function () { return false; });
-    }).catch(function () { return false; });
-  } catch (e) { return Promise.resolve(false); }
+    if (!(navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined')) return null;
+    var resolveFn, rejectFn;
+    var pendingBlob = new Promise(function (resolve, reject) { resolveFn = resolve; rejectFn = reject; });
+    // النداء الحاسم: يحدث الآن فوراً (ضمن تفعيل المستخدم) بصرف النظر عن متى يُحل الـPromise فعلياً
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': pendingBlob })]).then(function () {
+      showToast('📋 نُسخت الصورة أيضاً للحافظة بجودة HD — يمكن لصقها في أي برنامج آخر مباشرة');
+    }).catch(function () {
+      // رفض صامت (صلاحية مرفوضة، متصفح غير مدعوم) — لا يجوز أن يعطّل مسار الحفظ/المشاركة الأصلي أبداً
+    });
+    var deferred = { resolve: resolveFn, reject: rejectFn };
+    window._pendingClipDeferred = deferred;
+    return deferred;
+  } catch (e) { return null; }
 }
-/* 📋 (V4.128) زر «نسخ الصورة للحافظة» الاحتياطي — يظهر فقط عندما يرفض المتصفح النسخ التلقائي
-   لانتهاء مهلة تفعيل المستخدم أثناء الالتقاط. الصورة محفوظة بالفعل بالذاكرة، فالنقرة عليه تنسخها
-   فوراً بنفس دقة الملف المُصدَّر تماماً (بلا إعادة التقاط). يختفي تلقائياً بعد النسخ أو بعد دقيقة. */
-function _showClipboardFallbackBtn_(files) {
-  try {
-    if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') return;
-    var old = document.getElementById('_clipCopyBar'); if (old) old.remove();
-    var bar = document.createElement('div');
-    bar.id = '_clipCopyBar';
-    bar.dir = 'rtl';
-    bar.style.cssText = 'position:fixed;z-index:2147483000;bottom:18px;left:50%;transform:translateX(-50%);' +
-      'background:#0f4c4c;color:#fff;border-radius:999px;padding:8px 12px;display:flex;align-items:center;' +
-      'gap:8px;box-shadow:0 10px 28px rgba(0,0,0,.32);font-size:12px;font-weight:700;';
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn-light btn-sm py-0 px-2';
-    btn.textContent = '📋 نسخ الصورة للحافظة';
-    btn.onclick = function () {
-      btn.disabled = true; btn.textContent = '⏳ جاري النسخ…';
-      _copyImageToClipboard_(files).then(function (ok) {
-        bar.remove();
-        showToast(ok ? '📋 نُسخت الصورة للحافظة بنفس جودة الملف المُصدَّر'
-                     : '❌ تعذّر النسخ للحافظة — المتصفح لا يسمح بذلك هنا', !ok);
-      });
-    };
-    var close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'btn btn-outline-light btn-sm py-0 px-2';
-    close.textContent = '✕';
-    close.onclick = function () { bar.remove(); };
-    bar.appendChild(document.createTextNode('تم حفظ الصورة —'));
-    bar.appendChild(btn); bar.appendChild(close);
-    document.body.appendChild(bar);
-    setTimeout(function () { if (bar.parentNode) bar.remove(); }, 60000);
-  } catch (e) {}
+// يُستدعى بمجرد جهوز اللوحة الفعلية — يحلّ أي Promise حافظة معلَّق بأعلى دقة متاحة (اللوحة الكاملة
+// قبل التقطيع، لا الملف المحفوظ بعد أي ضغط)، فتُنسخ الصورة تلقائياً بصمت بلا أي زر
+function _resolvePendingClipboard_(files) {
+  var deferred = window._pendingClipDeferred;
+  window._pendingClipDeferred = null;
+  if (!deferred) return;
+  var canvas = window.__lastCaptureCanvas;
+  if (canvas && canvas.width && canvas.height && canvas.toBlob) {
+    try {
+      canvas.toBlob(function (b) {
+        if (b) deferred.resolve(b);
+        else if (files && files[0]) deferred.resolve(files[0]);
+        else deferred.reject(new Error('no image'));
+      }, 'image/png');
+      return;
+    } catch (e) {}
+  }
+  if (files && files[0]) deferred.resolve(files[0]);
+  else deferred.reject(new Error('no image'));
 }
+// يُستدعى في أي مسار فشل/توقّف قبل جهوز الصورة — كي لا يبقى Promise الحافظة معلَّقاً إلى الأبد
+function _rejectPendingClipboard_() {
+  var deferred = window._pendingClipDeferred;
+  window._pendingClipDeferred = null;
+  if (deferred) deferred.reject(new Error('export failed'));
+}
+
 // 📤 نقطة الاستدعاء الموحّدة لأي زر "📸 صورة HD": ينسخ للحافظة تلقائياً بالتوازي، ثم يشارك مباشرة
 // (Web Share API) أو يحفظ الملف/الملفات تلقائياً لو المشاركة غير متاحة بالجهاز/المتصفح.
 // 🛡️ (V4.110) كانت `.catch(function(){})` تتجاهل أي رفض بصمت — فلو تعذّرت المشاركة (لا استجابة،
@@ -17981,14 +17991,9 @@ function _showClipboardFallbackBtn_(files) {
 // المشاركة فُتحت فعلاً؛ ولو لم تستجب لوحة المشاركة إطلاقاً خلال مهلة معقولة، نحفظ الملف بديلاً بدل
 // ترك المستخدم أمام زر بلا أي أثر.
 function _shareOrSaveImageFiles_(files) {
-  // 📋 (V4.128) المتصفح يشترط «تفعيل المستخدم» (نقرة حديثة) للكتابة في الحافظة، والتقاط الصورة
-  // يستغرق ثوانٍ — فكان النسخ التلقائي يُرفض بصمت في كل مرة تقريباً (ولهذا لم تُنسخ الصورة إطلاقاً
-  // رغم إضافة الميزة). الحل: نحاول النسخ التلقائي، وإن رُفض نعرض زر «نسخ للحافظة» جاهزاً — ضغطة
-  // واحدة عليه تمنح التفعيل المطلوب فتُنسخ الصورة فوراً بنفس الدقة (الصورة جاهزة بالذاكرة بالفعل).
-  _copyImageToClipboard_(files).then(function (copied) {
-    if (copied) showToast('📋 نُسخت الصورة أيضاً للحافظة — يمكن لصقها في أي برنامج آخر مباشرة');
-    else _showClipboardFallbackBtn_(files);
-  });
+  // 📋 (V4.129) يحلّ Promise الحافظة المُعلَّق منذ لحظة الضغطة (راجع _tryClipboardImageCopy_) —
+  // فتُنسخ الصورة تلقائياً وبصمت هنا بلا أي زر يدوي، بنفس دقة اللوحة الكاملة قبل التقطيع
+  _resolvePendingClipboard_(files);
   try {
     if (navigator.canShare && navigator.canShare({ files: files })) {
       var settled = false, wasHidden = false;
@@ -18020,8 +18025,12 @@ function _shareOrSaveImageFiles_(files) {
 // 🔘 دالة زر عامة: تبني HTML التقرير الكامل (نفس دالة الطباعة/PDF الجاهزة أصلاً لكل شاشة)
 // وتحوّله لصورة HD ثم تشارك/تحفظ — btn اختياري (لعرض حالة التحميل ⏳)
 function exportReportAsImage(getFullHtmlFn, fileNameBase, btn) {
+  // 📋 (V4.129) أول سطر دوماً — ضمن نافذة تفعيل المستخدم. لو استُدعيت هذه الدالة بعد نداء سيرفر
+  // سابق (مثل تصدير إشعار: يجلب HTML من السيرفر أولاً ثم يستدعيها) يكون المستدعي قد فتح النافذة
+  // بنفسه مسبقاً (window._pendingClipDeferred موجودة بالفعل) فلا نُنشئ واحدة ثانية متأخرة عبثاً
+  if (!window._pendingClipDeferred) _tryClipboardImageCopy_();
   var fullHtml = typeof getFullHtmlFn === 'function' ? getFullHtmlFn() : getFullHtmlFn;
-  if (!fullHtml) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
+  if (!fullHtml) { showToast('❌ لا يوجد محتوى لتصديره', true); _rejectPendingClipboard_(); return; }
   var orig = btn ? btn.innerHTML : null;
   if (btn) { btn.disabled = true; btn.innerHTML = '⏳...'; }
   // 🛡️ (V4.113) حارس زمني: لو لم يستجب المسار الكامل خلال 35 ثانية (جهاز ضعيف/تقرير ضخم) نُعيد
@@ -18032,12 +18041,13 @@ function exportReportAsImage(getFullHtmlFn, fileNameBase, btn) {
     if (typeof _capOverlay_ === 'function') _capOverlay_(false);
     if (btn) { btn.disabled = false; btn.innerHTML = orig; }
     showToast('⚠️ التصدير يستغرق وقتاً طويلاً — قد يكون التقرير كبيراً جداً. أعد المحاولة أو صغِّر نطاق البيانات.', true);
+    _rejectPendingClipboard_();
   }, 60000);
   _exportFullHtmlAsImage_(fullHtml, fileNameBase || 'تقرير', function(files, err) {
     if (settled) return; settled = true;
     clearTimeout(watchdog);
     if (btn) { btn.disabled = false; btn.innerHTML = orig; }
-    if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
+    if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); _rejectPendingClipboard_(); return; }
     _shareOrSaveImageFiles_(files);
   });
 }
@@ -18213,6 +18223,7 @@ function generateHousing(city) {
   // 🩹 (V4.128) تعمل الآن من أي شاشة (زر التسكين المباشر بقائمة الرحلات مثلاً) وليس من قسم الرحلات فقط
   _detachModalToBody_('housingModal');
   new bootstrap.Modal(document.getElementById('housingModal')).show();
+  _liftModalBackdrop_();
 }
 
 
@@ -19618,8 +19629,9 @@ function _hnSwapForCapture_(scope) {
   };
 }
 function _mhExportImage_(btn) {
+  _tryClipboardImageCopy_();   // (V4.129) أول سطر — ضمن نافذة تفعيل المستخدم
   var root = document.getElementById('mhCardsArea');
-  if (!root || !root.innerHTML.trim()) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
+  if (!root || !root.innerHTML.trim()) { showToast('❌ لا يوجد محتوى لتصديره', true); _rejectPendingClipboard_(); return; }
   var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳...';
   var fileNameBase = 'تسكين مدموج — ' + (window._mhMeta ? window._mhMeta.label : '');
   var restore = _hnSwapForCapture_('merged');
@@ -21421,8 +21433,9 @@ function renderStatsDashboard(d) {
 // بلا أي تأثيرات تفاعلية/hover)، مع ترويسة عنوان+وقت طباعة وترقيم صفحات تلقائي أسفل كل صفحة
 // 📸 (V4.104) صورة HD للوحة الإحصائيات — التقاط مباشر لقسم الشاشة الحيّ بالكامل
 function _statsExportImage_(btn) {
+  _tryClipboardImageCopy_();   // (V4.129) أول سطر — ضمن نافذة تفعيل المستخدم
   var root = document.getElementById('section-stats');
-  if (!root) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
+  if (!root) { showToast('❌ لا يوجد محتوى لتصديره', true); _rejectPendingClipboard_(); return; }
   var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳...';
   _captureElementAsPngFiles_(root, 'لوحة الإحصائيات', function(files, err) {
     btn.disabled = false; btn.innerHTML = orig;
