@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.132";
+var APP_VERSION = "4.133";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21033,7 +21033,7 @@ var VZ_ITEMS_SHEET   = 'AgentAccounts_Items';
 var VZ_ITEMS_HEADERS = ['المعرف','الوكيل','البيان','العملة','القيمة','دائن؟','ملاحظات','الترتيب','أنشئ بواسطة','أنشئ في'];
 var VZ_PAY_SHEET     = 'AgentAccounts_Payments';
 var VZ_PAY_HEADERS   = ['المعرف','الوكيل','التاريخ','المبلغ','العملة','ملاحظات','أنشئ بواسطة','أنشئ في'];
-var VZ_STATUSES_     = ['قيد التنفيذ','مُصدَّرة','مستلمة','مرفوضة','ملغاة'];
+var VZ_STATUSES_     = ['تم الإرسال','تم السداد','تم إصدار الموفا'];
 var VZ_BOOTSTRAP_CACHE_KEY = 'visa_bootstrap_cache';
 
 function _vzPerm_(authToken, cap) {
@@ -21213,11 +21213,46 @@ function getVisaBootstrap(authToken) {
   }
   var out = {}; for (var k in shared) out[k] = shared[k];
   out.success = true; out.user = session.username;
+  var finance = _vzHasFinance_(session);
   out.can = {
     add: _sessionHasPerm_(session, 'visas.add'), edit: _sessionHasPerm_(session, 'visas.edit'),
-    del: _sessionHasPerm_(session, 'visas.delete')
+    del: _sessionHasPerm_(session, 'visas.delete'), finance: finance
   };
+  // 🔒 (V4.133) الجانب المالي (الأسعار/المستحق/أرصدة الوكلاء) لا يُرسَل إطلاقاً لمن لا يملك صلاحية
+  // visas.finance — فلا يراه من يسجّل ويتابع فقط. نُعيد بناء نسخة منزوعة القيم المالية.
+  if (!finance) {
+    out.prices = []; out.agentBalances = {};
+    out.files = (out.files || []).map(function (f) {
+      var c = {}; for (var k2 in f) c[k2] = f[k2];
+      c.price = 0; c.dueSAR = 0; return c;
+    });
+  }
   return out;
+}
+/* 🔗 (V4.133) أرقام مجموعات التأشيرات مفهرسة بالرحلة — ليعرض السجل العام رقم المجموعة
+   مع بيانات كل معتمر/عميل (نفس أسلوب ربط ملفات الوزارة بالسجل). لا تُرسَل أي بيانات مالية. */
+function getVisaTripLinks(authToken) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'visas.view') && !_sessionHasPerm_(session, 'registry.view') &&
+      !_sessionHasPerm_(session, 'trips.view')) return { success: true, links: {} };
+  var links = {};
+  _vzReadAll_().forEach(function (f) {
+    var t = _mfStr_(f.tripName); if (!t) return;
+    if (!links[t]) links[t] = [];
+    links[t].push({
+      id: f.id, ref: f.ref, seq: f.seq, status: f.status, date: f.date,
+      agent: f.agent, company: f.company,
+      clients: (f.breakdown || []).map(function (b) { return _mfStr_(b.name); }),
+      selected: Array.isArray(f.selected) ? f.selected : []
+    });
+  });
+  return { success: true, links: links };
+}
+function _vzHasFinance_(session) { return _sessionHasPerm_(session, 'visas.finance'); }
+function _vzFinancePerm_(authToken) {
+  var session = requireAuth_(authToken);
+  if (_vzHasFinance_(session)) return session;
+  throw new Error('لا تملك صلاحية الجانب المالي في متابعة التأشيرات والوكلاء');
 }
 
 function saveVisaFile(authToken, data) {
@@ -21275,11 +21310,11 @@ function deleteVisaFile(authToken, id) {
 
 /* -------- تسعير الوكلاء (فترات) -------- */
 function getVisaAgentPrices(authToken) {
-  _vzPerm_(authToken, 'view');
+  _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   return { success: true, prices: _vzReadPrices_() };
 }
 function saveVisaAgentPrices(authToken, agent, periods) {
-  var session = _vzPerm_(authToken, 'edit');
+  var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
   var lock = LockService.getScriptLock();
@@ -21308,7 +21343,7 @@ function saveVisaAgentPrices(authToken, agent, periods) {
 
 /* -------- حساب وكيل: عرض/دفعات/بنود -------- */
 function getAgentAccount(authToken, agent) {
-  _vzPerm_(authToken, 'view');
+  _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
   var files = _vzReadAll_().filter(function (f) { return f.agent === agent; });
@@ -21321,7 +21356,7 @@ function getAgentAccount(authToken, agent) {
   };
 }
 function saveAgentAccItem(authToken, item) {
-  var session = _vzPerm_(authToken, 'edit');
+  var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var agent = _mfStr_(item && item.agent);
   if (!agent || !_mfStr_(item.desc)) return { success: false, error: 'الوكيل والبيان مطلوبان' };
   var sh = _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS);
@@ -21340,7 +21375,7 @@ function saveAgentAccItem(authToken, item) {
   return { success: true };
 }
 function deleteAgentAccItem(authToken, id) {
-  var session = _vzPerm_(authToken, 'delete');
+  var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var hit = _vzReadItems_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'البند غير موجود' };
   _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS).deleteRow(hit._row);
@@ -21349,7 +21384,7 @@ function deleteAgentAccItem(authToken, id) {
   return { success: true };
 }
 function saveAgentPayment(authToken, pay) {
-  var session = _vzPerm_(authToken, 'edit');
+  var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var agent = _mfStr_(pay && pay.agent);
   if (!agent || !_accNum_(pay.amount)) return { success: false, error: 'الوكيل والمبلغ مطلوبان' };
   var sh = _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS);
@@ -21368,7 +21403,7 @@ function saveAgentPayment(authToken, pay) {
   return { success: true };
 }
 function deleteAgentPayment(authToken, id) {
-  var session = _vzPerm_(authToken, 'delete');
+  var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var hit = _vzReadPays_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
   _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS).deleteRow(hit._row);
@@ -21379,7 +21414,7 @@ function deleteAgentPayment(authToken, id) {
 
 /* -------- إحصائيات الوكلاء بفلاتر متعددة -------- */
 function getAgentVisaStats(authToken, filters) {
-  _vzPerm_(authToken, 'view');
+  _vzFinancePerm_(authToken);   // 🔒 (V4.133) الإحصائيات تكشف المستحقات المالية
   filters = filters || {};
   var fromMs = _mfMs_(_mfDate_(filters.from)); if (isNaN(fromMs)) fromMs = -8640000000000000;
   var toMs = _mfMs_(_mfDate_(filters.to)); if (isNaN(toMs)) toMs = 8640000000000000;
@@ -21414,6 +21449,216 @@ function getAgentVisaStats(authToken, filters) {
     success: true, totalFiles: totalFiles, totalVisas: totalVisas, totalDueSAR: totalDue,
     byAgent: arr(byAgent), byStatus: arr(byStatus), byCompany: arr(byCompany)
   };
+}
+
+/* ============================================================
+   🏨 (V4.133 — المرحلة 2) اتفاقيات سكن مكة والمدينة + محرك المتاح
+   ------------------------------------------------------------
+   نموذج «كثير إلى كثير»: كل اتفاقية سكن لها سعة وفترة (من/إلى)، وتُقسَّم على
+   عدة مجموعات؛ وكل مجموعة يمكن أن ترتبط بأكثر من اتفاقية في مكة والمدينة.
+   محرك المتاح يحسب المتاح على محور الزمن: يقطع فترة الاتفاقية عند كل حدود
+   تخصيص، فيظهر المتاح في كل مقطع على حدة + المتاح طوال الفترة كاملة (الأدنى).
+   مثال: اتفاقية 100 من 1-9 إلى 4-9 ومجموعة 40 من 1-9 إلى 4-9 ⇒ متاح 60 (1-9→4-9).
+   ثم مجموعة 40 من 1-9 إلى 3-9 ⇒ متاح 20 (1-9→3-9) و60 (3-9→4-9) — أي 20 للفترة كاملة.
+   ============================================================ */
+var VZ_HAGR_SHEET    = 'HousingAgreements';
+var VZ_HAGR_HEADERS  = ['المعرف','مسلسل','رقم الاتفاقية','المدينة','الفندق / المورد','العدد','من تاريخ','إلى تاريخ',
+  'الحالة','ملاحظات','أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في'];
+var VZ_HALLOC_SHEET  = 'HousingAllocations';
+var VZ_HALLOC_HEADERS = ['المعرف','معرف الاتفاقية','رقم المجموعة','العدد','من تاريخ','إلى تاريخ','ملاحظات','أنشئ بواسطة','أنشئ في'];
+var VZ_HA_CITIES_    = ['مكة','المدينة'];
+var VZ_HA_STATUSES_  = ['مبدئية','مؤكَّدة','مُوقَّعة','ملغاة'];
+var VZ_HA_CACHE_KEY  = 'visa_housing_cache';
+
+function _vzHaClearCache_() { try { CacheService.getScriptCache().remove(VZ_HA_CACHE_KEY); } catch (e) {} try { _vzClearCache_(); } catch (e2) {} }
+
+function _vzHaRowToObj_(r) {
+  return { id: _mfStr_(r[0]), seq: _mfNum_(r[1]), agrNo: _mfStr_(r[2]), city: _mfStr_(r[3]), hotel: _mfStr_(r[4]),
+    capacity: _mfNum_(r[5]), from: _mfStr_(r[6]), to: _mfStr_(r[7]), status: _mfStr_(r[8]), notes: _mfStr_(r[9]),
+    createdBy: _mfStr_(r[10]), createdAt: _mfStr_(r[11]), updatedBy: _mfStr_(r[12]), updatedAt: _mfStr_(r[13]) };
+}
+function _vzHaReadAll_() {
+  var sh = _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS);
+  var last = sh.getLastRow(); if (last < 2) return [];
+  return sh.getRange(2, 1, last - 1, VZ_HAGR_HEADERS.length).getValues()
+    .filter(function (r) { return _mfStr_(r[0]); })
+    .map(function (r, i) { var o = _vzHaRowToObj_(r); o._row = i + 2; return o; });
+}
+function _vzAllocReadAll_() {
+  var sh = _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS);
+  var last = sh.getLastRow(); if (last < 2) return [];
+  return sh.getRange(2, 1, last - 1, VZ_HALLOC_HEADERS.length).getValues()
+    .filter(function (r) { return _mfStr_(r[0]); })
+    .map(function (r, i) {
+      return { id: _mfStr_(r[0]), agrId: _mfStr_(r[1]), groupRef: _mfStr_(r[2]), count: _mfNum_(r[3]),
+        from: _mfStr_(r[4]), to: _mfStr_(r[5]), notes: _mfStr_(r[6]),
+        createdBy: _mfStr_(r[7]), createdAt: _mfStr_(r[8]), _row: i + 2 };
+    });
+}
+
+/* 🧮 محرك المتاح: يقسّم فترة الاتفاقية إلى مقاطع عند كل حدود تخصيص، ويحسب لكل
+   مقطع المستخدَم والمتاح، ثم يدمج المقاطع المتجاورة المتساوية. */
+function _vzHaSegments_(capacity, from, to, allocs) {
+  var cap = _mfNum_(capacity);
+  var F = _mfMs_(_mfDate_(from)), T = _mfMs_(_mfDate_(to));
+  var used = allocs.reduce(function (a, x) { return a + _mfNum_(x.count); }, 0);
+  if (isNaN(F) || isNaN(T) || T <= F) {
+    return { segments: [{ from: _mfStr_(from), to: _mfStr_(to), used: used, remaining: cap - used }],
+             minRemaining: cap - used, maxUsed: used, totalAllocated: used };
+  }
+  var pts = {}; pts[F] = 1; pts[T] = 1;
+  allocs.forEach(function (x) {
+    var f = _mfMs_(_mfDate_(x.from)), t = _mfMs_(_mfDate_(x.to));
+    if (isNaN(f)) f = F; if (isNaN(t)) t = T;
+    f = Math.max(F, Math.min(T, f)); t = Math.max(F, Math.min(T, t));
+    pts[f] = 1; pts[t] = 1;
+  });
+  var keys = Object.keys(pts).map(Number).sort(function (a, b) { return a - b; });
+  var raw = [];
+  for (var i = 0; i < keys.length - 1; i++) {
+    var a = keys[i], b = keys[i + 1];
+    var u = 0;
+    allocs.forEach(function (x) {
+      var f = _mfMs_(_mfDate_(x.from)), t = _mfMs_(_mfDate_(x.to));
+      if (isNaN(f)) f = F; if (isNaN(t)) t = T;
+      f = Math.max(F, Math.min(T, f)); t = Math.max(F, Math.min(T, t));
+      if (f <= a && t >= b) u += _mfNum_(x.count);
+    });
+    raw.push({ a: a, b: b, used: u });
+  }
+  // دمج المقاطع المتجاورة المتساوية في المستخدَم
+  var merged = [];
+  raw.forEach(function (s) {
+    var last = merged[merged.length - 1];
+    if (last && last.used === s.used) last.b = s.b; else merged.push({ a: s.a, b: s.b, used: s.used });
+  });
+  var d = function (ms) { return Utilities.formatDate(new Date(ms), 'Africa/Cairo', 'dd/MM/yyyy'); };
+  var segs = merged.map(function (s) { return { from: d(s.a), to: d(s.b), used: s.used, remaining: cap - s.used }; });
+  var minRem = segs.length ? Math.min.apply(null, segs.map(function (s) { return s.remaining; })) : cap;
+  var maxUsed = segs.length ? Math.max.apply(null, segs.map(function (s) { return s.used; })) : 0;
+  return { segments: segs, minRemaining: minRem, maxUsed: maxUsed, totalAllocated: used };
+}
+
+// أرقام المجموعات المسجَّلة بشاشة التأشيرات — للبحث التنبّئي وملء العدد والتواريخ تلقائياً
+function _vzGroupIndex_() {
+  var out = [];
+  _vzReadAll_().forEach(function (f) {
+    var ref = _mfStr_(f.ref); if (!ref) return;
+    out.push({ ref: ref, count: _mfNum_(f.visaCount), agent: f.agent, company: f.company,
+      tripName: f.tripName, status: f.status,
+      makkahIn: f.makkahIn, makkahOut: f.makkahOut, madinahIn: f.madinahIn, madinahOut: f.madinahOut,
+      clients: (f.breakdown || []).map(function (b) { return _mfStr_(b.name); }) });
+  });
+  return out;
+}
+
+function getHousingAgreements(authToken) {
+  _vzPerm_(authToken, 'view');
+  var agrs = _vzHaReadAll_(), allocs = _vzAllocReadAll_();
+  var byAgr = {};
+  allocs.forEach(function (x) { (byAgr[x.agrId] = byAgr[x.agrId] || []).push(x); });
+  agrs.forEach(function (a) {
+    a.allocations = (byAgr[a.id] || []).map(function (x) { var c = {}; for (var k in x) if (k !== '_row') c[k] = x[k]; return c; });
+    var av = _vzHaSegments_(a.capacity, a.from, a.to, a.allocations);
+    a.segments = av.segments; a.minRemaining = av.minRemaining; a.totalAllocated = av.totalAllocated;
+    delete a._row;
+  });
+  agrs.sort(function (x, y) { return (y.seq || 0) - (x.seq || 0); });
+  return { success: true, agreements: agrs, groups: _vzGroupIndex_(),
+    cities: VZ_HA_CITIES_, statuses: VZ_HA_STATUSES_, today: _mfToday_() };
+}
+
+function saveHousingAgreement(authToken, data) {
+  var isNew = !_mfStr_(data && data.id);
+  var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
+  data = data || {};
+  var agrNo = _mfStr_(data.agrNo);
+  if (!agrNo) throw new Error('أدخل رقم الاتفاقية');
+  var city = _mfStr_(data.city);
+  if (VZ_HA_CITIES_.indexOf(city) < 0) throw new Error('اختر المدينة (مكة أو المدينة)');
+  var sh = _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS);
+  var all = _vzHaReadAll_();
+  // منع تكرار رقم الاتفاقية داخل نفس المدينة
+  var dup = all.filter(function (a) { return a.agrNo === agrNo && a.city === city && a.id !== _mfStr_(data.id); });
+  if (dup.length) throw new Error('رقم الاتفاقية ' + agrNo + ' مسجَّل من قبل في ' + city);
+  var stamp = _mfStamp_();
+  var row = [null, 0, agrNo, city, _mfStr_(data.hotel), _mfNum_(data.capacity),
+    _mfDate_(data.from), _mfDate_(data.to), _mfStr_(data.status) || VZ_HA_STATUSES_[0], _mfStr_(data.notes)];
+  if (isNew) {
+    var seq = all.reduce(function (m, a) { return Math.max(m, _mfNum_(a.seq)); }, 0) + 1;
+    row[0] = 'HA' + new Date().getTime(); row[1] = seq;
+    sh.appendRow(row.concat([session.username, stamp, '', '']));
+  } else {
+    var cur = all.filter(function (a) { return a.id === _mfStr_(data.id); })[0];
+    if (!cur) throw new Error('الاتفاقية غير موجودة');
+    row[0] = cur.id; row[1] = cur.seq;
+    sh.getRange(cur._row, 1, 1, VZ_HAGR_HEADERS.length)
+      .setValues([row.concat([cur.createdBy, cur.createdAt, session.username, stamp])]);
+  }
+  _vzHaClearCache_();
+  return { success: true };
+}
+
+function deleteHousingAgreement(authToken, id) {
+  _vzPerm_(authToken, 'delete');
+  id = _mfStr_(id);
+  var a = _vzHaReadAll_().filter(function (x) { return x.id === id; })[0];
+  if (!a) throw new Error('الاتفاقية غير موجودة');
+  // حذف تخصيصاتها أولاً (من الأسفل للأعلى حفاظاً على أرقام الصفوف)
+  var ash = _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS);
+  _vzAllocReadAll_().filter(function (x) { return x.agrId === id; })
+    .sort(function (x, y) { return y._row - x._row; })
+    .forEach(function (x) { ash.deleteRow(x._row); });
+  _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS).deleteRow(a._row);
+  _vzHaClearCache_();
+  return { success: true };
+}
+
+function saveHousingAllocation(authToken, data) {
+  var isNew = !_mfStr_(data && data.id);
+  var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
+  data = data || {};
+  var agrId = _mfStr_(data.agrId);
+  var agr = _vzHaReadAll_().filter(function (a) { return a.id === agrId; })[0];
+  if (!agr) throw new Error('اختر اتفاقية صحيحة');
+  var ref = _mfStr_(data.groupRef);
+  if (!ref) throw new Error('أدخل رقم المجموعة');
+  var cnt = _mfNum_(data.count);
+  if (cnt <= 0) throw new Error('أدخل عدداً أكبر من صفر');
+  var from = _mfDate_(data.from) || agr.from, to = _mfDate_(data.to) || agr.to;
+  // ✅ التحقق من المتاح: نحسب المقاطع بعد إضافة/تعديل هذا التخصيص ونرفض أي مقطع سالب
+  var others = _vzAllocReadAll_().filter(function (x) { return x.agrId === agrId && x.id !== _mfStr_(data.id); });
+  var av = _vzHaSegments_(agr.capacity, agr.from, agr.to,
+    others.concat([{ count: cnt, from: from, to: to }]));
+  if (av.minRemaining < 0) {
+    var bad = av.segments.filter(function (s) { return s.remaining < 0; })[0];
+    throw new Error('تجاوز سعة الاتفاقية: المطلوب يفوق المتاح بـ ' + Math.abs(bad.remaining) +
+      ' في الفترة ' + bad.from + ' → ' + bad.to);
+  }
+  var sh = _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS);
+  var stamp = _mfStamp_();
+  var row = [null, agrId, ref, cnt, from, to, _mfStr_(data.notes)];
+  if (isNew) {
+    row[0] = 'HL' + new Date().getTime();
+    sh.appendRow(row.concat([session.username, stamp]));
+  } else {
+    var cur = _vzAllocReadAll_().filter(function (x) { return x.id === _mfStr_(data.id); })[0];
+    if (!cur) throw new Error('التخصيص غير موجود');
+    row[0] = cur.id;
+    sh.getRange(cur._row, 1, 1, VZ_HALLOC_HEADERS.length).setValues([row.concat([cur.createdBy, cur.createdAt])]);
+  }
+  _vzHaClearCache_();
+  return { success: true };
+}
+
+function deleteHousingAllocation(authToken, id) {
+  _vzPerm_(authToken, 'delete');
+  id = _mfStr_(id);
+  var x = _vzAllocReadAll_().filter(function (a) { return a.id === id; })[0];
+  if (!x) throw new Error('التخصيص غير موجود');
+  _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS).deleteRow(x._row);
+  _vzHaClearCache_();
+  return { success: true };
 }
 
 // يعرض كل التحركات المسجَّلة في تاريخ بعينه — نفس تنسيق أزرار «تحركات اليوم/الغد» (غير مُصفّاة)
