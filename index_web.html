@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.129 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.130 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.129)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.130)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.129</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.130</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6424,7 +6424,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.129";
+var CLIENT_APP_VERSION = "4.130";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -17758,16 +17758,27 @@ function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
 
   var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  // 🖼️ (V4.129) رفع سقف الدقة تدريجياً (لا لأقصى ما تسمح به الذاكرة نظرياً — راجع الشرح أعلى هذه
-  // الدالة عن أزمة تجمّد المتصفح الفعلية التي وقعت سابقاً بسقف 110-180 مليون بكسل): 26 مليون
-  // بكسل/2.5× كانت آمنة لكن دون FHD وضوحاً لتقارير كبيرة؛ 40 مليون/3.5× يعطي جودة أعلى بوضوح مع
-  // بقاء الذاكرة لكل لوحة ضمن ~160 ميجابايت (بعيداً كفاية عن نطاق التجمّد المُثبَت سابقاً)
-  var MAX_AREA = IS_IOS_ ? 16000000 : 40000000;   // بكسل² — 4 بايت لكل بكسل بالذاكرة
-  var MAX_DIM  = IS_IOS_ ? 8192 : 12000;
+  // 🖼️ (V4.130) رفع الدقة لأقصى مستوى FHD+ مثالي مع بقاء الأمان: نُدرِّج السقف حسب ذاكرة الجهاز
+  // الفعلية (navigator.deviceMemory بالجيجابايت) بدل رقم ثابت واحد — فالأجهزة القوية تحصل على أعلى
+  // دقة ممكنة، والضعيفة تبقى بعيدة عن نطاق التجمّد المُثبَت سابقاً (110–180 مليون بكسل).
+  // • سطح مكتب/أندرويد قوي (≥8GB أو غير معروف): 64 مليون بكسل، مقياس حتى 4× → نص حادّ جداً.
+  // • جهاز متوسط (4–8GB): 44 مليون، حتى 3.5×.  • ضعيف (<4GB): 30 مليون، حتى 3×.
+  // كل بكسل 4 بايت + أحمال html2canvas الوسيطة ≈ 2×، فحتى 64 مليون تبقى ضمن حدود آمنة على الأجهزة القوية.
+  var _mem = (typeof navigator.deviceMemory === 'number' && navigator.deviceMemory > 0) ? navigator.deviceMemory : 8;
+  var MAX_AREA, SCALE_CAP;
+  if (IS_IOS_)            { MAX_AREA = 18000000; SCALE_CAP = 3.0; }
+  else if (_mem >= 8)     { MAX_AREA = 64000000; SCALE_CAP = 4.0; }
+  else if (_mem >= 4)     { MAX_AREA = 44000000; SCALE_CAP = 3.5; }
+  else                    { MAX_AREA = 30000000; SCALE_CAP = 3.0; }
+  var MAX_DIM  = IS_IOS_ ? 8192 : 16000;
   var byArea = Math.sqrt(MAX_AREA / (cssW * cssH));
   var byDim  = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
-  var scale = Math.min(3.5, byArea, byDim);
+  // نضمن حدّاً أدنى للدقة = ضعف كثافة الشاشة (لا نهبط تحت 2× على المحتوى المعتاد حتى لا يبهت النص)
+  var _dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  var scale = Math.min(SCALE_CAP, byArea, byDim);
   if (!(scale > 0)) scale = 1;
+  // لو لم يفرض سقف المساحة/الأبعاد تخفيضاً كبيراً، ارفع الدقة لحدّها الأقصى لهذا المحتوى تحديداً
+  if (scale < _dpr && byArea >= _dpr && byDim >= _dpr) scale = _dpr;
   if (scale < 0.4) scale = 0.4;                   // تقرير ضخم جداً — دقة أقل خير من فشل كامل
 
   _capOverlay_(true, 'جاري إنشاء الصورة…');
