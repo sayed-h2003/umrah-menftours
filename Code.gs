@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.131";
+var APP_VERSION = "4.132";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21017,9 +21017,16 @@ function _tgMoveParseShortOrFullDate_(s) {
    عن حسابات العملاء (دفعات + بنود مدينة/دائنة + كشف)، وإحصائيات بفلاتر متعددة.
    ================================================================================== */
 var VZ_FILES_SHEET   = 'VisaFiles';
-var VZ_FILES_HEADERS = ['المعرف','مسلسل','رقم القيد','الحالة','التاريخ','الشركة المصرية','الوكيل السعودي',
-  'الرحلة المرتبطة','بنود العملاء (JSON)','المعتمرون المختارون (JSON)','عدد التأشيرات','سعر التأشيرة','ملاحظات',
-  'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في'];
+// 🧩 (V4.132) توسّع الشيت لنموذج «المجموعات والوكلاء»: رقم المجموعة (ref) + العدد (visaCount) +
+// حالة السداد + سكن مكة/المدينة بتواريخ دخول/خروج + أرقام اتفاقيات السكن والإعاشة للمدينتين.
+// الأعمدة الجديدة مُلحَقة بالنهاية (17→25) فلا تتأثر فهارس البيانات القديمة، و_accSheet_ يُرقّي
+// صف العناوين تلقائياً عند فتح شيت أقدم.
+var VZ_FILES_HEADERS = ['المعرف','مسلسل','رقم المجموعة','الحالة','التاريخ','الشركة المصرية','الوكيل السعودي',
+  'الرحلة المرتبطة','بنود العملاء (JSON)','المعتمرون المختارون (JSON)','العدد','سعر الفرد','ملاحظات',
+  'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في',
+  'حالة السداد','سكن مكة دخول','سكن مكة خروج','سكن المدينة دخول','سكن المدينة خروج',
+  'رقم اتفاقية سكن مكة','رقم اتفاقية سكن المدينة','رقم اتفاقية اعاشة مكة','رقم اتفاقية اعاشة المدينة'];
+var VZ_PAY_STATUSES_ = ['', 'تم إصدار الموقّع', 'تم الإرسال', 'تم السداد'];
 var VZ_PRICES_SHEET  = 'VisaAgentPrices';
 var VZ_PRICES_HEADERS = ['الوكيل','السعر','من تاريخ','إلى تاريخ','أنشئ بواسطة','أنشئ في'];
 var VZ_ITEMS_SHEET   = 'AgentAccounts_Items';
@@ -21043,14 +21050,20 @@ function _vzRowToObj_(r) {
     id: _mfStr_(r[0]), seq: _mfNum_(r[1]), ref: _mfStr_(r[2]), status: _mfStr_(r[3]) || VZ_STATUSES_[0],
     date: _mfStr_(r[4]), company: _mfStr_(r[5]), agent: _mfStr_(r[6]), tripName: _mfStr_(r[7]),
     breakdown: bd, selected: sel, visaCount: _mfNum_(r[10]), price: _mfNum_(r[11]), notes: _mfStr_(r[12]),
-    createdBy: _mfStr_(r[13]), createdAt: _mfDateTime_(r[14]), updatedBy: _mfStr_(r[15]), updatedAt: _mfDateTime_(r[16])
+    createdBy: _mfStr_(r[13]), createdAt: _mfDateTime_(r[14]), updatedBy: _mfStr_(r[15]), updatedAt: _mfDateTime_(r[16]),
+    payStatus: _mfStr_(r[17]), makkahIn: _mfStr_(r[18]), makkahOut: _mfStr_(r[19]),
+    madinahIn: _mfStr_(r[20]), madinahOut: _mfStr_(r[21]),
+    makkahHousingAgr: _mfStr_(r[22]), madinahHousingAgr: _mfStr_(r[23]),
+    makkahCateringAgr: _mfStr_(r[24]), madinahCateringAgr: _mfStr_(r[25])
   };
 }
 function _vzObjToRow_(f) {
   return [f.id, f.seq, _mfStr_(f.ref), _mfStr_(f.status), _mfDate_(f.date), _mfStr_(f.company), _mfStr_(f.agent),
     _mfStr_(f.tripName), JSON.stringify(f.breakdown || []), JSON.stringify(f.selected || []),
     _mfNum_(f.visaCount), _mfNum_(f.price), _mfStr_(f.notes),
-    f.createdBy, f.createdAt, f.updatedBy, f.updatedAt];
+    f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
+    _mfStr_(f.payStatus), _mfDate_(f.makkahIn), _mfDate_(f.makkahOut), _mfDate_(f.madinahIn), _mfDate_(f.madinahOut),
+    _mfStr_(f.makkahHousingAgr), _mfStr_(f.madinahHousingAgr), _mfStr_(f.makkahCateringAgr), _mfStr_(f.madinahCateringAgr)];
 }
 function _vzReadAll_() {
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
@@ -21144,6 +21157,30 @@ function _vzAgentBalance_(agent, files, items, pays) {
   };
 }
 
+// 🍽️ (V4.132) خريطة أرقام اتفاقيات الإعاشة المسجَّلة بشاشة اتفاقيات الإعاشة، مفهرسة برقم المجموعة
+// ثم بالمنطقة (مكة/المدينة) — تُعرض تلقائياً بشاشة المجموعات لو المجموعة مسجَّلة هناك.
+// { "رقم المجموعة": { makkah: ["25456", ...], madinah: [...] } }
+function _vzCateringByGroup_() {
+  var out = {};
+  try {
+    var sh = getSpreadsheet_().getSheetByName(CATERING_SHEET);
+    if (!sh || sh.getLastRow() < 2) return out;
+    var H = CATERING_HEADERS;
+    var iNo = H.indexOf('رقم الاتفاقية'), iArea = H.indexOf('منطقة الخدمة'), iGrp = H.indexOf('رقم المجموعة');
+    if (iGrp < 0 || iNo < 0) return out;
+    sh.getRange(2, 1, sh.getLastRow() - 1, H.length).getValues().forEach(function (r) {
+      var grp = _mfStr_(r[iGrp]); if (!grp) return;
+      var no = _mfStr_(r[iNo]); if (!no) return;
+      var area = _mfStr_(iArea >= 0 ? r[iArea] : '');
+      var city = (area.indexOf('مكة') >= 0 || area.indexOf('مكه') >= 0) ? 'makkah'
+        : (area.indexOf('مدين') >= 0 ? 'madinah' : 'other');
+      if (!out[grp]) out[grp] = { makkah: [], madinah: [], other: [] };
+      if (out[grp][city].indexOf(no) < 0) out[grp][city].push(no);
+    });
+  } catch (e) {}
+  return out;
+}
+
 function getVisaBootstrap(authToken) {
   var session = _vzPerm_(authToken, 'view');
   var shared = getCachedData(VZ_BOOTSTRAP_CACHE_KEY);
@@ -21169,7 +21206,8 @@ function getVisaBootstrap(authToken) {
     });
     shared = {
       files: files, prices: prices, companies: base.companies, trips: base.trips, clients: base.clients,
-      agents: Object.keys(agentsSet).sort(), statuses: VZ_STATUSES_, agentBalances: agentBalances, today: _mfToday_()
+      agents: Object.keys(agentsSet).sort(), statuses: VZ_STATUSES_, payStatuses: VZ_PAY_STATUSES_,
+      agentBalances: agentBalances, cateringByGroup: _vzCateringByGroup_(), today: _mfToday_()
     };
     setCachedData(VZ_BOOTSTRAP_CACHE_KEY, shared);
   }
@@ -21207,7 +21245,11 @@ function saveVisaFile(authToken, data) {
       breakdown: bd, selected: Array.isArray(data.selected) ? data.selected : (old ? old.selected : []),
       visaCount: visaCount, price: price, notes: _mfStr_(data.notes),
       createdBy: isNew ? session.username : old.createdBy, createdAt: isNew ? now : old.createdAt,
-      updatedBy: session.username, updatedAt: now
+      updatedBy: session.username, updatedAt: now,
+      payStatus: _mfStr_(data.payStatus), makkahIn: _mfDate_(data.makkahIn), makkahOut: _mfDate_(data.makkahOut),
+      madinahIn: _mfDate_(data.madinahIn), madinahOut: _mfDate_(data.madinahOut),
+      makkahHousingAgr: _mfStr_(data.makkahHousingAgr), madinahHousingAgr: _mfStr_(data.madinahHousingAgr),
+      makkahCateringAgr: _mfStr_(data.makkahCateringAgr), madinahCateringAgr: _mfStr_(data.madinahCateringAgr)
     };
     var row = _vzObjToRow_(f);
     if (isNew) sh.appendRow(row); else sh.getRange(old._row, 1, 1, VZ_FILES_HEADERS.length).setValues([row]);
