@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.130";
+var APP_VERSION = "4.131";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -5997,7 +5997,7 @@ function checkPasswordMatch_(plainPassword, storedValue) {
 /* 🔐 نموذج الصلاحيات الذكية (سيرفر): يفهم رموز "screen.cap" مع التتالي + الرموز القديمة
    - أي صلاحية شاشة تعني العرض؛ الحذف يعني التعديل والعرض
    - الرمز القديم "delete" يمنح الحذف في كل الشاشات (حفاظاً على السلوك السابق) */
-var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry'];
+var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas'];
 var _PERM_LEGACY_MAP_ = {
   'add':'bookings.add','edit':'bookings.edit','delete':'bookings.delete',
   'print':'bookings.print','approve':'bookings.approve',
@@ -21006,6 +21006,372 @@ function _tgMoveParseShortOrFullDate_(s) {
   var dt = new Date(yy, mm - 1, dd);
   if (dt.getDate() !== dd || dt.getMonth() !== mm - 1) return null;
   return ('0' + dd).slice(-2) + '/' + ('0' + mm).slice(-2) + '/' + yy;
+}
+
+/* ==================================================================================
+   🛂 (V4.131) متابعة التأشيرات والوكلاء — شاشة مستقلة على غرار «مراجعة ملفات الوزارة»:
+   لكل قيد تأشيرات: رقم قيد يدوي + تاريخ + حالة + شركة مصرية + وكيل سعودي + ربط رحلة/رحلات +
+   جلب أسماء المعتمرين وتخصيصهم لعملاء + عدد تأشيرات = مستحق الوكيل (عدد × سعر التأشيرة بالريال).
+   سعر التأشيرة يُجلب تلقائياً من «تسعير الوكلاء» حسب الوكيل وتاريخ القيد (فترات صلاحية مثل رسوم
+   الغرفة: من تاريخ → إلى تاريخ/مفتوح)، وقابل للتعديل يدوياً بالقيد. لكل وكيل حساب مستقل تماماً
+   عن حسابات العملاء (دفعات + بنود مدينة/دائنة + كشف)، وإحصائيات بفلاتر متعددة.
+   ================================================================================== */
+var VZ_FILES_SHEET   = 'VisaFiles';
+var VZ_FILES_HEADERS = ['المعرف','مسلسل','رقم القيد','الحالة','التاريخ','الشركة المصرية','الوكيل السعودي',
+  'الرحلة المرتبطة','بنود العملاء (JSON)','المعتمرون المختارون (JSON)','عدد التأشيرات','سعر التأشيرة','ملاحظات',
+  'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في'];
+var VZ_PRICES_SHEET  = 'VisaAgentPrices';
+var VZ_PRICES_HEADERS = ['الوكيل','السعر','من تاريخ','إلى تاريخ','أنشئ بواسطة','أنشئ في'];
+var VZ_ITEMS_SHEET   = 'AgentAccounts_Items';
+var VZ_ITEMS_HEADERS = ['المعرف','الوكيل','البيان','العملة','القيمة','دائن؟','ملاحظات','الترتيب','أنشئ بواسطة','أنشئ في'];
+var VZ_PAY_SHEET     = 'AgentAccounts_Payments';
+var VZ_PAY_HEADERS   = ['المعرف','الوكيل','التاريخ','المبلغ','العملة','ملاحظات','أنشئ بواسطة','أنشئ في'];
+var VZ_STATUSES_     = ['قيد التنفيذ','مُصدَّرة','مستلمة','مرفوضة','ملغاة'];
+var VZ_BOOTSTRAP_CACHE_KEY = 'visa_bootstrap_cache';
+
+function _vzPerm_(authToken, cap) {
+  var session = requireAuth_(authToken);
+  if (_sessionHasPerm_(session, 'visas.' + cap)) return session;
+  throw new Error('لا تملك صلاحية ' + ({view:'عرض',add:'إضافة',edit:'تعديل',delete:'حذف'}[cap] || cap) + ' متابعة التأشيرات والوكلاء');
+}
+function _vzClearCache_() { try { CacheService.getScriptCache().remove(VZ_BOOTSTRAP_CACHE_KEY); } catch (e) {} }
+
+function _vzRowToObj_(r) {
+  var bd = []; try { bd = JSON.parse(_mfStr_(r[8]) || '[]'); if (!Array.isArray(bd)) bd = []; } catch (e) { bd = []; }
+  var sel = []; try { sel = JSON.parse(_mfStr_(r[9]) || '[]'); if (!Array.isArray(sel)) sel = []; } catch (e) { sel = []; }
+  return {
+    id: _mfStr_(r[0]), seq: _mfNum_(r[1]), ref: _mfStr_(r[2]), status: _mfStr_(r[3]) || VZ_STATUSES_[0],
+    date: _mfStr_(r[4]), company: _mfStr_(r[5]), agent: _mfStr_(r[6]), tripName: _mfStr_(r[7]),
+    breakdown: bd, selected: sel, visaCount: _mfNum_(r[10]), price: _mfNum_(r[11]), notes: _mfStr_(r[12]),
+    createdBy: _mfStr_(r[13]), createdAt: _mfDateTime_(r[14]), updatedBy: _mfStr_(r[15]), updatedAt: _mfDateTime_(r[16])
+  };
+}
+function _vzObjToRow_(f) {
+  return [f.id, f.seq, _mfStr_(f.ref), _mfStr_(f.status), _mfDate_(f.date), _mfStr_(f.company), _mfStr_(f.agent),
+    _mfStr_(f.tripName), JSON.stringify(f.breakdown || []), JSON.stringify(f.selected || []),
+    _mfNum_(f.visaCount), _mfNum_(f.price), _mfStr_(f.notes),
+    f.createdBy, f.createdAt, f.updatedBy, f.updatedAt];
+}
+function _vzReadAll_() {
+  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var vals = sh.getRange(2, 1, last - 1, VZ_FILES_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    if (!_mfStr_(vals[i][0])) continue;
+    var o = _vzRowToObj_(vals[i]); o._row = i + 2; out.push(o);
+  }
+  return out;
+}
+function _vzNextSeq_() {
+  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+  var last = sh.getLastRow();
+  if (last < 2) return 1;
+  var vals = sh.getRange(2, 2, last - 1, 1).getValues();
+  var mx = 0; vals.forEach(function (r) { var n = _mfNum_(r[0]); if (n > mx) mx = n; });
+  return mx + 1;
+}
+// كل أسعار الوكلاء (مصفوفة صفوف) — تُقرأ مرة وتُمرَّر لـ_vzPriceAt_ لتفادي القراءة المتكررة
+function _vzReadPrices_() {
+  var sh = _accSheet_(VZ_PRICES_SHEET, VZ_PRICES_HEADERS);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  return sh.getRange(2, 1, last - 1, VZ_PRICES_HEADERS.length).getValues().map(function (r, i) {
+    return { agent: _mfStr_(r[0]), price: _mfNum_(r[1]), from: _mfDate_(r[2]), to: _mfDate_(r[3]), _row: i + 2 };
+  }).filter(function (p) { return p.agent; });
+}
+// سعر تأشيرة الوكيل الساري في تاريخ بعينه — أحدث فترة تحتوي التاريخ (وإلا 0)
+function _vzPriceAt_(agent, dateStr, prices) {
+  agent = _mfStr_(agent);
+  var t = _mfMs_(_mfDate_(dateStr));
+  if (!agent || isNaN(t)) return 0;
+  prices = prices || _vzReadPrices_();
+  var best = null, bestFrom = -1;
+  prices.forEach(function (p) {
+    if (_mfStr_(p.agent) !== agent) return;
+    var fm = _mfMs_(p.from); if (isNaN(fm)) return;
+    var to = p.to ? _mfMs_(p.to) : 8640000000000000; if (isNaN(to)) to = 8640000000000000;
+    if (t >= fm && t <= to && fm >= bestFrom) { best = p.price; bestFrom = fm; }
+  });
+  return best === null ? 0 : best;
+}
+// المستحق على كل وكيل من قيود التأشيرات (عدد × سعر) — خريطة {agent: totalالسعودي}
+function _vzAgentVisaDue_(files) {
+  var m = {};
+  (files || []).forEach(function (f) {
+    var a = _mfStr_(f.agent); if (!a) return;
+    m[a] = (m[a] || 0) + (_mfNum_(f.visaCount) * _mfNum_(f.price));
+  });
+  return m;
+}
+
+/* -------- حساب الوكيل: بنود يدوية + دفعات (بالريال والجنيه) -------- */
+function _vzReadItems_(agent) {
+  var sh = _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS);
+  var last = sh.getLastRow(); if (last < 2) return [];
+  var a = _mfStr_(agent);
+  return sh.getRange(2, 1, last - 1, VZ_ITEMS_HEADERS.length).getValues().map(function (r, i) {
+    return { id: _mfStr_(r[0]), agent: _mfStr_(r[1]), desc: _mfStr_(r[2]), currency: _mfStr_(r[3]) || 'SAR',
+      value: _accNum_(r[4]), isCredit: _mfStr_(r[5]) === 'نعم', notes: _mfStr_(r[6]), order: _accNum_(r[7]),
+      createdBy: _mfStr_(r[8]), createdAt: _mfStr_(r[9]), _row: i + 2 };
+  }).filter(function (x) { return x.id && (!a || x.agent === a); });
+}
+function _vzReadPays_(agent) {
+  var sh = _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS);
+  var last = sh.getLastRow(); if (last < 2) return [];
+  var a = _mfStr_(agent);
+  return sh.getRange(2, 1, last - 1, VZ_PAY_HEADERS.length).getValues().map(function (r, i) {
+    return { id: _mfStr_(r[0]), agent: _mfStr_(r[1]), date: _mfStr_(r[2]), amount: _accNum_(r[3]),
+      currency: _mfStr_(r[4]) || 'SAR', notes: _mfStr_(r[5]), createdBy: _mfStr_(r[6]), createdAt: _mfStr_(r[7]), _row: i + 2 };
+  }).filter(function (x) { return x.id && (!a || x.agent === a); });
+}
+// صافي حساب وكيل: مستحق (بالريال من التأشيرات + بنود مدينة) − دائن − مدفوع، لكل عملة على حدة
+function _vzAgentBalance_(agent, files, items, pays) {
+  var visaDueS = 0;
+  (files || []).forEach(function (f) { if (_mfStr_(f.agent) === _mfStr_(agent)) visaDueS += _mfNum_(f.visaCount) * _mfNum_(f.price); });
+  var dueS = visaDueS, dueE = 0, credS = 0, credE = 0, paidS = 0, paidE = 0;
+  (items || []).forEach(function (it) {
+    var v = _accNum_(it.value), sar = it.currency !== 'EGP';
+    if (it.isCredit) { if (sar) credS += v; else credE += v; }
+    else { if (sar) dueS += v; else dueE += v; }
+  });
+  (pays || []).forEach(function (p) { if (p.currency === 'EGP') paidE += _accNum_(p.amount); else paidS += _accNum_(p.amount); });
+  return {
+    visaDueS: visaDueS, dueS: dueS, dueE: dueE, credS: credS, credE: credE, paidS: paidS, paidE: paidE,
+    netS: Math.round((dueS - credS - paidS) * 100) / 100,
+    netE: Math.round((dueE - credE - paidE) * 100) / 100
+  };
+}
+
+function getVisaBootstrap(authToken) {
+  var session = _vzPerm_(authToken, 'view');
+  var shared = getCachedData(VZ_BOOTSTRAP_CACHE_KEY);
+  if (!shared) {
+    var files = _vzReadAll_();
+    var prices = _vzReadPrices_();
+    files.forEach(function (f) { f.dueSAR = _mfNum_(f.visaCount) * _mfNum_(f.price); delete f._row; });
+    // نُعيد استخدام نفس شركات/وكلاء/رحلات/عملاء بوتستراب الوزارة (بلا تكرار الكود)
+    var base = _mfBuildSharedBootstrap_();
+    // أرصدة الوكلاء (صافي كل وكيل) من التأشيرات + البنود + الدفعات
+    var allItems = _vzReadItems_(''), allPays = _vzReadPays_('');
+    var agentsSet = {};
+    (base.companies || []).forEach(function (c) { if (c.agent) agentsSet[c.agent] = true; });
+    files.forEach(function (f) { if (f.agent) agentsSet[f.agent] = true; });
+    allItems.forEach(function (it) { if (it.agent) agentsSet[it.agent] = true; });
+    allPays.forEach(function (p) { if (p.agent) agentsSet[p.agent] = true; });
+    var agentBalances = {};
+    Object.keys(agentsSet).forEach(function (a) {
+      agentBalances[a] = _vzAgentBalance_(a,
+        files.filter(function (f) { return f.agent === a; }),
+        allItems.filter(function (it) { return it.agent === a; }),
+        allPays.filter(function (p) { return p.agent === a; }));
+    });
+    shared = {
+      files: files, prices: prices, companies: base.companies, trips: base.trips, clients: base.clients,
+      agents: Object.keys(agentsSet).sort(), statuses: VZ_STATUSES_, agentBalances: agentBalances, today: _mfToday_()
+    };
+    setCachedData(VZ_BOOTSTRAP_CACHE_KEY, shared);
+  }
+  var out = {}; for (var k in shared) out[k] = shared[k];
+  out.success = true; out.user = session.username;
+  out.can = {
+    add: _sessionHasPerm_(session, 'visas.add'), edit: _sessionHasPerm_(session, 'visas.edit'),
+    del: _sessionHasPerm_(session, 'visas.delete')
+  };
+  return out;
+}
+
+function saveVisaFile(authToken, data) {
+  var isNew = !_mfStr_(data && data.id);
+  var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
+  try {
+    var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+    var all = _vzReadAll_();
+    var old = isNew ? null : all.filter(function (x) { return x.id === _mfStr_(data.id); })[0];
+    if (!isNew && !old) return { success: false, error: 'القيد غير موجود' };
+    var bd = Array.isArray(data.breakdown) ? data.breakdown.map(function (b) {
+      return { name: _mfStr_(b.name), count: _mfNum_(b.count) };
+    }).filter(function (b) { return b.name; }) : (old ? old.breakdown : []);
+    var visaCount = _mfNum_(data.visaCount);
+    if (!visaCount && bd.length) visaCount = bd.reduce(function (a, b) { return a + b.count; }, 0);
+    var price = _mfNum_(data.price);
+    if (!price) price = _vzPriceAt_(data.agent, data.date);
+    var now = _mfStamp_();
+    var f = {
+      id: isNew ? _accId_('VZ') : old.id, seq: isNew ? _vzNextSeq_() : old.seq,
+      ref: _mfStr_(data.ref), status: _mfStr_(data.status) || VZ_STATUSES_[0], date: _mfDate_(data.date),
+      company: _mfStr_(data.company), agent: _mfStr_(data.agent), tripName: _mfStr_(data.tripName),
+      breakdown: bd, selected: Array.isArray(data.selected) ? data.selected : (old ? old.selected : []),
+      visaCount: visaCount, price: price, notes: _mfStr_(data.notes),
+      createdBy: isNew ? session.username : old.createdBy, createdAt: isNew ? now : old.createdAt,
+      updatedBy: session.username, updatedAt: now
+    };
+    var row = _vzObjToRow_(f);
+    if (isNew) sh.appendRow(row); else sh.getRange(old._row, 1, 1, VZ_FILES_HEADERS.length).setValues([row]);
+    SpreadsheetApp.flush();
+    logChange_(session.username, isNew ? 'إضافة قيد تأشيرات' : 'تعديل قيد تأشيرات',
+      f.agent || '-', 'قيد ' + (f.ref || f.seq), old ? (old.visaCount + '×' + old.price) : '-', f.visaCount + '×' + f.price);
+    _vzClearCache_();
+    f.dueSAR = f.visaCount * f.price;
+    return { success: true, file: f };
+  } finally { lock.releaseLock(); }
+}
+
+function deleteVisaFile(authToken, id) {
+  var session = _vzPerm_(authToken, 'delete');
+  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+  var hit = _vzReadAll_().filter(function (x) { return x.id === _mfStr_(id); })[0];
+  if (!hit) return { success: false, error: 'القيد غير موجود' };
+  sh.deleteRow(hit._row);
+  logChange_(session.username, 'حذف قيد تأشيرات', hit.agent || '-', 'قيد ' + (hit.ref || hit.seq), '-', '-');
+  _vzClearCache_();
+  return { success: true };
+}
+
+/* -------- تسعير الوكلاء (فترات) -------- */
+function getVisaAgentPrices(authToken) {
+  _vzPerm_(authToken, 'view');
+  return { success: true, prices: _vzReadPrices_() };
+}
+function saveVisaAgentPrices(authToken, agent, periods) {
+  var session = _vzPerm_(authToken, 'edit');
+  agent = _mfStr_(agent);
+  if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try {
+    var sh = _accSheet_(VZ_PRICES_SHEET, VZ_PRICES_HEADERS);
+    // احذف كل فترات هذا الوكيل ثم أعد كتابتها (تحديث ذرّي بسيط)
+    var all = _vzReadPrices_();
+    var keepRows = all.filter(function (p) { return _mfStr_(p.agent) !== agent; }).map(function (p) {
+      return [p.agent, p.price, p.from, p.to, '', ''];
+    });
+    var now = _mfStamp_();
+    var mine = (Array.isArray(periods) ? periods : []).map(function (p) {
+      return [agent, _mfNum_(p.price), _mfDate_(p.from), _mfDate_(p.to), session.username, now];
+    }).filter(function (r) { return r[2]; }); // لا بد من تاريخ بداية
+    var out = keepRows.concat(mine);
+    var lastRow = sh.getLastRow();
+    if (lastRow > 1) sh.getRange(2, 1, lastRow - 1, VZ_PRICES_HEADERS.length).clearContent();
+    if (out.length) sh.getRange(2, 1, out.length, VZ_PRICES_HEADERS.length).setValues(out);
+    SpreadsheetApp.flush();
+    logChange_(session.username, 'تسعير وكيل تأشيرات', agent, 'عدد الفترات', '-', String(mine.length));
+    _vzClearCache_();
+    return { success: true, count: mine.length };
+  } finally { lock.releaseLock(); }
+}
+
+/* -------- حساب وكيل: عرض/دفعات/بنود -------- */
+function getAgentAccount(authToken, agent) {
+  _vzPerm_(authToken, 'view');
+  agent = _mfStr_(agent);
+  if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
+  var files = _vzReadAll_().filter(function (f) { return f.agent === agent; });
+  files.forEach(function (f) { f.dueSAR = _mfNum_(f.visaCount) * _mfNum_(f.price); delete f._row; });
+  var items = _vzReadItems_(agent), pays = _vzReadPays_(agent);
+  items.forEach(function (x) { delete x._row; }); pays.forEach(function (x) { delete x._row; });
+  return {
+    success: true, agent: agent, files: files, items: items, payments: pays,
+    balance: _vzAgentBalance_(agent, files, items, pays)
+  };
+}
+function saveAgentAccItem(authToken, item) {
+  var session = _vzPerm_(authToken, 'edit');
+  var agent = _mfStr_(item && item.agent);
+  if (!agent || !_mfStr_(item.desc)) return { success: false, error: 'الوكيل والبيان مطلوبان' };
+  var sh = _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS);
+  var now = _mfStamp_();
+  var id = _mfStr_(item.id);
+  var rowVals = [id || _accId_('AI'), agent, _mfStr_(item.desc), _mfStr_(item.currency) || 'SAR',
+    _accNum_(item.value), item.isCredit ? 'نعم' : 'لا', _mfStr_(item.notes), _accNum_(item.order), session.username, now];
+  if (id) {
+    var hit = _vzReadItems_('').filter(function (x) { return x.id === id; })[0];
+    if (!hit) return { success: false, error: 'البند غير موجود' };
+    sh.getRange(hit._row, 1, 1, VZ_ITEMS_HEADERS.length).setValues([rowVals]);
+  } else { sh.appendRow(rowVals); }
+  logChange_(session.username, id ? 'تعديل بند حساب وكيل' : 'إضافة بند حساب وكيل', agent, _mfStr_(item.desc),
+    '-', _accNum_(item.value) + ' ' + (item.currency || 'SAR') + (item.isCredit ? ' (دائن)' : ' (مدين)'));
+  _vzClearCache_();
+  return { success: true };
+}
+function deleteAgentAccItem(authToken, id) {
+  var session = _vzPerm_(authToken, 'delete');
+  var hit = _vzReadItems_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
+  if (!hit) return { success: false, error: 'البند غير موجود' };
+  _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS).deleteRow(hit._row);
+  logChange_(session.username, 'حذف بند حساب وكيل', hit.agent, hit.desc, '-', '-');
+  _vzClearCache_();
+  return { success: true };
+}
+function saveAgentPayment(authToken, pay) {
+  var session = _vzPerm_(authToken, 'edit');
+  var agent = _mfStr_(pay && pay.agent);
+  if (!agent || !_accNum_(pay.amount)) return { success: false, error: 'الوكيل والمبلغ مطلوبان' };
+  var sh = _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS);
+  var now = _mfStamp_();
+  var id = _mfStr_(pay.id);
+  var rowVals = [id || _accId_('AP'), agent, _mfDate_(pay.date) || _mfToday_(), _accNum_(pay.amount),
+    _mfStr_(pay.currency) || 'SAR', _mfStr_(pay.notes), session.username, now];
+  if (id) {
+    var hit = _vzReadPays_('').filter(function (x) { return x.id === id; })[0];
+    if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
+    sh.getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).setValues([rowVals]);
+  } else { sh.appendRow(rowVals); }
+  logChange_(session.username, id ? 'تعديل دفعة وكيل' : 'إضافة دفعة وكيل', agent,
+    _accNum_(pay.amount) + ' ' + (pay.currency || 'SAR'), '-', '-');
+  _vzClearCache_();
+  return { success: true };
+}
+function deleteAgentPayment(authToken, id) {
+  var session = _vzPerm_(authToken, 'delete');
+  var hit = _vzReadPays_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
+  if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
+  _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS).deleteRow(hit._row);
+  logChange_(session.username, 'حذف دفعة وكيل', hit.agent, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
+  _vzClearCache_();
+  return { success: true };
+}
+
+/* -------- إحصائيات الوكلاء بفلاتر متعددة -------- */
+function getAgentVisaStats(authToken, filters) {
+  _vzPerm_(authToken, 'view');
+  filters = filters || {};
+  var fromMs = _mfMs_(_mfDate_(filters.from)); if (isNaN(fromMs)) fromMs = -8640000000000000;
+  var toMs = _mfMs_(_mfDate_(filters.to)); if (isNaN(toMs)) toMs = 8640000000000000;
+  var companies = Array.isArray(filters.companies) ? filters.companies.map(_mfStr_).filter(Boolean) : [];
+  var statuses = Array.isArray(filters.statuses) ? filters.statuses.map(_mfStr_).filter(Boolean) : [];
+  var agentsFilter = Array.isArray(filters.agents) ? filters.agents.map(_mfStr_).filter(Boolean) : [];
+
+  var files = _vzReadAll_().filter(function (f) {
+    var t = _mfMs_(f.date);
+    if (!isNaN(t) && (t < fromMs || t > toMs)) return false;
+    if (isNaN(t) && (fromMs > -8640000000000000 || toMs < 8640000000000000)) return false;
+    if (companies.length && companies.indexOf(f.company) < 0) return false;
+    if (statuses.length && statuses.indexOf(f.status) < 0) return false;
+    if (agentsFilter.length && agentsFilter.indexOf(f.agent) < 0) return false;
+    return true;
+  });
+
+  var byAgent = {}, byStatus = {}, byCompany = {}, totalVisas = 0, totalDue = 0, totalFiles = files.length;
+  files.forEach(function (f) {
+    var due = _mfNum_(f.visaCount) * _mfNum_(f.price);
+    totalVisas += _mfNum_(f.visaCount); totalDue += due;
+    var A = f.agent || '(بلا وكيل)', S = f.status || '-', C = f.company || '(بلا شركة)';
+    (byAgent[A] = byAgent[A] || { agent: A, files: 0, visas: 0, dueSAR: 0 });
+    byAgent[A].files++; byAgent[A].visas += _mfNum_(f.visaCount); byAgent[A].dueSAR += due;
+    (byStatus[S] = byStatus[S] || { status: S, files: 0, visas: 0, dueSAR: 0 });
+    byStatus[S].files++; byStatus[S].visas += _mfNum_(f.visaCount); byStatus[S].dueSAR += due;
+    (byCompany[C] = byCompany[C] || { company: C, files: 0, visas: 0, dueSAR: 0 });
+    byCompany[C].files++; byCompany[C].visas += _mfNum_(f.visaCount); byCompany[C].dueSAR += due;
+  });
+  var arr = function (m) { return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return b.dueSAR - a.dueSAR; }); };
+  return {
+    success: true, totalFiles: totalFiles, totalVisas: totalVisas, totalDueSAR: totalDue,
+    byAgent: arr(byAgent), byStatus: arr(byStatus), byCompany: arr(byCompany)
+  };
 }
 
 // يعرض كل التحركات المسجَّلة في تاريخ بعينه — نفس تنسيق أزرار «تحركات اليوم/الغد» (غير مُصفّاة)
