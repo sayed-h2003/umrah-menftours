@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.147 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.148 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.147)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.148)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.147</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.148</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6666,7 +6666,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.147";
+var CLIENT_APP_VERSION = "4.148";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -39224,7 +39224,11 @@ function vzAcctPickerGo() {
 }
 function vzAcctCfgOpen() {
   if (!vzFin()) { _showPopup('ضبط حسابات الوكلاء يتطلب صلاحية مالية خاصة', 'error'); return; }
-  VZ._acfg = (VZ.acctRows || []).map(function (r) { return { agent: r.agent, company: r.company, mode: r.mode || 'عام', mainCompany: r.mainCompany || '', notes: r.notes || '', active: r.active !== false }; });
+  // 🐞 (V4.148) الإصلاح الجذري: كانت هذه النافذة تعتمد على VZ.acctRows المحمَّلة مسبقاً بالذاكرة —
+  // لو أُعيد فتحها بسرعة بعد الحفظ (قبل اكتمال طلب vzLoad(true) غير المتزامن) تعرض حالة قديمة
+  // من الذاكرة فتبدو وكأن التعديلات (مثل صناديق "نشط") لم تُحفظ. الآن تجلب البيانات الحيّة من
+  // الشيت مباشرة (getAgentCompanyAccounts لا تستخدم أي كاش) في كل مرة تُفتح، فتعرض الحقيقة دوماً.
+  VZ._acfg = null;
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzAcfgOv';
   ov.innerHTML = '<div class="vz-dlg" style="width:min(900px,97vw);"><div class="vz-hd"><b>⚙️ إعدادات حسابات الوكلاء مع الشركات المصرية</b>' +
     '<button class="vz-btn sm" onclick="vzAcctCfgClose()">✕</button></div><div class="p-3">' +
@@ -39233,17 +39237,29 @@ function vzAcctCfgOpen() {
       '<b>منفصل</b> — حساب مستقل تماماً باسم «الوكيل - الشركة» له دفعاته وبنوده الخاصة.<br>' +
       '<b>مشترك</b> — يُضمّ لحساب «الوكيل - الشركة الرئيسية» فيصير الحسابان حساباً واحداً محاسبياً.<br>' +
       '<span style="color:#8a5a06;font-weight:700;">في كل الأحوال يظل جدول المجموعات يعرض الشركة المصرية الحقيقية لكل مجموعة.</span></div></div>' +
-    '<div id="vzAcfgBody"></div>' +
+    '<div id="vzAcfgBody"><div class="text-muted text-center py-3">⏳ جاري تحميل الروابط الحالية…</div></div>' +
     '<div class="d-flex gap-2 mt-2 flex-wrap"><button class="vz-btn sm" onclick="vzAcctCfgAdd()">➕ إضافة ربط</button>' +
-    '<button class="vz-btn sm" onclick="vzAcctCfgAutoGen()" title="يفحص كل أزواج (وكيل × شركة) الظاهرة بمجموعات التأشيرات وإعدادات الشركات، ويضيف رابط «منفصل» تلقائياً لكل زوج غير معرَّف بعد — كي لا يبقى أي زوج على الحساب العام المدموج بالخطأ">🧩 توليد الروابط تلقائياً</button>' +
+    '<button class="vz-btn sm" onclick="vzAcctCfgAutoGen()" title="يفحص كل أزواج (وكيل × شركة) الظاهرة بمجموعات التأشيرات وإعدادات الشركات وشيت النقل، ويضيف رابط «منفصل» تلقائياً لكل زوج غير معرَّف بعد — كي لا يبقى أي زوج على الحساب العام المدموج بالخطأ">🧩 توليد الروابط تلقائياً</button>' +
     '<button class="vz-btn pri" onclick="vzAcctCfgSave()">💾 حفظ الإعدادات</button>' +
     '<button class="vz-btn" onclick="vzAcctCfgClose()">إلغاء</button></div></div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzAcctCfgClose(); });
-  vzAcctCfgRender();
+  google.script.run
+    .withSuccessHandler(function (res) {
+      VZ.acctRows = (res && res.rows) || [];
+      VZ.acctModes = (res && res.modes) || VZ.acctModes;
+      VZ._acfg = VZ.acctRows.map(function (r) { return { agent: r.agent, company: r.company, mode: r.mode || 'عام', mainCompany: r.mainCompany || '', notes: r.notes || '', active: r.active !== false }; });
+      vzAcctCfgRender();
+    })
+    .withFailureHandler(function (e) {
+      VZ._acfg = (VZ.acctRows || []).map(function (r) { return { agent: r.agent, company: r.company, mode: r.mode || 'عام', mainCompany: r.mainCompany || '', notes: r.notes || '', active: r.active !== false }; });
+      _showPopup('تعذّر جلب أحدث الروابط، تُعرض آخر نسخة محمَّلة: ' + (e && e.message ? e.message : e), 'error');
+      vzAcctCfgRender();
+    })
+    .getAgentCompanyAccounts(window.authToken);
 }
 function vzAcctCfgClose() { var o = document.getElementById('vzAcfgOv'); if (o) o.remove(); }
-function vzAcctCfgAdd() { VZ._acfg.push({ agent: '', company: '', mode: 'منفصل', mainCompany: '', notes: '', active: true }); vzAcctCfgRender(); }
+function vzAcctCfgAdd() { if (!VZ._acfg) return; VZ._acfg.push({ agent: '', company: '', mode: 'منفصل', mainCompany: '', notes: '', active: true }); vzAcctCfgRender(); }
 // 🧩 (V4.145) توليد تلقائي لروابط «منفصل» لكل زوج (وكيل × شركة) ظاهر فعلياً بمجموعات التأشيرات
 // أو بإعدادات الشركات (Agents_Settings) وليس له رابط مُعرَّف بعد — يحل مشكلة نسيان ربط أحد
 // الأزواج يدوياً فيقع سهواً في الحساب العام المدموج بدل حسابه المستقل الخاص بشركته.
@@ -39256,6 +39272,7 @@ function vzAcctCfgAutoGen() {
     .getTransportAgentCompanyPairs(window.authToken);
 }
 function _vzAcctCfgAutoGenApply_(transportPairs) {
+  if (!VZ._acfg) { _showPopup('لا تزال الروابط قيد التحميل — انتظر قليلاً ثم أعد المحاولة', 'error'); return; }
   var pairs = {};
   (VZ.files || []).forEach(function (f) { if (f.agent && f.company) pairs[f.agent + '|' + f.company] = { agent: f.agent, company: f.company }; });
   (VZ.companies || []).forEach(function (c) { if (c.agent && c.company) pairs[c.agent + '|' + c.company] = { agent: c.agent, company: c.company }; });
@@ -39303,6 +39320,9 @@ function vzAcctCfgRender() {
     '</div>';
 }
 function vzAcctCfgSave() {
+  // 🛡️ (V4.148) لو الجلب الحي لم يكتمل بعد، VZ._acfg تكون null — لو حفظنا فارغةً هنا سيُمحى كل
+  // الروابط الحالية سهواً؛ نمنع الحفظ صراحةً حتى يكتمل التحميل
+  if (!VZ._acfg) { _showPopup('لا تزال الروابط قيد التحميل — انتظر قليلاً ثم أعد المحاولة', 'error'); return; }
   var bad = (VZ._acfg || []).filter(function (r) { return !mfStr(r.agent) || !mfStr(r.company); });
   if (bad.length) { _showPopup('أكمل اسم الوكيل والشركة في كل سطر', 'error'); return; }
   google.script.run
