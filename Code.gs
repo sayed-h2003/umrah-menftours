@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.133";
+var APP_VERSION = "4.134";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -11087,6 +11087,77 @@ function _taSaudiPort_(v, isArrival) {
 // - "الوكيل" → المورد هو الوكيل السعودي (حقل agent)
 // - "النقل بمعرفة العميل" → لا يوجد مورد (isClientManaged = true)
 // - أي اسم آخر (مورد آخر مكتوب يدويًا) → المورد هو الاسم نفسه
+/* ✏️ (V4.134) تعديل صف بكشف حساب النقل السعودي: اسم المورد والبيان يُحفظان كتجاوز
+   خاص بالشاشة فقط (لا يمسّ الإشعار)، أما سعر الباص وقيمة التشغيلة فيُكتبان في الإشعار
+   نفسه — «دون التأثير على بيانات الإشعار إلا في السعر فقط». */
+var TA_OVR_SHEET   = 'TransportAccounts_Overrides';
+var TA_OVR_HEADERS = ['رقم الإشعار','المورد','البيان','ملاحظات','عُدّل بواسطة','عُدّل في'];
+
+function _taOverrides_() {
+  var out = {};
+  try {
+    var sh = _accSheet_(TA_OVR_SHEET, TA_OVR_HEADERS);
+    var last = sh.getLastRow(); if (last < 2) return out;
+    sh.getRange(2, 1, last - 1, TA_OVR_HEADERS.length).getValues().forEach(function (r, i) {
+      var id = String(r[0] || '').trim(); if (!id) return;
+      out[id] = { id: id, supplier: String(r[1] || '').trim(), desc: String(r[2] || '').trim(),
+        notes: String(r[3] || '').trim(), _row: i + 2 };
+    });
+  } catch (e) {}
+  return out;
+}
+function saveTransportRowEdit(authToken, data) {
+  var session = requireTransportAccountsPermission_(authToken);
+  data = data || {};
+  var id = String(data.id || '').trim();
+  if (!id) return { success: false, error: 'رقم الإشعار مطلوب' };
+  var now = _mfStamp_();
+  // 1) التجاوزات الخاصة بالشاشة: المورد + البيان
+  var sh = _accSheet_(TA_OVR_SHEET, TA_OVR_HEADERS);
+  var ovr = _taOverrides_();
+  var row = [id, String(data.supplier || '').trim(), String(data.desc || '').trim(),
+    String(data.notes || '').trim(), session.username || '', now];
+  if (ovr[id]) sh.getRange(ovr[id]._row, 1, 1, TA_OVR_HEADERS.length).setValues([row]);
+  else sh.appendRow(row);
+  // 2) السعر وقيمة التشغيلة: يُكتبان في الإشعار نفسه
+  var priceChanged = '';
+  try {
+    var bsh = getSpreadsheet_().getSheetByName('Bookings');
+    if (bsh && bsh.getLastRow() > 1) {
+      var map = _robustColMap_(bsh, BOOKINGS_HEADERS_);
+      var iId = map[BOOKINGS_COL_.id], iPrice = map[BOOKINGS_COL_.busPrice], iVal = map[BOOKINGS_COL_.operationValue];
+      if (iId !== undefined) {
+        var ids = bsh.getRange(2, iId + 1, bsh.getLastRow() - 1, 1).getValues();
+        for (var i = 0; i < ids.length; i++) {
+          if (String(ids[i][0] || '').trim() !== id) continue;
+          var r0 = i + 2;
+          if (data.busPrice !== undefined && data.busPrice !== null && data.busPrice !== '' && iPrice !== undefined) {
+            var oldP = bsh.getRange(r0, iPrice + 1).getValue();
+            bsh.getRange(r0, iPrice + 1).setValue(_accNum_(data.busPrice));
+            priceChanged = String(oldP) + ' ← ' + _accNum_(data.busPrice);
+          }
+          if (data.operationValue !== undefined && data.operationValue !== null && data.operationValue !== '' && iVal !== undefined) {
+            bsh.getRange(r0, iVal + 1).setValue(_accNum_(data.operationValue));
+          }
+          break;
+        }
+      }
+    }
+  } catch (e2) {}
+  SpreadsheetApp.flush();
+  logChange_(session.username, 'تعديل صف كشف النقل السعودي', 'إشعار ' + id, 'مورد/بيان/سعر',
+    priceChanged || '-', (data.supplier || '') + ' — ' + (data.desc || ''));
+  return { success: true };
+}
+function deleteTransportRowEdit(authToken, id) {
+  requireTransportAccountsPermission_(authToken);
+  id = String(id || '').trim();
+  var ovr = _taOverrides_();
+  if (!ovr[id]) return { success: true };
+  _accSheet_(TA_OVR_SHEET, TA_OVR_HEADERS).deleteRow(ovr[id]._row);
+  return { success: true };
+}
+
 function getTransportAccountsData(authToken) {
   requireTransportAccountsPermission_(authToken);
 
@@ -11104,6 +11175,7 @@ function getTransportAccountsData(authToken) {
   headers.forEach(function(h, i) { idx[h] = i; });
 
   var result = [];
+  var _ovr = _taOverrides_();   // ✏️ (V4.134) تجاوزات المورد/البيان المسجَّلة من الشاشة
 
   for (var r = 1; r < allData.length; r++) {
     var row = allData[r];
@@ -11141,8 +11213,16 @@ function getTransportAccountsData(authToken) {
       operationValue += sv;
     });
 
+    var _bid = String(row[idx["رقم الإشعار"]] || "");
+    var _ov = _ovr[_bid];
+    if (_ov) {
+      if (_ov.supplier) supplier = _ov.supplier;
+      if (_ov.desc) desc = _ov.desc;
+    }
     result.push({
-      id: String(row[idx["رقم الإشعار"]] || ""),
+      edited: !!_ov,
+      editNotes: _ov ? _ov.notes : "",
+      id: _bid,
       operationNo: String(row[idx["رقم التشغيلة"]] || ""),
       client: String(row[idx["العميل"]] || ""),
       company: String(row[idx["الشركة المصرية"]] || ""),
@@ -13894,10 +13974,34 @@ function _accClientPriceAt_(pricing, key, dateStr) {
   return null;
 }
 
+/* 🛂 (V4.134) مجموعات التأشيرات المسجَّلة لهذا العميل في هذه الرحلة — عددُ أفراده فيها
+   وبيانٌ يذكر أرقام المجموعات ووكلاءها. تُستخدَم لبند «تأشيرات» بنمط «بنود». */
+function _accVisaGroupsFor_(client, trip) {
+  client = String(client || '').trim(); trip = String(trip || '').trim();
+  var out = { count: 0, desc: '', refs: [], agents: [] };
+  if (!client) return out;
+  var files = [];
+  try { files = _vzReadAll_(); } catch (e) { return out; }
+  files.forEach(function (f) {
+    if (trip && String(f.tripName || '').trim() !== trip) return;
+    var n = 0;
+    (f.breakdown || []).forEach(function (b) { if (String(b.name || '').trim() === client) n += _mfNum_(b.count); });
+    if (!n) return;
+    out.count += n;
+    if (f.ref && out.refs.indexOf(f.ref) < 0) out.refs.push(f.ref);
+    if (f.agent && out.agents.indexOf(f.agent) < 0) out.agents.push(f.agent);
+  });
+  if (!out.count) return out;
+  out.desc = 'تأشيرات' + (out.refs.length ? ' — مجموعة ' + out.refs.join('، ') : '') +
+    (out.agents.length ? ' (الوكيل: ' + out.agents.join('، ') + ')' : '');
+  return out;
+}
+
 // مفتاح المطابقة الموحّد لبند «بنود»: البيانات الديناميكية (تذاكر بخط السير، سكن بالفندق) تُرجَع لمفتاحها الثابت
 function _accBondKey_(desc) {
   desc = String(desc || '').trim();
   for (var i = 0; i < ACC_BOND_BASE_.length; i++) if (desc === ACC_BOND_BASE_[i].key) return desc;
+  if (desc.indexOf('تأشيرات') === 0) return 'تأشيرات';   // 🛂 (V4.134) «تأشيرات — مجموعة … (الوكيل …)»
   if (desc.indexOf('تذاكر الأطفال') === 0) return 'تذاكر الأطفال';
   if (desc.indexOf('تذاكر الرضع') === 0) return 'تذاكر الرضع';
   if (desc.indexOf('تذاكر') === 0) return 'تذاكر';
@@ -13933,7 +14037,11 @@ function _accBondsDesired_(authToken, client, trip) {
   if (row.adults) push('تذاكر', tkDesc, 'كبير', 'EGP', row.adults, 0, '', 0);
   if (row.children) push('تذاكر الأطفال', 'تذاكر الأطفال', 'طفل بسرير', 'EGP', row.children, 0, '', 0);
   if (row.infants) push('تذاكر الرضع', 'تذاكر الرضع', 'رضيع', 'EGP', row.infants, 0, '', 0);
-  push('تأشيرات', 'تأشيرات', 'كبير', 'SAR', row.total, 0, '', 0);
+  // 🛂 (V4.134) لو العميل له أفراد في مجموعات تأشيرات مسجَّلة بهذه الرحلة، يظهر بند «تأشيرات»
+  // بعدد أفراده في تلك المجموعات وبيانها يذكر رقم المجموعة والوكيل — أما سعر البيع فيبقى
+  // من تسعير بنود العميل أو يدوياً من داخل حساب العميل (لا علاقة له بسعر الوكيل إطلاقاً).
+  var vz = _accVisaGroupsFor_(client, trip);
+  push('تأشيرات', vz.desc || 'تأشيرات', 'كبير', 'SAR', vz.count || row.total, 0, '', 0);
   push('نقل سعودي', 'نقل سعودي', 'أخرى', 'SAR', 1, 0, '', 0);
   // 🏨 (V4.39) فترة الإقامة (دخول/خروج) تُكتب جنب اسم الفندق بطلب صريح، مثال: «ديوان المدينة من 1-8 الى 4-8»
   var madSuffix = hz.madHotel ? (' - ' + hz.madHotel + _accStayRange_(hz.madCheckIn, hz.madCheckOut)) : '';
@@ -20276,6 +20384,10 @@ function getMinistryBootstrap(authToken) {
   };
   return out;
 }
+// قراءة عمود JSON كمصفوفة بأمان (الفنادق الإضافية بالرحلات)
+function _mfParseJsonArr_(v) {
+  try { var a = JSON.parse(_mfStr_(v) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
 function _mfBuildSharedBootstrap_() {
   var files = _mfReadAll_();
   var receipts = _mfReadReceipts_();
@@ -20325,6 +20437,12 @@ function _mfBuildSharedBootstrap_() {
           madinahOut: _mfDate_(rd(row, 'madinahCheckOut')),
           makkahHotel: _mfStr_(rd(row, 'makkahHotel')), makkahIn: _mfDate_(rd(row, 'makkahCheckIn')),
           makkahOut: _mfDate_(rd(row, 'makkahCheckOut')),
+          // 🏨 (V4.134) الفنادق الإضافية لكل مدينة — لتُجلب تلقائياً في نموذج مجموعة التأشيرات
+          madinahExtra: _mfParseJsonArr_(rd(row, 'madinahExtra')),
+          makkahExtra: _mfParseJsonArr_(rd(row, 'makkahExtra')),
+          madinahNights: _mfNum_(rd(row, 'madinahNights')), makkahNights: _mfNum_(rd(row, 'makkahNights')),
+          airline: _mfStr_(rd(row, 'airline')), direction: _mfStr_(rd(row, 'direction')),
+          tripRef: _mfStr_(rd(row, 'tripRef')),
           seats: _mfNum_(rd(row, 'bookedSeats')) });
       });
     }
@@ -21025,7 +21143,11 @@ var VZ_FILES_HEADERS = ['المعرف','مسلسل','رقم المجموعة','�
   'الرحلة المرتبطة','بنود العملاء (JSON)','المعتمرون المختارون (JSON)','العدد','سعر الفرد','ملاحظات',
   'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في',
   'حالة السداد','سكن مكة دخول','سكن مكة خروج','سكن المدينة دخول','سكن المدينة خروج',
-  'رقم اتفاقية سكن مكة','رقم اتفاقية سكن المدينة','رقم اتفاقية اعاشة مكة','رقم اتفاقية اعاشة المدينة'];
+  'رقم اتفاقية سكن مكة','رقم اتفاقية سكن المدينة','رقم اتفاقية اعاشة مكة','رقم اتفاقية اعاشة المدينة',
+  // 🏨 (V4.134) السكن متعدد الفنادق: مصفوفة {city,hotel,count,in,out,hAgr,cAgr,supplier} — المجموعة
+  // الواحدة قد تُوزَّع على أكثر من فندق في المدينة الواحدة، ومجموع أعدادها لكل مدينة = عدد المجموعة.
+  // الأعمدة 18→25 تبقى كما هي للتوافق الرجعي (أول سكن لكل مدينة يُكتب فيها أيضاً).
+  'السكن والاتفاقيات (JSON)'];
 var VZ_PAY_STATUSES_ = ['', 'تم إصدار الموقّع', 'تم الإرسال', 'تم السداد'];
 var VZ_PRICES_SHEET  = 'VisaAgentPrices';
 var VZ_PRICES_HEADERS = ['الوكيل','السعر','من تاريخ','إلى تاريخ','أنشئ بواسطة','أنشئ في'];
@@ -21046,6 +21168,7 @@ function _vzClearCache_() { try { CacheService.getScriptCache().remove(VZ_BOOTST
 function _vzRowToObj_(r) {
   var bd = []; try { bd = JSON.parse(_mfStr_(r[8]) || '[]'); if (!Array.isArray(bd)) bd = []; } catch (e) { bd = []; }
   var sel = []; try { sel = JSON.parse(_mfStr_(r[9]) || '[]'); if (!Array.isArray(sel)) sel = []; } catch (e) { sel = []; }
+  var hz = []; try { hz = JSON.parse(_mfStr_(r[26]) || '[]'); if (!Array.isArray(hz)) hz = []; } catch (e) { hz = []; }
   return {
     id: _mfStr_(r[0]), seq: _mfNum_(r[1]), ref: _mfStr_(r[2]), status: _mfStr_(r[3]) || VZ_STATUSES_[0],
     date: _mfStr_(r[4]), company: _mfStr_(r[5]), agent: _mfStr_(r[6]), tripName: _mfStr_(r[7]),
@@ -21054,8 +21177,33 @@ function _vzRowToObj_(r) {
     payStatus: _mfStr_(r[17]), makkahIn: _mfStr_(r[18]), makkahOut: _mfStr_(r[19]),
     madinahIn: _mfStr_(r[20]), madinahOut: _mfStr_(r[21]),
     makkahHousingAgr: _mfStr_(r[22]), madinahHousingAgr: _mfStr_(r[23]),
-    makkahCateringAgr: _mfStr_(r[24]), madinahCateringAgr: _mfStr_(r[25])
+    makkahCateringAgr: _mfStr_(r[24]), madinahCateringAgr: _mfStr_(r[25]),
+    housing: hz
   };
+}
+// 🏨 (V4.134) ترقية السكن القديم (حقول مكة/المدينة المفردة) إلى مصفوفة السكن المتعدد
+function _vzHousingNormalize_(f) {
+  var hz = Array.isArray(f.housing) ? f.housing.slice() : [];
+  hz = hz.filter(function (h) { return h && (_mfStr_(h.hotel) || _mfStr_(h.in) || _mfStr_(h.out) || _mfStr_(h.hAgr) || _mfStr_(h.cAgr) || _mfNum_(h.count)); });
+  if (!hz.length) {
+    if (_mfStr_(f.makkahIn) || _mfStr_(f.makkahOut) || _mfStr_(f.makkahHousingAgr) || _mfStr_(f.makkahCateringAgr)) {
+      hz.push({ city: 'مكة', hotel: '', count: _mfNum_(f.visaCount), in: _mfStr_(f.makkahIn), out: _mfStr_(f.makkahOut),
+        hAgr: _mfStr_(f.makkahHousingAgr), cAgr: _mfStr_(f.makkahCateringAgr), supplier: '' });
+    }
+    if (_mfStr_(f.madinahIn) || _mfStr_(f.madinahOut) || _mfStr_(f.madinahHousingAgr) || _mfStr_(f.madinahCateringAgr)) {
+      hz.push({ city: 'المدينة', hotel: '', count: _mfNum_(f.visaCount), in: _mfStr_(f.madinahIn), out: _mfStr_(f.madinahOut),
+        hAgr: _mfStr_(f.madinahHousingAgr), cAgr: _mfStr_(f.madinahCateringAgr), supplier: '' });
+    }
+  }
+  return hz.map(function (h) {
+    return { city: _mfStr_(h.city) || 'مكة', hotel: _mfStr_(h.hotel), count: _mfNum_(h.count),
+      in: _mfDate_(h.in), out: _mfDate_(h.out), hAgr: _mfStr_(h.hAgr), cAgr: _mfStr_(h.cAgr), supplier: _mfStr_(h.supplier) };
+  });
+}
+// أول سكن لمدينة — لملء الأعمدة المفردة (التوافق الرجعي والفلاتر والطباعة)
+function _vzHousingFirst_(hz, city) {
+  for (var i = 0; i < (hz || []).length; i++) if (hz[i].city === city) return hz[i];
+  return null;
 }
 function _vzObjToRow_(f) {
   return [f.id, f.seq, _mfStr_(f.ref), _mfStr_(f.status), _mfDate_(f.date), _mfStr_(f.company), _mfStr_(f.agent),
@@ -21063,7 +21211,8 @@ function _vzObjToRow_(f) {
     _mfNum_(f.visaCount), _mfNum_(f.price), _mfStr_(f.notes),
     f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
     _mfStr_(f.payStatus), _mfDate_(f.makkahIn), _mfDate_(f.makkahOut), _mfDate_(f.madinahIn), _mfDate_(f.madinahOut),
-    _mfStr_(f.makkahHousingAgr), _mfStr_(f.madinahHousingAgr), _mfStr_(f.makkahCateringAgr), _mfStr_(f.madinahCateringAgr)];
+    _mfStr_(f.makkahHousingAgr), _mfStr_(f.madinahHousingAgr), _mfStr_(f.makkahCateringAgr), _mfStr_(f.madinahCateringAgr),
+    JSON.stringify(f.housing || [])];
 }
 function _vzReadAll_() {
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
@@ -21140,9 +21289,94 @@ function _vzReadPays_(agent) {
   }).filter(function (x) { return x.id && (!a || x.agent === a); });
 }
 // صافي حساب وكيل: مستحق (بالريال من التأشيرات + بنود مدينة) − دائن − مدفوع، لكل عملة على حدة
+/* ============================================================
+   🧑‍💼 (V4.134) حسابات الوكيل مع الشركات المصرية
+   ------------------------------------------------------------
+   الوكيل الواحد قد يعمل مع أكثر من شركة مصرية، وقد يريد المستخدم لكل شركة
+   حساباً مالياً منفصلاً تماماً (دفعات وبنود مستقلة)، أو دمج عدة شركات في حساب
+   واحد تحت «الشركة الرئيسية». يُضبط ذلك من زر «إعدادات حسابات الوكلاء».
+   مفتاح الحساب:
+     • بلا إعداد           ⇒ «الوكيل»            (حساب عام يجمع كل شركاته)
+     • نمط «منفصل»          ⇒ «الوكيل - الشركة»
+     • نمط «مشترك» + رئيسية ⇒ «الوكيل - الشركة الرئيسية»
+   جدول المجموعات يظل يعرض الشركة المصرية الحقيقية لكل مجموعة مهما كان الدمج.
+   ============================================================ */
+var VZ_ACCT_SHEET   = 'AgentCompanyAccounts';
+var VZ_ACCT_HEADERS = ['الوكيل','الشركة المصرية','نمط الحساب','الشركة الرئيسية','ملاحظات','عُدّل بواسطة','عُدّل في'];
+var VZ_ACCT_MODES_  = ['عام', 'منفصل', 'مشترك'];
+
+function _vzAcctRead_() {
+  var sh = _accSheet_(VZ_ACCT_SHEET, VZ_ACCT_HEADERS);
+  var last = sh.getLastRow(); if (last < 2) return [];
+  return sh.getRange(2, 1, last - 1, VZ_ACCT_HEADERS.length).getValues()
+    .filter(function (r) { return _mfStr_(r[0]) && _mfStr_(r[1]); })
+    .map(function (r, i) {
+      return { agent: _mfStr_(r[0]), company: _mfStr_(r[1]), mode: _mfStr_(r[2]) || 'عام',
+        mainCompany: _mfStr_(r[3]), notes: _mfStr_(r[4]), _row: i + 2 };
+    });
+}
+// خريطة سريعة: "الوكيل|الشركة" → إعداد
+function _vzAcctMap_(rows) {
+  var m = {};
+  (rows || _vzAcctRead_()).forEach(function (r) { m[r.agent + '|' + r.company] = r; });
+  return m;
+}
+// مفتاح الحساب المالي لزوج (وكيل، شركة)
+function _vzAcctKey_(agent, company, map) {
+  agent = _mfStr_(agent); company = _mfStr_(company);
+  if (!agent) return '';
+  var c = map[agent + '|' + company];
+  if (!c || c.mode === 'عام') return agent;
+  if (c.mode === 'مشترك') return agent + ' - ' + (_mfStr_(c.mainCompany) || company);
+  return agent + ' - ' + company;
+}
+// كل مفاتيح الحسابات المتاحة (وكيل عام + الحسابات الفرعية المُعدَّة) مرتَّبة
+function _vzAcctKeys_(agents, map) {
+  var keys = {}, sub = {};
+  (agents || []).forEach(function (a) { if (a) keys[a] = { key: a, agent: a, company: '', kind: 'عام' }; });
+  Object.keys(map).forEach(function (k) {
+    var c = map[k]; if (c.mode === 'عام') return;
+    var key = _vzAcctKey_(c.agent, c.company, map);
+    if (!keys[c.agent]) keys[c.agent] = { key: c.agent, agent: c.agent, company: '', kind: 'عام' };
+    if (!sub[key]) sub[key] = { key: key, agent: c.agent, company: key.slice(c.agent.length + 3), kind: c.mode, companies: [] };
+    if (sub[key].companies.indexOf(c.company) < 0) sub[key].companies.push(c.company);
+  });
+  var out = Object.keys(keys).map(function (k) { return keys[k]; })
+    .concat(Object.keys(sub).map(function (k) { return sub[k]; }));
+  out.sort(function (a, b) { return a.key < b.key ? -1 : (a.key > b.key ? 1 : 0); });
+  return out;
+}
+// هل هذه المجموعة تنتمي لمفتاح الحساب المطلوب؟ (المفتاح العام يجمع كل شركات الوكيل)
+function _vzFileInAcct_(f, acctKey, map) {
+  var agent = _mfStr_(f.agent); if (!agent) return false;
+  if (acctKey === agent) return true;
+  return _vzAcctKey_(agent, f.company, map) === acctKey;
+}
+function getAgentCompanyAccounts(authToken) {
+  _vzPerm_(authToken, 'view');
+  var rows = _vzAcctRead_().map(function (r) { var c = {}; for (var k in r) if (k !== '_row') c[k] = r[k]; return c; });
+  return { success: true, rows: rows, modes: VZ_ACCT_MODES_ };
+}
+function saveAgentCompanyAccounts(authToken, rows) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 ضبط الحسابات المالية للوكلاء
+  rows = Array.isArray(rows) ? rows : [];
+  var sh = _accSheet_(VZ_ACCT_SHEET, VZ_ACCT_HEADERS);
+  var last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, VZ_ACCT_HEADERS.length).clearContent();
+  var now = _mfStamp_();
+  var out = rows.filter(function (r) { return _mfStr_(r.agent) && _mfStr_(r.company); }).map(function (r) {
+    var mode = _mfStr_(r.mode); if (VZ_ACCT_MODES_.indexOf(mode) < 0) mode = 'عام';
+    return [_mfStr_(r.agent), _mfStr_(r.company), mode, _mfStr_(r.mainCompany), _mfStr_(r.notes), session.username, now];
+  });
+  if (out.length) sh.getRange(2, 1, out.length, VZ_ACCT_HEADERS.length).setValues(out);
+  _vzClearCache_();
+  return { success: true, count: out.length };
+}
+
 function _vzAgentBalance_(agent, files, items, pays) {
+  // ملاحظة: القائمة تصل مُصفّاة مسبقاً على حساب الوكيل (قد يكون حساباً فرعياً مع شركة بعينها)
   var visaDueS = 0;
-  (files || []).forEach(function (f) { if (_mfStr_(f.agent) === _mfStr_(agent)) visaDueS += _mfNum_(f.visaCount) * _mfNum_(f.price); });
+  (files || []).forEach(function (f) { visaDueS += _mfNum_(f.visaCount) * _mfNum_(f.price); });
   var dueS = visaDueS, dueE = 0, credS = 0, credE = 0, paidS = 0, paidE = 0;
   (items || []).forEach(function (it) {
     var v = _accNum_(it.value), sar = it.currency !== 'EGP';
@@ -21197,17 +21431,23 @@ function getVisaBootstrap(authToken) {
     files.forEach(function (f) { if (f.agent) agentsSet[f.agent] = true; });
     allItems.forEach(function (it) { if (it.agent) agentsSet[it.agent] = true; });
     allPays.forEach(function (p) { if (p.agent) agentsSet[p.agent] = true; });
+    // 🧑‍💼 (V4.134) الأرصدة تُحسب لكل «مفتاح حساب» (الوكيل العام + حساباته الفرعية مع الشركات)
+    var acctMap = _vzAcctMap_();
+    var accounts = _vzAcctKeys_(Object.keys(agentsSet), acctMap);
     var agentBalances = {};
-    Object.keys(agentsSet).forEach(function (a) {
-      agentBalances[a] = _vzAgentBalance_(a,
-        files.filter(function (f) { return f.agent === a; }),
-        allItems.filter(function (it) { return it.agent === a; }),
-        allPays.filter(function (p) { return p.agent === a; }));
+    accounts.forEach(function (ac) {
+      agentBalances[ac.key] = _vzAgentBalance_(ac.key,
+        files.filter(function (f) { return _vzFileInAcct_(f, ac.key, acctMap); }),
+        allItems.filter(function (it) { return it.agent === ac.key; }),
+        allPays.filter(function (p) { return p.agent === ac.key; }));
     });
     shared = {
       files: files, prices: prices, companies: base.companies, trips: base.trips, clients: base.clients,
       agents: Object.keys(agentsSet).sort(), statuses: VZ_STATUSES_, payStatuses: VZ_PAY_STATUSES_,
-      agentBalances: agentBalances, cateringByGroup: _vzCateringByGroup_(), today: _mfToday_()
+      accounts: accounts, acctRows: _vzAcctRead_().map(function (r) { var c = {}; for (var k in r) if (k !== '_row') c[k] = r[k]; return c; }),
+      acctModes: VZ_ACCT_MODES_,
+      agentBalances: agentBalances, cateringByGroup: _vzCateringByGroup_(),
+      housingByGroup: _vzHousingAgrByGroup_(), today: _mfToday_()
     };
     setCachedData(VZ_BOOTSTRAP_CACHE_KEY, shared);
   }
@@ -21284,16 +21524,77 @@ function saveVisaFile(authToken, data) {
       payStatus: _mfStr_(data.payStatus), makkahIn: _mfDate_(data.makkahIn), makkahOut: _mfDate_(data.makkahOut),
       madinahIn: _mfDate_(data.madinahIn), madinahOut: _mfDate_(data.madinahOut),
       makkahHousingAgr: _mfStr_(data.makkahHousingAgr), madinahHousingAgr: _mfStr_(data.madinahHousingAgr),
-      makkahCateringAgr: _mfStr_(data.makkahCateringAgr), madinahCateringAgr: _mfStr_(data.madinahCateringAgr)
+      makkahCateringAgr: _mfStr_(data.makkahCateringAgr), madinahCateringAgr: _mfStr_(data.madinahCateringAgr),
+      housing: Array.isArray(data.housing) ? data.housing : (old ? old.housing : [])
     };
+    // 🏨 (V4.134) تطبيع السكن المتعدد + مزامنة الحقول المفردة منه (أول فندق لكل مدينة)
+    f.housing = _vzHousingNormalize_(f);
+    var _hMk = _vzHousingFirst_(f.housing, 'مكة'), _hMd = _vzHousingFirst_(f.housing, 'المدينة');
+    if (_hMk) { f.makkahIn = _hMk.in; f.makkahOut = _hMk.out; f.makkahHousingAgr = _hMk.hAgr; f.makkahCateringAgr = _hMk.cAgr; }
+    if (_hMd) { f.madinahIn = _hMd.in; f.madinahOut = _hMd.out; f.madinahHousingAgr = _hMd.hAgr; f.madinahCateringAgr = _hMd.cAgr; }
     var row = _vzObjToRow_(f);
     if (isNew) sh.appendRow(row); else sh.getRange(old._row, 1, 1, VZ_FILES_HEADERS.length).setValues([row]);
     SpreadsheetApp.flush();
+    // 🔗 (V4.134) ربط ثنائي الاتجاه: أرقام اتفاقيات السكن المكتوبة بالمجموعة تُسجَّل تخصيصاً
+    // في شاشة اتفاقيات السكن تلقائياً (والعكس مُنفَّذ في saveHousingAllocation)
+    try { _vzSyncGroupHousingAllocs_(f, session.username); } catch (eSync) {}
     logChange_(session.username, isNew ? 'إضافة قيد تأشيرات' : 'تعديل قيد تأشيرات',
       f.agent || '-', 'قيد ' + (f.ref || f.seq), old ? (old.visaCount + '×' + old.price) : '-', f.visaCount + '×' + f.price);
     _vzClearCache_();
     f.dueSAR = f.visaCount * f.price;
     return { success: true, file: f };
+  } finally { lock.releaseLock(); }
+}
+
+/* 📥 (V4.134) استيراد المجموعات القديمة دفعةً واحدة بعد معاينتها وتعديلها بالشاشة.
+   يتخطّى أي مجموعة برقم مسجَّل من قبل (منعاً للتكرار) ويُرجع ما استُورد وما تُخطِّي. */
+function importVisaFilesBatch(authToken, rows) {
+  var session = _vzPerm_(authToken, 'add');
+  rows = Array.isArray(rows) ? rows : [];
+  if (!rows.length) return { success: false, error: 'لا توجد صفوف للاستيراد' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try {
+    var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+    var all = _vzReadAll_();
+    var existing = {};
+    all.forEach(function (f) { if (f.ref) existing[f.ref] = 1; });
+    var seq = all.reduce(function (m, f) { return Math.max(m, _mfNum_(f.seq)); }, 0);
+    var now = _mfStamp_();
+    var out = [], skipped = [], imported = 0;
+    rows.forEach(function (r) {
+      var ref = _mfStr_(r.ref);
+      if (ref && existing[ref]) { skipped.push(ref); return; }
+      if (ref) existing[ref] = 1;
+      var bd = Array.isArray(r.breakdown) ? r.breakdown.map(function (b) {
+        return { name: _mfStr_(b.name), count: _mfNum_(b.count) };
+      }).filter(function (b) { return b.name; }) : [];
+      var cnt = _mfNum_(r.visaCount);
+      if (!cnt && bd.length) cnt = bd.reduce(function (a, b) { return a + b.count; }, 0);
+      var price = _mfNum_(r.price);
+      if (!price) price = _vzPriceAt_(r.agent, r.date);
+      var f = {
+        id: _accId_('VZ'), seq: ++seq, ref: ref,
+        status: _mfStr_(r.status) || VZ_STATUSES_[0], date: _mfDate_(r.date),
+        company: _mfStr_(r.company), agent: _mfStr_(r.agent), tripName: _mfStr_(r.tripName),
+        breakdown: bd, selected: [], visaCount: cnt, price: price, notes: _mfStr_(r.notes),
+        createdBy: session.username, createdAt: now, updatedBy: '', updatedAt: '',
+        payStatus: '', makkahIn: _mfDate_(r.makkahIn), makkahOut: _mfDate_(r.makkahOut),
+        madinahIn: _mfDate_(r.madinahIn), madinahOut: _mfDate_(r.madinahOut),
+        makkahHousingAgr: _mfStr_(r.makkahHousingAgr), madinahHousingAgr: _mfStr_(r.madinahHousingAgr),
+        makkahCateringAgr: _mfStr_(r.makkahCateringAgr), madinahCateringAgr: _mfStr_(r.madinahCateringAgr),
+        housing: Array.isArray(r.housing) ? r.housing : []
+      };
+      f.housing = _vzHousingNormalize_(f);
+      out.push(_vzObjToRow_(f));
+      imported++;
+    });
+    if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, VZ_FILES_HEADERS.length).setValues(out);
+    SpreadsheetApp.flush();
+    logChange_(session.username, 'استيراد مجموعات تأشيرات', '-', 'استيراد دفعة',
+      '-', 'استُورد ' + imported + ' — تُخطِّي ' + skipped.length);
+    _vzClearCache_();
+    return { success: true, imported: imported, skipped: skipped.length, skippedRefs: skipped };
   } finally { lock.releaseLock(); }
 }
 
@@ -21342,16 +21643,55 @@ function saveVisaAgentPrices(authToken, agent, periods) {
 }
 
 /* -------- حساب وكيل: عرض/دفعات/بنود -------- */
-function getAgentAccount(authToken, agent) {
+/* 🧾 (V4.134) كشف حساب الوكيل — يقبل «مفتاح حساب»: اسم الوكيل وحده (كل شركاته)
+   أو «الوكيل - الشركة» (حساب فرعي منفصل/مشترك كما ضُبط من إعدادات حسابات الوكلاء).
+   الدفعات والبنود تُخزَّن بنفس المفتاح فيبقى لكل حساب دفعاته المستقلة. */
+function getAgentAccount(authToken, agent, filters) {
   _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
-  var files = _vzReadAll_().filter(function (f) { return f.agent === agent; });
-  files.forEach(function (f) { f.dueSAR = _mfNum_(f.visaCount) * _mfNum_(f.price); delete f._row; });
-  var items = _vzReadItems_(agent), pays = _vzReadPays_(agent);
+  filters = filters || {};
+  var map = _vzAcctMap_();
+  var files = _vzReadAll_().filter(function (f) { return _vzFileInAcct_(f, agent, map); });
+  files.forEach(function (f) {
+    f.dueSAR = _mfNum_(f.visaCount) * _mfNum_(f.price);
+    f.clientsLabel = (f.breakdown || []).map(function (b) { return b.name + (b.count ? ' (' + b.count + ')' : ''); }).join('، ');
+    delete f._row;
+  });
+  // 🗓️ فلترة الكشف بفترة (مفتوحة البداية أو النهاية) وبالشركة
+  var fromMs = _mfMs_(_mfDate_(filters.from)); if (isNaN(fromMs)) fromMs = -8640000000000000;
+  var toMs = _mfMs_(_mfDate_(filters.to)); if (isNaN(toMs)) toMs = 8640000000000000;
+  var compF = _mfStr_(filters.company);
+  var inRange = function (dateStr) {
+    var t = _mfMs_(_mfDate_(dateStr));
+    if (isNaN(t)) return (fromMs === -8640000000000000 && toMs === 8640000000000000);
+    return t >= fromMs && t <= toMs;
+  };
+  files = files.filter(function (f) { return inRange(f.date) && (!compF || f.company === compF); });
+  files.sort(function (a, b) { var x = _mfMs_(a.date), y = _mfMs_(b.date); return (isNaN(x) ? 0 : x) - (isNaN(y) ? 0 : y); });
+  // 🧮 الحساب العام (اسم الوكيل وحده) يُجمِّع أيضاً بنود ودفعات حساباته الفرعية، فيكون كشفاً
+  // موحَّداً صادقاً؛ أما الحساب الفرعي فيرى بنوده ودفعاته وحده كما طُلب.
+  var myKeys = [agent];
+  var isGeneral = true;
+  Object.keys(map).forEach(function (k) { if (map[k].agent === agent) return; });
+  if (agent.indexOf(' - ') > 0) isGeneral = false;
+  if (isGeneral) {
+    _vzAcctKeys_([agent], map).forEach(function (ac) { if (ac.agent === agent && myKeys.indexOf(ac.key) < 0) myKeys.push(ac.key); });
+  }
+  var items = [], pays = [];
+  myKeys.forEach(function (k) {
+    _vzReadItems_(k).forEach(function (x) { items.push(x); });
+    _vzReadPays_(k).forEach(function (x) { pays.push(x); });
+  });
+  pays = pays.filter(function (p) { return inRange(p.date); });
   items.forEach(function (x) { delete x._row; }); pays.forEach(function (x) { delete x._row; });
+  pays.sort(function (a, b) { var x = _mfMs_(a.date), y = _mfMs_(b.date); return (isNaN(x) ? 0 : x) - (isNaN(y) ? 0 : y); });
+  // الشركات التي يضمّها هذا الحساب فعلياً (تُعرض بترويسة الكشف)
+  var comps = {}; files.forEach(function (f) { if (f.company) comps[f.company] = 1; });
   return {
     success: true, agent: agent, files: files, items: items, payments: pays,
+    companies: Object.keys(comps).sort(),
+    filters: { from: _mfDate_(filters.from), to: _mfDate_(filters.to), company: compF },
     balance: _vzAgentBalance_(agent, files, items, pays)
   };
 }
@@ -21413,44 +21753,56 @@ function deleteAgentPayment(authToken, id) {
 }
 
 /* -------- إحصائيات الوكلاء بفلاتر متعددة -------- */
+/* 📊 (V4.134) إحصائيات المجموعات والوكلاء — أعداد فقط بلا أي قيم مالية (فلا تحتاج
+   الصلاحية المالية): إجماليات + حسب الوكيل + حسب الحالة + حسب الشركة المصرية
+   + جدول متقاطع «الوكيل × الشركة المصرية». الحالات والشركات اختيار متعدد مع «الكل». */
 function getAgentVisaStats(authToken, filters) {
-  _vzFinancePerm_(authToken);   // 🔒 (V4.133) الإحصائيات تكشف المستحقات المالية
+  _vzPerm_(authToken, 'view');
   filters = filters || {};
   var fromMs = _mfMs_(_mfDate_(filters.from)); if (isNaN(fromMs)) fromMs = -8640000000000000;
   var toMs = _mfMs_(_mfDate_(filters.to)); if (isNaN(toMs)) toMs = 8640000000000000;
   var companies = Array.isArray(filters.companies) ? filters.companies.map(_mfStr_).filter(Boolean) : [];
   var statuses = Array.isArray(filters.statuses) ? filters.statuses.map(_mfStr_).filter(Boolean) : [];
   var agentsFilter = Array.isArray(filters.agents) ? filters.agents.map(_mfStr_).filter(Boolean) : [];
+  var openPeriod = (fromMs === -8640000000000000 && toMs === 8640000000000000);
 
   var files = _vzReadAll_().filter(function (f) {
     var t = _mfMs_(f.date);
     if (!isNaN(t) && (t < fromMs || t > toMs)) return false;
-    if (isNaN(t) && (fromMs > -8640000000000000 || toMs < 8640000000000000)) return false;
+    if (isNaN(t) && !openPeriod) return false;
     if (companies.length && companies.indexOf(f.company) < 0) return false;
     if (statuses.length && statuses.indexOf(f.status) < 0) return false;
     if (agentsFilter.length && agentsFilter.indexOf(f.agent) < 0) return false;
     return true;
   });
 
-  var byAgent = {}, byStatus = {}, byCompany = {}, totalVisas = 0, totalDue = 0, totalFiles = files.length;
+  var byAgent = {}, byStatus = {}, byCompany = {}, cross = {};
+  var agentsOrder = [], compsOrder = [];
+  var totalVisas = 0, totalFiles = files.length, totalClients = {};
   files.forEach(function (f) {
-    var due = _mfNum_(f.visaCount) * _mfNum_(f.price);
-    totalVisas += _mfNum_(f.visaCount); totalDue += due;
-    var A = f.agent || '(بلا وكيل)', S = f.status || '-', C = f.company || '(بلا شركة)';
-    (byAgent[A] = byAgent[A] || { agent: A, files: 0, visas: 0, dueSAR: 0 });
-    byAgent[A].files++; byAgent[A].visas += _mfNum_(f.visaCount); byAgent[A].dueSAR += due;
-    (byStatus[S] = byStatus[S] || { status: S, files: 0, visas: 0, dueSAR: 0 });
-    byStatus[S].files++; byStatus[S].visas += _mfNum_(f.visaCount); byStatus[S].dueSAR += due;
-    (byCompany[C] = byCompany[C] || { company: C, files: 0, visas: 0, dueSAR: 0 });
-    byCompany[C].files++; byCompany[C].visas += _mfNum_(f.visaCount); byCompany[C].dueSAR += due;
+    var n = _mfNum_(f.visaCount);
+    totalVisas += n;
+    var A = f.agent || '(بلا وكيل)', S = f.status || '(بلا حالة)', C = f.company || '(بلا شركة)';
+    (f.breakdown || []).forEach(function (b) { if (b.name) totalClients[b.name] = 1; });
+    (byAgent[A] = byAgent[A] || { agent: A, files: 0, visas: 0 });  byAgent[A].files++;  byAgent[A].visas += n;
+    (byStatus[S] = byStatus[S] || { status: S, files: 0, visas: 0 }); byStatus[S].files++; byStatus[S].visas += n;
+    (byCompany[C] = byCompany[C] || { company: C, files: 0, visas: 0 }); byCompany[C].files++; byCompany[C].visas += n;
+    if (agentsOrder.indexOf(A) < 0) agentsOrder.push(A);
+    if (compsOrder.indexOf(C) < 0) compsOrder.push(C);
+    var k = A + '|' + C;
+    (cross[k] = cross[k] || { agent: A, company: C, files: 0, visas: 0 });
+    cross[k].files++; cross[k].visas += n;
   });
-  var arr = function (m) { return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return b.dueSAR - a.dueSAR; }); };
+  agentsOrder.sort(); compsOrder.sort();
+  var arr = function (m) { return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return b.visas - a.visas; }); };
   return {
-    success: true, totalFiles: totalFiles, totalVisas: totalVisas, totalDueSAR: totalDue,
-    byAgent: arr(byAgent), byStatus: arr(byStatus), byCompany: arr(byCompany)
+    success: true, totalFiles: totalFiles, totalVisas: totalVisas,
+    totalClients: Object.keys(totalClients).length,
+    byAgent: arr(byAgent), byStatus: arr(byStatus), byCompany: arr(byCompany),
+    crossAgents: agentsOrder, crossCompanies: compsOrder,
+    cross: Object.keys(cross).map(function (k) { return cross[k]; })
   };
 }
-
 /* ============================================================
    🏨 (V4.133 — المرحلة 2) اتفاقيات سكن مكة والمدينة + محرك المتاح
    ------------------------------------------------------------
@@ -21462,8 +21814,12 @@ function getAgentVisaStats(authToken, filters) {
    ثم مجموعة 40 من 1-9 إلى 3-9 ⇒ متاح 20 (1-9→3-9) و60 (3-9→4-9) — أي 20 للفترة كاملة.
    ============================================================ */
 var VZ_HAGR_SHEET    = 'HousingAgreements';
-var VZ_HAGR_HEADERS  = ['المعرف','مسلسل','رقم الاتفاقية','المدينة','الفندق / المورد','العدد','من تاريخ','إلى تاريخ',
-  'الحالة','ملاحظات','أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في'];
+var VZ_HAGR_HEADERS  = ['المعرف','مسلسل','رقم الاتفاقية','المدينة','الفندق','العدد','من تاريخ','إلى تاريخ',
+  'الحالة','ملاحظات','أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في',
+  // 🏢 (V4.134) المورد عمود مستقل عن الفندق — ولو كان المورد هو الوكيل السعودي أمكن ترحيل قيمة
+  // الاتفاقية إلى الجانب الدائن بحساب ذلك الوكيل. و«نوع الاتفاقية» يفصل اتفاقيات السكن عن الإعاشة.
+  'المورد','نوع الاتفاقية'];
+var VZ_HA_KINDS_ = ['سكن', 'إعاشة'];
 var VZ_HALLOC_SHEET  = 'HousingAllocations';
 var VZ_HALLOC_HEADERS = ['المعرف','معرف الاتفاقية','رقم المجموعة','العدد','من تاريخ','إلى تاريخ','ملاحظات','أنشئ بواسطة','أنشئ في'];
 var VZ_HA_CITIES_    = ['مكة','المدينة'];
@@ -21475,7 +21831,8 @@ function _vzHaClearCache_() { try { CacheService.getScriptCache().remove(VZ_HA_C
 function _vzHaRowToObj_(r) {
   return { id: _mfStr_(r[0]), seq: _mfNum_(r[1]), agrNo: _mfStr_(r[2]), city: _mfStr_(r[3]), hotel: _mfStr_(r[4]),
     capacity: _mfNum_(r[5]), from: _mfStr_(r[6]), to: _mfStr_(r[7]), status: _mfStr_(r[8]), notes: _mfStr_(r[9]),
-    createdBy: _mfStr_(r[10]), createdAt: _mfStr_(r[11]), updatedBy: _mfStr_(r[12]), updatedAt: _mfStr_(r[13]) };
+    createdBy: _mfStr_(r[10]), createdAt: _mfStr_(r[11]), updatedBy: _mfStr_(r[12]), updatedAt: _mfStr_(r[13]),
+    supplier: _mfStr_(r[14]), kind: _mfStr_(r[15]) || 'سكن' };
 }
 function _vzHaReadAll_() {
   var sh = _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS);
@@ -21552,20 +21909,111 @@ function _vzGroupIndex_() {
   return out;
 }
 
-function getHousingAgreements(authToken) {
+/* 🏨 (V4.134) اتفاقيات السكن/الإعاشة مع محرك المتاح + «من في الاتفاقية» في أي تاريخ.
+   filters: { from, to, onDate } — الفترة مفتوحة البداية أو النهاية، و onDate يعرض
+   المجموعات (وبالتالي العملاء) الموجودة داخل كل اتفاقية في ذلك اليوم تحديداً. */
+function getHousingAgreements(authToken, filters) {
   _vzPerm_(authToken, 'view');
+  filters = filters || {};
+  var fromMs = _mfMs_(_mfDate_(filters.from)); if (isNaN(fromMs)) fromMs = -8640000000000000;
+  var toMs = _mfMs_(_mfDate_(filters.to)); if (isNaN(toMs)) toMs = 8640000000000000;
+  var onMs = _mfMs_(_mfDate_(filters.onDate));
+
   var agrs = _vzHaReadAll_(), allocs = _vzAllocReadAll_();
   var byAgr = {};
   allocs.forEach(function (x) { (byAgr[x.agrId] = byAgr[x.agrId] || []).push(x); });
+  // فهرس المجموعات: رقم المجموعة → عملاؤها ورحلتها ووكيلها (لعرض «من بالداخل» كاملاً)
+  var gIdx = {}; _vzGroupIndex_().forEach(function (g) { gIdx[g.ref] = g; });
+
   agrs.forEach(function (a) {
-    a.allocations = (byAgr[a.id] || []).map(function (x) { var c = {}; for (var k in x) if (k !== '_row') c[k] = x[k]; return c; });
+    a.allocations = (byAgr[a.id] || []).map(function (x) {
+      var c = {}; for (var k in x) if (k !== '_row') c[k] = x[k];
+      var g = gIdx[c.groupRef];
+      c.clients = g ? (g.clients || []) : [];
+      c.tripName = g ? g.tripName : '';
+      c.agent = g ? g.agent : '';
+      c.company = g ? g.company : '';
+      // هل هذا التخصيص ساري في تاريخ الاستعلام؟
+      var f = _mfMs_(_mfDate_(c.from)), t = _mfMs_(_mfDate_(c.to));
+      c.onDate = !isNaN(onMs) && !isNaN(f) && !isNaN(t) ? (onMs >= f && onMs < t) : false;
+      return c;
+    });
     var av = _vzHaSegments_(a.capacity, a.from, a.to, a.allocations);
     a.segments = av.segments; a.minRemaining = av.minRemaining; a.totalAllocated = av.totalAllocated;
+    // 📅 لقطة التاريخ المطلوب: المشغول والمتاح ومن بالداخل
+    if (!isNaN(onMs)) {
+      var seg = null;
+      (a.segments || []).forEach(function (sg) {
+        var f2 = _mfMs_(_mfDate_(sg.from)), t2 = _mfMs_(_mfDate_(sg.to));
+        if (!isNaN(f2) && !isNaN(t2) && onMs >= f2 && onMs < t2) seg = sg;
+      });
+      a.onDateUsed = seg ? seg.used : 0;
+      a.onDateRemaining = seg ? seg.remaining : _mfNum_(a.capacity);
+      a.onDateGroups = a.allocations.filter(function (c) { return c.onDate; });
+      a.onDateInside = !!(seg || a.onDateGroups.length);
+    }
     delete a._row;
   });
+  // ⏳ فلترة بالفترة: تبقى الاتفاقية التي تتقاطع فترتها مع الفترة المطلوبة
+  agrs = agrs.filter(function (a) {
+    if (fromMs === -8640000000000000 && toMs === 8640000000000000) return true;
+    var f = _mfMs_(_mfDate_(a.from)), t = _mfMs_(_mfDate_(a.to));
+    if (isNaN(f) && isNaN(t)) return false;
+    if (isNaN(f)) f = t; if (isNaN(t)) t = f;
+    return f <= toMs && t >= fromMs;
+  });
+  if (!isNaN(onMs) && filters.onlyOnDate) agrs = agrs.filter(function (a) { return a.onDateInside; });
   agrs.sort(function (x, y) { return (y.seq || 0) - (x.seq || 0); });
   return { success: true, agreements: agrs, groups: _vzGroupIndex_(),
-    cities: VZ_HA_CITIES_, statuses: VZ_HA_STATUSES_, today: _mfToday_() };
+    cities: VZ_HA_CITIES_, kinds: VZ_HA_KINDS_, suppliers: _vzSupplierList_(),
+    onDate: _mfDate_(filters.onDate), today: _mfToday_() };
+}
+// قائمة الموردين المقترحة: الوكلاء السعوديون + كل مورد سبق تسجيله باتفاقية
+function _vzSupplierList_() {
+  var set = {};
+  try { _vzHaReadAll_().forEach(function (a) { if (a.supplier) set[a.supplier] = 1; }); } catch (e) {}
+  try { _vzReadAll_().forEach(function (f) { if (f.agent) set[f.agent] = 1; }); } catch (e2) {}
+  return Object.keys(set).sort();
+}
+/* 🔗 (V4.134) ربط ثنائي الاتجاه — أرقام اتفاقيات السكن المسجَّلة بالمجموعة، مفهرسة برقم المجموعة
+   ثم بالمدينة، لتُجلب تلقائياً في نموذج المجموعة كما تُجلب اتفاقيات الإعاشة. */
+function _vzHousingAgrByGroup_() {
+  var out = {}, byId = {};
+  try { _vzHaReadAll_().forEach(function (a) { byId[a.id] = a; }); } catch (e) { return out; }
+  try {
+    _vzAllocReadAll_().forEach(function (x) {
+      var g = _mfStr_(x.groupRef); if (!g) return;
+      var a = byId[x.agrId]; if (!a) return;
+      var city = a.city === 'المدينة' ? 'madinah' : 'makkah';
+      var kind = (a.kind || 'سكن') === 'إعاشة' ? 'catering' : 'housing';
+      if (!out[g]) out[g] = { makkah: [], madinah: [], makkahCatering: [], madinahCatering: [] };
+      var bucket = kind === 'catering' ? (city + 'Catering') : city;
+      var rec = { agrNo: a.agrNo, hotel: a.hotel, supplier: a.supplier, count: x.count, from: x.from, to: x.to };
+      if (!out[g][bucket].some(function (y) { return y.agrNo === rec.agrNo; })) out[g][bucket].push(rec);
+    });
+  } catch (e2) {}
+  return out;
+}
+/* 🔁 (V4.134) عند حفظ المجموعة: كل رقم اتفاقية سكن مكتوب بأحد سكنات المجموعة يُسجَّل
+   تخصيصاً في شاشة اتفاقيات السكن تلقائياً (إن لم يكن مسجَّلاً) — والعكس في saveHousingAllocation. */
+function _vzSyncGroupHousingAllocs_(f, username) {
+  var ref = _mfStr_(f.ref); if (!ref) return;
+  var agrs = _vzHaReadAll_(); if (!agrs.length) return;
+  var allocs = _vzAllocReadAll_();
+  var sh = _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS);
+  var stamp = _mfStamp_();
+  (f.housing || []).forEach(function (h) {
+    [[_mfStr_(h.hAgr), 'سكن'], [_mfStr_(h.cAgr), 'إعاشة']].forEach(function (pair) {
+      var no = pair[0], kind = pair[1]; if (!no) return;
+      var a = agrs.filter(function (x) { return x.agrNo === no && x.city === h.city && (x.kind || 'سكن') === kind; })[0];
+      if (!a) return;
+      if (allocs.some(function (x) { return x.agrId === a.id && x.groupRef === ref; })) return;
+      sh.appendRow(['HL' + new Date().getTime() + Math.floor(Math.random() * 999), a.id, ref,
+        _mfNum_(h.count) || _mfNum_(f.visaCount), _mfDate_(h.in) || a.from, _mfDate_(h.out) || a.to,
+        'ربط تلقائي من بيانات المجموعة', username, stamp]);
+    });
+  });
+  _vzHaClearCache_();
 }
 
 function saveHousingAgreement(authToken, data) {
@@ -21579,21 +22027,22 @@ function saveHousingAgreement(authToken, data) {
   var sh = _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS);
   var all = _vzHaReadAll_();
   // منع تكرار رقم الاتفاقية داخل نفس المدينة
-  var dup = all.filter(function (a) { return a.agrNo === agrNo && a.city === city && a.id !== _mfStr_(data.id); });
-  if (dup.length) throw new Error('رقم الاتفاقية ' + agrNo + ' مسجَّل من قبل في ' + city);
+  var kind = _mfStr_(data.kind) || 'سكن';
+  var dup = all.filter(function (a) { return a.agrNo === agrNo && a.city === city && (a.kind || 'سكن') === kind && a.id !== _mfStr_(data.id); });
+  if (dup.length) throw new Error('اتفاقية ' + kind + ' رقم ' + agrNo + ' مسجَّلة من قبل في ' + city);
   var stamp = _mfStamp_();
   var row = [null, 0, agrNo, city, _mfStr_(data.hotel), _mfNum_(data.capacity),
-    _mfDate_(data.from), _mfDate_(data.to), _mfStr_(data.status) || VZ_HA_STATUSES_[0], _mfStr_(data.notes)];
+    _mfDate_(data.from), _mfDate_(data.to), _mfStr_(data.status), _mfStr_(data.notes)];
   if (isNew) {
     var seq = all.reduce(function (m, a) { return Math.max(m, _mfNum_(a.seq)); }, 0) + 1;
     row[0] = 'HA' + new Date().getTime(); row[1] = seq;
-    sh.appendRow(row.concat([session.username, stamp, '', '']));
+    sh.appendRow(row.concat([session.username, stamp, '', '', _mfStr_(data.supplier), kind]));
   } else {
     var cur = all.filter(function (a) { return a.id === _mfStr_(data.id); })[0];
     if (!cur) throw new Error('الاتفاقية غير موجودة');
     row[0] = cur.id; row[1] = cur.seq;
     sh.getRange(cur._row, 1, 1, VZ_HAGR_HEADERS.length)
-      .setValues([row.concat([cur.createdBy, cur.createdAt, session.username, stamp])]);
+      .setValues([row.concat([cur.createdBy, cur.createdAt, session.username, stamp, _mfStr_(data.supplier), kind])]);
   }
   _vzHaClearCache_();
   return { success: true };
@@ -21647,8 +22096,82 @@ function saveHousingAllocation(authToken, data) {
     row[0] = cur.id;
     sh.getRange(cur._row, 1, 1, VZ_HALLOC_HEADERS.length).setValues([row.concat([cur.createdBy, cur.createdAt])]);
   }
+  // 🔁 (V4.134) الاتجاه العكسي: رقم الاتفاقية يُسجَّل تلقائياً في بيانات سكن المجموعة
+  try { _vzSyncAllocToGroup_(agr, ref, cnt, from, to, session.username); } catch (eBack) {}
   _vzHaClearCache_();
   return { success: true };
+}
+/* 🔁 (V4.134) تسجيل رقم الاتفاقية في سكن المجموعة المطابق للمدينة — ينشئ سطر سكن جديداً
+   إن لم يوجد سكن لتلك المدينة، ولا يمسّ رقماً سبق للمستخدم كتابته يدوياً. */
+function _vzSyncAllocToGroup_(agr, groupRef, count, from, to, username) {
+  groupRef = _mfStr_(groupRef); if (!groupRef) return;
+  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+  var all = _vzReadAll_();
+  var kind = (agr.kind || 'سكن') === 'إعاشة' ? 'cAgr' : 'hAgr';
+  var touched = false;
+  all.forEach(function (f) {
+    if (_mfStr_(f.ref) !== groupRef) return;
+    var hz = _vzHousingNormalize_(f);
+    var hit = null;
+    for (var i = 0; i < hz.length; i++) {
+      if (hz[i].city !== agr.city) continue;
+      if (_mfStr_(hz[i][kind]) === _mfStr_(agr.agrNo)) { hit = hz[i]; break; }   // مسجَّل بالفعل
+      if (!_mfStr_(hz[i][kind]) && !hit) hit = hz[i];                            // أول خانة فارغة
+    }
+    if (hit && _mfStr_(hit[kind]) === _mfStr_(agr.agrNo)) return;
+    if (!hit) {
+      hit = { city: agr.city, hotel: _mfStr_(agr.hotel), count: _mfNum_(count), in: _mfDate_(from), out: _mfDate_(to),
+        hAgr: '', cAgr: '', supplier: _mfStr_(agr.supplier) };
+      hz.push(hit);
+    }
+    hit[kind] = _mfStr_(agr.agrNo);
+    if (!_mfStr_(hit.hotel) && kind === 'hAgr') hit.hotel = _mfStr_(agr.hotel);
+    if (!_mfStr_(hit.supplier)) hit.supplier = _mfStr_(agr.supplier);
+    if (!_mfStr_(hit.in)) hit.in = _mfDate_(from);
+    if (!_mfStr_(hit.out)) hit.out = _mfDate_(to);
+    f.housing = hz;
+    var mk = _vzHousingFirst_(hz, 'مكة'), md = _vzHousingFirst_(hz, 'المدينة');
+    if (mk) { f.makkahIn = mk.in; f.makkahOut = mk.out; f.makkahHousingAgr = mk.hAgr; f.makkahCateringAgr = mk.cAgr; }
+    if (md) { f.madinahIn = md.in; f.madinahOut = md.out; f.madinahHousingAgr = md.hAgr; f.madinahCateringAgr = md.cAgr; }
+    f.updatedBy = username; f.updatedAt = _mfStamp_();
+    sh.getRange(f._row, 1, 1, VZ_FILES_HEADERS.length).setValues([_vzObjToRow_(f)]);
+    touched = true;
+  });
+  if (touched) { SpreadsheetApp.flush(); _vzClearCache_(); }
+}
+
+/* 💳 (V4.134) ترحيل قيمة اتفاقية سكن/إعاشة موردها هو الوكيل السعودي إلى الجانب الدائن
+   بحساب ذلك الوكيل — البيان يُبنى من بيانات الاتفاقية (رقمها، الفندق، العميل/الرحلة، المجموعة)
+   والقيمة تُدخَل يدوياً من الشاشة. */
+function postAgreementToAgentAccount(authToken, payload) {
+  var session = _vzFinancePerm_(authToken);
+  payload = payload || {};
+  var agrId = _mfStr_(payload.agrId);
+  var a = _vzHaReadAll_().filter(function (x) { return x.id === agrId; })[0];
+  if (!a) return { success: false, error: 'الاتفاقية غير موجودة' };
+  var acct = _mfStr_(payload.agent) || _mfStr_(a.supplier);
+  if (!acct) return { success: false, error: 'حدّد حساب الوكيل' };
+  var value = _accNum_(payload.value);
+  if (value <= 0) return { success: false, error: 'أدخل قيمة أكبر من صفر' };
+  var allocs = _vzAllocReadAll_().filter(function (x) { return x.agrId === agrId; });
+  var gIdx = {}; _vzGroupIndex_().forEach(function (g) { gIdx[g.ref] = g; });
+  var refs = allocs.map(function (x) { return x.groupRef; });
+  var trips = {}, clients = {};
+  allocs.forEach(function (x) {
+    var g = gIdx[x.groupRef]; if (!g) return;
+    if (g.tripName) trips[g.tripName] = 1;
+    (g.clients || []).forEach(function (c) { if (c) clients[c] = 1; });
+  });
+  var parts = ['اتفاقية ' + (a.kind || 'سكن') + ' رقم ' + a.agrNo];
+  if (a.hotel) parts.push(a.hotel);
+  if (a.city) parts.push(a.city);
+  var who = Object.keys(clients).join('، ') || Object.keys(trips).join('، ');
+  if (who) parts.push(who);
+  if (refs.length) parts.push('مجموعة ' + refs.join('، '));
+  var desc = _mfStr_(payload.desc) || parts.join(' - ');
+  return saveAgentAccItem(authToken, { agent: acct, desc: desc,
+    currency: _mfStr_(payload.currency) || 'SAR', value: value, isCredit: true,
+    notes: _mfStr_(payload.notes) || ('مُرحَّل من اتفاقية ' + a.agrNo) });
 }
 
 function deleteHousingAllocation(authToken, id) {

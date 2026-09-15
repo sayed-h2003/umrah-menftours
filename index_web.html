@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.133 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.134 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.133)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.134)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.133</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.134</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4682,7 +4682,7 @@ input[type="date"]:not(:focus):not(:valid) {
   #mfColWin .pin.on{ background:#fef3e2; border-color:#f6d199; color:#c2670a; }
 
   /* التقويم المخصص — لا يعتمد على showPicker المحجوب داخل إطار Apps Script */
-  #mfDatePick{ position:fixed; z-index:2147483000; background:#fff; border:1px solid #cbd5e1; border-radius:11px;
+  #mfDatePick{ position:fixed; z-index:2147483600; background:#fff; border:1px solid #cbd5e1; border-radius:11px;
     box-shadow:0 18px 50px rgba(15,23,42,.28); padding:9px; display:none; width:248px; }
   #mfDatePick.show{ display:block; }
   #mfDatePick .dh{ display:flex; align-items:center; gap:4px; margin-bottom:7px; }
@@ -5081,8 +5081,10 @@ input[type="date"]:not(:focus):not(:valid) {
     <div class="ms-auto d-flex gap-2 flex-wrap">
       <button class="vz-btn pri" onclick="vzNewFile()">➕ مجموعة جديدة</button>
       <button class="vz-btn" onclick="vzHaOpen()">🏨 اتفاقيات السكن</button>
+      <button class="vz-btn" onclick="vzImportOpen()">📥 استيراد مجموعات</button>
+      <button class="vz-btn vz-fin" id="vzBtnAcctCfg" onclick="vzAcctCfgOpen()">⚙️ إعدادات حسابات الوكلاء</button>
       <button class="vz-btn gold vz-fin" id="vzBtnPricing" onclick="vzOpenPricing()">💲 تسعير الوكلاء</button>
-      <button class="vz-btn vz-fin" id="vzBtnStats" onclick="vzOpenStats()">📊 إحصائيات الوكلاء</button>
+      <button class="vz-btn" id="vzBtnStats" onclick="vzOpenStats()">📊 إحصائيات الوكلاء</button>
       <button class="vz-btn" onclick="vzPrint()">🖨️ طباعة / PDF</button>
       <button class="vz-btn" onclick="vzExportImage(this)">📸 صورة HD</button>
       <button class="vz-btn" onclick="vzLoad(true)">🔄 تحديث</button>
@@ -5096,7 +5098,7 @@ input[type="date"]:not(:focus):not(:valid) {
     <div class="d-flex align-items-end gap-2 flex-wrap">
       <div class="vz-fld" style="flex:1 1 150px;"><label>بحث شامل</label><input id="vzF_search" placeholder="رقم مجموعة/وكيل/شركة/رحلة/عميل/اتفاقية..." autocomplete="off"></div>
       <div class="vz-fld"><label>رقم المجموعة</label><input id="vzF_ref" autocomplete="off"></div>
-      <div class="vz-fld"><label>الوكيل</label><input id="vzF_agent" list="vzAgentsList" autocomplete="off"></div>
+      <div class="vz-fld"><label>الوكيل / الحساب</label><select id="vzF_agent"><option value="">الكل</option></select></div>
       <div class="vz-fld"><label>الشركة</label><input id="vzF_company" list="vzCompaniesList" autocomplete="off"></div>
       <div class="vz-fld"><label>العميل/الرحلة</label><input id="vzF_client" autocomplete="off"></div>
       <div class="vz-fld"><label>الحالة</label><select id="vzF_status"><option value="">الكل</option></select></div>
@@ -6544,7 +6546,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.133";
+var CLIENT_APP_VERSION = "4.134";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -20462,12 +20464,15 @@ var TA_COLUMNS_ = [
   { key: 'agent', label: 'الوكيل السعودي', val: function(r) { return r.agent || '-'; }, render: function(r) { return escapeHtml_(r.agent || '-'); } },
   { key: 'arrivalDate', label: 'تاريخ الوصول', cls: 'nowrap-cell', val: function(r) { return r.arrivalDate; }, render: function(r) { return escapeHtml_(r.arrivalDate); } },
   { key: 'departureDate', label: 'تاريخ المغادرة', cls: 'nowrap-cell', val: function(r) { return r.departureDate; }, render: function(r) { return escapeHtml_(r.departureDate); } },
-  { key: 'supplier', label: 'المورد', val: function(r) { return r.isClientManaged ? 'بمعرفة العميل' : (r.supplier || '-'); }, render: function(r) { return r.isClientManaged ? '<span class="badge bg-secondary">بمعرفة العميل</span>' : escapeHtml_(r.supplier || '-'); } },
+  { key: 'supplier', label: 'المورد', val: function(r) { return r.isClientManaged ? 'بمعرفة العميل' : (r.supplier || '-'); }, render: function(r) { return (r.isClientManaged ? '<span class="badge bg-secondary">بمعرفة العميل</span>' : escapeHtml_(r.supplier || '-')) + (r.edited ? ' <span class="badge bg-warning text-dark" style="font-size:8.5px;" title="مُعدَّل يدوياً من هذه الشاشة">✏️</span>' : ''); } },
   // 🧩 (V4.43) البيان: اسم المجموعة + دورة النقل حسب مطاري الاستقبال/المغادرة (السعودية فقط) + أي مقاطع إضافية
   { key: 'desc', label: 'البيان', cls: 'text-start', val: function(r) { return r.desc || '-'; }, render: function(r) { return '<span style="font-size:11px;">' + escapeHtml_(r.desc || '-') + '</span>'; } },
   { key: 'busCount', label: 'عدد الباصات', isSum: true, val: function(r) { return r.busCount; }, render: function(r) { return escapeHtml_(r.busCount); } },
   { key: 'busPrice', label: 'سعر الباص', val: function(r) { return r.busPrice ? r.busPrice.toLocaleString('en-US') : '-'; }, render: function(r) { return escapeHtml_(r.busPrice ? r.busPrice.toLocaleString('en-US') : '-'); } },
-  { key: 'operationValue', label: 'القيمة', cls: 'fw-bold', isSum: true, val: function(r) { return r.operationValue ? r.operationValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'; }, render: function(r) { return escapeHtml_(r.operationValue ? r.operationValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'); } }
+  { key: 'operationValue', label: 'القيمة', cls: 'fw-bold', isSum: true, val: function(r) { return r.operationValue ? r.operationValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'; }, render: function(r) { return escapeHtml_(r.operationValue ? r.operationValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'); } },
+  // ✏️ (V4.134) تعديل بيانات الصف: المورد والبيان (خاصان بهذه الشاشة فقط) وسعر الباص والقيمة (يُكتبان بالإشعار)
+  { key: 'rowEdit', label: '⚙', noPrint: true, val: function() { return ''; },
+    render: function(r) { return '<button class="btn btn-outline-primary btn-sm py-0 px-1" title="تعديل المورد والبيان والسعر" onclick="taEditRow(\'' + String(r.id).replace(/'/g, "\\'") + '\')">✏️</button>'; } }
 ];
 window._taColVisible = {};
 TA_COLUMNS_.forEach(function(c) { if (window._taColVisible[c.key] === undefined) window._taColVisible[c.key] = true; });
@@ -20544,6 +20549,70 @@ function renderTransportAccountsTable(rows) {
   area.innerHTML = html;
 }
 
+/* ✏️ (V4.134) تعديل صف بكشف حساب النقل السعودي.
+   المورد والبيان يُحفظان كتجاوز خاص بهذه الشاشة ولا يمسّان بيانات الإشعار إطلاقاً،
+   أما سعر الباص وقيمة التشغيلة فيُكتبان في الإشعار نفسه — «إلا في السعر فقط». */
+function taEditRow(bookingId) {
+  var rows = window.taFilteredData || window.taRawData || [];
+  var r = rows.filter(function (x) { return String(x.id) === String(bookingId); })[0];
+  if (!r) { showToast('❌ لم يُعثر على الصف', true); return; }
+  var esc = escapeHtml_;
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483200;background:rgba(15,23,42,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:14px;direction:rtl;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(560px,96vw);max-height:92vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.4);border-top:5px solid #f59e0b;">' +
+    '<div style="background:linear-gradient(135deg,#1e3d59,#16324a);color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between;">' +
+      '<b style="font-size:15px;">✏️ تعديل صف كشف النقل — تشغيلة ' + esc(r.operationNo || r.id) + '</b>' +
+      '<button class="btn btn-sm btn-light py-0" id="taEdX">✕</button></div>' +
+    '<div class="p-3">' +
+      '<div class="alert alert-warning py-2" style="font-size:11.5px;">اسم المورد والبيان يُحفظان لهذه الشاشة فقط ولا يؤثّران على بيانات الإشعار. أما <b>سعر الباص وقيمة التشغيلة</b> فيُحدَّثان في الإشعار نفسه.</div>' +
+      '<div class="mb-2"><label class="form-label fw-bold small mb-1">اسم المورد</label>' +
+        '<input id="taEdSupplier" class="form-control form-control-sm" value="' + esc(r.supplier || '') + '"></div>' +
+      '<div class="mb-2"><label class="form-label fw-bold small mb-1">البيان</label>' +
+        '<textarea id="taEdDesc" class="form-control form-control-sm" rows="2">' + esc(r.desc || '') + '</textarea></div>' +
+      '<div class="row g-2 mb-2">' +
+        '<div class="col-6"><label class="form-label fw-bold small mb-1">سعر الباص <span class="text-danger">(يُكتب بالإشعار)</span></label>' +
+          '<input id="taEdPrice" class="form-control form-control-sm" value="' + esc(r.busPrice || 0) + '"></div>' +
+        '<div class="col-6"><label class="form-label fw-bold small mb-1">قيمة التشغيلة <span class="text-danger">(يُكتب بالإشعار)</span></label>' +
+          '<input id="taEdValue" class="form-control form-control-sm" value="' + esc(r.operationValue || 0) + '"></div>' +
+      '</div>' +
+      '<div class="mb-2"><label class="form-label fw-bold small mb-1">ملاحظات التعديل</label>' +
+        '<input id="taEdNotes" class="form-control form-control-sm" value="' + esc(r.editNotes || '') + '"></div>' +
+      '<div class="d-flex gap-2 mt-3"><button class="btn btn-primary btn-sm fw-bold" id="taEdSave">💾 حفظ</button>' +
+        (r.edited ? '<button class="btn btn-outline-danger btn-sm" id="taEdReset">↺ إلغاء التعديل اليدوي</button>' : '') +
+        '<button class="btn btn-secondary btn-sm" id="taEdCancel">إلغاء</button></div>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  var close = function () { ov.remove(); };
+  ov.querySelector('#taEdX').onclick = close;
+  ov.querySelector('#taEdCancel').onclick = close;
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) close(); });
+  var reset = ov.querySelector('#taEdReset');
+  if (reset) reset.onclick = function () {
+    google.script.run
+      .withSuccessHandler(function () { close(); showToast('↺ أُلغي التعديل اليدوي'); loadTransportAccountsData(); })
+      .withFailureHandler(function (e) { showToast('❌ ' + (e && e.message ? e.message : e), true); })
+      .deleteTransportRowEdit(window.authToken, r.id);
+  };
+  ov.querySelector('#taEdSave').onclick = function (ev) {
+    var btn = ev.currentTarget; btn.disabled = true; btn.textContent = '⏳ جاري الحفظ…';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.disabled = false; btn.textContent = '💾 حفظ';
+        if (!res || !res.success) { showToast('❌ ' + ((res && res.error) || 'تعذّر الحفظ'), true); return; }
+        close(); showToast('✅ حُفظ التعديل'); loadTransportAccountsData();
+      })
+      .withFailureHandler(function (e) { btn.disabled = false; btn.textContent = '💾 حفظ'; showToast('❌ ' + (e && e.message ? e.message : e), true); })
+      .saveTransportRowEdit(window.authToken, {
+        id: r.id,
+        supplier: (document.getElementById('taEdSupplier') || {}).value || '',
+        desc: (document.getElementById('taEdDesc') || {}).value || '',
+        busPrice: (document.getElementById('taEdPrice') || {}).value,
+        operationValue: (document.getElementById('taEdValue') || {}).value,
+        notes: (document.getElementById('taEdNotes') || {}).value || ''
+      });
+  };
+}
+
 // ==============================
 // طباعة / حفظ PDF لشاشة حسابات النقل
 // ==============================
@@ -20563,8 +20632,8 @@ function printTransportAccountsReport() {
   var printedAt = _formatPrintTimestamp();
 
   // 🖨️ (V4.44) الطباعة تعكس نفس تخصيص الأعمدة الظاهر بالشاشة — بطلب صريح
-  var cols = TA_COLUMNS_.filter(function(c) { return window._taColVisible[c.key] !== false; });
-  if (!cols.length) cols = TA_COLUMNS_;
+  var cols = TA_COLUMNS_.filter(function(c) { return !c.noPrint && window._taColVisible[c.key] !== false; });
+  if (!cols.length) cols = TA_COLUMNS_.filter(function(c) { return !c.noPrint; });
 
   var totalBuses = 0, totalValue = 0;
   rows.forEach(function(r) {
@@ -20682,9 +20751,9 @@ function exportTransportAccountsExcelClick() {
   var subtitle = (subtitleParts.length ? subtitleParts.join(' | ') : ('عدد التشغيلات: ' + rows.length)) +
     '   |   تمت الطباعة: ' + _formatPrintTimestamp();
 
-  // 📊 (V4.44) التصدير يعكس نفس تخصيص الأعمدة الظاهر بالشاشة — بطلب صريح
-  var cols = TA_COLUMNS_.filter(function(c) { return window._taColVisible[c.key] !== false; });
-  if (!cols.length) cols = TA_COLUMNS_;
+  // 📊 (V4.44) التصدير يعكس نفس تخصيص الأعمدة الظاهر بالشاشة — بطلب صريح (بلا عمود الإجراءات)
+  var cols = TA_COLUMNS_.filter(function(c) { return !c.noPrint && window._taColVisible[c.key] !== false; });
+  if (!cols.length) cols = TA_COLUMNS_.filter(function(c) { return !c.noPrint; });
   var columns = cols.map(function(c) { return c.label; });
 
   var totalBuses = 0, totalValue = 0;
@@ -37190,6 +37259,8 @@ function vzLoad(force) {
       VZ.trips = res.trips || []; VZ.clients = res.clients || []; VZ.agents = res.agents || [];
       VZ.statuses = res.statuses || []; VZ.agentBalances = res.agentBalances || {};
       VZ.cateringByGroup = res.cateringByGroup || {};
+      VZ.housingByGroup = res.housingByGroup || {};
+      VZ.accounts = res.accounts || []; VZ.acctRows = res.acctRows || []; VZ.acctModes = res.acctModes || [];
       VZ.today = res.today || ''; VZ.can = res.can || {}; VZ.loaded = true;
       vzApplyFinanceUI();
       vzRender();
@@ -37201,7 +37272,7 @@ function vzLoad(force) {
 function vzFin() { return !!(VZ.can && VZ.can.finance); }
 function vzApplyFinanceUI() {
   var on = vzFin();
-  ['vzBtnPricing', 'vzBtnStats'].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; });
+  ['vzBtnPricing', 'vzBtnAcctCfg'].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; });
   var strip = document.getElementById('vzAgentStrip'); if (strip && !on) strip.innerHTML = '';
 }
 // سعر تأشيرة الوكيل الساري في تاريخ (نفس منطق السيرفر) — لأحدث فترة تحتوي التاريخ
@@ -37226,6 +37297,21 @@ function _vzStatusBadge(s) {
   return '<span class="vz-badge ' + cls + '">' + vzEsc(s) + '</span>';
 }
 function vzFV(id) { var e = document.getElementById(id); return e ? mfStr(e.value) : ''; }
+/* 🧑‍💼 (V4.134) مفتاح حساب الوكيل لمجموعة (نفس منطق السيرفر بالضبط):
+   بلا إعداد ⇒ «الوكيل» · «منفصل» ⇒ «الوكيل - الشركة» · «مشترك» ⇒ «الوكيل - الشركة الرئيسية». */
+function vzAcctKeyOf(agent, company) {
+  agent = mfStr(agent); company = mfStr(company);
+  if (!agent) return '';
+  var c = (VZ.acctRows || []).filter(function (r) { return mfStr(r.agent) === agent && mfStr(r.company) === company; })[0];
+  if (!c || c.mode === 'عام') return agent;
+  if (c.mode === 'مشترك') return agent + ' - ' + (mfStr(c.mainCompany) || company);
+  return agent + ' - ' + company;
+}
+function vzFileInAcct(f, acctKey) {
+  var agent = mfStr(f.agent); if (!agent) return false;
+  if (acctKey === agent) return true;
+  return vzAcctKeyOf(agent, f.company) === acctKey;
+}
 function vzClientsOf(f) { return (f.breakdown || []).map(function (b) { return b.name; }).join(' ') + ' ' + (f.tripName || ''); }
 function vzMatch(f) {
   var q = vzFV('vzF_search').toLowerCase();
@@ -37234,7 +37320,10 @@ function vzMatch(f) {
       f.makkahHousingAgr, f.madinahHousingAgr, f.makkahCateringAgr, f.madinahCateringAgr].join(' ').toLowerCase();
     if (hay.indexOf(q) < 0) return false;
   }
-  var pairs = [['vzF_ref', 'ref'], ['vzF_agent', 'agent'], ['vzF_company', 'company']];
+  // 🧑‍💼 (V4.134) فلتر الوكيل بمفتاح الحساب: «الوكيل» وحده = كل شركاته، و«الوكيل - الشركة» = حسابه معها فقط
+  var acct = vzFV('vzF_agent');
+  if (acct && !vzFileInAcct(f, acct)) return false;
+  var pairs = [['vzF_ref', 'ref'], ['vzF_company', 'company']];
   for (var i = 0; i < pairs.length; i++) {
     var v = vzFV(pairs[i][0]); if (v && String(f[pairs[i][1]] || '').toLowerCase().indexOf(v.toLowerCase()) < 0) return false;
   }
@@ -37270,12 +37359,14 @@ function vzClearFilters() {
   VZ_FILTER_META.forEach(function (m) { var e = document.getElementById(m[0]); if (e) e.value = ''; });
   vzRender();
 }
-function vzCal(id) {
+/* 📅 (V4.134) كل تقاويم شاشة التأشيرات وشاشاتها الفرعية تستخدم منتقي التاريخ نفسه
+   المستخدَم بشاشة ملفات المراجعة (#mfDatePick) — تصميم واحد وسلوك واحد في البرنامج كله. */
+function _vzCal_(id, after) {
   var el = document.getElementById(id); if (!el) return;
-  if (typeof flatpickr === 'undefined') { el.focus(); _showPopup('التقويم غير متاح — أدخل التاريخ يدوياً dd/mm/yyyy', 'error'); return; }
-  if (!el._fp) el._fp = flatpickr(el, { dateFormat: 'd/m/Y', allowInput: true, disableMobile: true, appendTo: document.body, position: 'auto', onChange: function () { vzRender(); } });
-  el._fp.open();
+  if (typeof mfPickDate === 'function') { mfPickDate(id, window.event, after || null); return; }
+  el.focus();
 }
+function vzCal(id) { _vzCal_(id, function () { vzRender(); }); }
 function vzRender() {
   _vzWireFilters();
   // القوائم المنسدلة والداتالِست
@@ -37283,6 +37374,17 @@ function vzRender() {
   var co = document.getElementById('vzCompaniesList'); if (co) co.innerHTML = (VZ.companies || []).map(function (c) { return '<option value="' + vzEsc(c.company) + '">'; }).join('');
   var stf = document.getElementById('vzF_status');
   if (stf && stf.options.length <= 1) stf.innerHTML = '<option value="">الكل</option>' + (VZ.statuses || []).map(function (s) { return '<option>' + vzEsc(s) + '</option>'; }).join('');
+  // 🧑‍💼 (V4.134) قائمة الوكلاء/الحسابات: الوكيل العام ثم حساباته الفرعية مع الشركات
+  var agf = document.getElementById('vzF_agent');
+  if (agf) {
+    var keep = agf.value;
+    var opts = (VZ.accounts || []).length ? VZ.accounts : (VZ.agents || []).map(function (a) { return { key: a, agent: a, kind: 'عام' }; });
+    agf.innerHTML = '<option value="">الكل</option>' + opts.map(function (ac) {
+      var lbl = ac.kind === 'عام' ? (ac.key + ' (كل الشركات)') : (ac.key + (ac.kind === 'مشترك' ? ' — حساب مشترك' : ''));
+      return '<option value="' + vzEsc(ac.key) + '">' + vzEsc(lbl) + '</option>';
+    }).join('');
+    agf.value = keep;
+  }
   vzRenderChips();
   vzApplyFinanceUI();
 
@@ -37290,8 +37392,12 @@ function vzRender() {
   var strip = document.getElementById('vzAgentStrip');
   if (strip && !vzFin()) strip.innerHTML = '';
   else if (strip) {
+    // من له حسابات فرعية مع شركات نعرض الفرعية فقط (كي لا يتكرر المبلغ مرتين بالشريط)
+    var hasSub = {};
+    (VZ.accounts || []).forEach(function (ac) { if (ac.kind !== 'عام') hasSub[ac.agent] = 1; });
     var rows = Object.keys(VZ.agentBalances || {}).map(function (a) { var b = VZ.agentBalances[a]; return { a: a, b: b }; })
       .filter(function (x) { return Math.abs(x.b.netS) > 0.5 || Math.abs(x.b.netE) > 0.5; })
+      .filter(function (x) { return !(hasSub[x.a] && x.a.indexOf(' - ') < 0); })
       .sort(function (x, y) { return y.b.netS - x.b.netS; });
     strip.innerHTML = rows.length ? ('<div class="d-flex gap-2 flex-wrap">' + rows.map(function (x) {
       var pos = x.b.netS >= 0;
@@ -37317,20 +37423,21 @@ function vzRender() {
     var clients = (f.breakdown || []).map(function (b) { return b.name + (b.count ? ' (' + b.count + ')' : ''); }).join('، ');
     var clientTrip = (f.tripName ? '🧳 ' + vzEsc(f.tripName) + (clients ? '<br>' : '') : '') + (clients ? '👤 ' + vzEsc(clients) : '');
     var mkAuto = _vzAutoCatering(f, 'makkah'), mdAuto = _vzAutoCatering(f, 'madinah');
+    var mkH = _vzAutoHousing(f, 'makkah'), mdH = _vzAutoHousing(f, 'madinah');
     return '<tr>' +
       '<td>' + (VZ.can.edit ? '<button class="vz-rowbtn" title="تعديل" onclick="vzEditFile(\'' + vzJs(f.id) + '\')">✏️</button>' : '') +
         (VZ.can.del ? '<button class="vz-rowbtn" title="حذف" style="color:#dc2626;" onclick="vzDeleteFile(\'' + vzJs(f.id) + '\')">🗑️</button>' : '') + '</td>' +
       '<td>' + vzL(f.seq) + '</td><td>' + (f.ref ? vzL(f.ref) : '—') + '</td>' +
       '<td>' + _vzStatusBadge(f.status) + '</td><td>' + vzL(f.date || '—') + '</td>' +
       '<td>' + vzEsc(f.company || '—') + '</td>' +
-      '<td>' + (FIN ? '<b style="color:#075c46;cursor:pointer;" title="كشف حساب الوكيل" onclick="vzOpenAccount(\'' + vzJs(f.agent) + '\')">' + vzEsc(f.agent || '—') + '</b>'
+      '<td>' + (FIN ? '<b style="color:#075c46;cursor:pointer;" title="كشف حساب الوكيل" onclick="vzOpenAccount(\'' + vzJs(vzAcctKeyOf(f.agent, f.company)) + '\')">' + vzEsc(f.agent || '—') + '</b>'
                     : '<b style="color:#075c46;">' + vzEsc(f.agent || '—') + '</b>') + '</td>' +
       '<td><b>' + vzL(vzFmt(f.visaCount)) + '</b></td>' +
       '<td style="max-width:170px;white-space:normal;text-align:right;font-size:10.5px;">' + (clientTrip || '—') + '</td>' +
       '<td>' + (f.makkahIn || f.makkahOut ? vzL(f.makkahIn || '؟') + ' ← ' + vzL(f.makkahOut || '؟') : '—') + '</td>' +
-      '<td style="max-width:150px;white-space:normal;">' + agrCell(f.makkahHousingAgr, mkAuto) + '</td>' +
+      '<td style="max-width:150px;white-space:normal;">' + agrCell(mkH, mkAuto) + '</td>' +
       '<td>' + (f.madinahIn || f.madinahOut ? vzL(f.madinahIn || '؟') + ' ← ' + vzL(f.madinahOut || '؟') : '—') + '</td>' +
-      '<td style="max-width:150px;white-space:normal;">' + agrCell(f.madinahHousingAgr, mdAuto) + '</td>' +
+      '<td style="max-width:150px;white-space:normal;">' + agrCell(mdH, mdAuto) + '</td>' +
       (FIN ? '<td><b style="color:#b45309;">' + vzL(vzFmt(due)) + '</b></td>' : '') +
       '<td style="max-width:140px;white-space:normal;font-size:10.5px;color:#64748b;">' + vzEsc(f.notes || '') + '</td>' +
       '</tr>';
@@ -37351,7 +37458,19 @@ function _vzAutoCatering(f, city) {
   if (manual) return manual;
   var g = (VZ.cateringByGroup || {})[mfStr(f.ref)];
   if (g && g[city] && g[city].length) return g[city].join('، ');
+  // 🔗 (V4.134) أو من اتفاقيات الإعاشة المسجَّلة بشاشة الاتفاقيات لنفس رقم المجموعة
+  var h = (VZ.housingByGroup || {})[mfStr(f.ref)];
+  var b = h && h[city + 'Catering'];
+  if (b && b.length) return b.map(function (x) { return x.agrNo; }).join('، ');
   return '';
+}
+// 🔗 (V4.134) رقم اتفاقية السكن المجلوب تلقائياً بدلالة رقم المجموعة
+function _vzAutoHousing(f, city) {
+  var manual = mfStr(city === 'makkah' ? f.makkahHousingAgr : f.madinahHousingAgr);
+  if (manual) return manual;
+  var h = (VZ.housingByGroup || {})[mfStr(f.ref)];
+  var b = h && h[city];
+  return (b && b.length) ? b.map(function (x) { return x.agrNo; }).join('، ') : '';
 }
 function _vzPayBadge(s) {
   if (!s) return '<span class="vz-badge b" style="opacity:.6;">—</span>';
@@ -37360,10 +37479,10 @@ function _vzPayBadge(s) {
 }
 // وصل مدخلات الفلاتر (مرة واحدة)
 function _vzWireFilters() {
-  ['vzF_search', 'vzF_ref', 'vzF_agent', 'vzF_company', 'vzF_client', 'vzF_agr', 'vzF_from', 'vzF_to'].forEach(function (id) {
+  ['vzF_search', 'vzF_ref', 'vzF_company', 'vzF_client', 'vzF_agr', 'vzF_from', 'vzF_to'].forEach(function (id) {
     var e = document.getElementById(id); if (e && !e._vzB) { e._vzB = 1; e.addEventListener('input', vzRender); }
   });
-  ['vzF_status'].forEach(function (id) { var st = document.getElementById(id); if (st && !st._vzB) { st._vzB = 1; st.addEventListener('change', vzRender); } });
+  ['vzF_status', 'vzF_agent'].forEach(function (id) { var st = document.getElementById(id); if (st && !st._vzB) { st._vzB = 1; st.addEventListener('change', vzRender); } });
 }
 document.addEventListener('DOMContentLoaded', _vzWireFilters);
 setTimeout(_vzWireFilters, 1500);
@@ -37427,9 +37546,9 @@ function vzFormRender() {
       '<div class="col-md-3 vz-fld"><label>رقم المجموعة (يدوي)</label><input value="' + vzEsc(d.ref) + '" oninput="vzSet(\'ref\',this.value)" onblur="vzFormRefChanged()" placeholder="مثال: 1448-101" title="عند إدخال رقم مجموعة مسجَّل باتفاقيات الإعاشة تُجلب أرقام اتفاقياتها تلقائياً"></div>' +
       '<div class="col-md-3 vz-fld"><label>الحالة</label><select onchange="vzSet(\'status\',this.value)">' + sel(d.status, statusOpts) + '</select></div>' +
       '<div class="col-md-3">' + dateFld('date', 'تاريخ السداد', 'vzSetPrice();') + '</div>' +
-      '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><select onchange="vzSet(\'company\',this.value)">' + sel(d.company, companyOpts) + '</select></div>' +
-      '<div class="col-md-4 vz-fld"><label>الوكيل السعودي</label><select onchange="vzSet(\'agent\',this.value);vzSetPrice()">' + sel(d.agent, agentOpts) + '</select></div>' +
-      '<div class="col-md-5 vz-fld"><label>الرحلة المرتبطة</label><select onchange="vzSet(\'tripName\',this.value);vzTripChanged()">' + sel(d.tripName, tripOpts) + '</select></div>' +
+      '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><input list="vzCompDL" autocomplete="off" value="' + vzEsc(d.company) + '" oninput="vzSet(\'company\',this.value)" placeholder="ابحث باسم الشركة…"></div>' +
+      '<div class="col-md-4 vz-fld"><label>الوكيل السعودي</label><input list="vzAgentsDL" autocomplete="off" value="' + vzEsc(d.agent) + '" oninput="vzSet(\'agent\',this.value)" onchange="vzSet(\'agent\',this.value);vzSetPrice()" placeholder="ابحث بالاسم…"></div>' +
+      '<div class="col-md-5 vz-fld"><label>الرحلة المرتبطة</label><input list="vzTripsDL" id="vzfTrip" autocomplete="off" value="' + vzEsc(d.tripName) + '" oninput="vzSet(\'tripName\',this.value)" onchange="vzSet(\'tripName\',this.value);vzTripChanged()" placeholder="ابحث باسم الرحلة…"></div>' +
       '<div class="col-md-3 vz-fld"><label>عدد المجموعة</label><input id="vzfCount" value="' + vzEsc(d.visaCount) + '" oninput="vzSet(\'visaCount\',this.value,true)"></div>' +
       '<div class="col-12 vz-fld"><label>ملاحظات</label><input value="' + vzEsc(d.notes) + '" oninput="vzSet(\'notes\',this.value)" placeholder="أي ملاحظات على المجموعة"></div>' +
     '</div></div>' +
@@ -37444,18 +37563,21 @@ function vzFormRender() {
       '<div class="col-md-4 vz-fld"><label>المستحق على الوكيل</label><div style="font-size:19px;font-weight:900;color:#b45309;" id="vzfDue">' + vzFmt(due) + ' ريال</div></div>' +
     '</div></div>') : '');
 
-  // ===== تبويب 2: السكن والاتفاقيات =====
-  var city = function (ttl, inK, outK, agrK, catK, auto) {
-    return '<div class="vz-sec"><div class="vz-sec-h">' + ttl + '</div><div class="row g-2">' +
-      '<div class="col-md-3">' + dateFld(inK, 'تاريخ الدخول') + '</div>' +
-      '<div class="col-md-3">' + dateFld(outK, 'تاريخ الخروج') + '</div>' +
-      '<div class="col-md-3 vz-fld"><label>رقم اتفاقية السكن</label><input value="' + vzEsc(d[agrK]) + '" oninput="vzSet(\'' + agrK + '\',this.value)"></div>' +
-      '<div class="col-md-3 vz-fld"><label>رقم اتفاقية الإعاشة</label><input value="' + vzEsc(d[catK]) + '" oninput="vzSet(\'' + catK + '\',this.value)" placeholder="' + (auto ? 'تلقائي: ' + vzEsc(auto) : 'يدوي') + '">' +
-        (auto ? '<div style="font-size:10px;color:#166534;font-weight:700;">🍽️ من اتفاقيات الإعاشة: ' + vzEsc(auto) + '</div>' : '') + '</div>' +
-    '</div></div>';
-  };
-  var pStay = city('🕋 سكن مكة المكرَّمة', 'makkahIn', 'makkahOut', 'makkahHousingAgr', 'makkahCateringAgr', mkAuto) +
-              city('🕌 سكن المدينة المنوَّرة', 'madinahIn', 'madinahOut', 'madinahHousingAgr', 'madinahCateringAgr', mdAuto);
+  // ===== تبويب 2: السكن والاتفاقيات (فنادق متعددة لكل مدينة) =====
+  var pStay = '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🏨 فنادق المجموعة واتفاقياتها <span id="vzHzChip"></span>' +
+      '<span style="margin-inline-start:auto;display:flex;gap:6px;">' +
+      '<button class="vz-btn sm" onclick="vzHzAdd(\'مكة\')">➕ سكن مكة</button>' +
+      '<button class="vz-btn sm" onclick="vzHzAdd(\'المدينة\')">➕ سكن المدينة</button>' +
+      (mfStr(d.tripName) ? '<button class="vz-btn sm pri" onclick="vzHzFromTrip()">🧳 جلب فنادق الرحلة</button>' : '') +
+      '</span></div>' +
+      '<div style="font-size:11px;color:#4e7a6e;margin-bottom:8px;line-height:1.7;">' +
+      'المجموعة الواحدة قد تُوزَّع على أكثر من فندق في المدينة الواحدة — سجّل لكل فندق عدده وتواريخه واتفاقيتي السكن والإعاشة والمورد. ' +
+      'يُشترط أن يساوي مجموع أعداد فنادق كل مدينة عدد المجموعة.</div>' +
+      '<div id="vzHzList"></div></div>' +
+      ((mkAuto || mdAuto) ? ('<div class="vz-sec"><div class="vz-sec-h">🔗 اتفاقيات مسجَّلة بهذا رقم المجموعة</div>' +
+        (mkAuto ? '<div style="font-size:12px;color:#166534;font-weight:700;">🕋 مكة: ' + vzEsc(mkAuto) + '</div>' : '') +
+        (mdAuto ? '<div style="font-size:12px;color:#166534;font-weight:700;">🕌 المدينة: ' + vzEsc(mdAuto) + '</div>' : '') +
+        '<div style="font-size:10.5px;color:#6b8c82;margin-top:4px;">تُجلب تلقائياً من شاشتي اتفاقيات الإعاشة واتفاقيات السكن برقم المجموعة.</div></div>') : '');
 
   // ===== تبويب 3: المعتمرون =====
   var pPil = '<div class="vz-sec"><div class="vz-sec-h">👥 معتمرو الرحلة</div>' +
@@ -37480,7 +37602,31 @@ function vzFormRender() {
     '<button class="vz-btn pri" onclick="vzFormSave()">💾 حفظ المجموعة</button>';
 
   vzBdRender();
+  vzHzRender();
+  // 🔎 قوائم البحث التنبّئي داخل النموذج
+  var dls = document.getElementById('vzFormDL');
+  if (!dls) {
+    dls = document.createElement('div'); dls.id = 'vzFormDL'; document.body.appendChild(dls);
+  }
+  dls.innerHTML =
+    '<datalist id="vzTripsDL">' + (VZ.trips || []).map(function (t) {
+      return '<option value="' + vzEsc(t.name) + '">' + vzEsc([t.company, t.goDate].filter(Boolean).join(' · ')) + '</option>'; }).join('') + '</datalist>' +
+    '<datalist id="vzAgentsDL">' + (VZ.agents || []).map(function (a) { return '<option value="' + vzEsc(a) + '">'; }).join('') + '</datalist>' +
+    '<datalist id="vzCompDL">' + (VZ.companies || []).map(function (c) { return '<option value="' + vzEsc(c.company) + '">'; }).join('') + '</datalist>' +
+    '<datalist id="vzHotelsDL">' + vzHotelOptions() + '</datalist>' +
+    '<datalist id="vzSuppliersDL">' + (VZ.agents || []).map(function (a) { return '<option value="' + vzEsc(a) + '">'; }).join('') + '</datalist>';
   if (mfStr(d.tripName)) vzEnsurePick();
+}
+// أسماء الفنادق المقترحة: فنادق كل الرحلات المسجَّلة
+function vzHotelOptions() {
+  var set = {};
+  (VZ.trips || []).forEach(function (t) {
+    [t.makkahHotel, t.madinahHotel].forEach(function (h) { if (mfStr(h)) set[mfStr(h)] = 1; });
+    [].concat(t.makkahExtra || [], t.madinahExtra || []).forEach(function (x) {
+      var h = mfStr(x && (x.hotel || x.name || x)); if (h) set[h] = 1;
+    });
+  });
+  return Object.keys(set).sort().map(function (h) { return '<option value="' + vzEsc(h) + '">'; }).join('');
 }
 function vzSet(k, v, isNum) {
   VZ._draft[k] = isNum ? mfNum(v) : mfStr(v);
@@ -37495,16 +37641,11 @@ function vzSetPrice() {
   if (p) { d.price = p; var el = document.getElementById('vzfPrice'); if (el) el.value = p; var due = document.getElementById('vzfDue'); if (due) due.textContent = vzFmt(mfNum(d.visaCount) * p) + ' ريال'; }
 }
 function vzFormCal(inputId, key) {
-  var el = document.getElementById(inputId); if (!el) return;
-  if (typeof flatpickr === 'undefined') { el.focus(); _showPopup('التقويم غير متاح — أدخل التاريخ يدوياً dd/mm/yyyy', 'error'); return; }
-  if (!el._fp) {
-    el._fp = flatpickr(el, {
-      dateFormat: 'd/m/Y', allowInput: true, disableMobile: true, appendTo: document.body, position: 'auto',
-      defaultDate: mfStr(el.value) || null,
-      onChange: function () { vzSet(key, el.value); if (key === 'date') vzSetPrice(); }
-    });
-  }
-  el._fp.open();
+  _vzCal_(inputId, function (v) { vzSet(key, v); if (key === 'date') vzSetPrice(); });
+}
+// تقويم لأحد سطور السكن المتعدد
+function vzHzCal(i, key) {
+  _vzCal_('vzHz_' + key + '_' + i, function (v) { vzHzSet(i, key, v); });
 }
 // عند مغادرة حقل رقم المجموعة: نعيد رسم النموذج فتظهر أرقام اتفاقيات الإعاشة المطابقة تلقائياً (على blur فلا يُفقد التركيز أثناء الكتابة)
 function vzFormRefChanged() { if (document.getElementById('vzFormOv')) vzFormRender(); }
@@ -37542,11 +37683,121 @@ function vzBdRender() {
   vzBdChip();
 }
 
+/* -------- 🏨 (V4.134) سكن المجموعة متعدد الفنادق -------- */
+function vzHzList() { if (!Array.isArray(VZ._draft.housing)) VZ._draft.housing = []; return VZ._draft.housing; }
+function vzHzAdd(city, seed) {
+  var L = vzHzList();
+  L.push(Object.assign({ city: city || 'مكة', hotel: '', count: 0, in: '', out: '', hAgr: '', cAgr: '', supplier: '' }, seed || {}));
+  vzHzRender();
+}
+function vzHzDel(i) { vzHzList().splice(i, 1); vzHzRender(); }
+function vzHzSet(i, k, v) {
+  var L = vzHzList(); if (!L[i]) return;
+  L[i][k] = (k === 'count') ? mfNum(v) : mfStr(v);
+  if (k === 'count') vzHzChip();
+  if (k === 'hAgr' || k === 'cAgr') vzHzSupplierHint(i);
+}
+// لو الاتفاقية مسجَّلة بشاشة اتفاقيات السكن فنجلب المورد والفندق منها تلقائياً
+function vzHzSupplierHint(i) {
+  var L = vzHzList(), h = L[i]; if (!h) return;
+  var idx = VZ.housingByGroup || {};
+  var g = idx[mfStr(VZ._draft.ref)]; if (!g) { vzHzRender(); return; }
+  var bucket = (h.city === 'المدينة' ? 'madinah' : 'makkah');
+  var pool = [].concat(g[bucket] || [], g[bucket + 'Catering'] || []);
+  var hit = pool.filter(function (x) { return x.agrNo === mfStr(h.hAgr) || x.agrNo === mfStr(h.cAgr); })[0];
+  if (hit) {
+    if (!mfStr(h.supplier) && hit.supplier) h.supplier = hit.supplier;
+    if (!mfStr(h.hotel) && hit.hotel) h.hotel = hit.hotel;
+  }
+  vzHzRender();
+}
+// مجموع أعداد الفنادق لكل مدينة مقابل عدد المجموعة
+function vzHzTotals() {
+  var t = { 'مكة': 0, 'المدينة': 0 };
+  vzHzList().forEach(function (h) { t[h.city] = (t[h.city] || 0) + mfNum(h.count); });
+  return t;
+}
+function vzHzChip() {
+  var chip = document.getElementById('vzHzChip'); if (!chip) return;
+  var t = vzHzTotals(), gt = mfNum(VZ._draft.visaCount), out = [];
+  ['مكة', 'المدينة'].forEach(function (c) {
+    var has = vzHzList().some(function (h) { return h.city === c; });
+    if (!has) return;
+    out.push(t[c] === gt
+      ? '<span class="vz-badge g">✅ ' + c + ': ' + t[c] + ' / ' + gt + '</span>'
+      : '<span class="vz-badge r">⚠️ ' + c + ': ' + t[c] + ' ≠ ' + gt + '</span>');
+  });
+  chip.innerHTML = out.join(' ');
+}
+function vzHzRender() {
+  var box = document.getElementById('vzHzList'); if (!box) return;
+  var L = vzHzList();
+  if (!L.length) {
+    box.innerHTML = '<div class="text-muted" style="font-size:12px;padding:8px 2px;">لم يُسجَّل سكن بعد — أضف سكن مكة أو المدينة، أو اجلب فنادق الرحلة.</div>';
+    vzHzChip(); return;
+  }
+  var inp = 'width:100%;font-size:12.5px;padding:7px 9px;border:1.5px solid var(--vzBorder);border-radius:8px;font-weight:600;background:#fff;color:#0f2a23;';
+  box.innerHTML = L.map(function (h, i) {
+    var icon = h.city === 'المدينة' ? '🕌' : '🕋';
+    return '<div style="border:1.5px solid var(--vzBorder);border-radius:11px;padding:10px;margin-bottom:8px;background:#fff;">' +
+      '<div class="d-flex align-items-center gap-2 mb-2">' +
+        '<span class="vz-badge ' + (h.city === 'المدينة' ? 'b' : 'g') + '">' + icon + ' ' + vzEsc(h.city) + '</span>' +
+        '<select style="' + inp + 'width:auto;" onchange="vzHzSet(' + i + ',\'city\',this.value)">' +
+          ['مكة', 'المدينة'].map(function (c) { return '<option' + (c === h.city ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select>' +
+        '<button class="vz-rowbtn" style="color:#dc2626;margin-inline-start:auto;" title="حذف هذا السكن" onclick="vzHzDel(' + i + ')">🗑️</button></div>' +
+      '<div class="row g-2">' +
+        '<div class="col-md-4 vz-fld"><label>الفندق</label><input list="vzHotelsDL" style="' + inp + '" value="' + vzEsc(h.hotel) + '" oninput="vzHzSet(' + i + ',\'hotel\',this.value)" placeholder="اسم الفندق"></div>' +
+        '<div class="col-md-2 vz-fld"><label>العدد</label><input style="' + inp + 'text-align:center;" value="' + vzEsc(h.count) + '" oninput="vzHzSet(' + i + ',\'count\',this.value)"></div>' +
+        '<div class="col-md-3 vz-fld"><label>تاريخ الدخول</label><div class="vz-date">' +
+          '<button type="button" class="vz-calbtn" title="تقويم" onclick="vzHzCal(' + i + ',\'in\')">📅</button>' +
+          '<input id="vzHz_in_' + i + '" style="' + inp + 'padding-inline-start:34px;" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(h.in) + '" oninput="vzHzSet(' + i + ',\'in\',this.value)" onblur="vzHzSet(' + i + ',\'in\',mfDate(this.value));this.value=VZ._draft.housing[' + i + '].in"></div></div>' +
+        '<div class="col-md-3 vz-fld"><label>تاريخ الخروج</label><div class="vz-date">' +
+          '<button type="button" class="vz-calbtn" title="تقويم" onclick="vzHzCal(' + i + ',\'out\')">📅</button>' +
+          '<input id="vzHz_out_' + i + '" style="' + inp + 'padding-inline-start:34px;" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(h.out) + '" oninput="vzHzSet(' + i + ',\'out\',this.value)" onblur="vzHzSet(' + i + ',\'out\',mfDate(this.value));this.value=VZ._draft.housing[' + i + '].out"></div></div>' +
+        '<div class="col-md-4 vz-fld"><label>رقم اتفاقية السكن</label><input style="' + inp + '" value="' + vzEsc(h.hAgr) + '" oninput="vzHzSet(' + i + ',\'hAgr\',this.value)" onblur="vzHzSupplierHint(' + i + ')"></div>' +
+        '<div class="col-md-4 vz-fld"><label>رقم اتفاقية الإعاشة</label><input style="' + inp + '" value="' + vzEsc(h.cAgr) + '" oninput="vzHzSet(' + i + ',\'cAgr\',this.value)" onblur="vzHzSupplierHint(' + i + ')"></div>' +
+        '<div class="col-md-4 vz-fld"><label>المورد</label><input list="vzSuppliersDL" style="' + inp + '" value="' + vzEsc(h.supplier) + '" oninput="vzHzSet(' + i + ',\'supplier\',this.value)" placeholder="الفندق أو الوكيل أو مورد آخر"></div>' +
+      '</div></div>';
+  }).join('');
+  vzHzChip();
+}
+// 🧳 جلب فنادق الرحلة (الأساسي + الفنادق الإضافية) بأعدادها وتواريخها — قابلة للتعديل
+function vzHzFromTrip() {
+  var t = (VZ.trips || []).filter(function (x) { return x.name === mfStr(VZ._draft.tripName); })[0];
+  if (!t) { _showPopup('اختر رحلة مسجَّلة أولاً', 'error'); return; }
+  var L = vzHzList(), added = 0;
+  var push = function (city, hotel, cnt, inD, outD) {
+    hotel = mfStr(hotel); if (!hotel) return;
+    if (L.some(function (h) { return h.city === city && mfStr(h.hotel) === hotel; })) return;
+    L.push({ city: city, hotel: hotel, count: mfNum(cnt), in: mfStr(inD), out: mfStr(outD), hAgr: '', cAgr: '', supplier: '' });
+    added++;
+  };
+  // الفندق الأساسي يأخذ العدد المتبقي بعد أعداد الفنادق الإضافية
+  var extra = function (arr) { return (arr || []).reduce(function (a, x) { return a + mfNum(x && (x.count || x.seats || x.pax)); }, 0); };
+  var total = mfNum(VZ._draft.visaCount) || mfNum(t.seats);
+  push('مكة', t.makkahHotel, Math.max(0, total - extra(t.makkahExtra)), t.makkahIn, t.makkahOut);
+  (t.makkahExtra || []).forEach(function (x) { push('مكة', x && (x.hotel || x.name || x), x && (x.count || x.seats || x.pax), (x && (x.in || x.checkIn)) || t.makkahIn, (x && (x.out || x.checkOut)) || t.makkahOut); });
+  push('المدينة', t.madinahHotel, Math.max(0, total - extra(t.madinahExtra)), t.madinahIn, t.madinahOut);
+  (t.madinahExtra || []).forEach(function (x) { push('المدينة', x && (x.hotel || x.name || x), x && (x.count || x.seats || x.pax), (x && (x.in || x.checkIn)) || t.madinahIn, (x && (x.out || x.checkOut)) || t.madinahOut); });
+  vzHzRender();
+  _showPopup(added ? ('أُضيف ' + added + ' سكن من بيانات الرحلة — عدّل الأعداد كما تشاء') : 'فنادق الرحلة مُسجَّلة بالفعل', added ? 'success' : 'error');
+}
+
 /* -------- ربط الرحلة وجلب المعتمرين -------- */
+/* 🧳 (V4.134) عند اختيار رحلة: تُجلب كل بياناتها المتاحة افتراضياً (الشركة، الوكيل،
+   تاريخ السفر، العدد، وفنادق مكة والمدينة بأعدادها وتواريخها) — وكلها قابلة للتعديل. */
 function vzTripChanged() {
   var d = VZ._draft; VZ._pick = null; VZ._pickLoading = false;
   var t = (VZ.trips || []).filter(function (x) { return x.name === d.tripName; })[0];
-  if (t) { if (t.company && !d.company) d.company = t.company; if (t.agent && !d.agent) { d.agent = t.agent; } }
+  if (t) {
+    if (t.company && !mfStr(d.company)) d.company = t.company;
+    if (t.agent && !mfStr(d.agent)) d.agent = t.agent;
+    if (!mfStr(d.date) && t.goDate) d.date = t.goDate;
+    if (!mfNum(d.visaCount) && mfNum(t.seats)) d.visaCount = mfNum(t.seats);
+    if (!vzHzList().length) {
+      try { vzHzFromTrip(); } catch (e) {}
+    }
+  }
   vzSetPrice();
   vzFormRender();
 }
@@ -37629,11 +37880,22 @@ function vzFormSave() {
     _showPopup('مجموع أعداد العملاء (' + vzBdTotal() + ') لا يساوي عدد المجموعة (' + mfNum(d.visaCount) + ')', 'error');
     return;
   }
+  // 🏨 مجموع أعداد فنادق كل مدينة = عدد المجموعة
+  var ht = vzHzTotals(), bad = null;
+  ['مكة', 'المدينة'].forEach(function (c) {
+    if (!vzHzList().some(function (h) { return h.city === c; })) return;
+    if (ht[c] !== mfNum(d.visaCount) && !bad) bad = c + ': ' + ht[c] + ' ≠ ' + mfNum(d.visaCount);
+  });
+  if (bad) {
+    VZ._tab = 'stay'; vzFormRender();
+    _showPopup('مجموع أعداد فنادق ' + bad + ' — يجب أن يساوي عدد المجموعة', 'error');
+    return;
+  }
   var warn = document.getElementById('vzFormWarn'); if (warn) warn.textContent = '⏳ جاري الحفظ…';
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { if (warn) warn.textContent = ''; _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
-      vzFormClose(); _showPopup('تم حفظ القيد', 'success'); vzLoad(true);
+      vzFormClose(); _showPopup('تم حفظ المجموعة', 'success'); vzLoad(true);
     })
     .withFailureHandler(function (e) { if (warn) warn.textContent = ''; _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveVisaFile(window.authToken, d);
@@ -37736,13 +37998,7 @@ function vzPriceRender() {
     '<div class="mt-2 d-flex gap-2 flex-wrap"><button class="vz-btn sm" onclick="VZ._prDraft.push({price:0,from:VZ.today,to:\'\'});vzPriceRender()">➕ فترة سعر جديدة</button>' +
     '<button class="vz-btn pri sm" onclick="vzPriceSave()">💾 حفظ تسعير الوكيل</button></div></div>';
 }
-function vzPrCal(i, k) {
-  var el = document.getElementById('vzPr_' + k + '_' + i); if (!el) return;
-  if (typeof flatpickr === 'undefined') { el.focus(); return; }
-  if (!el._fp) el._fp = flatpickr(el, { dateFormat: 'd/m/Y', allowInput: true, disableMobile: true, appendTo: document.body, position: 'auto',
-    onChange: function () { VZ._prDraft[i][k] = el.value; } });
-  el._fp.open();
-}
+function vzPrCal(i, k) { _vzCal_('vzPr_' + k + '_' + i, function (v) { VZ._prDraft[i][k] = v; }); }
 function vzPriceSave() {
   var a = mfStr(document.getElementById('vzPrAgent').value);
   if (!a) { _showPopup('اختر الوكيل', 'error'); return; }
@@ -37757,15 +38013,71 @@ function vzOpenAccount(agent) {
   agent = mfStr(agent); if (!agent) return;
   if (!vzFin()) { _showPopup('كشوف حسابات الوكلاء تتطلب صلاحية مالية خاصة', 'error'); return; }
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzAccOv';
-  ov.innerHTML = '<div class="vz-dlg"><div class="vz-hd"><b>🧑‍💼 حساب الوكيل: ' + vzEsc(agent) + '</b>' +
-    '<span class="d-flex gap-2"><button class="vz-btn sm" onclick="vzAccExport(this)">📸 صورة</button><button class="vz-btn sm" onclick="vzAccClose()">✕</button></span></div>' +
-    '<div class="p-3" id="vzAccBody"><div class="text-muted text-center py-4">⏳ جاري التحميل…</div></div></div>';
+  VZ._accKey = agent; VZ._accF = { from: '', to: '', company: '' };
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(1150px,98vw);"><div class="vz-hd"><b>🧑‍💼 كشف حساب: ' + vzEsc(agent) + '</b>' +
+    '<span class="d-flex gap-2">' +
+    '<button class="vz-btn sm" onclick="vzAccPrint()">🖨️ طباعة / PDF</button>' +
+    '<button class="vz-btn sm" onclick="vzAccExport(this)">📸 صورة</button>' +
+    '<button class="vz-btn sm" onclick="vzAccClose()">✕</button></span></div>' +
+    '<div class="p-3">' +
+    '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🔎 فلاتر الكشف</div><div class="row g-2 align-items-end">' +
+      '<div class="col-md-3 vz-fld"><label>من تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzAccCal(\'vzAccFrom\')">📅</button><input id="vzAccFrom" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
+      '<div class="col-md-3 vz-fld"><label>إلى تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzAccCal(\'vzAccTo\')">📅</button><input id="vzAccTo" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
+      '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><select id="vzAccComp"><option value="">الكل</option></select></div>' +
+      '<div class="col-md-3 d-flex gap-2"><button class="vz-btn pri" onclick="vzAccApply()">تطبيق</button>' +
+      '<button class="vz-btn" onclick="vzAccClearFilters()">✖ إلغاء الكل</button></div>' +
+      '<div class="col-12"><div id="vzAccChips" class="d-flex gap-2 flex-wrap"></div></div>' +
+    '</div></div>' +
+    '<div id="vzAccBody"><div class="text-muted text-center py-4">⏳ جاري التحميل…</div></div></div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzAccClose(); });
+  vzAccFetch();
+}
+function vzAccCal(id) { _vzCal_(id, null); }
+function vzAccApply() {
+  VZ._accF = { from: mfDate(vzFV('vzAccFrom')), to: mfDate(vzFV('vzAccTo')), company: vzFV('vzAccComp') };
+  vzAccFetch();
+}
+function vzAccClearFilters() {
+  ['vzAccFrom', 'vzAccTo', 'vzAccComp'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; });
+  VZ._accF = { from: '', to: '', company: '' };
+  vzAccFetch();
+}
+function vzAccClearOne(k) {
+  var id = k === 'from' ? 'vzAccFrom' : (k === 'to' ? 'vzAccTo' : 'vzAccComp');
+  var e = document.getElementById(id); if (e) e.value = '';
+  VZ._accF[k] = ''; vzAccFetch();
+}
+function vzAccFetch() {
+  var b = document.getElementById('vzAccBody');
+  if (b) b.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
   google.script.run
-    .withSuccessHandler(function (res) { if (!res || !res.success) { document.getElementById('vzAccBody').innerHTML = '<div class="alert alert-danger">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; } VZ._acc = res; vzAccRender(); })
-    .withFailureHandler(function (e) { var b = document.getElementById('vzAccBody'); if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
-    .getAgentAccount(window.authToken, agent);
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { if (b) b.innerHTML = '<div class="alert alert-danger">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
+      VZ._acc = res;
+      var cs = document.getElementById('vzAccComp');
+      if (cs && cs.options.length <= 1) {
+        var keep = cs.value;
+        cs.innerHTML = '<option value="">الكل</option>' + (res.companies || []).map(function (c) { return '<option>' + vzEsc(c) + '</option>'; }).join('');
+        cs.value = keep;
+      }
+      vzAccRender();
+    })
+    .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
+    .getAgentAccount(window.authToken, VZ._accKey, VZ._accF);
+}
+// شرائح الفلاتر النشطة مع X لكل فلتر — تظهر بالشاشة وتُطبَع بالكشف
+var VZ_ACC_FLT_ = [['from', 'من تاريخ'], ['to', 'إلى تاريخ'], ['company', 'الشركة المصرية']];
+function vzAccChips() {
+  var box = document.getElementById('vzAccChips'); if (!box) return;
+  var c = [];
+  VZ_ACC_FLT_.forEach(function (m) {
+    var v = mfStr((VZ._accF || {})[m[0]]); if (!v) return;
+    c.push('<span class="vz-badge b" style="font-size:11px;padding:3px 8px;">' + m[1] + ': ' + vzEsc(v) +
+      ' <span style="cursor:pointer;font-weight:900;" title="إلغاء هذا الفلتر" onclick="vzAccClearOne(\'' + m[0] + '\')">✕</span></span>');
+  });
+  box.innerHTML = c.length ? (c.join(' ') + ' <button class="vz-btn sm dgr" onclick="vzAccClearFilters()">✖ إلغاء كل الفلاتر</button>')
+    : '<span class="text-muted" style="font-size:11px;">لا فلاتر — الكشف كامل من أول قيد حتى آخره.</span>';
 }
 function vzAccClose() { var o = document.getElementById('vzAccOv'); if (o) o.remove(); }
 function vzAccRender() {
@@ -37773,10 +38085,16 @@ function vzAccRender() {
   var bal = r.balance || {};
   var money = function (n, cur) { return vzFmt(Math.abs(n)) + ' ' + cur; };
   var netCell = function (n, cur) { return n >= 0 ? '<b style="color:#b91c1c;">' + money(n, cur) + ' مستحق له</b>' : '<b style="color:#166534;">' + money(n, cur) + ' دائن</b>'; };
+  var fTotC = 0, fTotV = 0;
   var filesRows = (r.files || []).map(function (f) {
-    return '<tr><td>' + vzEsc(f.ref || f.seq) + '</td><td>' + vzEsc(f.date) + '</td><td>' + vzEsc(f.status) + '</td><td>' + vzEsc(f.tripName || '—') + '</td>' +
-      '<td>' + vzFmt(f.visaCount) + '</td><td>' + vzFmt(f.price) + '</td><td><b>' + vzFmt(mfNum(f.visaCount) * mfNum(f.price)) + '</b></td></tr>';
-  }).join('') || '<tr><td colspan="7" class="text-muted">لا قيود تأشيرات</td></tr>';
+    var due = mfNum(f.visaCount) * mfNum(f.price); fTotC += mfNum(f.visaCount); fTotV += due;
+    return '<tr><td>' + vzL(f.ref || f.seq) + '</td><td>' + vzL(f.date) + '</td><td>' + _vzStatusBadge(f.status) + '</td>' +
+      '<td>' + vzEsc(f.company || '—') + '</td><td>' + vzEsc(f.tripName || '—') + '</td>' +
+      '<td style="text-align:right;font-size:10.5px;">' + vzEsc(f.clientsLabel || '—') + '</td>' +
+      '<td>' + vzL(vzFmt(f.visaCount)) + '</td><td>' + vzL(vzFmt(f.price)) + '</td><td><b style="color:#b45309;">' + vzL(vzFmt(due)) + '</b></td></tr>';
+  }).join('') || '<tr><td colspan="9" class="text-muted">لا مجموعات في هذا النطاق</td></tr>';
+  filesRows += '<tr style="background:#075c46;color:#fff;font-weight:800;"><td colspan="6">الإجمالي</td><td>' +
+    vzL(vzFmt(fTotC)) + '</td><td>—</td><td>' + vzL(vzFmt(fTotV)) + '</td></tr>';
   var itemRows = (r.items || []).map(function (it) {
     return '<tr><td style="text-align:right;">' + vzEsc(it.desc) + '</td><td>' + (it.isCredit ? '<span class="vz-badge g">دائن</span>' : '<span class="vz-badge r">مدين</span>') + '</td>' +
       '<td>' + vzFmt(it.value) + ' ' + (it.currency === 'EGP' ? 'جنيه' : 'ريال') + '</td>' +
@@ -37791,15 +38109,18 @@ function vzAccRender() {
       '<div style="font-size:11px;font-weight:800;color:var(--vzLbl);">' + lbl + '</div>' +
       '<div style="font-size:19px;font-weight:900;' + (color ? 'color:' + color + ';' : '') + '">' + val + '</div></div>';
   };
+  vzAccChips();
   b.innerHTML =
-    '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📌 ملخّص الحساب</div><div class="d-flex gap-2 flex-wrap">' +
+    '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📌 ملخّص الحساب' +
+      ((r.companies || []).length ? '<span class="vz-badge b" style="margin-inline-start:auto;">🏢 ' + vzEsc(r.companies.join('، ')) + '</span>' : '') +
+      '</div><div class="d-flex gap-2 flex-wrap">' +
       kpi('مستحق التأشيرات (ريال)', vzFmt(bal.visaDueS), '#b45309') +
       kpi('مدفوع (ريال)', vzFmt(bal.paidS), '#166534') +
       kpi('الصافي (ريال)', netCell(bal.netS, 'ريال'), '') +
       (Math.abs(bal.netE) > 0.5 ? kpi('الصافي (جنيه)', netCell(bal.netE, 'جنيه'), '') : '') +
     '</div></div>' +
     '<div class="vz-sec"><div class="vz-sec-h">📋 مجموعات التأشيرات</div>' +
-      '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>المجموعة</th><th>تاريخ السداد</th><th>الحالة</th><th>الرحلة</th><th>العدد</th><th>السعر</th><th>المستحق</th></tr></thead><tbody>' + filesRows + '</tbody></table></div></div>' +
+      '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>المجموعة</th><th>تاريخ السداد</th><th>الحالة</th><th>الشركة</th><th>الرحلة</th><th>العملاء</th><th>العدد</th><th>السعر</th><th>المستحق</th></tr></thead><tbody>' + filesRows + '</tbody></table></div></div>' +
     '<div class="row g-2">' +
       '<div class="col-md-6"><div class="vz-sec"><div class="vz-sec-h">💰 الدفعات <button class="vz-btn sm" style="margin-inline-start:auto;" onclick="vzAccAddPay()">➕ دفعة</button></div>' +
         '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>التاريخ</th><th>المبلغ</th><th>ملاحظات</th><th>⚙</th></tr></thead><tbody>' + payRows + '</tbody></table></div></div></div>' +
@@ -37840,14 +38161,112 @@ function vzAccDelPay(id) {
     { label: 'حذف', class: 'btn-danger', onClick: function () { google.script.run.withSuccessHandler(function () { vzOpenAccount(r.agent); vzLoad(true); }).deleteAgentPayment(window.authToken, id); } },
     { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
 }
-function vzAccExport(btn) {
-  var body = document.getElementById('vzAccBody'); if (!body) return;
-  if (typeof _tryClipboardImageCopy_ === 'function') _tryClipboardImageCopy_();
-  var name = (VZ._acc && VZ._acc.agent) || 'وكيل';
-  if (typeof _captureElementAsPngFiles_ === 'function') {
-    var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳';
-    _captureElementAsPngFiles_(body, 'حساب الوكيل — ' + name, function (files, err) { btn.disabled = false; btn.innerHTML = orig; if (!files) { if (typeof _rejectPendingClipboard_ === 'function') _rejectPendingClipboard_(); _showPopup('❌ تعذّر إنشاء الصورة: ' + (err || ''), 'error'); return; } _shareOrSaveImageFiles_(files); });
+/* ============================================================
+   🧾 (V4.134 — المرحلة 3) كشف حساب الوكيل الاحترافي القابل للطباعة والمشاركة
+   ترقيم صفحات حقيقي (كل صفحة تُبنى بعدد صفوف ثابت ولها ترويسة وتذييل مستقلان)،
+   تاريخ ووقت الطباعة، سطر الفلاتر المطبوع مع X لإلغاء كل فلتر وإلغاء الكل،
+   أعمدة كاملة بعروض ملائمة لحجم البيانات، واسم ملف PDF واضح.
+   ============================================================ */
+function _vzAccPdfName() {
+  var f = VZ._accF || {}, p = [];
+  p.push('كشف حساب - ' + mfStr(VZ._accKey || 'وكيل'));
+  if (f.company) p.push(f.company);
+  if (f.from || f.to) p.push((f.from || 'البداية') + ' إلى ' + (f.to || 'الآن'));
+  return p.join(' - ').replace(/[\\/:*?"<>|]/g, '-');
+}
+function vzAccBuildDoc(forPrint) {
+  var r = VZ._acc; if (!r) return null;
+  var f = VZ._accF || {}, meta = _vzPrintMeta();
+  var money = function (n) { return vzFmt(Math.abs(n)); };
+  // 🧱 صفوف الكشف الموحَّدة: مجموعات + بنود + دفعات، مرتَّبة لعرض متسلسل مع رصيد جارٍ
+  var rows = [];
+  (r.files || []).forEach(function (x) {
+    var due = mfNum(x.visaCount) * mfNum(x.price);
+    rows.push({ date: x.date, kind: 'مجموعة',
+      desc: 'مجموعة ' + (x.ref || x.seq) + (x.tripName ? ' — ' + x.tripName : '') + (x.clientsLabel ? ' — ' + x.clientsLabel : ''),
+      company: x.company || '', count: mfNum(x.visaCount), price: mfNum(x.price),
+      debit: due, credit: 0, cur: 'ريال' });
+  });
+  (r.items || []).forEach(function (x) {
+    var v = mfNum(x.value), cur = (x.currency === 'EGP') ? 'جنيه' : 'ريال';
+    rows.push({ date: '', kind: x.isCredit ? 'بند دائن' : 'بند مدين', desc: x.desc || '', company: '',
+      count: 0, price: 0, debit: x.isCredit ? 0 : v, credit: x.isCredit ? v : 0, cur: cur });
+  });
+  (r.payments || []).forEach(function (x) {
+    rows.push({ date: x.date, kind: 'دفعة', desc: 'دفعة' + (x.notes ? ' — ' + x.notes : ''), company: '',
+      count: 0, price: 0, debit: 0, credit: mfNum(x.amount), cur: (x.currency === 'EGP') ? 'جنيه' : 'ريال' });
+  });
+  if (!rows.length) return null;
+
+  var bal = r.balance || {};
+  var flt = [];
+  VZ_ACC_FLT_.forEach(function (m) { var v = mfStr(f[m[0]]); if (v) flt.push(m[1] + ': ' + v); });
+
+  var ROWS_PER_PAGE = 22;
+  var pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
+  var runS = 0, runE = 0;
+  var head = '<tr><th style="width:26px;">م</th><th style="width:66px;">التاريخ</th><th style="width:62px;">النوع</th>' +
+    '<th>البيان</th><th style="width:88px;">الشركة</th><th style="width:40px;">العدد</th><th style="width:54px;">السعر</th>' +
+    '<th style="width:70px;">مدين</th><th style="width:70px;">دائن</th><th style="width:44px;">العملة</th><th style="width:78px;">الرصيد</th></tr>';
+
+  var body = '';
+  for (var pg = 0; pg < pages; pg++) {
+    var slice = rows.slice(pg * ROWS_PER_PAGE, (pg + 1) * ROWS_PER_PAGE);
+    var trs = slice.map(function (x, i) {
+      if (x.cur === 'جنيه') runE += (x.debit - x.credit); else runS += (x.debit - x.credit);
+      var run = (x.cur === 'جنيه') ? runE : runS;
+      return '<tr><td>' + (pg * ROWS_PER_PAGE + i + 1) + '</td><td dir="ltr">' + vzEsc(x.date || '—') + '</td>' +
+        '<td>' + vzEsc(x.kind) + '</td><td class="ar">' + vzEsc(x.desc) + '</td><td class="ar">' + vzEsc(x.company || '—') + '</td>' +
+        '<td>' + (x.count ? vzFmt(x.count) : '—') + '</td><td>' + (x.price ? vzFmt(x.price) : '—') + '</td>' +
+        '<td>' + (x.debit ? vzFmt(x.debit) : '—') + '</td><td>' + (x.credit ? vzFmt(x.credit) : '—') + '</td>' +
+        '<td>' + vzEsc(x.cur) + '</td><td><b>' + vzFmt(run) + '</b></td></tr>';
+    }).join('');
+    body += '<section class="pg">' +
+      '<div class="hd"><div><h1>🧾 كشف حساب الوكيل</h1>' +
+        '<div class="who">' + vzEsc(VZ._accKey || '') + ((r.companies || []).length ? ' — ' + vzEsc(r.companies.join('، ')) : '') + '</div></div>' +
+        '<div class="stamp">منظومة منف للسياحة<br>طُبع في: ' + vzEsc(meta.stamp) + '</div></div>' +
+      (flt.length ? '<div class="flt">🔎 الفلاتر المطبَّقة: ' + vzEsc(flt.join('  ·  ')) + '</div>'
+                  : '<div class="flt">🔎 بلا فلاتر — الكشف كامل</div>') +
+      '<table><thead>' + head + '</thead><tbody>' + trs + '</tbody></table>' +
+      (pg === pages - 1 ? ('<table class="sum"><tr>' +
+        '<td>مستحق المجموعات</td><td>' + money(bal.visaDueS) + ' ريال</td>' +
+        '<td>مدفوع</td><td>' + money(bal.paidS) + ' ريال</td>' +
+        '<td>الصافي</td><td><b>' + money(bal.netS) + ' ريال ' + (bal.netS >= 0 ? 'مستحق له' : 'دائن') + '</b></td>' +
+        '</tr>' + (Math.abs(bal.netE) > 0.5 ? '<tr><td colspan="4">الصافي بالجنيه</td><td colspan="2"><b>' +
+          money(bal.netE) + ' جنيه ' + (bal.netE >= 0 ? 'مستحق له' : 'دائن') + '</b></td></tr>' : '') + '</table>') : '') +
+      '<div class="ft"><span>' + vzEsc(_vzAccPdfName()) + '</span><span>صفحة ' + (pg + 1) + ' من ' + pages + '</span></div>' +
+      '</section>';
   }
+
+  return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>' + vzEsc(_vzAccPdfName()) + '</title><style>' +
+    '@page{size:A4 landscape;margin:8mm;}' +
+    'body{font-family:"Cairo",Tahoma,sans-serif;margin:0;color:#14312a;background:#fff;padding:' + (forPrint ? '0' : '10px') + ';}' +
+    '.pg{page-break-after:always;padding:4mm 2mm;display:flex;flex-direction:column;min-height:' + (forPrint ? '187mm' : 'auto') + ';}' +
+    '.pg:last-child{page-break-after:auto;}' +
+    '.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #075c46;padding-bottom:5px;margin-bottom:6px;}' +
+    'h1{font-size:15px;color:#075c46;margin:0;} .who{font-size:12px;font-weight:800;color:#0b7a5e;margin-top:2px;}' +
+    '.stamp{font-size:9px;color:#64748b;text-align:left;line-height:1.6;}' +
+    '.flt{font-size:9.5px;background:#eefaf5;border:1px solid #cfe6de;border-radius:5px;padding:3px 8px;margin-bottom:6px;color:#0f5c47;font-weight:700;}' +
+    'table{width:100%;border-collapse:collapse;font-size:9.5px;table-layout:fixed;}' +
+    'th,td{border:1px solid #9fb8b0;padding:3px 4px;text-align:center;overflow-wrap:anywhere;}' +
+    'td.ar{text-align:right;}' +
+    'th{background:#075c46;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'tbody tr:nth-child(even){background:#f4fbf8;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    '.sum{margin-top:7px;font-size:10.5px;} .sum td{background:#eefaf5;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    '.ft{margin-top:auto;padding-top:5px;border-top:1px solid #cfe6de;display:flex;justify-content:space-between;font-size:9px;color:#64748b;}' +
+    '</style></head><body>' + body + '</body></html>';
+}
+function vzAccPrint() {
+  var html = vzAccBuildDoc(true);
+  if (!html) { _showPopup('لا توجد حركات للطباعة في هذا النطاق', 'error'); return; }
+  var w = window.open('', '_blank'); if (!w) { _showPopup('اسمح بالنوافذ المنبثقة للطباعة', 'error'); return; }
+  w.document.write(html); w.document.close();
+  w.onload = function () { try { w.document.title = _vzAccPdfName(); } catch (e) {} setTimeout(function () { w.focus(); w.print(); }, 450); };
+}
+function vzAccExport(btn) {
+  if (typeof exportReportAsImage !== 'function') { _showPopup('نظام تصدير الصور غير متاح', 'error'); return; }
+  if (!vzAccBuildDoc(false)) { _showPopup('لا توجد حركات للتصدير في هذا النطاق', 'error'); return; }
+  exportReportAsImage(function () { return vzAccBuildDoc(false); }, _vzAccPdfName(), btn);
 }
 // نموذج صغير عام لإدخال دفعة/بند
 function _vzMiniForm(title, fields, data, onSave) {
@@ -37878,46 +38297,265 @@ function _vzMiniForm(title, fields, data, onSave) {
   };
 }
 
+/* ============================================================
+   ⚙️ (V4.134) إعدادات حسابات الوكلاء مع الشركات المصرية
+   لكل زوج (وكيل، شركة) نمط:
+     • عام    — يدخل في حساب الوكيل العام (كل شركاته في حساب واحد)
+     • منفصل  — حساب مستقل تماماً «الوكيل - الشركة» بدفعاته وبنوده
+     • مشترك  — يُضمّ لحساب «الوكيل - الشركة الرئيسية» المحدَّدة
+   جدول المجموعات يظل يعرض الشركة المصرية الحقيقية لكل مجموعة في كل الأحوال.
+   ============================================================ */
+function vzAcctCfgOpen() {
+  if (!vzFin()) { _showPopup('ضبط حسابات الوكلاء يتطلب صلاحية مالية خاصة', 'error'); return; }
+  VZ._acfg = (VZ.acctRows || []).map(function (r) { return { agent: r.agent, company: r.company, mode: r.mode || 'عام', mainCompany: r.mainCompany || '', notes: r.notes || '' }; });
+  var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzAcfgOv';
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(900px,97vw);"><div class="vz-hd"><b>⚙️ إعدادات حسابات الوكلاء مع الشركات المصرية</b>' +
+    '<button class="vz-btn sm" onclick="vzAcctCfgClose()">✕</button></div><div class="p-3">' +
+    '<div class="vz-sec" style="margin-top:0;"><div style="font-size:11.5px;color:#4e7a6e;line-height:1.8;">' +
+      '<b>عام</b> — مجموعات هذه الشركة تدخل في حساب الوكيل العام (اسم الوكيل وحده).<br>' +
+      '<b>منفصل</b> — حساب مستقل تماماً باسم «الوكيل - الشركة» له دفعاته وبنوده الخاصة.<br>' +
+      '<b>مشترك</b> — يُضمّ لحساب «الوكيل - الشركة الرئيسية» فيصير الحسابان حساباً واحداً محاسبياً.<br>' +
+      '<span style="color:#8a5a06;font-weight:700;">في كل الأحوال يظل جدول المجموعات يعرض الشركة المصرية الحقيقية لكل مجموعة.</span></div></div>' +
+    '<div id="vzAcfgBody"></div>' +
+    '<div class="d-flex gap-2 mt-2"><button class="vz-btn sm" onclick="vzAcctCfgAdd()">➕ إضافة ربط</button>' +
+    '<button class="vz-btn pri" onclick="vzAcctCfgSave()">💾 حفظ الإعدادات</button>' +
+    '<button class="vz-btn" onclick="vzAcctCfgClose()">إلغاء</button></div></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzAcctCfgClose(); });
+  vzAcctCfgRender();
+}
+function vzAcctCfgClose() { var o = document.getElementById('vzAcfgOv'); if (o) o.remove(); }
+function vzAcctCfgAdd() { VZ._acfg.push({ agent: '', company: '', mode: 'منفصل', mainCompany: '', notes: '' }); vzAcctCfgRender(); }
+function vzAcctCfgDel(i) { VZ._acfg.splice(i, 1); vzAcctCfgRender(); }
+function vzAcctCfgSet(i, k, v) { VZ._acfg[i][k] = mfStr(v); if (k === 'mode') vzAcctCfgRender(); }
+function vzAcctCfgRender() {
+  var box = document.getElementById('vzAcfgBody'); if (!box) return;
+  var inp = 'width:100%;font-size:12.5px;padding:6px 8px;border:1.5px solid var(--vzBorder);border-radius:8px;font-weight:600;background:#fff;color:#0f2a23;';
+  var comps = (VZ.companies || []).map(function (c) { return c.company; });
+  box.innerHTML = '<div class="vz-sec"><div class="vz-sec-h">🔗 الروابط المسجَّلة</div><div style="overflow:auto;"><table class="vz-tab">' +
+    '<thead><tr><th style="width:24%;">الوكيل</th><th style="width:22%;">الشركة المصرية</th><th style="width:16%;">نمط الحساب</th>' +
+    '<th style="width:22%;">الشركة الرئيسية</th><th>الحساب الناتج</th><th style="width:8%;">⚙</th></tr></thead><tbody>' +
+    ((VZ._acfg || []).length ? VZ._acfg.map(function (r, i) {
+      var key = r.mode === 'عام' ? mfStr(r.agent)
+        : (r.mode === 'مشترك' ? mfStr(r.agent) + ' - ' + (mfStr(r.mainCompany) || mfStr(r.company))
+                              : mfStr(r.agent) + ' - ' + mfStr(r.company));
+      return '<tr>' +
+        '<td><input list="vzAcfgAgents" style="' + inp + '" value="' + vzEsc(r.agent) + '" oninput="vzAcctCfgSet(' + i + ',\'agent\',this.value)" placeholder="اسم الوكيل"></td>' +
+        '<td><input list="vzAcfgComps" style="' + inp + '" value="' + vzEsc(r.company) + '" oninput="vzAcctCfgSet(' + i + ',\'company\',this.value)" placeholder="الشركة"></td>' +
+        '<td><select style="' + inp + '" onchange="vzAcctCfgSet(' + i + ',\'mode\',this.value)">' +
+          (VZ.acctModes || ['عام', 'منفصل', 'مشترك']).map(function (m) { return '<option' + (m === r.mode ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></td>' +
+        '<td>' + (r.mode === 'مشترك'
+          ? '<input list="vzAcfgComps" style="' + inp + '" value="' + vzEsc(r.mainCompany) + '" oninput="vzAcctCfgSet(' + i + ',\'mainCompany\',this.value)" placeholder="الشركة الرئيسية">'
+          : '<span class="text-muted" style="font-size:11px;">—</span>') + '</td>' +
+        '<td><span class="vz-badge ' + (r.mode === 'عام' ? 'b' : (r.mode === 'مشترك' ? 'y' : 'g')) + '">' + vzEsc(key || '—') + '</span></td>' +
+        '<td><button class="vz-rowbtn" style="color:#dc2626;" onclick="vzAcctCfgDel(' + i + ')">🗑️</button></td></tr>';
+    }).join('') : '<tr><td colspan="6" class="text-muted" style="padding:12px;">لا روابط — كل وكيل له حساب عام واحد يجمع كل شركاته.</td></tr>') +
+    '</tbody></table></div>' +
+    '<datalist id="vzAcfgAgents">' + (VZ.agents || []).map(function (a) { return '<option value="' + vzEsc(a) + '">'; }).join('') + '</datalist>' +
+    '<datalist id="vzAcfgComps">' + comps.map(function (c) { return '<option value="' + vzEsc(c) + '">'; }).join('') + '</datalist>' +
+    '</div>';
+}
+function vzAcctCfgSave() {
+  var bad = (VZ._acfg || []).filter(function (r) { return !mfStr(r.agent) || !mfStr(r.company); });
+  if (bad.length) { _showPopup('أكمل اسم الوكيل والشركة في كل سطر', 'error'); return; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      vzAcctCfgClose(); _showPopup('حُفظت إعدادات حسابات الوكلاء (' + res.count + ' ربط)', 'success'); vzLoad(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveAgentCompanyAccounts(window.authToken, VZ._acfg || []);
+}
+
+/* ============================================================
+   📥 (V4.134) استيراد المجموعات القديمة من ملف Excel
+   يقرأ الملف في المتصفح، يستخلص ما أمكن من الأعمدة بمطابقة مرنة للعناوين،
+   ثم يعرضها في جدول قابل للتعديل بالكامل قبل الاستيراد الفعلي.
+   ============================================================ */
+var VZ_IMP_COLS_ = [
+  ['ref', 'رقم المجموعة', ['رقم المجموعة', 'المجموعة', 'رقم مجموعة', 'group']],
+  ['date', 'تاريخ السداد', ['التاريخ', 'تاريخ السداد', 'date']],
+  ['status', 'الحالة', ['الحالة', 'حالة', 'status']],
+  ['company', 'الشركة المصرية', ['الشركة المصرية', 'الشركة', 'company']],
+  ['agent', 'الوكيل', ['الوكيل السعودي', 'الوكيل', 'agent']],
+  ['visaCount', 'العدد', ['العدد', 'عدد', 'count']],
+  ['tripName', 'الرحلة', ['الرحلة المرتبطة', 'الرحلة', 'اسم الرحلة', 'trip']],
+  ['clients', 'العملاء', ['العميل', 'العملاء', 'client']],
+  ['makkahIn', 'دخول مكة', ['سكن مكة دخول', 'دخول مكة', 'مكة دخول']],
+  ['makkahOut', 'خروج مكة', ['سكن مكة خروج', 'خروج مكة', 'مكة خروج']],
+  ['madinahIn', 'دخول المدينة', ['سكن المدينة دخول', 'دخول المدينة', 'المدينة دخول']],
+  ['madinahOut', 'خروج المدينة', ['سكن المدينة خروج', 'خروج المدينة', 'المدينة خروج']],
+  ['makkahHousingAgr', 'اتفاقية سكن مكة', ['رقم اتفاقية سكن مكة', 'اتفاقية سكن مكة']],
+  ['madinahHousingAgr', 'اتفاقية سكن المدينة', ['رقم اتفاقية سكن المدينة', 'اتفاقية سكن المدينة']],
+  ['makkahCateringAgr', 'اتفاقية إعاشة مكة', ['رقم اتفاقية اعاشة مكة', 'اتفاقية اعاشة مكة', 'اتفاقية إعاشة مكة']],
+  ['madinahCateringAgr', 'اتفاقية إعاشة المدينة', ['رقم اتفاقية اعاشة المدينة', 'اتفاقية اعاشة المدينة', 'اتفاقية إعاشة المدينة']],
+  ['notes', 'ملاحظات', ['ملاحظات', 'notes']]
+];
+function vzImportOpen() {
+  if (!VZ.can.add) { _showPopup('لا تملك صلاحية إضافة مجموعات', 'error'); return; }
+  VZ._imp = null;
+  var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzImpOv';
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(1200px,98vw);"><div class="vz-hd"><b>📥 استيراد المجموعات القديمة من Excel</b>' +
+    '<button class="vz-btn sm" onclick="vzImportClose()">✕</button></div><div class="p-3">' +
+    '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">1️⃣ اختر الملف</div>' +
+      '<input type="file" id="vzImpFile" accept=".xlsx,.xls,.csv" style="font-size:13px;" onchange="vzImportRead(this)">' +
+      '<div style="font-size:11.5px;color:#4e7a6e;margin-top:6px;line-height:1.8;">' +
+      'تُطابَق الأعمدة تلقائياً بعناوينها (رقم المجموعة، التاريخ، الحالة، الشركة، الوكيل، العدد، الرحلة، العملاء، تواريخ السكن، أرقام الاتفاقيات، ملاحظات).<br>' +
+      'كل الخانات قابلة للتعديل قبل الاستيراد، وأي مجموعة برقم مسجَّل من قبل تُتخطّى تلقائياً منعاً للتكرار.</div></div>' +
+    '<div id="vzImpBody"></div></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzImportClose(); });
+}
+function vzImportClose() { var o = document.getElementById('vzImpOv'); if (o) o.remove(); }
+function _vzImpNorm(v) { return String(v == null ? '' : v).replace(/[ً-ٟـ]/g, '').replace(/[إأآا]/g, 'ا').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function _vzImpCell(v) {
+  if (v instanceof Date && !isNaN(v)) {
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return p(v.getDate()) + '/' + p(v.getMonth() + 1) + '/' + v.getFullYear();
+  }
+  return mfStr(v);
+}
+function vzImportRead(input) {
+  var file = input && input.files && input.files[0]; if (!file) return;
+  if (typeof XLSX === 'undefined') { _showPopup('مكتبة قراءة Excel غير محمَّلة', 'error'); return; }
+  var body = document.getElementById('vzImpBody');
+  if (body) body.innerHTML = '<div class="text-muted text-center py-3">⏳ جاري قراءة الملف…</div>';
+  var rd = new FileReader();
+  rd.onload = function (e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+      var sh = wb.Sheets[wb.SheetNames[0]];
+      var aoa = XLSX.utils.sheet_to_json(sh, { header: 1, raw: false, cellDates: true, defval: '' });
+      // أول صف يحوي عنواناً معروفاً هو صف العناوين
+      var hRow = -1, colMap = {};
+      for (var r = 0; r < Math.min(aoa.length, 12); r++) {
+        var hits = 0, m = {};
+        (aoa[r] || []).forEach(function (cell, ci) {
+          var n = _vzImpNorm(cell); if (!n) return;
+          VZ_IMP_COLS_.forEach(function (c) {
+            if (m[c[0]] !== undefined) return;
+            if (c[2].some(function (alias) { return n.indexOf(_vzImpNorm(alias)) >= 0; })) { m[c[0]] = ci; hits++; }
+          });
+        });
+        if (hits >= 2) { hRow = r; colMap = m; break; }
+      }
+      if (hRow < 0) { document.getElementById('vzImpBody').innerHTML = '<div class="alert alert-danger">لم يُعثر على صف عناوين معروف في الملف.</div>'; return; }
+      var rows = [];
+      for (var i = hRow + 1; i < aoa.length; i++) {
+        var raw = aoa[i] || [], o = {}, any = false;
+        VZ_IMP_COLS_.forEach(function (c) {
+          var ci = colMap[c[0]];
+          var v = (ci === undefined) ? '' : _vzImpCell(raw[ci]);
+          if (c[0] === 'date' || c[0].indexOf('In') > 0 || c[0].indexOf('Out') > 0) v = mfDate(v) || v;
+          o[c[0]] = v; if (v) any = true;
+        });
+        if (any) rows.push(o);
+      }
+      if (!rows.length) { document.getElementById('vzImpBody').innerHTML = '<div class="alert alert-warning">لا صفوف بيانات بعد صف العناوين.</div>'; return; }
+      VZ._imp = rows;
+      vzImportRender();
+    } catch (err) {
+      document.getElementById('vzImpBody').innerHTML = '<div class="alert alert-danger">❌ تعذّرت قراءة الملف: ' + vzEsc(err && err.message ? err.message : err) + '</div>';
+    }
+  };
+  rd.readAsBinaryString(file);
+}
+function vzImpSet(i, k, v) { if (VZ._imp && VZ._imp[i]) VZ._imp[i][k] = mfStr(v); }
+function vzImpDel(i) { VZ._imp.splice(i, 1); vzImportRender(); }
+function vzImportRender() {
+  var box = document.getElementById('vzImpBody'); if (!box) return;
+  var rows = VZ._imp || [];
+  var existing = {}; (VZ.files || []).forEach(function (f) { if (f.ref) existing[mfStr(f.ref)] = 1; });
+  var dupN = rows.filter(function (r) { return r.ref && existing[mfStr(r.ref)]; }).length;
+  var inp = 'width:100%;min-width:90px;font-size:12px;padding:5px 7px;border:1.5px solid var(--vzBorder);border-radius:7px;font-weight:600;background:#fff;color:#0f2a23;';
+  box.innerHTML = '<div class="vz-sec"><div class="vz-sec-h">2️⃣ معاينة وتعديل قبل الاستيراد' +
+      '<span class="vz-badge b" style="margin-inline-start:auto;">' + rows.length + ' صف</span>' +
+      (dupN ? '<span class="vz-badge y">⚠️ ' + dupN + ' برقم مسجَّل — ستُتخطّى</span>' : '') + '</div>' +
+    '<div style="overflow:auto;max-height:52vh;"><table class="vz-tab"><thead><tr><th style="width:34px;">م</th>' +
+      VZ_IMP_COLS_.map(function (c) { return '<th>' + c[1] + '</th>'; }).join('') + '<th style="width:40px;">⚙</th></tr></thead><tbody>' +
+    rows.map(function (r, i) {
+      var dup = r.ref && existing[mfStr(r.ref)];
+      return '<tr' + (dup ? ' style="background:#fef3c7;"' : '') + '><td>' + (i + 1) + (dup ? ' ⚠️' : '') + '</td>' +
+        VZ_IMP_COLS_.map(function (c) {
+          return '<td><input style="' + inp + '" value="' + vzEsc(r[c[0]]) + '" oninput="vzImpSet(' + i + ',\'' + c[0] + '\',this.value)"></td>';
+        }).join('') +
+        '<td><button class="vz-rowbtn" style="color:#dc2626;" title="استبعاد الصف" onclick="vzImpDel(' + i + ')">🗑️</button></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<div class="d-flex gap-2 mt-2"><button class="vz-btn pri" onclick="vzImportRun(this)">📥 استيراد ' + rows.length + ' مجموعة</button>' +
+    '<button class="vz-btn" onclick="vzImportClose()">إلغاء</button></div></div>';
+}
+function vzImportRun(btn) {
+  var rows = VZ._imp || []; if (!rows.length) return;
+  var payload = rows.map(function (r) {
+    var bd = mfStr(r.clients).split(/[،,\/|]+/).map(function (x) { return mfStr(x); }).filter(Boolean)
+      .map(function (n) { return { name: n, count: 0 }; });
+    if (bd.length === 1) bd[0].count = mfNum(r.visaCount);
+    var o = {}; VZ_IMP_COLS_.forEach(function (c) { if (c[0] !== 'clients') o[c[0]] = r[c[0]]; });
+    o.breakdown = bd; o.visaCount = mfNum(r.visaCount);
+    return o;
+  });
+  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الاستيراد…';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      btn.disabled = false; btn.innerHTML = orig;
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الاستيراد', 'error'); return; }
+      vzImportClose();
+      _showPopup('استُورد ' + res.imported + ' مجموعة' + (res.skipped ? ' — تُخطِّي ' + res.skipped + ' مسجَّلة من قبل' : ''), 'success');
+      vzLoad(true);
+    })
+    .withFailureHandler(function (e) { btn.disabled = false; btn.innerHTML = orig; _showPopup(e && e.message ? e.message : e, 'error'); })
+    .importVisaFilesBatch(window.authToken, payload);
+}
+
 /* -------- 📊 إحصائيات الوكلاء -------- */
 function vzOpenStats() {
-  if (!vzFin()) { _showPopup('الجانب المالي يتطلب صلاحية مالية خاصة', 'error'); return; }
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzStatsOv';
   var compChips = (VZ.companies || []).map(function (c) { return '<label class="vz-pkc"><input type="checkbox" class="vzStComp" value="' + vzEsc(c.company) + '"> ' + vzEsc(c.company) + '</label>'; }).join('');
   var statChips = (VZ.statuses || []).map(function (s) { return '<label class="vz-pkc"><input type="checkbox" class="vzStStatus" value="' + vzEsc(s) + '"> ' + vzEsc(s) + '</label>'; }).join('');
+  var agentChips = (VZ.agents || []).map(function (a) { return '<label class="vz-pkc"><input type="checkbox" class="vzStAgent" value="' + vzEsc(a) + '"> ' + vzEsc(a) + '</label>'; }).join('');
   ov.innerHTML = '<div class="vz-dlg"><div class="vz-hd"><b>📊 إحصائيات الوكلاء</b>' +
     '<span class="d-flex gap-2"><button class="vz-btn sm" onclick="vzStatsExport(this)">📸 صورة</button><button class="vz-btn sm" onclick="vzStatsClose()">✕</button></span></div>' +
     '<div class="p-3"><div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🔎 نطاق الإحصائية</div><div class="row g-2 align-items-end">' +
       '<div class="col-md-3 vz-fld"><label>من تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzStCal(\'vzStFrom\')">📅</button><input id="vzStFrom" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
       '<div class="col-md-3 vz-fld"><label>إلى تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzStCal(\'vzStTo\')">📅</button><input id="vzStTo" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
       '<div class="col-md-6 d-flex align-items-end"><div style="font-size:11.5px;color:#4e7a6e;font-weight:700;">اترك التواريخ فارغة لفترة مفتوحة البداية أو النهاية.</div></div>' +
-      '<div class="col-12"><label style="font-size:11px;font-weight:800;color:var(--vzLbl);display:block;margin-bottom:4px;">🏢 الشركات المصرية (اختيار متعدد)</label><div class="d-flex gap-1 flex-wrap">' + (compChips || '<span class="text-muted small">لا شركات</span>') + '</div></div>' +
-      '<div class="col-12"><label style="font-size:11px;font-weight:800;color:var(--vzLbl);display:block;margin-bottom:4px;">🏷️ الحالات (اختيار متعدد)</label><div class="d-flex gap-1 flex-wrap">' + (statChips || '<span class="text-muted small">لا حالات</span>') + '</div></div>' +
+      '<div class="col-12"><label style="font-size:11px;font-weight:800;color:var(--vzLbl);display:block;margin-bottom:4px;">🏢 الشركات المصرية (اختيار متعدد) ' +
+        '<button class="vz-btn sm" style="padding:1px 8px;font-size:10px;" onclick="vzStAll(\'vzStComp\',true)">الكل</button> ' +
+        '<button class="vz-btn sm" style="padding:1px 8px;font-size:10px;" onclick="vzStAll(\'vzStComp\',false)">إفراغ</button></label>' +
+        '<div class="d-flex gap-1 flex-wrap">' + (compChips || '<span class="text-muted small">لا شركات</span>') + '</div></div>' +
+      '<div class="col-12"><label style="font-size:11px;font-weight:800;color:var(--vzLbl);display:block;margin-bottom:4px;">🏷️ الحالات (اختيار متعدد) ' +
+        '<button class="vz-btn sm" style="padding:1px 8px;font-size:10px;" onclick="vzStAll(\'vzStStatus\',true)">الكل</button> ' +
+        '<button class="vz-btn sm" style="padding:1px 8px;font-size:10px;" onclick="vzStAll(\'vzStStatus\',false)">إفراغ</button></label>' +
+        '<div class="d-flex gap-1 flex-wrap">' + (statChips || '<span class="text-muted small">لا حالات</span>') + '</div></div>' +
+      '<div class="col-12"><label style="font-size:11px;font-weight:800;color:var(--vzLbl);display:block;margin-bottom:4px;">🧑‍💼 الوكلاء (اختيار متعدد) ' +
+        '<button class="vz-btn sm" style="padding:1px 8px;font-size:10px;" onclick="vzStAll(\'vzStAgent\',true)">الكل</button> ' +
+        '<button class="vz-btn sm" style="padding:1px 8px;font-size:10px;" onclick="vzStAll(\'vzStAgent\',false)">إفراغ</button></label>' +
+        '<div class="d-flex gap-1 flex-wrap">' + (agentChips || '<span class="text-muted small">لا وكلاء</span>') + '</div></div>' +
       '<div class="col-12"><button class="vz-btn pri" onclick="vzStatsRun()">📊 عرض الإحصائيات</button></div>' +
     '</div></div><div id="vzStBody"><div class="vz-sec"><div class="text-muted" style="font-size:12.5px;">حدّد النطاق واضغط «عرض الإحصائيات».</div></div></div></div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzStatsClose(); });
 }
 function vzStatsClose() { var o = document.getElementById('vzStatsOv'); if (o) o.remove(); }
-function vzStCal(id) {
-  var el = document.getElementById(id); if (!el) return;
-  if (typeof flatpickr === 'undefined') { el.focus(); return; }
-  if (!el._fp) el._fp = flatpickr(el, { dateFormat: 'd/m/Y', allowInput: true, disableMobile: true, appendTo: document.body, position: 'auto' });
-  el._fp.open();
+function vzStCal(id) { _vzCal_(id, null); }
+function vzStAll(cls, on) {
+  Array.prototype.forEach.call(document.querySelectorAll('.' + cls), function (x) { x.checked = !!on; });
 }
 function vzStatsRun() {
   var comps = Array.prototype.map.call(document.querySelectorAll('.vzStComp:checked'), function (x) { return x.value; });
   var stats = Array.prototype.map.call(document.querySelectorAll('.vzStStatus:checked'), function (x) { return x.value; });
+  var agts = Array.prototype.map.call(document.querySelectorAll('.vzStAgent:checked'), function (x) { return x.value; });
   var body = document.getElementById('vzStBody'); if (body) body.innerHTML = '<div class="text-muted text-center py-3">⏳ جاري الحساب…</div>';
   google.script.run
     .withSuccessHandler(function (res) { if (!res || !res.success) { if (body) body.innerHTML = '<div class="alert alert-danger">' + vzEsc((res && res.error) || 'تعذّر') + '</div>'; return; } VZ._stats = res; vzStatsRender(); })
     .withFailureHandler(function (e) { if (body) body.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
-    .getAgentVisaStats(window.authToken, { from: mfStr((document.getElementById('vzStFrom') || {}).value), to: mfStr((document.getElementById('vzStTo') || {}).value), companies: comps, statuses: stats });
+    .getAgentVisaStats(window.authToken, { from: mfStr((document.getElementById('vzStFrom') || {}).value), to: mfStr((document.getElementById('vzStTo') || {}).value), companies: comps, statuses: stats, agents: agts });
 }
 function vzStatsRender() {
   var r = VZ._stats, body = document.getElementById('vzStBody'); if (!body || !r) return;
   var tbl = function (title, rows, keyLabel, keyField) {
-    return '<div class="vz-sec"><div class="vz-sec-h">' + title + '</div><div style="overflow:auto;"><table class="vz-tab"><thead><tr><th style="text-align:right;">' + keyLabel + '</th><th>مجموعات</th><th>تأشيرات</th><th>المستحق (ريال)</th></tr></thead><tbody>' +
-      (rows.length ? rows.map(function (x) { return '<tr><td style="text-align:right;font-weight:700;">' + vzEsc(x[keyField] || '—') + '</td><td>' + vzFmt(x.files) + '</td><td><b style="color:#1d4ed8;">' + vzFmt(x.visas) + '</b></td><td><b style="color:#b45309;">' + vzFmt(x.dueSAR) + '</b></td></tr>'; }).join('') : '<tr><td colspan="4" class="text-muted" style="padding:12px;">لا بيانات في هذا النطاق</td></tr>') +
+    return '<div class="vz-sec"><div class="vz-sec-h">' + title + '</div><div style="overflow:auto;"><table class="vz-tab"><thead><tr><th style="text-align:right;">' + keyLabel + '</th><th>عدد المجموعات</th><th>عدد التأشيرات</th></tr></thead><tbody>' +
+      (rows.length ? rows.map(function (x) { return '<tr><td style="text-align:right;font-weight:700;">' + vzEsc(x[keyField] || '—') + '</td><td>' + vzL(vzFmt(x.files)) + '</td><td><b style="color:#1d4ed8;">' + vzL(vzFmt(x.visas)) + '</b></td></tr>'; }).join('') : '<tr><td colspan="3" class="text-muted" style="padding:12px;">لا بيانات في هذا النطاق</td></tr>') +
       '</tbody></table></div></div>';
   };
   var kpi = function (lbl, val, color) {
@@ -37925,12 +38563,40 @@ function vzStatsRender() {
       '<div style="font-size:11px;font-weight:800;color:var(--vzLbl);">' + lbl + '</div>' +
       '<div style="font-size:22px;font-weight:900;color:' + color + ';">' + val + '</div></div>';
   };
+  // 🔀 جدول متقاطع: الوكيل × الشركة المصرية (أعداد المجموعات والتأشيرات)
+  var cx = {}; (r.cross || []).forEach(function (x) { cx[x.agent + '|' + x.company] = x; });
+  var ags = r.crossAgents || [], cps = r.crossCompanies || [];
+  var crossTbl = '';
+  if (ags.length && cps.length) {
+    var colTot = {}, grandF = 0, grandV = 0;
+    crossTbl = '<div class="vz-sec"><div class="vz-sec-h">🔀 الوكيل × الشركة المصرية <span style="font-size:10.5px;font-weight:600;color:#6b8c82;">(مجموعات / تأشيرات)</span></div>' +
+      '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th style="text-align:right;">الوكيل \\ الشركة</th>' +
+      cps.map(function (c) { return '<th>' + vzEsc(c) + '</th>'; }).join('') + '<th>الإجمالي</th></tr></thead><tbody>' +
+      ags.map(function (a) {
+        var rf = 0, rv = 0;
+        var tds = cps.map(function (c) {
+          var x = cx[a + '|' + c];
+          if (!x) return '<td style="color:#cbd5e1;">—</td>';
+          rf += x.files; rv += x.visas;
+          colTot[c] = colTot[c] || { f: 0, v: 0 }; colTot[c].f += x.files; colTot[c].v += x.visas;
+          return '<td><b>' + vzL(vzFmt(x.files)) + '</b> / <span style="color:#1d4ed8;font-weight:800;">' + vzL(vzFmt(x.visas)) + '</span></td>';
+        }).join('');
+        grandF += rf; grandV += rv;
+        return '<tr><td style="text-align:right;font-weight:800;">' + vzEsc(a) + '</td>' + tds +
+          '<td style="background:#eefaf5;"><b>' + vzL(vzFmt(rf)) + '</b> / <span style="color:#1d4ed8;font-weight:800;">' + vzL(vzFmt(rv)) + '</span></td></tr>';
+      }).join('') +
+      '<tr style="background:#075c46;color:#fff;font-weight:800;"><td style="text-align:right;">الإجمالي</td>' +
+      cps.map(function (c) { var t = colTot[c] || { f: 0, v: 0 }; return '<td>' + vzL(vzFmt(t.f)) + ' / ' + vzL(vzFmt(t.v)) + '</td>'; }).join('') +
+      '<td>' + vzL(vzFmt(grandF)) + ' / ' + vzL(vzFmt(grandV)) + '</td></tr>' +
+      '</tbody></table></div></div>';
+  }
   body.innerHTML =
-    '<div class="vz-sec"><div class="vz-sec-h">📌 الإجماليات</div><div class="d-flex gap-2 flex-wrap">' +
+    '<div class="vz-sec"><div class="vz-sec-h">📌 الإجماليات <span style="font-size:10.5px;font-weight:600;color:#6b8c82;">— أعداد فقط بلا قيم مالية</span></div><div class="d-flex gap-2 flex-wrap">' +
       kpi('عدد المجموعات', vzFmt(r.totalFiles), '#075c46') +
       kpi('إجمالي التأشيرات', vzFmt(r.totalVisas), '#1d4ed8') +
-      kpi('إجمالي المستحق (ريال)', vzFmt(r.totalDueSAR), '#b45309') +
+      kpi('عدد العملاء', vzFmt(r.totalClients), '#c98a1e') +
     '</div></div>' +
+    crossTbl +
     tbl('👤 حسب الوكيل', r.byAgent || [], 'الوكيل', 'agent') +
     tbl('🏷️ حسب الحالة', r.byStatus || [], 'الحالة', 'status') +
     tbl('🏢 حسب الشركة المصرية', r.byCompany || [], 'الشركة', 'company');
@@ -37963,9 +38629,15 @@ function vzHaOpen() {
         '<div class="row g-2">' +
           '<div class="col-md-4 vz-fld"><label>بحث (رقم الاتفاقية / الفندق / رقم مجموعة)</label><input id="haF_q" oninput="vzHaRender()" autocomplete="off"></div>' +
           '<div class="col-md-3 vz-fld"><label>المدينة</label><select id="haF_city" onchange="vzHaRender()"><option value="">الكل</option></select></div>' +
-          '<div class="col-md-3 vz-fld"><label>الحالة</label><select id="haF_status" onchange="vzHaRender()"><option value="">الكل</option></select></div>' +
-          '<div class="col-md-2 vz-fld"><label>العرض</label><select id="haF_avail" onchange="vzHaRender()">' +
+          '<div class="col-md-2 vz-fld"><label>النوع</label><select id="haF_kind" onchange="vzHaRender()"><option value="">الكل</option><option>سكن</option><option>إعاشة</option></select></div>' +
+          '<div class="col-md-3 vz-fld"><label>العرض</label><select id="haF_avail" onchange="vzHaRender()">' +
             '<option value="">الكل</option><option value="free">فيها متاح</option><option value="full">مكتملة</option></select></div>' +
+          '<div class="col-md-3 vz-fld"><label>الفترة من</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_from\')">📅</button><input id="haF_from" maxlength="10" placeholder="dd/mm/yyyy — مفتوحة"></div></div>' +
+          '<div class="col-md-3 vz-fld"><label>الفترة إلى</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_to\')">📅</button><input id="haF_to" maxlength="10" placeholder="dd/mm/yyyy — مفتوحة"></div></div>' +
+          '<div class="col-md-3 vz-fld"><label>👁️ من بالداخل بتاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_on\')">📅</button><input id="haF_on" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
+          '<div class="col-md-3 vz-fld"><label>&nbsp;</label><label class="vz-pkc" style="height:38px;"><input type="checkbox" id="haF_onlyOn" onchange="vzHaLoad(true)"> اعرض ما بداخله فقط</label></div>' +
+          '<div class="col-md-3 d-flex align-items-end gap-2"><button class="vz-btn pri" onclick="vzHaLoad(true)">تطبيق الفترة</button>' +
+          '<button class="vz-btn" onclick="vzHaClearFilters()">✖ إلغاء الكل</button></div>' +
         '</div></div>' +
       '<div id="haBody"><div class="text-muted text-center py-4">⏳ جاري التحميل…</div></div>' +
     '</div></div>';
@@ -37981,26 +38653,37 @@ function vzHaLoad(force) {
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { if (b) b.innerHTML = '<div class="alert alert-danger">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
       HA.agreements = res.agreements || []; HA.groups = res.groups || [];
-      HA.cities = res.cities || []; HA.statuses = res.statuses || []; HA.today = res.today || '';
+      HA.cities = res.cities || []; HA.kinds = res.kinds || ['سكن', 'إعاشة'];
+      HA.suppliers = res.suppliers || []; HA.onDate = res.onDate || ''; HA.today = res.today || '';
       HA.loaded = true;
       var cs = document.getElementById('haF_city');
       if (cs && cs.options.length <= 1) cs.innerHTML = '<option value="">الكل</option>' + HA.cities.map(function (c) { return '<option>' + vzEsc(c) + '</option>'; }).join('');
-      var ss = document.getElementById('haF_status');
-      if (ss && ss.options.length <= 1) ss.innerHTML = '<option value="">الكل</option>' + HA.statuses.map(function (c) { return '<option>' + vzEsc(c) + '</option>'; }).join('');
       vzHaRender();
     })
     .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
-    .getHousingAgreements(window.authToken);
+    .getHousingAgreements(window.authToken, {
+      from: mfDate(vzFV('haF_from')), to: mfDate(vzFV('haF_to')),
+      onDate: mfDate(vzFV('haF_on')),
+      onlyOnDate: !!(document.getElementById('haF_onlyOn') || {}).checked
+    });
+}
+function vzHaFCal(id) { _vzCal_(id, function () { vzHaLoad(true); }); }
+function vzHaClearFilters() {
+  ['haF_q', 'haF_city', 'haF_kind', 'haF_avail', 'haF_from', 'haF_to', 'haF_on'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; });
+  var c = document.getElementById('haF_onlyOn'); if (c) c.checked = false;
+  vzHaLoad(true);
 }
 function vzHaVisible() {
-  var q = mfStr(vzFV('haF_q')).toLowerCase(), city = vzFV('haF_city'), st = vzFV('haF_status'), av = vzFV('haF_avail');
+  var q = mfStr(vzFV('haF_q')).toLowerCase(), city = vzFV('haF_city'), kd = vzFV('haF_kind'), av = vzFV('haF_avail');
   return HA.agreements.filter(function (a) {
     if (city && a.city !== city) return false;
-    if (st && a.status !== st) return false;
+    if (kd && (a.kind || 'سكن') !== kd) return false;
     if (av === 'free' && !(a.minRemaining > 0)) return false;
     if (av === 'full' && a.minRemaining > 0) return false;
     if (q) {
-      var hay = [a.agrNo, a.hotel, a.city, a.status, a.notes].concat((a.allocations || []).map(function (x) { return x.groupRef; })).join(' ').toLowerCase();
+      var hay = [a.agrNo, a.hotel, a.supplier, a.city, a.kind, a.notes]
+        .concat((a.allocations || []).map(function (x) { return x.groupRef + ' ' + (x.clients || []).join(' ') + ' ' + (x.tripName || ''); }))
+        .join(' ').toLowerCase();
       if (hay.indexOf(q) < 0) return false;
     }
     return true;
@@ -38030,30 +38713,55 @@ function vzHaRender() {
   box.innerHTML = list.map(function (a) {
     var allocRows = (a.allocations || []).map(function (x) {
       var g = (HA.groups || []).filter(function (y) { return y.ref === x.groupRef; })[0];
-      return '<tr><td><b class="vz-latin">' + vzEsc(x.groupRef) + '</b>' + (g && g.agent ? '<div style="font-size:9.5px;color:#6b8c82;">' + vzEsc(g.agent) + '</div>' : '') + '</td>' +
+      return '<tr' + (x.onDate ? ' style="background:#e7f6f1;"' : '') + '><td><b class="vz-latin">' + vzEsc(x.groupRef) + '</b>' +
+          (x.onDate ? ' <span class="vz-badge g" style="font-size:8.5px;">بالداخل</span>' : '') +
+          (x.agent ? '<div style="font-size:9.5px;color:#6b8c82;">' + vzEsc(x.agent) + '</div>' : '') + '</td>' +
         '<td><b>' + vzFmt(x.count) + '</b></td><td>' + vzL(x.from) + '</td><td>' + vzL(x.to) + '</td>' +
+        '<td style="text-align:right;font-size:10.5px;">' + vzEsc((x.clients || []).join('، ') || '—') +
+          (x.tripName ? '<div style="color:#6b8c82;font-size:9.5px;">🧳 ' + vzEsc(x.tripName) + '</div>' : '') + '</td>' +
         '<td style="text-align:right;font-size:10.5px;color:#64748b;">' + vzEsc(x.notes || '') + '</td>' +
         '<td><button class="vz-rowbtn" title="تعديل" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',\'' + vzJs(x.id) + '\')">✏️</button>' +
         '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف" onclick="vzHaAllocDel(\'' + vzJs(x.id) + '\')">🗑️</button></td></tr>';
-    }).join('') || '<tr><td colspan="6" class="text-muted" style="padding:10px;">لم تُخصَّص هذه الاتفاقية لأي مجموعة بعد</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="text-muted" style="padding:10px;">لم تُخصَّص هذه الاتفاقية لأي مجموعة بعد</td></tr>';
     var full = a.minRemaining <= 0;
+    var isCat = (a.kind || 'سكن') === 'إعاشة';
+    // 👁️ لقطة تاريخ بعينه: من بالداخل الآن وكم المتاح
+    var onBox = '';
+    if (HA.onDate) {
+      var ins = a.onDateGroups || [];
+      onBox = '<div style="background:#eefaf5;border:1.5px dashed var(--vzBorder);border-radius:10px;padding:8px 10px;margin-bottom:8px;">' +
+        '<b style="font-size:12px;color:#075c46;">👁️ بتاريخ ' + vzEsc(HA.onDate) + ':</b> ' +
+        '<span class="vz-badge ' + (mfNum(a.onDateRemaining) > 0 ? 'g' : 'r') + '">متاح ' + vzFmt(a.onDateRemaining) + '</span> ' +
+        '<span class="vz-badge y">مشغول ' + vzFmt(a.onDateUsed) + '</span>' +
+        (ins.length
+          ? '<div style="font-size:11.5px;margin-top:5px;line-height:1.8;">' + ins.map(function (x) {
+              return '🛂 <b class="vz-latin">' + vzEsc(x.groupRef) + '</b> (' + vzFmt(x.count) + ')' +
+                ((x.clients || []).length ? ' — 👤 ' + vzEsc(x.clients.join('، ')) : '') +
+                (x.tripName ? ' — 🧳 ' + vzEsc(x.tripName) : '');
+            }).join('<br>') + '</div>'
+          : '<div style="font-size:11.5px;color:#6b8c82;margin-top:4px;">لا مجموعات بالداخل في هذا التاريخ.</div>') +
+        '</div>';
+    }
     return '<div class="vz-sec">' +
-      '<div class="vz-sec-h">' + (a.city === 'مكة' ? '🕋' : '🕌') + ' اتفاقية ' + vzEsc(a.agrNo) + ' — ' + vzEsc(a.city) +
-        '<span class="vz-badge ' + (a.status === 'ملغاة' ? 'r' : (a.status === 'مُوقَّعة' ? 'g' : 'y')) + '">' + vzEsc(a.status || '—') + '</span>' +
+      '<div class="vz-sec-h">' + (a.city === 'مكة' ? '🕋' : '🕌') + ' اتفاقية ' + (isCat ? 'إعاشة' : 'سكن') + ' ' + vzEsc(a.agrNo) + ' — ' + vzEsc(a.city) +
         '<span style="margin-inline-start:auto;display:flex;gap:6px;">' +
         '<button class="vz-btn sm" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',null)">➕ تخصيص لمجموعة</button>' +
+        (vzFin() && mfStr(a.supplier) && (VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0
+          ? '<button class="vz-btn sm gold" title="ترحيل قيمة الاتفاقية دائناً لحساب الوكيل" onclick="vzHaPost(\'' + vzJs(a.id) + '\')">💳 ترحيل لحساب الوكيل</button>' : '') +
         '<button class="vz-btn sm" onclick="vzHaForm(\'' + vzJs(a.id) + '\')">✏️ تعديل</button>' +
         '<button class="vz-btn sm dgr" onclick="vzHaDel(\'' + vzJs(a.id) + '\')">🗑️</button></span></div>' +
       '<div class="d-flex gap-2 flex-wrap mb-2">' +
+        '<span class="vz-badge ' + (isCat ? 'y' : 'b') + '">' + (isCat ? '🍽️ إعاشة' : '🏨 سكن') + '</span>' +
         '<span class="vz-badge b">🏨 ' + vzEsc(a.hotel || 'بلا فندق') + '</span>' +
+        '<span class="vz-badge ' + ((VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0 ? 'g' : 'b') + '">🏢 المورد: ' + vzEsc(a.supplier || '—') + '</span>' +
         '<span class="vz-badge b">👥 السعة: ' + vzFmt(a.capacity) + '</span>' +
         '<span class="vz-badge b">🗓️ ' + vzEsc(a.from || '؟') + ' → ' + vzEsc(a.to || '؟') + '</span>' +
         '<span class="vz-badge ' + (full ? 'r' : 'g') + '">' + (full ? '⛔ مكتملة طوال الفترة' : '✅ متاح للفترة كاملة: ' + vzFmt(a.minRemaining)) + '</span>' +
         '<span class="vz-badge y">📦 مخصَّص: ' + vzFmt(a.totalAllocated) + '</span>' +
-      '</div>' +
+      '</div>' + onBox +
       '<div style="font-size:11px;font-weight:800;color:var(--vzLbl);margin-bottom:4px;">📊 المتاح على محور الزمن (الرقم = المتاح في كل فترة)</div>' +
       _haBar(a) +
-      '<div style="overflow:auto;margin-top:8px;"><table class="vz-tab"><thead><tr><th>رقم المجموعة</th><th>العدد</th><th>من</th><th>إلى</th><th>ملاحظات</th><th>⚙</th></tr></thead><tbody>' + allocRows + '</tbody></table></div>' +
+      '<div style="overflow:auto;margin-top:8px;"><table class="vz-tab"><thead><tr><th>رقم المجموعة</th><th>العدد</th><th>من</th><th>إلى</th><th>العملاء / الرحلة</th><th>ملاحظات</th><th>⚙</th></tr></thead><tbody>' + allocRows + '</tbody></table></div>' +
       (a.notes ? '<div style="font-size:11px;color:#64748b;margin-top:6px;">📝 ' + vzEsc(a.notes) + '</div>' : '') +
     '</div>';
   }).join('');
@@ -38061,7 +38769,7 @@ function vzHaRender() {
 /* ---- نموذج الاتفاقية ---- */
 function vzHaForm(id) {
   var a = id ? HA.agreements.filter(function (x) { return x.id === id; })[0] : null;
-  HA._draft = a ? JSON.parse(JSON.stringify(a)) : { id: '', agrNo: '', city: HA.cities[0] || 'مكة', hotel: '', capacity: 0, from: HA.today, to: '', status: HA.statuses[0] || '', notes: '' };
+  HA._draft = a ? JSON.parse(JSON.stringify(a)) : { id: '', agrNo: '', city: HA.cities[0] || 'مكة', kind: 'سكن', hotel: '', supplier: '', capacity: 0, from: HA.today, to: '', notes: '' };
   var d = HA._draft;
   var selOf = function (val, opts) { return opts.map(function (o) { return '<option' + (String(o) === String(val || '') ? ' selected' : '') + '>' + vzEsc(o) + '</option>'; }).join(''); };
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzHaFormOv'; ov.style.zIndex = '2147483200';
@@ -38070,26 +38778,26 @@ function vzHaForm(id) {
     '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📄 بيانات الاتفاقية</div><div class="row g-2">' +
       '<div class="col-md-4 vz-fld"><label>رقم الاتفاقية</label><input value="' + vzEsc(d.agrNo) + '" oninput="HA._draft.agrNo=this.value"></div>' +
       '<div class="col-md-4 vz-fld"><label>المدينة</label><select onchange="HA._draft.city=this.value">' + selOf(d.city, HA.cities) + '</select></div>' +
-      '<div class="col-md-4 vz-fld"><label>الحالة</label><select onchange="HA._draft.status=this.value">' + selOf(d.status, HA.statuses) + '</select></div>' +
-      '<div class="col-md-5 vz-fld"><label>الفندق / المورد</label><input value="' + vzEsc(d.hotel) + '" oninput="HA._draft.hotel=this.value"></div>' +
-      '<div class="col-md-3 vz-fld"><label>العدد (السعة)</label><input value="' + vzEsc(d.capacity) + '" oninput="HA._draft.capacity=mfNum(this.value)"></div>' +
+      '<div class="col-md-4 vz-fld"><label>نوع الاتفاقية</label><select onchange="HA._draft.kind=this.value">' + selOf(d.kind || 'سكن', HA.kinds || ['سكن', 'إعاشة']) + '</select></div>' +
+      '<div class="col-md-4 vz-fld"><label>الفندق</label><input list="haHotelsDL" value="' + vzEsc(d.hotel) + '" oninput="HA._draft.hotel=this.value" placeholder="اسم الفندق"></div>' +
+      '<div class="col-md-4 vz-fld"><label>المورد</label><input list="haSuppliersDL" value="' + vzEsc(d.supplier) + '" oninput="HA._draft.supplier=this.value" placeholder="الفندق أو الوكيل السعودي أو مورد آخر">' +
+        '<div style="font-size:10px;color:#8a5a06;">لو المورد هو الوكيل السعودي أمكن ترحيل قيمة الاتفاقية دائناً لحسابه.</div></div>' +
+      '<div class="col-md-4 vz-fld"><label>العدد (السعة)</label><input value="' + vzEsc(d.capacity) + '" oninput="HA._draft.capacity=mfNum(this.value)"></div>' +
       '<div class="col-md-2 vz-fld"><label>من تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" onclick="vzHaCal(\'haFrom\',\'from\')">📅</button><input id="haFrom" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(d.from) + '" oninput="HA._draft.from=this.value" onblur="HA._draft.from=mfDate(this.value);this.value=HA._draft.from"></div></div>' +
       '<div class="col-md-2 vz-fld"><label>إلى تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" onclick="vzHaCal(\'haTo\',\'to\')">📅</button><input id="haTo" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(d.to) + '" oninput="HA._draft.to=this.value" onblur="HA._draft.to=mfDate(this.value);this.value=HA._draft.to"></div></div>' +
       '<div class="col-12 vz-fld"><label>ملاحظات</label><input value="' + vzEsc(d.notes) + '" oninput="HA._draft.notes=this.value"></div>' +
     '</div></div>' +
     '<div class="d-flex gap-2 mt-2"><button class="vz-btn pri" onclick="vzHaSave()">💾 حفظ الاتفاقية</button>' +
-    '<button class="vz-btn" onclick="vzHaFormClose()">إلغاء</button></div></div></div>';
+    '<button class="vz-btn" onclick="vzHaFormClose()">إلغاء</button></div>' +
+    '<datalist id="haHotelsDL">' + (typeof vzHotelOptions === 'function' ? vzHotelOptions() : '') + '</datalist>' +
+    '<datalist id="haSuppliersDL">' + (HA.suppliers || []).concat(VZ.agents || []).filter(function (v, i, arr) { return v && arr.indexOf(v) === i; })
+      .map(function (x) { return '<option value="' + vzEsc(x) + '">'; }).join('') + '</datalist>' +
+    '</div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzHaFormClose(); });
 }
 function vzHaFormClose() { var o = document.getElementById('vzHaFormOv'); if (o) o.remove(); }
-function vzHaCal(inputId, key) {
-  var el = document.getElementById(inputId); if (!el) return;
-  if (typeof flatpickr === 'undefined') { el.focus(); return; }
-  if (!el._fp) el._fp = flatpickr(el, { dateFormat: 'd/m/Y', allowInput: true, disableMobile: true, appendTo: document.body, position: 'auto',
-    onChange: function () { HA._draft[key] = el.value; } });
-  el._fp.open();
-}
+function vzHaCal(inputId, key) { _vzCal_(inputId, function (v) { HA._draft[key] = v; }); }
 function vzHaSave() {
   var d = HA._draft;
   if (!mfStr(d.agrNo)) { _showPopup('أدخل رقم الاتفاقية', 'error'); return; }
@@ -38135,13 +38843,7 @@ function vzHaAllocForm(agrId, allocId) {
   if (d.groupRef) vzHaAllocPickGroup(d.groupRef, true);
 }
 function vzHaAllocClose() { var o = document.getElementById('vzHaAllocOv'); if (o) o.remove(); }
-function vzHaAlCal(inputId, key) {
-  var el = document.getElementById(inputId); if (!el) return;
-  if (typeof flatpickr === 'undefined') { el.focus(); return; }
-  if (!el._fp) el._fp = flatpickr(el, { dateFormat: 'd/m/Y', allowInput: true, disableMobile: true, appendTo: document.body, position: 'auto',
-    onChange: function () { HA._alloc[key] = el.value; } });
-  el._fp.open();
-}
+function vzHaAlCal(inputId, key) { _vzCal_(inputId, function (v) { HA._alloc[key] = v; }); }
 // عند اختيار رقم مجموعة: نملأ العدد وتواريخ دخول/خروج المدينة المناسبة تلقائياً
 function vzHaAllocPickGroup(ref, keepValues) {
   var g = (HA.groups || []).filter(function (x) { return x.ref === mfStr(ref); })[0];
@@ -38176,6 +38878,40 @@ function vzHaAllocDel(id) {
         .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).deleteHousingAllocation(window.authToken, id);
     } }, { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
 }
+/* 💳 (V4.134) ترحيل قيمة اتفاقية موردها هو الوكيل السعودي إلى الجانب الدائن بحسابه.
+   البيان يُبنى تلقائياً من بيانات الاتفاقية (رقمها - الفندق - العميل/الرحلة - رقم المجموعة)
+   والقيمة تُدخَل يدوياً، تماماً كما طُلب. */
+function vzHaPost(agrId) {
+  var a = HA.agreements.filter(function (x) { return x.id === agrId; })[0]; if (!a) return;
+  var refs = (a.allocations || []).map(function (x) { return x.groupRef; });
+  var clients = {}, trips = {};
+  (a.allocations || []).forEach(function (x) {
+    (x.clients || []).forEach(function (c) { if (c) clients[c] = 1; });
+    if (x.tripName) trips[x.tripName] = 1;
+  });
+  var who = Object.keys(clients).join('، ') || Object.keys(trips).join('، ');
+  var desc = ['اتفاقية ' + ((a.kind || 'سكن')) + ' رقم ' + a.agrNo, a.hotel, a.city, who,
+    refs.length ? ('مجموعة ' + refs.join('، ')) : ''].filter(Boolean).join(' - ');
+  // حساب الوكيل: الحساب الفرعي لو المجموعات كلها لشركة واحدة، وإلا الحساب العام
+  var comps = {}; (a.allocations || []).forEach(function (x) { if (x.company) comps[x.company] = 1; });
+  var ck = Object.keys(comps);
+  var acct = (ck.length === 1 && typeof vzAcctKeyOf === 'function') ? vzAcctKeyOf(a.supplier, ck[0]) : mfStr(a.supplier);
+  _vzMiniForm('💳 ترحيل اتفاقية ' + a.agrNo + ' لحساب الوكيل',
+    [{ k: 'agent', l: 'حساب الوكيل' }, { k: 'value', l: 'القيمة', num: 1 },
+     { k: 'currency', l: 'العملة', opts: ['SAR', 'EGP'] }, { k: 'desc', l: 'البيان (مبني تلقائياً — قابل للتعديل)' },
+     { k: 'notes', l: 'ملاحظات' }],
+    { agrId: agrId, agent: acct, value: 0, currency: 'SAR', desc: desc, notes: '' },
+    function (obj) {
+      obj.agrId = agrId;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الترحيل', 'error'); return; }
+          _showPopup('رُحِّلت قيمة الاتفاقية دائناً لحساب ' + obj.agent, 'success'); vzLoad(true);
+        })
+        .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+        .postAgreementToAgentAccount(window.authToken, obj);
+    });
+}
 function vzHaExport(btn) {
   var body = document.getElementById('haBody'); if (!body) return;
   if (typeof _tryClipboardImageCopy_ === 'function') _tryClipboardImageCopy_();
@@ -38192,13 +38928,27 @@ function vzHaPrint() {
   var list = vzHaVisible(); if (!list.length) { _showPopup('لا توجد اتفاقيات للطباعة', 'error'); return; }
   var meta = _vzPrintMeta();
   var rows = list.map(function (a) {
-    var allocs = (a.allocations || []).map(function (x) { return x.groupRef + ' (' + x.count + ') ' + x.from + '→' + x.to; }).join('<br>') || '—';
+    var allocs = (a.allocations || []).map(function (x) {
+      return x.groupRef + ' (' + x.count + ') ' + x.from + '→' + x.to +
+        ((x.clients || []).length ? ' — ' + x.clients.join('، ') : '') + (x.tripName ? ' — ' + x.tripName : '');
+    }).join('<br>') || '—';
     var segs = (a.segments || []).map(function (s) { return s.from + '→' + s.to + ': متاح ' + s.remaining; }).join('<br>') || '—';
-    return '<tr><td>' + vzEsc(a.agrNo) + '</td><td>' + vzEsc(a.city) + '</td><td>' + vzEsc(a.hotel || '—') + '</td>' +
-      '<td>' + vzFmt(a.capacity) + '</td><td>' + vzEsc(a.from) + ' → ' + vzEsc(a.to) + '</td><td>' + vzEsc(a.status || '—') + '</td>' +
+    var onCell = HA.onDate
+      ? ('متاح ' + vzFmt(a.onDateRemaining) + ' / مشغول ' + vzFmt(a.onDateUsed) +
+         ((a.onDateGroups || []).length ? '<br><small>' + vzEsc(a.onDateGroups.map(function (x) { return x.groupRef + (x.clients && x.clients.length ? ' (' + x.clients.join('، ') + ')' : ''); }).join(' · ')) + '</small>' : ''))
+      : '—';
+    return '<tr><td>' + vzEsc(a.agrNo) + '</td><td>' + vzEsc(a.kind || 'سكن') + '</td><td>' + vzEsc(a.city) + '</td>' +
+      '<td>' + vzEsc(a.hotel || '—') + '</td><td>' + vzEsc(a.supplier || '—') + '</td>' +
+      '<td>' + vzFmt(a.capacity) + '</td><td>' + vzEsc(a.from) + ' → ' + vzEsc(a.to) + '</td>' +
       '<td style="text-align:right;">' + allocs + '</td><td style="text-align:right;">' + segs + '</td>' +
+      '<td>' + onCell + '</td>' +
       '<td>' + vzFmt(a.totalAllocated) + '</td><td><b>' + vzFmt(a.minRemaining) + '</b></td></tr>';
   }).join('');
+  var haFlt = [];
+  [['haF_q', 'بحث'], ['haF_city', 'المدينة'], ['haF_kind', 'النوع'], ['haF_avail', 'العرض'],
+   ['haF_from', 'الفترة من'], ['haF_to', 'الفترة إلى'], ['haF_on', 'بتاريخ']].forEach(function (m) {
+    var v = vzFV(m[0]); if (v) haFlt.push(m[1] + ': ' + v);
+  });
   var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>اتفاقيات السكن - ' + vzEsc(meta.stamp) + '</title><style>' +
     '@page{size:A4 landscape;margin:10mm 8mm 14mm;}' +
     'body{font-family:"Cairo",Tahoma,sans-serif;margin:0;color:#1e293b;}' +
@@ -38206,8 +38956,10 @@ function vzHaPrint() {
     'table{width:100%;border-collapse:collapse;font-size:9.5px;} th,td{border:1px solid #94a3b8;padding:3px 4px;text-align:center;}' +
     'th{background:#075c46;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;} tr{page-break-inside:avoid;}' +
     '.pfoot{position:fixed;bottom:4mm;left:0;right:0;text-align:center;font-size:9px;color:#94a3b8;}' +
-    '</style></head><body><h1>🏨 اتفاقيات سكن مكة والمدينة</h1><div class="sub">تاريخ ووقت الطباعة: ' + vzEsc(meta.stamp) + ' — عدد الاتفاقيات: ' + list.length + '</div>' +
-    '<table><thead><tr><th>رقم الاتفاقية</th><th>المدينة</th><th>الفندق</th><th>السعة</th><th>الفترة</th><th>الحالة</th><th>المجموعات المخصَّصة</th><th>المتاح بالفترات</th><th>مخصَّص</th><th>متاح للفترة كاملة</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '.flt{font-size:9.5px;background:#eefaf5;border:1px solid #cfe6de;border-radius:5px;padding:3px 8px;margin-bottom:6px;color:#0f5c47;font-weight:700;}' +
+    '</style></head><body><h1>🏨 اتفاقيات سكن وإعاشة مكة والمدينة</h1><div class="sub">تاريخ ووقت الطباعة: ' + vzEsc(meta.stamp) + ' — عدد الاتفاقيات: ' + list.length + '</div>' +
+    (haFlt.length ? '<div class="flt">🔎 الفلاتر المطبَّقة: ' + vzEsc(haFlt.join('  ·  ')) + '</div>' : '<div class="flt">🔎 بلا فلاتر — كل الاتفاقيات</div>') +
+    '<table><thead><tr><th>رقم الاتفاقية</th><th>النوع</th><th>المدينة</th><th>الفندق</th><th>المورد</th><th>السعة</th><th>الفترة</th><th>المجموعات المخصَّصة (والعملاء)</th><th>المتاح بالفترات</th><th>' + (HA.onDate ? 'بتاريخ ' + vzEsc(HA.onDate) : 'لقطة تاريخ') + '</th><th>مخصَّص</th><th>متاح للفترة كاملة</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div class="pfoot">منظومة منف للسياحة — اتفاقيات السكن</div></body></html>';
   var w = window.open('', '_blank'); if (!w) { _showPopup('اسمح بالنوافذ المنبثقة للطباعة', 'error'); return; }
   w.document.write(html); w.document.close();
