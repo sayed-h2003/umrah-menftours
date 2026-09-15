@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.139 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.140 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.139)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.140)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.139</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.140</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6639,7 +6639,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.139";
+var CLIENT_APP_VERSION = "4.140";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -37815,13 +37815,15 @@ function vzFormRender() {
       (mfStr(d.tripName) ? '<button class="vz-btn sm pri" onclick="vzHzFromTrip()">🧳 جلب فنادق الرحلة</button>' : '') +
       '</span></div>' +
       '<div style="font-size:11px;color:#4e7a6e;margin-bottom:8px;line-height:1.7;">' +
-      'المجموعة الواحدة قد تُوزَّع على أكثر من فندق في المدينة الواحدة — سجّل لكل فندق عدده وتواريخه واتفاقيتي السكن والإعاشة والمورد. ' +
-      'يُشترط أن يساوي مجموع أعداد فنادق كل مدينة عدد المجموعة.</div>' +
+      'المجموعة الواحدة قد تُوزَّع على أكثر من فندق في المدينة الواحدة — سجّل لكل فندق عدده وتواريخه ورقم اتفاقية سكنه والمورد. ' +
+      'يُشترط أن يساوي مجموع أعداد فنادق كل مدينة عدد المجموعة.<br>' +
+      '🍽️ اتفاقيات الإعاشة لا تُسجَّل من هنا — تُسجَّل من شاشة «اتفاقيات الإعاشة» المستقلة برقم هذه المجموعة، وتظهر تلقائياً أدناه.</div>' +
       '<div id="vzHzList"></div></div>' +
-      ((mkAuto || mdAuto) ? ('<div class="vz-sec"><div class="vz-sec-h">🔗 اتفاقيات مسجَّلة بهذا رقم المجموعة</div>' +
+      '<div class="vz-sec"><div class="vz-sec-h">🍽️ اتفاقيات الإعاشة المسجَّلة لهذه المجموعة</div>' +
         (mkAuto ? '<div style="font-size:12px;color:#166534;font-weight:700;">🕋 مكة: ' + vzEsc(mkAuto) + '</div>' : '') +
         (mdAuto ? '<div style="font-size:12px;color:#166534;font-weight:700;">🕌 المدينة: ' + vzEsc(mdAuto) + '</div>' : '') +
-        '<div style="font-size:10.5px;color:#6b8c82;margin-top:4px;">تُجلب تلقائياً من شاشتي اتفاقيات الإعاشة واتفاقيات السكن برقم المجموعة.</div></div>') : '');
+        (!mkAuto && !mdAuto ? '<div style="font-size:12px;color:#94a3b8;">لا اتفاقية إعاشة مسجَّلة لهذه المجموعة بعد.</div>' : '') +
+        '<div style="font-size:10.5px;color:#6b8c82;margin-top:4px;">تُجلب تلقائياً من شاشة «اتفاقيات الإعاشة» برقم هذه المجموعة — قد تكون أكثر من اتفاقية واحدة لكل مدينة.</div></div>';
 
   // ===== تبويب 3: المعتمرون =====
   var pPil = '<div class="vz-sec"><div class="vz-sec-h">👥 معتمرو الرحلة</div>' +
@@ -37998,9 +38000,8 @@ function vzHzRender() {
         '<div class="col-md-3 vz-fld"><label>تاريخ الخروج</label><div class="vz-date">' +
           '<button type="button" class="vz-calbtn" title="تقويم" onclick="vzHzCal(' + i + ',\'out\')">📅</button>' +
           '<input id="vzHz_out_' + i + '" style="' + inp + 'padding-inline-start:34px;" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(h.out) + '" oninput="vzHzSet(' + i + ',\'out\',this.value)" onblur="vzHzSet(' + i + ',\'out\',mfDate(this.value));this.value=VZ._draft.housing[' + i + '].out"></div></div>' +
-        '<div class="col-md-4 vz-fld"><label>رقم اتفاقية السكن</label><input style="' + inp + '" value="' + vzEsc(h.hAgr) + '" oninput="vzHzSet(' + i + ',\'hAgr\',this.value)" onblur="vzHzSupplierHint(' + i + ')"></div>' +
-        '<div class="col-md-4 vz-fld"><label>رقم اتفاقية الإعاشة</label><input style="' + inp + '" value="' + vzEsc(h.cAgr) + '" oninput="vzHzSet(' + i + ',\'cAgr\',this.value)" onblur="vzHzSupplierHint(' + i + ')"></div>' +
-        '<div class="col-md-4 vz-fld"><label>المورد</label><input list="vzSuppliersDL" style="' + inp + '" value="' + vzEsc(h.supplier) + '" oninput="vzHzSet(' + i + ',\'supplier\',this.value)" placeholder="الفندق أو الوكيل أو مورد آخر"></div>' +
+        '<div class="col-md-6 vz-fld"><label>رقم اتفاقية السكن</label><input style="' + inp + '" value="' + vzEsc(h.hAgr) + '" oninput="vzHzSet(' + i + ',\'hAgr\',this.value)" onblur="vzHzSupplierHint(' + i + ')"></div>' +
+        '<div class="col-md-6 vz-fld"><label>المورد</label><input list="vzSuppliersDL" style="' + inp + '" value="' + vzEsc(h.supplier) + '" oninput="vzHzSet(' + i + ',\'supplier\',this.value)" placeholder="الفندق أو الوكيل أو مورد آخر"></div>' +
       '</div></div>';
   }).join('');
   vzHzChip();
@@ -38797,10 +38798,15 @@ function vzImportRender() {
       var dup = r.ref && existing[mfStr(r.ref)];
       return '<tr' + (dup ? ' style="background:#fef3c7;"' : '') + '><td>' + (i + 1) + (dup ? ' ⚠️' : '') + '</td>' +
         VZ_IMP_COLS_.map(function (c) {
-          return '<td><input style="' + inp + '" value="' + vzEsc(r[c[0]]) + '" oninput="vzImpSet(' + i + ',\'' + c[0] + '\',this.value)"></td>';
+          // 🔎 (V4.140) بحث تنبّئي عند مراجعة الاستيراد: العملاء من قائمة العملاء، والرحلة من قائمة الرحلات
+          var dl = c[0] === 'clients' ? ' list="vzImpClientsDL"' : (c[0] === 'tripName' ? ' list="vzImpTripsDL"' : '');
+          return '<td><input style="' + inp + '"' + dl + ' autocomplete="off" value="' + vzEsc(r[c[0]]) + '" oninput="vzImpSet(' + i + ',\'' + c[0] + '\',this.value)"></td>';
         }).join('') +
         '<td><button class="vz-rowbtn" style="color:#dc2626;" title="استبعاد الصف" onclick="vzImpDel(' + i + ')">🗑️</button></td></tr>';
     }).join('') + '</tbody></table></div>' +
+    '<div style="font-size:10.5px;color:#6b8c82;margin-top:4px;">💡 عمود «العملاء» وعمود «الرحلة» يقترحان أسماء مسجَّلة بالبرنامج أثناء الكتابة (البحث التنبّئي) — ويمكن كتابة أكثر من عميل بالفاصلة أو «/».</div>' +
+    '<datalist id="vzImpClientsDL">' + (VZ.clients || []).map(function (c) { return '<option value="' + vzEsc(c) + '">'; }).join('') + '</datalist>' +
+    '<datalist id="vzImpTripsDL">' + (VZ.trips || []).map(function (t) { return '<option value="' + vzEsc(t.name) + '">'; }).join('') + '</datalist>' +
     '<div class="d-flex gap-2 mt-2"><button class="vz-btn pri" onclick="vzImportRun(this)">📥 استيراد ' + rows.length + ' مجموعة</button>' +
     '<button class="vz-btn" onclick="vzImportClose()">إلغاء</button></div></div>';
 }
@@ -39114,16 +39120,18 @@ function vzHaForm(id) {
   if (id && !VZ.can.edit) { _showPopup('لا تملك صلاحية تعديل اتفاقيات السكن', 'error'); return; }
   if (!id && !VZ.can.add) { _showPopup('لا تملك صلاحية إضافة اتفاقيات السكن', 'error'); return; }
   var a = id ? HA.agreements.filter(function (x) { return x.id === id; })[0] : null;
+  // 🔕 (V4.140) اتفاقيات السكن هنا فقط — اتفاقيات الإعاشة تُسجَّل حصراً من شاشتها المستقلة
   HA._draft = a ? JSON.parse(JSON.stringify(a)) : { id: '', agrNo: '', city: HA.cities[0] || 'مكة', kind: 'سكن', hotel: '', supplier: '', capacity: 0, from: HA.today, to: '', notes: '' };
+  HA._draft.kind = 'سكن';
   var d = HA._draft;
   var selOf = function (val, opts) { return opts.map(function (o) { return '<option' + (String(o) === String(val || '') ? ' selected' : '') + '>' + vzEsc(o) + '</option>'; }).join(''); };
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzHaFormOv'; ov.style.zIndex = '2147483200';
   ov.innerHTML = '<div class="vz-dlg" style="width:min(720px,96vw);"><div class="vz-hd"><b>🏨 ' + (a ? 'تعديل اتفاقية سكن' : 'اتفاقية سكن جديدة') + '</b>' +
     '<button class="vz-btn sm" onclick="vzHaFormClose()">✕</button></div><div class="p-3">' +
-    '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📄 بيانات الاتفاقية</div><div class="row g-2">' +
+    '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📄 بيانات الاتفاقية' +
+      '<span style="margin-inline-start:auto;font-size:10.5px;color:#6b8c82;font-weight:600;">🍽️ اتفاقيات الإعاشة من شاشتها المستقلة</span></div><div class="row g-2">' +
       '<div class="col-md-4 vz-fld"><label>رقم الاتفاقية</label><input value="' + vzEsc(d.agrNo) + '" oninput="HA._draft.agrNo=this.value"></div>' +
       '<div class="col-md-4 vz-fld"><label>المدينة</label><select onchange="HA._draft.city=this.value">' + selOf(d.city, HA.cities) + '</select></div>' +
-      '<div class="col-md-4 vz-fld"><label>نوع الاتفاقية</label><select onchange="HA._draft.kind=this.value">' + selOf(d.kind || 'سكن', HA.kinds || ['سكن', 'إعاشة']) + '</select></div>' +
       '<div class="col-md-4 vz-fld"><label>الفندق</label><input list="haHotelsDL" value="' + vzEsc(d.hotel) + '" oninput="HA._draft.hotel=this.value" placeholder="اسم الفندق"></div>' +
       '<div class="col-md-4 vz-fld"><label>المورد</label><input list="haSuppliersDL" value="' + vzEsc(d.supplier) + '" oninput="HA._draft.supplier=this.value" placeholder="الفندق أو الوكيل السعودي أو مورد آخر">' +
         '<div style="font-size:10px;color:#8a5a06;">لو المورد هو الوكيل السعودي أمكن ترحيل قيمة الاتفاقية دائناً لحسابه.</div></div>' +
@@ -39306,7 +39314,7 @@ function vzHaPrint() {
     'th{background:#075c46;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;} tr{page-break-inside:avoid;}' +
     '.pfoot{position:fixed;bottom:4mm;left:0;right:0;text-align:center;font-size:9px;color:#94a3b8;}' +
     '.flt{font-size:9.5px;background:#eefaf5;border:1px solid #cfe6de;border-radius:5px;padding:3px 8px;margin-bottom:6px;color:#0f5c47;font-weight:700;}' +
-    '</style></head><body><h1>🏨 اتفاقيات سكن وإعاشة مكة والمدينة</h1><div class="sub">تاريخ ووقت الطباعة: ' + vzEsc(meta.stamp) + ' — عدد الاتفاقيات: ' + list.length + '</div>' +
+    '</style></head><body><h1>🏨 اتفاقيات سكن مكة والمدينة</h1><div class="sub">تاريخ ووقت الطباعة: ' + vzEsc(meta.stamp) + ' — عدد الاتفاقيات: ' + list.length + '</div>' +
     (haFlt.length ? '<div class="flt">🔎 الفلاتر المطبَّقة: ' + vzEsc(haFlt.join('  ·  ')) + '</div>' : '<div class="flt">🔎 بلا فلاتر — كل الاتفاقيات</div>') +
     '<table><thead><tr><th>رقم الاتفاقية</th><th>النوع</th><th>المدينة</th><th>الفندق</th><th>المورد</th><th>السعة</th><th>الفترة</th><th>المجموعات المخصَّصة (والعملاء)</th><th>المتاح بالفترات</th><th>' + (HA.onDate ? 'بتاريخ ' + vzEsc(HA.onDate) : 'لقطة تاريخ') + '</th><th>مخصَّص</th><th>متاح للفترة كاملة</th></tr></thead><tbody>' + rows + '</tbody></table>' +
     '<div class="pfoot">منظومة منف للسياحة — اتفاقيات السكن</div></body></html>';
