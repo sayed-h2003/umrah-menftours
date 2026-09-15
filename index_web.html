@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.138 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.139 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.138)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.139)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.138</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.139</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -3062,6 +3062,11 @@ input[type="date"]:not(:focus):not(:valid) {
         <div class="col-md-4">
           <label class="form-label small fw-semibold">المشرف:</label>
           <input class="form-control form-control-sm" id="tripFormSupervisor" placeholder="اسم المشرف">
+        </div>
+        <!-- 📱 (V4.139) حقل نص حر لجوال مشرف أو أكثر — يظهر في نتائج بحث المعتمر بالتليجرام -->
+        <div class="col-md-4">
+          <label class="form-label small fw-semibold">📱 جوال المشرف (مشرف واحد أو أكثر):</label>
+          <input class="form-control form-control-sm" id="tripFormSupervisorPhones" placeholder="مثال: 0501234567 / 0559876543" dir="ltr">
         </div>
         <div class="col-md-2">
           <label class="form-label small fw-semibold">اتجاه الإقامة:</label>
@@ -5087,6 +5092,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="vz-btn pri" onclick="vzNewFile()">➕ مجموعة جديدة</button>
       <button class="vz-btn" onclick="vzHaOpen()">🏨 اتفاقيات السكن</button>
       <button class="vz-btn" onclick="vzImportOpen()">📥 استيراد مجموعات</button>
+      <button class="vz-btn vz-fin" id="vzBtnAcctPick" onclick="vzAcctPickerOpen()">🧑‍💼 حسابات الوكلاء</button>
       <button class="vz-btn vz-fin" id="vzBtnAcctCfg" onclick="vzAcctCfgOpen()">⚙️ إعدادات حسابات الوكلاء</button>
       <button class="vz-btn gold vz-fin" id="vzBtnPricing" onclick="vzOpenPricing()">💲 تسعير الوكلاء</button>
       <button class="vz-btn" id="vzBtnStats" onclick="vzOpenStats()">📊 إحصائيات الوكلاء</button>
@@ -6633,7 +6639,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.138";
+var CLIENT_APP_VERSION = "4.139";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -12795,7 +12801,7 @@ function _populateBookingIdList_() {
 function openTripForm() {
   document.getElementById('tripTargetRow').value = '';
   document.getElementById('tripFormTitle').textContent = '➕ رحلة جديدة';
-  ['tripFormName','tripFormSupervisor','tripFormDepartDate','tripFormReturnDate','tripFormAirline','tripFormBookedSeats',
+  ['tripFormName','tripFormSupervisor','tripFormSupervisorPhones','tripFormDepartDate','tripFormReturnDate','tripFormAirline','tripFormBookedSeats',
    'tripFormMadinahHotel','tripFormMadinahIn','tripFormMadinahOut','tripFormMadinahNights',
    'tripFormMakkahHotel','tripFormMakkahIn','tripFormMakkahOut','tripFormMakkahNights'].forEach(function(id){
     document.getElementById(id).value = '';
@@ -12953,6 +12959,7 @@ function editTrip(row) {
   document.getElementById('tripFormCompany').value = t.company;
   document.getElementById('tripFormAgent').value = t.agent;
   document.getElementById('tripFormSupervisor').value = t.supervisor;
+  document.getElementById('tripFormSupervisorPhones').value = t.supervisorPhones || '';
   document.getElementById('tripFormDepartDate').value = t.departDate;
   document.getElementById('tripFormReturnDate').value = t.returnDate;
   document.getElementById('tripFormAirline').value = t.airline;
@@ -13006,6 +13013,7 @@ function saveTripFromForm(btn) {
     company: document.getElementById('tripFormCompany').value,
     agent: document.getElementById('tripFormAgent').value,
     supervisor: document.getElementById('tripFormSupervisor').value.trim(),
+    supervisorPhones: document.getElementById('tripFormSupervisorPhones').value.trim(),
     departDate: document.getElementById('tripFormDepartDate').value.trim(),
     returnDate: document.getElementById('tripFormReturnDate').value.trim(),
     airline: document.getElementById('tripFormAirline').value.trim(),
@@ -34921,19 +34929,26 @@ function mfColFilter(ev, k) {
 }
 
 /* ---------- التقويم المخصص ---------- */
-var MFDP = { id: null, el: null, y: 0, m: 0, after: null };
+var MFDP = { id: null, el: null, y: 0, m: 0, after: null, vip: true };
 var MF_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 var MF_DOW = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
-function mfPickDate(id, ev, after) {
+// showVip: ملاحظة «الجمعة والسبت = مراجعة VIP تلقائية» خاصة بشاشة ملفات المراجعة فقط — افتراضياً
+// ظاهرة (توافقاً مع كل نداءات تلك الشاشة القديمة)، وتُمرَّر false صراحةً من أي شاشة أخرى (مثل
+// التأشيرات والوكلاء واتفاقيات السكن) حتى لا تظهر ملاحظة لا علاقة لها بها.
+function mfPickDate(id, ev, after, showVip) {
   if (ev && ev.stopPropagation) ev.stopPropagation();
   var el = document.getElementById(id); if (!el) return;
   MFDP.id = id; MFDP.el = el; MFDP.after = after || null;
+  MFDP.vip = (showVip === undefined) ? true : !!showVip;
   var cur = mfDate(el.value), p = cur ? cur.split('/') : null;
   if (p && p.length === 3) { MFDP.y = +p[2]; MFDP.m = +p[1] - 1; }
   else { var t = (MF.today || '').split('/'); var now = new Date();
     MFDP.y = t.length === 3 ? +t[2] : now.getFullYear(); MFDP.m = t.length === 3 ? +t[1] - 1 : now.getMonth(); }
   mfDpRender();
   var box = document.getElementById('mfDatePick');
+  // 🛡️ (V4.139) إعادة إلحاقه كآخر عنصر في body عند كل فتح — يحسم أي تراكب/تغطية من نوافذ أخرى
+  // مهما كان ترتيبها في DOM، بنفس أسلوب _detachModalToBody_ المُثبَت في هذا المشروع
+  document.body.appendChild(box);
   box.classList.add('show');
   var anchor = (ev && ev.currentTarget) ? ev.currentTarget : el;
   var r = anchor.getBoundingClientRect(), bw = 248, bh = box.offsetHeight || 290;
@@ -34964,11 +34979,11 @@ function mfDpRender() {
     var cls = 'dd' + ((dow === 5 || dow === 6) ? ' we' : '') + (ms === todayMs ? ' today' : '') + (ms === selMs ? ' sel' : '');
     if (dow === 5 || dow === 6) anyWe = true;
     h += '<button type="button" class="' + cls + '" onclick="mfDpPick(' + d + ')" title="' +
-      (dow === 5 ? 'جمعة — مراجعة VIP تلقائية' : (dow === 6 ? 'سبت — مراجعة VIP تلقائية' : '')) + '">' + d + '</button>';
+      (MFDP.vip && (dow === 5 || dow === 6) ? (dow === 5 ? 'جمعة — مراجعة VIP تلقائية' : 'سبت — مراجعة VIP تلقائية') : '') + '">' + d + '</button>';
   }
   h += '</div><div class="df"><button type="button" onclick="mfDpToday()">اليوم</button>' +
     '<button type="button" onclick="mfDpClear()">مسح</button><button type="button" onclick="mfDpClose()">إغلاق</button></div>';
-  if (anyWe) h += '<div class="dn">الجمعة والسبت = مراجعة VIP تلقائية</div>';
+  if (anyWe && MFDP.vip) h += '<div class="dn">الجمعة والسبت = مراجعة VIP تلقائية</div>';
   box.innerHTML = h;
 }
 function mfDpNav(k) { MFDP.m += k; if (MFDP.m < 0) { MFDP.m = 11; MFDP.y--; } if (MFDP.m > 11) { MFDP.m = 0; MFDP.y++; } mfDpRender(); }
@@ -37404,7 +37419,7 @@ function vzLoad(force) {
 function vzFin() { return !!(VZ.can && VZ.can.finance); }
 function vzApplyFinanceUI() {
   var on = vzFin();
-  ['vzBtnPricing', 'vzBtnAcctCfg'].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; });
+  ['vzBtnPricing', 'vzBtnAcctCfg', 'vzBtnAcctPick'].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; });
   var strip = document.getElementById('vzAgentStrip'); if (strip && !on) strip.innerHTML = '';
 }
 // سعر تأشيرة الوكيل الساري في تاريخ (نفس منطق السيرفر) — لأحدث فترة تحتوي التاريخ
@@ -37581,10 +37596,11 @@ function vzClearFilters() {
   vzRender();
 }
 /* 📅 (V4.134) كل تقاويم شاشة التأشيرات وشاشاتها الفرعية تستخدم منتقي التاريخ نفسه
-   المستخدَم بشاشة ملفات المراجعة (#mfDatePick) — تصميم واحد وسلوك واحد في البرنامج كله. */
+   المستخدَم بشاشة ملفات المراجعة (#mfDatePick) — تصميم واحد وسلوك واحد في البرنامج كله.
+   🔕 (V4.139) بلا ملاحظة «الجمعة والسبت = مراجعة VIP» — خاصة بشاشة ملفات المراجعة فقط. */
 function _vzCal_(id, after) {
   var el = document.getElementById(id); if (!el) return;
-  if (typeof mfPickDate === 'function') { mfPickDate(id, window.event, after || null); return; }
+  if (typeof mfPickDate === 'function') { mfPickDate(id, window.event, after || null, false); return; }
   el.focus();
 }
 function vzCal(id) { _vzCal_(id, function () { vzRender(); }); }
@@ -38584,6 +38600,31 @@ function _vzMiniForm(title, fields, data, onSave) {
      • مشترك  — يُضمّ لحساب «الوكيل - الشركة الرئيسية» المحدَّدة
    جدول المجموعات يظل يعرض الشركة المصرية الحقيقية لكل مجموعة في كل الأحوال.
    ============================================================ */
+/* 🧑‍💼 (V4.139) فتح مباشر لأي حساب وكيل (عام أو فرعي مع شركة) — يحل مشكلة عدم وجود طريق واضح
+   لفتح حساب وكيل لا يظهر بشريط الأرصدة (لأن رصيده صفر أو المستخدم يريد وكيلاً بعينه مباشرة). */
+function vzAcctPickerOpen() {
+  if (!vzFin()) { _showPopup('حسابات الوكلاء تتطلب صلاحية مالية خاصة', 'error'); return; }
+  var opts = (VZ.accounts || []).length ? VZ.accounts : (VZ.agents || []).map(function (a) { return { key: a, agent: a, kind: 'عام' }; });
+  if (!opts.length) { _showPopup('لا يوجد وكلاء مسجَّلون بعد', 'error'); return; }
+  var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzAcctPickOv';
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(480px,95vw);"><div class="vz-hd"><b>🧑‍💼 فتح حساب وكيل</b>' +
+    '<button class="vz-btn sm" onclick="vzAcctPickerClose()">✕</button></div><div class="p-3">' +
+    '<div class="vz-sec" style="margin-top:0;"><div class="vz-fld"><label>اختر الوكيل أو حسابه الفرعي</label>' +
+    '<select id="vzAcctPickSel">' + opts.map(function (ac) {
+      var lbl = ac.kind === 'عام' ? (ac.key + ' (كل الشركات)') : (ac.key + (ac.kind === 'مشترك' ? ' — حساب مشترك' : ' — حساب منفصل'));
+      return '<option value="' + vzEsc(ac.key) + '">' + vzEsc(lbl) + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="d-flex gap-2 mt-2"><button class="vz-btn pri" onclick="vzAcctPickerGo()">📂 فتح الحساب</button>' +
+    '<button class="vz-btn" onclick="vzAcctPickerClose()">إلغاء</button></div></div></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzAcctPickerClose(); });
+}
+function vzAcctPickerClose() { var o = document.getElementById('vzAcctPickOv'); if (o) o.remove(); }
+function vzAcctPickerGo() {
+  var sel = document.getElementById('vzAcctPickSel'); var key = sel ? sel.value : '';
+  vzAcctPickerClose();
+  if (key) vzOpenAccount(key);
+}
 function vzAcctCfgOpen() {
   if (!vzFin()) { _showPopup('ضبط حسابات الوكلاء يتطلب صلاحية مالية خاصة', 'error'); return; }
   VZ._acfg = (VZ.acctRows || []).map(function (r) { return { agent: r.agent, company: r.company, mode: r.mode || 'عام', mainCompany: r.mainCompany || '', notes: r.notes || '' }; });

@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.138";
+var APP_VERSION = "4.139";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12068,7 +12068,9 @@ var TRIPS_HEADERS_ = [
   "رقم رحلة الوصول",    // فهرس 30
   "رقم رحلة المغادرة",  // فهرس 31
   "المشرفون (JSON)",    // فهرس 32
-  "رمز مشاركة العميل"   // فهرس 33 — رابط القراءة-فقط لعميل الرحلة
+  "رمز مشاركة العميل",  // فهرس 33 — رابط القراءة-فقط لعميل الرحلة
+  // 📱 (V4.139) حقل نص حر لأرقام جوالات المشرف/المشرفين — مشرف واحد أو أكثر بأي فاصل يكتبه المستخدم
+  "أرقام جوالات المشرف"  // فهرس 34
 ];
 
 var PILGRIMS_HEADERS_ = [
@@ -12139,7 +12141,8 @@ var TRIPS_COL_ = {
   tripRef: 'الرقم المرجعي', madinahExtra: 'فنادق إضافية - المدينة (JSON)', makkahExtra: 'فنادق إضافية - مكة (JSON)',
   arrivalPort: 'منفذ الوصول', departurePort: 'منفذ المغادرة', arrivalTime: 'ساعة الوصول', departureTime: 'ساعة المغادرة',
   arrivalFlight: 'رقم رحلة الوصول', departureFlight: 'رقم رحلة المغادرة', supervisorsJson: 'المشرفون (JSON)',
-  shareToken: 'رمز مشاركة العميل'
+  shareToken: 'رمز مشاركة العميل',
+  supervisorPhones: 'أرقام جوالات المشرف'  // 📱 (V4.139)
 };
 var PILGRIMS_COL_ = {
   serial: 'مسلسل', name: 'اسم المعتمر', passport: 'رقم الجواز', type: 'النوع', client: 'العميل',
@@ -12481,6 +12484,7 @@ function getTripsList(authToken) {
       infantCount: infants,
       supervisors: supervisorsList,
       supervisorsDisplay: _supervisorsDisplay_(supervisorsList),
+      supervisorPhones: String(T(r, 'supervisorPhones') || ""),
       seatsOccupied: seatsOccupied,
       bookedSeats: bookedSeats,
       direction: String(T(r, 'direction') || ""),
@@ -12908,9 +12912,17 @@ function _accSheet_(name, headers) {
   var ss = getSpreadsheet_();
   var sh = ss.getSheetByName(name);
   if (!sh) {
-    sh = ss.insertSheet(name);
-    sh.appendRow(headers);
-    sh.setFrozenRows(1);
+    // 🛡️ (V4.139) سباق تزامني: طلبان يفتحان الشاشة في نفس اللحظة قد يريا الشيت غير موجود معاً
+    // فيحاول كلاهما إنشاءه — الثاني يفشل بخطأ "هناك ورقة موجودة من قبل" رغم أن الشيت بات موجوداً
+    // فعلاً (أنشأه الأول للتو). بدل فشل الشاشة بالكامل، نُعيد القراءة ونستخدم الشيت الذي أُنشئ.
+    try {
+      sh = ss.insertSheet(name);
+      sh.appendRow(headers);
+      sh.setFrozenRows(1);
+    } catch (e) {
+      sh = ss.getSheetByName(name);
+      if (!sh) throw e; // خطأ حقيقي غير متعلق بالتزامن
+    }
   } else if (sh.getLastColumn() < headers.length) {
     // 🧱 ترقية شيت قديم: أعمدة أُضيفت لاحقاً (الليالي/الشركة) — أعد كتابة صف العناوين كاملاً
     sh.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -15700,6 +15712,9 @@ function saveTrip(authToken, targetRow, tripData) {
   if (tripData.departureTime   !== undefined) setByName('departureTime', tripData.departureTime || "");
   if (tripData.arrivalFlight   !== undefined) setByName('arrivalFlight', tripData.arrivalFlight || "");
   if (tripData.departureFlight !== undefined) setByName('departureFlight', tripData.departureFlight || "");
+  // 📱 (V4.139) أرقام جوالات المشرف/المشرفين — حقل نص حر، يُكتب فقط لو أُرسل صراحةً (كتابة خلية واحدة
+  // مستقلة كباقي حقول خط السير أعلاه، فلا يتّسع نطاق الكتابة الضيّق لبقية الرحلة ولا يتصادم مع أي تعديل متزامن)
+  if (tripData.supervisorPhones !== undefined) setByName('supervisorPhones', tripData.supervisorPhones || "");
 
   // 👥 المشرفون: عمود المشرفون(JSON) + الدور (للتوافق) — يُكتب فقط عند إرسال بيانات مشرف
   if (tripData.supervisors !== undefined || tripData.supervisor !== undefined || tripData.supervisorRole !== undefined) {
@@ -21246,6 +21261,7 @@ function _tgReadTripsMap_() {
     map[n] = {
       name: n, company: String(T(r, 'company') || '').trim(), agent: String(T(r, 'agent') || '').trim(),
       supervisor: String(T(r, 'supervisor') || '').trim(),
+      supervisorPhones: String(T(r, 'supervisorPhones') || '').trim(),
       departDate: _tripFormatDate_(T(r, 'departDate')), returnDate: _tripFormatDate_(T(r, 'returnDate')),
       madinahHotel: String(T(r, 'madinahHotel') || '').trim(),
       madinahIn: _tripFormatDate_(T(r, 'madinahCheckIn')), madinahOut: _tripFormatDate_(T(r, 'madinahCheckOut')),
@@ -21370,6 +21386,7 @@ function _tgPilgrimDetailMsg_(person) {
   msg += '👥 <b>العميل:</b> ' + (r.client || '—') + '\n';
   msg += '🧳 <b>الرحلة:</b> ' + (r.tripName || '—') + (person.active ? '  ▶ <b>جارية الآن</b>' : '') + '\n';
   msg += '🧑‍✈️ <b>المشرف:</b> ' + (t.supervisor || '—') + '\n';
+  if (t.supervisorPhones) msg += '📱 <b>جوال المشرف:</b> ' + t.supervisorPhones + '\n';
   if (stay) {
     msg += '📍 <b>مكانه الآن — ' + stay.city + ':</b>\n' +
       '   🏨 الفندق: ' + (stay.hotel || '—') + (r.accommodation ? '  |  🛏️ ' + r.accommodation : '') +
@@ -21733,7 +21750,9 @@ function getVisaBootstrap(authToken) {
     allItems.forEach(function (it) { if (it.agent) agentsSet[it.agent] = true; });
     allPays.forEach(function (p) { if (p.agent) agentsSet[p.agent] = true; });
     // 🧑‍💼 (V4.134) الأرصدة تُحسب لكل «مفتاح حساب» (الوكيل العام + حساباته الفرعية مع الشركات)
-    var acctMap = _vzAcctMap_();
+    // ⚡ (V4.139) قراءة شيت الربط مرة واحدة فقط بدل مرتين (كانت acctMap وacctRows تقرآنه منفصلتين)
+    var acctRowsRaw = _vzAcctRead_();
+    var acctMap = _vzAcctMap_(acctRowsRaw);
     var accounts = _vzAcctKeys_(Object.keys(agentsSet), acctMap);
     var agentBalances = {};
     accounts.forEach(function (ac) {
@@ -21745,7 +21764,7 @@ function getVisaBootstrap(authToken) {
     shared = {
       files: files, prices: prices, companies: base.companies, trips: base.trips, clients: base.clients,
       agents: Object.keys(agentsSet).sort(), statuses: VZ_STATUSES_, payStatuses: VZ_PAY_STATUSES_,
-      accounts: accounts, acctRows: _vzAcctRead_().map(function (r) { var c = {}; for (var k in r) if (k !== '_row') c[k] = r[k]; return c; }),
+      accounts: accounts, acctRows: acctRowsRaw.map(function (r) { var c = {}; for (var k in r) if (k !== '_row') c[k] = r[k]; return c; }),
       acctModes: VZ_ACCT_MODES_,
       agentBalances: agentBalances, cateringByGroup: _vzCateringByGroup_(),
       housingByGroup: _vzHousingAgrByGroup_(), today: _mfToday_()
