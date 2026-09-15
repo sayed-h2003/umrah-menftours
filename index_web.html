@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.136 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.137 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.136)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.137)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.136</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.137</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -3675,7 +3675,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <div class="table-responsive bg-white rounded-3 shadow-sm p-2" style="border:1px solid #e2e8f0;">
         <table id="registryTable" class="table table-bordered table-sm align-middle text-center mb-1" style="font-size:12.5px;">
           <thead>
-            <tr>
+            <tr id="regTableHeadRow">
               <th style="width:34px;"><input type="checkbox" class="form-check-input" id="regSelectAll" onchange="_toggleRegSelectAll(this.checked)" title="اختيار الكل"></th>
               <th style="width:45px;">م</th>
               <th style="min-width:170px;">اسم المعتمر</th>
@@ -4541,10 +4541,10 @@ input[type="date"]:not(:focus):not(:valid) {
     width:1px; background:rgba(255,255,255,.28); }
   #section-ministry .mf-rsz:hover::after{ background:#ffd77a; width:2px; }
   body.mf-resizing, body.mf-resizing *{ cursor:col-resize !important; user-select:none !important; }
-  #section-ministry .mf-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
-  #section-ministry .mf-thic, .mf-dlg .mf-thic{ background:none; border:none; color:#a9c1e2; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
-  #section-ministry .mf-thic:hover, .mf-dlg .mf-thic:hover{ color:#fff; background:rgba(255,255,255,.16); }
-  #section-ministry .mf-thic.on, .mf-dlg .mf-thic.on{ color:#ffd77a; }
+  #section-ministry .mf-thin, #registryTable .mf-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
+  #section-ministry .mf-thic, .mf-dlg .mf-thic, #registryTable .mf-thic{ background:none; border:none; color:#a9c1e2; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
+  #section-ministry .mf-thic:hover, .mf-dlg .mf-thic:hover, #registryTable .mf-thic:hover{ color:#fff; background:rgba(255,255,255,.16); }
+  #section-ministry .mf-thic.on, .mf-dlg .mf-thic.on, #registryTable .mf-thic.on{ color:#ffd77a; }
   #section-ministry th.mf-fz, #section-ministry td.mf-fz{ position:sticky; z-index:8; }
   #section-ministry thead th.mf-fz{ z-index:15; }
   #section-ministry .mf-edge{ box-shadow:-7px 0 8px -7px rgba(0,0,0,.28); }
@@ -5051,10 +5051,10 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-visas table.vz-tab th{ background:linear-gradient(180deg,var(--vzG),var(--vzGD)); color:#fff; font-weight:800; padding:9px 6px; white-space:nowrap;
     position:sticky; top:0; z-index:2; border:1px solid var(--vzGD); }
   /* 🔎↕️ أيقونتا التصفية الديناميكية والترتيب برأس كل عمود — نفس أسلوب شاشة ملفات الوزارة */
-  #section-visas .vz-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
-  #section-visas .vz-thic{ background:none; border:none; color:#cdeee1; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
-  #section-visas .vz-thic:hover{ color:#fff; background:rgba(255,255,255,.18); }
-  #section-visas .vz-thic.on{ color:var(--vzGold); }
+  #section-visas .vz-thin, .vz-dlg .vz-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
+  #section-visas .vz-thic, .vz-dlg .vz-thic{ background:none; border:none; color:#cdeee1; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
+  #section-visas .vz-thic:hover, .vz-dlg .vz-thic:hover{ color:#fff; background:rgba(255,255,255,.18); }
+  #section-visas .vz-thic.on, .vz-dlg .vz-thic.on{ color:var(--vzGold); }
   #section-visas table.vz-tab td{ padding:7px 6px; border:1px solid #e0efe9; text-align:center; white-space:nowrap; color:#123; }
   #section-visas table.vz-tab tbody tr:nth-child(even){ background:#f6fcfa; }
   #section-visas table.vz-tab tbody tr:hover td{ background:var(--vzGL); }
@@ -5769,6 +5769,88 @@ function escapeHtml_(value) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/* ============================================================
+   🔧 (V4.137) محرك عام لتصفية وترتيب أي جدول من رأس أعمدته — قابل لإعادة الاستخدام
+   في أي شاشة بمعرِّف فريد لكل جدول (فلا تتعارض حالات جدولين مختلفين ببعضها).
+   يُستخدَم في: جدول المجموعات (شاشة التأشيرات)، كشف حساب الوكيل، اتفاقيات السكن،
+   والسجل العام للمعتمرين. يُعيد استخدام نافذة التصفية المشتركة #mfColFilterPop نفسها
+   المستخدَمة أصلاً بشاشة ملفات المراجعة، فلا تكرار كود ونفس السلوك في كل الشاشات.
+   ============================================================ */
+var _TBL_STATE_ = {}, _TBL_REFRESH_ = {}, _TBL_COLS_ = {};
+function _tblState_(id) {
+  if (!_TBL_STATE_[id]) _TBL_STATE_[id] = { colFilters: {}, sort: { key: null, dir: 1 } };
+  return _TBL_STATE_[id];
+}
+// يُسجَّل عند كل رسم — دالة إعادة الرسم التي تُستدعى بعد أي تغيير بالتصفية أو الترتيب
+function _tblRefresh_(id, fn) { _TBL_REFRESH_[id] = fn; }
+// يُطبِّق تصفية الأعمدة النشطة ثم الترتيب النشط على مصفوفة صفوف — rawFn(key, row) تُرجع القيمة الخام
+function _tblApply_(id, rows, cols, rawFn) {
+  var st = _tblState_(id);
+  var out = rows || [];
+  Object.keys(st.colFilters).forEach(function (k) {
+    var val = st.colFilters[k]; if (!val) return;
+    out = out.filter(function (row) {
+      var rv = rawFn(k, row);
+      return String(rv == null ? '' : rv).toLowerCase().indexOf(String(val).toLowerCase()) >= 0;
+    });
+  });
+  if (st.sort.key) {
+    var def = (cols || []).filter(function (c) { return c.k === st.sort.key; })[0];
+    var dir = st.sort.dir;
+    out = out.slice().sort(function (a, b) {
+      var av = rawFn(st.sort.key, a), bv = rawFn(st.sort.key, b);
+      if (def && def.num) return ((Number(av) || 0) - (Number(bv) || 0)) * dir;
+      if (def && def.date && typeof mfMs === 'function' && typeof mfDate === 'function') {
+        var am = mfMs(mfDate(av)), bm = mfMs(mfDate(bv));
+        if (isNaN(am) && isNaN(bm)) return 0; if (isNaN(am)) return 1; if (isNaN(bm)) return -1;
+        return (am - bm) * dir;
+      }
+      return String(av == null ? '' : av).localeCompare(String(bv == null ? '' : bv), 'ar') * dir;
+    });
+  }
+  return out;
+}
+// يبني خلايا <th> لكل الأعمدة — thClass: 'mf-thic' (شاشات كحلية) أو 'vz-thic' (شاشة التأشيرات الزمردية)
+function _tblHead_(id, cols, thClass) {
+  thClass = thClass || 'mf-thic';
+  var thinCls = thClass === 'vz-thic' ? 'vz-thin' : 'mf-thin';
+  _TBL_COLS_[id] = cols;
+  var st = _tblState_(id);
+  return (cols || []).map(function (c) {
+    if (c.nof) return '<th' + (c.style ? ' style="' + c.style + '"' : '') + '>' + escapeHtml_(c.label) + '</th>';
+    var si = st.sort.key === c.k ? (st.sort.dir > 0 ? '▲' : '▼') : '⇅';
+    return '<th' + (c.style ? ' style="' + c.style + '"' : '') + '><div class="' + thinCls + '"><span>' + escapeHtml_(c.label) + '</span>' +
+      '<button class="' + thClass + (st.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();_tblColFilter_(\'' + id + '\',event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="' + thClass + (st.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();_tblSortBy_(\'' + id + '\',\'' + c.k + '\')">' + si + '</button></div></th>';
+  }).join('');
+}
+var _tblPopId = null, _tblPopKey = null;
+function _tblColFilter_(id, ev, k) {
+  _tblPopId = id; _tblPopKey = k;
+  var col = (_TBL_COLS_[id] || []).filter(function (c) { return c.k === k; })[0];
+  var pop = document.getElementById('mfColFilterPop'); if (!pop) return;
+  var lbl = document.getElementById('mfColFilterLbl'); if (lbl) lbl.textContent = 'تصفية: ' + (col ? col.label : k);
+  var inp = document.getElementById('mfColFilterInput'); if (!inp) return;
+  var st = _tblState_(id);
+  inp.value = st.colFilters[k] || '';
+  inp.oninput = function () {
+    var v = (inp.value || '').trim();
+    if (v) st.colFilters[_tblPopKey] = v; else delete st.colFilters[_tblPopKey];
+    if (_TBL_REFRESH_[_tblPopId]) _TBL_REFRESH_[_tblPopId]();
+  };
+  var r = ev.currentTarget.getBoundingClientRect();
+  pop.style.top = (r.bottom + 6) + 'px';
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - 195, r.left - 70)) + 'px';
+  pop.classList.add('show');
+  setTimeout(function () { inp.focus(); }, 30);
+}
+function _tblSortBy_(id, k) {
+  var st = _tblState_(id);
+  if (st.sort.key === k) st.sort.dir *= -1; else { st.sort.key = k; st.sort.dir = 1; }
+  if (_TBL_REFRESH_[id]) _TBL_REFRESH_[id]();
+}
+
 
 /* 🔐 معالج موحّد لانتهاء الجلسة: خادم Apps Script يخزّن الجلسات في CacheService وهو تخزين
    "أفضل جهد" — قد يطرد الجلسة قبل مدتها الكاملة تحت الضغط، فتفشل النداءات فجأة برسالة
@@ -6551,7 +6633,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.136";
+var CLIENT_APP_VERSION = "4.137";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -9714,12 +9796,61 @@ function _setRegExpiryFilter(kind) {
   renderRegistryTable();
 }
 
+// 📅 (شائع) آخر رحلة مسجَّل عليها المعتمر (الأحدث بتاريخ الذهاب) — تُستخدَم للعرض وللترتيب/التصفية معاً
+function _regLastTrip_(r) {
+  var lastTrip = null, lastD = -1;
+  (r.trips || []).forEach(function(t) {
+    var m = String(t.depart || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    var ts = m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0;
+    if (ts >= lastD) { lastD = ts; lastTrip = t; }
+  });
+  return lastTrip;
+}
+/* 🔧 (V4.137) تعريف أعمدة السجل العام + القيمة الخام لكل عمود — للتصفية الديناميكية والترتيب من الرأس */
+var REG_TBL_COLS_ = [
+  { k: 'idx', label: 'م', nof: true, style: 'width:45px;' },
+  { k: 'name', label: 'اسم المعتمر', style: 'min-width:170px;' },
+  { k: 'latinName', label: 'الاسم بالإنجليزية', style: 'min-width:150px;' },
+  { k: 'passport', label: 'رقم الجواز', style: 'min-width:110px;' },
+  { k: 'type', label: 'النوع', style: 'min-width:70px;' },
+  { k: 'birthDate', label: 'تاريخ الميلاد', date: true, style: 'min-width:95px;' },
+  { k: 'issueDate', label: 'إصدار الجواز', date: true, style: 'min-width:95px;' },
+  { k: 'expiryDate', label: 'انتهاء الجواز', date: true, style: 'min-width:95px;' },
+  { k: 'client', label: 'العميل', style: 'min-width:120px;' },
+  { k: 'trips', label: '🧳 الرحلات', style: 'min-width:200px;' },
+  { k: 'departDate', label: '📅 تاريخ السفر', date: true, style: 'min-width:100px;' },
+  { k: 'returnDate', label: '🛬 تاريخ العودة', date: true, style: 'min-width:100px;' },
+  { k: 'notes', label: 'ملاحظات', style: 'min-width:120px;' }
+];
+function _regColRaw(k, r) {
+  switch (k) {
+    case 'name': return r.name || '';
+    case 'latinName': return r.latinName || '';
+    case 'passport': return r.passport || '';
+    case 'type': return r.type || '';
+    case 'birthDate': return r.birthDate || '';
+    case 'issueDate': return r.issueDate || '';
+    case 'expiryDate': return r.expiryDate || '';
+    case 'client': return r.client || '';
+    case 'trips': return (r.trips || []).map(function (t) { return t.name; }).join(' ');
+    case 'departDate': { var lt1 = _regLastTrip_(r); return (lt1 && lt1.depart) || ''; }
+    case 'returnDate': { var lt2 = _regLastTrip_(r); return (lt2 && lt2.ret) || ''; }
+    case 'notes': return r.notes || '';
+    default: return '';
+  }
+}
 function renderRegistryTable() {
   var tbody = document.getElementById('registryTableBody');
   if (!tbody) return;
+  _tblRefresh_('regTable', renderRegistryTable);
+  var headRow = document.getElementById('regTableHeadRow');
+  if (headRow) headRow.innerHTML =
+    '<th style="width:34px;"><input type="checkbox" class="form-check-input" id="regSelectAll" onchange="_toggleRegSelectAll(this.checked)" title="اختيار الكل"></th>' +
+    _tblHead_('regTable', REG_TBL_COLS_, 'mf-thic') +
+    '<th style="width:80px;">إجراءات</th>';
   _renderRegistryActiveFilters();
   _renderRegistryExpiryAlert();
-  var allRows = _registryFilteredRows();
+  var allRows = _tblApply_('regTable', _registryFilteredRows(), REG_TBL_COLS_, _regColRaw);
   document.getElementById('regCountBadge').textContent = allRows.length;
 
   if (!allRows.length) {
@@ -9732,13 +9863,7 @@ function renderRegistryTable() {
   var html = '';
   rows.forEach(function(r, i) {
     var key = r.passport || r.name;
-    // 📅 تاريخا السفر والعودة لآخر رحلة مسجَّل عليها المعتمر (الأحدث بتاريخ الذهاب)
-    var lastTrip = null, lastD = -1;
-    (r.trips || []).forEach(function(t) {
-      var m = String(t.depart || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-      var ts = m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0;
-      if (ts >= lastD) { lastD = ts; lastTrip = t; }
-    });
+    var lastTrip = _regLastTrip_(r);
     var departs = (lastTrip && lastTrip.depart) || '—';
     var returns = (lastTrip && lastTrip.ret) || '—';
     html += '<tr onclick="_regSelectRow(this)">' +
@@ -38183,13 +38308,62 @@ function vzAccChips() {
     : '<span class="text-muted" style="font-size:11px;">لا فلاتر — الكشف كامل من أول قيد حتى آخره.</span>';
 }
 function vzAccClose() { var o = document.getElementById('vzAccOv'); if (o) o.remove(); }
+// 🔧 (V4.137) أعمدة الجداول الثلاثة داخل كشف حساب الوكيل — للتصفية الديناميكية والترتيب من الرأس
+var VZ_ACC_FILES_COLS_ = [
+  { k: 'ref', label: 'المجموعة' }, { k: 'date', label: 'تاريخ السداد', date: true },
+  { k: 'status', label: 'الحالة' }, { k: 'company', label: 'الشركة' }, { k: 'tripName', label: 'الرحلة' },
+  { k: 'clientsLabel', label: 'العملاء' }, { k: 'visaCount', label: 'العدد', num: true },
+  { k: 'price', label: 'السعر', num: true }, { k: 'due', label: 'المستحق', num: true }
+];
+function _vzAccFilesRaw(k, f) {
+  switch (k) {
+    case 'ref': return f.ref || f.seq;
+    case 'date': return f.date || '';
+    case 'status': return f.status || '';
+    case 'company': return f.company || '';
+    case 'tripName': return f.tripName || '';
+    case 'clientsLabel': return f.clientsLabel || '';
+    case 'visaCount': return mfNum(f.visaCount);
+    case 'price': return mfNum(f.price);
+    case 'due': return mfNum(f.visaCount) * mfNum(f.price);
+    default: return '';
+  }
+}
+var VZ_ACC_ITEMS_COLS_ = [
+  { k: 'desc', label: 'البيان' }, { k: 'isCredit', label: 'النوع' },
+  { k: 'value', label: 'القيمة', num: true }, { k: 'notes', label: 'ملاحظات' },
+  { k: 'act', label: '⚙', nof: true }
+];
+function _vzAccItemsRaw(k, it) {
+  switch (k) {
+    case 'desc': return it.desc || '';
+    case 'isCredit': return it.isCredit ? 'دائن' : 'مدين';
+    case 'value': return mfNum(it.value);
+    case 'notes': return it.notes || '';
+    default: return '';
+  }
+}
+var VZ_ACC_PAYS_COLS_ = [
+  { k: 'date', label: 'التاريخ', date: true }, { k: 'amount', label: 'المبلغ', num: true },
+  { k: 'notes', label: 'ملاحظات' }, { k: 'act', label: '⚙', nof: true }
+];
+function _vzAccPaysRaw(k, p) {
+  switch (k) {
+    case 'date': return p.date || '';
+    case 'amount': return mfNum(p.amount);
+    case 'notes': return p.notes || '';
+    default: return '';
+  }
+}
 function vzAccRender() {
   var r = VZ._acc, b = document.getElementById('vzAccBody'); if (!b || !r) return;
+  _tblRefresh_('vzAccFiles', vzAccRender); _tblRefresh_('vzAccItems', vzAccRender); _tblRefresh_('vzAccPays', vzAccRender);
   var bal = r.balance || {};
   var money = function (n, cur) { return vzFmt(Math.abs(n)) + ' ' + cur; };
   var netCell = function (n, cur) { return n >= 0 ? '<b style="color:#b91c1c;">' + money(n, cur) + ' مستحق له</b>' : '<b style="color:#166534;">' + money(n, cur) + ' دائن</b>'; };
   var fTotC = 0, fTotV = 0;
-  var filesRows = (r.files || []).map(function (f) {
+  var filesList = _tblApply_('vzAccFiles', r.files || [], VZ_ACC_FILES_COLS_, _vzAccFilesRaw);
+  var filesRows = filesList.map(function (f) {
     var due = mfNum(f.visaCount) * mfNum(f.price); fTotC += mfNum(f.visaCount); fTotV += due;
     return '<tr><td>' + vzL(f.ref || f.seq) + '</td><td>' + vzL(f.date) + '</td><td>' + _vzStatusBadge(f.status) + '</td>' +
       '<td>' + vzEsc(f.company || '—') + '</td><td>' + vzEsc(f.tripName || '—') + '</td>' +
@@ -38198,12 +38372,14 @@ function vzAccRender() {
   }).join('') || '<tr><td colspan="9" class="text-muted">لا مجموعات في هذا النطاق</td></tr>';
   filesRows += '<tr style="background:#075c46;color:#fff;font-weight:800;"><td colspan="6">الإجمالي</td><td>' +
     vzL(vzFmt(fTotC)) + '</td><td>—</td><td>' + vzL(vzFmt(fTotV)) + '</td></tr>';
-  var itemRows = (r.items || []).map(function (it) {
+  var itemsList = _tblApply_('vzAccItems', r.items || [], VZ_ACC_ITEMS_COLS_, _vzAccItemsRaw);
+  var itemRows = itemsList.map(function (it) {
     return '<tr><td style="text-align:right;">' + vzEsc(it.desc) + '</td><td>' + (it.isCredit ? '<span class="vz-badge g">دائن</span>' : '<span class="vz-badge r">مدين</span>') + '</td>' +
       '<td>' + vzFmt(it.value) + ' ' + (it.currency === 'EGP' ? 'جنيه' : 'ريال') + '</td>' +
       '<td>' + vzEsc(it.notes || '') + '</td><td><button class="vz-rowbtn" style="color:#dc2626;" onclick="vzAccDelItem(\'' + vzJs(it.id) + '\')">✕</button></td></tr>';
   }).join('') || '<tr><td colspan="5" class="text-muted">لا بنود يدوية</td></tr>';
-  var payRows = (r.payments || []).map(function (p) {
+  var paysList = _tblApply_('vzAccPays', r.payments || [], VZ_ACC_PAYS_COLS_, _vzAccPaysRaw);
+  var payRows = paysList.map(function (p) {
     return '<tr><td>' + vzEsc(p.date) + '</td><td><b>' + vzFmt(p.amount) + ' ' + (p.currency === 'EGP' ? 'جنيه' : 'ريال') + '</b></td>' +
       '<td>' + vzEsc(p.notes || '') + '</td><td><button class="vz-rowbtn" style="color:#dc2626;" onclick="vzAccDelPay(\'' + vzJs(p.id) + '\')">✕</button></td></tr>';
   }).join('') || '<tr><td colspan="4" class="text-muted">لا دفعات</td></tr>';
@@ -38223,12 +38399,12 @@ function vzAccRender() {
       (Math.abs(bal.netE) > 0.5 ? kpi('الصافي (جنيه)', netCell(bal.netE, 'جنيه'), '') : '') +
     '</div></div>' +
     '<div class="vz-sec"><div class="vz-sec-h">📋 مجموعات التأشيرات</div>' +
-      '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>المجموعة</th><th>تاريخ السداد</th><th>الحالة</th><th>الشركة</th><th>الرحلة</th><th>العملاء</th><th>العدد</th><th>السعر</th><th>المستحق</th></tr></thead><tbody>' + filesRows + '</tbody></table></div></div>' +
+      '<div style="overflow:auto;"><table class="vz-tab"><thead><tr>' + _tblHead_('vzAccFiles', VZ_ACC_FILES_COLS_, 'vz-thic') + '</tr></thead><tbody>' + filesRows + '</tbody></table></div></div>' +
     '<div class="row g-2">' +
       '<div class="col-md-6"><div class="vz-sec"><div class="vz-sec-h">💰 الدفعات <button class="vz-btn sm" style="margin-inline-start:auto;" onclick="vzAccAddPay()">➕ دفعة</button></div>' +
-        '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>التاريخ</th><th>المبلغ</th><th>ملاحظات</th><th>⚙</th></tr></thead><tbody>' + payRows + '</tbody></table></div></div></div>' +
+        '<div style="overflow:auto;"><table class="vz-tab"><thead><tr>' + _tblHead_('vzAccPays', VZ_ACC_PAYS_COLS_, 'vz-thic') + '</tr></thead><tbody>' + payRows + '</tbody></table></div></div></div>' +
       '<div class="col-md-6"><div class="vz-sec"><div class="vz-sec-h">🧾 بنود مدينة / دائنة <button class="vz-btn sm" style="margin-inline-start:auto;" onclick="vzAccAddItem()">➕ بند</button></div>' +
-        '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>البيان</th><th>النوع</th><th>القيمة</th><th>ملاحظات</th><th>⚙</th></tr></thead><tbody>' + itemRows + '</tbody></table></div></div></div>' +
+        '<div style="overflow:auto;"><table class="vz-tab"><thead><tr>' + _tblHead_('vzAccItems', VZ_ACC_ITEMS_COLS_, 'vz-thic') + '</tr></thead><tbody>' + itemRows + '</tbody></table></div></div></div>' +
     '</div>';
 }
 function vzAccAddPay() {
@@ -38809,12 +38985,33 @@ function _haBar(a) {
         '<div style="font-size:9px;font-weight:700;" class="vz-latin">' + vzEsc(x.from) + ' → ' + vzEsc(x.to) + '</div></div>';
     }).join('') + '</div>';
 }
+// 🔧 (V4.137) أعمدة جدول تخصيصات كل اتفاقية — للتصفية الديناميكية والترتيب من الرأس
+var VZ_HA_ALLOC_COLS_ = [
+  { k: 'groupRef', label: 'رقم المجموعة' }, { k: 'count', label: 'العدد', num: true },
+  { k: 'from', label: 'من', date: true }, { k: 'to', label: 'إلى', date: true },
+  { k: 'clientTrip', label: 'العملاء / الرحلة' }, { k: 'notes', label: 'ملاحظات' },
+  { k: 'act', label: '⚙', nof: true }
+];
+function _vzHaAllocRaw(k, x) {
+  switch (k) {
+    case 'groupRef': return x.groupRef || '';
+    case 'count': return mfNum(x.count);
+    case 'from': return x.from || '';
+    case 'to': return x.to || '';
+    case 'clientTrip': return (x.clients || []).join(' ') + ' ' + (x.tripName || '');
+    case 'notes': return x.notes || '';
+    default: return '';
+  }
+}
 function vzHaRender() {
   var box = document.getElementById('haBody'); if (!box) return;
   var list = vzHaVisible();
   if (!list.length) { box.innerHTML = '<div class="vz-sec"><div class="text-muted text-center py-3">لا توجد اتفاقيات مطابقة</div></div>'; return; }
   box.innerHTML = list.map(function (a) {
-    var allocRows = (a.allocations || []).map(function (x) {
+    var allocTblId = 'vzHaAlloc_' + a.id;
+    _tblRefresh_(allocTblId, vzHaRender);
+    var allocList = _tblApply_(allocTblId, a.allocations || [], VZ_HA_ALLOC_COLS_, _vzHaAllocRaw);
+    var allocRows = allocList.map(function (x) {
       var g = (HA.groups || []).filter(function (y) { return y.ref === x.groupRef; })[0];
       return '<tr' + (x.onDate ? ' style="background:#e7f6f1;"' : '') + '><td><b class="vz-latin">' + vzEsc(x.groupRef) + '</b>' +
           (x.onDate ? ' <span class="vz-badge g" style="font-size:8.5px;">بالداخل</span>' : '') +
@@ -38866,7 +39063,7 @@ function vzHaRender() {
       '</div>' + onBox +
       '<div style="font-size:11px;font-weight:800;color:var(--vzLbl);margin-bottom:4px;">📊 المتاح على محور الزمن (الرقم = المتاح في كل فترة)</div>' +
       _haBar(a) +
-      '<div style="overflow:auto;margin-top:8px;"><table class="vz-tab"><thead><tr><th>رقم المجموعة</th><th>العدد</th><th>من</th><th>إلى</th><th>العملاء / الرحلة</th><th>ملاحظات</th><th>⚙</th></tr></thead><tbody>' + allocRows + '</tbody></table></div>' +
+      '<div style="overflow:auto;margin-top:8px;"><table class="vz-tab"><thead><tr>' + _tblHead_(allocTblId, VZ_HA_ALLOC_COLS_, 'vz-thic') + '</tr></thead><tbody>' + allocRows + '</tbody></table></div>' +
       (a.notes ? '<div style="font-size:11px;color:#64748b;margin-top:6px;">📝 ' + vzEsc(a.notes) + '</div>' : '') +
     '</div>';
   }).join('');
