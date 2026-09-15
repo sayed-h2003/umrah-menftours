@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.140";
+var APP_VERSION = "4.141";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -7578,6 +7578,28 @@ function doPost(e) {
         return;
       }
 
+      // 📑 (V4.140) أزرار بوت اتفاقيات الإعاشة (بادئة cc:) — مدموج الآن في نفس بوت الأوامر الرئيسي
+      if (callbackData.indexOf('cc:') === 0) {
+        try {
+          _tgccHandleCallback_(cq);
+        } catch (ccErr3) {
+          sendTelegramMessageDirect(chatId, "❌ <b>حدث خطأ في بوت اتفاقيات الإعاشة:</b>\n<code>" + ccErr3.toString() + "</code>");
+        }
+        return;
+      }
+      // 📑 (V4.140) زر «اتفاقيات الإعاشة» بالقائمة الرئيسية — يبدأ نفس محادثة بوت الاتفاقيات
+      if (callbackData === 'cc_start') {
+        try {
+          var ccCfg2 = _tgccCfg_();
+          if (!ccCfg2.enabled) { sendTelegramMessageDirect(chatId, "⚠️ ميزة اتفاقيات الإعاشة غير مفعَّلة حالياً — راجع الإدارة."); return; }
+          if (!_tgccIsAllowed_(ccCfg2, chatId, { from: cq.from })) { sendTelegramMessageDirect(chatId, "⛔ غير مصرَّح لك باستخدام اتفاقيات الإعاشة من هذه المحادثة."); return; }
+          _tgccShowMainMenu_(ccCfg2.token, chatId);
+        } catch (ccErr4) {
+          sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + ccErr4.toString() + "</code>");
+        }
+        return;
+      }
+
       // 📅 (V4.109) زر «تحركات بتاريخ معيّن» — يبدأ محادثة قصيرة تنتظر التاريخ من المستخدم
       if (callbackData === 'moves_bydate') {
         try {
@@ -7594,12 +7616,14 @@ function doPost(e) {
         return;
       }
 
-      // 🔎 (V4.138) زر «بحث عن معتمر» — يبدأ محادثة قصيرة تنتظر الاسم (تقريبي) أو رقم الجواز
+      // 🔎 (V4.138/140) زر «بحث عن معتمر» — يبدأ محادثة قصيرة تنتظر الاسم (تقريبي) أو رقم الجواز،
+      // أو صورة الجواز/التأشيرة مباشرة (يُستخلص منها الاسم ورقم الجواز بالذكاء الاصطناعي ويُبحث بهما)
       if (callbackData === 'srch_start') {
         try {
           _tgSrchSetState_(chatId, cq.from.id);
           sendTelegramMessageDirect(chatId,
-            "🔎 <b>ابحث عن معتمر</b>\nاكتب <b>اسم المعتمر</b> (ولو جزءاً منه أو تقريبياً) أو <b>رقم جوازه</b>.\n\n" +
+            "🔎 <b>ابحث عن معتمر</b>\nاكتب <b>اسم المعتمر</b> (ولو جزءاً منه أو تقريبياً) أو <b>رقم جوازه</b>، " +
+            "أو أرسل مباشرة <b>صورة الجواز أو التأشيرة</b> وسأستخلص منها الاسم والجواز وأبحث عنهما فوراً.\n\n" +
             "💡 يمكنك أيضاً البحث مباشرة بصيغة: <code>بحث: اسم المعتمر</code> بلا حاجة لهذا الزر.");
         } catch (srchErr) {
           sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + srchErr.toString() + "</code>");
@@ -7673,8 +7697,23 @@ function doPost(e) {
       }
       return;
     }
-    // 🔎 (V4.138) رد على سؤال «بحث عن معتمر» بعد الضغط على الزر — محادثة قصيرة منفصلة (مفتاح srchq_)
+    // 🔎 (V4.138/140) رد على سؤال «بحث عن معتمر» بعد الضغط على الزر — محادثة قصيرة منفصلة (مفتاح srchq_)
+    // النص العادي يُبحث به مباشرة؛ وصورة/PDF (جواز أو تأشيرة) يُستخلص منها الاسم والجواز أولاً
     if (msg.from && _tgSrchGetState_(chatId, msg.from.id)) {
+      var _srchFileId = null;
+      if (msg.photo && msg.photo.length) _srchFileId = msg.photo[msg.photo.length - 1].file_id;
+      else if (msg.document) _srchFileId = msg.document.file_id;
+      if (_srchFileId) {
+        // 📸 صورة/ملف: لا نُنهي حالة الانتظار إلا بعد اكتمال الاستخلاص (فقد تصل الصورة كرسالة منفصلة)
+        try {
+          _tgRunSearchByImage_(chatId, _srchFileId);
+        } catch (srchImgErr) {
+          sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء استخلاص الصورة:</b>\n<code>" + srchImgErr.toString() + "</code>");
+        }
+        _tgSrchClearState_(chatId, msg.from.id);
+        return;
+      }
+      if (!text) return; // رسالة بلا نص ولا صورة (ملصق مثلاً) — تجاهلها وابقَ بانتظار الرد الحقيقي
       _tgSrchClearState_(chatId, msg.from.id);
       try {
         _tgRunSearch_(chatId, text);
@@ -7700,6 +7739,28 @@ function doPost(e) {
         _tgMoveClearState_(chatId, msg.from.id);
         sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + mvErr.toString() + "</code>");
       }
+      return;
+    }
+
+    // 📑 (V4.140) بوت اتفاقيات الإعاشة — مدموج الآن في نفس بوت الأوامر الرئيسي: يتولّى الرسالة لو
+    // كانت داخل محادثة اتفاقية نشطة، أو صورة/ملف PDF مرفق، أو تحوي إحدى كلمات التشغيل — بشرط ألّا
+    // تكون هناك محادثة نشطة لبوت تسجيل إشعارات الوصول لنفس المستخدم (فلا نخطف رسالته منه).
+    try {
+      var _tgbnActive = msg.from ? !!_tgbnGetState_(chatId, msg.from.id) : false;
+      if (!_tgbnActive) {
+        var ccCfg3 = _tgccCfg_();
+        if (ccCfg3.enabled && _tgccIsAllowed_(ccCfg3, chatId, msg)) {
+          var _ccActive = msg.from ? !!_tgccGetState_(chatId, msg.from.id) : false;
+          var _ccHasFile = !!((msg.photo && msg.photo.length) || msg.document);
+          var _ccTrigger = text && ccCfg3.triggers.some(function (t) { return text.indexOf(t) > -1; });
+          if (_ccActive || _ccHasFile || _ccTrigger) {
+            _tgccDispatchMessage_(msg);
+            return;
+          }
+        }
+      }
+    } catch (ccErr5) {
+      sendTelegramMessageDirect(chatId, "❌ <b>حدث خطأ في بوت اتفاقيات الإعاشة:</b>\n<code>" + ccErr5.toString() + "</code>");
       return;
     }
 
@@ -7741,6 +7802,9 @@ function sendTelegramMenu(chatId) {
         ],
         [
           { "text": "🔎 بحث عن معتمر", "callback_data": "srch_start" }
+        ],
+        [
+          { "text": "📑 اتفاقيات الإعاشة", "callback_data": "cc_start" }
         ]
       ]
     })
@@ -7826,10 +7890,12 @@ function sendTelegramBookings_Custom(type, chatId) {
 }
 
 // دالة الإرسال المباشر (معدلة بصيغة HTML)
-function sendTelegramMessageDirect(chatId, text) {
+// buttons (اختياري، V4.140): مصفوفة صفوف أزرار [[{text,callback_data}, ...], ...] — لإرفاق لوحة تفاعلية
+function sendTelegramMessageDirect(chatId, text, buttons) {
   var token = TELEGRAM_CONFIG.token;
   var url = "https://api.telegram.org/bot" + token + "/sendMessage";
   var payload = { "chat_id": chatId, "text": text, "parse_mode": "HTML" };
+  if (buttons && buttons.length) payload.reply_markup = JSON.stringify({ inline_keyboard: buttons });
   try {
     UrlFetchApp.fetch(url, { "method": "post", "contentType": "application/json", "payload": JSON.stringify(payload) });
   } catch(e) {
@@ -7853,7 +7919,9 @@ function sendTelegramMessageDirect(chatId, text) {
 function _tgccDefaults_() {
   return { enabled: false, token: '', groups: [], allowedUsers: [], triggers: ['اتفاقية','اتفاقيات','contract'], acceptEveryone: false, ocrSpaceKey: '' };
 }
-function _tgccCfg_() {
+// 📄 الإعدادات كما حُفظت فعلياً بلا أي دمج/توكن افتراضي — لواجهة الإعدادات ولإدارة البوت المنفصل
+// (توكن فارغ هنا يعني حرفياً "لا بوت منفصل مضبوط"، وهذا بالضبط ما تحتاج شاشة الإعدادات عرضه)
+function _tgccCfgRaw_() {
   var raw = null; try { raw = PropertiesService.getScriptProperties().getProperty('TGCC_CFG'); } catch (_e) {}
   var cfg = null; try { cfg = raw ? JSON.parse(raw) : null; } catch (_e2) { cfg = null; }
   var d = _tgccDefaults_();
@@ -7864,9 +7932,18 @@ function _tgccCfg_() {
   if (!Array.isArray(cfg.triggers) || !cfg.triggers.length) cfg.triggers = d.triggers;
   return cfg;
 }
+// ⚙️ الإعدادات الفعلية وقت التشغيل — تُستخدَم من كل معالجات الرسائل/الأزرار فقط
+function _tgccCfg_() {
+  var cfg = _tgccCfgRaw_();
+  // 🤖 (V4.140) دمج بوت اتفاقيات الإعاشة في بوت الأوامر الرئيسي: لو لم يُضبَط توكن منفصل لها
+  // (الوضع الافتراضي بعد الدمج)، تُستخدَم توكن البوت الرئيسي — بوت واحد للاثنين معاً. من يملك
+  // بوتاً منفصلاً فعلاً (توكن محفوظ صراحةً) يستمر بلا أي تغيير.
+  if (!cfg.token) cfg.token = TELEGRAM_CONFIG.token || '';
+  return cfg;
+}
 function getTgCateringConfig(authToken) {
   requireAuth_(authToken);
-  return { success: true, cfg: _tgccCfg_() };
+  return { success: true, cfg: _tgccCfgRaw_(), mergedToken: TELEGRAM_CONFIG.token ? true : false };
 }
 function saveTgCateringConfig(authToken, cfg) {
   var session = requireAdminPermission_(authToken);
@@ -7904,17 +7981,26 @@ function saveTgCateringConfig(authToken, cfg) {
 // 🧪 اختبار شامل لبوت الاتفاقيات — توكن، اتصال، ويب هوك، ثم رسالة اختبار لكل جروب
 function testTgCateringBot(authToken) {
   requireAdminPermission_(authToken);
-  var cfg = _tgccCfg_();
+  var cfg = _tgccCfgRaw_();
   var checks = [];
-  if (!cfg.token) { checks.push({ ok: false, label: 'توكن البوت', detail: 'لم يُضبَط بعد — أدخِله وحفظ الإعدادات' }); return { success: true, checks: checks }; }
+  // 🤖 (V4.140) لا توكن منفصل مضبوط = الوضع المدموج الطبيعي؛ لا داعي لاختبار ويب هوك مستقل هنا،
+  // فقط تحقّق من تفعيل الميزة وضبط من له حق الاستخدام — اختبار اتصال البوت نفسه يكون من قسم إعداداته.
+  if (!cfg.token) {
+    checks.push({ ok: true, label: 'الوضع المدموج', detail: 'لا يوجد توكن منفصل — تعمل اتفاقيات الإعاشة عبر بوت الأوامر الرئيسي نفسه. اختبر اتصال ذلك البوت من قسم إعداداته.' });
+    checks.push({ ok: cfg.enabled, label: 'تفعيل الميزة', detail: cfg.enabled ? 'مفعَّلة' : 'غير مفعَّلة — فعِّل المفتاح واحفظ الإعدادات' });
+    var hasAccess = !!(cfg.groups.length || cfg.allowedUsers.length || cfg.acceptEveryone);
+    checks.push({ ok: hasAccess, label: 'من له حق الاستخدام', detail: hasAccess ? 'مضبوط' : 'لم تُضِف أي جروب/مستخدم مصرَّح ولا فعّلت "قبول الجميع" — لن يستجيب البوت لأحد' });
+    return { success: true, checks: checks };
+  }
+  // من هنا فصاعداً: توكن منفصل مضبوط فعلاً — بوت مستقل تماماً، يبقى نفس الاختبار السابق كما كان
 
   // 0) ⚠️ (V4.101) نفس توكن بوت التنبيهات الرئيسي؟ — تيليجرام يسمح بويب هوك واحد فقط لكل بوت،
   // فلو كان التوكنان متطابقين سيتعارض ضبط أي منهما مع الآخر (كل ضغطة "ضبط الويب هوك" تُلغي الأخرى)
   // وهذا هو السبب الشائع لعمل بوت الاتفاقيات أحياناً وتوقفه أحياناً أخرى بلا سبب ظاهر
   if (TELEGRAM_CONFIG.token && cfg.token === TELEGRAM_CONFIG.token) {
     checks.push({ ok: false, label: '⚠️ تعارض التوكن', detail:
-      'توكن بوت الاتفاقيات هو نفس توكن بوت التنبيهات الرئيسي! تيليجرام يسمح بويب هوك واحد فقط لكل بوت — ' +
-      'كل مرة يُضبط فيها ويب هوك أحد البوتين يُلغي ويب هوك الآخر تلقائياً، فيعمل بوت الاتفاقيات حيناً ويتوقف حيناً. ' +
+      'توكن بوت الاتفاقيات هو نفس توكن بوت التنبيهات الرئيسي! لو تقصد الدمج، احذف هذا التوكن من الحقل واتركه فارغاً بدل تكراره هنا. ' +
+      'وإن كنت تقصد بوتاً منفصلاً فعلاً: تيليجرام يسمح بويب هوك واحد فقط لكل بوت — كل مرة يُضبط فيها ويب هوك أحد البوتين يُلغي ويب هوك الآخر تلقائياً. ' +
       'الحل: أنشئ بوتاً منفصلاً جديداً عبر @BotFather في تيليجرام وضع توكنه هنا (بوت الاتفاقيات) مع إبقاء البوت الأصلي لبوت التنبيهات فقط.' });
   }
 
@@ -7957,8 +8043,10 @@ function testTgCateringBot(authToken) {
 
 function setTgCateringWebhook(authToken) {
   requireAdminPermission_(authToken);
-  var cfg = _tgccCfg_();
-  if (!cfg.token) return { success: false, error: 'أدخل التوكن أولاً واحفظ الإعدادات' };
+  var cfg = _tgccCfgRaw_();
+  // 🤖 (V4.140) هذا الزر لبوت منفصل فقط — في الوضع المدموج (توكن فارغ) لا حاجة لضبط أي ويب هوك
+  // هنا إطلاقاً، وتشغيله بتوكن البوت الرئيسي كان سيسرق ويب هوكه ويعطّل بقية أزرار البوت الرئيسي.
+  if (!cfg.token) return { success: false, error: 'أنت بالوضع المدموج (لا توكن منفصل) — لا حاجة لضبط ويب هوك هنا؛ الميزة تعمل تلقائياً عبر بوت الأوامر الرئيسي. أدخل توكن بوت منفصل فقط لو تريد فصله فعلاً.' };
   var webAppUrl = '';
   try { webAppUrl = ScriptApp.getService().getUrl(); } catch (_e) {}
   if (!webAppUrl) return { success: false, error: 'رابط الـWeb App غير متاح — انشر البرنامج أولاً' };
@@ -18621,7 +18709,11 @@ function getHousingShareSuggestions(authToken) {
    ============================================================ */
 function extractPassportData(authToken, base64Image, mimeType) {
   requireAuth_(authToken);
-
+  return _extractPassportDataCore_(base64Image, mimeType);
+}
+// 🛂 (V4.140) النواة الفعلية بلا فحص جلسة — يستخدمها extractPassportData (بواسطة، عبر الواجهة)
+// وبوت تليجرام (بحث عن معتمر برفع صورة الجواز/التأشيرة) معاً، فلا تكرار لمنطق الاستخلاص.
+function _extractPassportDataCore_(base64Image, mimeType) {
   var GKEYS = _geminiKeys_();
   if (!GKEYS.length) {
     return { success: false, error: "مفتاح Gemini غير مُعدّ — أضفه من شاشة الإعدادات" };
@@ -21444,6 +21536,52 @@ function _tgRunSearch_(chatId, query) {
     "reply_markup": JSON.stringify({ "inline_keyboard": rows })
   };
   UrlFetchApp.fetch(url, { "method": "post", "contentType": "application/json", "payload": JSON.stringify(payload) });
+}
+/* 📸 (V4.140) بحث عن معتمر برفع صورة الجواز أو التأشيرة — يستخلص الاسم ورقم الجواز بالذكاء
+   الاصطناعي (نفس محرك استخلاص الجوازات المستخدَم بشاشة الرحلات) ثم يبحث بهما تلقائياً. تدعم
+   الصورة أكثر من مستند (جوازان جنباً إلى جنب) فتُجمَع نتائج البحث عن كل شخص مستخلَص معاً. */
+function _tgRunSearchByImage_(chatId, fileId) {
+  sendTelegramMessageDirect(chatId, '⏳ جاري استخلاص بيانات الجواز/التأشيرة من الصورة…');
+  var fetched = _tgccFetchFileBase64_(TELEGRAM_CONFIG.token, fileId);
+  if (!fetched) { sendTelegramMessageDirect(chatId, '❌ تعذّر تحميل الملف من تليجرام.'); return; }
+  var ext;
+  try { ext = _extractPassportDataCore_(fetched.data, fetched.mime); }
+  catch (e) { sendTelegramMessageDirect(chatId, '❌ خطأ أثناء الاستخلاص: ' + e.toString()); return; }
+  if (!ext || !ext.success || !ext.persons || !ext.persons.length) {
+    sendTelegramMessageDirect(chatId, '🚫 ' + ((ext && ext.error) || 'تعذّر استخلاص بيانات مقروءة من الصورة') + ' — جرِّب صورة أوضح، أو اكتب الاسم/الجواز مباشرة.');
+    return;
+  }
+  var found = [], namesTried = [];
+  ext.persons.forEach(function (p) {
+    var q = _mfStr_(p.passport) || _mfStr_(p.name);
+    if (!q) return;
+    namesTried.push(_mfStr_(p.name) + (p.passport ? ' (' + _mfStr_(p.passport) + ')' : ''));
+    _tgSearchPilgrim_(q).forEach(function (person) {
+      var key = person.row.passport ? ('P:' + person.row.passport) : ('N:' + person.row.name + '|' + person.row.tripName);
+      if (!found.some(function (f) { return f._key === key; })) { person._key = key; found.push(person); }
+    });
+  });
+  if (!namesTried.length) { sendTelegramMessageDirect(chatId, '🚫 لم تحتوِ الصورة على اسم أو رقم جواز مقروء.'); return; }
+  var extractedLine = '📷 <b>استُخلص من الصورة:</b> ' + namesTried.join('، ') + '\n\n';
+  if (!found.length) {
+    sendTelegramMessageDirect(chatId, extractedLine + '🚫 لم يُعثر على معتمر مطابق بهذه البيانات في السجلات.');
+    return;
+  }
+  if (found.length === 1) {
+    sendTelegramMessageDirect(chatId, extractedLine + _tgPilgrimDetailMsg_(found[0]));
+    return;
+  }
+  if (found.length > 20) {
+    sendTelegramMessageDirect(chatId, extractedLine + '⚠️ عدد النتائج كبير جداً (' + found.length + ') — استخدم البحث بالاسم أو الجواز كاملاً بدل الصورة.');
+    return;
+  }
+  var sid = _tgSrchStoreResults_(chatId, found);
+  var rows = found.map(function (p, i) {
+    var label = '👤 ' + p.row.name + (p.row.passport ? ' — 🛂 ' + p.row.passport : '') + (p.row.tripName ? ' — 🧳 ' + p.row.tripName : '');
+    if (label.length > 60) label = label.substring(0, 57) + '...';
+    return [{ text: label, callback_data: 'srch:' + sid + ':' + i }];
+  });
+  sendTelegramMessageDirect(chatId, extractedLine + '🔎 <b>تعدَّدت المطابقات (' + found.length + ') — اختر المعتمر المطلوب:</b>', rows);
 }
 
 /* ==================================================================================

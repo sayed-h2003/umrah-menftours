@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.140 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.141 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.140)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.141)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.140</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.141</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2853,11 +2853,11 @@ input[type="date"]:not(:focus):not(:valid) {
     </div>
   </div>
 
-  <!-- 📑 (V4.57) بوت اتفاقيات الإعاشة — مستقل تماماً عن بوت الإشعارات (توكن مختلف، جروبات، مستخدمون) -->
+  <!-- 📑 (V4.140) بوت اتفاقيات الإعاشة — مدموج افتراضياً في بوت الأوامر الرئيسي نفسه (توكن التنبيهات) -->
   <div class="card shadow-sm border-0 mb-2" id="svcCard-tgCcBot">
     <div class="card-header bg-white border-0 py-2 px-3" style="cursor:pointer;" onclick="toggleService('tgCcBot')">
       <div class="d-flex justify-content-between align-items-center">
-        <span class="fw-bold" style="font-size:14px;">📑 بوت اتفاقيات الإعاشة (تليجرام — مستقل)</span>
+        <span class="fw-bold" style="font-size:14px;">📑 اتفاقيات الإعاشة بالتليجرام (مدموجة ببوت الأوامر الرئيسي)</span>
         <div class="d-flex align-items-center gap-2">
           <span id="svcBadge-tgCcBot" class="badge rounded-pill bg-secondary small">...</span>
           <i id="svcIcon-tgCcBot" class="fas fa-chevron-down text-muted" style="font-size:11px;"></i>
@@ -2867,29 +2867,31 @@ input[type="date"]:not(:focus):not(:valid) {
     <div id="svcBody-tgCcBot" class="d-none border-top">
       <div class="p-3">
         <p class="text-muted small mb-2">
-          بوت مستقل تماماً عن بوت تسجيل الإشعارات — <b>توكن مختلف، جروبات مختلفة، مستخدمون مختلفون</b>.
-          يستقبل صور/PDF اتفاقيات الإعاشة، يستخلص البيانات، ثم يعرضها للاعتماد أو التخطي، ويسأل عن العميل/الرحلة ورقم المجموعة قبل الحفظ.
+          🤖 <b>افتراضياً بوت واحد للاثنين معاً</b>: اترك حقل التوكن أدناه فارغاً ليعمل عبر نفس بوت التنبيهات/الأوامر
+          الرئيسي — يظهر زر «📑 اتفاقيات الإعاشة» في قائمة <code>/menu</code>، وأي صورة أو ملف PDF يُرسَل لذلك البوت
+          يُفهَم تلقائياً كاتفاقية إعاشة ويُكمَل الاستخلاص. يستقبل صور/PDF اتفاقيات الإعاشة، يستخلص البيانات، ثم
+          يعرضها للاعتماد أو التخطي، ويسأل عن العميل/الرحلة ورقم المجموعة قبل الحفظ.
         </p>
         <div class="alert alert-warning small py-2 px-3 mb-3">
-          🧭 <b>خطوات الإعداد:</b><br>
-          1) أنشئ بوت جديد من <b>@BotFather</b> واحصل على <b>التوكن</b> — الصقه بالحقل أدناه واحفظ الإعدادات.<br>
-          2) اضغط زر «⚙️ ضبط الويب هوك» — سيربط البوت بالسكربت الحالي مع علامة تمييز خاصة به (bot=catering).<br>
-          3) أضف البوت لأي جروب مصرَّح واكتب فيه <code>/id</code> لنسخ معرّف الجروب، والصقه هنا.<br>
-          4) اضغط زر «🧪 اختبار» للتأكد أن كل شيء يعمل ورسالة الاختبار تصل الجروبات.
+          🧭 <b>خطوات الإعداد (بوت واحد مدموج — الوضع الافتراضي المطلوب):</b><br>
+          1) اترك حقل التوكن أدناه <b>فارغاً</b> — لا حاجة لبوت جديد من BotFather ولا لضبط ويب هوك منفصل.<br>
+          2) فعِّل المفتاح أدناه، وأضف الجروبات/المستخدمين المصرَّح لهم بتسجيل اتفاقيات الإعاشة، واحفظ الإعدادات.<br>
+          3) اكتب <code>/menu</code> في بوت التنبيهات نفسه — سيظهر زر «📑 اتفاقيات الإعاشة»، وأي صورة/PDF تُرسَل له تُعامَل كاتفاقية مباشرة.<br>
+          <span style="opacity:.85;">— أما لمن يفضّل بوتاً منفصلاً تماماً (توكن مختلف): أدخِل توكناً هنا صراحةً واستخدم زر «ضبط الويب هوك» كالسابق.</span>
         </div>
 
         <div class="form-check form-switch mb-3">
           <input class="form-check-input" type="checkbox" id="tgccEnabled">
-          <label class="form-check-label fw-bold small" for="tgccEnabled">تفعيل بوت الاتفاقيات</label>
+          <label class="form-check-label fw-bold small" for="tgccEnabled">تفعيل اتفاقيات الإعاشة بالتليجرام</label>
         </div>
 
         <div class="row g-2 mb-3">
           <div class="col-md-8">
-            <label class="form-label small fw-bold">🔑 توكن البوت (Bot Token من BotFather)</label>
-            <input type="text" id="tgccToken" class="form-control form-control-sm" placeholder="1234567890:AAExampleToken..." autocomplete="off" style="direction:ltr;">
+            <label class="form-label small fw-bold">🔑 توكن بوت منفصل (اختياري — اتركه فارغاً لاستخدام بوت التنبيهات الرئيسي نفسه)</label>
+            <input type="text" id="tgccToken" class="form-control form-control-sm" placeholder="اتركه فارغاً للدمج التلقائي، أو الصق توكن بوت منفصل من BotFather" autocomplete="off" style="direction:ltr;">
           </div>
           <div class="col-md-4 d-flex align-items-end">
-            <button class="btn btn-outline-primary btn-sm w-100" onclick="setTgCcWebhookRun(this)">⚙️ ضبط الويب هوك</button>
+            <button class="btn btn-outline-primary btn-sm w-100" onclick="setTgCcWebhookRun(this)" title="فقط لمن أدخل توكن بوت منفصل أعلاه">⚙️ ضبط الويب هوك (لبوت منفصل فقط)</button>
           </div>
         </div>
 
@@ -6639,7 +6641,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.140";
+var CLIENT_APP_VERSION = "4.141";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
