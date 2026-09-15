@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.134 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.135 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.134)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.135)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.134</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.135</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6546,7 +6546,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.134";
+var CLIENT_APP_VERSION = "4.135";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -38624,7 +38624,7 @@ function vzHaOpen() {
     '<button class="vz-btn sm" onclick="vzHaClose()">✕</button></span></div>' +
     '<div class="p-3">' +
       '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🔎 بحث وتصفية' +
-        '<button class="vz-btn sm pri" style="margin-inline-start:auto;" onclick="vzHaForm(null)">➕ اتفاقية جديدة</button>' +
+        (VZ.can.add ? '<button class="vz-btn sm pri" style="margin-inline-start:auto;" onclick="vzHaForm(null)">➕ اتفاقية جديدة</button>' : '<span style="margin-inline-start:auto;"></span>') +
         '<button class="vz-btn sm" onclick="vzHaLoad(true)">🔄 تحديث</button></div>' +
         '<div class="row g-2">' +
           '<div class="col-md-4 vz-fld"><label>بحث (رقم الاتفاقية / الفندق / رقم مجموعة)</label><input id="haF_q" oninput="vzHaRender()" autocomplete="off"></div>' +
@@ -38720,8 +38720,9 @@ function vzHaRender() {
         '<td style="text-align:right;font-size:10.5px;">' + vzEsc((x.clients || []).join('، ') || '—') +
           (x.tripName ? '<div style="color:#6b8c82;font-size:9.5px;">🧳 ' + vzEsc(x.tripName) + '</div>' : '') + '</td>' +
         '<td style="text-align:right;font-size:10.5px;color:#64748b;">' + vzEsc(x.notes || '') + '</td>' +
-        '<td><button class="vz-rowbtn" title="تعديل" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',\'' + vzJs(x.id) + '\')">✏️</button>' +
-        '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف" onclick="vzHaAllocDel(\'' + vzJs(x.id) + '\')">🗑️</button></td></tr>';
+        '<td>' + (VZ.can.edit ? '<button class="vz-rowbtn" title="تعديل التخصيص" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',\'' + vzJs(x.id) + '\')">✏️</button>' : '') +
+        (VZ.can.del ? '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف التخصيص" onclick="vzHaAllocDel(\'' + vzJs(x.id) + '\')">🗑️</button>' : '') +
+        (!VZ.can.edit && !VZ.can.del ? '<span class="text-muted">—</span>' : '') + '</td></tr>';
     }).join('') || '<tr><td colspan="7" class="text-muted" style="padding:10px;">لم تُخصَّص هذه الاتفاقية لأي مجموعة بعد</td></tr>';
     var full = a.minRemaining <= 0;
     var isCat = (a.kind || 'سكن') === 'إعاشة';
@@ -38745,11 +38746,12 @@ function vzHaRender() {
     return '<div class="vz-sec">' +
       '<div class="vz-sec-h">' + (a.city === 'مكة' ? '🕋' : '🕌') + ' اتفاقية ' + (isCat ? 'إعاشة' : 'سكن') + ' ' + vzEsc(a.agrNo) + ' — ' + vzEsc(a.city) +
         '<span style="margin-inline-start:auto;display:flex;gap:6px;">' +
-        '<button class="vz-btn sm" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',null)">➕ تخصيص لمجموعة</button>' +
+        (VZ.can.add ? '<button class="vz-btn sm" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',null)">➕ تخصيص لمجموعة</button>' : '') +
         (vzFin() && mfStr(a.supplier) && (VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0
           ? '<button class="vz-btn sm gold" title="ترحيل قيمة الاتفاقية دائناً لحساب الوكيل" onclick="vzHaPost(\'' + vzJs(a.id) + '\')">💳 ترحيل لحساب الوكيل</button>' : '') +
-        '<button class="vz-btn sm" onclick="vzHaForm(\'' + vzJs(a.id) + '\')">✏️ تعديل</button>' +
-        '<button class="vz-btn sm dgr" onclick="vzHaDel(\'' + vzJs(a.id) + '\')">🗑️</button></span></div>' +
+        (VZ.can.edit ? '<button class="vz-btn sm" title="تعديل بيانات الاتفاقية" onclick="vzHaForm(\'' + vzJs(a.id) + '\')">✏️ تعديل</button>' : '') +
+        (VZ.can.del ? '<button class="vz-btn sm dgr" title="حذف الاتفاقية وكل تخصيصاتها" onclick="vzHaDel(\'' + vzJs(a.id) + '\')">🗑️ حذف</button>' : '') +
+        '</span></div>' +
       '<div class="d-flex gap-2 flex-wrap mb-2">' +
         '<span class="vz-badge ' + (isCat ? 'y' : 'b') + '">' + (isCat ? '🍽️ إعاشة' : '🏨 سكن') + '</span>' +
         '<span class="vz-badge b">🏨 ' + vzEsc(a.hotel || 'بلا فندق') + '</span>' +
@@ -38768,6 +38770,8 @@ function vzHaRender() {
 }
 /* ---- نموذج الاتفاقية ---- */
 function vzHaForm(id) {
+  if (id && !VZ.can.edit) { _showPopup('لا تملك صلاحية تعديل اتفاقيات السكن', 'error'); return; }
+  if (!id && !VZ.can.add) { _showPopup('لا تملك صلاحية إضافة اتفاقيات السكن', 'error'); return; }
   var a = id ? HA.agreements.filter(function (x) { return x.id === id; })[0] : null;
   HA._draft = a ? JSON.parse(JSON.stringify(a)) : { id: '', agrNo: '', city: HA.cities[0] || 'مكة', kind: 'سكن', hotel: '', supplier: '', capacity: 0, from: HA.today, to: '', notes: '' };
   var d = HA._draft;
@@ -38808,6 +38812,7 @@ function vzHaSave() {
     .saveHousingAgreement(window.authToken, d);
 }
 function vzHaDel(id) {
+  if (!VZ.can.del) { _showPopup('لا تملك صلاحية حذف اتفاقيات السكن', 'error'); return; }
   var a = HA.agreements.filter(function (x) { return x.id === id; })[0]; if (!a) return;
   showElegantConfirm({ icon: '🗑️', title: 'حذف الاتفاقية', message: 'حذف اتفاقية ' + (a.agrNo || '') + ' وكل تخصيصاتها للمجموعات؟',
     buttons: [{ label: 'حذف', class: 'btn-danger', onClick: function () {
@@ -38817,6 +38822,8 @@ function vzHaDel(id) {
 }
 /* ---- تخصيص اتفاقية لمجموعة (بحث تنبّئي في أرقام المجموعات) ---- */
 function vzHaAllocForm(agrId, allocId) {
+  if (allocId && !VZ.can.edit) { _showPopup('لا تملك صلاحية تعديل التخصيصات', 'error'); return; }
+  if (!allocId && !VZ.can.add) { _showPopup('لا تملك صلاحية إضافة تخصيصات', 'error'); return; }
   var a = HA.agreements.filter(function (x) { return x.id === agrId; })[0]; if (!a) return;
   var x = allocId ? (a.allocations || []).filter(function (y) { return y.id === allocId; })[0] : null;
   HA._alloc = x ? JSON.parse(JSON.stringify(x)) : { id: '', agrId: agrId, groupRef: '', count: 0, from: a.from, to: a.to, notes: '' };
@@ -38872,6 +38879,7 @@ function vzHaAllocSave() {
     .saveHousingAllocation(window.authToken, d);
 }
 function vzHaAllocDel(id) {
+  if (!VZ.can.del) { _showPopup('لا تملك صلاحية حذف التخصيصات', 'error'); return; }
   showElegantConfirm({ icon: '🗑️', title: 'حذف التخصيص', message: 'حذف تخصيص هذه المجموعة من الاتفاقية؟',
     buttons: [{ label: 'حذف', class: 'btn-danger', onClick: function () {
       google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; } _showPopup('تم الحذف', 'success'); vzHaLoad(true); })
