@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.150 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.151 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.150)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.151)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.150</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.151</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5858,6 +5858,9 @@ function _tblHead_(id, cols, thClass) {
   _TBL_COLS_[id] = cols;
   var st = _tblState_(id);
   return (cols || []).map(function (c) {
+    // ☑️ (V4.151) عمود تحديد يحمل خيار "تحديد الكل" — يمرَّره المستدعي عبر c.selAll {checked, onchange}
+    if (c.selAll) return '<th' + (c.style ? ' style="' + c.style + '"' : '') + '><input type="checkbox" ' +
+      (c.selAll.checked ? 'checked' : '') + ' onchange="' + c.selAll.onchange + '" title="تحديد الكل/إلغاء الكل"></th>';
     if (c.nof) return '<th' + (c.style ? ' style="' + c.style + '"' : '') + '>' + escapeHtml_(c.label) + '</th>';
     var si = st.sort.key === c.k ? (st.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + (c.style ? ' style="' + c.style + '"' : '') + '><div class="' + thinCls + '"><span>' + escapeHtml_(c.label) + '</span>' +
@@ -6673,7 +6676,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.150";
+var CLIENT_APP_VERSION = "4.151";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -37584,6 +37587,11 @@ var VZ_COL_DEFS_ = [
 // القيمة الخام لعمود بعينه من قيد تأشيرات — تُستخدَم للتصفية الديناميكية والترتيب معاً
 // 🗑️ (V4.150) تحديد/حذف جماعي لصفوف جدول المجموعات
 function vzFileSelToggle(id, on) { VZ._filesSel[id] = on; vzRenderSelBar_(); }
+// ☑️ (V4.151) تحديد/إلغاء تحديد كل المجموعات الظاهرة حالياً (بعد أي تصفية) دفعة واحدة
+function vzFileSelToggleAll(on) {
+  vzVisible().forEach(function (f) { VZ._filesSel[f.id] = on; });
+  vzRender();
+}
 function vzRenderSelBar_() {
   var box = document.getElementById('vzFilesSelBar'); if (!box) return;
   var ids = Object.keys(VZ._filesSel).filter(function (k) { return VZ._filesSel[k]; });
@@ -37880,6 +37888,12 @@ function vzRender() {
   var headCells = cols.map(function (c) {
     var w = colW[c.k] || c.w;
     var wStyle = w ? (' style="width:' + w + 'px;min-width:' + w + 'px;max-width:' + w + 'px;"') : '';
+    // ☑️ (V4.151) تحديد الكل/إلغاء الكل — مربوطة بنفس المجموعات الظاهرة حالياً بعد أي تصفية
+    if (c.k === 'sel') {
+      var allSel = list.length > 0 && list.every(function (f) { return VZ._filesSel[f.id]; });
+      return '<th' + wStyle + '><input type="checkbox" ' + (allSel ? 'checked' : '') +
+        ' onchange="vzFileSelToggleAll(this.checked)" title="تحديد الكل/إلغاء الكل"></th>';
+    }
     if (c.nof) return '<th' + wStyle + '>' + vzEsc(c.label) + '</th>';
     var si = VZ.sort.key === c.k ? (VZ.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + wStyle + '><div class="vz-thin"><span>' + vzEsc(c.label) + '</span>' +
@@ -38872,11 +38886,16 @@ function vzAccRender() {
   };
   var allRows = vzAccBuildRows_();
   var cols = VZ_ACC_LEDGER_COLS_.filter(function (c) { return vzAccColsOn_(c.k); });
-  var thead = _tblHead_('vzAccLedger', cols, 'vz-thic');
   var rows = _tblApply_('vzAccLedger', allRows, VZ_ACC_LEDGER_COLS_, _vzAccLedgerRaw_);
-  // 🗑️ (V4.149) تحديد صفوف متعددة (بند/دفعة/مجموعة فقط — لا يشمل دورات النقل) للحذف الجماعي
+  // 🗑️ (V4.149) تحديد صفوف متعددة (بند/دفعة فقط — لا يشمل مجموعات أو دورات نقل) للحذف الجماعي
   if (!VZ._accSel) VZ._accSel = {};
   var selKey = function (x) { return x.kind + ':' + x.id; };
+  // ☑️ (V4.151) تحديد الكل/إلغاء الكل — يشمل فقط الصفوف القابلة للحذف (بنود/دفعات) الظاهرة حالياً
+  var deletableRows = rows.filter(function (x) { return x.kind === 'item' || x.kind === 'pay'; });
+  var allAccSel = deletableRows.length > 0 && deletableRows.every(function (x) { return VZ._accSel[selKey(x)]; });
+  var selColDef = cols.filter(function (c) { return c.k === 'sel'; })[0];
+  if (selColDef) selColDef.selAll = { checked: allAccSel, onchange: 'vzAccSelToggleAll(this.checked)' };
+  var thead = _tblHead_('vzAccLedger', cols, 'vz-thic');
   var totCount = 0, totBus = 0, totDebit = 0, totCredit = 0;
   var editBtns = function (x) {
     var h = '<button class="vz-rowbtn" title="تعديل" onclick="vzAccEditRow(\'' + x.kind + '\',\'' + vzJs(x.id) + '\')">✏️</button>' +
@@ -38969,6 +38988,14 @@ function vzAccEntryNoEdit(kind, id, val) {
     [fn](window.authToken, id, val);
 }
 function vzAccSelToggle(key, on) { if (!VZ._accSel) VZ._accSel = {}; VZ._accSel[key] = on; vzAccRender(); }
+// ☑️ (V4.151) تحديد/إلغاء تحديد كل البنود/الدفعات الظاهرة حالياً (بعد أي تصفية) دفعة واحدة
+function vzAccSelToggleAll(on) {
+  if (!VZ._accSel) VZ._accSel = {};
+  var allRows = vzAccBuildRows_();
+  var rows = _tblApply_('vzAccLedger', allRows, VZ_ACC_LEDGER_COLS_, _vzAccLedgerRaw_);
+  rows.forEach(function (x) { if (x.kind === 'item' || x.kind === 'pay') VZ._accSel[x.kind + ':' + x.id] = on; });
+  vzAccRender();
+}
 // 🗑️ (V4.149) حذف جماعي للبنود/الدفعات المحدَّدة دفعة واحدة (لا يشمل مجموعات أو دورات نقل)
 function vzAccDelSelected() {
   var keys = Object.keys(VZ._accSel || {}).filter(function (k) { return VZ._accSel[k]; });
@@ -39513,6 +39540,7 @@ function vzAcctCfgSave() {
    ============================================================ */
 var VZ_IMP_COLS_ = [
   ['ref', 'رقم المجموعة', ['رقم المجموعة', 'المجموعة', 'رقم مجموعة', 'group']],
+  ['entryNo', 'القيد', ['رقم القيد', 'القيد', 'entry']],
   ['date', 'تاريخ السداد', ['التاريخ', 'تاريخ السداد', 'date']],
   ['status', 'الحالة', ['الحالة', 'حالة', 'status']],
   ['company', 'الشركة المصرية', ['الشركة المصرية', 'الشركة', 'company']],

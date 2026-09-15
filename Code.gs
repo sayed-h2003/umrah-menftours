@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.150";
+var APP_VERSION = "4.151";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22131,7 +22131,7 @@ function importVisaFilesBatch(authToken, rows) {
         madinahIn: _mfDate_(r.madinahIn), madinahOut: _mfDate_(r.madinahOut),
         makkahHousingAgr: _mfStr_(r.makkahHousingAgr), madinahHousingAgr: _mfStr_(r.madinahHousingAgr),
         makkahCateringAgr: _mfStr_(r.makkahCateringAgr), madinahCateringAgr: _mfStr_(r.madinahCateringAgr),
-        housing: Array.isArray(r.housing) ? r.housing : []
+        housing: Array.isArray(r.housing) ? r.housing : [], entryNo: _mfStr_(r.entryNo)
       };
       f.housing = _vzHousingNormalize_(f);
       out.push(_vzObjToRow_(f));
