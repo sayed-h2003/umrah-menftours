@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.141";
+var APP_VERSION = "4.142";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -11268,13 +11268,15 @@ function saveTransportRowEdit(authToken, data) {
     String(data.notes || '').trim(), session.username || '', now];
   if (ovr[id]) sh.getRange(ovr[id]._row, 1, 1, TA_OVR_HEADERS.length).setValues([row]);
   else sh.appendRow(row);
-  // 2) السعر وقيمة التشغيلة: يُكتبان في الإشعار نفسه
+  // 2) السعر: يُكتب بالإشعار، وقيمة التشغيلة تُعاد حسابها تلقائياً = عدد الباصات × سعر الباص —
+  // لا تُقبل قيمة تشغيلة مُدخَلة يدوياً مستقلة عن السعر بعد اليوم (طلب صريح، تفادياً لعدم الاتساق)
   var priceChanged = '';
   try {
     var bsh = getSpreadsheet_().getSheetByName('Bookings');
     if (bsh && bsh.getLastRow() > 1) {
       var map = _robustColMap_(bsh, BOOKINGS_HEADERS_);
-      var iId = map[BOOKINGS_COL_.id], iPrice = map[BOOKINGS_COL_.busPrice], iVal = map[BOOKINGS_COL_.operationValue];
+      var iId = map[BOOKINGS_COL_.id], iPrice = map[BOOKINGS_COL_.busPrice],
+          iVal = map[BOOKINGS_COL_.operationValue], iCount = map[BOOKINGS_COL_.busCount];
       if (iId !== undefined) {
         var ids = bsh.getRange(2, iId + 1, bsh.getLastRow() - 1, 1).getValues();
         for (var i = 0; i < ids.length; i++) {
@@ -11282,11 +11284,13 @@ function saveTransportRowEdit(authToken, data) {
           var r0 = i + 2;
           if (data.busPrice !== undefined && data.busPrice !== null && data.busPrice !== '' && iPrice !== undefined) {
             var oldP = bsh.getRange(r0, iPrice + 1).getValue();
-            bsh.getRange(r0, iPrice + 1).setValue(_accNum_(data.busPrice));
-            priceChanged = String(oldP) + ' ← ' + _accNum_(data.busPrice);
-          }
-          if (data.operationValue !== undefined && data.operationValue !== null && data.operationValue !== '' && iVal !== undefined) {
-            bsh.getRange(r0, iVal + 1).setValue(_accNum_(data.operationValue));
+            var newPrice = _accNum_(data.busPrice);
+            bsh.getRange(r0, iPrice + 1).setValue(newPrice);
+            priceChanged = String(oldP) + ' ← ' + newPrice;
+            if (iVal !== undefined && iCount !== undefined) {
+              var busCountNow = _accNum_(bsh.getRange(r0, iCount + 1).getValue());
+              bsh.getRange(r0, iVal + 1).setValue(busCountNow * newPrice);
+            }
           }
           break;
         }
@@ -21955,6 +21959,33 @@ function _vzFinancePerm_(authToken) {
   throw new Error('لا تملك صلاحية الجانب المالي في متابعة التأشيرات والوكلاء');
 }
 
+// 📜 (V4.142) أسماء حقول مجموعة التأشيرات للسجل — تُستخدَم للمقارنة حقلاً بحقل عند كل تعديل
+var VZ_FIELD_LABELS_ = {
+  ref: 'رقم المجموعة', status: 'الحالة', date: 'تاريخ السداد', company: 'الشركة المصرية',
+  agent: 'الوكيل السعودي', tripName: 'الرحلة المرتبطة', visaCount: 'العدد', price: 'سعر الفرد',
+  notes: 'ملاحظات', payStatus: 'حالة السداد',
+  breakdown: 'بنود العملاء', selected: 'المعتمرون المختارون', housing: 'السكن والاتفاقيات'
+};
+function getVisaFileHistory(authToken, id) {
+  _vzPerm_(authToken, 'view');
+  var sh = ensureAuditLogSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return { success: true, entries: [] };
+  var vals = sh.getRange(2, 1, last - 1, 7).getValues();
+  var key = 'VZ:' + _mfStr_(id);
+  var tz = Session.getScriptTimeZone() || 'Asia/Riyadh';
+  var out = [];
+  for (var i = vals.length - 1; i >= 0; i--) {
+    if (_mfStr_(vals[i][3]) !== key) continue;
+    var ts = vals[i][0];
+    out.push({
+      when: (ts instanceof Date) ? Utilities.formatDate(ts, tz, 'dd/MM/yyyy HH:mm:ss') : _mfStr_(ts),
+      who: _mfStr_(vals[i][1]), action: _mfStr_(vals[i][2]),
+      field: _mfStr_(vals[i][4]), oldVal: _mfStr_(vals[i][5]), newVal: _mfStr_(vals[i][6])
+    });
+  }
+  return { success: true, entries: out };
+}
 function saveVisaFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
@@ -21998,8 +22029,24 @@ function saveVisaFile(authToken, data) {
     // 🔗 (V4.134) ربط ثنائي الاتجاه: أرقام اتفاقيات السكن المكتوبة بالمجموعة تُسجَّل تخصيصاً
     // في شاشة اتفاقيات السكن تلقائياً (والعكس مُنفَّذ في saveHousingAllocation)
     try { _vzSyncGroupHousingAllocs_(f, session.username); } catch (eSync) {}
-    logChange_(session.username, isNew ? 'إضافة قيد تأشيرات' : 'تعديل قيد تأشيرات',
-      f.agent || '-', 'قيد ' + (f.ref || f.seq), old ? (old.visaCount + '×' + old.price) : '-', f.visaCount + '×' + f.price);
+    // 📜 (V4.142) سجل تعديلات حقيقي لكل مجموعة على حدة (recordId = 'VZ:'+id وليس اسم الوكيل —
+    // كان يخلط سجلات كل مجموعات الوكيل معاً فلا يمكن تتبع مجموعة بعينها) بفرق حقل بحقل كملفات الوزارة
+    var recId = 'VZ:' + f.id;
+    if (isNew) {
+      logChange_(session.username, 'إضافة مجموعة تأشيرات', recId, '-', '-',
+        (f.ref ? 'مجموعة ' + f.ref : 'مسلسل ' + f.seq) + ' — ' + (f.agent || '') + ' — ' + f.visaCount + '×' + f.price);
+    } else {
+      var entries = [];
+      Object.keys(VZ_FIELD_LABELS_).forEach(function (k) {
+        var a = old[k], b = f[k];
+        if (k === 'breakdown' || k === 'selected' || k === 'housing') { a = JSON.stringify(a || []); b = JSON.stringify(b || []); }
+        if (String(a == null ? '' : a) === String(b == null ? '' : b)) return;
+        entries.push({ action: 'تعديل مجموعة تأشيرات', recordId: recId, field: VZ_FIELD_LABELS_[k],
+          oldVal: String(a == null || a === '' ? '-' : a).slice(0, 300),
+          newVal: String(b == null || b === '' ? '-' : b).slice(0, 300) });
+      });
+      if (entries.length) logChangesBatch_(session.username, entries);
+    }
     _vzClearCache_();
     f.dueSAR = f.visaCount * f.price;
     return { success: true, file: f };

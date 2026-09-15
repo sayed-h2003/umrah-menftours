@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.141 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.142 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.141)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.142)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.141</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.142</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5065,6 +5065,18 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-visas table.vz-tab td{ padding:7px 6px; border:1px solid #e0efe9; text-align:center; white-space:nowrap; color:#123; }
   #section-visas table.vz-tab tbody tr:nth-child(even){ background:#f6fcfa; }
   #section-visas table.vz-tab tbody tr:hover td{ background:var(--vzGL); }
+  /* 🖱️ (V4.142) تمييز صف المجموعة المحدَّدة — نفس أسلوب شاشة ملفات المراجعة */
+  #section-visas table.vz-tab tbody tr.vz-row{ cursor:pointer; }
+  #section-visas table.vz-tab tbody tr.vz-sel td{ background:var(--vzGL) !important; box-shadow:inset 0 0 0 2px var(--vzG); }
+  /* ===== شريط إجراءات المجموعة المحدَّدة ===== */
+  #section-visas .vz-actbar{ display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    background:linear-gradient(135deg,var(--vzG),var(--vzGD)); color:#fff; border-radius:11px; padding:7px 11px;
+    box-shadow:0 6px 18px rgba(7,92,70,.18); margin-bottom:8px; }
+  #section-visas .vz-actbar .id{ font-size:11.5px; font-weight:800; display:flex; align-items:center; gap:7px; }
+  #section-visas .vz-actbar .id small{ color:#cdeee1; font-weight:600; }
+  #section-visas .vz-actbar .vz-btn{ background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.24); color:#fff; }
+  #section-visas .vz-actbar .vz-btn:hover{ background:rgba(255,255,255,.27); color:#fff; border-color:rgba(255,255,255,.42); }
+  #section-visas .vz-actbar .vz-btn.dgr{ background:rgba(220,38,38,.32); border-color:rgba(220,38,38,.55); color:#ffdada; }
   .vz-dlg table.vz-tab{ width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
   .vz-dlg table.vz-tab th{ background:var(--vzGD); color:#fff; padding:7px 6px; border:1px solid var(--vzGD); }
   .vz-dlg table.vz-tab td{ padding:6px; border:1px solid #e0efe9; text-align:center; }
@@ -5121,6 +5133,9 @@ input[type="date"]:not(:focus):not(:valid) {
     </div>
     <div id="vzChips" class="d-flex align-items-center gap-2 flex-wrap mt-2"></div>
   </div>
+
+  <!-- 🖱️ (V4.142) شريط إجراءات المجموعة المحدَّدة — يظهر عند تحديد صف بالضغط عليه أو بالأسهم -->
+  <div id="vzActBarBox"></div>
 
   <div class="vz-bar" style="padding:0; overflow:auto;">
     <div id="vzTableWrap"><div class="text-muted text-center py-4">⏳ جاري التحميل…</div></div>
@@ -6641,7 +6656,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.141";
+var CLIENT_APP_VERSION = "4.142";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -20704,16 +20719,18 @@ function taEditRow(bookingId) {
       '<b style="font-size:15px;">✏️ تعديل صف كشف النقل — تشغيلة ' + esc(r.operationNo || r.id) + '</b>' +
       '<button class="btn btn-sm btn-light py-0" id="taEdX">✕</button></div>' +
     '<div class="p-3">' +
-      '<div class="alert alert-warning py-2" style="font-size:11.5px;">اسم المورد والبيان يُحفظان لهذه الشاشة فقط ولا يؤثّران على بيانات الإشعار. أما <b>سعر الباص وقيمة التشغيلة</b> فيُحدَّثان في الإشعار نفسه.</div>' +
+      '<div class="alert alert-warning py-2" style="font-size:11.5px;">اسم المورد والبيان يُحفظان لهذه الشاشة فقط ولا يؤثّران على بيانات الإشعار. أما <b>سعر الباص</b> فيُكتب بالإشعار، و<b>قيمة التشغيلة تُحسَب تلقائياً</b> = عدد الباصات × سعر الباص ولا تُعدَّل يدوياً.</div>' +
       '<div class="mb-2"><label class="form-label fw-bold small mb-1">اسم المورد</label>' +
         '<input id="taEdSupplier" class="form-control form-control-sm" value="' + esc(r.supplier || '') + '"></div>' +
       '<div class="mb-2"><label class="form-label fw-bold small mb-1">البيان</label>' +
         '<textarea id="taEdDesc" class="form-control form-control-sm" rows="2">' + esc(r.desc || '') + '</textarea></div>' +
       '<div class="row g-2 mb-2">' +
-        '<div class="col-6"><label class="form-label fw-bold small mb-1">سعر الباص <span class="text-danger">(يُكتب بالإشعار)</span></label>' +
-          '<input id="taEdPrice" class="form-control form-control-sm" value="' + esc(r.busPrice || 0) + '"></div>' +
-        '<div class="col-6"><label class="form-label fw-bold small mb-1">قيمة التشغيلة <span class="text-danger">(يُكتب بالإشعار)</span></label>' +
-          '<input id="taEdValue" class="form-control form-control-sm" value="' + esc(r.operationValue || 0) + '"></div>' +
+        '<div class="col-4"><label class="form-label fw-bold small mb-1">عدد الباصات</label>' +
+          '<input id="taEdCount" class="form-control form-control-sm" value="' + esc(r.busCount || 0) + '" disabled></div>' +
+        '<div class="col-4"><label class="form-label fw-bold small mb-1">سعر الباص <span class="text-danger">(يُكتب بالإشعار)</span></label>' +
+          '<input id="taEdPrice" class="form-control form-control-sm" value="' + esc(r.busPrice || 0) + '" oninput="_taEdRecalc_()"></div>' +
+        '<div class="col-4"><label class="form-label fw-bold small mb-1">قيمة التشغيلة <span class="text-muted">(تلقائي)</span></label>' +
+          '<input id="taEdValue" class="form-control form-control-sm bg-light" value="' + esc(r.operationValue || 0) + '" disabled></div>' +
       '</div>' +
       '<div class="mb-2"><label class="form-label fw-bold small mb-1">ملاحظات التعديل</label>' +
         '<input id="taEdNotes" class="form-control form-control-sm" value="' + esc(r.editNotes || '') + '"></div>' +
@@ -20726,6 +20743,7 @@ function taEditRow(bookingId) {
   ov.querySelector('#taEdX').onclick = close;
   ov.querySelector('#taEdCancel').onclick = close;
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) close(); });
+  window._taEdCount = parseFloat(r.busCount) || 0;
   var reset = ov.querySelector('#taEdReset');
   if (reset) reset.onclick = function () {
     google.script.run
@@ -20747,10 +20765,17 @@ function taEditRow(bookingId) {
         supplier: (document.getElementById('taEdSupplier') || {}).value || '',
         desc: (document.getElementById('taEdDesc') || {}).value || '',
         busPrice: (document.getElementById('taEdPrice') || {}).value,
-        operationValue: (document.getElementById('taEdValue') || {}).value,
         notes: (document.getElementById('taEdNotes') || {}).value || ''
       });
   };
+}
+// ✏️ (V4.142) قيمة التشغيلة = عدد الباصات (ثابت) × سعر الباص — تُحدَّث لحظياً بالعرض فقط؛
+// القيمة الفعلية المحفوظة تُحسَب من الخادم بنفس الصيغة عند الحفظ فلا تتعدَّل يدوياً أبداً
+function _taEdRecalc_() {
+  var priceEl = document.getElementById('taEdPrice'), valEl = document.getElementById('taEdValue');
+  if (!priceEl || !valEl) return;
+  var price = parseFloat(priceEl.value) || 0;
+  valEl.value = (window._taEdCount * price).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 // ==============================
@@ -37392,7 +37417,7 @@ function mfExportImage(btn) {
 var VZ = { files: [], prices: [], companies: [], trips: [], clients: [], agents: [], statuses: [],
   agentBalances: {}, today: '', can: {}, loaded: false, _draft: null, _pick: null, _pickLoading: false,
   // 🔎↕️ تصفية ديناميكية لحظية من رأس كل عمود + ترتيب تصاعدي/تنازلي بالعمود
-  colFilters: {}, sort: { key: 'seq', dir: -1 } };
+  colFilters: {}, sort: { key: 'seq', dir: -1 }, selId: null };
 function vzEsc(v) { return escapeHtml_(String(v == null ? '' : v)); }
 function vzJs(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 function vzFmt(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
@@ -37487,7 +37512,6 @@ function vzMatch(f) {
 /* 🧱 (V4.136) تعريف أعمدة جدول المجموعات — يُستخدَم لبناء الرأس (تصفية + ترتيب) ولقراءة
    القيمة الخام لكل عمود عند التصفية الديناميكية أو الترتيب. */
 var VZ_COL_DEFS_ = [
-  { k: 'act', label: '⚙', nof: true },
   { k: 'seq', label: 'م', num: true },
   { k: 'ref', label: 'رقم المجموعة' },
   { k: 'status', label: 'الحالة' },
@@ -37663,9 +37687,7 @@ function vzRender() {
     var clientTrip = (f.tripName ? '🧳 ' + vzEsc(f.tripName) + (clients ? '<br>' : '') : '') + (clients ? '👤 ' + vzEsc(clients) : '');
     var mkAuto = _vzAutoCatering(f, 'makkah'), mdAuto = _vzAutoCatering(f, 'madinah');
     var mkH = _vzAutoHousing(f, 'makkah'), mdH = _vzAutoHousing(f, 'madinah');
-    return '<tr>' +
-      '<td>' + (VZ.can.edit ? '<button class="vz-rowbtn" title="تعديل" onclick="vzEditFile(\'' + vzJs(f.id) + '\')">✏️</button>' : '') +
-        (VZ.can.del ? '<button class="vz-rowbtn" title="حذف" style="color:#dc2626;" onclick="vzDeleteFile(\'' + vzJs(f.id) + '\')">🗑️</button>' : '') + '</td>' +
+    return '<tr class="vz-row' + (VZ.selId === f.id ? ' vz-sel' : '') + '" data-id="' + vzJs(f.id) + '" onclick="vzSelect(\'' + vzJs(f.id) + '\')">' +
       '<td>' + vzL(f.seq) + '</td><td>' + (f.ref ? vzL(f.ref) : '—') + '</td>' +
       '<td>' + _vzStatusBadge(f.status) + '</td><td>' + vzL(f.date || '—') + '</td>' +
       '<td>' + vzEsc(f.company || '—') + '</td>' +
@@ -37693,11 +37715,156 @@ function vzRender() {
   }).join('');
   wrap.innerHTML = '<table class="vz-tab"><thead><tr>' +
     headCells + '</tr></thead><tbody>' + body +
-    '<tr style="background:#075c46;color:#fff;font-weight:800;"><td colspan="7">الإجمالي (' + list.length + ' مجموعة)</td>' +
+    '<tr style="background:#075c46;color:#fff;font-weight:800;"><td colspan="6">الإجمالي (' + list.length + ' مجموعة)</td>' +
     '<td>' + vzL(vzFmt(totCount)) + '</td><td colspan="5">—</td>' +
     (FIN ? '<td>' + vzL(vzFmt(totDue)) + '</td>' : '') + '<td>—</td></tr>' +
     '</tbody></table>';
 }
+/* ============================================================
+   🖱️ (V4.142) تحديد صف المجموعة + شريط إجراءات + تنقّل بالأسهم — نفس أسلوب شاشة ملفات المراجعة
+   ============================================================ */
+function vzSelect(id) {
+  VZ.selId = id;
+  document.querySelectorAll('#section-visas tr.vz-row').forEach(function (t) { t.classList.remove('vz-sel'); });
+  var tr = document.querySelector('#section-visas tr.vz-row[data-id="' + id + '"]');
+  if (tr) tr.classList.add('vz-sel');
+  vzRenderActBar();
+}
+function vzRenderActBar() {
+  var box = document.getElementById('vzActBarBox'); if (!box) return;
+  var f = VZ.selId ? vzGet(VZ.selId) : null;
+  if (!f) { box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="vz-actbar">' +
+    '<span class="id">🛂 ' + (f.ref ? ('مجموعة ' + vzL(f.ref)) : ('مسلسل ' + vzL(f.seq))) +
+    ' <small>' + vzEsc(f.agent || '—') + ' · ' + vzL(vzFmt(f.visaCount)) + ' تأشيرة</small></span>' +
+    _vzStatusBadge(f.status) +
+    '<span style="flex:1;"></span>' +
+    (VZ.can.edit ? '<button class="vz-btn sm" onclick="vzEditFile(\'' + vzJs(f.id) + '\')">✏️ تعديل</button>' : '') +
+    '<button class="vz-btn sm" onclick="vzShowGroupPilgrims(\'' + vzJs(f.id) + '\')">👥 المعتمرون</button>' +
+    (VZ.can.edit ? '<button class="vz-btn sm" onclick="vzQuickLinkTrip(\'' + vzJs(f.id) + '\')">🔗 ربط برحلة</button>' : '') +
+    '<button class="vz-btn sm" onclick="vzHistory(\'' + vzJs(f.id) + '\')">📜 السجل</button>' +
+    '<button class="vz-btn sm" onclick="vzToggleDetail(\'' + vzJs(f.id) + '\')">📋 التفاصيل</button>' +
+    (VZ.can.del ? '<button class="vz-btn sm dgr" onclick="vzDeleteFile(\'' + vzJs(f.id) + '\')">🗑️ حذف</button>' : '') +
+    '</div>';
+}
+/* -------- 👥 معتمرو المجموعة المحدَّدون -------- */
+function vzShowGroupPilgrims(id) {
+  var f = vzGet(id); if (!f) return;
+  mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
+    '<div id="vzFpBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 700);
+  if (!mfStr(f.tripName)) {
+    document.getElementById('vzFpBox').innerHTML = '<div class="alert alert-warning small">المجموعة غير مرتبطة برحلة — لا يمكن عرض أسماء المعتمرين.</div>';
+    return;
+  }
+  google.script.run
+    .withSuccessHandler(function (list) {
+      var box = document.getElementById('vzFpBox'); if (!box) return;
+      var keys = f.selected || [];
+      var rows = (list || []).filter(function (p, i) { return keys.indexOf(vzPickKey(p, i)) >= 0; });
+      if (!rows.length) { box.innerHTML = '<div class="text-muted small">لا يوجد معتمرون مُختارون بأسمائهم لهذه المجموعة.</div>'; return; }
+      box.innerHTML = '<table class="vz-tab"><thead><tr><th>الاسم</th><th>الجواز</th><th>العميل</th></tr></thead><tbody>' +
+        rows.map(function (p) { return '<tr><td>' + vzEsc(p.name || '') + '</td><td class="vz-latin">' + vzEsc(p.passport || '') + '</td><td>' + vzEsc(p.client || '') + '</td></tr>'; }).join('') +
+        '</tbody></table>';
+    })
+    .withFailureHandler(function (e) { var box = document.getElementById('vzFpBox'); if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
+    .getTripPilgrims(window.authToken, f.tripName);
+}
+/* -------- 🔗 ربط سريع برحلة -------- */
+function vzQuickLinkTrip(id) {
+  var f = vzGet(id); if (!f) return;
+  if (!VZ.can.edit) { _showPopup('لا تملك صلاحية التعديل', 'error'); return; }
+  var h = '<div class="mf-note info"><span>🔗</span><div>اختر الرحلة بالبحث التنبؤي — يكفي حرفان. الربط لا يغيّر بيانات المجموعة الأخرى.</div></div>' +
+    '<div class="mf-fld"><label>الرحلة</label><input id="vzQlTrip" class="form-control form-control-sm" autocomplete="off"' +
+    ' value="' + vzEsc(f.tripName || '') + '" placeholder="اكتب جزءاً من اسم الرحلة..."></div>';
+  mfModal('🔗 ربط المجموعة برحلة', h,
+    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="vzQuickLinkSave(\'' + id + '\')">💾 اعتماد الربط</button>', 560);
+  setTimeout(function () { mfBindTA('vzQlTrip', function () { return (VZ.trips || []).map(function (t) { return t.name; }); }, null); }, 40);
+}
+function vzQuickLinkSave(id) {
+  var f = vzGet(id); if (!f) return;
+  var name = mfStr(document.getElementById('vzQlTrip').value);
+  var payload = JSON.parse(JSON.stringify(f)); payload.tripName = name;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      mfCloseModal(); _showPopup('تم الربط', 'success'); vzLoad(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveVisaFile(window.authToken, payload);
+}
+/* -------- 📜 سجل تعديلات المجموعة -------- */
+function vzHistory(id) {
+  var f = vzGet(id);
+  mfModal('📜 سجل تعديلات المجموعة ' + (f && f.ref ? vzEsc(f.ref) : ('#' + (f ? f.seq : ''))),
+    '<div id="vzHistBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 760);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var box = document.getElementById('vzHistBox'); if (!box) return;
+      var h = '';
+      if (f) h += '<div style="background:var(--vzSurf);border:1px solid var(--vzBorder);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;line-height:1.9;">' +
+        '<b>أنشئ بواسطة:</b> ' + vzEsc(f.createdBy || '—') + ' · ' + vzL(f.createdAt || '—') +
+        '<br><b>آخر تعديل:</b> ' + vzEsc(f.updatedBy || '—') + ' · ' + vzL(f.updatedAt || '—') + '</div>';
+      var es = (res && res.entries) || [];
+      if (!es.length) h += '<div class="text-muted small">لا توجد تعديلات مسجَّلة.</div>';
+      else {
+        h += '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>التاريخ والساعة</th><th>المستخدم</th><th>العملية</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead><tbody>';
+        es.forEach(function (e) {
+          h += '<tr><td class="vz-latin">' + vzEsc(e.when) + '</td><td>' + vzEsc(e.who) + '</td><td>' + vzEsc(e.action) +
+            '</td><td>' + vzEsc(e.field) + '</td><td style="color:#94a3b8;">' + vzEsc(e.oldVal) + '</td><td style="font-weight:700;">' + vzEsc(e.newVal) + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      box.innerHTML = h;
+    })
+    .withFailureHandler(function (e) { var box = document.getElementById('vzHistBox'); if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
+    .getVisaFileHistory(window.authToken, id);
+}
+/* -------- 📋 تفاصيل المجموعة -------- */
+function vzToggleDetail(id) {
+  var f = vzGet(id); if (!f) return;
+  vzSelect(id);
+  var due = mfNum(f.visaCount) * mfNum(f.price);
+  var mkAuto = _vzAutoCatering(f, 'makkah'), mdAuto = _vzAutoCatering(f, 'madinah');
+  var mkH = _vzAutoHousing(f, 'makkah'), mdH = _vzAutoHousing(f, 'madinah');
+  var clients = (f.breakdown || []).map(function (b) { return b.name + (b.count ? ' (' + b.count + ')' : ''); }).join('، ');
+  var body = '<div style="font-size:12.5px;line-height:2.1;">' +
+    '<b>رقم المجموعة:</b> ' + vzEsc(f.ref || '—') + '<br>' +
+    '<b>الحالة:</b> ' + _vzStatusBadge(f.status) + '<br>' +
+    '<b>تاريخ السداد:</b> ' + vzL(f.date || '—') + '<br>' +
+    '<b>الشركة المصرية:</b> ' + vzEsc(f.company || '—') + '<br>' +
+    '<b>الوكيل السعودي:</b> ' + vzEsc(f.agent || '—') + '<br>' +
+    '<b>الرحلة:</b> ' + vzEsc(f.tripName || '—') + '<br>' +
+    '<b>العدد:</b> ' + vzL(vzFmt(f.visaCount)) + '<br>' +
+    (vzFin() ? ('<b>سعر الفرد:</b> ' + vzL(vzFmt(f.price)) + ' ريال<br><b>المستحق:</b> ' + vzL(vzFmt(due)) + ' ريال<br>') : '') +
+    '<b>العملاء:</b> ' + vzEsc(clients || '—') + '<br>' +
+    '<b>سكن مكة:</b> ' + vzEsc((f.makkahIn || f.makkahOut) ? (f.makkahIn + ' ← ' + f.makkahOut) : '—') +
+      (mkH ? (' — اتفاقية سكن: ' + vzEsc(mkH)) : '') + (mkAuto ? (' — إعاشة: ' + vzEsc(mkAuto)) : '') + '<br>' +
+    '<b>سكن المدينة:</b> ' + vzEsc((f.madinahIn || f.madinahOut) ? (f.madinahIn + ' ← ' + f.madinahOut) : '—') +
+      (mdH ? (' — اتفاقية سكن: ' + vzEsc(mdH)) : '') + (mdAuto ? (' — إعاشة: ' + vzEsc(mdAuto)) : '') + '<br>' +
+    '<b>ملاحظات:</b> ' + vzEsc(f.notes || '—') +
+    '</div>';
+  mfModal('📋 تفاصيل المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)), body,
+    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إغلاق</button>', 640);
+}
+// ⌨️ تنقّل بالأسهم عمودياً وأفقياً بين صفوف المجموعات (نفس تجربة شاشة ملفات المراجعة)
+(function () {
+  document.addEventListener('keydown', function (e) {
+    var sec = document.getElementById('section-visas');
+    if (!sec || !sec.classList.contains('active')) return;
+    if (['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].indexOf(e.key) < 0) return;
+    if (document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].indexOf(document.activeElement.tagName) >= 0) return;
+    var list = vzVisible(); if (!list.length) return;
+    var i = -1; list.forEach(function (f, ix) { if (f.id === VZ.selId) i = ix; });
+    var fwd = (e.key === 'ArrowDown' || e.key === 'ArrowRight');
+    i = fwd ? Math.min(list.length - 1, i + 1) : Math.max(0, i < 0 ? 0 : i - 1);
+    e.preventDefault();
+    vzSelect(list[i].id);
+    var tr = document.querySelector('#section-visas tr.vz-row[data-id="' + list[i].id + '"]');
+    if (tr) tr.scrollIntoView({ block: 'nearest' });
+  });
+})();
+
 // رقم اتفاقية الإعاشة اليدوي بالمجموعة، أو المجلوب تلقائياً من شاشة اتفاقيات الإعاشة برقم المجموعة
 function _vzAutoCatering(f, city) {
   var manual = mfStr(city === 'makkah' ? f.makkahCateringAgr : f.madinahCateringAgr);
@@ -37792,7 +37959,7 @@ function vzFormRender() {
       '<div class="col-md-3 vz-fld"><label>رقم المجموعة (يدوي)</label><input value="' + vzEsc(d.ref) + '" oninput="vzSet(\'ref\',this.value)" onblur="vzFormRefChanged()" placeholder="مثال: 1448-101" title="عند إدخال رقم مجموعة مسجَّل باتفاقيات الإعاشة تُجلب أرقام اتفاقياتها تلقائياً"></div>' +
       '<div class="col-md-3 vz-fld"><label>الحالة</label><select onchange="vzSet(\'status\',this.value)">' + sel(d.status, statusOpts) + '</select></div>' +
       '<div class="col-md-3">' + dateFld('date', 'تاريخ السداد', 'vzSetPrice();') + '</div>' +
-      '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><input list="vzCompDL" autocomplete="off" value="' + vzEsc(d.company) + '" oninput="vzSet(\'company\',this.value)" placeholder="ابحث باسم الشركة…"></div>' +
+      '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><input list="vzCompDL" autocomplete="off" value="' + vzEsc(d.company) + '" oninput="vzSet(\'company\',this.value)" onchange="vzCompanyChanged(this.value)" placeholder="ابحث باسم الشركة…"></div>' +
       '<div class="col-md-4 vz-fld"><label>الوكيل السعودي</label><input list="vzAgentsDL" autocomplete="off" value="' + vzEsc(d.agent) + '" oninput="vzSet(\'agent\',this.value)" onchange="vzSet(\'agent\',this.value);vzSetPrice()" placeholder="ابحث بالاسم…"></div>' +
       '<div class="col-md-5 vz-fld"><label>الرحلة المرتبطة</label><input list="vzTripsDL" id="vzfTrip" autocomplete="off" value="' + vzEsc(d.tripName) + '" oninput="vzSet(\'tripName\',this.value)" onchange="vzSet(\'tripName\',this.value);vzTripChanged()" placeholder="ابحث باسم الرحلة…"></div>' +
       '<div class="col-md-3 vz-fld"><label>عدد المجموعة</label><input id="vzfCount" value="' + vzEsc(d.visaCount) + '" oninput="vzSet(\'visaCount\',this.value,true)"></div>' +
@@ -37875,6 +38042,14 @@ function vzHotelOptions() {
     });
   });
   return Object.keys(set).sort().map(function (h) { return '<option value="' + vzEsc(h) + '">'; }).join('');
+}
+// 🧑‍💼 (V4.142) اختيار الشركة المصرية يملأ الوكيل السعودي افتراضياً حسب الربط بشاشة إعدادات
+// الوكلاء — والمستخدم حرّ في تغييره بعدها بلا أي قيد
+function vzCompanyChanged(company) {
+  vzSet('company', company);
+  var c = (VZ.companies || []).filter(function (x) { return x.company === mfStr(company); })[0];
+  if (c && c.agent) { VZ._draft.agent = c.agent; vzSetPrice(); }
+  vzFormRender();
 }
 function vzSet(k, v, isNum) {
   VZ._draft[k] = isNum ? mfNum(v) : mfStr(v);
@@ -38733,8 +38908,10 @@ function vzImportClose() { var o = document.getElementById('vzImpOv'); if (o) o.
 function _vzImpNorm(v) { return String(v == null ? '' : v).replace(/[ً-ٟـ]/g, '').replace(/[إأآا]/g, 'ا').replace(/\s+/g, ' ').trim().toLowerCase(); }
 function _vzImpCell(v) {
   if (v instanceof Date && !isNaN(v)) {
+    // 🗓️ (V4.142) SheetJS يبني خلايا التاريخ كمنتصف ليل UTC — القراءة بدوال getUTC* تضمن نفس
+    // اليوم/الشهر بصرف النظر عن توقيت المتصفح المحلي (كانت القراءة المحلية تعكس اليوم أحياناً)
     var p = function (n) { return (n < 10 ? '0' : '') + n; };
-    return p(v.getDate()) + '/' + p(v.getMonth() + 1) + '/' + v.getFullYear();
+    return p(v.getUTCDate()) + '/' + p(v.getUTCMonth() + 1) + '/' + v.getUTCFullYear();
   }
   return mfStr(v);
 }
@@ -38748,7 +38925,10 @@ function vzImportRead(input) {
     try {
       var wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
       var sh = wb.Sheets[wb.SheetNames[0]];
-      var aoa = XLSX.utils.sheet_to_json(sh, { header: 1, raw: false, cellDates: true, defval: '' });
+      // 🗓️ (V4.142) raw:true (وليس false) — لتصل خلايا التاريخ ككائنات Date حقيقية عبر cellDates،
+      // فتُقرأ يوماً/شهراً بلا التباس. raw:false كان يُرجع النص المُنسَّق بتنسيق الملف الأصلي
+      // (أحياناً mm/dd/yyyy أمريكي) فيُقرأ خطأً كـ dd/mm/yyyy ويتبادل اليوم والشهر.
+      var aoa = XLSX.utils.sheet_to_json(sh, { header: 1, raw: true, cellDates: true, defval: '' });
       // أول صف يحوي عنواناً معروفاً هو صف العناوين
       var hRow = -1, colMap = {};
       for (var r = 0; r < Math.min(aoa.length, 12); r++) {
