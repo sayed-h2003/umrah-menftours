@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.137";
+var APP_VERSION = "4.138";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -7594,6 +7594,40 @@ function doPost(e) {
         return;
       }
 
+      // 🔎 (V4.138) زر «بحث عن معتمر» — يبدأ محادثة قصيرة تنتظر الاسم (تقريبي) أو رقم الجواز
+      if (callbackData === 'srch_start') {
+        try {
+          _tgSrchSetState_(chatId, cq.from.id);
+          sendTelegramMessageDirect(chatId,
+            "🔎 <b>ابحث عن معتمر</b>\nاكتب <b>اسم المعتمر</b> (ولو جزءاً منه أو تقريبياً) أو <b>رقم جوازه</b>.\n\n" +
+            "💡 يمكنك أيضاً البحث مباشرة بصيغة: <code>بحث: اسم المعتمر</code> بلا حاجة لهذا الزر.");
+        } catch (srchErr) {
+          sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + srchErr.toString() + "</code>");
+        }
+        return;
+      }
+      if (callbackData === 'srchq_cancel') {
+        _tgSrchClearState_(chatId, cq.from.id);
+        sendTelegramMessageDirect(chatId, "✔️ تم الإلغاء.");
+        return;
+      }
+      // اختيار معتمر من قائمة نتائج بحث متعددة: srch:<sid>:<idx>
+      if (callbackData.indexOf('srch:') === 0) {
+        try {
+          var _srchParts = callbackData.split(':');
+          var _srchSid = _srchParts[1], _srchIdx = parseInt(_srchParts[2], 10);
+          var _srchPerson = _tgSrchLoadResult_(chatId, _srchSid, _srchIdx);
+          if (!_srchPerson) {
+            sendTelegramMessageDirect(chatId, "⚠️ انتهت صلاحية نتائج هذا البحث. أعد البحث من جديد.");
+          } else {
+            sendTelegramMessageDirect(chatId, _tgPilgrimDetailMsg_(_srchPerson));
+          }
+        } catch (srchErr2) {
+          sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء عرض بيانات المعتمر:</b>\n<code>" + srchErr2.toString() + "</code>");
+        }
+        return;
+      }
+
       // تنفيذ جلب التقارير مع حماية كشف الأخطاء
       try {
         if (callbackData === 'moves_today')      sendTelegramArrivalAlerts_Custom('today', chatId);
@@ -7623,6 +7657,28 @@ function doPost(e) {
     // 2️⃣ استدعاء دالة القائمة عند كتابة /menu أو /start
     if (cmd === '/menu' || cmd === '/start') {
       sendTelegramMenu(chatId);
+      return;
+    }
+
+    // 🔎 (V4.138) البحث المباشر بصيغة «بحث: الاسم أو رقم الجواز» — يعمل في أي وقت بلا حاجة لمحادثة
+    var srchDirect = text.match(/^بحث\s*[:：]\s*(.+)$/);
+    if (srchDirect) {
+      try {
+        if (msg.from) _tgSrchClearState_(chatId, msg.from.id); // إلغاء أي محادثة بحث معلَّقة لهذا المستخدم
+        _tgRunSearch_(chatId, srchDirect[1]);
+      } catch (srchErr3) {
+        sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث:</b>\n<code>" + srchErr3.toString() + "</code>");
+      }
+      return;
+    }
+    // 🔎 (V4.138) رد على سؤال «بحث عن معتمر» بعد الضغط على الزر — محادثة قصيرة منفصلة (مفتاح srchq_)
+    if (msg.from && _tgSrchGetState_(chatId, msg.from.id)) {
+      _tgSrchClearState_(chatId, msg.from.id);
+      try {
+        _tgRunSearch_(chatId, text);
+      } catch (srchErr4) {
+        sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث:</b>\n<code>" + srchErr4.toString() + "</code>");
+      }
       return;
     }
 
@@ -7680,6 +7736,9 @@ function sendTelegramMenu(chatId) {
         ],
         [
           { "text": "📅 تحركات بتاريخ معيّن", "callback_data": "moves_bydate" }
+        ],
+        [
+          { "text": "🔎 بحث عن معتمر", "callback_data": "srch_start" }
         ]
       ]
     })
@@ -21124,6 +21183,248 @@ function _tgMoveParseShortOrFullDate_(s) {
   var dt = new Date(yy, mm - 1, dd);
   if (dt.getDate() !== dd || dt.getMonth() !== mm - 1) return null;
   return ('0' + dd).slice(-2) + '/' + ('0' + mm).slice(-2) + '/' + yy;
+}
+
+/* ==================================================================================
+   🔎 (V4.138) بوت تليجرام — البحث عن معتمر بالاسم (تقريبي/جزئي) أو رقم الجواز
+   يعرض: الاسم، الجواز، العميل، الرحلة (وإن كانت جارية الآن)، المشرف، مكانه الحالي (الفندق
+   وطبيعة التسكين ورقم الغرفة في المدينة التي هو بها فعلياً وقت الاستعلام)، ملف مراجعة الوزارة،
+   رقم الإشعار، مجموعة التأشيرات، الوكيل السعودي، والشركة المصرية.
+   يعمل بزر من القائمة (محادثة قصيرة تنتظر الاسم/الجواز) وبأمر مباشر «بحث: ...» في أي وقت.
+   ================================================================================== */
+// تطبيع عربي للمقارنة التقريبية: حذف التشكيل + توحيد الألف/الهمزة + الياء/الألف المقصورة + التاء
+// المربوطة + المسافات الزائدة — نفس منطق _normalizeArabic_ في الواجهة (index_web.html) بالضبط
+function _tgNormAr_(s) {
+  return String(s || '')
+    .replace(/[ً-ْٰ]/g, '')
+    .replace(/[إأآٱا]/g, 'ا')
+    .replace(/[ىئ]/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+// محادثة قصيرة بعد زر «بحث عن معتمر» — تنتظر نص البحث من المستخدم (10 دقائق ثم تنتهي صلاحيتها)
+function _tgSrchStateKey_(chatId, userId) { return 'srchq_' + chatId + '_' + userId; }
+function _tgSrchSetState_(chatId, userId) { CacheService.getScriptCache().put(_tgSrchStateKey_(chatId, userId), '1', 600); }
+function _tgSrchGetState_(chatId, userId) { return !!CacheService.getScriptCache().get(_tgSrchStateKey_(chatId, userId)); }
+function _tgSrchClearState_(chatId, userId) { CacheService.getScriptCache().remove(_tgSrchStateKey_(chatId, userId)); }
+
+// قراءة خام لكل صفوف شيت المعتمرين — كل صف = تسجيل معتمر على رحلة بعينها (بلا تجميع)
+function _tgReadPilgrimRows_() {
+  var sh = _getPilgrimsSheet_();
+  var last = sh.getLastRow(); if (last < 2) return [];
+  var C = _robustColMap_(sh, PILGRIMS_HEADERS_);
+  var P = _cellReader_(C, PILGRIMS_COL_);
+  var data = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var out = [];
+  data.forEach(function (r) {
+    var name = String(P(r, 'name') || '').trim();
+    if (!name) return;
+    out.push({
+      name: name, passport: String(P(r, 'passport') || '').trim(),
+      client: String(P(r, 'client') || '').trim(), tripName: String(P(r, 'tripName') || '').trim(),
+      bookingId: String(P(r, 'bookingId') || '').trim(),
+      accommodation: String(P(r, 'accommodation') || '').trim(),
+      hotelMadinah: String(P(r, 'hotelMadinah') || '').trim(), hotelMakkah: String(P(r, 'hotelMakkah') || '').trim(),
+      roomNoMadinah: String(P(r, 'roomNoMadinah') || '').trim(), roomNoMakkah: String(P(r, 'roomNoMakkah') || '').trim(),
+      roomNo: String(P(r, 'roomNo') || '').trim()
+    });
+  });
+  return out;
+}
+// خريطة بيانات الرحلات (اسم الرحلة → بياناتها اللازمة): الشركة/الوكيل/المشرف/تواريخ الذهاب
+// والعودة وفندقا مكة والمدينة الأساسيان بتواريخ الدخول/الخروج + رقم الإشعار المرتبط
+function _tgReadTripsMap_() {
+  var sh = _getTripsSheet_();
+  var last = sh.getLastRow(); var map = {};
+  if (last < 2) return map;
+  var C = _robustColMap_(sh, TRIPS_HEADERS_);
+  var T = _cellReader_(C, TRIPS_COL_);
+  sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues().forEach(function (r) {
+    var n = String(T(r, 'name') || '').trim(); if (!n) return;
+    map[n] = {
+      name: n, company: String(T(r, 'company') || '').trim(), agent: String(T(r, 'agent') || '').trim(),
+      supervisor: String(T(r, 'supervisor') || '').trim(),
+      departDate: _tripFormatDate_(T(r, 'departDate')), returnDate: _tripFormatDate_(T(r, 'returnDate')),
+      madinahHotel: String(T(r, 'madinahHotel') || '').trim(),
+      madinahIn: _tripFormatDate_(T(r, 'madinahCheckIn')), madinahOut: _tripFormatDate_(T(r, 'madinahCheckOut')),
+      makkahHotel: String(T(r, 'makkahHotel') || '').trim(),
+      makkahIn: _tripFormatDate_(T(r, 'makkahCheckIn')), makkahOut: _tripFormatDate_(T(r, 'makkahCheckOut')),
+      linkedBookingId: String(T(r, 'linkedBookingId') || '').trim()
+    };
+  });
+  return map;
+}
+// مطابقة تقريبية: الجواز = تضمين نصّي بلا مسافات، الاسم = كل كلمات البحث موجودة (بأي ترتيب) داخل
+// الاسم بعد التطبيع — هذا يحقق «تقريبي وغير كامل» ويتسامح مع اختلاف المسافات وحالات الأحرف معاً
+function _tgPilgrimMatches_(row, qNameTokens, qPassNorm) {
+  if (qPassNorm && row.passport && row.passport.replace(/\s+/g, '').toLowerCase().indexOf(qPassNorm) >= 0) return true;
+  if (qNameTokens.length) {
+    var nn = _tgNormAr_(row.name);
+    return qNameTokens.every(function (tok) { return nn.indexOf(tok) >= 0; });
+  }
+  return false;
+}
+/* 🔎 البحث الرئيسي: يُرجع «أشخاصاً» مجمَّعين (المفتاح: رقم الجواز، وإلا الاسم) — لكل شخص
+   نختار الصف الذي يمثّل حالته الآن: رحلة جارية أولاً، وإلا آخر رحلة بتاريخ ذهاب (الأحدث). */
+function _tgSearchPilgrim_(query) {
+  query = String(query || '').trim();
+  if (!query) return [];
+  var qNorm = _tgNormAr_(query);
+  var qNameTokens = qNorm ? qNorm.split(' ').filter(Boolean) : [];
+  var qPassNorm = query.replace(/\s+/g, '').toLowerCase();
+  var rows = _tgReadPilgrimRows_();
+  var trips = _tgReadTripsMap_();
+  var todayMs = _mfMs_(_mfToday_());
+
+  var byKey = {}, order = [];
+  rows.forEach(function (r) {
+    if (!_tgPilgrimMatches_(r, qNameTokens, qPassNorm)) return;
+    var key = r.passport ? ('P:' + r.passport) : ('N:' + r.name + '|' + r.tripName);
+    if (!byKey[key]) { byKey[key] = []; order.push(key); }
+    byKey[key].push(r);
+  });
+
+  return order.map(function (key) {
+    var group = byKey[key];
+    var best = group[0], bestActive = false, bestMs = -Infinity;
+    group.forEach(function (r) {
+      var t = trips[r.tripName] || {};
+      var dMs = _mfMs_(_mfDate_(t.departDate)), rMs = _mfMs_(_mfDate_(t.returnDate));
+      var active = (!isNaN(dMs) && !isNaN(rMs) && todayMs >= dMs && todayMs <= rMs);
+      var dCmp = isNaN(dMs) ? -Infinity : dMs;
+      if (active && !bestActive) { best = r; bestActive = true; bestMs = dCmp; }
+      else if (active === bestActive && dCmp > bestMs) { best = r; bestMs = dCmp; }
+    });
+    return { row: best, trip: trips[best.tripName] || {}, active: bestActive };
+  });
+}
+// مكانه الحالي فعلياً وقت الاستعلام: يقارن اليوم بفترتي دخول/خروج مكة والمدينة بالرحلة —
+// ويعيد فندق وغرفة ذلك المعتمر تحديداً (قد يختلفان عن فندق الرحلة الأساسي في مجموعات متعددة الفنادق)
+function _tgCurrentStay_(row, trip) {
+  var todayMs = _mfMs_(_mfToday_());
+  var within = function (a, b) { return !isNaN(a) && !isNaN(b) && todayMs >= a && todayMs < b; };
+  if (within(_mfMs_(_mfDate_(trip.madinahIn)), _mfMs_(_mfDate_(trip.madinahOut)))) {
+    return { city: 'المدينة المنوَّرة 🕌', hotel: row.hotelMadinah || trip.madinahHotel, room: row.roomNoMadinah || row.roomNo };
+  }
+  if (within(_mfMs_(_mfDate_(trip.makkahIn)), _mfMs_(_mfDate_(trip.makkahOut)))) {
+    return { city: 'مكة المكرَّمة 🕋', hotel: row.hotelMakkah || trip.makkahHotel, room: row.roomNoMakkah || row.roomNo };
+  }
+  return null;
+}
+// ملف/ملفات مراجعة الوزارة الخاصة بهذا المعتمر بهذه الرحلة (نفس منطق _mfFilesForTrip_ بالواجهة)
+function _tgMfForPilgrim_(tripName, passport) {
+  if (!tripName) return [];
+  var files;
+  try { files = _mfReadAll_().filter(function (f) { return f.tripName === tripName; }); } catch (e) { return []; }
+  return files.filter(function (f) {
+    if (!(f.selected || []).length) return true;
+    if (!passport) return true;
+    return f.selected.indexOf(passport) >= 0 || f.selected.indexOf('P:' + passport) >= 0;
+  });
+}
+// مجموعة/مجموعات التأشيرات الخاصة بهذا المعتمر بهذه الرحلة (بالجواز إن حُدِّد، وإلا بالعميل)
+function _tgVzForPilgrim_(tripName, passport, client) {
+  if (!tripName) return [];
+  var files;
+  try { files = _vzReadAll_().filter(function (f) { return f.tripName === tripName; }); } catch (e) { return []; }
+  return files.filter(function (f) {
+    if ((f.selected || []).length) return passport && (f.selected.indexOf(passport) >= 0 || f.selected.indexOf('P:' + passport) >= 0);
+    if ((f.breakdown || []).length) return f.breakdown.some(function (b) { return b.name === client; });
+    return true;
+  });
+}
+// كل نتائج بحث دُفعة واحدة (لبناء قائمة اختيار عند تعدّد المطابقات) — تُخزَّن مؤقتاً في الكاش
+// بمعرِّف قصير (sid) لأن أزرار تيليجرام محدودة الحجم فلا يمكن حمل الاسم والجواز كاملين بها
+function _tgSrchResultsKey_(chatId, sid) { return 'srchres_' + chatId + '_' + sid; }
+function _tgSrchStoreResults_(chatId, people) {
+  var sid = Utilities.getUuid().replace(/-/g, '').substring(0, 8);
+  var slim = people.map(function (p) { return { t: p.row.tripName, p: p.row.passport, n: p.row.name }; });
+  CacheService.getScriptCache().put(_tgSrchResultsKey_(chatId, sid), JSON.stringify(slim), 600);
+  return sid;
+}
+function _tgSrchLoadResult_(chatId, sid, idx) {
+  var raw = CacheService.getScriptCache().get(_tgSrchResultsKey_(chatId, sid));
+  if (!raw) return null;
+  var list = JSON.parse(raw);
+  var item = list[idx]; if (!item) return null;
+  var row = _tgReadPilgrimRows_().filter(function (r) {
+    return r.tripName === item.t && (item.p ? r.passport === item.p : (r.name === item.n && !r.passport));
+  })[0];
+  if (!row) return null;
+  var trips = _tgReadTripsMap_();
+  var trip = trips[row.tripName] || {};
+  var todayMs = _mfMs_(_mfToday_());
+  var dMs = _mfMs_(_mfDate_(trip.departDate)), rMs = _mfMs_(_mfDate_(trip.returnDate));
+  var active = (!isNaN(dMs) && !isNaN(rMs) && todayMs >= dMs && todayMs <= rMs);
+  return { row: row, trip: trip, active: active };
+}
+// رسالة بيانات معتمر واحد كاملة — بكل الحقول المطلوبة
+function _tgPilgrimDetailMsg_(person) {
+  var r = person.row, t = person.trip || {};
+  var stay = _tgCurrentStay_(r, t);
+  var msg = '🔎 <b>بيانات المعتمر</b>\n━━━━━━━━━━━━━━━━━━\n';
+  msg += '👤 <b>الاسم:</b> ' + (r.name || '—') + '\n';
+  msg += '🛂 <b>رقم الجواز:</b> ' + (r.passport || '—') + '\n';
+  msg += '👥 <b>العميل:</b> ' + (r.client || '—') + '\n';
+  msg += '🧳 <b>الرحلة:</b> ' + (r.tripName || '—') + (person.active ? '  ▶ <b>جارية الآن</b>' : '') + '\n';
+  msg += '🧑‍✈️ <b>المشرف:</b> ' + (t.supervisor || '—') + '\n';
+  if (stay) {
+    msg += '📍 <b>مكانه الآن — ' + stay.city + ':</b>\n' +
+      '   🏨 الفندق: ' + (stay.hotel || '—') + (r.accommodation ? '  |  🛏️ ' + r.accommodation : '') +
+      (stay.room ? '  |  🔑 غرفة ' + stay.room : '') + '\n';
+  } else {
+    msg += '📍 <b>السكن (خارج فترتي الإقامة المسجَّلتين حالياً):</b>\n' +
+      '   🕌 المدينة: ' + (r.hotelMadinah || t.madinahHotel || '—') + (r.roomNoMadinah ? ' — غرفة ' + r.roomNoMadinah : '') + '\n' +
+      '   🕋 مكة: ' + (r.hotelMakkah || t.makkahHotel || '—') + (r.roomNoMakkah ? ' — غرفة ' + r.roomNoMakkah : '') + '\n';
+  }
+  var mfHits = _tgMfForPilgrim_(r.tripName, r.passport);
+  msg += '🏛️ <b>ملف مراجعة الوزارة:</b> ' + (mfHits.length
+    ? mfHits.map(function (f) { return (f.fileNo || 'بلا رقم') + (f.reviewDate ? ' ✓' : ' ⏳'); }).join('، ')
+    : 'لا يوجد') + '\n';
+  msg += '🎫 <b>رقم الإشعار:</b> ' + (r.bookingId || t.linkedBookingId || '—') + '\n';
+  var vzHits = _tgVzForPilgrim_(r.tripName, r.passport, r.client);
+  msg += '🛂 <b>مجموعة التأشيرات:</b> ' + (vzHits.length
+    ? vzHits.map(function (f) { return (f.ref || ('#' + f.seq)) + (f.status ? ' (' + f.status + ')' : ''); }).join('، ')
+    : 'لا يوجد') + '\n';
+  msg += '🇸🇦 <b>الوكيل السعودي:</b> ' + (t.agent || '—') + '\n';
+  msg += '🏢 <b>الشركة المصرية:</b> ' + (t.company || '—');
+  return msg;
+}
+// نقطة الدخول الموحَّدة: يُشغَّل من الأمر المباشر «بحث: ...» ومن محادثة الزر معاً
+function _tgRunSearch_(chatId, query) {
+  query = String(query || '').trim();
+  if (!query) { sendTelegramMessageDirect(chatId, '⚠️ اكتب اسم المعتمر أو رقم جوازه بعد «بحث:».'); return; }
+  var people = _tgSearchPilgrim_(query);
+  if (!people.length) {
+    sendTelegramMessageDirect(chatId, '🚫 لم يُعثر على معتمر مطابق لـ «' + query + '».\nجرِّب اسماً أقصر أو جزءاً من رقم الجواز.');
+    return;
+  }
+  if (people.length === 1) {
+    sendTelegramMessageDirect(chatId, _tgPilgrimDetailMsg_(people[0]));
+    return;
+  }
+  if (people.length > 20) {
+    sendTelegramMessageDirect(chatId, '⚠️ عدد النتائج كبير جداً (' + people.length + ') — اكتب اسماً أكثر تحديداً أو رقم الجواز كاملاً.');
+    return;
+  }
+  var sid = _tgSrchStoreResults_(chatId, people);
+  var rows = people.map(function (p, i) {
+    var label = '👤 ' + p.row.name + (p.row.passport ? ' — 🛂 ' + p.row.passport : '') +
+      (p.row.tripName ? ' — 🧳 ' + p.row.tripName : '');
+    if (label.length > 60) label = label.substring(0, 57) + '...';
+    return [{ text: label, callback_data: 'srch:' + sid + ':' + i }];
+  });
+  var token = TELEGRAM_CONFIG.token;
+  var url = "https://api.telegram.org/bot" + token + "/sendMessage";
+  var payload = {
+    "chat_id": chatId,
+    "text": "🔎 <b>تعدَّدت المطابقات (" + people.length + ") — اختر المعتمر المطلوب:</b>",
+    "parse_mode": "HTML",
+    "reply_markup": JSON.stringify({ "inline_keyboard": rows })
+  };
+  UrlFetchApp.fetch(url, { "method": "post", "contentType": "application/json", "payload": JSON.stringify(payload) });
 }
 
 /* ==================================================================================
