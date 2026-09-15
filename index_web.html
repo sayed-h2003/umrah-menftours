@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.144 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.145 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.144)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.145)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.144</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.145</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5054,9 +5054,17 @@ input[type="date"]:not(:focus):not(:valid) {
   /* شريط الحفظ السفلي الثابت */
   .vz-foot{ position:sticky; bottom:0; z-index:4; background:#fff; border-top:1.5px solid var(--vzBorder);
     padding:10px 16px; display:flex; align-items:center; gap:8px; box-shadow:0 -4px 14px rgba(7,92,70,.07); }
+  /* 📌 (V4.145) رؤوس أعمدة جدول المجموعات تبقى ثابتة ومرئية أثناء التمرير — الحاوية نفسها
+     هي التي تُمرَّر (بدل الصفحة كلها) كي يعمل sticky بشكل موثوق مهما طال الجدول */
+  #section-visas #vzTableWrap{ max-height:65vh; overflow:auto; border-radius:10px; }
   #section-visas table.vz-tab{ width:100%; border-collapse:separate; border-spacing:0; font-size:12px; background:#fff; }
   #section-visas table.vz-tab th{ background:linear-gradient(180deg,var(--vzG),var(--vzGD)); color:#fff; font-weight:800; padding:9px 6px; white-space:nowrap;
     position:sticky; top:0; z-index:2; border:1px solid var(--vzGD); }
+  /* ↔️ (V4.145) مقبض تغيير عرض العمود بالسحب — نفس أسلوب شاشة ملفات الوزارة */
+  #section-visas .vz-rsz{ position:absolute; top:0; bottom:0; inset-inline-end:-3px; width:7px; cursor:col-resize; z-index:3; }
+  #section-visas .vz-rsz::after{ content:""; position:absolute; top:5px; bottom:5px; inset-inline-end:3px; width:1px; background:rgba(255,255,255,.28); }
+  #section-visas .vz-rsz:hover::after{ background:var(--vzGold); width:2px; }
+  body.vz-resizing, body.vz-resizing *{ cursor:col-resize !important; user-select:none !important; }
   /* 🔎↕️ أيقونتا التصفية الديناميكية والترتيب برأس كل عمود — نفس أسلوب شاشة ملفات الوزارة */
   #section-visas .vz-thin, .vz-dlg .vz-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
   #section-visas .vz-thic, .vz-dlg .vz-thic{ background:none; border:none; color:#cdeee1; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
@@ -5094,8 +5102,6 @@ input[type="date"]:not(:focus):not(:valid) {
   .vz-pkc:hover{ border-color:var(--vzG); }
   .vz-pkc.on{ background:var(--vzGL); border-color:var(--vzG); font-weight:700; }
   .vz-pkc.used{ opacity:.55; }
-  /* شريط أرصدة الوكلاء */
-  #section-visas #vzAgentStrip .vz-btn{ font-size:11.5px; }
   .flatpickr-calendar{ z-index:2147483400 !important; }
 </style>
 <div id="section-visas" class="page-section container-fluid my-2 px-2">
@@ -5106,18 +5112,15 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="vz-btn pri" onclick="vzNewFile()">➕ مجموعة جديدة</button>
       <button class="vz-btn" onclick="vzHaOpen()">🏨 اتفاقيات السكن</button>
       <button class="vz-btn" onclick="vzImportOpen()">📥 استيراد مجموعات</button>
-      <button class="vz-btn vz-fin" id="vzBtnAcctPick" onclick="vzAcctPickerOpen()">🧑‍💼 حسابات الوكلاء</button>
-      <button class="vz-btn vz-fin" id="vzBtnAcctCfg" onclick="vzAcctCfgOpen()">⚙️ إعدادات حسابات الوكلاء</button>
-      <button class="vz-btn gold vz-fin" id="vzBtnPricing" onclick="vzOpenPricing()">💲 تسعير الوكلاء</button>
+      <!-- 💰 (V4.145) مدخل واحد فقط للماليات — التسعير والأرصدة وإعدادات الحسابات كلها انتقلت
+           داخل هذه النافذة الموحَّدة، فلا تظهر أي ماليات مباشرة بشاشة متابعة الوكلاء العامة -->
+      <button class="vz-btn gold vz-fin" id="vzBtnAcctPick" onclick="vzAcctHubOpen()">💰 حسابات الوكلاء</button>
       <button class="vz-btn" id="vzBtnStats" onclick="vzOpenStats()">📊 إحصائيات الوكلاء</button>
       <button class="vz-btn" onclick="vzPrint()">🖨️ طباعة / PDF</button>
       <button class="vz-btn" onclick="vzExportImage(this)">📸 صورة HD</button>
       <button class="vz-btn" onclick="vzLoad(true)">🔄 تحديث</button>
     </div>
   </div>
-
-  <!-- أرصدة الوكلاء السريعة -->
-  <div id="vzAgentStrip" class="mb-2"></div>
 
   <div class="vz-bar mb-2">
     <div class="d-flex align-items-end gap-2 flex-wrap">
@@ -6656,7 +6659,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.144";
+var CLIENT_APP_VERSION = "4.145";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -37440,7 +37443,7 @@ function mfExportImage(btn) {
 var VZ = { files: [], prices: [], companies: [], trips: [], clients: [], agents: [], statuses: [],
   agentBalances: {}, today: '', can: {}, loaded: false, _draft: null, _pick: null, _pickLoading: false,
   // 🔎↕️ تصفية ديناميكية لحظية من رأس كل عمود + ترتيب تصاعدي/تنازلي بالعمود
-  colFilters: {}, sort: { key: 'seq', dir: -1 }, selId: null };
+  colFilters: {}, sort: { key: 'seq', dir: -1 }, selId: null, colW: {} };
 function vzEsc(v) { return escapeHtml_(String(v == null ? '' : v)); }
 function vzJs(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 function vzFmt(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
@@ -37469,8 +37472,7 @@ function vzLoad(force) {
 function vzFin() { return !!(VZ.can && VZ.can.finance); }
 function vzApplyFinanceUI() {
   var on = vzFin();
-  ['vzBtnPricing', 'vzBtnAcctCfg', 'vzBtnAcctPick'].forEach(function (id) { var e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; });
-  var strip = document.getElementById('vzAgentStrip'); if (strip && !on) strip.innerHTML = '';
+  var e = document.getElementById('vzBtnAcctPick'); if (e) e.style.display = on ? '' : 'none';
 }
 // سعر تأشيرة الوكيل الساري في تاريخ (نفس منطق السيرفر) — لأحدث فترة تحتوي التاريخ
 function _vzPriceAt(agent, dateStr) {
@@ -37547,7 +37549,6 @@ var VZ_COL_DEFS_ = [
   { k: 'makkahAgr', label: 'اتفاقيات مكة' },
   { k: 'madinahStay', label: 'سكن المدينة (دخول ← خروج)', date: true },
   { k: 'madinahAgr', label: 'اتفاقيات المدينة' },
-  { k: 'due', label: 'المستحق (ريال)', num: true, finOnly: true },
   { k: 'notes', label: 'ملاحظات' }
 ];
 // القيمة الخام لعمود بعينه من قيد تأشيرات — تُستخدَم للتصفية الديناميكية والترتيب معاً
@@ -37565,7 +37566,6 @@ function vzColRaw(k, f) {
     case 'makkahAgr': return _vzAutoHousing(f, 'makkah') + ' ' + _vzAutoCatering(f, 'makkah');
     case 'madinahStay': return mfStr(f.madinahIn) + ' ' + mfStr(f.madinahOut);
     case 'madinahAgr': return _vzAutoHousing(f, 'madinah') + ' ' + _vzAutoCatering(f, 'madinah');
-    case 'due': return mfNum(f.visaCount) * mfNum(f.price);
     case 'notes': return mfStr(f.notes);
     default: return '';
   }
@@ -37592,6 +37592,49 @@ function vzVisible() {
 }
 function vzSortBy(k) {
   if (VZ.sort.key === k) VZ.sort.dir *= -1; else { VZ.sort.key = k; VZ.sort.dir = 1; }
+  vzRender();
+}
+/* ↔️ (V4.145) تغيير عرض عمود جدول المجموعات بالسحب — نفس تقنية شاشة ملفات الوزارة، بحجم مُطبَّق
+   على رأس العمود وخلاياه لحظياً أثناء السحب، ويُحفظ بحالة الجلسة (VZ.colW) عند الإفلات. */
+var VZ_RSZ = null;
+function vzRszStart(ev, k) {
+  ev.preventDefault(); ev.stopPropagation();
+  var th = ev.currentTarget.parentNode;
+  if (!th) return;
+  var startW = VZ.colW[k] || th.getBoundingClientRect().width;
+  var rtl = true;
+  try { rtl = getComputedStyle(th.closest('table') || document.body).direction === 'rtl'; } catch (e) {}
+  VZ_RSZ = { k: k, th: th, startX: ev.clientX, startW: startW, rtl: rtl };
+  document.body.classList.add('vz-resizing');
+  document.addEventListener('mousemove', vzRszMove);
+  document.addEventListener('mouseup', vzRszEnd);
+}
+function vzRszMove(ev) {
+  var R = VZ_RSZ; if (!R) return;
+  var delta = R.rtl ? (R.startX - ev.clientX) : (ev.clientX - R.startX);
+  var w = Math.max(38, Math.min(700, Math.round(R.startW + delta)));
+  R.live = w;
+  R.th.style.width = w + 'px'; R.th.style.minWidth = w + 'px'; R.th.style.maxWidth = w + 'px';
+  var idx = -1; VZ_COL_DEFS_.forEach(function (c, i) { if (c.k === R.k) idx = i; });
+  if (idx >= 0) {
+    var rows = R.th.closest('table').querySelectorAll('tbody tr.vz-row');
+    for (var i = 0; i < rows.length; i++) {
+      var cell = rows[i].children[idx];
+      if (cell) { cell.style.maxWidth = w + 'px'; cell.style.minWidth = w + 'px'; }
+    }
+  }
+}
+function vzRszEnd() {
+  var R = VZ_RSZ;
+  document.removeEventListener('mousemove', vzRszMove);
+  document.removeEventListener('mouseup', vzRszEnd);
+  document.body.classList.remove('vz-resizing');
+  VZ_RSZ = null;
+  if (R && R.live) VZ.colW[R.k] = R.live;
+}
+function vzRszReset(ev, k) {
+  ev.preventDefault(); ev.stopPropagation();
+  delete VZ.colW[k];
   vzRender();
 }
 // تصفية عمود من رأسه — نعيد استخدام نافذة #mfColFilterPop المشتركة نفسها بكل الشاشات
@@ -37674,73 +37717,60 @@ function vzRender() {
   vzRenderChips();
   vzApplyFinanceUI();
 
-  // شريط أرصدة الوكلاء (المدينون فقط) — للصلاحية المالية فقط
-  var strip = document.getElementById('vzAgentStrip');
-  if (strip && !vzFin()) strip.innerHTML = '';
-  else if (strip) {
-    // من له حسابات فرعية مع شركات نعرض الفرعية فقط (كي لا يتكرر المبلغ مرتين بالشريط)
-    var hasSub = {};
-    (VZ.accounts || []).forEach(function (ac) { if (ac.kind !== 'عام') hasSub[ac.agent] = 1; });
-    var rows = Object.keys(VZ.agentBalances || {}).map(function (a) { var b = VZ.agentBalances[a]; return { a: a, b: b }; })
-      .filter(function (x) { return Math.abs(x.b.netS) > 0.5 || Math.abs(x.b.netE) > 0.5; })
-      .filter(function (x) { return !(hasSub[x.a] && x.a.indexOf(' - ') < 0); })
-      .sort(function (x, y) { return y.b.netS - x.b.netS; });
-    strip.innerHTML = rows.length ? ('<div class="d-flex gap-2 flex-wrap">' + rows.map(function (x) {
-      var pos = x.b.netS >= 0;
-      return '<button class="vz-btn sm" style="border-color:' + (pos ? '#f6b8b8' : '#a7e8cf') + ';" onclick="vzOpenAccount(\'' + vzJs(x.a) + '\')">' +
-        '🧑‍💼 ' + vzEsc(x.a) + ' — <b style="color:' + (pos ? '#b91c1c' : '#166534') + ';">' + vzFmt(Math.abs(x.b.netS)) + ' ريال ' + (pos ? 'مستحق له' : 'دائن') + '</b>' +
-        (Math.abs(x.b.netE) > 0.5 ? (' · ' + vzFmt(Math.abs(x.b.netE)) + ' جنيه') : '') + '</button>';
-    }).join('') + '</div>') : '';
-  }
-
   var list = vzVisible();
   var lbl = document.getElementById('vzCountLbl'); if (lbl) lbl.textContent = '— ' + list.length + ' مجموعة';
   var wrap = document.getElementById('vzTableWrap'); if (!wrap) return;
   if (!list.length) { wrap.innerHTML = '<div class="text-muted text-center py-4">لا توجد مجموعات مطابقة</div>'; return; }
-  var totCount = 0, totDue = 0;
+  var totCount = 0;
   var agrCell = function (housing, cateringAuto) {
     var h = mfStr(housing), c = mfStr(cateringAuto);
     return (h ? '<div class="vz-latin">🏨 ' + vzEsc(h) + '</div>' : '') +
       (c ? '<div class="vz-latin" style="color:#166534;">🍽️ ' + vzEsc(c) + '</div>' : (h ? '' : '—'));
   };
-  var FIN = vzFin();
   var body = list.map(function (f) {
-    var due = mfNum(f.visaCount) * mfNum(f.price); totCount += mfNum(f.visaCount); totDue += due;
+    totCount += mfNum(f.visaCount);
     var clients = (f.breakdown || []).map(function (b) { return b.name + (b.count ? ' (' + b.count + ')' : ''); }).join('، ');
     var clientTrip = (f.tripName ? '🧳 ' + vzEsc(f.tripName) + (clients ? '<br>' : '') : '') + (clients ? '👤 ' + vzEsc(clients) : '');
     var mkAuto = _vzAutoCatering(f, 'makkah'), mdAuto = _vzAutoCatering(f, 'madinah');
     var mkH = _vzAutoHousing(f, 'makkah'), mdH = _vzAutoHousing(f, 'madinah');
-    return '<tr class="vz-row' + (VZ.selId === f.id ? ' vz-sel' : '') + '" data-id="' + vzJs(f.id) + '" onclick="vzSelect(\'' + vzJs(f.id) + '\')">' +
+    // 🖱️ (V4.145) نقرة واحدة على أي مكان بالصف (شامل اسم الوكيل) = تحديد الصف فقط؛ فتح حساب
+    // الوكيل صار من شريط الإجراءات بعد التحديد، ونقرة مزدوجة على الصف = فتح تعديل المجموعة —
+    // كانت نقرة اسم الوكيل تفتح الحساب مباشرة فتمنع التحديد والتنقل بالأسهم، وهذا كان الخطأ
+    return '<tr class="vz-row' + (VZ.selId === f.id ? ' vz-sel' : '') + '" data-id="' + vzJs(f.id) + '" onclick="vzSelect(\'' + vzJs(f.id) + '\')" ondblclick="' + (VZ.can.edit ? ('vzEditFile(\'' + vzJs(f.id) + '\')') : '') + '">' +
       '<td>' + vzL(f.seq) + '</td><td>' + (f.ref ? vzL(f.ref) : '—') + '</td>' +
       '<td>' + _vzStatusBadge(f.status) + '</td><td>' + vzL(f.date || '—') + '</td>' +
       '<td>' + vzEsc(f.company || '—') + '</td>' +
-      '<td>' + (FIN ? '<b style="color:#075c46;cursor:pointer;" title="كشف حساب الوكيل" onclick="vzOpenAccount(\'' + vzJs(vzAcctKeyOf(f.agent, f.company)) + '\')">' + vzEsc(f.agent || '—') + '</b>'
-                    : '<b style="color:#075c46;">' + vzEsc(f.agent || '—') + '</b>') + '</td>' +
+      '<td><b style="color:#075c46;">' + vzEsc(f.agent || '—') + '</b></td>' +
       '<td><b>' + vzL(vzFmt(f.visaCount)) + '</b></td>' +
       '<td style="max-width:170px;white-space:normal;text-align:right;font-size:10.5px;">' + (clientTrip || '—') + '</td>' +
       '<td>' + (f.makkahIn || f.makkahOut ? vzL(f.makkahIn || '؟') + ' ← ' + vzL(f.makkahOut || '؟') : '—') + '</td>' +
       '<td style="max-width:150px;white-space:normal;">' + agrCell(mkH, mkAuto) + '</td>' +
       '<td>' + (f.madinahIn || f.madinahOut ? vzL(f.madinahIn || '؟') + ' ← ' + vzL(f.madinahOut || '؟') : '—') + '</td>' +
       '<td style="max-width:150px;white-space:normal;">' + agrCell(mdH, mdAuto) + '</td>' +
-      (FIN ? '<td><b style="color:#b45309;">' + vzL(vzFmt(due)) + '</b></td>' : '') +
       '<td style="max-width:140px;white-space:normal;font-size:10.5px;color:#64748b;">' + vzEsc(f.notes || '') + '</td>' +
       '</tr>';
   }).join('');
   // 🔎↕️ (V4.136) رأس كل عمود (عدا ⚙) يحمل أيقونة تصفية ديناميكية لحظية وأيقونة ترتيب تصاعدي/تنازلي
-  var cols = VZ_COL_DEFS_.filter(function (c) { return !c.finOnly || FIN; });
+  // 💰 (V4.145) لا أعمدة مالية إطلاقاً بالشاشة العامة — التسعير والمستحق والأرصدة كلها انتقلت
+  // لشاشة/نافذة «حسابات الوكلاء» المستقلة فقط
+  var cols = VZ_COL_DEFS_;
+  var colW = VZ.colW || {};
+  // ↔️ (V4.145) تغيير حجم الأعمدة بالسحب — مقبض على حافة كل رأس عمود، والعرض يُحفظ لحظياً بالجلسة
+  var rsz = '<span class="vz-rsz" title="اسحب لتغيير عرض العمود · ضغطتان = العرض الافتراضي"' +
+    ' onmousedown="vzRszStart(event,\'{{K}}\')" ondblclick="vzRszReset(event,\'{{K}}\')"></span>';
   var headCells = cols.map(function (c) {
-    if (c.nof) return '<th>' + vzEsc(c.label) + '</th>';
+    var wStyle = colW[c.k] ? (' style="width:' + colW[c.k] + 'px;min-width:' + colW[c.k] + 'px;max-width:' + colW[c.k] + 'px;"') : '';
+    if (c.nof) return '<th' + wStyle + '>' + vzEsc(c.label) + '</th>';
     var si = VZ.sort.key === c.k ? (VZ.sort.dir > 0 ? '▲' : '▼') : '⇅';
-    return '<th><div class="vz-thin"><span>' + vzEsc(c.label) + '</span>' +
+    return '<th' + wStyle + '><div class="vz-thin"><span>' + vzEsc(c.label) + '</span>' +
       '<button class="vz-thic' + (VZ.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();vzColFilter(event,\'' + c.k + '\')">🔽</button>' +
       '<button class="vz-thic' + (VZ.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();vzSortBy(\'' + c.k + '\')">' + si + '</button>' +
-      '</div></th>';
+      '</div>' + rsz.replace(/\{\{K\}\}/g, c.k) + '</th>';
   }).join('');
   wrap.innerHTML = '<table class="vz-tab"><thead><tr>' +
     headCells + '</tr></thead><tbody>' + body +
     '<tr style="background:#075c46;color:#fff;font-weight:800;"><td colspan="6">الإجمالي (' + list.length + ' مجموعة)</td>' +
-    '<td>' + vzL(vzFmt(totCount)) + '</td><td colspan="5">—</td>' +
-    (FIN ? '<td>' + vzL(vzFmt(totDue)) + '</td>' : '') + '<td>—</td></tr>' +
+    '<td>' + vzL(vzFmt(totCount)) + '</td><td colspan="6">—</td></tr>' +
     '</tbody></table>';
 }
 /* ============================================================
@@ -38936,20 +38966,41 @@ function _vzMiniForm(title, fields, data, onSave) {
    ============================================================ */
 /* 🧑‍💼 (V4.139) فتح مباشر لأي حساب وكيل (عام أو فرعي مع شركة) — يحل مشكلة عدم وجود طريق واضح
    لفتح حساب وكيل لا يظهر بشريط الأرصدة (لأن رصيده صفر أو المستخدم يريد وكيلاً بعينه مباشرة). */
-function vzAcctPickerOpen() {
+// 💰 (V4.145) نافذة "حسابات الوكلاء" الموحَّدة — المدخل الوحيد لكل ما هو مالي: الأرصدة السريعة،
+// فتح حساب وكيل، تسعير الوكلاء، وإعدادات حسابات الوكلاء. لا شيء مالي يظهر بالشاشة العامة بعد اليوم.
+function _vzAgentBalanceRows_() {
+  var hasSub = {};
+  (VZ.accounts || []).forEach(function (ac) { if (ac.kind !== 'عام') hasSub[ac.agent] = 1; });
+  return Object.keys(VZ.agentBalances || {}).map(function (a) { var b = VZ.agentBalances[a]; return { a: a, b: b }; })
+    .filter(function (x) { return Math.abs(x.b.netS) > 0.5 || Math.abs(x.b.netE) > 0.5; })
+    .filter(function (x) { return !(hasSub[x.a] && x.a.indexOf(' - ') < 0); })
+    .sort(function (x, y) { return y.b.netS - x.b.netS; });
+}
+function vzAcctHubOpen() {
   if (!vzFin()) { _showPopup('حسابات الوكلاء تتطلب صلاحية مالية خاصة', 'error'); return; }
   var opts = (VZ.accounts || []).length ? VZ.accounts : (VZ.agents || []).map(function (a) { return { key: a, agent: a, kind: 'عام' }; });
-  if (!opts.length) { _showPopup('لا يوجد وكلاء مسجَّلون بعد', 'error'); return; }
+  var rows = _vzAgentBalanceRows_();
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzAcctPickOv';
-  ov.innerHTML = '<div class="vz-dlg" style="width:min(480px,95vw);"><div class="vz-hd"><b>🧑‍💼 فتح حساب وكيل</b>' +
-    '<button class="vz-btn sm" onclick="vzAcctPickerClose()">✕</button></div><div class="p-3">' +
-    '<div class="vz-sec" style="margin-top:0;"><div class="vz-fld"><label>اختر الوكيل أو حسابه الفرعي</label>' +
-    '<select id="vzAcctPickSel">' + opts.map(function (ac) {
-      var lbl = ac.kind === 'عام' ? (ac.key + ' (كل الشركات)') : (ac.key + (ac.kind === 'مشترك' ? ' — حساب مشترك' : ' — حساب منفصل'));
-      return '<option value="' + vzEsc(ac.key) + '">' + vzEsc(lbl) + '</option>';
-    }).join('') + '</select></div>' +
-    '<div class="d-flex gap-2 mt-2"><button class="vz-btn pri" onclick="vzAcctPickerGo()">📂 فتح الحساب</button>' +
-    '<button class="vz-btn" onclick="vzAcctPickerClose()">إلغاء</button></div></div></div></div>';
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(560px,95vw);"><div class="vz-hd"><b>💰 حسابات الوكلاء</b>' +
+    '<span class="d-flex gap-2"><button class="vz-btn sm" onclick="vzOpenPricing()">💲 تسعير الوكلاء</button>' +
+    '<button class="vz-btn sm" onclick="vzAcctCfgOpen()">⚙️ إعدادات الربط</button>' +
+    '<button class="vz-btn sm" onclick="vzAcctPickerClose()">✕</button></span></div><div class="p-3">' +
+    '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📌 الأرصدة (المدينون/الدائنون فقط)</div>' +
+    (rows.length ? ('<div class="d-flex gap-2 flex-wrap">' + rows.map(function (x) {
+      var pos = x.b.netS >= 0;
+      return '<button class="vz-btn sm" style="border-color:' + (pos ? '#f6b8b8' : '#a7e8cf') + ';" onclick="vzOpenAccount(\'' + vzJs(x.a) + '\')">' +
+        '🧑‍💼 ' + vzEsc(x.a) + ' — <b style="color:' + (pos ? '#b91c1c' : '#166534') + ';">' + vzFmt(Math.abs(x.b.netS)) + ' ريال ' + (pos ? 'مستحق له' : 'دائن') + '</b>' +
+        (Math.abs(x.b.netE) > 0.5 ? (' · ' + vzFmt(Math.abs(x.b.netE)) + ' جنيه') : '') + '</button>';
+    }).join('') + '</div>') : '<div class="text-muted small">لا أرصدة مستحقة حالياً.</div>') + '</div>' +
+    '<div class="vz-sec"><div class="vz-sec-h">📂 فتح حساب وكيل</div>' +
+    (opts.length ? ('<div class="vz-fld"><label>اختر الوكيل أو حسابه الفرعي</label>' +
+      '<select id="vzAcctPickSel">' + opts.map(function (ac) {
+        var lbl = ac.kind === 'عام' ? (ac.key + ' (كل الشركات)') : (ac.key + (ac.kind === 'مشترك' ? ' — حساب مشترك' : ' — حساب منفصل'));
+        return '<option value="' + vzEsc(ac.key) + '">' + vzEsc(lbl) + '</option>';
+      }).join('') + '</select></div>' +
+      '<div class="d-flex gap-2 mt-2"><button class="vz-btn pri" onclick="vzAcctPickerGo()">📂 فتح الحساب</button></div>')
+      : '<div class="text-muted small">لا يوجد وكلاء مسجَّلون بعد.</div>') + '</div>' +
+    '</div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzAcctPickerClose(); });
 }
@@ -38971,7 +39022,8 @@ function vzAcctCfgOpen() {
       '<b>مشترك</b> — يُضمّ لحساب «الوكيل - الشركة الرئيسية» فيصير الحسابان حساباً واحداً محاسبياً.<br>' +
       '<span style="color:#8a5a06;font-weight:700;">في كل الأحوال يظل جدول المجموعات يعرض الشركة المصرية الحقيقية لكل مجموعة.</span></div></div>' +
     '<div id="vzAcfgBody"></div>' +
-    '<div class="d-flex gap-2 mt-2"><button class="vz-btn sm" onclick="vzAcctCfgAdd()">➕ إضافة ربط</button>' +
+    '<div class="d-flex gap-2 mt-2 flex-wrap"><button class="vz-btn sm" onclick="vzAcctCfgAdd()">➕ إضافة ربط</button>' +
+    '<button class="vz-btn sm" onclick="vzAcctCfgAutoGen()" title="يفحص كل أزواج (وكيل × شركة) الظاهرة بمجموعات التأشيرات وإعدادات الشركات، ويضيف رابط «منفصل» تلقائياً لكل زوج غير معرَّف بعد — كي لا يبقى أي زوج على الحساب العام المدموج بالخطأ">🧩 توليد الروابط تلقائياً</button>' +
     '<button class="vz-btn pri" onclick="vzAcctCfgSave()">💾 حفظ الإعدادات</button>' +
     '<button class="vz-btn" onclick="vzAcctCfgClose()">إلغاء</button></div></div></div>';
   document.body.appendChild(ov);
@@ -38980,6 +39032,25 @@ function vzAcctCfgOpen() {
 }
 function vzAcctCfgClose() { var o = document.getElementById('vzAcfgOv'); if (o) o.remove(); }
 function vzAcctCfgAdd() { VZ._acfg.push({ agent: '', company: '', mode: 'منفصل', mainCompany: '', notes: '' }); vzAcctCfgRender(); }
+// 🧩 (V4.145) توليد تلقائي لروابط «منفصل» لكل زوج (وكيل × شركة) ظاهر فعلياً بمجموعات التأشيرات
+// أو بإعدادات الشركات (Agents_Settings) وليس له رابط مُعرَّف بعد — يحل مشكلة نسيان ربط أحد
+// الأزواج يدوياً فيقع سهواً في الحساب العام المدموج بدل حسابه المستقل الخاص بشركته.
+function vzAcctCfgAutoGen() {
+  var pairs = {};
+  (VZ.files || []).forEach(function (f) { if (f.agent && f.company) pairs[f.agent + '|' + f.company] = { agent: f.agent, company: f.company }; });
+  (VZ.companies || []).forEach(function (c) { if (c.agent && c.company) pairs[c.agent + '|' + c.company] = { agent: c.agent, company: c.company }; });
+  var existing = {};
+  (VZ._acfg || []).forEach(function (r) { existing[mfStr(r.agent) + '|' + mfStr(r.company)] = true; });
+  var added = 0;
+  Object.keys(pairs).forEach(function (k) {
+    if (existing[k]) return;
+    var p = pairs[k];
+    VZ._acfg.push({ agent: p.agent, company: p.company, mode: 'منفصل', mainCompany: '', notes: 'أُنشئ تلقائياً' });
+    added++;
+  });
+  vzAcctCfgRender();
+  _showPopup(added ? ('أُضيف ' + added + ' ربط تلقائي بنمط «منفصل» — راجعها ثم اضغط 💾 حفظ الإعدادات') : 'كل أزواج (وكيل × شركة) الظاهرة معرَّفة بالفعل', added ? 'success' : 'error');
+}
 function vzAcctCfgDel(i) { VZ._acfg.splice(i, 1); vzAcctCfgRender(); }
 function vzAcctCfgSet(i, k, v) { VZ._acfg[i][k] = mfStr(v); if (k === 'mode') vzAcctCfgRender(); }
 function vzAcctCfgRender() {

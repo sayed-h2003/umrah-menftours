@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.144";
+var APP_VERSION = "4.145";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21435,16 +21435,19 @@ function _tgCurrentStay_(row, trip) {
   }
   return null;
 }
-// ملف/ملفات مراجعة الوزارة الخاصة بهذا المعتمر بهذه الرحلة (نفس منطق _mfFilesForTrip_ بالواجهة)
+// 🏛️ (V4.145) ملف مراجعة الوزارة الخاص بهذا المعتمر بهذه الرحلة: الأولوية للملف الذي اختير فيه
+// المعتمر بعينه (تم اختياره صراحة في «المعتمرون المحدَّدون» بذلك الملف)؛ فقط لو لم يوجد أي ملف
+// كهذا، يُعتبر مربوطاً بملف/ملفات الرحلة العامة (بلا تحديد أسماء) إن وُجدت.
 function _tgMfForPilgrim_(tripName, passport) {
   if (!tripName) return [];
   var files;
   try { files = _mfReadAll_().filter(function (f) { return f.tripName === tripName; }); } catch (e) { return []; }
-  return files.filter(function (f) {
-    if (!(f.selected || []).length) return true;
-    if (!passport) return true;
-    return f.selected.indexOf(passport) >= 0 || f.selected.indexOf('P:' + passport) >= 0;
+  var explicit = files.filter(function (f) {
+    return (f.selected || []).length && passport &&
+      (f.selected.indexOf(passport) >= 0 || f.selected.indexOf('P:' + passport) >= 0);
   });
+  if (explicit.length) return explicit;
+  return files.filter(function (f) { return !(f.selected || []).length; });
 }
 // مجموعة/مجموعات التأشيرات الخاصة بهذا المعتمر بهذه الرحلة (بالجواز إن حُدِّد، وإلا بالعميل)
 function _tgVzForPilgrim_(tripName, passport, client) {
@@ -21491,6 +21494,9 @@ function _tgPilgrimDetailMsg_(person) {
   msg += '🛂 <b>رقم الجواز:</b> ' + (r.passport || '—') + '\n';
   msg += '👥 <b>العميل:</b> ' + (r.client || '—') + '\n';
   msg += '🧳 <b>الرحلة:</b> ' + (r.tripName || '—') + (person.active ? '  ▶ <b>جارية الآن</b>' : '') + '\n';
+  if (t.departDate || t.returnDate) {
+    msg += '🛫 <b>السفر:</b> ' + (t.departDate || '—') + '   🛬 <b>العودة:</b> ' + (t.returnDate || '—') + '\n';
+  }
   msg += '🧑‍✈️ <b>المشرف:</b> ' + (t.supervisor || '—') + '\n';
   if (t.supervisorPhones) msg += '📱 <b>جوال المشرف:</b> ' + t.supervisorPhones + '\n';
   if (stay) {
@@ -21641,11 +21647,11 @@ function _vzRowToObj_(r) {
   var hz = []; try { hz = JSON.parse(_mfStr_(r[26]) || '[]'); if (!Array.isArray(hz)) hz = []; } catch (e) { hz = []; }
   return {
     id: _mfStr_(r[0]), seq: _mfNum_(r[1]), ref: _mfStr_(r[2]), status: _mfStr_(r[3]) || VZ_STATUSES_[0],
-    date: _mfStr_(r[4]), company: _mfStr_(r[5]), agent: _mfStr_(r[6]), tripName: _mfStr_(r[7]),
+    date: _mfDate_(r[4]), company: _mfStr_(r[5]), agent: _mfStr_(r[6]), tripName: _mfStr_(r[7]),
     breakdown: bd, selected: sel, visaCount: _mfNum_(r[10]), price: _mfNum_(r[11]), notes: _mfStr_(r[12]),
     createdBy: _mfStr_(r[13]), createdAt: _mfDateTime_(r[14]), updatedBy: _mfStr_(r[15]), updatedAt: _mfDateTime_(r[16]),
-    payStatus: _mfStr_(r[17]), makkahIn: _mfStr_(r[18]), makkahOut: _mfStr_(r[19]),
-    madinahIn: _mfStr_(r[20]), madinahOut: _mfStr_(r[21]),
+    payStatus: _mfStr_(r[17]), makkahIn: _mfDate_(r[18]), makkahOut: _mfDate_(r[19]),
+    madinahIn: _mfDate_(r[20]), madinahOut: _mfDate_(r[21]),
     makkahHousingAgr: _mfStr_(r[22]), madinahHousingAgr: _mfStr_(r[23]),
     makkahCateringAgr: _mfStr_(r[24]), madinahCateringAgr: _mfStr_(r[25]),
     housing: hz
@@ -21754,7 +21760,7 @@ function _vzReadPays_(agent) {
   var last = sh.getLastRow(); if (last < 2) return [];
   var a = _mfStr_(agent);
   return sh.getRange(2, 1, last - 1, VZ_PAY_HEADERS.length).getValues().map(function (r, i) {
-    return { id: _mfStr_(r[0]), agent: _mfStr_(r[1]), date: _mfStr_(r[2]), amount: _accNum_(r[3]),
+    return { id: _mfStr_(r[0]), agent: _mfStr_(r[1]), date: _mfDate_(r[2]), amount: _accNum_(r[3]),
       currency: _mfStr_(r[4]) || 'SAR', notes: _mfStr_(r[5]), createdBy: _mfStr_(r[6]), createdAt: _mfStr_(r[7]), _row: i + 2 };
   }).filter(function (x) { return x.id && (!a || x.agent === a); });
 }
@@ -22164,8 +22170,11 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
   agent = _mfStr_(agent); price = _mfNum_(price);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
   if (!price) return { success: false, error: 'السعر مطلوب' };
-  var fromMs = from ? _mfMsOf_(_mfDate_(from)) : -Infinity;
-  var toMs = to ? _mfMsOf_(_mfDate_(to)) : Infinity;
+  // 🐞 (V4.145) الإصلاح الجذري: كانت `_mfMsOf_` تمرّر السلسلة dd/mm/yyyy إلى `new Date()` مباشرة
+  // التي تُفسِّرها بصيغة mm/dd/yyyy الأمريكية أو تعيد Invalid Date — فتُستبعَد كل الصفوف من الفترة
+  // صامتة. `_mfMs_` الموجودة أصلاً بالبرنامج تُحلِّل dd/mm/yyyy بشكل صريح وصحيح دوماً.
+  var fromMs = from ? _mfMs_(_mfDate_(from)) : -Infinity;
+  var toMs = to ? _mfMs_(_mfDate_(to)) : Infinity;
   var lock = LockService.getScriptLock();
   try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
@@ -22175,8 +22184,8 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
     var touched = 0;
     all.forEach(function (f) {
       if (!_vzFileInAcct_(f, agent, map)) return;
-      var ms = _mfMsOf_(_mfDate_(f.date));
-      if (ms === null || isNaN(ms) || ms < fromMs || ms > toMs) return;
+      var ms = _mfMs_(_mfDate_(f.date));
+      if (isNaN(ms) || ms < fromMs || ms > toMs) return;
       if (_mfNum_(f.price) === price) return;
       var oldP = f.price;
       sh.getRange(f._row, 12).setValue(price); // العمود 12 = السعر
@@ -22188,7 +22197,6 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
     return { success: true, count: touched };
   } finally { lock.releaseLock(); }
 }
-function _mfMsOf_(d) { if (!d) return null; var t = new Date(d).getTime(); return isNaN(t) ? null : t; }
 
 // 📜 (V4.144) سجل تعديلات سطر واحد بكشف حساب الوكيل — بند/دفعة/مجموعة/دورة نقل، كلٌّ بمفتاحه الخاص
 function getAgentAccRowHistory(authToken, kind, id) {
@@ -22431,7 +22439,7 @@ function _vzHaClearCache_() { try { CacheService.getScriptCache().remove(VZ_HA_C
 
 function _vzHaRowToObj_(r) {
   return { id: _mfStr_(r[0]), seq: _mfNum_(r[1]), agrNo: _mfStr_(r[2]), city: _mfStr_(r[3]), hotel: _mfStr_(r[4]),
-    capacity: _mfNum_(r[5]), from: _mfStr_(r[6]), to: _mfStr_(r[7]), status: _mfStr_(r[8]), notes: _mfStr_(r[9]),
+    capacity: _mfNum_(r[5]), from: _mfDate_(r[6]), to: _mfDate_(r[7]), status: _mfStr_(r[8]), notes: _mfStr_(r[9]),
     createdBy: _mfStr_(r[10]), createdAt: _mfStr_(r[11]), updatedBy: _mfStr_(r[12]), updatedAt: _mfStr_(r[13]),
     supplier: _mfStr_(r[14]), kind: _mfStr_(r[15]) || 'سكن' };
 }
@@ -22449,7 +22457,7 @@ function _vzAllocReadAll_() {
     .filter(function (r) { return _mfStr_(r[0]); })
     .map(function (r, i) {
       return { id: _mfStr_(r[0]), agrId: _mfStr_(r[1]), groupRef: _mfStr_(r[2]), count: _mfNum_(r[3]),
-        from: _mfStr_(r[4]), to: _mfStr_(r[5]), notes: _mfStr_(r[6]),
+        from: _mfDate_(r[4]), to: _mfDate_(r[5]), notes: _mfStr_(r[6]),
         createdBy: _mfStr_(r[7]), createdAt: _mfStr_(r[8]), _row: i + 2 };
     });
 }
