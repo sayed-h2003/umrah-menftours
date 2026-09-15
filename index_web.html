@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.146 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.147 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.146)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.147)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.146</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.147</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6666,7 +6666,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.146";
+var CLIENT_APP_VERSION = "4.147";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -38662,6 +38662,9 @@ function vzAccFetch() {
         cs.value = keep;
       }
       vzAccRender();
+      // 🚌 (V4.147) جلب دورات النقل تلقائياً عند فتح الحساب — بلا حاجة لضغط زر "تحديث" يدوياً،
+      // وتشمل كل الدورات حتى لو لم يُسجَّل سعرها بعد (تظهر بقيمة صفر ريثما يُضبَط السعر)
+      vzAccRefreshTransport(true);
     })
     .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
     .getAgentAccount(window.authToken, VZ._accKey, VZ._accF);
@@ -39021,15 +39024,25 @@ function vzAccRowHistory(kind, id) {
 }
 // 🚌 (V4.144) يجلب دورات النقل السعودي الخاصة بهذا الحساب تحديداً (الوكيل/المورد + الشركة
 // المصرية مطابقان لمفتاح الحساب) من شاشة حسابات النقل، ويُدرجها ضمن دفتر الحساب الموحَّد.
-function vzAccRefreshTransport() {
+function vzAccRefreshTransport(quiet) {
   google.script.run
     .withSuccessHandler(function (res) {
-      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الجلب', 'error'); return; }
+      if (!res || !res.success) { if (!quiet) _showPopup((res && res.error) || 'تعذّر الجلب', 'error'); return; }
       VZ._accTransport = res.rows || [];
-      _showPopup('جُلبت ' + VZ._accTransport.length + ' دورة نقل', 'success');
+      // 🔎 (V4.147) التشخيص عند 0 نتيجة يظهر فقط عند الضغط اليدوي على الزر (ليس عند الفتح التلقائي
+      // الصامت) — فمعظم الحسابات لا تشمل دورات نقل أصلاً وهذا طبيعي وليس عطلاً يستحق نافذة تنبيه
+      if (!quiet && !VZ._accTransport.length && (res.diag || []).length) {
+        var h = '<div class="mf-note info"><span>🔎</span><div>لا دورات نقل مطابقة لحساب «' + vzEsc(VZ._accKey) +
+          '» — لكن وُجدت دورات نقل بهذه الأزواج (المورد، الشركة) لوكلاء مشابهين بالاسم. أضِف الشركة الناقصة من ⚙️ إعدادات الربط:<br>' +
+          res.diag.map(function (d) { return '• <b>' + vzEsc(d.agent) + '</b> — ' + vzEsc(d.company) + ' (' + d.count + ' صف)'; }).join('<br>') +
+          '</div></div>';
+        showElegantConfirm({ icon: '🔎', title: 'لا دورات نقل مطابقة', messageHtml: h, buttons: [{ label: 'حسناً', class: 'btn-primary', onClick: function () {} }] });
+      } else if (!quiet) {
+        _showPopup('جُلبت ' + VZ._accTransport.length + ' دورة نقل', 'success');
+      }
       vzAccRender();
     })
-    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .withFailureHandler(function (e) { if (!quiet) _showPopup(e && e.message ? e.message : e, 'error'); })
     .getAgentTransportRuns(window.authToken, VZ._accKey);
 }
 /* ============================================================
@@ -39234,10 +39247,19 @@ function vzAcctCfgAdd() { VZ._acfg.push({ agent: '', company: '', mode: 'منف�
 // 🧩 (V4.145) توليد تلقائي لروابط «منفصل» لكل زوج (وكيل × شركة) ظاهر فعلياً بمجموعات التأشيرات
 // أو بإعدادات الشركات (Agents_Settings) وليس له رابط مُعرَّف بعد — يحل مشكلة نسيان ربط أحد
 // الأزواج يدوياً فيقع سهواً في الحساب العام المدموج بدل حسابه المستقل الخاص بشركته.
+// 🚌 (V4.147) تشمل الآن أيضاً أزواج (المورد، الشركة) من شيت النقل السعودي — كانت شركات مخصَّصة
+// فقط لدورات النقل (لا تظهر بأي مجموعة تأشيرات ولا بإعدادات الشركات) تفوت التوليد التلقائي تماماً
 function vzAcctCfgAutoGen() {
+  google.script.run
+    .withSuccessHandler(function (res) { _vzAcctCfgAutoGenApply_((res && res.pairs) || []); })
+    .withFailureHandler(function () { _vzAcctCfgAutoGenApply_([]); })
+    .getTransportAgentCompanyPairs(window.authToken);
+}
+function _vzAcctCfgAutoGenApply_(transportPairs) {
   var pairs = {};
   (VZ.files || []).forEach(function (f) { if (f.agent && f.company) pairs[f.agent + '|' + f.company] = { agent: f.agent, company: f.company }; });
   (VZ.companies || []).forEach(function (c) { if (c.agent && c.company) pairs[c.agent + '|' + c.company] = { agent: c.agent, company: c.company }; });
+  (transportPairs || []).forEach(function (p) { if (p.agent && p.company) pairs[p.agent + '|' + p.company] = { agent: p.agent, company: p.company }; });
   var existing = {};
   (VZ._acfg || []).forEach(function (r) { existing[mfStr(r.agent) + '|' + mfStr(r.company)] = true; });
   var added = 0;
@@ -39248,7 +39270,7 @@ function vzAcctCfgAutoGen() {
     added++;
   });
   vzAcctCfgRender();
-  _showPopup(added ? ('أُضيف ' + added + ' ربط تلقائي بنمط «منفصل» — راجعها ثم اضغط 💾 حفظ الإعدادات') : 'كل أزواج (وكيل × شركة) الظاهرة معرَّفة بالفعل', added ? 'success' : 'error');
+  _showPopup(added ? ('أُضيف ' + added + ' ربط تلقائي بنمط «منفصل» — راجعها ثم اضغط 💾 حفظ الإعدادات') : 'كل أزواج (وكيل × شركة) الظاهرة (شاملةً شركات النقل) معرَّفة بالفعل', added ? 'success' : 'error');
 }
 function vzAcctCfgDel(i) { VZ._acfg.splice(i, 1); vzAcctCfgRender(); }
 function vzAcctCfgSet(i, k, v) { VZ._acfg[i][k] = (k === 'active') ? !!v : mfStr(v); if (k === 'mode') vzAcctCfgRender(); }

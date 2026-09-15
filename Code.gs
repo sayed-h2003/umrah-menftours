@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.146";
+var APP_VERSION = "4.147";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22266,7 +22266,37 @@ function getAgentTransportRuns(authToken, acctKey) {
       client: r.client, tripName: r.tripName, company: r.company
     };
   });
-  return { success: true, rows: out };
+  // 🔎 (V4.147) تشخيص عند 0 نتيجة: نعرض أزواج (المورد، الشركة) الفعلية الموجودة بشيت النقل
+  // لأقرب اسم وكيل مطابق، ليتّضح للمستخدم فوراً أي مسمّى شركة يلزم ربطه بإعدادات الحسابات
+  // (بدل تخمين السبب) — لا يُرسَل إلا عند الحاجة تفادياً لحمل زائد على الاستجابة المعتادة.
+  var diag = null;
+  if (!out.length) {
+    var agentPart = acctKey.split(' - ')[0];
+    var seen = {};
+    rows.forEach(function (r) {
+      if (!r.supplier || r.supplier.indexOf(agentPart) < 0) return;
+      var k = r.supplier + '|' + r.company;
+      if (!seen[k]) seen[k] = { agent: r.supplier, company: r.company, count: 0 };
+      seen[k].count++;
+    });
+    diag = Object.keys(seen).map(function (k) { return seen[k]; });
+  }
+  return { success: true, rows: out, diag: diag };
+}
+// 🧩 (V4.147) كل أزواج (المورد، الشركة) الفعلية بشيت النقل — تُستخدَم لتوليد روابط حسابات
+// الوكلاء تلقائياً حتى لو لم تظهر هذه الشركة إطلاقاً بمجموعات التأشيرات أو إعدادات الشركات
+// (شركات خاصة بدورات النقل فقط، كانت تفوت أداة "توليد الروابط تلقائياً" سابقاً).
+function getTransportAgentCompanyPairs(authToken) {
+  _vzFinancePerm_(authToken);   // 🔒 مالي
+  var rows = _taReadRowsRaw_();
+  var seen = {}, out = [];
+  rows.forEach(function (r) {
+    if (!r.supplier || !r.company) return;
+    var k = r.supplier + '|' + r.company;
+    if (seen[k]) return;
+    seen[k] = true; out.push({ agent: r.supplier, company: r.company });
+  });
+  return { success: true, pairs: out };
 }
 
 /* -------- حساب وكيل: عرض/دفعات/بنود -------- */
