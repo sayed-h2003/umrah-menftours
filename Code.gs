@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.148";
+var APP_VERSION = "4.150";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21623,14 +21623,17 @@ var VZ_FILES_HEADERS = ['المعرف','مسلسل','رقم المجموعة','�
   // 🏨 (V4.134) السكن متعدد الفنادق: مصفوفة {city,hotel,count,in,out,hAgr,cAgr,supplier} — المجموعة
   // الواحدة قد تُوزَّع على أكثر من فندق في المدينة الواحدة، ومجموع أعدادها لكل مدينة = عدد المجموعة.
   // الأعمدة 18→25 تبقى كما هي للتوافق الرجعي (أول سكن لكل مدينة يُكتب فيها أيضاً).
-  'السكن والاتفاقيات (JSON)'];
+  'السكن والاتفاقيات (JSON)',
+  // 📝 (V4.149) رقم القيد — حقل نصي حر يُسجَّله المستخدم يدوياً (رقم القيد المحاسبي من دفاتره
+  // الخاصة)، منفصل تماماً عن "رقم المجموعة" وعن رقم التسلسل الداخلي
+  'رقم القيد'];
 var VZ_PAY_STATUSES_ = ['', 'تم إصدار الموقّع', 'تم الإرسال', 'تم السداد'];
 var VZ_PRICES_SHEET  = 'VisaAgentPrices';
 var VZ_PRICES_HEADERS = ['الوكيل','السعر','من تاريخ','إلى تاريخ','أنشئ بواسطة','أنشئ في'];
 var VZ_ITEMS_SHEET   = 'AgentAccounts_Items';
-var VZ_ITEMS_HEADERS = ['المعرف','الوكيل','البيان','العملة','القيمة','دائن؟','ملاحظات','الترتيب','أنشئ بواسطة','أنشئ في'];
+var VZ_ITEMS_HEADERS = ['المعرف','الوكيل','البيان','العملة','القيمة','دائن؟','ملاحظات','الترتيب','أنشئ بواسطة','أنشئ في','رقم القيد'];
 var VZ_PAY_SHEET     = 'AgentAccounts_Payments';
-var VZ_PAY_HEADERS   = ['المعرف','الوكيل','التاريخ','المبلغ','العملة','ملاحظات','أنشئ بواسطة','أنشئ في'];
+var VZ_PAY_HEADERS   = ['المعرف','الوكيل','التاريخ','المبلغ','العملة','ملاحظات','أنشئ بواسطة','أنشئ في','رقم القيد'];
 var VZ_STATUSES_     = ['تم الإرسال','تم السداد','تم إصدار الموفا'];
 var VZ_BOOTSTRAP_CACHE_KEY = 'visa_bootstrap_cache';
 
@@ -21654,7 +21657,7 @@ function _vzRowToObj_(r) {
     madinahIn: _mfDate_(r[20]), madinahOut: _mfDate_(r[21]),
     makkahHousingAgr: _mfStr_(r[22]), madinahHousingAgr: _mfStr_(r[23]),
     makkahCateringAgr: _mfStr_(r[24]), madinahCateringAgr: _mfStr_(r[25]),
-    housing: hz
+    housing: hz, entryNo: _mfStr_(r[27])
   };
 }
 // 🏨 (V4.134) ترقية السكن القديم (حقول مكة/المدينة المفردة) إلى مصفوفة السكن المتعدد
@@ -21688,7 +21691,7 @@ function _vzObjToRow_(f) {
     f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
     _mfStr_(f.payStatus), _mfDate_(f.makkahIn), _mfDate_(f.makkahOut), _mfDate_(f.madinahIn), _mfDate_(f.madinahOut),
     _mfStr_(f.makkahHousingAgr), _mfStr_(f.madinahHousingAgr), _mfStr_(f.makkahCateringAgr), _mfStr_(f.madinahCateringAgr),
-    JSON.stringify(f.housing || [])];
+    JSON.stringify(f.housing || []), _mfStr_(f.entryNo)];
 }
 function _vzReadAll_() {
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
@@ -21752,7 +21755,7 @@ function _vzReadItems_(agent) {
   return sh.getRange(2, 1, last - 1, VZ_ITEMS_HEADERS.length).getValues().map(function (r, i) {
     return { id: _mfStr_(r[0]), agent: _mfStr_(r[1]), desc: _mfStr_(r[2]), currency: _mfStr_(r[3]) || 'SAR',
       value: _accNum_(r[4]), isCredit: _mfStr_(r[5]) === 'نعم', notes: _mfStr_(r[6]), order: _accNum_(r[7]),
-      createdBy: _mfStr_(r[8]), createdAt: _mfStr_(r[9]), _row: i + 2 };
+      createdBy: _mfStr_(r[8]), createdAt: _mfStr_(r[9]), entryNo: _mfStr_(r[10]), _row: i + 2 };
   }).filter(function (x) { return x.id && (!a || x.agent === a); });
 }
 function _vzReadPays_(agent) {
@@ -21761,7 +21764,8 @@ function _vzReadPays_(agent) {
   var a = _mfStr_(agent);
   return sh.getRange(2, 1, last - 1, VZ_PAY_HEADERS.length).getValues().map(function (r, i) {
     return { id: _mfStr_(r[0]), agent: _mfStr_(r[1]), date: _mfDate_(r[2]), amount: _accNum_(r[3]),
-      currency: _mfStr_(r[4]) || 'SAR', notes: _mfStr_(r[5]), createdBy: _mfStr_(r[6]), createdAt: _mfStr_(r[7]), _row: i + 2 };
+      currency: _mfStr_(r[4]) || 'SAR', notes: _mfStr_(r[5]), createdBy: _mfStr_(r[6]), createdAt: _mfStr_(r[7]),
+      entryNo: _mfStr_(r[8]), _row: i + 2 };
   }).filter(function (x) { return x.id && (!a || x.agent === a); });
 }
 // صافي حساب وكيل: مستحق (بالريال من التأشيرات + بنود مدينة) − دائن − مدفوع، لكل عملة على حدة
@@ -21999,7 +22003,7 @@ function _vzFinancePerm_(authToken) {
 var VZ_FIELD_LABELS_ = {
   ref: 'رقم المجموعة', status: 'الحالة', date: 'تاريخ السداد', company: 'الشركة المصرية',
   agent: 'الوكيل السعودي', tripName: 'الرحلة المرتبطة', visaCount: 'العدد', price: 'سعر الفرد',
-  notes: 'ملاحظات', payStatus: 'حالة السداد',
+  notes: 'ملاحظات', payStatus: 'حالة السداد', entryNo: 'رقم القيد',
   breakdown: 'بنود العملاء', selected: 'المعتمرون المختارون', housing: 'السكن والاتفاقيات'
 };
 function getVisaFileHistory(authToken, id) {
@@ -22052,7 +22056,8 @@ function saveVisaFile(authToken, data) {
       madinahIn: _mfDate_(data.madinahIn), madinahOut: _mfDate_(data.madinahOut),
       makkahHousingAgr: _mfStr_(data.makkahHousingAgr), madinahHousingAgr: _mfStr_(data.madinahHousingAgr),
       makkahCateringAgr: _mfStr_(data.makkahCateringAgr), madinahCateringAgr: _mfStr_(data.madinahCateringAgr),
-      housing: Array.isArray(data.housing) ? data.housing : (old ? old.housing : [])
+      housing: Array.isArray(data.housing) ? data.housing : (old ? old.housing : []),
+      entryNo: _mfStr_(data.entryNo)
     };
     // 🏨 (V4.134) تطبيع السكن المتعدد + مزامنة الحقول المفردة منه (أول فندق لكل مدينة)
     f.housing = _vzHousingNormalize_(f);
@@ -22141,6 +22146,19 @@ function importVisaFilesBatch(authToken, rows) {
   } finally { lock.releaseLock(); }
 }
 
+// 📝 (V4.149) تعديل رقم القيد وحده لمجموعة — كتابة خلية واحدة سريعة بلا إعادة التحقق من كامل
+// النموذج (يُستخدَم من عمود "القيد" القابل للتحرير المباشر بجدول المجموعات وكشف الحساب)
+function setVisaFileEntryNo(authToken, id, entryNo) {
+  var session = _vzPerm_(authToken, 'edit');
+  var hit = _vzReadAll_().filter(function (x) { return x.id === _mfStr_(id); })[0];
+  if (!hit) return { success: false, error: 'القيد غير موجود' };
+  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+  var old = hit.entryNo;
+  sh.getRange(hit._row, 28).setValue(_mfStr_(entryNo)); // العمود 28 = رقم القيد
+  logChange_(session.username, 'تعديل رقم القيد', 'VZ:' + hit.id, 'رقم القيد', old || '-', entryNo || '-');
+  _vzClearCache_();
+  return { success: true };
+}
 function deleteVisaFile(authToken, id) {
   var session = _vzPerm_(authToken, 'delete');
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
@@ -22150,6 +22168,22 @@ function deleteVisaFile(authToken, id) {
   logChange_(session.username, 'حذف قيد تأشيرات', hit.agent || '-', 'قيد ' + (hit.ref || hit.seq), '-', '-');
   _vzClearCache_();
   return { success: true };
+}
+// 🗑️ (V4.149) حذف جماعي لعدة مجموعات تأشيرات دفعة واحدة — يحذف الصفوف من الأسفل للأعلى
+// كي لا يختل ترقيم الصفوف الباقية أثناء الحذف المتتابع
+function deleteVisaFilesBatch(authToken, ids) {
+  var session = _vzPerm_(authToken, 'delete');
+  ids = (Array.isArray(ids) ? ids : []).map(_mfStr_).filter(Boolean);
+  if (!ids.length) return { success: false, error: 'لم تُحدَّد أي مجموعة' };
+  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+  var all = _vzReadAll_();
+  var hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+  hits.forEach(function (hit) {
+    sh.deleteRow(hit._row);
+    logChange_(session.username, 'حذف قيد تأشيرات (جماعي)', hit.agent || '-', 'قيد ' + (hit.ref || hit.seq), '-', '-');
+  });
+  _vzClearCache_();
+  return { success: true, count: hits.length };
 }
 
 /* -------- تسعير الوكلاء (فترات) -------- */
@@ -22360,7 +22394,8 @@ function saveAgentAccItem(authToken, item) {
   var now = _mfStamp_();
   var id = _mfStr_(item.id);
   var rowVals = [id || _accId_('AI'), agent, _mfStr_(item.desc), _mfStr_(item.currency) || 'SAR',
-    _accNum_(item.value), item.isCredit ? 'نعم' : 'لا', _mfStr_(item.notes), _accNum_(item.order), session.username, now];
+    _accNum_(item.value), item.isCredit ? 'نعم' : 'لا', _mfStr_(item.notes), _accNum_(item.order), session.username, now,
+    _mfStr_(item.entryNo)];
   var isEdit = !!id;
   if (isEdit) {
     var hit = _vzReadItems_('').filter(function (x) { return x.id === id; })[0];
@@ -22373,6 +22408,25 @@ function saveAgentAccItem(authToken, item) {
   _vzClearCache_();
   return { success: true };
 }
+// 📝 (V4.149) تعديل رقم القيد وحده لبند/دفعة — بلا إعادة كتابة باقي بيانات الصف
+function setAgentAccItemEntryNo(authToken, id, entryNo) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 مالي
+  var hit = _vzReadItems_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
+  if (!hit) return { success: false, error: 'البند غير موجود' };
+  _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS).getRange(hit._row, 11).setValue(_mfStr_(entryNo));
+  logChange_(session.username, 'تعديل رقم القيد', 'AI:' + hit.id, 'رقم القيد', hit.entryNo || '-', entryNo || '-');
+  _vzClearCache_();
+  return { success: true };
+}
+function setAgentPaymentEntryNo(authToken, id, entryNo) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 مالي
+  var hit = _vzReadPays_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
+  if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
+  _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS).getRange(hit._row, 9).setValue(_mfStr_(entryNo));
+  logChange_(session.username, 'تعديل رقم القيد', 'AP:' + hit.id, 'رقم القيد', hit.entryNo || '-', entryNo || '-');
+  _vzClearCache_();
+  return { success: true };
+}
 function deleteAgentAccItem(authToken, id) {
   var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var hit = _vzReadItems_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
@@ -22382,6 +22436,20 @@ function deleteAgentAccItem(authToken, id) {
   _vzClearCache_();
   return { success: true };
 }
+// 🗑️ (V4.149) حذف جماعي لعدة بنود دفعة واحدة
+function deleteAgentAccItemsBatch(authToken, ids) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 مالي
+  ids = (Array.isArray(ids) ? ids : []).map(_mfStr_).filter(Boolean);
+  if (!ids.length) return { success: false, error: 'لم تُحدَّد أي بنود' };
+  var sh = _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS);
+  var hits = _vzReadItems_('').filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+  hits.forEach(function (hit) {
+    sh.deleteRow(hit._row);
+    logChange_(session.username, 'حذف بند حساب وكيل (جماعي)', 'AI:' + hit.id, hit.desc, '-', '-');
+  });
+  _vzClearCache_();
+  return { success: true, count: hits.length };
+}
 function saveAgentPayment(authToken, pay) {
   var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var agent = _mfStr_(pay && pay.agent);
@@ -22390,7 +22458,7 @@ function saveAgentPayment(authToken, pay) {
   var now = _mfStamp_();
   var id = _mfStr_(pay.id);
   var rowVals = [id || _accId_('AP'), agent, _mfDate_(pay.date) || _mfToday_(), _accNum_(pay.amount),
-    _mfStr_(pay.currency) || 'SAR', _mfStr_(pay.notes), session.username, now];
+    _mfStr_(pay.currency) || 'SAR', _mfStr_(pay.notes), session.username, now, _mfStr_(pay.entryNo)];
   var isEdit = !!id;
   if (isEdit) {
     var hit = _vzReadPays_('').filter(function (x) { return x.id === id; })[0];
@@ -22412,6 +22480,20 @@ function deleteAgentPayment(authToken, id) {
   _vzClearCache_();
   return { success: true };
 }
+// 🗑️ (V4.149) حذف جماعي لعدة دفعات دفعة واحدة
+function deleteAgentPaymentsBatch(authToken, ids) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 مالي
+  ids = (Array.isArray(ids) ? ids : []).map(_mfStr_).filter(Boolean);
+  if (!ids.length) return { success: false, error: 'لم تُحدَّد أي دفعات' };
+  var sh = _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS);
+  var hits = _vzReadPays_('').filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+  hits.forEach(function (hit) {
+    sh.deleteRow(hit._row);
+    logChange_(session.username, 'حذف دفعة وكيل (جماعي)', 'AP:' + hit.id, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
+  });
+  _vzClearCache_();
+  return { success: true, count: hits.length };
+}
 // 📋 (V4.146) دفعات متعددة دفعة واحدة — للصق من إكسيل (كل الوكلاء والتأشيرات عامة بالريال السعودي)
 function saveAgentPaymentsBatch(authToken, agent, rows) {
   var session = _vzFinancePerm_(authToken);   // 🔒 مالي
@@ -22424,7 +22506,7 @@ function saveAgentPaymentsBatch(authToken, agent, rows) {
   var out = [], entries = [];
   valid.forEach(function (r) {
     var id = _accId_('AP');
-    out.push([id, agent, _mfDate_(r.date) || _mfToday_(), _accNum_(r.amount), 'SAR', _mfStr_(r.notes), session.username, now]);
+    out.push([id, agent, _mfDate_(r.date) || _mfToday_(), _accNum_(r.amount), 'SAR', _mfStr_(r.notes), session.username, now, _mfStr_(r.entryNo)]);
     entries.push({ action: 'إضافة دفعة وكيل (لصق دفعات)', recordId: 'AP:' + id,
       field: _mfStr_(r.notes) || '-', oldVal: '-', newVal: _accNum_(r.amount) + ' ريال' });
   });
@@ -22447,7 +22529,7 @@ function saveAgentAccItemsBatch(authToken, agent, isCredit, rows) {
   var out = [], entries = [];
   valid.forEach(function (r) {
     var id = _accId_('AI');
-    out.push([id, agent, _mfStr_(r.desc), 'SAR', _accNum_(r.value), isCredit ? 'نعم' : 'لا', '', 0, session.username, now]);
+    out.push([id, agent, _mfStr_(r.desc), 'SAR', _accNum_(r.value), isCredit ? 'نعم' : 'لا', '', 0, session.username, now, _mfStr_(r.entryNo)]);
     entries.push({ action: 'إضافة بند حساب وكيل (لصق بنود)', recordId: 'AI:' + id,
       field: _mfStr_(r.desc), oldVal: '-', newVal: _accNum_(r.value) + ' ريال' + (isCredit ? ' (دائن)' : ' (مدين)') });
   });

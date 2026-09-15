@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.148 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.150 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.148)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.150)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.148</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.150</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5077,6 +5077,11 @@ input[type="date"]:not(:focus):not(:valid) {
      بالتحويم عبر title، مهما طال المحتوى (رأس العمود وحده يُسمح له بسطرين) */
   #section-visas table.vz-tab td{ padding:7px 6px; border:1px solid #e0efe9; text-align:center; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; max-width:200px; color:#123; }
+  /* 📝 (V4.149) حقل "القيد" القابل للكتابة الحرة داخل الجدول مباشرة */
+  .vz-inline-inp{ width:100%; border:1.5px solid transparent; background:transparent; text-align:center; font-size:12px;
+    font-weight:700; color:#123; border-radius:6px; padding:2px 4px; }
+  .vz-inline-inp:hover{ border-color:var(--vzBorder); background:#fff; }
+  .vz-inline-inp:focus{ border-color:var(--vzG); background:#fff; outline:none; }
   #section-visas table.vz-tab tbody tr:nth-child(even){ background:#f6fcfa; }
   #section-visas table.vz-tab tbody tr:hover td{ background:var(--vzGL); }
   /* 🖱️ (V4.142) تمييز صف المجموعة المحدَّدة — نفس أسلوب شاشة ملفات المراجعة */
@@ -5114,6 +5119,7 @@ input[type="date"]:not(:focus):not(:valid) {
   <div class="vz-bar mb-2 d-flex align-items-center gap-2 flex-wrap">
     <h5 class="fw-bold mb-0" style="color:#075c46;">🛂 متابعة التأشيرات والوكلاء</h5>
     <span class="text-muted small" id="vzCountLbl"></span>
+    <div id="vzFilesSelBar"></div>
     <div class="ms-auto d-flex gap-2 flex-wrap">
       <button class="vz-btn pri" onclick="vzNewFile()">➕ مجموعة جديدة</button>
       <button class="vz-btn" onclick="vzHaOpen()">🏨 اتفاقيات السكن</button>
@@ -5148,6 +5154,7 @@ input[type="date"]:not(:focus):not(:valid) {
   <div id="vzActBarBox"></div>
 
   <div class="vz-bar" style="padding:0; overflow:auto;">
+    <div id="vzTotalsBar" class="mb-2"></div>
     <div id="vzTableWrap"><div class="text-muted text-center py-4">⏳ جاري التحميل…</div></div>
   </div>
   <datalist id="vzAgentsList"></datalist>
@@ -6666,7 +6673,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.148";
+var CLIENT_APP_VERSION = "4.150";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -37450,7 +37457,7 @@ function mfExportImage(btn) {
 var VZ = { files: [], prices: [], companies: [], trips: [], clients: [], agents: [], statuses: [],
   agentBalances: {}, today: '', can: {}, loaded: false, _draft: null, _pick: null, _pickLoading: false,
   // 🔎↕️ تصفية ديناميكية لحظية من رأس كل عمود + ترتيب تصاعدي/تنازلي بالعمود
-  colFilters: {}, sort: { key: 'seq', dir: -1 }, selId: null, colW: {} };
+  colFilters: {}, sort: { key: 'seq', dir: -1 }, selId: null, colW: {}, _filesSel: {} };
 function vzEsc(v) { return escapeHtml_(String(v == null ? '' : v)); }
 function vzJs(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 function vzFmt(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
@@ -37555,26 +37562,55 @@ function vzMatch(f) {
 }
 /* 🧱 (V4.136) تعريف أعمدة جدول المجموعات — يُستخدَم لبناء الرأس (تصفية + ترتيب) ولقراءة
    القيمة الخام لكل عمود عند التصفية الديناميكية أو الترتيب. */
+// 📏 (V4.150) لكل عمود عرض افتراضي معقول (w) يمنع رأس العمود من الانضغاط لعمود عمودي شبه غير
+// مقروء — يُستخدَم فقط لو المستخدم لم يُخصِّص عرضاً يدوياً بالسحب (يُحفَظ ويُستعاد من localStorage)
 var VZ_COL_DEFS_ = [
-  { k: 'seq', label: 'م', num: true },
-  { k: 'ref', label: 'رقم المجموعة' },
-  { k: 'status', label: 'الحالة' },
-  { k: 'date', label: 'تاريخ السداد', date: true },
-  { k: 'company', label: 'الشركة' },
-  { k: 'agent', label: 'الوكيل' },
-  { k: 'visaCount', label: 'العدد', num: true },
-  { k: 'clientTrip', label: 'العميل / الرحلة' },
-  { k: 'makkahStay', label: 'سكن مكة (دخول ← خروج)', date: true },
-  { k: 'makkahAgr', label: 'اتفاقيات مكة' },
-  { k: 'madinahStay', label: 'سكن المدينة (دخول ← خروج)', date: true },
-  { k: 'madinahAgr', label: 'اتفاقيات المدينة' },
-  { k: 'notes', label: 'ملاحظات' }
+  { k: 'sel', label: '☑', nof: true, w: 30 },
+  { k: 'seq', label: 'م', num: true, w: 40 },
+  { k: 'ref', label: 'رقم المجموعة', w: 95 },
+  { k: 'entryNo', label: 'القيد', w: 85 },
+  { k: 'status', label: 'الحالة', w: 90 },
+  { k: 'date', label: 'تاريخ السداد', date: true, w: 90 },
+  { k: 'company', label: 'الشركة', w: 130 },
+  { k: 'agent', label: 'الوكيل', w: 150 },
+  { k: 'visaCount', label: 'العدد', num: true, w: 55 },
+  { k: 'clientTrip', label: 'العميل / الرحلة', w: 190 },
+  { k: 'makkahStay', label: 'سكن مكة', date: true, w: 115 },
+  { k: 'makkahAgr', label: 'اتفاقيات مكة', w: 150 },
+  { k: 'madinahStay', label: 'سكن المدينة', date: true, w: 115 },
+  { k: 'madinahAgr', label: 'اتفاقيات المدينة', w: 150 },
+  { k: 'notes', label: 'ملاحظات', w: 150 }
 ];
 // القيمة الخام لعمود بعينه من قيد تأشيرات — تُستخدَم للتصفية الديناميكية والترتيب معاً
+// 🗑️ (V4.150) تحديد/حذف جماعي لصفوف جدول المجموعات
+function vzFileSelToggle(id, on) { VZ._filesSel[id] = on; vzRenderSelBar_(); }
+function vzRenderSelBar_() {
+  var box = document.getElementById('vzFilesSelBar'); if (!box) return;
+  var ids = Object.keys(VZ._filesSel).filter(function (k) { return VZ._filesSel[k]; });
+  box.innerHTML = ids.length ? ('<button class="vz-btn sm dgr" onclick="vzFilesDelSelected()">🗑️ حذف المحدَّد (' + ids.length + ')</button>') : '';
+}
+function vzFilesDelSelected() {
+  var ids = Object.keys(VZ._filesSel).filter(function (k) { return VZ._filesSel[k]; });
+  if (!ids.length) return;
+  showElegantConfirm({ icon: '🗑️', title: 'حذف جماعي', message: 'حذف ' + ids.length + ' مجموعة تأشيرات محدَّدة؟ لا يمكن التراجع عن هذا.', buttons: [
+    { label: 'حذف', class: 'btn-danger', onClick: function () {
+      google.script.run
+        .withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; } VZ._filesSel = {}; _showPopup('حُذفت ' + res.count + ' مجموعة', 'success'); vzLoad(true); })
+        .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+        .deleteVisaFilesBatch(window.authToken, ids);
+    } }, { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
+}
+function vzEntryNoEdit(id, val) {
+  google.script.run
+    .withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; } var f = vzGet(id); if (f) f.entryNo = mfStr(val); })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .setVisaFileEntryNo(window.authToken, id, val);
+}
 function vzColRaw(k, f) {
   switch (k) {
     case 'seq': return mfNum(f.seq);
     case 'ref': return mfStr(f.ref);
+    case 'entryNo': return mfStr(f.entryNo);
     case 'status': return mfStr(f.status);
     case 'date': return mfStr(f.date);
     case 'company': return mfStr(f.company);
@@ -37614,13 +37650,24 @@ function vzSortBy(k) {
   vzRender();
 }
 /* ↔️ (V4.145) تغيير عرض عمود جدول المجموعات بالسحب — نفس تقنية شاشة ملفات الوزارة، بحجم مُطبَّق
-   على رأس العمود وخلاياه لحظياً أثناء السحب، ويُحفظ بحالة الجلسة (VZ.colW) عند الإفلات. */
+   على رأس العمود وخلاياه لحظياً أثناء السحب. (V4.150) يُحفَظ بالمتصفح (localStorage) فيبقى بعد
+   إعادة تحميل الصفحة، والضغط المزدوج يُلائم العرض تلقائياً لأعرض محتوى بالعمود بسطر واحد. */
+var VZ_COLW_KEY_ = 'vzGroupsColW';
+function vzColWGet_() {
+  if (VZ.colW) return VZ.colW;
+  var v = {};
+  try { v = JSON.parse(localStorage.getItem(VZ_COLW_KEY_) || '{}') || {}; } catch (e) { v = {}; }
+  VZ.colW = v;
+  return v;
+}
+function vzColWSave_() { try { localStorage.setItem(VZ_COLW_KEY_, JSON.stringify(VZ.colW || {})); } catch (e) {} }
 var VZ_RSZ = null;
 function vzRszStart(ev, k) {
   ev.preventDefault(); ev.stopPropagation();
   var th = ev.currentTarget.parentNode;
   if (!th) return;
-  var startW = VZ.colW[k] || th.getBoundingClientRect().width;
+  var colW = vzColWGet_();
+  var startW = colW[k] || th.getBoundingClientRect().width;
   var rtl = true;
   try { rtl = getComputedStyle(th.closest('table') || document.body).direction === 'rtl'; } catch (e) {}
   VZ_RSZ = { k: k, th: th, startX: ev.clientX, startW: startW, rtl: rtl };
@@ -37651,11 +37698,38 @@ function vzRszEnd() {
   document.removeEventListener('mouseup', vzRszEnd);
   document.body.classList.remove('vz-resizing');
   VZ_RSZ = null;
-  if (R && R.live) VZ.colW[R.k] = R.live;
+  if (R && R.live) { vzColWGet_()[R.k] = R.live; vzColWSave_(); }
 }
+// 📏 (V4.150) ضغطتان على مقبض السحب = ملاءمة عرض العمود تلقائياً لأعرض محتوى فيه (رأسه أو أي
+// خلية) بحيث يظهر بسطر واحد كامل بلا اقتصاص — بدل مجرد إعادته للعرض الافتراضي الثابت.
 function vzRszReset(ev, k) {
   ev.preventDefault(); ev.stopPropagation();
-  delete VZ.colW[k];
+  var th = ev.currentTarget.parentNode;
+  var table = th ? th.closest('table') : null;
+  if (!th || !table) return;
+  var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+  var probe = document.createElement('span');
+  probe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;visibility:hidden;white-space:nowrap;font-family:inherit;font-size:12px;';
+  document.body.appendChild(probe);
+  var maxW = 0;
+  var measure = function (text, bold) {
+    if (!text) return;
+    probe.style.fontWeight = bold ? '800' : '600';
+    probe.textContent = text;
+    maxW = Math.max(maxW, probe.getBoundingClientRect().width);
+  };
+  var headSpan = th.querySelector('.vz-thin > span');
+  measure(headSpan ? headSpan.textContent : th.textContent, true);
+  var rows = table.querySelectorAll('tbody tr.vz-row');
+  for (var i = 0; i < rows.length; i++) {
+    var cell = rows[i].children[idx];
+    if (!cell) continue;
+    var inp = cell.querySelector('input');
+    measure(inp ? inp.value : (cell.getAttribute('title') || cell.textContent), false);
+  }
+  document.body.removeChild(probe);
+  var w = Math.max(38, Math.min(700, Math.round(maxW + 36))); // هامش للحشو + أيقونات التصفية/الترتيب/السحب
+  vzColWGet_()[k] = w; vzColWSave_();
   vzRender();
 }
 // تصفية عمود من رأسه — نعيد استخدام نافذة #mfColFilterPop المشتركة نفسها بكل الشاشات
@@ -37741,7 +37815,12 @@ function vzRender() {
   var list = vzVisible();
   var lbl = document.getElementById('vzCountLbl'); if (lbl) lbl.textContent = '— ' + list.length + ' مجموعة';
   var wrap = document.getElementById('vzTableWrap'); if (!wrap) return;
-  if (!list.length) { wrap.innerHTML = '<div class="text-muted text-center py-4">لا توجد مجموعات مطابقة</div>'; return; }
+  var totalsBar = document.getElementById('vzTotalsBar');
+  if (!list.length) {
+    wrap.innerHTML = '<div class="text-muted text-center py-4">لا توجد مجموعات مطابقة</div>';
+    if (totalsBar) totalsBar.innerHTML = '';
+    return;
+  }
   var totCount = 0;
   // 📏 (V4.146) عمود واحد بسطر واحد فقط — الجزآن (سكن/إعاشة) يُدمَجان بفاصل، والنص الكامل
   // بخاصية title يظهر عند التحويم لو اقتُصّ العرض
@@ -37770,7 +37849,11 @@ function vzRender() {
     var mkH = _vzAutoHousing(f, 'makkah'), mdH = _vzAutoHousing(f, 'madinah');
     // خريطة كل خلية بمفتاح عمودها — تُصفَّى حسب الأعمدة الظاهرة فقط قبل اللَّحام بالصف
     var cellsByKey = {
+      sel: '<td onclick="event.stopPropagation();"><input type="checkbox" ' + (VZ._filesSel[f.id] ? 'checked' : '') + ' onchange="vzFileSelToggle(\'' + vzJs(f.id) + '\',this.checked)"></td>',
       seq: '<td>' + vzL(f.seq) + '</td>', ref: '<td>' + (f.ref ? vzL(f.ref) : '—') + '</td>',
+      // 📝 (V4.149) رقم القيد — عمود كتابة حرة يُحفَظ مباشرة عند مغادرة الحقل، بلا فتح نموذج التعديل
+      entryNo: '<td onclick="event.stopPropagation();"><input class="vz-inline-inp" value="' + vzEsc(f.entryNo || '') + '" ' +
+        (VZ.can.edit ? ('onchange="vzEntryNoEdit(\'' + vzJs(f.id) + '\',this.value)"') : 'disabled') + '></td>',
       status: '<td>' + _vzStatusBadge(f.status) + '</td>', date: '<td>' + vzL(f.date || '—') + '</td>',
       company: '<td title="' + vzEsc(f.company || '') + '">' + vzEsc(f.company || '—') + '</td>',
       agent: '<td title="' + vzEsc(f.agent || '') + '"><b style="color:#075c46;">' + vzEsc(f.agent || '—') + '</b></td>',
@@ -37789,12 +37872,14 @@ function vzRender() {
       cols.map(function (c) { return cellsByKey[c.k] || '<td>—</td>'; }).join('') +
       '</tr>';
   }).join('');
-  var colW = VZ.colW || {};
-  // ↔️ (V4.145) تغيير حجم الأعمدة بالسحب — مقبض على حافة كل رأس عمود، والعرض يُحفظ لحظياً بالجلسة
+  var colW = vzColWGet_();
+  // ↔️ (V4.145) تغيير حجم الأعمدة بالسحب — مقبض على حافة كل رأس عمود، يُحفَظ بالمتصفح (V4.150)
+  // فيبقى بعد إعادة تحميل الصفحة، ولو لم يُخصَّص عمود بعينه يُستخدَم عرضه الافتراضي المعقول (c.w)
   var rsz = '<span class="vz-rsz" title="اسحب لتغيير عرض العمود · ضغطتان = العرض الافتراضي"' +
     ' onmousedown="vzRszStart(event,\'{{K}}\')" ondblclick="vzRszReset(event,\'{{K}}\')"></span>';
   var headCells = cols.map(function (c) {
-    var wStyle = colW[c.k] ? (' style="width:' + colW[c.k] + 'px;min-width:' + colW[c.k] + 'px;max-width:' + colW[c.k] + 'px;"') : '';
+    var w = colW[c.k] || c.w;
+    var wStyle = w ? (' style="width:' + w + 'px;min-width:' + w + 'px;max-width:' + w + 'px;"') : '';
     if (c.nof) return '<th' + wStyle + '>' + vzEsc(c.label) + '</th>';
     var si = VZ.sort.key === c.k ? (VZ.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + wStyle + '><div class="vz-thin"><span>' + vzEsc(c.label) + '</span>' +
@@ -37802,17 +37887,20 @@ function vzRender() {
       '<button class="vz-thic' + (VZ.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();vzSortBy(\'' + c.k + '\')">' + si + '</button>' +
       '</div>' + rsz.replace(/\{\{K\}\}/g, c.k) + '</th>';
   }).join('');
-  // صف الإجماليات: بلا colspan إطلاقاً (خلية واحدة لكل عمود ظاهر) كي يبقى صحيحاً أياً كانت
-  // الأعمدة المُخفاة — النص التلخيصي يظهر في أول عمود ظاهر فقط
-  var totalsCells = cols.map(function (c, i) {
-    if (c.k === 'visaCount') return '<td>' + vzL(vzFmt(totCount)) + '</td>';
-    if (i === 0) return '<td>الإجمالي (' + list.length + ' مجموعة)</td>';
-    return '<td>—</td>';
-  }).join('');
+  // 📏 (V4.150) صف الإجماليات: خلية واحدة مدمجة (colspan) بجملة إجمالية كاملة — بدل خلية لكل عمود
+  // (كانت تُجبر عمودي "م"/"القيد" الضيّقين على الاتّساع لعرض النص)، ولون الكتابة أبيض صريح (وليس
+  // موروثاً فقط) لأن قاعدة td العامة تفرض لوناً داكناً أقوى تحديداً من لون الصف الموروث.
+  var totalsTxt = 'الإجمالي (' + list.length + ' مجموعة) — إجمالي العدد: ' + vzL(vzFmt(totCount));
+  var totalsRow = '<tr style="background:#075c46;"><td colspan="' + cols.length + '" style="color:#fff;font-weight:800;text-align:center;">' + totalsTxt + '</td></tr>';
   wrap.innerHTML = '<table class="vz-tab"><thead><tr>' +
     headCells + '</tr></thead><tbody>' + body +
-    '<tr style="background:#075c46;color:#fff;font-weight:800;">' + totalsCells + '</tr>' +
+    totalsRow +
     '</tbody></table>';
+  // 📌 (V4.150) نفس الإجمالي يظهر أيضاً فوق الجدول (لا حاجة للتمرير لأسفل لرؤيته) ويتحدَّث لحظياً
+  // مع أي تصفية — الفلترة أصلاً حيّة بلا زر "تطبيق" (مربوطة بحدث input/change منذ البداية)
+  if (totalsBar) totalsBar.innerHTML = '<div style="background:linear-gradient(135deg,var(--vzG),var(--vzGD));color:#fff;' +
+    'border-radius:10px;padding:8px 14px;font-weight:800;text-align:center;font-size:13px;">' + totalsTxt + '</div>';
+  vzRenderSelBar_();
 }
 // ⚙️ (V4.146) تخصيص إظهار/إخفاء أعمدة جدول المجموعات بالشاشة العامة — نفس أسلوب تخصيص أعمدة
 // دفتر حساب الوكيل، بنافذة منبثقة صغيرة تختفي بالضغط خارجها أو بعلامة X
@@ -38079,6 +38167,7 @@ function vzFormRender() {
   var pBasic =
     '<div class="vz-sec"><div class="vz-sec-h">🗂️ بيانات المجموعة</div><div class="row g-2">' +
       '<div class="col-md-3 vz-fld"><label>رقم المجموعة (يدوي)</label><input value="' + vzEsc(d.ref) + '" oninput="vzSet(\'ref\',this.value)" onblur="vzFormRefChanged()" placeholder="مثال: 1448-101" title="عند إدخال رقم مجموعة مسجَّل باتفاقيات الإعاشة تُجلب أرقام اتفاقياتها تلقائياً"></div>' +
+      '<div class="col-md-3 vz-fld"><label>رقم القيد</label><input value="' + vzEsc(d.entryNo) + '" oninput="vzSet(\'entryNo\',this.value)" placeholder="رقم القيد المحاسبي (اختياري)"></div>' +
       '<div class="col-md-3 vz-fld"><label>الحالة</label><select onchange="vzSet(\'status\',this.value)">' + sel(d.status, statusOpts) + '</select></div>' +
       '<div class="col-md-3">' + dateFld('date', 'تاريخ السداد', 'vzSetPrice();') + '</div>' +
       '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><input list="vzCompDL" autocomplete="off" value="' + vzEsc(d.company) + '" oninput="vzSet(\'company\',this.value)" onchange="vzCompanyChanged(this.value)" placeholder="ابحث باسم الشركة…"></div>' +
@@ -38502,30 +38591,32 @@ function _vzPrintMeta() {
 function vzBuildPrintDoc(forPrint) {
   var list = vzVisible(); if (!list.length) return null;
   var meta = _vzPrintMeta();
-  var FINP = vzFin();
-  var totV = 0, totD = 0;
+  var totV = 0;
+  // 🖨️ (V4.150) لا عمود مالي إطلاقاً بالطباعة (مطابقة الشاشة) + عمود القيد الحر + صف الإجمالي
+  // أصبح آخر صف بالجدول نفسه (بدل tfoot) كي لا يتكرر تلقائياً في كل صفحة عند الطباعة الفعلية
   var rows = list.map(function (f) {
-    var due = mfNum(f.visaCount) * mfNum(f.price); totV += mfNum(f.visaCount); totD += due;
+    totV += mfNum(f.visaCount);
     var cl = (f.tripName ? f.tripName + (f.breakdown && f.breakdown.length ? ' | ' : '') : '') + (f.breakdown || []).map(function (b) { return b.name + (b.count ? '(' + b.count + ')' : ''); }).join('، ');
-    return '<tr><td>' + vzEsc(f.seq) + '</td><td>' + vzEsc(f.ref || '—') + '</td><td>' + vzEsc(f.status || '—') + '</td><td>' + vzEsc(f.date) + '</td>' +
+    return '<tr><td>' + vzEsc(f.seq) + '</td><td>' + vzEsc(f.entryNo || '—') + '</td><td>' + vzEsc(f.ref || '—') + '</td><td>' + vzEsc(f.status || '—') + '</td><td>' + vzEsc(f.date) + '</td>' +
       '<td>' + vzEsc(f.company) + '</td><td>' + vzEsc(f.agent) + '</td><td>' + vzFmt(f.visaCount) + '</td><td>' + vzEsc(cl || '—') + '</td>' +
       '<td>' + vzEsc((f.makkahIn || '') + (f.makkahOut ? ' ← ' + f.makkahOut : '')) + '<br><small>' + vzEsc(f.makkahHousingAgr || '') + ' ' + vzEsc(_vzAutoCatering(f, 'makkah')) + '</small></td>' +
       '<td>' + vzEsc((f.madinahIn || '') + (f.madinahOut ? ' ← ' + f.madinahOut : '')) + '<br><small>' + vzEsc(f.madinahHousingAgr || '') + ' ' + vzEsc(_vzAutoCatering(f, 'madinah')) + '</small></td>' +
-      (FINP ? '<td>' + vzFmt(due) + '</td>' : '') + '<td><small>' + vzEsc(f.notes || '') + '</small></td></tr>';
+      '<td><small>' + vzEsc(f.notes || '') + '</small></td></tr>';
   }).join('');
+  var totalsTr = '<tr style="background:#dcfce7;font-weight:bold;"><td colspan="7">الإجمالي (' + list.length + ' مجموعة)</td><td>' + vzFmt(totV) + '</td><td colspan="4">—</td></tr>';
   return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>متابعة التأشيرات والوكلاء - ' + vzEsc(meta.stamp) + '</title><style>' +
     '@page{size:A4 landscape;margin:10mm 8mm 14mm;}' +
     'body{font-family:"Cairo",Tahoma,sans-serif;margin:0;padding:' + (forPrint ? '0' : '14px') + ';color:#1e293b;}' +
     'h1{font-size:16px;color:#075c46;margin:0 0 3px;} .sub{font-size:10px;color:#64748b;margin-bottom:8px;}' +
     '.flt{font-size:9.5px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:4px;padding:3px 7px;margin-bottom:7px;}' +
     'table{width:100%;border-collapse:collapse;font-size:9.5px;} th,td{border:1px solid #94a3b8;padding:3px 4px;text-align:center;}' +
-    'th{background:#075c46;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;} tfoot td{background:#dcfce7;font-weight:bold;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'th{background:#075c46;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;position:sticky;top:0;}' +
     'tr{page-break-inside:avoid;}' +
     '.pfoot{position:fixed;bottom:4mm;left:0;right:0;text-align:center;font-size:9px;color:#94a3b8;}' +
     '</style></head><body><h1>🛂 متابعة التأشيرات والوكلاء</h1><div class="sub">تاريخ ووقت الطباعة: ' + vzEsc(meta.stamp) + ' — عدد المجموعات: ' + list.length + '</div>' +
     (meta.filters ? '<div class="flt">🔎 الفلاتر: ' + vzEsc(meta.filters) + '</div>' : '') +
-    '<table><thead><tr><th>م</th><th>رقم المجموعة</th><th>الحالة</th><th>تاريخ السداد</th><th>الشركة</th><th>الوكيل</th><th>العدد</th><th>العميل/الرحلة</th><th>سكن مكة + اتفاقياتها</th><th>سكن المدينة + اتفاقياتها</th>' + (FINP ? '<th>المستحق</th>' : '') + '<th>ملاحظات</th></tr></thead>' +
-    '<tbody>' + rows + '</tbody><tfoot><tr><td colspan="6">الإجمالي</td><td>' + vzFmt(totV) + '</td><td colspan="3">—</td>' + (FINP ? '<td>' + vzFmt(totD) + '</td>' : '') + '<td>—</td></tr></tfoot></table>' +
+    '<table><thead><tr><th>م</th><th>القيد</th><th>رقم المجموعة</th><th>الحالة</th><th>تاريخ السداد</th><th>الشركة</th><th>الوكيل</th><th>العدد</th><th>العميل/الرحلة</th><th>سكن مكة + اتفاقياتها</th><th>سكن المدينة + اتفاقياتها</th><th>ملاحظات</th></tr></thead>' +
+    '<tbody>' + rows + totalsTr + '</tbody></table>' +
     (forPrint ? '<div class="pfoot">منظومة منف للسياحة — متابعة التأشيرات والوكلاء</div>' : '') +
     '</body></html>';
 }
@@ -38621,19 +38712,19 @@ function vzOpenAccount(agent) {
     '<button class="vz-btn sm" onclick="vzAccClose()">✕</button></span></div>' +
     '<div class="p-3">' +
     '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🔎 فلاتر الكشف</div><div class="row g-2 align-items-end">' +
-      '<div class="col-md-3 vz-fld"><label>من تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzAccCal(\'vzAccFrom\')">📅</button><input id="vzAccFrom" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
-      '<div class="col-md-3 vz-fld"><label>إلى تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzAccCal(\'vzAccTo\')">📅</button><input id="vzAccTo" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
-      '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><select id="vzAccComp"><option value="">الكل</option></select></div>' +
-      '<div class="col-md-3 d-flex gap-2"><button class="vz-btn pri" onclick="vzAccApply()">تطبيق</button>' +
-      '<button class="vz-btn" onclick="vzAccClearFilters()">✖ إلغاء الكل</button></div>' +
+      '<div class="col-md-3 vz-fld"><label>من تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzAccCal(\'vzAccFrom\')">📅</button><input id="vzAccFrom" maxlength="10" placeholder="dd/mm/yyyy" onchange="vzAccApply()"></div></div>' +
+      '<div class="col-md-3 vz-fld"><label>إلى تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzAccCal(\'vzAccTo\')">📅</button><input id="vzAccTo" maxlength="10" placeholder="dd/mm/yyyy" onchange="vzAccApply()"></div></div>' +
+      '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><select id="vzAccComp" onchange="vzAccApply()"><option value="">الكل</option></select></div>' +
+      '<div class="col-md-3 d-flex gap-2"><button class="vz-btn" onclick="vzAccClearFilters()">✖ إلغاء الكل</button></div>' +
       '<div class="col-12"><div id="vzAccChips" class="d-flex gap-2 flex-wrap"></div></div>' +
     '</div></div>' +
+    '<div id="vzAccTotalsBar" class="mb-2"></div>' +
     '<div id="vzAccBody"><div class="text-muted text-center py-4">⏳ جاري التحميل…</div></div></div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzAccClose(); });
   vzAccFetch();
 }
-function vzAccCal(id) { _vzCal_(id, null); }
+function vzAccCal(id) { _vzCal_(id, function () { vzAccApply(); }); }
 function vzAccApply() {
   VZ._accF = { from: mfDate(vzFV('vzAccFrom')), to: mfDate(vzFV('vzAccTo')), company: vzFV('vzAccComp') };
   vzAccFetch();
@@ -38691,11 +38782,21 @@ function vzAccClose() { var o = document.getElementById('vzAccOv'); if (o) o.rem
    الخاصة بهذا الحساب تحديداً (بمطابقة الوكيل/المورد + الشركة المصرية).
    ============================================================ */
 var VZ_ACC_LEDGER_COLS_ = [
-  { k: 'seq', label: 'القيد' }, { k: 'date', label: 'التاريخ' }, { k: 'groupRef', label: 'رقم المجموعة' },
-  { k: 'desc', label: 'البيان' }, { k: 'count', label: 'العدد' }, { k: 'price', label: 'السعر' },
-  { k: 'value', label: 'القيمة' }, { k: 'balance', label: 'الرصيد التراكمي' }, { k: 'posting', label: 'التوجيه المحاسبي' },
-  { k: 'act', label: '⚙' }
+  { k: 'sel', label: '☑', nof: true }, { k: 'entryNo', label: 'القيد' }, { k: 'date', label: 'التاريخ', date: true },
+  { k: 'groupRef', label: 'رقم المجموعة' }, { k: 'desc', label: 'البيان' }, { k: 'count', label: 'العدد', num: true },
+  { k: 'price', label: 'السعر', num: true }, { k: 'debit', label: 'مدين', num: true }, { k: 'credit', label: 'دائن', num: true },
+  { k: 'balance', label: 'الرصيد التراكمي', num: true }, { k: 'posting', label: 'التوجيه المحاسبي' },
+  { k: 'act', label: '⚙', nof: true }
 ];
+// القيمة الخام لعمود بعينه بدفتر الحساب — للتصفية الديناميكية والترتيب (نفس محرك بقية الشاشات)
+function _vzAccLedgerRaw_(k, x) {
+  switch (k) {
+    case 'entryNo': return mfStr(x.entryNo); case 'date': return mfStr(x.date); case 'groupRef': return mfStr(x.groupRef);
+    case 'desc': return mfStr(x.desc); case 'count': return mfNum(x.count); case 'price': return mfNum(x.price);
+    case 'debit': return mfNum(x.debit); case 'credit': return mfNum(x.credit); case 'balance': return mfNum(x.balance);
+    case 'posting': return mfStr(x.posting); default: return '';
+  }
+}
 function vzAccColsOn_(k) { if (!VZ._accColsOn) VZ._accColsOn = {}; return VZ._accColsOn[k] !== false; }
 function vzAccColsToggle(btn) {
   var ex = document.getElementById('vzAccColsPop'); if (ex) { ex.remove(); return; }
@@ -38708,7 +38809,7 @@ function vzAccColsToggle(btn) {
   pop.innerHTML = '<div class="d-flex justify-content-between align-items-center mb-1">' +
     '<b style="font-size:12px;color:#0f4c4c;">⚙️ تخصيص الأعمدة</b>' +
     '<span style="cursor:pointer;font-weight:900;" onclick="document.getElementById(\'vzAccColsPop\').remove()">✕</span></div>' +
-    VZ_ACC_LEDGER_COLS_.filter(function (c) { return c.k !== 'seq' && c.k !== 'act'; }).map(function (c) {
+    VZ_ACC_LEDGER_COLS_.filter(function (c) { return !c.nof; }).map(function (c) {
       return '<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:2px 0;">' +
         '<input type="checkbox" ' + (vzAccColsOn_(c.k) ? 'checked' : '') + ' onchange="vzAccColSet(\'' + c.k + '\',this.checked)"> ' + vzEsc(c.label) + '</label>';
     }).join('');
@@ -38722,28 +38823,31 @@ function vzAccColsToggle(btn) {
 function vzAccColSet(k, on) { if (!VZ._accColsOn) VZ._accColsOn = {}; VZ._accColsOn[k] = on; vzAccRender(); }
 // 🧱 يبني صفوف الدفتر الموحَّد: مجموعات + بنود + دفعات + دورات نقل (لو جُلبت)، مرتَّبة بالتاريخ
 // مع رصيد تراكمي — بنفس منطق نسخة الطباعة لكن على الشاشة أيضاً وبأزرار تعديل/سجل لكل سطر.
+// 💰 (V4.149) عمودا مدين/دائن منفصلان بدل عمود "قيمة" موقَّع واحد
 function vzAccBuildRows_() {
   var r = VZ._acc; if (!r) return [];
   var f = VZ._accF || {};
   var fromMs = f.from ? mfMs(mfDate(f.from)) : -Infinity, toMs = f.to ? mfMs(mfDate(f.to)) : Infinity;
   var rows = [];
   (r.files || []).forEach(function (x) {
-    rows.push({ kind: 'group', id: x.id, date: x.date, groupRef: x.ref || ('#' + x.seq),
+    var v = mfNum(x.visaCount) * mfNum(x.price);
+    rows.push({ kind: 'group', id: x.id, entryNo: x.entryNo, date: x.date, groupRef: x.ref || ('#' + x.seq),
       desc: x.tripName || x.clientsLabel || '—', count: mfNum(x.visaCount), price: mfNum(x.price),
-      value: mfNum(x.visaCount) * mfNum(x.price), posting: x.clientsLabel || x.tripName || '—' });
+      debit: v, credit: 0, posting: x.clientsLabel || x.tripName || '—' });
   });
   (r.items || []).forEach(function (x) {
-    rows.push({ kind: 'item', id: x.id, date: '', groupRef: '—', desc: x.desc || '—',
-      count: '', price: '', value: mfNum(x.value) * (x.isCredit ? -1 : 1), posting: x.notes || '—' });
+    var v = mfNum(x.value);
+    rows.push({ kind: 'item', id: x.id, entryNo: x.entryNo, date: '', groupRef: '—', desc: x.desc || '—',
+      count: '', price: '', debit: x.isCredit ? 0 : v, credit: x.isCredit ? v : 0, posting: x.notes || '—' });
   });
   (r.payments || []).forEach(function (x) {
-    rows.push({ kind: 'pay', id: x.id, date: x.date, groupRef: '—', desc: 'دفعة' + (x.notes ? ' — ' + x.notes : ''),
-      count: '', price: '', value: -mfNum(x.amount), posting: x.notes || '—' });
+    rows.push({ kind: 'pay', id: x.id, entryNo: x.entryNo, date: x.date, groupRef: '—', desc: 'دفعة' + (x.notes ? ' — ' + x.notes : ''),
+      count: '', price: '', debit: 0, credit: mfNum(x.amount), posting: x.notes || '—' });
   });
   (VZ._accTransport || []).forEach(function (x) {
     if (f.company && x.company !== f.company) return;
-    rows.push({ kind: 'transport', id: x.id, date: x.date, groupRef: x.groupRef, desc: x.desc,
-      count: mfNum(x.busCount), price: mfNum(x.busPrice), value: mfNum(x.value), posting: x.tripName || x.client || '—' });
+    rows.push({ kind: 'transport', id: x.id, entryNo: '', date: x.date, groupRef: x.groupRef, desc: x.desc,
+      count: mfNum(x.busCount), price: mfNum(x.busPrice), debit: mfNum(x.value), credit: 0, posting: x.tripName || x.client || '—' });
   });
   rows = rows.filter(function (x) {
     if (!x.date) return true; // بنود بلا تاريخ (مثل بعض البنود اليدوية) تبقى ظاهرة دوماً
@@ -38752,11 +38856,12 @@ function vzAccBuildRows_() {
   });
   rows.sort(function (a, b) { return (mfMs(mfDate(a.date)) || 0) - (mfMs(mfDate(b.date)) || 0); });
   var run = 0;
-  rows.forEach(function (x, i) { run += mfNum(x.value); x.seq = i + 1; x.balance = run; });
+  rows.forEach(function (x) { run += mfNum(x.debit) - mfNum(x.credit); x.balance = run; });
   return rows;
 }
 function vzAccRender() {
   var r = VZ._acc, b = document.getElementById('vzAccBody'); if (!b || !r) return;
+  _tblRefresh_('vzAccLedger', vzAccRender);
   var bal = r.balance || {};
   var money = function (n, cur) { return vzFmt(Math.abs(n)) + ' ' + cur; };
   var netCell = function (n, cur) { return n >= 0 ? '<b style="color:#b91c1c;">' + money(n, cur) + ' مستحق له</b>' : '<b style="color:#166534;">' + money(n, cur) + ' دائن</b>'; };
@@ -38765,10 +38870,14 @@ function vzAccRender() {
       '<div style="font-size:11px;font-weight:800;color:var(--vzLbl);">' + lbl + '</div>' +
       '<div style="font-size:19px;font-weight:900;' + (color ? 'color:' + color + ';' : '') + '">' + val + '</div></div>';
   };
-  var rows = vzAccBuildRows_();
+  var allRows = vzAccBuildRows_();
   var cols = VZ_ACC_LEDGER_COLS_.filter(function (c) { return vzAccColsOn_(c.k); });
-  var thead = cols.map(function (c) { return '<th>' + vzEsc(c.label) + '</th>'; }).join('');
-  var totCount = 0, totBus = 0;
+  var thead = _tblHead_('vzAccLedger', cols, 'vz-thic');
+  var rows = _tblApply_('vzAccLedger', allRows, VZ_ACC_LEDGER_COLS_, _vzAccLedgerRaw_);
+  // 🗑️ (V4.149) تحديد صفوف متعددة (بند/دفعة/مجموعة فقط — لا يشمل دورات النقل) للحذف الجماعي
+  if (!VZ._accSel) VZ._accSel = {};
+  var selKey = function (x) { return x.kind + ':' + x.id; };
+  var totCount = 0, totBus = 0, totDebit = 0, totCredit = 0;
   var editBtns = function (x) {
     var h = '<button class="vz-rowbtn" title="تعديل" onclick="vzAccEditRow(\'' + x.kind + '\',\'' + vzJs(x.id) + '\')">✏️</button>' +
       '<button class="vz-rowbtn" title="سجل التعديلات" onclick="vzAccRowHistory(\'' + x.kind + '\',\'' + vzJs(x.id) + '\')">📜</button>';
@@ -38779,15 +38888,22 @@ function vzAccRender() {
   var bodyRows = rows.map(function (x) {
     if (x.kind === 'group') totCount += mfNum(x.count);
     if (x.kind === 'transport') totBus += mfNum(x.count);
+    totDebit += mfNum(x.debit); totCredit += mfNum(x.credit);
+    var deletable = x.kind === 'item' || x.kind === 'pay';
     return '<tr>' + cols.map(function (c) {
       switch (c.k) {
-        case 'seq': return '<td>' + x.seq + '</td>';
+        case 'sel': return '<td onclick="event.stopPropagation();">' + (deletable ?
+          ('<input type="checkbox" ' + (VZ._accSel[selKey(x)] ? 'checked' : '') + ' onchange="vzAccSelToggle(\'' + selKey(x) + '\',this.checked)">') : '') + '</td>';
+        case 'entryNo': return '<td onclick="event.stopPropagation();">' + (x.kind === 'transport'
+          ? '<span class="text-muted">—</span>'
+          : ('<input class="vz-inline-inp" value="' + vzEsc(x.entryNo || '') + '" onchange="vzAccEntryNoEdit(\'' + x.kind + '\',\'' + vzJs(x.id) + '\',this.value)">')) + '</td>';
         case 'date': return '<td dir="ltr">' + vzEsc(x.date || '—') + '</td>';
         case 'groupRef': return '<td>' + vzEsc(x.groupRef || '—') + '</td>';
         case 'desc': return '<td style="text-align:right;">' + vzEsc(x.desc || '—') + '</td>';
         case 'count': return '<td>' + (x.count !== '' ? vzL(vzFmt(x.count)) : '—') + '</td>';
         case 'price': return '<td>' + (x.price !== '' ? vzL(vzFmt(x.price)) : '—') + '</td>';
-        case 'value': return '<td><b style="color:' + (x.value >= 0 ? '#b45309' : '#166534') + ';">' + vzL(vzFmt(x.value)) + '</b></td>';
+        case 'debit': return '<td>' + (x.debit ? '<b style="color:#b45309;">' + vzL(vzFmt(x.debit)) + '</b>' : '—') + '</td>';
+        case 'credit': return '<td>' + (x.credit ? '<b style="color:#166534;">' + vzL(vzFmt(x.credit)) + '</b>' : '—') + '</td>';
         case 'balance': return '<td><b>' + vzL(vzFmt(x.balance)) + '</b></td>';
         case 'posting': return '<td style="text-align:right;font-size:10.5px;">' + vzEsc(x.posting || '—') + '</td>';
         case 'act': return '<td class="d-flex gap-1">' + editBtns(x) + '</td>';
@@ -38795,9 +38911,33 @@ function vzAccRender() {
       }
     }).join('') + '</tr>';
   }).join('') || ('<tr><td colspan="' + cols.length + '" class="text-muted" style="padding:14px;">لا حركات في هذا النطاق</td></tr>');
-  var totalsRow = '<tr style="background:#075c46;color:#fff;font-weight:800;"><td colspan="' + cols.length + '">' +
-    'إجمالي عدد التأشيرات: ' + vzL(vzFmt(totCount)) + (totBus ? (' · إجمالي عدد الباصات: ' + vzL(vzFmt(totBus))) : '') + '</td></tr>';
+  var finalBalance = rows.length ? rows[rows.length - 1].balance : 0;
+  // 📏 (V4.150) الأعمدة الضيقة (تحديد/القيد/التاريخ/رقم المجموعة/البيان/العدد/السعر) تُدمَج في
+  // خلية واحدة بجملة الإجمالي بدل إجبارها على الاتّساع، ومدين/دائن/الرصيد تبقى أعمدة رقمية مستقلة
+  var preCols = ['sel', 'entryNo', 'date', 'groupRef', 'desc', 'count', 'price'];
+  var preSpan = cols.filter(function (c) { return preCols.indexOf(c.k) >= 0; }).length;
+  var wroteLabel = false;
+  var totalsRow = '<tr style="background:#075c46;">' + cols.map(function (c) {
+    if (preCols.indexOf(c.k) >= 0) {
+      if (wroteLabel) return '';
+      wroteLabel = true;
+      return '<td colspan="' + preSpan + '" style="color:#fff;font-weight:800;text-align:center;">' +
+        'إجمالي التأشيرات: ' + vzL(vzFmt(totCount)) + (totBus ? (' · الباصات: ' + vzL(vzFmt(totBus))) : '') + '</td>';
+    }
+    if (c.k === 'debit') return '<td style="color:#fff;font-weight:800;">' + vzL(vzFmt(totDebit)) + '</td>';
+    if (c.k === 'credit') return '<td style="color:#fff;font-weight:800;">' + vzL(vzFmt(totCredit)) + '</td>';
+    if (c.k === 'balance') return '<td style="color:#fff;font-weight:800;">' + vzL(vzFmt(finalBalance)) + '</td>';
+    return '<td style="color:#fff;">—</td>';
+  }).join('') + '</tr>';
   vzAccChips();
+  // 📌 (V4.150) نفس إجماليات الدفتر (مدين/دائن/الرصيد) تظهر أيضاً فوق الجدول مباشرة، وتتحدَّث
+  // لحظياً مع أي تصفية (التصفية الديناميكية لكل عمود مربوطة بنفس محرك vzRender هذا)
+  var accTotalsBar = document.getElementById('vzAccTotalsBar');
+  if (accTotalsBar) accTotalsBar.innerHTML = '<div style="background:linear-gradient(135deg,var(--vzG),var(--vzGD));color:#fff;' +
+    'border-radius:10px;padding:8px 14px;font-weight:800;text-align:center;font-size:13px;">' +
+    'إجمالي التأشيرات: ' + vzL(vzFmt(totCount)) + (totBus ? (' · الباصات: ' + vzL(vzFmt(totBus))) : '') +
+    ' · إجمالي مدين: ' + vzL(vzFmt(totDebit)) + ' · إجمالي دائن: ' + vzL(vzFmt(totCredit)) + ' · الرصيد: ' + vzL(vzFmt(finalBalance)) + '</div>';
+  var selCount = Object.keys(VZ._accSel).filter(function (k) { return VZ._accSel[k]; }).length;
   b.innerHTML =
     '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📌 ملخّص الحساب' +
       ((r.companies || []).length ? '<span class="vz-badge b" style="margin-inline-start:auto;">🏢 ' + vzEsc(r.companies.join('، ')) + '</span>' : '') +
@@ -38809,15 +38949,50 @@ function vzAccRender() {
     '</div></div>' +
     '<div class="vz-sec"><div class="vz-sec-h">📒 دفتر الحساب الموحَّد' +
       '<span style="margin-inline-start:auto;" class="d-flex gap-2 flex-wrap">' +
+      (selCount ? '<button class="vz-btn sm dgr" onclick="vzAccDelSelected()">🗑️ حذف المحدَّد (' + selCount + ')</button>' : '') +
       '<button class="vz-btn sm" onclick="vzAccRefreshTransport()">🚌 تحديث دورات النقل</button>' +
       '<button class="vz-btn sm" onclick="vzAccAddPay()">➕ دفعة</button>' +
       '<button class="vz-btn sm" onclick="vzAccAddItem()">➕ بند</button>' +
       '<button class="vz-btn sm" onclick="vzAccColsToggle(this)">⚙️ الأعمدة</button></span></div>' +
       '<div style="overflow:auto;"><table class="vz-tab"><thead><tr>' + thead + '</tr></thead><tbody>' + bodyRows + totalsRow + '</tbody></table></div></div>';
 }
+function vzAccEntryNoEdit(kind, id, val) {
+  var fn = kind === 'item' ? 'setAgentAccItemEntryNo' : kind === 'pay' ? 'setAgentPaymentEntryNo' : null;
+  if (!fn) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      var list = kind === 'item' ? (VZ._acc.items || []) : (VZ._acc.payments || []);
+      var hit = list.filter(function (x) { return x.id === id; })[0]; if (hit) hit.entryNo = mfStr(val);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    [fn](window.authToken, id, val);
+}
+function vzAccSelToggle(key, on) { if (!VZ._accSel) VZ._accSel = {}; VZ._accSel[key] = on; vzAccRender(); }
+// 🗑️ (V4.149) حذف جماعي للبنود/الدفعات المحدَّدة دفعة واحدة (لا يشمل مجموعات أو دورات نقل)
+function vzAccDelSelected() {
+  var keys = Object.keys(VZ._accSel || {}).filter(function (k) { return VZ._accSel[k]; });
+  if (!keys.length) return;
+  var itemIds = keys.filter(function (k) { return k.indexOf('item:') === 0; }).map(function (k) { return k.slice(5); });
+  var payIds = keys.filter(function (k) { return k.indexOf('pay:') === 0; }).map(function (k) { return k.slice(4); });
+  showElegantConfirm({ icon: '🗑️', title: 'حذف جماعي', message: 'حذف ' + keys.length + ' سطر محدَّد (بنود/دفعات) من الحساب؟', buttons: [
+    { label: 'حذف', class: 'btn-danger', onClick: function () {
+      var calls = [];
+      if (itemIds.length) calls.push(new Promise(function (res) {
+        google.script.run.withSuccessHandler(res).withFailureHandler(function () { res(null); }).deleteAgentAccItemsBatch(window.authToken, itemIds);
+      }));
+      if (payIds.length) calls.push(new Promise(function (res) {
+        google.script.run.withSuccessHandler(res).withFailureHandler(function () { res(null); }).deleteAgentPaymentsBatch(window.authToken, payIds);
+      }));
+      Promise.all(calls).then(function () { VZ._accSel = {}; _showPopup('تم الحذف الجماعي', 'success'); vzAccFetch(); vzLoad(true); });
+    } }, { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
+}
 // 📋 (V4.146) يفكّك أسطر ملصوقة من إكسيل (Tab-separated عادةً) إلى {date, type, desc, amount} —
 // التاريخ = أول عمود بصيغة تاريخ، النوع = العمود بعده، البيان = الذي يليه، والمبلغ = آخر عمود رقمي
 // غير فارغ بالسطر (يتجاوز أعمدة فارغة بينهما كما تُلصَق من إكسيل بأعمدة مدين/دائن منفصلة).
+// 📋 (V4.149) أكثر متانة: عمود القيد (أول عمود) يُلتقَط صراحةً، وكل النصوص الواقعة بين عمود
+// التاريخ وعمود المبلغ (المُكتشَف كآخر عمود رقمي بالسطر) تُجمَع معاً كبيان — بدل افتراض عمودين
+// فقط بينهما بالضبط، الذي كان يُفقِد أجزاءً من البيان أو يُخطئ اكتشاف المبلغ ببعض صيغ اللصق.
 function _vzParsePasteLines_(text) {
   var dateRe = /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/;
   return String(text || '').split('\n').map(function (l) { return l.replace(/\r$/, ''); })
@@ -38829,11 +39004,15 @@ function _vzParsePasteLines_(text) {
       var dIdx = -1;
       for (var i = 0; i < cols.length; i++) { if (dateRe.test(cols[i])) { dIdx = i; break; } }
       var date = dIdx >= 0 ? mfDate(cols[dIdx]) : '';
-      var type = dIdx >= 0 ? (cols[dIdx + 1] || '') : (cols[0] || '');
-      var desc = dIdx >= 0 ? (cols[dIdx + 2] || type) : (cols[1] || '');
-      var amount = 0;
-      for (var j = cols.length - 1; j >= 0; j--) { var n = mfNum(cols[j]); if (n) { amount = n; break; } }
-      return { date: date, type: type, desc: desc, amount: amount };
+      var entryNo = dIdx > 0 ? cols[0] : '';
+      var amtIdx = -1, amount = 0;
+      for (var j = cols.length - 1; j >= 0; j--) { var n = mfNum(cols[j]); if (n) { amount = n; amtIdx = j; break; } }
+      var startTxt = dIdx >= 0 ? dIdx + 1 : (entryNo ? 1 : 0);
+      var endTxt = amtIdx >= 0 ? amtIdx : cols.length;
+      var textCols = cols.slice(Math.max(startTxt, 0), Math.max(endTxt, startTxt)).filter(function (c) { return c; });
+      var type = textCols[0] || '';
+      var desc = textCols.length > 1 ? textCols.slice(1).join(' — ') : type;
+      return { date: date, type: type, desc: desc, amount: amount, entryNo: entryNo };
     });
 }
 function vzAccAddPay() {
@@ -38846,6 +39025,7 @@ function vzAccAddPay() {
       '<button class="vz-btn sm" id="vzPayModeMulti" onclick="_vzPayModeSet(true)">📋 لصق دفعات متعددة من إكسيل</button>' +
     '</div>' +
     '<div id="vzPaySingleBox">' +
+      '<div class="vz-fld mb-2"><label>رقم القيد (اختياري)</label><input id="vzPaySEntry"></div>' +
       '<div class="vz-fld mb-2"><label>التاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" onclick="_vzCal_(\'vzPaySDate\',null)">📅</button><input id="vzPaySDate" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(VZ.today) + '"></div></div>' +
       '<div class="vz-fld mb-2"><label>المبلغ (ريال)</label><input id="vzPaySAmt" type="number"></div>' +
       '<div class="vz-fld mb-2"><label>ملاحظات</label><input id="vzPaySNotes"></div>' +
@@ -38870,7 +39050,7 @@ function _vzPayModeSet(multi) {
 }
 function vzAccAddPaySingleSave() {
   var r = VZ._acc;
-  var obj = { agent: r.agent, date: mfDate(vzFV('vzPaySDate')) || VZ.today, amount: mfNum(vzFV('vzPaySAmt')), currency: 'SAR', notes: vzFV('vzPaySNotes') };
+  var obj = { agent: r.agent, date: mfDate(vzFV('vzPaySDate')) || VZ.today, amount: mfNum(vzFV('vzPaySAmt')), currency: 'SAR', notes: vzFV('vzPaySNotes'), entryNo: vzFV('vzPaySEntry') };
   if (!obj.amount) { _showPopup('أدخِل المبلغ', 'error'); return; }
   google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت الدفعة', 'success'); vzAccFetch(); vzLoad(true); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPayment(window.authToken, obj);
@@ -38881,16 +39061,16 @@ function _vzPayPastePreview() {
   var box = document.getElementById('vzPayPastePreview'), btn = document.getElementById('vzPayMultiSaveBtn');
   if (!rows.length) { box.innerHTML = ''; btn.disabled = true; return; }
   var tot = valid.reduce(function (a, r) { return a + r.amount; }, 0);
-  box.innerHTML = '<div style="overflow:auto;max-height:220px;"><table class="vz-tab"><thead><tr><th>التاريخ</th><th>البيان</th><th>المبلغ</th></tr></thead><tbody>' +
+  box.innerHTML = '<div style="overflow:auto;max-height:220px;"><table class="vz-tab"><thead><tr><th>القيد</th><th>التاريخ</th><th>البيان</th><th>المبلغ</th></tr></thead><tbody>' +
     rows.map(function (r) { return '<tr' + (!r.amount ? ' style="opacity:.45;" title="سيُتجاهَل — لا مبلغ"' : '') + '>' +
-      '<td>' + vzEsc(r.date || '—') + '</td><td style="text-align:right;">' + vzEsc(r.desc || '—') + '</td><td>' + (r.amount ? vzFmt(r.amount) : '—') + '</td></tr>'; }).join('') +
+      '<td>' + vzEsc(r.entryNo || '—') + '</td><td>' + vzEsc(r.date || '—') + '</td><td style="text-align:right;">' + vzEsc(r.desc || '—') + '</td><td>' + (r.amount ? vzFmt(r.amount) : '—') + '</td></tr>'; }).join('') +
     '</tbody></table></div><div class="small text-muted mt-1">' + valid.length + ' دفعة صالحة من ' + rows.length + ' سطر — الإجمالي ' + vzFmt(tot) + ' ريال</div>';
   btn.disabled = !valid.length;
 }
 function vzAccAddPayMultiSave() {
   var r = VZ._acc;
   var rows = _vzParsePasteLines_(vzFV('vzPayPasteArea')).filter(function (x) { return x.amount; })
-    .map(function (x) { return { date: x.date, amount: x.amount, notes: x.desc }; });
+    .map(function (x) { return { date: x.date, amount: x.amount, notes: x.desc, entryNo: x.entryNo }; });
   if (!rows.length) return;
   google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت ' + res.count + ' دفعة', 'success'); vzAccFetch(); vzLoad(true); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPaymentsBatch(window.authToken, r.agent, rows);
@@ -38905,6 +39085,7 @@ function vzAccAddItem() {
       '<button class="vz-btn sm" id="vzItModeMulti" onclick="_vzItModeSet(true)">📋 لصق بنود متعددة من إكسيل</button>' +
     '</div>' +
     '<div id="vzItSingleBox">' +
+      '<div class="vz-fld mb-2"><label>رقم القيد (اختياري)</label><input id="vzItSEntry"></div>' +
       '<div class="vz-fld mb-2"><label>البيان</label><input id="vzItSDesc"></div>' +
       '<div class="vz-fld mb-2"><label>القيمة (ريال)</label><input id="vzItSVal" type="number"></div>' +
       '<div class="vz-fld mb-2"><label>النوع</label><select id="vzItSCredit"><option value="false">مدين (علينا للوكيل)</option><option value="true">دائن (له علينا أقل)</option></select></div>' +
@@ -38930,7 +39111,7 @@ function _vzItModeSet(multi) {
 }
 function vzAccAddItemSingleSave() {
   var r = VZ._acc;
-  var obj = { agent: r.agent, desc: vzFV('vzItSDesc'), currency: 'SAR', value: mfNum(vzFV('vzItSVal')), isCredit: vzFV('vzItSCredit') === 'true', notes: '' };
+  var obj = { agent: r.agent, desc: vzFV('vzItSDesc'), currency: 'SAR', value: mfNum(vzFV('vzItSVal')), isCredit: vzFV('vzItSCredit') === 'true', notes: '', entryNo: vzFV('vzItSEntry') };
   if (!obj.desc || !obj.value) { _showPopup('أكمل البيان والقيمة', 'error'); return; }
   google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzItemAddOv').remove(); _showPopup('أُضيف البند', 'success'); vzAccFetch(); vzLoad(true); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentAccItem(window.authToken, obj);
@@ -38941,16 +39122,16 @@ function _vzItPastePreview() {
   var box = document.getElementById('vzItPastePreview'), btn = document.getElementById('vzItMultiSaveBtn');
   if (!rows.length) { box.innerHTML = ''; btn.disabled = true; return; }
   var tot = valid.reduce(function (a, r) { return a + r.amount; }, 0);
-  box.innerHTML = '<div style="overflow:auto;max-height:220px;"><table class="vz-tab"><thead><tr><th>النوع</th><th>البيان</th><th>القيمة</th></tr></thead><tbody>' +
+  box.innerHTML = '<div style="overflow:auto;max-height:220px;"><table class="vz-tab"><thead><tr><th>القيد</th><th>النوع</th><th>البيان</th><th>القيمة</th></tr></thead><tbody>' +
     rows.map(function (r) { return '<tr' + (!(r.amount && r.desc) ? ' style="opacity:.45;" title="سيُتجاهَل"' : '') + '>' +
-      '<td>' + vzEsc(r.type || '—') + '</td><td style="text-align:right;">' + vzEsc(r.desc || '—') + '</td><td>' + (r.amount ? vzFmt(r.amount) : '—') + '</td></tr>'; }).join('') +
+      '<td>' + vzEsc(r.entryNo || '—') + '</td><td>' + vzEsc(r.type || '—') + '</td><td style="text-align:right;">' + vzEsc(r.desc || '—') + '</td><td>' + (r.amount ? vzFmt(r.amount) : '—') + '</td></tr>'; }).join('') +
     '</tbody></table></div><div class="small text-muted mt-1">' + valid.length + ' بند صالح من ' + rows.length + ' سطر — الإجمالي ' + vzFmt(tot) + ' ريال</div>';
   btn.disabled = !valid.length;
 }
 function vzAccAddItemMultiSave() {
   var r = VZ._acc, isCredit = vzFV('vzItMCredit') === 'true';
   var rows = _vzParsePasteLines_(vzFV('vzItPasteArea')).filter(function (x) { return x.amount && x.desc; })
-    .map(function (x) { return { desc: (x.type && x.type !== x.desc ? (x.type + ' — ' + x.desc) : x.desc), value: x.amount }; });
+    .map(function (x) { return { desc: (x.type && x.type !== x.desc ? (x.type + ' — ' + x.desc) : x.desc), value: x.amount, entryNo: x.entryNo }; });
   if (!rows.length) return;
   google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzItemAddOv').remove(); _showPopup('أُضيف ' + res.count + ' بند', 'success'); vzAccFetch(); vzLoad(true); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentAccItemsBatch(window.authToken, r.agent, isCredit, rows);
@@ -38982,11 +39163,11 @@ function vzAccEditRow(kind, id) {
   if (kind === 'item') {
     var it = (r.items || []).filter(function (x) { return x.id === id; })[0]; if (!it) return;
     _vzMiniForm('✏️ تعديل بند حساب للوكيل', [
-      { k: 'desc', l: 'البيان' }, { k: 'value', l: 'القيمة', num: 1 },
+      { k: 'entryNo', l: 'رقم القيد' }, { k: 'desc', l: 'البيان' }, { k: 'value', l: 'القيمة', num: 1 },
       { k: 'currency', l: 'العملة', opts: ['SAR', 'EGP'] },
       { k: 'isCredit', l: 'النوع', opts: [['false', 'مدين (علينا للوكيل)'], ['true', 'دائن (له علينا أقل)']], bool: 1 },
       { k: 'notes', l: 'ملاحظات' }
-    ], { id: it.id, agent: it.agent, desc: it.desc, value: it.value, currency: it.currency, isCredit: String(!!it.isCredit), notes: it.notes }, function (obj) {
+    ], { id: it.id, agent: it.agent, desc: it.desc, value: it.value, currency: it.currency, isCredit: String(!!it.isCredit), notes: it.notes, entryNo: it.entryNo }, function (obj) {
       obj.isCredit = (String(obj.isCredit) === 'true');
       google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } _showPopup('حُفظ التعديل', 'success'); vzAccFetch(); vzLoad(true); })
         .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentAccItem(window.authToken, obj);
@@ -38996,9 +39177,9 @@ function vzAccEditRow(kind, id) {
   if (kind === 'pay') {
     var p = (r.payments || []).filter(function (x) { return x.id === id; })[0]; if (!p) return;
     _vzMiniForm('✏️ تعديل دفعة للوكيل', [
-      { k: 'date', l: 'التاريخ', date: 1 }, { k: 'amount', l: 'المبلغ', num: 1 },
+      { k: 'entryNo', l: 'رقم القيد' }, { k: 'date', l: 'التاريخ', date: 1 }, { k: 'amount', l: 'المبلغ', num: 1 },
       { k: 'currency', l: 'العملة', opts: ['SAR', 'EGP'] }, { k: 'notes', l: 'ملاحظات' }
-    ], { id: p.id, agent: p.agent, date: p.date, amount: p.amount, currency: p.currency, notes: p.notes }, function (obj) {
+    ], { id: p.id, agent: p.agent, date: p.date, amount: p.amount, currency: p.currency, notes: p.notes, entryNo: p.entryNo }, function (obj) {
       google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } _showPopup('حُفظ التعديل', 'success'); vzAccFetch(); vzLoad(true); })
         .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPayment(window.authToken, obj);
     });
@@ -39062,8 +39243,10 @@ function vzAccBuildDoc(forPrint) {
   var r = VZ._acc; if (!r) return null;
   var f = VZ._accF || {}, meta = _vzPrintMeta();
   var money = function (n) { return vzFmt(Math.abs(n)); };
-  // 🧱 (V4.144) نفس دفتر الحساب الموحَّد المعروض بالشاشة (القيد/التاريخ/رقم المجموعة/البيان/
-  // العدد/السعر/القيمة/الرصيد التراكمي/التوجيه المحاسبي) — يشمل دورات النقل لو جُلبت بالشاشة
+  // 🧱 (V4.150) نفس دفتر الحساب الموحَّد المعروض بالشاشة (القيد/التاريخ/رقم المجموعة/البيان/
+  // العدد/السعر/مدين/دائن/الرصيد التراكمي/التوجيه المحاسبي) — يشمل دورات النقل لو جُلبت بالشاشة.
+  // 🖨️ جدول واحد متواصل بدل تقسيم يدوي لصفحات بارتفاع ثابت (كان يُنتج صفحات فارغة كبيرة أحياناً
+  // لاختلافات بسيطة بقياس الخط بين المتصفحات) — رأس الجدول يتكرر تلقائياً بكل صفحة مطبوعة.
   var rows = vzAccBuildRows_();
   if (!rows.length) return null;
 
@@ -39071,49 +39254,24 @@ function vzAccBuildDoc(forPrint) {
   var flt = [];
   VZ_ACC_FLT_.forEach(function (m) { var v = mfStr(f[m[0]]); if (v) flt.push(m[1] + ': ' + v); });
 
-  // 🖨️ (V4.146) طباعة عمودية (portrait) بعد اليوم — الأعمدة أصبحت أقل وأضيق (9 فقط) فلا داعي
-  // للعرضية، وحجم صفحة عمودي أطول فيتّسع لصفوف أكثر بلا الحاجة لطباعة عريضة غير مناسبة للبيانات
-  var ROWS_PER_PAGE = 26;
-  var pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
-  var head = '<tr><th style="width:22px;">القيد</th><th style="width:52px;">التاريخ</th><th style="width:52px;">رقم المجموعة</th>' +
+  var totDebit = 0, totCredit = 0;
+  var trs = rows.map(function (x) {
+    totDebit += mfNum(x.debit); totCredit += mfNum(x.credit);
+    return '<tr><td>' + vzEsc(x.entryNo || '—') + '</td><td dir="ltr">' + vzEsc(x.date || '—') + '</td>' +
+      '<td>' + vzEsc(x.groupRef || '—') + '</td><td class="ar">' + vzEsc(x.desc || '—') + '</td>' +
+      '<td>' + (x.count !== '' ? vzFmt(x.count) : '—') + '</td><td>' + (x.price !== '' ? vzFmt(x.price) : '—') + '</td>' +
+      '<td>' + (x.debit ? vzFmt(x.debit) : '—') + '</td><td>' + (x.credit ? vzFmt(x.credit) : '—') + '</td>' +
+      '<td><b>' + vzFmt(x.balance) + '</b></td><td class="ar">' + vzEsc(x.posting || '—') + '</td></tr>';
+  }).join('');
+  var finalBalance = rows[rows.length - 1].balance;
+  var totalsTr = '<tr style="background:#eefaf5;font-weight:800;"><td colspan="6">الإجمالي</td><td>' + vzFmt(totDebit) + '</td><td>' + vzFmt(totCredit) + '</td><td>' + vzFmt(finalBalance) + '</td><td>—</td></tr>';
+  var head = '<tr><th style="width:38px;">القيد</th><th style="width:52px;">التاريخ</th><th style="width:52px;">رقم المجموعة</th>' +
     '<th>البيان</th><th style="width:28px;">العدد</th><th style="width:36px;">السعر</th>' +
-    '<th style="width:50px;">القيمة</th><th style="width:56px;">الرصيد التراكمي</th><th style="width:82px;">التوجيه المحاسبي</th></tr>';
-
-  var body = '';
-  for (var pg = 0; pg < pages; pg++) {
-    var slice = rows.slice(pg * ROWS_PER_PAGE, (pg + 1) * ROWS_PER_PAGE);
-    var trs = slice.map(function (x) {
-      return '<tr><td>' + x.seq + '</td><td dir="ltr">' + vzEsc(x.date || '—') + '</td>' +
-        '<td>' + vzEsc(x.groupRef || '—') + '</td><td class="ar">' + vzEsc(x.desc || '—') + '</td>' +
-        '<td>' + (x.count !== '' ? vzFmt(x.count) : '—') + '</td><td>' + (x.price !== '' ? vzFmt(x.price) : '—') + '</td>' +
-        '<td>' + vzFmt(x.value) + '</td><td><b>' + vzFmt(x.balance) + '</b></td>' +
-        '<td class="ar">' + vzEsc(x.posting || '—') + '</td></tr>';
-    }).join('');
-    body += '<section class="pg">' +
-      '<div class="hd"><div><h1>🧾 كشف حساب الوكيل</h1>' +
-        '<div class="who">' + vzEsc(VZ._accKey || '') + ((r.companies || []).length ? ' — ' + vzEsc(r.companies.join('، ')) : '') + '</div></div>' +
-        '<div class="stamp">منظومة منف للسياحة<br>طُبع في: ' + vzEsc(meta.stamp) + '</div></div>' +
-      (flt.length ? '<div class="flt">🔎 الفلاتر المطبَّقة: ' + vzEsc(flt.join('  ·  ')) + '</div>'
-                  : '<div class="flt">🔎 بلا فلاتر — الكشف كامل</div>') +
-      '<table><thead>' + head + '</thead><tbody>' + trs + '</tbody></table>' +
-      (pg === pages - 1 ? ('<table class="sum"><tr>' +
-        '<td>مستحق المجموعات</td><td>' + money(bal.visaDueS) + ' ريال</td>' +
-        '<td>مدفوع</td><td>' + money(bal.paidS) + ' ريال</td>' +
-        '<td>الصافي</td><td><b>' + money(bal.netS) + ' ريال ' + (bal.netS >= 0 ? 'مستحق له' : 'دائن') + '</b></td>' +
-        '</tr>' + (Math.abs(bal.netE) > 0.5 ? '<tr><td colspan="4">الصافي بالجنيه</td><td colspan="2"><b>' +
-          money(bal.netE) + ' جنيه ' + (bal.netE >= 0 ? 'مستحق له' : 'دائن') + '</b></td></tr>' : '') + '</table>') : '') +
-      '<div class="ft"><span>' + vzEsc(_vzAccPdfName()) + '</span><span>صفحة ' + (pg + 1) + ' من ' + pages + '</span></div>' +
-      '</section>';
-  }
+    '<th style="width:46px;">مدين</th><th style="width:46px;">دائن</th><th style="width:56px;">الرصيد</th><th style="width:82px;">التوجيه المحاسبي</th></tr>';
 
   return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>' + vzEsc(_vzAccPdfName()) + '</title><style>' +
     '@page{size:A4 portrait;margin:10mm;}' +
     'body{font-family:"Cairo",Tahoma,sans-serif;margin:0;color:#14312a;background:#fff;padding:' + (forPrint ? '0' : '10px') + ';}' +
-    // 📄 (V4.146) min-height أقل من ارتفاع الصفحة الفعلي بهامش أمان (بدل شبه الارتفاع الكامل) —
-    // كانت القيمة القديمة قريبة جداً من ارتفاع الصفحة فتدفع أحياناً بصفحة فارغة إضافية عند الطباعة
-    // الفعلية لاختلافات بسيطة بقياس الخط بين المتصفحات
-    '.pg{page-break-after:always;padding:4mm 2mm;display:flex;flex-direction:column;min-height:' + (forPrint ? '255mm' : 'auto') + ';}' +
-    '.pg:last-child{page-break-after:auto;}' +
     '.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #075c46;padding-bottom:5px;margin-bottom:6px;}' +
     'h1{font-size:15px;color:#075c46;margin:0;} .who{font-size:12px;font-weight:800;color:#0b7a5e;margin-top:2px;}' +
     '.stamp{font-size:9px;color:#64748b;text-align:left;line-height:1.6;}' +
@@ -39121,11 +39279,25 @@ function vzAccBuildDoc(forPrint) {
     'table{width:100%;border-collapse:collapse;font-size:9.5px;table-layout:fixed;}' +
     'th,td{border:1px solid #9fb8b0;padding:3px 4px;text-align:center;overflow-wrap:anywhere;}' +
     'td.ar{text-align:right;}' +
-    'th{background:#075c46;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'th{background:#075c46;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;position:sticky;top:0;}' +
     'tbody tr:nth-child(even){background:#f4fbf8;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
     '.sum{margin-top:7px;font-size:10.5px;} .sum td{background:#eefaf5;font-weight:800;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
-    '.ft{margin-top:auto;padding-top:5px;border-top:1px solid #cfe6de;display:flex;justify-content:space-between;font-size:9px;color:#64748b;}' +
-    '</style></head><body>' + body + '</body></html>';
+    '.pfoot{margin-top:8px;padding-top:5px;border-top:1px solid #cfe6de;display:flex;justify-content:space-between;font-size:9px;color:#64748b;}' +
+    '</style></head><body>' +
+    '<div class="hd"><div><h1>🧾 كشف حساب الوكيل</h1>' +
+      '<div class="who">' + vzEsc(VZ._accKey || '') + ((r.companies || []).length ? ' — ' + vzEsc(r.companies.join('، ')) : '') + '</div></div>' +
+      '<div class="stamp">منظومة منف للسياحة<br>طُبع في: ' + vzEsc(meta.stamp) + '</div></div>' +
+    (flt.length ? '<div class="flt">🔎 الفلاتر المطبَّقة: ' + vzEsc(flt.join('  ·  ')) + '</div>'
+                : '<div class="flt">🔎 بلا فلاتر — الكشف كامل</div>') +
+    '<table><thead>' + head + '</thead><tbody>' + trs + totalsTr + '</tbody></table>' +
+    '<table class="sum"><tr>' +
+      '<td>مستحق المجموعات</td><td>' + money(bal.visaDueS) + ' ريال</td>' +
+      '<td>مدفوع</td><td>' + money(bal.paidS) + ' ريال</td>' +
+      '<td>الصافي</td><td><b>' + money(bal.netS) + ' ريال ' + (bal.netS >= 0 ? 'مستحق له' : 'دائن') + '</b></td>' +
+      '</tr>' + (Math.abs(bal.netE) > 0.5 ? '<tr><td colspan="4">الصافي بالجنيه</td><td colspan="2"><b>' +
+        money(bal.netE) + ' جنيه ' + (bal.netE >= 0 ? 'مستحق له' : 'دائن') + '</b></td></tr>' : '') + '</table>' +
+    '<div class="pfoot"><span>' + vzEsc(_vzAccPdfName()) + '</span><span>منظومة منف للسياحة</span></div>' +
+    '</body></html>';
 }
 function vzAccPrint() {
   var html = vzAccBuildDoc(true);
