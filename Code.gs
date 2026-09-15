@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.143";
+var APP_VERSION = "4.144";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -11315,7 +11315,11 @@ function deleteTransportRowEdit(authToken, id) {
 
 function getTransportAccountsData(authToken) {
   requireTransportAccountsPermission_(authToken);
-
+  return _taReadRowsRaw_();
+}
+// 🚌 (V4.144) نفس منطق قراءة صفوف النقل بلا فحص صلاحية — يُستخدَم أيضاً من زر "تحديث دورات النقل"
+// بكشف حساب الوكيل (الذي يفحص صلاحيته المالية الخاصة بدلاً من صلاحية شاشة حسابات النقل)
+function _taReadRowsRaw_() {
   var sheet = getSpreadsheet_().getSheetByName("Bookings");
   if (!sheet) return [];
 
@@ -11394,7 +11398,9 @@ function getTransportAccountsData(authToken) {
       desc: desc, // 🧩 (V4.43) بيان كشف حساب النقل السعودي
       busCount: row[idx["عدد الباصات"]],
       busPrice: busPrice,
-      operationValue: operationValue
+      operationValue: operationValue,
+      // 🧑‍💼 (V4.144) اسم الرحلة — يلزم لبيان دورات النقل بكشف حساب الوكيل
+      tripName: idx["اسم الرحلة"] !== undefined ? String(row[idx["اسم الرحلة"]] || "") : ""
     });
   }
 
@@ -22184,6 +22190,55 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
 }
 function _mfMsOf_(d) { if (!d) return null; var t = new Date(d).getTime(); return isNaN(t) ? null : t; }
 
+// 📜 (V4.144) سجل تعديلات سطر واحد بكشف حساب الوكيل — بند/دفعة/مجموعة/دورة نقل، كلٌّ بمفتاحه الخاص
+function getAgentAccRowHistory(authToken, kind, id) {
+  _vzPerm_(authToken, 'view');
+  id = _mfStr_(id);
+  if (!id) return { success: true, entries: [] };
+  var key = kind === 'item' ? ('AI:' + id) : kind === 'pay' ? ('AP:' + id)
+    : kind === 'group' ? ('VZ:' + id) : kind === 'transport' ? ('إشعار ' + id) : null;
+  if (!key) return { success: true, entries: [] };
+  var sh = ensureAuditLogSheet_();
+  var last = sh.getLastRow();
+  if (last < 2) return { success: true, entries: [] };
+  var vals = sh.getRange(2, 1, last - 1, 7).getValues();
+  var tz = Session.getScriptTimeZone() || 'Asia/Riyadh';
+  var out = [];
+  for (var i = vals.length - 1; i >= 0; i--) {
+    if (_mfStr_(vals[i][3]) !== key) continue;
+    var ts = vals[i][0];
+    out.push({
+      when: (ts instanceof Date) ? Utilities.formatDate(ts, tz, 'dd/MM/yyyy HH:mm:ss') : _mfStr_(ts),
+      who: _mfStr_(vals[i][1]), action: _mfStr_(vals[i][2]),
+      field: _mfStr_(vals[i][4]), oldVal: _mfStr_(vals[i][5]), newVal: _mfStr_(vals[i][6])
+    });
+  }
+  return { success: true, entries: out };
+}
+// 🚌 (V4.144) دورات النقل التي تخص حساب وكيل بعينه — الوكيل/المورد والشركة المصرية لكل صف نقل
+// يُحلَّلان بنفس منطق ربط مجموعات التأشيرات بالحساب (_vzFileInAcct_)، فحساب "ريادة الرؤى - واي
+// اتش ام" يجلب فقط صفوف النقل التي موردها ريادة الرؤى وشركتها واي اتش ام، بينما الحساب العام
+// "ريادة الرؤى" يجلب كل صفوفه غير المرتبطة بحساب فرعي مخصَّص.
+function getAgentTransportRuns(authToken, acctKey) {
+  _vzFinancePerm_(authToken);   // 🔒 مالي
+  acctKey = _mfStr_(acctKey);
+  if (!acctKey) return { success: false, error: 'حساب الوكيل مطلوب' };
+  var map = _vzAcctMap_();
+  var rows = _taReadRowsRaw_();
+  var out = rows.filter(function (r) {
+    return _vzFileInAcct_({ agent: r.supplier, company: r.company }, acctKey, map);
+  }).map(function (r) {
+    var busCount = _mfNum_(r.busCount), busPrice = _mfNum_(r.busPrice);
+    return {
+      id: r.id, date: r.arrivalDate, groupRef: 'نقل ' + r.id,
+      desc: 'دورة نقل ' + (r.tripName || r.client || '—') + ' (' + busCount + ' × ' + busPrice + ')',
+      busCount: busCount, busPrice: busPrice, value: busCount * busPrice,
+      client: r.client, tripName: r.tripName, company: r.company
+    };
+  });
+  return { success: true, rows: out };
+}
+
 /* -------- حساب وكيل: عرض/دفعات/بنود -------- */
 /* 🧾 (V4.134) كشف حساب الوكيل — يقبل «مفتاح حساب»: اسم الوكيل وحده (كل شركاته)
    أو «الوكيل - الشركة» (حساب فرعي منفصل/مشترك كما ضُبط من إعدادات حسابات الوكلاء).
@@ -22246,12 +22301,14 @@ function saveAgentAccItem(authToken, item) {
   var id = _mfStr_(item.id);
   var rowVals = [id || _accId_('AI'), agent, _mfStr_(item.desc), _mfStr_(item.currency) || 'SAR',
     _accNum_(item.value), item.isCredit ? 'نعم' : 'لا', _mfStr_(item.notes), _accNum_(item.order), session.username, now];
-  if (id) {
+  var isEdit = !!id;
+  if (isEdit) {
     var hit = _vzReadItems_('').filter(function (x) { return x.id === id; })[0];
     if (!hit) return { success: false, error: 'البند غير موجود' };
     sh.getRange(hit._row, 1, 1, VZ_ITEMS_HEADERS.length).setValues([rowVals]);
-  } else { sh.appendRow(rowVals); }
-  logChange_(session.username, id ? 'تعديل بند حساب وكيل' : 'إضافة بند حساب وكيل', agent, _mfStr_(item.desc),
+  } else { sh.appendRow(rowVals); id = rowVals[0]; }
+  // 📜 (V4.144) سجل التعديلات لكل بند مستقل عن باقي بنود نفس الوكيل — بمفتاح البند نفسه
+  logChange_(session.username, isEdit ? 'تعديل بند حساب وكيل' : 'إضافة بند حساب وكيل', 'AI:' + id, _mfStr_(item.desc),
     '-', _accNum_(item.value) + ' ' + (item.currency || 'SAR') + (item.isCredit ? ' (دائن)' : ' (مدين)'));
   _vzClearCache_();
   return { success: true };
@@ -22261,7 +22318,7 @@ function deleteAgentAccItem(authToken, id) {
   var hit = _vzReadItems_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'البند غير موجود' };
   _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS).deleteRow(hit._row);
-  logChange_(session.username, 'حذف بند حساب وكيل', hit.agent, hit.desc, '-', '-');
+  logChange_(session.username, 'حذف بند حساب وكيل', 'AI:' + hit.id, hit.desc, '-', '-');
   _vzClearCache_();
   return { success: true };
 }
@@ -22274,12 +22331,14 @@ function saveAgentPayment(authToken, pay) {
   var id = _mfStr_(pay.id);
   var rowVals = [id || _accId_('AP'), agent, _mfDate_(pay.date) || _mfToday_(), _accNum_(pay.amount),
     _mfStr_(pay.currency) || 'SAR', _mfStr_(pay.notes), session.username, now];
-  if (id) {
+  var isEdit = !!id;
+  if (isEdit) {
     var hit = _vzReadPays_('').filter(function (x) { return x.id === id; })[0];
     if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
     sh.getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).setValues([rowVals]);
-  } else { sh.appendRow(rowVals); }
-  logChange_(session.username, id ? 'تعديل دفعة وكيل' : 'إضافة دفعة وكيل', agent,
+  } else { sh.appendRow(rowVals); id = rowVals[0]; }
+  // 📜 (V4.144) سجل التعديلات لكل دفعة مستقل — بمفتاح الدفعة نفسها
+  logChange_(session.username, isEdit ? 'تعديل دفعة وكيل' : 'إضافة دفعة وكيل', 'AP:' + id,
     _accNum_(pay.amount) + ' ' + (pay.currency || 'SAR'), '-', '-');
   _vzClearCache_();
   return { success: true };
@@ -22289,7 +22348,7 @@ function deleteAgentPayment(authToken, id) {
   var hit = _vzReadPays_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
   _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS).deleteRow(hit._row);
-  logChange_(session.username, 'حذف دفعة وكيل', hit.agent, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
+  logChange_(session.username, 'حذف دفعة وكيل', 'AP:' + hit.id, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
   _vzClearCache_();
   return { success: true };
 }
