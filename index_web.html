@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.142 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.143 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.142)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.143)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.142</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.143</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6656,7 +6656,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.142";
+var CLIENT_APP_VERSION = "4.143";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -38411,16 +38411,37 @@ function vzPriceRender() {
   box.innerHTML = '<div class="vz-sec"><div class="vz-sec-h">🗓️ الفترات السعرية</div>' +
     '<div style="font-size:11.5px;color:#4e7a6e;background:#fff;border:1px dashed var(--vzBorder);border-radius:9px;padding:8px 10px;margin-bottom:8px;line-height:1.7;">' +
     'كل فترة سعر يبدأ من تاريخ التفعيل حتى تاريخ الانتهاء — اترك «إلى تاريخ» فارغاً ليكون السعر سارياً لما لا نهاية.<br>لتغيير السعر أضِف فترة جديدة بسعر جديد من تاريخ جديد.</div>' +
-    '<table class="vz-tab"><thead><tr><th style="width:26%;">السعر (ريال)</th><th style="width:30%;">من تاريخ</th><th style="width:30%;">إلى تاريخ (فارغ = مفتوح)</th><th style="width:14%;">⚙</th></tr></thead><tbody>' +
+    '<table class="vz-tab"><thead><tr><th style="width:22%;">السعر (ريال)</th><th style="width:26%;">من تاريخ</th><th style="width:26%;">إلى تاريخ (فارغ = مفتوح)</th><th style="width:26%;">⚙</th></tr></thead><tbody>' +
     (d.length ? d.map(function (p, i) {
       return '<tr><td><input style="' + inp + '" value="' + vzEsc(p.price) + '" oninput="VZ._prDraft[' + i + '].price=mfNum(this.value)"></td>' +
         '<td>' + dt(i, 'from') + '</td><td>' + dt(i, 'to') + '</td>' +
-        '<td><button class="vz-rowbtn" style="color:#dc2626;" title="حذف الفترة" onclick="VZ._prDraft.splice(' + i + ',1);vzPriceRender()">🗑️</button></td></tr>';
+        '<td class="d-flex gap-1"><button class="vz-btn sm" title="طبّق هذا السعر على كل مجموعات الوكيل ضمن هذه الفترة" onclick="vzPriceApplyToGroups(' + i + ')">📌 تطبيق</button>' +
+        '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف الفترة" onclick="VZ._prDraft.splice(' + i + ',1);vzPriceRender()">🗑️</button></td></tr>';
     }).join('') : '<tr><td colspan="4" class="text-muted" style="padding:14px;">لا فترات سعرية لهذا الوكيل بعد.</td></tr>') + '</tbody></table>' +
     '<div class="mt-2 d-flex gap-2 flex-wrap"><button class="vz-btn sm" onclick="VZ._prDraft.push({price:0,from:VZ.today,to:\'\'});vzPriceRender()">➕ فترة سعر جديدة</button>' +
     '<button class="vz-btn pri sm" onclick="vzPriceSave()">💾 حفظ تسعير الوكيل</button></div></div>';
 }
 function vzPrCal(i, k) { _vzCal_('vzPr_' + k + '_' + i, function (v) { VZ._prDraft[i][k] = v; }); }
+// 📌 (V4.143) تطبيق سعر فترة على كل مجموعات الوكيل التي تاريخها ضمن الفترة (بدل تعديل كل مجموعة يدوياً)
+function vzPriceApplyToGroups(i) {
+  var a = mfStr(document.getElementById('vzPrAgent').value);
+  var p = (VZ._prDraft || [])[i]; if (!a || !p) return;
+  if (!mfNum(p.price)) { _showPopup('أدخِل السعر أولاً', 'error'); return; }
+  showElegantConfirm({ icon: '📌', title: 'تطبيق السعر على المجموعات',
+    message: 'سيُطبَّق سعر ' + mfFmt(p.price) + ' ريال على كل مجموعات «' + a + '» التي تاريخها من ' + (p.from || 'البداية') + ' إلى ' + (p.to || 'الآن') + '. متابعة؟',
+    buttons: [
+      { label: 'تطبيق', class: 'btn-primary', onClick: function () {
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر التطبيق', 'error'); return; }
+            _showPopup('طُبِّق السعر على ' + res.count + ' مجموعة', 'success'); vzLoad(true);
+          })
+          .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+          .applyAgentPriceToGroups(window.authToken, a, p.price, p.from || '', p.to || '');
+      } },
+      { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }
+    ] });
+}
 function vzPriceSave() {
   var a = mfStr(document.getElementById('vzPrAgent').value);
   if (!a) { _showPopup('اختر الوكيل', 'error'); return; }
@@ -38677,22 +38698,22 @@ function vzAccBuildDoc(forPrint) {
 
   var ROWS_PER_PAGE = 22;
   var pages = Math.max(1, Math.ceil(rows.length / ROWS_PER_PAGE));
-  var runS = 0, runE = 0;
-  var head = '<tr><th style="width:26px;">م</th><th style="width:66px;">التاريخ</th><th style="width:62px;">النوع</th>' +
-    '<th>البيان</th><th style="width:88px;">الشركة</th><th style="width:40px;">العدد</th><th style="width:54px;">السعر</th>' +
-    '<th style="width:70px;">مدين</th><th style="width:70px;">دائن</th><th style="width:44px;">العملة</th><th style="width:78px;">الرصيد</th></tr>';
+  // 💰 (V4.143) حساب الوكيل عامة بالريال السعودي — لا عمود مستقل للعملة، رصيد جارٍ واحد مبسَّط
+  var run = 0;
+  var head = '<tr><th style="width:26px;">م</th><th style="width:70px;">التاريخ</th><th style="width:66px;">النوع</th>' +
+    '<th>البيان</th><th style="width:110px;">الشركة</th><th style="width:44px;">العدد</th><th style="width:58px;">السعر</th>' +
+    '<th style="width:78px;">مدين</th><th style="width:78px;">دائن</th><th style="width:86px;">الرصيد</th></tr>';
 
   var body = '';
   for (var pg = 0; pg < pages; pg++) {
     var slice = rows.slice(pg * ROWS_PER_PAGE, (pg + 1) * ROWS_PER_PAGE);
     var trs = slice.map(function (x, i) {
-      if (x.cur === 'جنيه') runE += (x.debit - x.credit); else runS += (x.debit - x.credit);
-      var run = (x.cur === 'جنيه') ? runE : runS;
+      run += (x.debit - x.credit);
       return '<tr><td>' + (pg * ROWS_PER_PAGE + i + 1) + '</td><td dir="ltr">' + vzEsc(x.date || '—') + '</td>' +
         '<td>' + vzEsc(x.kind) + '</td><td class="ar">' + vzEsc(x.desc) + '</td><td class="ar">' + vzEsc(x.company || '—') + '</td>' +
         '<td>' + (x.count ? vzFmt(x.count) : '—') + '</td><td>' + (x.price ? vzFmt(x.price) : '—') + '</td>' +
         '<td>' + (x.debit ? vzFmt(x.debit) : '—') + '</td><td>' + (x.credit ? vzFmt(x.credit) : '—') + '</td>' +
-        '<td>' + vzEsc(x.cur) + '</td><td><b>' + vzFmt(run) + '</b></td></tr>';
+        '<td><b>' + vzFmt(run) + '</b></td></tr>';
     }).join('');
     body += '<section class="pg">' +
       '<div class="hd"><div><h1>🧾 كشف حساب الوكيل</h1>' +

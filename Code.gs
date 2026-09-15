@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.142";
+var APP_VERSION = "4.143";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6643,7 +6643,9 @@ var ALL_CACHE_KEYS = [
   'folder_meta_cache',
   'trips_list_cache',   // قائمة الرحلات (تقرأ 3 شيتات — تُمسح مع أي تعديل رحلة/كشف)
   'registry_cache',     // السجل العام للمعتمرين
-  'ministry_bootstrap_cache' // 🏛️ (V4.109) بيانات شاشة مراجعة ملفات الوزارة المشتركة بين المستخدمين
+  'ministry_bootstrap_cache', // 🏛️ (V4.109) بيانات شاشة مراجعة ملفات الوزارة المشتركة بين المستخدمين
+  'visa_bootstrap_cache' // 🧑‍💼 (V4.142) بيانات شاشة متابعة التأشيرات والوكلاء — كانت مفقودة من هذه القائمة
+                         // فيظل ربط الوكيل بالشركة (زر إعدادات الوكيل) قديماً في هذه الشاشة حتى تنتهي صلاحية الكاش تلقائياً
 ];
 
 function clearAllCache() {
@@ -22148,6 +22150,39 @@ function saveVisaAgentPrices(authToken, agent, periods) {
     return { success: true, count: mine.length };
   } finally { lock.releaseLock(); }
 }
+
+// 💲 (V4.143) تطبيق سعر فترة معيّنة على كل مجموعات هذا الوكيل الواقعة تواريخها ضمن الفترة —
+// بدل تعديل كل مجموعة يدوياً بعد تسجيل فترة سعر جديدة.
+function applyAgentPriceToGroups(authToken, agent, price, from, to) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 مالي
+  agent = _mfStr_(agent); price = _mfNum_(price);
+  if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
+  if (!price) return { success: false, error: 'السعر مطلوب' };
+  var fromMs = from ? _mfMsOf_(_mfDate_(from)) : -Infinity;
+  var toMs = to ? _mfMsOf_(_mfDate_(to)) : Infinity;
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try {
+    var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+    var all = _vzReadAll_();
+    var map = _vzAcctMap_();
+    var touched = 0;
+    all.forEach(function (f) {
+      if (!_vzFileInAcct_(f, agent, map)) return;
+      var ms = _mfMsOf_(_mfDate_(f.date));
+      if (ms === null || isNaN(ms) || ms < fromMs || ms > toMs) return;
+      if (_mfNum_(f.price) === price) return;
+      var oldP = f.price;
+      sh.getRange(f._row, 12).setValue(price); // العمود 12 = السعر
+      logChange_(session.username, 'تطبيق سعر جماعي', f.ref || f.id, 'السعر', String(oldP), String(price));
+      touched++;
+    });
+    SpreadsheetApp.flush();
+    _vzClearCache_();
+    return { success: true, count: touched };
+  } finally { lock.releaseLock(); }
+}
+function _mfMsOf_(d) { if (!d) return null; var t = new Date(d).getTime(); return isNaN(t) ? null : t; }
 
 /* -------- حساب وكيل: عرض/دفعات/بنود -------- */
 /* 🧾 (V4.134) كشف حساب الوكيل — يقبل «مفتاح حساب»: اسم الوكيل وحده (كل شركاته)
