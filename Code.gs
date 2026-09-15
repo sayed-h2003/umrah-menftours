@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.145";
+var APP_VERSION = "4.146";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21778,7 +21778,9 @@ function _vzReadPays_(agent) {
    جدول المجموعات يظل يعرض الشركة المصرية الحقيقية لكل مجموعة مهما كان الدمج.
    ============================================================ */
 var VZ_ACCT_SHEET   = 'AgentCompanyAccounts';
-var VZ_ACCT_HEADERS = ['الوكيل','الشركة المصرية','نمط الحساب','الشركة الرئيسية','ملاحظات','عُدّل بواسطة','عُدّل في'];
+// 🔘 (V4.146) عمود "نشط" — يتحكم فقط في ظهور الحساب بقائمة "فتح حساب وكيل"/شريط الأرصدة،
+// ولا يغيّر أبداً منطق تجميع المبالغ (فارغ = نشط افتراضياً لأي صف قديم قبل إضافة هذا العمود)
+var VZ_ACCT_HEADERS = ['الوكيل','الشركة المصرية','نمط الحساب','الشركة الرئيسية','ملاحظات','عُدّل بواسطة','عُدّل في','نشط'];
 var VZ_ACCT_MODES_  = ['عام', 'منفصل', 'مشترك'];
 
 function _vzAcctRead_() {
@@ -21788,7 +21790,7 @@ function _vzAcctRead_() {
     .filter(function (r) { return _mfStr_(r[0]) && _mfStr_(r[1]); })
     .map(function (r, i) {
       return { agent: _mfStr_(r[0]), company: _mfStr_(r[1]), mode: _mfStr_(r[2]) || 'عام',
-        mainCompany: _mfStr_(r[3]), notes: _mfStr_(r[4]), _row: i + 2 };
+        mainCompany: _mfStr_(r[3]), notes: _mfStr_(r[4]), active: _mfStr_(r[7]) !== 'لا', _row: i + 2 };
     });
 }
 // خريطة سريعة: "الوكيل|الشركة" → إعداد
@@ -21798,27 +21800,46 @@ function _vzAcctMap_(rows) {
   return m;
 }
 // مفتاح الحساب المالي لزوج (وكيل، شركة)
+// 🔍 (V4.146) مطابقة تامة أولاً، وإلا مطابقة مرنة (احتواء أحد الاسمين للآخر بلا حساسية للمسافات) —
+// تحل تفاوت مسميات الشركة بين الشاشات (مثال: "جنات" بإعدادات الربط مقابل "جنات الربيع" بشيت
+// الإشعارات/النقل) دون الحاجة لتوحيد الأسماء يدوياً في كل الشيتات. النتيجة دوماً تُبنى من اسم
+// الشركة *المُعدَّل* (c.company) لا الاسم الخام المُمرَّر، فتتّحد كل المتغيّرات في مفتاح واحد ثابت.
 function _vzAcctKey_(agent, company, map) {
   agent = _mfStr_(agent); company = _mfStr_(company);
   if (!agent) return '';
   var c = map[agent + '|' + company];
+  if (!c) {
+    var normCompany = company.replace(/\s+/g, '');
+    if (normCompany) {
+      for (var k in map) {
+        var m2 = map[k];
+        if (m2.agent !== agent || !m2.company) continue;
+        var normCfg = m2.company.replace(/\s+/g, '');
+        if (normCfg && (normCompany.indexOf(normCfg) >= 0 || normCfg.indexOf(normCompany) >= 0)) { c = m2; break; }
+      }
+    }
+  }
   if (!c || c.mode === 'عام') return agent;
-  if (c.mode === 'مشترك') return agent + ' - ' + (_mfStr_(c.mainCompany) || company);
-  return agent + ' - ' + company;
+  if (c.mode === 'مشترك') return agent + ' - ' + (_mfStr_(c.mainCompany) || c.company);
+  return agent + ' - ' + c.company;
 }
 // كل مفاتيح الحسابات المتاحة (وكيل عام + الحسابات الفرعية المُعدَّة) مرتَّبة
+// 🔘 (V4.146) الحساب العام "الوكيل (كل الشركات)" يُخفى تلقائياً بمجرد وجود أي حساب فرعي له —
+// لا داعي له عادةً حينها ويُربك القائمة. والحسابات الفرعية غير "النشطة" تُخفى من القائمة أيضاً
+// (تبقى تُحتسَب محاسبياً كما هي، فهذا تفضيل عرض فقط وليس تغييراً بمنطق التجميع).
 function _vzAcctKeys_(agents, map) {
-  var keys = {}, sub = {};
-  (agents || []).forEach(function (a) { if (a) keys[a] = { key: a, agent: a, company: '', kind: 'عام' }; });
+  var keys = {}, sub = {}, agentsHaveSub = {};
   Object.keys(map).forEach(function (k) {
     var c = map[k]; if (c.mode === 'عام') return;
+    agentsHaveSub[c.agent] = true;
     var key = _vzAcctKey_(c.agent, c.company, map);
-    if (!keys[c.agent]) keys[c.agent] = { key: c.agent, agent: c.agent, company: '', kind: 'عام' };
-    if (!sub[key]) sub[key] = { key: key, agent: c.agent, company: key.slice(c.agent.length + 3), kind: c.mode, companies: [] };
+    if (!sub[key]) sub[key] = { key: key, agent: c.agent, company: key.slice(c.agent.length + 3), kind: c.mode, companies: [], active: false };
     if (sub[key].companies.indexOf(c.company) < 0) sub[key].companies.push(c.company);
+    if (c.active) sub[key].active = true; // نشط لو أي صف مُساهِم بهذا المفتاح نشط
   });
+  (agents || []).forEach(function (a) { if (a && !agentsHaveSub[a]) keys[a] = { key: a, agent: a, company: '', kind: 'عام' }; });
   var out = Object.keys(keys).map(function (k) { return keys[k]; })
-    .concat(Object.keys(sub).map(function (k) { return sub[k]; }));
+    .concat(Object.keys(sub).filter(function (k) { return sub[k].active; }).map(function (k) { return sub[k]; }));
   out.sort(function (a, b) { return a.key < b.key ? -1 : (a.key > b.key ? 1 : 0); });
   return out;
 }
@@ -21842,7 +21863,8 @@ function saveAgentCompanyAccounts(authToken, rows) {
   var now = _mfStamp_();
   var out = rows.filter(function (r) { return _mfStr_(r.agent) && _mfStr_(r.company); }).map(function (r) {
     var mode = _mfStr_(r.mode); if (VZ_ACCT_MODES_.indexOf(mode) < 0) mode = 'عام';
-    return [_mfStr_(r.agent), _mfStr_(r.company), mode, _mfStr_(r.mainCompany), _mfStr_(r.notes), session.username, now];
+    return [_mfStr_(r.agent), _mfStr_(r.company), mode, _mfStr_(r.mainCompany), _mfStr_(r.notes), session.username, now,
+      (r.active === false ? 'لا' : 'نعم')];
   });
   if (out.length) sh.getRange(2, 1, out.length, VZ_ACCT_HEADERS.length).setValues(out);
   _vzClearCache_();
@@ -22359,6 +22381,51 @@ function deleteAgentPayment(authToken, id) {
   logChange_(session.username, 'حذف دفعة وكيل', 'AP:' + hit.id, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
   _vzClearCache_();
   return { success: true };
+}
+// 📋 (V4.146) دفعات متعددة دفعة واحدة — للصق من إكسيل (كل الوكلاء والتأشيرات عامة بالريال السعودي)
+function saveAgentPaymentsBatch(authToken, agent, rows) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 مالي
+  agent = _mfStr_(agent);
+  if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
+  var valid = (Array.isArray(rows) ? rows : []).filter(function (r) { return _accNum_(r.amount); });
+  if (!valid.length) return { success: false, error: 'لا توجد دفعات صالحة بالبيانات الملصقة' };
+  var sh = _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS);
+  var now = _mfStamp_();
+  var out = [], entries = [];
+  valid.forEach(function (r) {
+    var id = _accId_('AP');
+    out.push([id, agent, _mfDate_(r.date) || _mfToday_(), _accNum_(r.amount), 'SAR', _mfStr_(r.notes), session.username, now]);
+    entries.push({ action: 'إضافة دفعة وكيل (لصق دفعات)', recordId: 'AP:' + id,
+      field: _mfStr_(r.notes) || '-', oldVal: '-', newVal: _accNum_(r.amount) + ' ريال' });
+  });
+  var last = sh.getLastRow();
+  sh.getRange(last + 1, 1, out.length, VZ_PAY_HEADERS.length).setValues(out);
+  logChangesBatch_(session.username, entries);
+  _vzClearCache_();
+  return { success: true, count: out.length };
+}
+// 📋 (V4.146) بنود متعددة دفعة واحدة — للصق من إكسيل، بنوع واحد (دائن/مدين) يُطبَّق على كل الأسطر
+// الملصقة معاً (تُحدَّد قبل اللصق)، وكلها بالريال السعودي.
+function saveAgentAccItemsBatch(authToken, agent, isCredit, rows) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 مالي
+  agent = _mfStr_(agent);
+  if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
+  var valid = (Array.isArray(rows) ? rows : []).filter(function (r) { return _mfStr_(r.desc) && _accNum_(r.value); });
+  if (!valid.length) return { success: false, error: 'لا توجد بنود صالحة بالبيانات الملصقة' };
+  var sh = _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS);
+  var now = _mfStamp_();
+  var out = [], entries = [];
+  valid.forEach(function (r) {
+    var id = _accId_('AI');
+    out.push([id, agent, _mfStr_(r.desc), 'SAR', _accNum_(r.value), isCredit ? 'نعم' : 'لا', '', 0, session.username, now]);
+    entries.push({ action: 'إضافة بند حساب وكيل (لصق بنود)', recordId: 'AI:' + id,
+      field: _mfStr_(r.desc), oldVal: '-', newVal: _accNum_(r.value) + ' ريال' + (isCredit ? ' (دائن)' : ' (مدين)') });
+  });
+  var last = sh.getLastRow();
+  sh.getRange(last + 1, 1, out.length, VZ_ITEMS_HEADERS.length).setValues(out);
+  logChangesBatch_(session.username, entries);
+  _vzClearCache_();
+  return { success: true, count: out.length };
 }
 
 /* -------- إحصائيات الوكلاء بفلاتر متعددة -------- */
