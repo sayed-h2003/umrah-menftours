@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.151 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.152 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.151)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.152)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.151</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.152</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6676,7 +6676,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.151";
+var CLIENT_APP_VERSION = "4.152";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -37457,7 +37457,7 @@ function mfExportImage(btn) {
    escapeHtml_/showElegantConfirm/_showPopup/getTripPilgrims/exportReportAsImage). كل النوافذ
    تُبنى ديناميكياً وتُلحق بـ<body> بطبقة عالية فتعمل من أي شاشة بلا تعارض.
    ============================================================ */
-var VZ = { files: [], prices: [], companies: [], trips: [], clients: [], agents: [], statuses: [],
+var VZ = { files: [], prices: [], transportPrices: [], companies: [], trips: [], clients: [], agents: [], statuses: [],
   agentBalances: {}, today: '', can: {}, loaded: false, _draft: null, _pick: null, _pickLoading: false,
   // 🔎↕️ تصفية ديناميكية لحظية من رأس كل عمود + ترتيب تصاعدي/تنازلي بالعمود
   colFilters: {}, sort: { key: 'seq', dir: -1 }, selId: null, colW: {}, _filesSel: {} };
@@ -37472,7 +37472,7 @@ function vzLoad(force) {
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { if (wrap) wrap.innerHTML = '<div class="alert alert-danger m-2">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
-      VZ.files = res.files || []; VZ.prices = res.prices || []; VZ.companies = res.companies || [];
+      VZ.files = res.files || []; VZ.prices = res.prices || []; VZ.transportPrices = res.transportPrices || []; VZ.companies = res.companies || [];
       VZ.trips = res.trips || []; VZ.clients = res.clients || []; VZ.agents = res.agents || [];
       VZ.statuses = res.statuses || []; VZ.agentBalances = res.agentBalances || {};
       VZ.cateringByGroup = res.cateringByGroup || {};
@@ -38713,6 +38713,59 @@ function vzPriceSave() {
     .saveVisaAgentPrices(window.authToken, a, VZ._prDraft || []);
 }
 
+/* -------- 🚌 (V4.152) تسعير دورات النقل للوكيل (فترات) — بنفس شكل تسعير التأشيرات، ويُطبَّق
+   افتراضياً فقط على دورات حسابات النقل السعودي التي ليس لها سعر يدوي مُسجَّل -------- */
+function vzOpenTransportPricing() {
+  if (!vzFin()) { _showPopup('الجانب المالي يتطلب صلاحية مالية خاصة', 'error'); return; }
+  var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzTPriceOv';
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(760px,96vw);"><div class="vz-hd"><b>🚌 تسعير دورات النقل للوكلاء — بالريال</b><button class="vz-btn sm" onclick="vzTPriceClose()">✕</button></div>' +
+    '<div class="p-3"><div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🧑‍💼 الوكيل</div>' +
+    '<div class="vz-fld" style="max-width:340px;"><label>اختر الوكيل السعودي</label><select id="vzTPrAgent" onchange="vzTPriceLoadAgent()">' +
+    '<option value="">— اختر —</option>' + (VZ.agents || []).map(function (a) { return '<option>' + vzEsc(a) + '</option>'; }).join('') + '</select></div></div>' +
+    '<div id="vzTPrBody"><div class="vz-sec"><div class="text-muted" style="font-size:12.5px;">اختر وكيلاً لعرض أو تعديل فتراته السعرية.</div></div></div>' +
+    '<div class="mf-note info mt-2"><span>ℹ️</span><div>هذا السعر يُطبَّق تلقائياً فقط على دورات النقل التي ليس لها سعر باص مُسجَّل يدوياً بحسابات النقل السعودي — لا يُغيِّر أي سعر يدوي موجود.</div></div></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzTPriceClose(); });
+}
+function vzTPriceClose() { var o = document.getElementById('vzTPriceOv'); if (o) o.remove(); }
+function vzTPriceLoadAgent() {
+  var a = mfStr(document.getElementById('vzTPrAgent').value);
+  VZ._tprDraft = (VZ.transportPrices || []).filter(function (p) { return mfStr(p.agent) === a; })
+    .map(function (p) { return { price: p.price, from: p.from, to: p.to }; })
+    .sort(function (x, y) { return mfMs(mfDate(x.from)) - mfMs(mfDate(y.from)); });
+  vzTPriceRender();
+}
+function vzTPriceRender() {
+  var box = document.getElementById('vzTPrBody'); if (!box) return;
+  var d = VZ._tprDraft || [];
+  var inp = 'width:100%;text-align:center;font-size:13px;padding:7px 8px;border:1.5px solid var(--vzBorder);border-radius:8px;font-weight:700;background:#fff;color:#0f2a23;';
+  var dt = function (i, k) {
+    return '<div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzTPrCal(' + i + ',\'' + k + '\')">📅</button>' +
+      '<input id="vzTPr_' + k + '_' + i + '" style="' + inp + 'padding-inline-start:34px;" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(d[i][k]) + '" ' +
+      'oninput="VZ._tprDraft[' + i + '].' + k + '=this.value" onblur="VZ._tprDraft[' + i + '].' + k + '=mfDate(this.value);this.value=VZ._tprDraft[' + i + '].' + k + '"></div>';
+  };
+  box.innerHTML = '<div class="vz-sec"><div class="vz-sec-h">🗓️ الفترات السعرية</div>' +
+    '<div style="font-size:11.5px;color:#4e7a6e;background:#fff;border:1px dashed var(--vzBorder);border-radius:9px;padding:8px 10px;margin-bottom:8px;line-height:1.7;">' +
+    'كل فترة سعر يبدأ من تاريخ التفعيل حتى تاريخ الانتهاء — اترك «إلى تاريخ» فارغاً ليكون السعر سارياً لما لا نهاية.<br>لتغيير السعر أضِف فترة جديدة بسعر جديد من تاريخ جديد.</div>' +
+    '<table class="vz-tab"><thead><tr><th style="width:22%;">سعر الباص (ريال)</th><th style="width:26%;">من تاريخ</th><th style="width:26%;">إلى تاريخ (فارغ = مفتوح)</th><th style="width:26%;">⚙</th></tr></thead><tbody>' +
+    (d.length ? d.map(function (p, i) {
+      return '<tr><td><input style="' + inp + '" value="' + vzEsc(p.price) + '" oninput="VZ._tprDraft[' + i + '].price=mfNum(this.value)"></td>' +
+        '<td>' + dt(i, 'from') + '</td><td>' + dt(i, 'to') + '</td>' +
+        '<td><button class="vz-rowbtn" style="color:#dc2626;" title="حذف الفترة" onclick="VZ._tprDraft.splice(' + i + ',1);vzTPriceRender()">🗑️</button></td></tr>';
+    }).join('') : '<tr><td colspan="4" class="text-muted" style="padding:14px;">لا فترات سعرية لهذا الوكيل بعد.</td></tr>') + '</tbody></table>' +
+    '<div class="mt-2 d-flex gap-2 flex-wrap"><button class="vz-btn sm" onclick="VZ._tprDraft.push({price:0,from:VZ.today,to:\'\'});vzTPriceRender()">➕ فترة سعر جديدة</button>' +
+    '<button class="vz-btn pri sm" onclick="vzTPriceSave()">💾 حفظ تسعير دورات النقل</button></div></div>';
+}
+function vzTPrCal(i, k) { _vzCal_('vzTPr_' + k + '_' + i, function (v) { VZ._tprDraft[i][k] = v; }); }
+function vzTPriceSave() {
+  var a = mfStr(document.getElementById('vzTPrAgent').value);
+  if (!a) { _showPopup('اختر الوكيل', 'error'); return; }
+  google.script.run
+    .withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; } _showPopup('حُفظ تسعير دورات النقل (' + res.count + ' فترة)', 'success'); vzTPriceClose(); vzLoad(true); })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveVisaAgentTransportPrices(window.authToken, a, VZ._tprDraft || []);
+}
+
 /* -------- 🧑‍💼 حساب الوكيل (كشف + دفعات + بنود) -------- */
 function vzOpenAccount(agent) {
   agent = mfStr(agent); if (!agent) return;
@@ -39031,10 +39084,14 @@ function _vzParsePasteLines_(text) {
       var dIdx = -1;
       for (var i = 0; i < cols.length; i++) { if (dateRe.test(cols[i])) { dIdx = i; break; } }
       var date = dIdx >= 0 ? mfDate(cols[dIdx]) : '';
-      var entryNo = dIdx > 0 ? cols[0] : '';
       var amtIdx = -1, amount = 0;
       for (var j = cols.length - 1; j >= 0; j--) { var n = mfNum(cols[j]); if (n) { amount = n; amtIdx = j; break; } }
-      var startTxt = dIdx >= 0 ? dIdx + 1 : (entryNo ? 1 : 0);
+      // 📝 (V4.152) رقم القيد: أول عمود رقمي صِرف يسبق التاريخ — وليس عمود 0 حصراً كما كان،
+      // فيدعم عموداً فارغاً قبله أو ترتيب أعمدة مختلف (كان اللصق يُسقِط القيد لو لم يكن أول عمود بالضبط)
+      var entrySearchEnd = dIdx >= 0 ? dIdx : (amtIdx >= 0 ? amtIdx : cols.length);
+      var entryIdx = -1, entryNo = '';
+      for (var e = 0; e < entrySearchEnd; e++) { if (/^\d+$/.test(cols[e])) { entryIdx = e; entryNo = cols[e]; break; } }
+      var startTxt = dIdx >= 0 ? dIdx + 1 : (entryIdx >= 0 ? entryIdx + 1 : 0);
       var endTxt = amtIdx >= 0 ? amtIdx : cols.length;
       var textCols = cols.slice(Math.max(startTxt, 0), Math.max(endTxt, startTxt)).filter(function (c) { return c; });
       var type = textCols[0] || '';
@@ -39394,6 +39451,7 @@ function vzAcctHubOpen() {
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzAcctPickOv';
   ov.innerHTML = '<div class="vz-dlg" style="width:min(560px,95vw);"><div class="vz-hd"><b>💰 حسابات الوكلاء</b>' +
     '<span class="d-flex gap-2"><button class="vz-btn sm" onclick="vzOpenPricing()">💲 تسعير الوكلاء</button>' +
+    '<button class="vz-btn sm" onclick="vzOpenTransportPricing()">🚌 تسعير دورات النقل</button>' +
     '<button class="vz-btn sm" onclick="vzAcctCfgOpen()">⚙️ إعدادات الربط</button>' +
     '<button class="vz-btn sm" onclick="vzAcctPickerClose()">✕</button></span></div><div class="p-3">' +
     '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📌 الأرصدة (المدينون/الدائنون فقط)</div>' +
