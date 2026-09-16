@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.152 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.153 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.152)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.153)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.152</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.153</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4887,6 +4887,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="mf-btn gold" onclick="mfOpenReceipts()">🏦 إيصالات رسوم الغرفة</button>
       <button class="mf-btn" onclick="mfOpenSupReg()">🧑‍✈️ سجل المشرفين</button>
       <button class="mf-btn" onclick="mfOpenSuggest()">🎯 اقتراح مشرف</button>
+      <button class="mf-btn" onclick="mfOpenQuotaStats()">📊 حصص الأفراد الشهرية</button>
       <div class="mf-sep"></div>
       <button class="mf-btn" onclick="mfPrint()">🖨️ طباعة</button>
       <button class="mf-btn" onclick="mfExportPdf()">📄 PDF</button>
@@ -4914,6 +4915,8 @@ input[type="date"]:not(:focus):not(:valid) {
         <div class="mf-fld"><label>رقم الملف</label><input id="mfF_fileNo" autocomplete="off"></div>
         <div class="mf-fld"><label>الشركة المصرية</label><input id="mfF_company" autocomplete="off"></div>
         <div class="mf-fld"><label>الوكيل السعودي</label><input id="mfF_agent" autocomplete="off"></div>
+        <div class="mf-fld"><label>نوع الملف</label><select id="mfF_fileType" onchange="mfRender()">
+          <option value="">الكل</option><option value="مجموعات">مجموعات</option><option value="فردي">فردي</option></select></div>
         <div class="mf-fld"><label>العميل</label><input id="mfF_clientLabel" autocomplete="off"></div>
         <!-- 🧳 (V4.126) فلتر باسم الرحلة أو جزء منه -->
         <div class="mf-fld"><label>الرحلة</label><input id="mfF_tripName" autocomplete="off" placeholder="اسم الرحلة أو جزء منه"></div>
@@ -4922,6 +4925,8 @@ input[type="date"]:not(:focus):not(:valid) {
         <div class="mf-fld"><label>فندق مكة</label><input id="mfF_makkahHotel" autocomplete="off"></div>
         <div class="mf-fld"><label>تاريخ السفر من</label>
           <div class="mf-date"><input id="mfF_goFrom" maxlength="10" placeholder=""><button type="button" onclick="mfPickDate('mfF_goFrom',event)">📅</button></div></div>
+        <div class="mf-fld"><label>تاريخ السفر إلى</label>
+          <div class="mf-date"><input id="mfF_goTo" maxlength="10" placeholder=""><button type="button" onclick="mfPickDate('mfF_goTo',event)">📅</button></div></div>
         <div class="mf-fld"><label>تاريخ العودة حتى</label>
           <div class="mf-date"><input id="mfF_retTo" maxlength="10" placeholder=""><button type="button" onclick="mfPickDate('mfF_retTo',event)">📅</button></div></div>
       </div>
@@ -6676,7 +6681,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.152";
+var CLIENT_APP_VERSION = "4.153";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -33979,6 +33984,19 @@ function mfAutoType(reviewDate, goDate, current) {
   }
   return current === 'VIP' ? 'VIP' : 'عادية';
 }
+// 🎯 نوع الملف التلقائي: «فردي» لو مشرفو الملف ليس بينهم أي مشرف فعلي مستقل عن الوكيل نفسه،
+// وإلا فـ«مجموعات» — نفس منطق الخادم بالضبط (saveMinistryFile)
+function mfAutoFileType_(sups, agent) {
+  var ag = mfStr(agent);
+  var hasRealSup = (sups || []).some(function (s) { return mfStr(s.name) && mfStr(s.name) !== ag; });
+  return hasRealSup ? 'مجموعات' : 'فردي';
+}
+// مفتاح الشهر yyyy-mm من تاريخ dd/mm/yyyy — لحصة الأفراد الشهرية بالواجهة (نفس _mfMonthKey_ بالخادم)
+function mfMonthKey_(dateStr) {
+  var d = mfDate(dateStr);
+  var m = String(d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? (m[3] + '-' + m[2]) : '';
+}
 // 📅 (V4.113) اسم يوم الأسبوع بالعربي بجوار أي تاريخ dd/mm/yyyy — عرض فقط
 var MF_DOW_NAMES = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 /* 🔗 (V4.115) رقم الإشعار المرتبط بالرحلة المرتبطة بهذا الملف — يُكمل الربط الثلاثي
@@ -34023,6 +34041,7 @@ var MF_COLS = [
   { k: 'bookingNo', g: 'الشركة والمراجعة', l: 'رقم الإشعار',           w: 78,  calcTxt: 1 },
   { k: 'reviewDate', g: 'الشركة والمراجعة', l: 'تاريخ المراجعة',      w: 84,  edit: 'date' },
   { k: 'reviewType', g: 'الشركة والمراجعة', l: 'نوع المراجعة',        w: 82,  edit: 'sel', opts: ['عادية', 'VIP', 'تجديد باركود'] },
+  { k: 'fileType', g: 'الشركة والمراجعة', l: 'نوع الملف',             w: 68,  edit: 'sel', opts: ['مجموعات', 'فردي'] },
   { k: 'travelMode', g: 'الشركة والمراجعة', l: 'وسيلة السفر',         w: 68,  edit: 'sel', opts: ['طيران', 'بري', 'بواخر'] },
   { k: 'goDate', g: 'العميل والمعتمرون', l: 'الذهاب',                 w: 80,  edit: 'date' },
   { k: 'retDate', g: 'العميل والمعتمرون', l: 'العودة',                w: 80,  edit: 'date' },
@@ -34224,7 +34243,7 @@ function mfMatch(f) {
       mfRaw('supNames', f), f.madinahHotel, f.makkahHotel, f.transport, f.notes].join(' ').toLowerCase();
     if (hay.indexOf(q) < 0 && !mfPilgrimMatches(f, q)) return false;
   }
-  var pairs = [['mfF_fileNo', 'fileNo'], ['mfF_company', 'company'], ['mfF_agent', 'agent'],
+  var pairs = [['mfF_fileNo', 'fileNo'], ['mfF_company', 'company'], ['mfF_agent', 'agent'], ['mfF_fileType', 'fileType'],
     ['mfF_clientLabel', 'clientLabel'], ['mfF_tripName', 'tripName'],
     ['mfF_madinahHotel', 'madinahHotel'], ['mfF_makkahHotel', 'makkahHotel']];
   for (var i = 0; i < pairs.length; i++) {
@@ -34235,6 +34254,8 @@ function mfMatch(f) {
   if (sv && mfRaw('supNames', f).toLowerCase().indexOf(sv.toLowerCase()) < 0) return false;
   var gf = mfDate(mfFV('mfF_goFrom'));
   if (gf && !isNaN(mfMs(gf)) && !(mfMs(f.goDate) >= mfMs(gf))) return false;
+  var gt = mfDate(mfFV('mfF_goTo'));
+  if (gt && !isNaN(mfMs(gt)) && !(mfMs(f.goDate) <= mfMs(gt))) return false;
   var rt = mfDate(mfFV('mfF_retTo'));
   if (rt && !isNaN(mfMs(rt)) && !(mfMs(f.retDate) <= mfMs(rt))) return false;
   for (var k in MF.colFilters) {
@@ -34278,8 +34299,8 @@ function mfVisible() {
 function mfToggleFacet(btn) { btn.classList.toggle('on'); MF.facets[btn.dataset.q] = btn.classList.contains('on'); mfRender(); }
 function mfSort(k) { if (MF.sort.key === k) MF.sort.dir *= -1; else { MF.sort.key = k; MF.sort.dir = 1; } mfRender(); }
 function mfClearFilters() {
-  ['mfSearch', 'mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_clientLabel', 'mfF_tripName', 'mfF_supName',
-    'mfF_madinahHotel', 'mfF_makkahHotel', 'mfF_goFrom', 'mfF_retTo'].forEach(function (id) {
+  ['mfSearch', 'mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_fileType', 'mfF_clientLabel', 'mfF_tripName', 'mfF_supName',
+    'mfF_madinahHotel', 'mfF_makkahHotel', 'mfF_goFrom', 'mfF_goTo', 'mfF_retTo'].forEach(function (id) {
       var e = document.getElementById(id); if (e) e.value = '';
     });
   MF.colFilters = {}; MF.facets = {};
@@ -34437,10 +34458,10 @@ function mfRenderApplied(list) {
   var box = document.getElementById('mfApplied'); if (!box) return;
   var chips = [];
   var q = mfFV('mfSearch'); if (q) chips.push({ l: 'بحث: ' + q, f: function () { document.getElementById('mfSearch').value = ''; } });
-  [['mfF_fileNo', 'رقم الملف'], ['mfF_company', 'الشركة'], ['mfF_agent', 'الوكيل'], ['mfF_clientLabel', 'العميل'],
+  [['mfF_fileNo', 'رقم الملف'], ['mfF_company', 'الشركة'], ['mfF_agent', 'الوكيل'], ['mfF_fileType', 'نوع الملف'], ['mfF_clientLabel', 'العميل'],
    ['mfF_tripName', 'الرحلة'],
    ['mfF_supName', 'المشرف'], ['mfF_madinahHotel', 'فندق المدينة'], ['mfF_makkahHotel', 'فندق مكة'],
-   ['mfF_goFrom', 'سفر من'], ['mfF_retTo', 'عودة حتى']].forEach(function (p) {
+   ['mfF_goFrom', 'سفر من'], ['mfF_goTo', 'سفر إلى'], ['mfF_retTo', 'عودة حتى']].forEach(function (p) {
     var v = mfFV(p[0]);
     if (v) chips.push({ l: p[1] + ': ' + v, f: (function (id) { return function () { document.getElementById(id).value = ''; }; })(p[0]) });
   });
@@ -34484,6 +34505,16 @@ function mfRenderAlerts() {
     var b = mfBalanceOf(c.company);
     if (b.pending > b.balance) low.push({ company: c.company, short: b.pending - b.balance });
   });
+  // 🎯 (V4.152) قرب اكتمال حصة الأفراد الشهرية — تنبيه غير مانع، يظهر فقط لو مفعَّل بإعدادات التنبيهات
+  var quotaNear = [];
+  if (_notifOn_('mf_quota_near')) {
+    var qmk = mfCurrentMonthKey_(), byC = {};
+    MF.files.forEach(function (f) {
+      if (f.fileType !== 'فردي' || mfMonthKey_(f.goDate) !== qmk) return;
+      byC[f.company] = (byC[f.company] || 0) + mfNum(f.pilgrims);
+    });
+    Object.keys(byC).forEach(function (c) { if (byC[c] >= 31) quotaNear.push({ company: c, pilgrims: byC[c] }); });
+  }
   var h = '';
   if (urgent.length) {
     h += '<div class="mf-note bad" style="margin-bottom:8px;"><span style="font-size:16px;">⏰</span><div style="flex:1;">' +
@@ -34504,10 +34535,17 @@ function mfRenderAlerts() {
       '<div style="font-size:10.5px;color:#5c6b83;margin-top:5px;font-weight:600;">التنبيه يظهر عند تسجيل رقم الملف وهو غير مانع · السحب الفعلي عند تسجيل تاريخ المراجعة.</div>' +
       '</div></div>';
   }
+  if (quotaNear.length) {
+    h += '<div class="mf-note bad" style="margin-bottom:8px;"><span style="font-size:16px;">📊</span><div style="flex:1;">' +
+      '<div style="font-weight:800;color:#dc2626;margin-bottom:4px;">شركات قاربت حد 36 فرد/شهر بالملفات الفردية (' + quotaNear.length + ')</div>' +
+      '<div class="d-flex gap-2 flex-wrap">' + quotaNear.map(function (x) {
+        return '<span class="mf-btn" style="font-size:10.5px;" onclick="mfOpenQuotaStats()">' + mfEsc(x.company) + ' — ' + mfL(x.pilgrims) + ' / 36</span>';
+      }).join('') + '</div></div></div>';
+  }
   box.innerHTML = h;
   // 🔔 (V4.111) قسم التنبيهات يظهر ويومض فقط عند وجود تنبيهات فعلية
   var sec = document.getElementById('mfSecAlerts');
-  var cnt = urgent.length + low.length;
+  var cnt = urgent.length + low.length + quotaNear.length;
   if (sec) {
     sec.style.display = cnt ? '' : 'none';
     var body = sec.querySelector(':scope > .sb');
@@ -34618,7 +34656,8 @@ function mfPayload(f) {
     madinahHotel: f.madinahHotel, madinahIn: f.madinahIn, madinahOut: f.madinahOut,
     makkahHotel: f.makkahHotel, makkahIn: f.makkahIn, makkahOut: f.makkahOut,
     transport: f.transport, notes: f.notes, selected: f.selected,
-    _manualType: !!f._manualType
+    _manualType: !!f._manualType,
+    fileType: f.fileType, _manualFileType: !!f._manualFileType
   };
 }
 
@@ -34795,6 +34834,7 @@ function mfInlineSave(id) {
       MF.editRowId = null; _mfInlineDraft = null; _mfInlineBar_(null);
       _showPopup('تم اعتماد التعديل', 'success');
       mfApplySaved(res, { silent: true });
+      mfShowQuotaWarning_(res.quotaWarning);
     })
     .withFailureHandler(function (e) { done(); _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveMinistryFile(window.authToken, d);
@@ -35636,7 +35676,7 @@ function mfEditFile(id) {
   if (id && !MF.can.edit) { _showPopup('لا تملك صلاحية تعديل ملفات المراجعة', 'error'); return; }
   var d = f ? JSON.parse(JSON.stringify(mfPayload(f))) : {
     id: '', fileNo: '', approved: false, eInvoice: '', ref: '', company: '', agent: '',
-    reviewDate: '', reviewType: 'عادية', vipReason: '', travelMode: 'طيران', clientLabel: '',
+    reviewDate: '', reviewType: 'عادية', fileType: 'فردي', vipReason: '', travelMode: 'طيران', clientLabel: '',
     breakdown: [], tripName: '', goDate: '', retDate: '', pilgrims: 0, supCount: 0, sups: [],
     progPrice: 0, ticket: 0, roomFee: mfRoomFeeAt(MF.today), adminFee: 0, pct: 0, fxRate: 0,
     madinahHotel: '', madinahIn: '', madinahOut: '', makkahHotel: '', makkahIn: '', makkahOut: '',
@@ -35717,6 +35757,7 @@ function mfFormRender() {
       "_showPopup('لا تملك صلاحية اعتماد ملفات مراجعة الوزارة','error')") + '"></span></div>', 2);
   h += mfFld('وسيلة السفر', mfSel('mfd_travelMode', ['طيران', 'بري', 'بواخر'], d.travelMode, 'mfDraftSet(\'travelMode\',this.value)'), 2);
   h += mfFld('نوع المراجعة', mfSel('mfd_reviewType', ['عادية', 'VIP', 'تجديد باركود'], d.reviewType, 'mfDraftType(this.value)'), 2);
+  h += mfFld('نوع الملف', mfSel('mfd_fileType', ['مجموعات', 'فردي'], d.fileType, 'mfDraftFileType(this.value)'), 2);
   h += mfFld('الشركة المصرية', mfSel('mfd_company', comps, d.company, 'mfDraftCompany(this.value)'), 3);
   h += mfFld('الوكيل السعودي', '<input class="form-control form-control-sm" value="' + mfEsc(d.agent) + '" oninput="mfDraftAgent(this.value)">' +
     '<div class="mf-hint">يُملأ تلقائياً من الشركة · المشرف المطابق له يصبح «استقبال»</div>', 3);
@@ -36097,6 +36138,7 @@ function mfApplyAgentRule() {
   var d = MF._draft, ag = mfStr(d.agent);
   if (ag) (d.sups || []).forEach(function (s) { if (mfStr(s.name) && mfStr(s.name) === ag) s.type = 'استقبال'; });
   d.supCount = mfMurafiqCount(d.sups);
+  if (!d._manualFileType) d.fileType = mfAutoFileType_(d.sups, d.agent);
 }
 function mfDraftTrip(v) {
   var d = MF._draft;
@@ -36171,9 +36213,15 @@ function mfDraftReviewDate(v) {
   if (!mfNum(d.roomFee)) d.roomFee = mfRoomFeeAt(d.reviewDate);
   mfFormRender();
 }
-function mfDraftGo(v) { MF._draft.goDate = mfDate(v); if (!MF._draft._manualType) MF._draft.reviewType = mfAutoType(MF._draft.reviewDate, MF._draft.goDate, MF._draft.reviewType); mfFormRender(); }
+function mfDraftGo(v) {
+  MF._draft.goDate = mfDate(v);
+  if (!MF._draft._manualType) MF._draft.reviewType = mfAutoType(MF._draft.reviewDate, MF._draft.goDate, MF._draft.reviewType);
+  if (!MF._draft._manualFileType) MF._draft.fileType = mfAutoFileType_(MF._draft.sups, MF._draft.agent);
+  mfFormRender();
+}
 function mfDraftRet(v) { MF._draft.retDate = mfDate(v); mfFormRender(); }
 function mfDraftType(v) { MF._draft.reviewType = mfStr(v); MF._draft._manualType = true; mfFormRender(); }
+function mfDraftFileType(v) { MF._draft.fileType = mfStr(v); MF._draft._manualFileType = true; mfFormRender(); }
 function mfBdAdd() { MF._draft.breakdown = MF._draft.breakdown || []; MF._draft.breakdown.push({ name: '', count: 0, sups: 0, note: '' }); mfFormRender(); }
 function mfBdDel(i) { MF._draft.breakdown.splice(i, 1); mfSyncCounts(); mfFormRender(); }
 function mfBdSet(i, k, v) {
@@ -36186,8 +36234,19 @@ function mfBdSet(i, k, v) {
 function mfMurafiqCount(sups) {
   return (sups || []).filter(function (s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
 }
-function mfSupAdd() { MF._draft.sups = MF._draft.sups || []; MF._draft.sups.push({ name: '', type: 'مرافق', directTo: '' }); MF._draft.supCount = mfMurafiqCount(MF._draft.sups); mfFormRender(); }
-function mfSupDel(i) { MF._draft.sups.splice(i, 1); MF._draft.supCount = mfMurafiqCount(MF._draft.sups); mfFormRender(); }
+function mfSupAdd() {
+  MF._draft.sups = MF._draft.sups || [];
+  MF._draft.sups.push({ name: '', type: 'مرافق', directTo: '' });
+  MF._draft.supCount = mfMurafiqCount(MF._draft.sups);
+  if (!MF._draft._manualFileType) MF._draft.fileType = mfAutoFileType_(MF._draft.sups, MF._draft.agent);
+  mfFormRender();
+}
+function mfSupDel(i) {
+  MF._draft.sups.splice(i, 1);
+  MF._draft.supCount = mfMurafiqCount(MF._draft.sups);
+  if (!MF._draft._manualFileType) MF._draft.fileType = mfAutoFileType_(MF._draft.sups, MF._draft.agent);
+  mfFormRender();
+}
 function mfSupSet(i, k, v) {
   MF._draft.sups[i][k] = mfStr(v);
   // لا نُعيد رسم النموذج أثناء الكتابة (يفقد التركيز) — القاعدة تُطبَّق على البيانات فوراً
@@ -36247,9 +36306,25 @@ function mfSaveDraft() {
       mfCloseModal();
       _showPopup('تم حفظ ملف المراجعة', 'success');
       mfApplySaved(res, { silent: true });
+      mfShowQuotaWarning_(res.quotaWarning);
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); mfFormValidate(); })
     .saveMinistryFile(window.authToken, d);
+}
+// 🎯 (V4.152) تنبيه غير مانع بعد الحفظ عند تجاوز ملف «فردي» حصة شركته الشهرية (36) أو حد الملف
+// الواحد (9) — الحفظ نجح بالفعل ولا يمنعه هذا التنبيه، فقط يعرض التفاصيل ويقترح شركات بديلة
+function mfShowQuotaWarning_(qw) {
+  if (!qw) return;
+  var parts = [];
+  if (qw.overMonthly) parts.push('تجاوزت الشركة الحصة الشهرية (' + qw.used + ' / ' + qw.limit + ' فرد)');
+  if (qw.overPerFile) parts.push('عدد أفراد هذا الملف تجاوز الحد المسموح للملف الواحد (' + qw.perFileLimit + ')');
+  var msg = '⚠️ ' + parts.join(' · ');
+  if (qw.suggestions && qw.suggestions.length) {
+    msg += '\nشركات بديلة بمساحة متبقية أكبر: ' + qw.suggestions.map(function (s) {
+      return s.company + ' (متبقٍ ' + s.headroom + ')';
+    }).join(' · ');
+  }
+  _showPopup(msg, 'warning', '📊 تنبيه حصة الأفراد الشهرية');
 }
 // 🏨 (V4.123) حفظ متتابع لملف واحد لكل مستوى تسكين — كل ملف نسخة من البيانات المشتركة (الشركة،
 // الوكيل، التواريخ، نوع المراجعة...) لكن بعدد معتمري مستواه فقط وسكنه وسعر بيعه الخاصين
@@ -36558,6 +36633,78 @@ function mfSgUse(name, type) {
   MF._draft.supCount = MF._draft.sups.length;
   mfFormBack();
 }
+
+/* ============================================================
+   🎯 حصص الأفراد الشهرية لكل شركة مصرية — ملفات نوعها «فردي» فقط، الحد 36 فرد/شهر لكل شركة
+   و9 أفراد كحد أقصى للملف الواحد. الكارت يُنقر فيطبّق فلاتر الجدول (النوع + الشركة + شهر السفر)
+   ويعرض تفصيل العملاء أسفله.
+   ============================================================ */
+function mfCurrentMonthKey_() {
+  var d = new Date();
+  var mm = d.getMonth() + 1;
+  return d.getFullYear() + '-' + (mm < 10 ? '0' : '') + mm;
+}
+function mfOpenQuotaStats(monthKey) {
+  monthKey = monthKey || mfCurrentMonthKey_();
+  mfModal('📊 حصص الأفراد الشهرية (ملفات «فردي»)', '<div id="mfQuotaOut">⏳ جاري التحميل…</div>', '', 760);
+  mfLoadQuotaStats(monthKey);
+}
+function mfLoadQuotaStats(monthKey) {
+  var out = document.getElementById('mfQuotaOut'); if (!out) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { out.innerHTML = '<div class="mf-note bad">⚠️<div>تعذّر تحميل الإحصاء</div></div>'; return; }
+      window._mfQuotaStats = res;
+      mfRenderQuotaStats(res);
+    })
+    .withFailureHandler(function (e) { out.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>'; })
+    .getMfIndividualQuotaStats(window.authToken, monthKey);
+}
+function mfRenderQuotaStats(res) {
+  var out = document.getElementById('mfQuotaOut'); if (!out) return;
+  var h = '<div class="small text-muted mb-2" style="font-weight:700;">الشهر: ' + mfEsc(res.monthKey) +
+    ' · الحد الشهري لكل شركة: ' + res.monthlyLimit + ' فرد · حد الملف الواحد: ' + res.perFileLimit + ' فرد</div>';
+  if (!res.companies.length) {
+    h += '<div class="text-muted small p-2">لا توجد ملفات فردية مسجَّلة بهذا الشهر</div>';
+  } else {
+    h += res.companies.map(function (c, i) {
+      var pct = Math.max(0, Math.min(100, Math.round(c.pilgrims / (res.monthlyLimit || 1) * 100)));
+      return '<div class="mf-note ' + (c.nearLimit ? 'bad' : 'info') + '" style="cursor:pointer;flex-direction:column;align-items:stretch;margin-bottom:8px;" onclick="mfQuotaCardClick(' + i + ')">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;font-weight:800;">' +
+        '<span>' + (c.nearLimit ? '⚠️ ' : '') + mfEsc(c.company) + '</span>' +
+        '<span>' + mfL(c.pilgrims) + ' / ' + res.monthlyLimit + ' · ' + mfL(c.files) + ' ملف</span></div>' +
+        '<div style="background:#e2e8f0;border-radius:99px;height:7px;margin-top:6px;overflow:hidden;">' +
+        '<div style="background:' + (c.nearLimit ? '#dc2626' : '#2563eb') + ';height:100%;width:' + pct + '%;"></div></div>' +
+        '</div>';
+    }).join('');
+  }
+  h += '<div id="mfQuotaBreak"></div>';
+  out.innerHTML = h;
+}
+function mfQuotaCardClick(i) {
+  var res = window._mfQuotaStats; if (!res) return;
+  var c = res.companies[i]; if (!c) return;
+  var mp = res.monthKey.split('-'), y = Number(mp[0]), mo = Number(mp[1]);
+  var lastDay = new Date(y, mo, 0).getDate();
+  var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+  // تطبيق الفلاتر على الجدول الرئيسي (نوع الملف + الشركة + شهر السفر) — يبقى ساري الوقت الذي تُغلق
+  // فيه هذه النافذة، ونُبقي النافذة مفتوحة كي يرى المستخدم تفصيل العملاء بجوار الكارت مباشرة
+  var fe = document.getElementById('mfF_fileType'); if (fe) fe.value = 'فردي';
+  var ce = document.getElementById('mfF_company'); if (ce) ce.value = c.company;
+  var gf = document.getElementById('mfF_goFrom'); if (gf) gf.value = '01/' + pad(mo) + '/' + y;
+  var gt = document.getElementById('mfF_goTo'); if (gt) gt.value = pad(lastDay) + '/' + pad(mo) + '/' + y;
+  mfRender();
+  var box = document.getElementById('mfQuotaBreak'); if (!box) return;
+  var clients = (c.clients || []).slice().sort(function (a, b) { return b.count - a.count; });
+  box.innerHTML = '<div class="mf-note info" style="flex-direction:column;align-items:stretch;">' +
+    '<div style="font-weight:800;margin-bottom:6px;">👥 تفصيل عملاء «' + mfEsc(c.company) + '» — شهر ' + mfEsc(res.monthKey) + '</div>' +
+    (clients.length
+      ? '<table class="mf-mini" style="background:#fff;"><thead><tr><th>العميل</th><th>عدد الأفراد</th></tr></thead><tbody>' +
+        clients.map(function (x) { return '<tr><td>' + mfEsc(x.name) + '</td><td>' + mfL(x.count) + '</td></tr>'; }).join('') + '</tbody></table>'
+      : '<div class="text-muted small">لا توجد بيانات عملاء</div>') +
+    '</div>';
+}
+
 function mfFormBack() {
   var d = MF._draft;
   mfEditFileFromDraft(d);

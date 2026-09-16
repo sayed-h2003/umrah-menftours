@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.152";
+var APP_VERSION = "4.153";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12862,6 +12862,8 @@ var NOTIF_TYPES_ = [
   { key: 'notif_acct_change', name: 'جرس: تغيّر تسكين/عدد/فندق',      desc: 'تنبيه داخل البرنامج عند تغيّر أعداد أو تسكين أو فندق عميل له حساب مسجَّل' },
   { key: 'mf_urgent',      name: 'ملفات الوزارة العاجلة',             desc: 'تنبيه الملفات التي لم تُراجع وباقٍ على سفرها 3 أيام أو أقل' },
   { key: 'mf_trips_no_file', name: 'رحلات بلا ملف مراجعة وزارة',      desc: 'البانر الأحمر أعلى قائمة الرحلات وشارة «بلا ملف وزارة» للرحلات التي باقٍ لها 3 أيام أو أقل بلا ملف مراجعة (أو بملف لم يُراجع)' },
+  { key: 'mf_quota_near',  name: 'قرب اكتمال حصة الأفراد الشهرية',    desc: 'تنبيه غير مانع عند اقتراب شركة مصرية من حد 36 فرد شهرياً بالملفات الفردية' },
+  { key: 'mf_quota_exceeded', name: 'تجاوز حصة الأفراد الشهرية عند التسجيل', desc: 'تنبيه غير مانع عند تسجيل ملف فردي يتجاوز الحصة الشهرية أو حد 9 أفراد للملف الواحد، مع ترشيح شركة بديلة' },
   { key: 'trips_no_notice', name: 'رحلات بلا إشعار خلال 72 ساعة',     desc: 'كارت التنبيه الأحمر بلوحة التحكم للرحلات التي بلا إشعار وسفرها قريب' },
   { key: 'trips_urgent48', name: 'رقاقة «عاجل 48 ساعة» للرحلات',      desc: 'الرقاقة الحمراء النابضة بشريط تصفية الرحلات للرحلات التي يقترب سفرها' },
   { key: 'passport_expiry', name: 'جوازات منتهية أو قاربت الانتهاء',  desc: 'شريط التنبيه بالسجل العام للمعتمرين (منتهية / تنتهي خلال 6 أشهر)' }
@@ -19961,7 +19963,8 @@ var MF_HEADERS = [
   'سعر البرنامج','التذكرة','رسوم الغرفة للفرد','رسوم إدارية للفرد','النسبة','سعر صرف الريال',
   'فندق المدينة','دخول المدينة','خروج المدينة','فندق مكة','دخول مكة','خروج مكة',
   'شركة النقل','ملاحظات','المعتمرون المختارون (JSON)',
-  'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في'
+  'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في',
+  'نوع الملف'
 ];
 
 var MF_SUP_SHEET = 'MinistrySupervisors';
@@ -19987,7 +19990,7 @@ var MF_FIELD_LABELS_ = {
   madinahHotel:'فندق المدينة', madinahIn:'دخول المدينة', madinahOut:'خروج المدينة',
   makkahHotel:'فندق مكة', makkahIn:'دخول مكة', makkahOut:'خروج مكة',
   transport:'شركة النقل', notes:'ملاحظات', breakdown:'بنود العميل', sups:'المشرفون',
-  selected:'المعتمرون المختارون'
+  selected:'المعتمرون المختارون', fileType:'نوع الملف'
 };
 
 /* ---------- صلاحية الشاشة ---------- */
@@ -20063,6 +20066,13 @@ function _mfTime_(v) {
 }
 function _mfJson_(v, fallback) {
   try { var o = JSON.parse(String(v || '')); return o || fallback; } catch (e) { return fallback; }
+}
+// مفتاح الشهر yyyy-mm من تاريخ dd/mm/yyyy — لحصة الأفراد الشهرية لكل شركة (نستخدم _mfDate_ أولاً
+// لتوحيد الصيغة بدل new Date() المباشر على النص، الذي له تاريخ أخطاء موثَّق بهذا الملف)
+function _mfMonthKey_(dateStr) {
+  var d = _mfDate_(dateStr);
+  var m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? (m[3] + '-' + m[2]) : '';
 }
 // يوم الأسبوع: 5 = جمعة، 6 = سبت
 function _mfDow_(dmy) {
@@ -20272,7 +20282,10 @@ function _mfRowToObj_(r) {
     makkahHotel: _mfStr_(r[29]), makkahIn: _mfDate_(r[30]), makkahOut: _mfDate_(r[31]),
     transport: _mfStr_(r[32]), notes: _mfStr_(r[33]), selected: _mfJson_(r[34], []),
     createdBy: _mfStr_(r[35]), createdAt: _mfDateTime_(r[36]),
-    updatedBy: _mfStr_(r[37]), updatedAt: _mfDateTime_(r[38])
+    updatedBy: _mfStr_(r[37]), updatedAt: _mfDateTime_(r[38]),
+    // 🎯 نوع الملف: «فردي»/«مجموعات» — عمود أُضيف لاحقاً، الفراغ بالصفوف القديمة يعني «غير مصنَّف»
+    // ولا يُحتسب ضمن حصة الأفراد (فقط القيمة الحرفية «فردي» تُحتسب)
+    fileType: _mfStr_(r[39]) || ''
   };
 }
 function _mfObjToRow_(f) {
@@ -20284,7 +20297,8 @@ function _mfObjToRow_(f) {
     f.progPrice, f.ticket, f.roomFee, f.adminFee, f.pct, f.fxRate,
     f.madinahHotel, f.madinahIn, f.madinahOut, f.makkahHotel, f.makkahIn, f.makkahOut,
     f.transport, f.notes, JSON.stringify(f.selected || []),
-    f.createdBy, f.createdAt, f.updatedBy, f.updatedAt
+    f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
+    f.fileType
   ];
 }
 function _mfNextSeq_() {
@@ -20730,6 +20744,7 @@ function saveMinistryFile(authToken, data) {
       company: _mfStr_(data.company), agent: _mfStr_(data.agent),
       reviewDate: _mfDate_(data.reviewDate),
       reviewType: _mfStr_(data.reviewType) || 'عادية',
+      fileType: _mfStr_(data.fileType) === 'فردي' ? 'فردي' : 'مجموعات',
       vipReason: _mfStr_(data.vipReason),
       travelMode: _mfStr_(data.travelMode) || 'طيران',
       clientLabel: _mfStr_(data.clientLabel) || bd.map(function(b) { return b.name; }).join(' + '),
@@ -20753,6 +20768,12 @@ function saveMinistryFile(authToken, data) {
 
     // نوع المراجعة التلقائي (جمعة/سبت أو أقل من 3 أيام) — ما لم يُثبّته الموظف يدوياً
     if (!data._manualType) f.reviewType = _mfAutoReviewType_(f.reviewDate, f.goDate, f.reviewType);
+    // 🎯 نوع الملف التلقائي: «فردي» لو مشرفو الملف ليس بينهم أي مشرف فعلي (مستقل عن الوكيل نفسه)،
+    // وإلا فـ«مجموعات» — ما لم يُثبّته الموظف يدوياً (نفس أسلوب نوع المراجعة أعلاه بالضبط)
+    if (!data._manualFileType) {
+      var hasRealSup = f.sups.some(function(s) { return s.name && s.name !== _mfStr_(f.agent); });
+      f.fileType = hasRealSup ? 'مجموعات' : 'فردي';
+    }
     // 🧾 (V4.111) الملف الذي له رقم قيد مسجَّل يُعتبر معتمداً تلقائياً
     if (_mfStr_(f.ref)) f.approved = true;
     // 🧑‍✈️ (V4.111) المشرف الذي يطابق اسمه الوكيل السعودي نوعه «استقبال» تلقائياً
@@ -20818,8 +20839,67 @@ function saveMinistryFile(authToken, data) {
     var balances = _mfBalances_(allAfter, _mfReadReceipts_());
     f.calc = _mfCompute_(f);
     f.flags = _mfRules_(f, allAfter, balances);
-    return { success: true, file: f, balances: balances };
+    var ret = { success: true, file: f, balances: balances };
+    // 🎯 حصة الأفراد الشهرية: تنبيه غير مانع فقط — الحفظ ينجح دائماً — عند تجاوز 36 فرد/شهر لكل
+    // شركة أو 9 أفراد للملف الواحد، مع اقتراح شركات بديلة بأكبر مساحة متبقية لنفس الشهر
+    if (f.fileType === 'فردي' && _notifEnabled_('mf_quota_exceeded')) {
+      var qMonthKey = _mfMonthKey_(f.goDate);
+      var qUsed = allAfter.filter(function(x) { return x.fileType === 'فردي' && x.company === f.company && _mfMonthKey_(x.goDate) === qMonthKey; })
+        .reduce(function(a, x) { return a + _mfNum_(x.pilgrims); }, 0);
+      var qOverMonthly = qUsed > 36;
+      var qOverPerFile = _mfNum_(f.pilgrims) > 9;
+      if (qOverMonthly || qOverPerFile) {
+        var qSugg = _mfCompanyList_().filter(function(c) { return c !== f.company; }).map(function(c) {
+          var u = allAfter.filter(function(x) { return x.fileType === 'فردي' && x.company === c && _mfMonthKey_(x.goDate) === qMonthKey; })
+            .reduce(function(a, x) { return a + _mfNum_(x.pilgrims); }, 0);
+          return { company: c, used: u, headroom: 36 - u };
+        }).filter(function(s) { return s.headroom > 0; }).sort(function(a, b) { return b.headroom - a.headroom; }).slice(0, 3);
+        ret.quotaWarning = { overMonthly: qOverMonthly, overPerFile: qOverPerFile, used: qUsed, limit: 36, perFileLimit: 9, suggestions: qSugg };
+      }
+    }
+    return ret;
   } finally { lock.releaseLock(); }
+}
+// قائمة أسماء الشركات المصرية الفريدة — نفس مصدر MF.companies بالواجهة (شيت Agents_Settings)
+function _mfCompanyList_() {
+  var out = [];
+  try {
+    var ash = getSpreadsheet_().getSheetByName('Agents_Settings');
+    if (ash && ash.getLastRow() > 1) {
+      var av = ash.getRange(2, 1, ash.getLastRow() - 1, Math.max(2, ash.getLastColumn())).getValues();
+      av.forEach(function(r) { var c = _mfStr_(r[1]); if (c && out.indexOf(c) < 0) out.push(c); });
+    }
+  } catch (e) {}
+  return out;
+}
+/* ---------- إحصاء حصة الأفراد الشهرية لكل شركة (ملفات «فردي» فقط) ---------- */
+function getMfIndividualQuotaStats(authToken, monthKey) {
+  _mfPerm_(authToken, 'view');
+  monthKey = _mfStr_(monthKey) || _mfMonthKey_(_mfToday_());
+  var files = _mfReadAll_().filter(function(f) { return f.fileType === 'فردي' && _mfMonthKey_(f.goDate) === monthKey; });
+  var byCompany = {}, order = [];
+  files.forEach(function(f) {
+    var c = f.company || '—';
+    if (!byCompany[c]) { byCompany[c] = { company: c, pilgrims: 0, files: 0, clientsMap: {} }; order.push(c); }
+    var g = byCompany[c];
+    g.pilgrims += _mfNum_(f.pilgrims);
+    g.files++;
+    if (Array.isArray(f.breakdown) && f.breakdown.length) {
+      f.breakdown.forEach(function(b) {
+        var nm = _mfStr_(b.name) || (f.clientLabel || 'غير محدد');
+        g.clientsMap[nm] = (g.clientsMap[nm] || 0) + _mfNum_(b.count);
+      });
+    } else {
+      var nm2 = _mfStr_(f.clientLabel) || 'غير محدد';
+      g.clientsMap[nm2] = (g.clientsMap[nm2] || 0) + _mfNum_(f.pilgrims);
+    }
+  });
+  var companies = order.map(function(c) {
+    var g = byCompany[c];
+    var clients = Object.keys(g.clientsMap).map(function(n) { return { name: n, count: g.clientsMap[n] }; });
+    return { company: g.company, pilgrims: g.pilgrims, files: g.files, clients: clients, nearLimit: g.pilgrims >= 31 };
+  }).sort(function(a, b) { return b.pilgrims - a.pilgrims; });
+  return { success: true, monthKey: monthKey, monthlyLimit: 36, perFileLimit: 9, companies: companies };
 }
 
 /* ⚡ (V4.126) اعتماد/إلغاء اعتماد ملف مراجعة — مسار خفيف مخصَّص بدل تمرير الملف كاملاً عبر
