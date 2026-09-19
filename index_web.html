@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.157 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.158 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.157)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.158)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.157</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.158</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1758,6 +1758,8 @@ input[type="date"]:not(:focus):not(:valid) {
                       <select id="supervisorRole" class="form-select form-select-sm flex-shrink-0" style="width:96px;" title="دور المشرف — مرافق: تذكرة + سكن + مقعد | استقبال فقط: سكن بلا تذكرة/مقعد">
                         <option>مرافق</option><option>استقبال فقط</option><option>الوكيل</option>
                       </select>
+                      <!-- 📱 (V4.158) جوال المشرف — لكل مشرف رقمه المستقل، ويُسجَّل أيضاً من بوت تليجرام -->
+                      <input type="text" class="form-control form-control-sm flex-shrink-0" id="supervisorMobile" placeholder="الجوال" dir="ltr" style="width:118px;" title="رقم جوال هذا المشرف (سعودي)">
                     </div>
                   </div>
                   <!-- المشرفون الإضافيون (عمود مضغوط لكل واحد ضمن نفس الشبكة) -->
@@ -6727,7 +6729,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.157";
+var CLIENT_APP_VERSION = "4.158";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -26936,8 +26938,17 @@ function _accPrint_(scope, tripOnly, mode, tripFilter, merge, summaryOnly, showS
         // 📅 (V4.40) الدفعات المُجمَّعة مرتّبة زمنيًا بلا أي فصل أو عنوان لكل رحلة — بطلب صريح
         pooledPays.sort(function(a, b) { return (parseD_(a.date) || 0) - (parseD_(b.date) || 0); });
         // 🔁 (V4.45) نوع قيد كل تحويل يُحسَم حسب حالة رصيد عملة مصدره لحظة إجرائه (دائن→بند، مدين→دفعة)
-        // — بطلب صريح ومؤكَّد برقم مثال — باستخدام كل بنود المجموعة المدمجة + الرصيد المرحّل كنقطة بداية
-        var fxRes = _accResolveFx_(pooledItems, pooledPays, carryE, carryS);
+        // 🧮 (V4.158) حتى داخل المجموعة المدمجة يُحسَم لكل رحلة على حدة وبلا رصيد مرحَّل، ثم تُجمَع
+        // النتائج — الصفوف المطبوعة تبقى مُجمَّعة كما هي، لكن الحساب صار مطابقاً للرصيد العام تماماً
+        var fxRes = { fxDueE: 0, fxDueS: 0, fxPayE: 0, fxPayS: 0 };
+        var _fxByTrip = {};
+        pooledItems.forEach(function (i) { (_fxByTrip[i.trip] = _fxByTrip[i.trip] || { it: [], pa: [] }).it.push(i); });
+        pooledPays.forEach(function (p) { (_fxByTrip[p.trip] = _fxByTrip[p.trip] || { it: [], pa: [] }).pa.push(p); });
+        Object.keys(_fxByTrip).forEach(function (k) {
+          var r = _accResolveFx_(_fxByTrip[k].it, _fxByTrip[k].pa, 0, 0);
+          fxRes.fxDueE += r.fxDueE; fxRes.fxDueS += r.fxDueS;
+          fxRes.fxPayE += r.fxPayE; fxRes.fxPayS += r.fxPayS;
+        });
         pooledPays.forEach(function(p) {
           rowsHtml += acctPayRow_(p);
           if (p.ptype !== 'تحويل') {
@@ -26977,9 +26988,12 @@ function _accPrint_(scope, tripOnly, mode, tripFilter, merge, summaryOnly, showS
         if (it.isDiscount) { if (it.currency === 'SAR') dueS -= v; else dueE -= v; }
         else { if (it.currency === 'SAR') dueS += v; else dueE += v; }
       });
-      // 🔁 (V4.45) نوع قيد كل تحويل بهذه الرحلة يُحسَم حسب حالة رصيد عملة مصدره لحظة إجرائه (يشمل
-      // الرصيد المرحّل من الرحلة السابقة) — بطلب صريح ومؤكَّد برقم مثال، بدل قاعدة ثابتة حسب الاتجاه فقط
-      var fxRes = _accResolveFx_(items, pays, carryInE, carryInS);
+      // 🔁 (V4.45) نوع قيد كل تحويل يُحسَم حسب حالة رصيد عملة مصدره لحظة إجرائه (دائن→بند، مدين→دفعة)
+      // 🧮 (V4.158) الحسم صار لكل رحلة على حدة وبلا رصيد مرحَّل — نفس قاعدة «الرصيد العام» وأرصدة
+      // الشريط الجانبي حرفياً (_accCalc_ بلا carryIn). كان تمرير الرصيد المرحَّل هنا يجعل التحويل
+      // نفسه يُصنَّف بالكشف المطبوع خلاف تصنيفه بالشاشة، فيختلف الرصيد بين الاثنين بلا سبب ظاهر.
+      // الرصيد المرحَّل نفسه لا يزال يتراكم بسلسلة runningE أدناه كما كان تماماً.
+      var fxRes = _accResolveFx_(items, pays, 0, 0);
       var paidE = 0, paidS = 0;
       pays.forEach(function(p) {
         paysBuf += acctPayRow_(p); // 🖨️ (V4.47) مؤجَّلة — تُضاف لبيان الدفعات بعد «الإجمالي» بدل هنا مباشرة
@@ -29220,7 +29234,7 @@ function _clearExtraHotels() {
 // ========== تعدّد المشرفين (مشرف لكل 50 معتمر) ==========
 // المشرف رقم 1 = حقلا #supervisor + #supervisorRole. الإضافيون في #supervisorsExtra.
 // مرافق = تذكرة + سكن + مقعد | استقبال فقط = سكن بلا تذكرة/مقعد.
-function _addSupervisorRow(name, role) {
+function _addSupervisorRow(name, role, mobile) {
   var box = document.getElementById('supervisorsExtra');
   if (!box) return;
   var idx = box.children.length + 2; // 1 هو الأساسي
@@ -29237,6 +29251,8 @@ function _addSupervisorRow(name, role) {
         '<option' + (rl === 'استقبال فقط' ? ' selected' : '') + '>استقبال فقط</option>' +
         '<option' + (rl === 'الوكيل' ? ' selected' : '') + '>الوكيل</option>' +
       '</select>' +
+      // 📱 (V4.158) جوال مستقل لكل مشرف
+      '<input type="text" class="form-control form-control-sm sup-mobile flex-shrink-0" placeholder="الجوال" dir="ltr" style="width:118px;" title="رقم جوال هذا المشرف (سعودي)" value="' + escapeHtml_(mobile || '') + '">' +
       '<button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" title="حذف هذا المشرف" onclick="this.closest(\'.supervisor-extra-row\').remove(); _renumberSupervisors();">×</button>' +
     '</div>';
   box.appendChild(wrap);
@@ -29253,18 +29269,21 @@ function _collectSupervisors() {
   var list = [];
   var pn = (document.getElementById('supervisor') || {}).value;
   var pr = (document.getElementById('supervisorRole') || {}).value || 'مرافق';
-  if (pn && pn.trim()) list.push({ name: pn.trim(), role: pr });
+  var pm = (document.getElementById('supervisorMobile') || {}).value;
+  if (pn && pn.trim()) list.push({ name: pn.trim(), role: pr, mobile: (pm || '').trim() });
   document.querySelectorAll('#supervisorsExtra .supervisor-extra-row').forEach(function(r) {
     var nm = (r.querySelector('.sup-name') || {}).value;
     var rl = (r.querySelector('.sup-role') || {}).value || 'مرافق';
-    if (nm && nm.trim()) list.push({ name: nm.trim(), role: rl });
+    var mb = (r.querySelector('.sup-mobile') || {}).value;
+    if (nm && nm.trim()) list.push({ name: nm.trim(), role: rl, mobile: (mb || '').trim() });
   });
   return list;
 }
 // نص العرض المُجمَّع للمشرفين (مطابق للفنادق: مفصولون بـ /) مع تمييز دور "استقبال فقط"
 function _supervisorsDisplayText(list) {
   return (list || []).map(function(s) {
-    return s.name + _supLbl_(s.role);
+    // 📱 (V4.158) الجوال جزء من نص المشرفين المُجمَّع فيظهر ببيان الإشعار المطبوع
+    return s.name + _supLbl_(s.role) + (s.mobile ? ' — ' + s.mobile : '');
   }).join(' / ');
 }
 function _clearSupervisors() {
@@ -29272,6 +29291,8 @@ function _clearSupervisors() {
   if (box) box.innerHTML = '';
   var sr = document.getElementById('supervisorRole');
   if (sr) sr.value = 'مرافق';
+  var sm = document.getElementById('supervisorMobile');   // 📱 (V4.158)
+  if (sm) sm.value = '';
 }
 // 🧭 شريط سياق التعديل أعلى النموذج: اسم الرحلة + رقم الإشعار إن وُجد
 function _setEditContextBar(tripName, bookingId) {
@@ -29307,10 +29328,12 @@ function _fillSupervisors(list, primaryName, primaryRole) {
   if (!arr.length && primaryName) arr = [{ name: primaryName, role: primaryRole || 'مرافق' }];
   var supEl = document.getElementById('supervisor');
   var roleEl = document.getElementById('supervisorRole');
+  var mobEl = document.getElementById('supervisorMobile');
   if (arr.length) {
     if (supEl) supEl.value = arr[0].name || '';
     if (roleEl) roleEl.value = arr[0].role || 'مرافق';
-    for (var i = 1; i < arr.length; i++) _addSupervisorRow(arr[i].name, arr[i].role);
+    if (mobEl) mobEl.value = arr[0].mobile || '';
+    for (var i = 1; i < arr.length; i++) _addSupervisorRow(arr[i].name, arr[i].role, arr[i].mobile);
   } else if (supEl) {
     supEl.value = primaryName || '';
   }

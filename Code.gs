@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.157";
+var APP_VERSION = "4.158";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -7664,6 +7664,39 @@ function doPost(e) {
         sendTelegramMessageDirect(chatId, "✔️ تم الإلغاء.");
         return;
       }
+      // 📱 (V4.158) زر «تسجيل جوال مشرف» — محادثة قصيرة: اسم تقريبي + رقم جوال بنص حر، ثم مراجعة
+      // المطابقة من واقع البيانات المسجَّلة (اسم المشرف ورحلته الجارية أو أحدثها) قبل الاعتماد
+      if (callbackData === 'supph_start') {
+        _tgSupSetState_(chatId, cq.from.id);
+        sendTelegramMessageDirect(chatId,
+          "📱 <b>تسجيل جوال مشرف</b>\nاكتب <b>اسم المشرف</b> (ولو تقريبياً) و<b>رقم جواله السعودي</b> في رسالة واحدة بأي ترتيب.\n\n" +
+          "مثال: <code>ابو محمد 0551234567</code>",
+          [[{ text: '✖️ إلغاء', callback_data: 'supphq_cancel' }]]);
+        return;
+      }
+      if (callbackData === 'supphq_cancel') {
+        _tgSupClearState_(chatId, cq.from.id);
+        sendTelegramMessageDirect(chatId, "✔️ تم الإلغاء.");
+        return;
+      }
+      if (callbackData.indexOf('supph:') === 0 || callbackData.indexOf('supphok:') === 0) {
+        try {
+          var _spP = callbackData.split(':');
+          var _spCand = _tgSupLoadCand_(chatId, _spP[1], parseInt(_spP[2], 10));
+          if (!_spCand) {
+            sendTelegramMessageDirect(chatId, "⚠️ انتهت صلاحية هذا الطلب. ابدأ من جديد بزر «تسجيل جوال مشرف».");
+          } else if (callbackData.indexOf('supphok:') === 0) {
+            sendTelegramMessageDirect(chatId, _tgSupSaveMobile_(_spCand));
+          } else {
+            sendTelegramMessageDirect(chatId, _tgSupReviewMsg_(_spCand),
+              [[{ text: '✅ اعتماد وتسجيل', callback_data: 'supphok:' + _spP[1] + ':' + _spP[2] },
+                { text: '❌ إلغاء', callback_data: 'supphq_cancel' }]]);
+          }
+        } catch (spErr) {
+          sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء تسجيل جوال المشرف:</b>\n<code>" + spErr.toString() + "</code>");
+        }
+        return;
+      }
       // اختيار معتمر من قائمة نتائج بحث متعددة: srch:<sid>:<idx>
       if (callbackData.indexOf('srch:') === 0) {
         try {
@@ -7752,6 +7785,18 @@ function doPost(e) {
       return;
     }
 
+    // 📱 (V4.158) رد على سؤال «تسجيل جوال مشرف» — نص حر فيه الاسم التقريبي ورقم الجوال
+    if (msg.from && _tgSupGetState_(chatId, msg.from.id)) {
+      if (!text) return;
+      _tgSupClearState_(chatId, msg.from.id);
+      try {
+        _tgSupRunMatch_(chatId, text);
+      } catch (supErr) {
+        sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث عن المشرف:</b>\n<code>" + supErr.toString() + "</code>");
+      }
+      return;
+    }
+
     // 📅 (V4.109) رد على سؤال «تحركات بتاريخ معيّن» — محادثة منفصلة تماماً عن بوت تسجيل الإشعارات
     // (مفتاح كاش خاص بها mvq_) حتى لا تتصادم الحالتان لو كان المستخدم في منتصف محادثة أخرى
     var mvState = msg.from ? _tgMoveGetState_(chatId, msg.from.id) : null;
@@ -7831,6 +7876,9 @@ function sendTelegramMenu(chatId) {
         ],
         [
           { "text": "🔎 بحث عن معتمر", "callback_data": "srch_start" }
+        ],
+        [
+          { "text": "📱 تسجيل جوال مشرف", "callback_data": "supph_start" }
         ],
         [
           { "text": "📑 اتفاقيات الإعاشة", "callback_data": "cc_start" }
@@ -12508,16 +12556,17 @@ function _buildSupervisorsList_(d) {
   if (Array.isArray(d.supervisors) && d.supervisors.length) {
     d.supervisors.forEach(function(s) {
       var nm = String((s && s.name) || "").trim();
-      if (nm) list.push({ name: nm, role: String((s && s.role) || "مرافق") });
+      // 📱 (V4.158) جوال مستقل لكل مشرف — يُحفظ ضمن نفس مصفوفة المشرفين بالرحلة
+      if (nm) list.push({ name: nm, role: String((s && s.role) || "مرافق"), mobile: _tgNormMobile_(s && s.mobile) });
     });
     if (list.length) return list;
   }
   // وإلا: الأساسي (supervisor/supervisorRole) + supervisorsExtra
   var primaryName = String(d.supervisor || "").trim();
-  if (primaryName) list.push({ name: primaryName, role: String(d.supervisorRole || "مرافق") });
+  if (primaryName) list.push({ name: primaryName, role: String(d.supervisorRole || "مرافق"), mobile: _tgNormMobile_(d.supervisorMobile) });
   (d.supervisorsExtra || []).forEach(function(s) {
     var nm = String((s && s.name) || "").trim();
-    if (nm) list.push({ name: nm, role: String((s && s.role) || "مرافق") });
+    if (nm) list.push({ name: nm, role: String((s && s.role) || "مرافق"), mobile: _tgNormMobile_(s && s.mobile) });
   });
   return list;
 }
@@ -12533,7 +12582,9 @@ function _parseSupervisorsRow_(row, colMap) {
       var arr = JSON.parse(raw);
       if (Array.isArray(arr)) {
         var out = arr.map(function(s) {
-          return { name: String((s && s.name) || "").trim(), role: String((s && s.role) || "مرافق") };
+          // 📱 (V4.158) الجوال جزء من سجل المشرف — لا يُسقَط عند إعادة البناء
+          return { name: String((s && s.name) || "").trim(), role: String((s && s.role) || "مرافق"),
+                   mobile: String((s && s.mobile) || "").trim() };
         }).filter(function(s) { return s.name; });
         if (out.length) return out;
       }
@@ -12545,8 +12596,23 @@ function _parseSupervisorsRow_(row, colMap) {
 // نص العرض المُجمَّع (مطابق للفنادق: مفصولون بـ /) مع تمييز "استقبال فقط"
 function _supervisorsDisplay_(list) {
   return (list || []).map(function(s) {
-    return s.name + (s.role === "استقبال فقط" ? " (استقبال)" : "");
+    // 📱 (V4.158) الجوال يظهر بجوار اسم المشرف أينما عُرضت القائمة (بيانات الرحلة وبيان الإشعار)
+    return s.name + (s.role === "استقبال فقط" ? " (استقبال)" : "") + (s.mobile ? " — " + s.mobile : "");
   }).join(" / ");
+}
+// 📱 (V4.158) أرقام جوالات المشرفين مُجمَّعة — تُكتب بعمود «أرقام جوالات المشرف» ليبقى متوافقاً مع
+// كل ما يقرأه اليوم (تفاصيل المعتمر ببوت تليجرام، شاشة الرحلات) بلا تعديل كل مكان على حدة
+function _supervisorsPhones_(list) {
+  return (list || []).map(function(s) { return String((s && s.mobile) || "").trim(); })
+    .filter(Boolean).join(" / ");
+}
+// توحيد صيغة الجوال السعودي: أرقام لاتينية فقط، و+966/00966 تُختصر إلى 0
+function _tgNormMobile_(v) {
+  var t = String(v == null ? "" : v).replace(/[٠-٩]/g, function (d) { return String("٠١٢٣٤٥٦٧٨٩".indexOf(d)); });
+  t = t.replace(/[^\d+]/g, "");
+  t = t.replace(/^\+?00?966/, "0").replace(/^\+966/, "0");
+  if (/^5\d{8}$/.test(t)) t = "0" + t;
+  return t;
 }
 // عدد المقاعد التي يشغلها المشرفون: كل "مرافق" ليس اسمه صفاً بالكشف = مقعد
 function _supervisorSeatCount_(list, kashfNamesMap) {
@@ -16072,6 +16138,12 @@ function saveTrip(authToken, targetRow, tripData) {
   if (tripData.supervisors !== undefined || tripData.supervisor !== undefined || tripData.supervisorRole !== undefined) {
     var supList = _buildSupervisorsList_(tripData);
     setByName('supervisorsJson', JSON.stringify(supList));
+    // 📱 (V4.158) عمود الجوالات المُجمَّع يُشتقّ من جوالات المشرفين ما دام لم يُرسَل صراحةً — فيبقى
+    // كل ما يقرأه اليوم (بوت تليجرام وشاشة الرحلات) صحيحاً بلا تعديل كل موضع على حدة
+    if (tripData.supervisorPhones === undefined) {
+      var _ph = _supervisorsPhones_(supList);
+      if (_ph) setByName('supervisorPhones', _ph);
+    }
     if (supList.length) {
       setByName('supervisor', supList[0].name);   // اسم المشرف الأول (لا نص مُجمَّع)
       setByName('supervisorRole', supList[0].role);
@@ -16724,6 +16796,9 @@ function saveTripDraft(authToken, draft) {
   if (_supList0.length) {
     vals[TRIPS_COL_.supervisor] = String(_supList0[0].name || "");
     vals[TRIPS_COL_.supervisorRole] = String(_supList0[0].role || "مرافق");
+    // 📱 (V4.158) الجوالات المُجمَّعة تُشتقّ من جوالات المشرفين لو لم تُرسَل صراحةً
+    var _ph0 = _supervisorsPhones_(_supList0);
+    if (_ph0 && !String(draft.supervisorPhones || "").trim()) vals[TRIPS_COL_.supervisorPhones] = _ph0;
   }
 
   var row = _buildRowByName_(C, width, vals, (rowIdx !== -1 ? existing : null));
@@ -21658,6 +21733,163 @@ function _tgSrchStateKey_(chatId, userId) { return 'srchq_' + chatId + '_' + use
 function _tgSrchSetState_(chatId, userId) { CacheService.getScriptCache().put(_tgSrchStateKey_(chatId, userId), '1', 600); }
 function _tgSrchGetState_(chatId, userId) { return !!CacheService.getScriptCache().get(_tgSrchStateKey_(chatId, userId)); }
 function _tgSrchClearState_(chatId, userId) { CacheService.getScriptCache().remove(_tgSrchStateKey_(chatId, userId)); }
+
+/* ============================================================
+   📱 (V4.158) تسجيل جوال مشرف من بوت تليجرام
+   الزر يبدأ محادثة قصيرة: المستخدم يكتب اسم المشرف تقريبياً ورقم جواله بنص حر، فنستخرج الرقم
+   بالتعبير النمطي ونبحث بالاسم في مشرفي الرحلات المسجَّلة (نفس أسلوب مطابقة اسم المعتمر التقريبية)،
+   ثم نعرض الاسم كما هو مسجَّل + رحلته الجارية أو أحدث رحلة له للمراجعة، وبعد الاعتماد يُكتب الرقم
+   في مصفوفة مشرفي الرحلة وفي عمود أرقام الجوالات المُجمَّع (الذي يظهر ببيان الإشعار).
+   ============================================================ */
+function _tgSupStateKey_(chatId, userId) { return 'supphq_' + chatId + '_' + userId; }
+function _tgSupSetState_(chatId, userId) { CacheService.getScriptCache().put(_tgSupStateKey_(chatId, userId), '1', 600); }
+function _tgSupGetState_(chatId, userId) { return !!CacheService.getScriptCache().get(_tgSupStateKey_(chatId, userId)); }
+function _tgSupClearState_(chatId, userId) { CacheService.getScriptCache().remove(_tgSupStateKey_(chatId, userId)); }
+function _tgSupCandKey_(chatId, sid) { return 'supphres_' + chatId + '_' + sid; }
+
+// كل مشرفي الرحلات المسجَّلة: صف لكل (مشرف × رحلة) مع تواريخ الرحلة — للمطابقة واختيار أحدث رحلة
+function _tgSupReadAll_() {
+  var sh = _getTripsSheet_();
+  var last = sh.getLastRow(); if (last < 2) return [];
+  var C = _robustColMap_(sh, TRIPS_HEADERS_);
+  var T = _cellReader_(C, TRIPS_COL_);
+  var out = [];
+  sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues().forEach(function (r) {
+    var tripName = String(T(r, 'name') || '').trim(); if (!tripName) return;
+    var dep = _tripFormatDate_(T(r, 'departDate')), ret = _tripFormatDate_(T(r, 'returnDate'));
+    _parseSupervisorsRow_(r, C).forEach(function (s) {
+      out.push({ name: s.name, role: s.role, mobile: s.mobile || '', trip: tripName,
+        departDate: dep, returnDate: ret, company: String(T(r, 'company') || '').trim(),
+        agent: String(T(r, 'agent') || '').trim() });
+    });
+  });
+  return out;
+}
+// أحدث تسجيل لكل مشرف: الرحلة الجارية أولاً، وإلا الأحدث بتاريخ الذهاب
+function _tgSupPickLatest_(rows) {
+  var todayMs = _mfMs_(_mfToday_());
+  var best = null, bestScore = -1;
+  rows.forEach(function (r) {
+    var d = _mfMs_(_mfDate_(r.departDate)), rt = _mfMs_(_mfDate_(r.returnDate));
+    var active = (!isNaN(d) && !isNaN(rt) && todayMs >= d && todayMs <= rt);
+    // الجارية تتقدّم دائماً، ثم الأحدث ذهاباً
+    var score = (active ? 1e15 : 0) + (isNaN(d) ? 0 : d);
+    if (score > bestScore) { bestScore = score; best = r; best._active = active; }
+  });
+  return best;
+}
+function _tgSupRunMatch_(chatId, text) {
+  var mobile = _tgNormMobile_((String(text).match(/(?:\+?9665|009665|05|5)\d{7,8}/) || [])[0] || '');
+  // اسم المشرف = ما تبقّى بعد نزع الرقم وأي رموز
+  var namePart = String(text).replace(/(?:\+?966|00966)?\d[\d\s\-]{6,}/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!/^05\d{8}$/.test(mobile)) {
+    sendTelegramMessageDirect(chatId, "⚠️ لم أتعرّف على رقم جوال سعودي صحيح بالرسالة.\nاكتب الاسم والرقم معاً، مثال: <code>ابو محمد 0551234567</code>",
+      [[{ text: '🔁 إعادة المحاولة', callback_data: 'supph_start' }]]);
+    return;
+  }
+  if (!namePart) {
+    sendTelegramMessageDirect(chatId, "⚠️ اكتب اسم المشرف مع الرقم (ولو تقريبياً).",
+      [[{ text: '🔁 إعادة المحاولة', callback_data: 'supph_start' }]]);
+    return;
+  }
+  var tokens = _tgNormAr_(namePart).split(/\s+/).filter(Boolean);
+  var all = _tgSupReadAll_();
+  // تجميع بالاسم: كل مشرف يظهر مرة واحدة برحلته الجارية أو أحدث رحلة له
+  var byName = {};
+  all.forEach(function (r) {
+    var nn = _tgNormAr_(r.name);
+    if (!tokens.every(function (t) { return nn.indexOf(t) >= 0; })) return;
+    (byName[r.name] = byName[r.name] || []).push(r);
+  });
+  var names = Object.keys(byName);
+  if (!names.length) {
+    sendTelegramMessageDirect(chatId, "🔍 لا يوجد مشرف مسجَّل يطابق «<b>" + _tgbnEsc_(namePart) + "</b>».\nتأكد من الاسم أو سجّله من شاشة الرحلة أولاً.");
+    return;
+  }
+  if (names.length > 20) {
+    sendTelegramMessageDirect(chatId, "🔍 النتائج كثيرة (" + names.length + "). اكتب اسماً أدقّ.");
+    return;
+  }
+  var cands = names.map(function (n) {
+    var pick = _tgSupPickLatest_(byName[n]);
+    return { name: n, trip: pick.trip, departDate: pick.departDate, returnDate: pick.returnDate,
+      company: pick.company, agent: pick.agent, active: !!pick._active, oldMobile: pick.mobile || '', mobile: mobile };
+  });
+  var sid = Utilities.getUuid().replace(/-/g, '').substring(0, 8);
+  CacheService.getScriptCache().put(_tgSupCandKey_(chatId, sid), JSON.stringify(cands), 600);
+  if (cands.length === 1) {
+    sendTelegramMessageDirect(chatId, _tgSupReviewMsg_(cands[0]),
+      [[{ text: '✅ اعتماد وتسجيل', callback_data: 'supphok:' + sid + ':0' },
+        { text: '❌ إلغاء', callback_data: 'supphq_cancel' }]]);
+    return;
+  }
+  var rows = cands.map(function (c, i) {
+    return [{ text: (c.active ? '🟢 ' : '') + c.name + ' — ' + (c.trip || 'بلا رحلة'), callback_data: 'supph:' + sid + ':' + i }];
+  });
+  rows.push([{ text: '✖️ إلغاء', callback_data: 'supphq_cancel' }]);
+  sendTelegramMessageDirect(chatId, "👥 <b>" + cands.length + " مشرفاً مطابقاً</b> — اختر الصحيح لمراجعة بياناته قبل تسجيل الرقم <code>" + mobile + "</code>:", rows);
+}
+function _tgSupReviewMsg_(c) {
+  return "📱 <b>مراجعة قبل الاعتماد</b>\n" +
+    "👤 المشرف: <b>" + _tgbnEsc_(c.name) + "</b>\n" +
+    "🧳 الرحلة: <b>" + _tgbnEsc_(c.trip || '—') + "</b>" + (c.active ? " (جارية الآن)" : "") + "\n" +
+    "📅 " + _tgbnEsc_(c.departDate || '—') + " ← " + _tgbnEsc_(c.returnDate || '—') + "\n" +
+    (c.company ? "🏢 " + _tgbnEsc_(c.company) + "\n" : "") +
+    (c.agent ? "🤝 " + _tgbnEsc_(c.agent) + "\n" : "") +
+    (c.oldMobile ? "📵 الرقم الحالي: <code>" + _tgbnEsc_(c.oldMobile) + "</code>\n" : "") +
+    "📞 الرقم الجديد: <code>" + _tgbnEsc_(c.mobile) + "</code>\n\n" +
+    "اضغط «اعتماد وتسجيل» ليُسجَّل الرقم ببيانات الرحلة وبيان الإشعار.";
+}
+function _tgSupLoadCand_(chatId, sid, idx) {
+  var raw = CacheService.getScriptCache().get(_tgSupCandKey_(chatId, sid));
+  if (!raw) return null;
+  var list = JSON.parse(raw);
+  return list[idx] || null;
+}
+// يكتب الرقم في مصفوفة مشرفي الرحلة + عمود الجوالات المُجمَّع (الذي يظهر ببيان الإشعار)
+function _tgSupSaveMobile_(c) {
+  var sh = _getTripsSheet_();
+  var last = sh.getLastRow(); if (last < 2) return "⚠️ لا توجد رحلات مسجَّلة.";
+  var C = _robustColMap_(sh, TRIPS_HEADERS_);
+  var T = _cellReader_(C, TRIPS_COL_);
+  var jsonIdx = C[TRIPS_COL_.supervisorsJson], phIdx = C[TRIPS_COL_.supervisorPhones];
+  if (jsonIdx === undefined) return "⚠️ عمود «المشرفون (JSON)» غير موجود بشيت الرحلات.";
+  var vals = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(T(vals[i], 'name') || '').trim() !== c.trip) continue;
+    var list = _parseSupervisorsRow_(vals[i], C);
+    var hit = false;
+    list.forEach(function (s) { if (s.name === c.name) { s.mobile = c.mobile; hit = true; } });
+    if (!hit) list.push({ name: c.name, role: 'مرافق', mobile: c.mobile });
+    sh.getRange(i + 2, jsonIdx + 1).setValue(JSON.stringify(list));
+    if (phIdx !== undefined) sh.getRange(i + 2, phIdx + 1).setValue(_supervisorsPhones_(list));
+    // 📄 (V4.158) بيان الإشعار يقرأ نص المشرفين المُجمَّع من صف الإشعار نفسه — نحدّثه هنا أيضاً
+    // كي يظهر الجوال بالإشعار فوراً بلا حاجة لإعادة حفظ الإشعار من الشاشة
+    try {
+      var _bkId = String(T(vals[i], 'linkedBookingId') || '').trim();
+      if (_bkId) _tgSupSyncBooking_(_bkId, _supervisorsDisplay_(list));
+    } catch (eBk) { Logger.log('تعذر تحديث بيان الإشعار بجوال المشرف: ' + eBk); }
+    SpreadsheetApp.flush();
+    try { clearAllCache(); } catch (eC) {}
+    logChange_('💠 بوت تليجرام', 'تسجيل جوال مشرف', c.trip, c.name, c.oldMobile || '-', c.mobile);
+    return "✅ <b>تم التسجيل</b>\n👤 " + _tgbnEsc_(c.name) + "\n🧳 " + _tgbnEsc_(c.trip) + "\n📞 <code>" + _tgbnEsc_(c.mobile) + "</code>";
+  }
+  return "⚠️ لم أعثر على الرحلة «" + _tgbnEsc_(c.trip) + "» بشيت الرحلات.";
+}
+// تحديث نص المشرفين بصف الإشعار المرتبط (خلية واحدة فقط — لا يمسّ أي بيان آخر بالإشعار)
+function _tgSupSyncBooking_(bookingId, supText) {
+  var bsh = getSpreadsheet_().getSheetByName('Bookings');
+  if (!bsh || bsh.getLastRow() < 2) return;
+  var C = _robustColMap_(bsh, BOOKINGS_HEADERS_);
+  var iId = C[BOOKINGS_COL_.id], iSup = C[BOOKINGS_COL_.supervisor];
+  if (iId === undefined || iSup === undefined) return;
+  var ids = bsh.getRange(2, iId + 1, bsh.getLastRow() - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (String(ids[i][0] || '').trim() !== String(bookingId).trim()) continue;
+    bsh.getRange(i + 2, iSup + 1).setValue(supText);
+    return;
+  }
+}
 
 // قراءة خام لكل صفوف شيت المعتمرين — كل صف = تسجيل معتمر على رحلة بعينها (بلا تجميع)
 function _tgReadPilgrimRows_() {
