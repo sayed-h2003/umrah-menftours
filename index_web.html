@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.156 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.157 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.156)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.157)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.156</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.157</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1987,6 +1987,52 @@ input[type="date"]:not(:focus):not(:valid) {
             <div class="col-md-12">
               <label class="form-label fw-semibold">ملاحظات عامة على ملف الإشعار:</label>
               <textarea class="form-control form-control-sm" id="notes" rows="2" placeholder="أي ملاحظات إضافية تخص الطيران أو الغرف..."></textarea>
+            </div>
+
+            <!-- 📎 (V4.157) مرفقات الإشعار + الربط اليدوي بمجموعات التأشيرات وملفات الوزارة -->
+            <div class="col-12">
+              <div class="p-3" style="border:1px dashed #0d6efd; background-color:#f8fafc; border-radius:8px;">
+                <div class="mb-2">
+                  <strong class="text-primary">📎 مرفقات الإشعار والربط اليدوي:</strong>
+                  <span class="text-muted d-block small mt-1">أي صور أو ملفات PDF تُرفَق هنا تُدمَج كصفحات إضافية بآخر ملف الإشعار عند المشاركة.</span>
+                </div>
+
+                <div class="row g-2">
+                  <div class="col-md-6">
+                    <label class="form-label fw-semibold">🛂 مجموعات التأشيرات المرتبطة:</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control form-control-sm" id="visaGroupsLink" placeholder="مثال: 120 - 121" oninput="updateAttachNamesState()">
+                      <button type="button" class="btn btn-outline-primary" onclick="fetchVisaGroupSuggestions()">جلب أرقام المجموعات</button>
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <label class="form-label fw-semibold">🏛️ ملفات الوزارة المرتبطة:</label>
+                    <div class="input-group input-group-sm">
+                      <input type="text" class="form-control form-control-sm" id="mfFilesLink" placeholder="مثال: 5512 - 5513">
+                      <button type="button" class="btn btn-outline-primary" onclick="fetchMfFileSuggestions()">جلب أرقام الملفات</button>
+                    </div>
+                  </div>
+
+                  <div class="col-12">
+                    <div class="form-check" id="attachNamesWrap">
+                      <input class="form-check-input" type="checkbox" id="attachNames">
+                      <label class="form-check-label fw-semibold" for="attachNames">إرفاق أسماء المعتمرين (صفحة أسماء داخل ملف الإشعار)</label>
+                    </div>
+                    <div class="text-muted small" id="attachNamesHint"></div>
+                  </div>
+
+                  <div class="col-12">
+                    <label class="form-label fw-semibold">مرفقات إضافية (صور / PDF):</label>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                      <input type="file" id="bookingAttachInput" accept="image/*,application/pdf" multiple style="display:none;" onchange="handleBookingAttachmentSelect(this)">
+                      <button type="button" class="btn btn-sm btn-success fw-bold" onclick="document.getElementById('bookingAttachInput').click()">📁 إضافة مرفقات</button>
+                      <span id="bookingAttachSpinner" class="spinner-border spinner-border-sm text-success d-none"></span>
+                    </div>
+                    <div id="bookingAttachList" class="mt-2"></div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="col-12 mt-3">
@@ -6681,7 +6727,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.156";
+var CLIENT_APP_VERSION = "4.157";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -29270,6 +29316,192 @@ function _fillSupervisors(list, primaryName, primaryRole) {
   }
 }
 
+/* ===== 📎 (V4.157) مرفقات إشعار الوصول + الربط اليدوي بالمجموعات وملفات الوزارة ===== */
+window._bkAttachments = window._bkAttachments || []; // [{url, name}] — تُسلسَل في attachmentsJson عند الحفظ
+
+function renderBookingAttachments() {
+  var box = document.getElementById('bookingAttachList');
+  if (!box) return;
+  var list = window._bkAttachments || [];
+  if (!list.length) { box.innerHTML = '<span class="text-muted small">لا توجد مرفقات.</span>'; return; }
+  var html = '';
+  list.forEach(function(a, i) {
+    html += '<div class="d-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1" style="background:#fff;">' +
+      '<a href="' + escapeHtml_(a.url) + '" target="_blank" class="small text-decoration-none">📄 ' + escapeHtml_(a.name || 'مرفق') + '</a>' +
+      '<button type="button" class="btn btn-sm btn-outline-danger" title="حذف المرفق" onclick="removeBookingAttachment(' + i + ')">🗑️</button>' +
+      '</div>';
+  });
+  box.innerHTML = html;
+}
+
+function removeBookingAttachment(idx) {
+  (window._bkAttachments || []).splice(idx, 1);
+  renderBookingAttachments();
+}
+
+function handleBookingAttachmentSelect(input) {
+  var files = input && input.files ? Array.prototype.slice.call(input.files) : [];
+  if (!files.length) return;
+  var spinner = document.getElementById('bookingAttachSpinner');
+  if (spinner) spinner.classList.remove('d-none');
+  var pending = files.length;
+  var done = function() {
+    pending--;
+    if (pending <= 0) {
+      if (spinner) spinner.classList.add('d-none');
+      input.value = '';
+      renderBookingAttachments();
+    }
+  };
+  files.forEach(function(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.success) {
+            window._bkAttachments.push({ url: res.fileUrl, name: res.name || file.name });
+            showToast('📎 تم رفع المرفق: ' + (res.name || file.name));
+          } else {
+            showToast((res && res.error) || 'فشل رفع المرفق', true);
+          }
+          done();
+        })
+        .withFailureHandler(function(err) { showToast('فشل رفع المرفق: ' + (err.message || err), true); done(); })
+        .uploadBookingAttachment(window.authToken, e.target.result, file.name);
+    };
+    reader.onerror = function() { showToast('تعذّرت قراءة الملف ' + file.name, true); done(); };
+    reader.readAsDataURL(file);
+  });
+}
+
+// اسم الرحلة الحالي بالنموذج — نفس قاعدة _submitFormImpl_ (بوضع المسودة اسم الرحلة هو خانة العميل)
+function _bkCurrentTripName() {
+  if (window._tripMode && window._tripMode.active) {
+    var c = document.getElementById('client');
+    return c ? String(c.value || '').trim() : '';
+  }
+  var t = document.getElementById('tripName');
+  return t ? String(t.value || '').trim() : '';
+}
+
+// الاختيار يُحفَظ في متغيّر عام لأن showElegantConfirm يزيل النافذة قبل تنفيذ زر الاعتماد
+function _bkPickToggle(i, checked) {
+  var items = window._bkPickItems || [];
+  if (checked) window._bkPickState[i] = items[i] ? items[i].value : '';
+  else delete window._bkPickState[i];
+}
+
+// نافذة مراجعة صغيرة: المستخدم يشطب ما لا يريده قبل كتابة الأرقام في الحقل (كلها مختارة افتراضياً)
+function _bkPickDialog(title, items, targetId) {
+  if (!items.length) { _showPopup('لا توجد نتائج مرتبطة بهذه الرحلة.', 'warning'); return; }
+  window._bkPickItems = items;
+  window._bkPickState = {};
+  var html = '<div class="text-end" style="max-height:240px;overflow:auto;">';
+  items.forEach(function(it, i) {
+    window._bkPickState[i] = it.value;
+    html += '<div class="form-check text-end">' +
+      '<input class="form-check-input" type="checkbox" id="_bkPick' + i + '" checked ' +
+      'onchange="_bkPickToggle(' + i + ', this.checked)">' +
+      '<label class="form-check-label small" for="_bkPick' + i + '">' + escapeHtml_(it.label) + '</label>' +
+      '</div>';
+  });
+  html += '</div>';
+  showElegantConfirm({
+    icon: '🔗', title: title, messageHtml: html,
+    buttons: [
+      { label: '✅ اعتماد المحدد', class: 'btn-primary', onClick: function() {
+          var vals = Object.keys(window._bkPickState || {}).sort(function(a, b) { return a - b; })
+            .map(function(k) { return window._bkPickState[k]; }).filter(Boolean);
+          var el = document.getElementById(targetId);
+          if (el) { el.value = vals.join(' - '); }
+          window._bkPickState = {};
+          updateAttachNamesState();
+          showToast('تم اعتماد ' + vals.length + ' عنصر');
+        } },
+      { label: '❌ إلغاء', class: 'btn-secondary', onClick: function() { window._bkPickState = {}; } }
+    ]
+  });
+}
+
+function _bkFetchSuggestions(kind) {
+  var trip = _bkCurrentTripName();
+  if (!trip) { _showPopup('اكتب اسم الرحلة أولاً حتى نجلب المرتبط بها.', 'warning'); return; }
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.success) { _showPopup('تعذّر الجلب', 'error'); return; }
+      if (kind === 'visas') {
+        _bkPickDialog('🛂 مجموعات التأشيرات المرتبطة بالرحلة', (res.groups || []).map(function(g) {
+          return { value: g.ref, label: 'مجموعة ' + (g.ref || '—') + (g.count ? ' — ' + g.count + ' تأشيرة' : '') +
+            ((g.clients && g.clients.length) ? ' — ' + g.clients.join(' + ') : '') };
+        }), 'visaGroupsLink');
+      } else {
+        _bkPickDialog('🏛️ ملفات الوزارة المرتبطة بالرحلة', (res.mfFiles || []).map(function(f) {
+          return { value: f.fileNo, label: 'ملف ' + (f.fileNo || '—') + (f.clientLabel ? ' — ' + f.clientLabel : '') };
+        }), 'mfFilesLink');
+      }
+    })
+    .withFailureHandler(function(err) { _showPopup('تعذّر الجلب: ' + (err.message || err), 'error'); })
+    .getBookingLinkSuggestions(window.authToken, trip);
+}
+function fetchVisaGroupSuggestions() { _bkFetchSuggestions('visas'); }
+function fetchMfFileSuggestions() { _bkFetchSuggestions('ministry'); }
+
+// ☑️ خانة «إرفاق أسماء المعتمرين»: مفعّلة فقط لو فيه مصدر أسماء فعلاً —
+// إما مجموعات تأشيرات مكتوبة بالحقل، أو رحلة لها كشف معتمرين. غير مفعّلة = disabled + باهتة (لا إخفاء)
+function updateAttachNamesState() {
+  var chk = document.getElementById('attachNames');
+  var wrap = document.getElementById('attachNamesWrap');
+  var hint = document.getElementById('attachNamesHint');
+  if (!chk) return;
+  var groupsEl = document.getElementById('visaGroupsLink');
+  var hasGroups = !!(groupsEl && String(groupsEl.value || '').trim());
+  var hasPilgrims = !!window._bkTripHasPilgrims;
+  var enabled = hasGroups || hasPilgrims;
+  chk.disabled = !enabled;
+  // نحتفظ برغبة المستخدم (أو بالقيمة المحفوظة بالإشعار) أثناء التعطيل المؤقت — لأن توفر الأسماء
+  // قد يصل متأخراً من السيرفر (كشف معتمري الرحلة)، فلا نفقد العلامة بسبب ترتيب الاستدعاء
+  if (!enabled) {
+    if (chk.checked) window._bkAttachNamesWanted = true;
+    chk.checked = false;
+  } else if (window._bkAttachNamesWanted) {
+    chk.checked = true;
+    window._bkAttachNamesWanted = false;
+  }
+  if (wrap) wrap.style.opacity = enabled ? '1' : '0.5';
+  if (hint) {
+    hint.textContent = enabled ? ''
+      : 'لا توجد أسماء متاحة للإرفاق — اربط الإشعار بمجموعة تأشيرات أو اختر رحلة لها كشف معتمرين.';
+  }
+}
+
+// يحدّث توفر الأسماء من كشف معتمري الرحلة (يُستدعى عند تغيّر اسم الرحلة أو فتح إشعار للتعديل)
+function _bkRefreshTripPilgrims() {
+  var trip = _bkCurrentTripName();
+  if (!trip) { window._bkTripHasPilgrims = false; updateAttachNamesState(); return; }
+  google.script.run
+    .withSuccessHandler(function(list) {
+      window._bkTripHasPilgrims = !!(list && list.length);
+      updateAttachNamesState();
+    })
+    .withFailureHandler(function() { window._bkTripHasPilgrims = false; updateAttachNamesState(); })
+    .getTripPilgrims(window.authToken, trip);
+}
+
+(function _bkBindLinkFields() {
+  var bind = function() {
+    ['tripName', 'client'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('change', _bkRefreshTripPilgrims);
+    });
+    var g = document.getElementById('visaGroupsLink');
+    if (g) g.addEventListener('change', updateAttachNamesState);
+    renderBookingAttachments();
+    updateAttachNamesState();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
+
 function _fillFormFromData(b) {
     b = b || {};
     Object.keys(b).forEach(function(k) {
@@ -29345,7 +29577,18 @@ function _fillFormFromData(b) {
     try { loadTransportSegments(typeof b.transportSegments === 'string' ? JSON.parse(b.transportSegments) : (b.transportSegments || [])); }
     catch (eTs) { loadTransportSegments([]); }
     document.getElementById('notes').value = b.notes;
-    
+
+    // 📎 (V4.157) المرفقات والربط اليدوي — استعادتها مع الإشعار عند التعديل
+    try { window._bkAttachments = (typeof b.attachmentsJson === 'string' ? JSON.parse(b.attachmentsJson || '[]') : (b.attachmentsJson || [])) || []; }
+    catch (eAt) { window._bkAttachments = []; }
+    if (!Array.isArray(window._bkAttachments)) window._bkAttachments = [];
+    renderBookingAttachments();
+    if (document.getElementById('visaGroupsLink')) document.getElementById('visaGroupsLink').value = b.visaGroups || '';
+    if (document.getElementById('mfFilesLink')) document.getElementById('mfFilesLink').value = b.mfFiles || '';
+    if (document.getElementById('attachNames')) document.getElementById('attachNames').checked = (b.attachNames === 'نعم');
+    updateAttachNamesState();
+    _bkRefreshTripPilgrims();
+
     document.getElementById('approvedStatus').value = b.status;
     document.getElementById('submitBtn').innerHTML =
 "💾 تحديث بيانات الحجز";
@@ -29432,6 +29675,13 @@ currentTicketTemporary = false;
 
   document.getElementById('extraMovementsContainer').innerHTML = "";
   var _tsList = document.getElementById('transportSegmentsList'); if (_tsList) _tsList.innerHTML = ""; // 🧩 (V4.43)
+
+  // 📎 (V4.157) تصفير المرفقات والربط اليدوي (form.reset لا يمسّ المصفوفة المحفوظة بالذاكرة)
+  window._bkAttachments = [];
+  window._bkAttachNamesWanted = false;
+  window._bkTripHasPilgrims = false;
+  if (typeof renderBookingAttachments === 'function') renderBookingAttachments();
+  if (typeof updateAttachNamesState === 'function') updateAttachNamesState();
 
   updateTicketBadgeLink("");
   document.getElementById('submitBtn').innerHTML =
@@ -29678,6 +29928,11 @@ row.querySelector('.move-type-select').value,
       extraMovements: movementsArray,
       transportSegments: collectTransportSegments(), // 🧩 (V4.43) مقاطع نقل إضافية — بيان+قيمة لكل مقطع
       notes: document.getElementById('notes').value,
+      // 📎 (V4.157) المرفقات كنص JSON + الربط اليدوي بالمجموعات/ملفات الوزارة
+      attachmentsJson: JSON.stringify(window._bkAttachments || []),
+      visaGroups: document.getElementById('visaGroupsLink') ? document.getElementById('visaGroupsLink').value.trim() : '',
+      mfFiles: document.getElementById('mfFilesLink') ? document.getElementById('mfFilesLink').value.trim() : '',
+      attachNames: (document.getElementById('attachNames') && document.getElementById('attachNames').checked) ? 'نعم' : 'لا',
       ticketUrl: document.getElementById('ticketUrlStore').value,
       ticketFileId: currentTicketFileId,
       ticketTemporary: currentTicketTemporary,

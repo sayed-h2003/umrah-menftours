@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.156";
+var APP_VERSION = "4.157";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2378,6 +2378,12 @@ if (
   // 🧩 (V4.43) مقاطع نقل إضافية — بيان+قيمة لكل مقطع، تُستخدم بكشف حساب النقل السعودي
   _vals[BOOKINGS_COL_.transportSegments] = typeof bookingData.transportSegments === "string"
     ? bookingData.transportSegments : JSON.stringify(bookingData.transportSegments || []);
+  // 📎 (V4.157) المرفقات تُخزَّن كنص JSON دائماً [{url,name}] حتى لو أرسلتها الواجهة كمصفوفة
+  _vals[BOOKINGS_COL_.attachmentsJson] = typeof bookingData.attachmentsJson === "string"
+    ? bookingData.attachmentsJson : JSON.stringify(bookingData.attachmentsJson || []);
+  _vals[BOOKINGS_COL_.visaGroups]     = bookingData.visaGroups || "";
+  _vals[BOOKINGS_COL_.mfFiles]        = bookingData.mfFiles || "";
+  _vals[BOOKINGS_COL_.attachNames]    = (bookingData.attachNames === 'نعم' || bookingData.attachNames === true) ? 'نعم' : 'لا';
   var rowValues = _buildRowByName_(C, BOOKINGS_HEADERS_.length, _vals);
   // 🧩 (V4.43) ضمان وجود عنوان العمود الجديد بصف العناوين لو الشيت قديم ولم يُنشأ به بعد (بلا إزاحة —
   // العمود مُضاف بآخر القائمة القانونية فقط)
@@ -2403,6 +2409,16 @@ if (
   }
   // أطِل rowValues لتطابق عرض الشيت بالضبط — منع أي التباس في setValues
   while (rowValues.length < _widthNeeded) rowValues.push("");
+
+  // 📎 (V4.157) عناوين أعمدة المرفقات/الربط اليدوي — تُكتب هنا (بعد توسيع الأعمدة) لأن الشيت القديم
+  // قد يكون أضيق من التعريف الحالي فتفشل getRange عليها لو كُتبت قبل التوسيع
+  try {
+    [BOOKINGS_COL_.attachmentsJson, BOOKINGS_COL_.visaGroups, BOOKINGS_COL_.mfFiles, BOOKINGS_COL_.attachNames]
+      .forEach(function (hdr) {
+        var idx = C[hdr];
+        if (idx !== undefined && !sheet.getRange(1, idx + 1).getValue()) sheet.getRange(1, idx + 1).setValue(hdr);
+      });
+  } catch (eAtHdr) {}
 
   if (targetRow !== -1) {
     sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
@@ -3999,6 +4015,12 @@ return {
       internalTransferDate: fmtDate(B(row, 'internalTransferDate')),
       internalTransferTime: fmtTime(B(row, 'internalTransferTime')),
       // ----------------------------------------------------
+      // 📎 (V4.157) يحتاجها generateBookingPdfForShare لبناء صفحات الأسماء والمرفقات
+      attachmentsJson: B(row, 'attachmentsJson') ? B(row, 'attachmentsJson').toString() : "[]",
+      visaGroups: B(row, 'visaGroups') ? B(row, 'visaGroups').toString() : "",
+      mfFiles: B(row, 'mfFiles') ? B(row, 'mfFiles').toString() : "",
+      attachNames: B(row, 'attachNames') ? B(row, 'attachNames').toString() : "لا",
+      tripName: String(B(row, 'tripName') || ""),
       extraMovements: extra
     };
     
@@ -6778,7 +6800,12 @@ function getAllBookings() {
       busPrice: (_bp !== undefined && _bp !== "") ? Number(_bp) : "",
       operationValue: (_ov !== undefined && _ov !== "") ? Number(_ov) : "",
       tripName: B(r, 'tripName') ? B(r, 'tripName').toString() : "",
-      groupName: B(r, 'groupName') ? B(r, 'groupName').toString() : "" // 🏷️ (V4.16) شاشة فقط — لا يظهر بالطباعة
+      groupName: B(r, 'groupName') ? B(r, 'groupName').toString() : "", // 🏷️ (V4.16) شاشة فقط — لا يظهر بالطباعة
+      // 📎 (V4.157) المرفقات والربط اليدوي — تعود للنموذج عند فتح الإشعار للتعديل
+      attachmentsJson: B(r, 'attachmentsJson') ? B(r, 'attachmentsJson').toString() : "[]",
+      visaGroups: B(r, 'visaGroups') ? B(r, 'visaGroups').toString() : "",
+      mfFiles: B(r, 'mfFiles') ? B(r, 'mfFiles').toString() : "",
+      attachNames: B(r, 'attachNames') ? B(r, 'attachNames').toString() : "لا"
     });
   });
   
@@ -9903,6 +9930,47 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
   }
 }
 
+// 👥 (V4.157) صفحة أسماء المعتمرين داخل ملف الإشعار — بنفس شريط العنوان المستخدم بصفحة التذكرة.
+// بلا ارتفاع ثابت للصفحات إطلاقاً: التقسيم متروك للمحوّل نفسه (فرض ارتفاعات كان سبب صفحات فارغة سابقاً)،
+// ونكتفي بـ page-break-inside:avoid على الصف حتى لا ينقسم اسم على صفحتين
+function buildPilgrimNamesPdfSection_(rows) {
+  rows = rows || [];
+  if (!rows.length) return '';
+  var esc = function (v) {
+    return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  };
+  var thStyle = 'padding:6px;border:1px solid #cbd5e1;text-align:center;font-size:13px;font-weight:700;background:#f8fafc;';
+  var tdStyle = 'padding:6px;border:1px solid #cbd5e1;text-align:center;font-size:13px;';
+
+  var body = '';
+  rows.forEach(function (r) {
+    body +=
+      '<tr style="page-break-inside:avoid;">' +
+        '<td style="' + tdStyle + '">' + esc(r.seq) + '</td>' +
+        '<td style="' + tdStyle + '">' + esc(r.group) + '</td>' +
+        '<td style="' + tdStyle + 'text-align:right;">' + esc(r.name) + '</td>' +
+        '<td style="' + tdStyle + '">' + esc(r.passport) + '</td>' +
+      '</tr>';
+  });
+
+  return '<div style="page-break-before:always;direction:rtl;">' +
+           '<table style="width:100%;border-collapse:collapse;margin:0 0 6px 0;">' +
+             '<tr>' +
+               '<td bgcolor="#1e3d59" style="background:#1e3d59;padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;color:#ffffff;font-family:\'Cairo\',Tahoma,Arial,sans-serif;">👥 أسماء المعتمرين (' + rows.length + ')</td>' +
+             '</tr>' +
+           '</table>' +
+           '<table style="width:100%;border-collapse:collapse;direction:rtl;font-family:\'Cairo\',Tahoma,Arial,sans-serif;">' +
+             '<thead><tr>' +
+               '<th style="' + thStyle + 'width:8%;">م</th>' +
+               '<th style="' + thStyle + 'width:20%;">المجموعة</th>' +
+               '<th style="' + thStyle + '">الاسم</th>' +
+               '<th style="' + thStyle + 'width:22%;">رقم الجواز</th>' +
+             '</tr></thead>' +
+             '<tbody>' + body + '</tbody>' +
+           '</table>' +
+         '</div>';
+}
+
 /**
  * ينشئ ملف PDF مؤقت للمشاركة (واتساب/بريد/أي وسيلة) من نفس قالب الطباعة (buildBookingNoticeHtml_) + التذكرة المرفقة.
  * 📞 يُستدعى من: secureShareBookingFile() في index_web.html (زر مشاركة الواتساب في جدول الحجوزات)
@@ -9951,6 +10019,24 @@ function generateBookingPdfForShare(authToken, bookingId) {
     var hostSection = buildTicketPdfSection_(hostMatch[1], '🏠 مستند بيانات المستضيف');
     if (hostSection) fullHtml = fullHtml.replace('</div></body>', hostSection + '</div></body>');
   }
+
+  // 👥 (V4.157) صفحة أسماء المعتمرين ثم المرفقات الإضافية — بنفس ترتيب الحقن (كل واحدة قبل
+  // </div></body> فتظهر بعد سابقتها): التذكرة ← الأسماء ← المرفقات
+  if (String(data.attachNames || '') === 'نعم') {
+    try {
+      var namesSection = buildPilgrimNamesPdfSection_(_bkPilgrimNamesRows_(data.visaGroups || ''));
+      if (namesSection) fullHtml = fullHtml.replace('</div></body>', namesSection + '</div></body>');
+    } catch (eNm) { Logger.log('تعذر إرفاق صفحة الأسماء: ' + eNm); }
+  }
+
+  try {
+    var atts = typeof data.attachmentsJson === 'string' ? JSON.parse(data.attachmentsJson || '[]') : (data.attachmentsJson || []);
+    (Array.isArray(atts) ? atts : []).forEach(function (att) {
+      if (!att || !att.url) return;
+      var attSection = buildTicketPdfSection_(att.url, 'مرفق: ' + (att.name || ''));
+      if (attSection) fullHtml = fullHtml.replace('</div></body>', attSection + '</div></body>');
+    });
+  } catch (eAt) { Logger.log('تعذر إرفاق المرفقات الإضافية: ' + eAt); }
 
   var safeDate = (data.arrivalDate || '').toString().replace(/\//g, '-');
   var fileName = (data.company || 'شركة').toString().replace(/[\\/:*?"<>|]/g, '-').trim() +
@@ -10104,6 +10190,121 @@ function uploadCompanyLogo(authToken, base64Data, fileName) {
   } catch (e) {
     return { success: false, error: "فشل رفع الشعار: " + e.message };
   }
+}
+
+// 📎 (V4.157) رفع مرفق إضافي لإشعار الوصول (صورة أو PDF) لمجلد الإشعارات — يُدمَج لاحقاً
+// كصفحات بآخر ملف الإشعار عبر buildTicketPdfSection_ نفسها (نفس آلية التذكرة بالضبط)
+function uploadBookingAttachment(authToken, base64Data, fileName) {
+  requireAuth_(authToken);
+
+  try {
+    var folder = getDriveFolder_('NOTICES');
+
+    var contentType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";"));
+    var rawBase64 = base64Data.substring(base64Data.indexOf(",") + 1);
+    var blob = Utilities.newBlob(Utilities.base64Decode(rawBase64), contentType, fileName);
+
+    var file = folder.createFile(blob);
+    file.setName('ATT_' + new Date().getTime() + '_' + fileName);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return { success: true, fileUrl: file.getUrl(), fileId: file.getId(), name: fileName };
+  } catch (e) {
+    return { success: false, error: "فشل رفع المرفق: " + e.message };
+  }
+}
+
+// 🔗 (V4.157) اقتراحات الربط اليدوي لإشعار الوصول: مجموعات التأشيرات وملفات الوزارة الخاصة برحلة الإشعار.
+// لا تُرمى أخطاء صلاحيات — من لا يملك صلاحية العرض يحصل على قائمة فارغة فقط (نفس أسلوب getVisaTripLinks)
+function getBookingLinkSuggestions(authToken, tripName) {
+  var session = requireAuth_(authToken);
+  var trip = _mfStr_(tripName);
+  var out = { success: true, groups: [], mfFiles: [] };
+  if (!trip) return out;
+
+  if (_sessionHasPerm_(session, 'visas.view') || _sessionHasPerm_(session, 'trips.view') ||
+      _sessionHasPerm_(session, 'registry.view')) {
+    try {
+      _vzReadAll_().forEach(function (f) {
+        if (_vzTripsOf_(f).indexOf(trip) === -1) return;
+        out.groups.push({
+          ref: _mfStr_(f.ref), seq: _mfNum_(f.seq), id: _mfStr_(f.id),
+          clients: (f.breakdown || []).map(function (b) { return _mfStr_(b.name); }),
+          count: _mfNum_(f.visaCount)
+        });
+      });
+    } catch (eVz) { Logger.log('getBookingLinkSuggestions visas: ' + eVz); }
+  }
+
+  if (_sessionHasPerm_(session, 'ministry.view') || _sessionHasPerm_(session, 'trips.view')) {
+    try {
+      _mfReadAll_().forEach(function (f) {
+        if (_mfStr_(f.tripName) !== trip) return;
+        out.mfFiles.push({ fileNo: _mfStr_(f.fileNo), clientLabel: _mfStr_(f.clientLabel) });
+      });
+    } catch (eMf) { Logger.log('getBookingLinkSuggestions ministry: ' + eMf); }
+  }
+
+  return out;
+}
+
+// 👥 (V4.157) أسماء معتمري المجموعات المرتبطة بالإشعار — تُطبع كصفحة أسماء داخل ملف الإشعار.
+// المطابقة بأرقام الجوازات المختارة بالمجموعة (تُنزَع بادئة "P:")، ولو كانت المجموعة بلا اختيار صريح
+// نرجع لمعتمري رحلاتها التابعين لعملاء بنود المجموعة (breakdown) — وهو المعنى الفعلي لمجموعة بلا تحديد
+function getBookingPilgrimNames(authToken, visaGroupRefs) {
+  requireAuth_(authToken);
+  return { success: true, rows: _bkPilgrimNamesRows_(visaGroupRefs) };
+}
+// نفس المنطق بلا تحقق صلاحية — يُستدعى داخلياً من مولّد PDF الإشعار (التحقق تم بالفعل هناك)
+function _bkPilgrimNamesRows_(visaGroupRefs) {
+  var refs = Array.isArray(visaGroupRefs)
+    ? visaGroupRefs.slice()
+    : String(visaGroupRefs || '').split(' - ');
+  refs = refs.map(function (r) { return _mfStr_(r); }).filter(Boolean);
+  if (!refs.length) return [];
+
+  var groups = [];
+  _vzReadAll_().forEach(function (f) {
+    if (refs.indexOf(_mfStr_(f.ref)) > -1) groups.push(f);
+  });
+  if (!groups.length) return [];
+
+  var pSheet = _getPilgrimsSheet_();
+  if (!pSheet || pSheet.getLastRow() < 2) return [];
+  var C = _robustColMap_(pSheet, PILGRIMS_HEADERS_);
+  var P = _cellReader_(C, PILGRIMS_COL_);
+  var all = pSheet.getRange(2, 1, pSheet.getLastRow() - 1, pSheet.getLastColumn()).getValues();
+
+  var rows = [], seq = 0;
+  groups.forEach(function (g) {
+    var gRef = _mfStr_(g.ref);
+    var pass = {}, hasSel = false;
+    (Array.isArray(g.selected) ? g.selected : []).forEach(function (s) {
+      var p = _mfStr_(String(s || '').replace(/^P:/, ''));
+      if (p) { pass[p] = 1; hasSel = true; }
+    });
+    var trips = _vzTripsOf_(g);
+    var clients = {};
+    (g.breakdown || []).forEach(function (b) { var n = _mfStr_(b && b.name); if (n) clients[n] = 1; });
+
+    all.forEach(function (r) {
+      var nm = String(P(r, 'name') || '').trim();
+      var pp = _mfStr_(P(r, 'passport'));
+      if (!nm && !pp) return;
+      var ok;
+      if (hasSel) {
+        ok = !!(pp && pass[pp]);
+      } else {
+        ok = trips.indexOf(String(P(r, 'tripName') || '').trim()) > -1 &&
+             !!clients[String(P(r, 'client') || '').trim()];
+      }
+      if (!ok) return;
+      seq++;
+      rows.push({ seq: seq, group: gRef, name: nm, passport: pp });
+    });
+  });
+
+  return rows;
 }
 
 
@@ -12267,7 +12468,10 @@ var BOOKINGS_HEADERS_ = [
   'سكن مكة', 'دخول مكة', 'خروج مكة', 'extraMovements', 'ملاحظات الإشعار', 'رابط تذكرة الطيران',
   'معرّف ملف التذكرة', 'سعر الباص', 'قيمة التشغيلة', 'اسم الرحلة', 'تاريخ التحرك الداخلي الأساسي',
   'توقيت التحرك الداخلي الأساسي', 'اسم المجموعة',
-  'مقاطع نقل إضافية' // 🧩 (V4.43) بيان+قيمة لكل مقطع نقل إضافي (JSON) — كشف حساب النقل السعودي
+  'مقاطع نقل إضافية', // 🧩 (V4.43) بيان+قيمة لكل مقطع نقل إضافي (JSON) — كشف حساب النقل السعودي
+  // 📎 (V4.157) مرفقات الإشعار وربطه اليدوي بالمجموعات/ملفات الوزارة — تُضاف بآخر القائمة فقط
+  // حتى تقرأ الصفوف القديمة الأعمدة الجديدة فارغة بلا أي إزاحة (نفس قاعدة «مقاطع نقل إضافية»)
+  'مرفقات إضافية (JSON)', 'مجموعات التأشيرات', 'ملفات الوزارة', 'إرفاق أسماء المعتمرين'
 ];
 var BOOKINGS_COL_ = {
   status: 'مراجعة واعتماد', id: 'رقم الإشعار', agent: 'الوكيل السعودي', company: 'الشركة المصرية',
@@ -12280,7 +12484,10 @@ var BOOKINGS_COL_ = {
   internalTransferDate: 'تاريخ التحرك الداخلي الأساسي', internalTransferTime: 'توقيت التحرك الداخلي الأساسي',
   notes: 'ملاحظات الإشعار', ticketUrl: 'رابط تذكرة الطيران', ticketFileId: 'معرّف ملف التذكرة',
   busPrice: 'سعر الباص', operationValue: 'قيمة التشغيلة', tripName: 'اسم الرحلة',
-  groupName: 'اسم المجموعة', transportSegments: 'مقاطع نقل إضافية'
+  groupName: 'اسم المجموعة', transportSegments: 'مقاطع نقل إضافية',
+  // 📎 (V4.157) مرفقات الإشعار + الربط اليدوي بمجموعات التأشيرات وملفات الوزارة
+  attachmentsJson: 'مرفقات إضافية (JSON)', visaGroups: 'مجموعات التأشيرات',
+  mfFiles: 'ملفات الوزارة', attachNames: 'إرفاق أسماء المعتمرين'
 };
 // مُنشئ دالة وصول للصف بالاسم المنطقي: T = _cellReader_(colMap, TRIPS_COL_) ثم T(r,'supervisor')
 function _cellReader_(colMap, nameDict) {
