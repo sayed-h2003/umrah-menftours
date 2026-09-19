@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.155";
+var APP_VERSION = "4.156";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12752,6 +12752,8 @@ var ACC_BOND_BASE_ = [
   { key: 'تأشيرات',          cur: 'SAR' }, { key: 'نقل سعودي',        cur: 'SAR' },
   { key: 'سكن المدينة',      cur: 'SAR' }, { key: 'سكن مكة',          cur: 'SAR' },
   { key: 'بدلات المشرف',     cur: 'SAR' },
+  // 🧑‍✈️ (V4.156) تأشيرة المشرف — تُسعَّر للعميل كبقية البنود الأساسية، وتُولَّد حين يكون المشرف خاصاً به
+  { key: 'تأشيرة المشرف',    cur: 'SAR' },
   { key: 'شركة',             cur: 'EGP' }, { key: 'ضرائب',            cur: 'EGP' },
   { key: 'الإعاشة',          cur: 'SAR' }
 ];
@@ -15314,6 +15316,30 @@ function _accClientPilgrimNotes_(client, trip) {
   return out;
 }
 
+/* 🧑‍✈️ (V4.156) هل مشرفو هذه الرحلة يخصّون هذا العميل وحده؟ المشرف بكشف الرحلة يُعرَف بأن خانة
+   «العميل» له هي «مشرف» أو تبدأ بـ«المشرف» (نفس قاعدة _syncTripSupervisors_). فإن كان كل معتمري
+   الرحلة — عدا المشرفين — تابعين لهذا العميل فقط، فالمشرف يخصّه وتُضاف بنوده (رسوم غرفة المشرف
+   وتأشيرة المشرف) لحسابه ليعتمدها أو يحذفها. */
+function _accTripSupsForClient_(client, trip) {
+  client = _mfStr_(client); trip = _mfStr_(trip);
+  var out = { exclusive: false, sups: 0, names: [] };
+  var pSheet = _getPilgrimsSheet_();
+  if (!pSheet || pSheet.getLastRow() < 2) return out;
+  var C = _robustColMap_(pSheet, PILGRIMS_HEADERS_);
+  var P = _cellReader_(C, PILGRIMS_COL_);
+  var isSup = function (cl) { return cl === 'مشرف' || cl.indexOf('المشرف') === 0; };
+  var otherClients = {}, mine = 0;
+  pSheet.getRange(2, 1, pSheet.getLastRow() - 1, pSheet.getLastColumn()).getValues().forEach(function (r) {
+    if (String(P(r, 'tripName') || '').trim() !== trip) return;
+    var cl = String(P(r, 'client') || '').trim();
+    var nm = String(P(r, 'name') || '').trim();
+    if (isSup(cl)) { if (nm) { out.sups++; out.names.push(nm); } return; }
+    if (cl === client) mine++; else if (cl) otherClients[cl] = 1;
+  });
+  out.exclusive = out.sups > 0 && mine > 0 && !Object.keys(otherClients).length;
+  return out;
+}
+
 // 💰 (V4.10) تجميع أرصدة العملاء من شيتي البنود والدفعات — لكل العملاء أو لرحلة محددة
 // الرصيد: موجب = مدين (مستحق عليه) · سالب = دائن (له) — بالجنيه والريال كلٌّ على حدة
 // 🔁 (V4.45) يبني items/payments لكل عميل ثم يمرّرها لـ_accCalc_ الموحَّدة — بدل تكرار حساب fx يدويًا،
@@ -15611,6 +15637,8 @@ function accGenerateDraft(authToken, client, trip, mode) {
   // 💵 (V4.15 — بطلب صريح) لو للرحلة تسعير محفوظ (شاشة تسعير الرحلة) تُملأ أسعار التوليد
   // منه تلقائيًا حسب المستوى وطبيعة التسكين — ولو لا تسعير تبقى فارغة للإدخال اليدوي المعتاد
   var breakdown = _accClientBreakdown_(client, trip);
+  // 🧑‍✈️ (V4.156) مشرفو الرحلة يخصّون هذا العميل إذا كانت الرحلة كلها له وحده (عدا المشرفين)
+  var _supOwn = _accTripSupsForClient_(client, trip);
   var _tp = (mode !== 'بنود') ? _accTripPricing_(trip) : null;
   var pushBreakdown = function() {
     breakdown.forEach(function(g) { push(g.desc, g.cat, 'EGP', g.count, _tp ? _accPriceFor_(_tp, g) : 0, 0, ''); });
@@ -15625,7 +15653,9 @@ function accGenerateDraft(authToken, client, trip, mode) {
     };
     // بنود الجنيه المصري
     push('رسوم غرفة', 'كبير', 'EGP', row.adults + row.children, pr('رسوم غرفة', roomFee), 0, row.company || '');
-    push('رسوم غرفة المشرف', 'مشرف', 'EGP', 1, pr('رسوم غرفة المشرف', cfg.supRoomFee || 200), 0, row.company || '');
+    // 🧑‍✈️ (V4.156) عدد المشرفين = العدد الفعلي بكشف الرحلة لو كانت الرحلة لهذا العميل وحده (المشرف يخصّه)
+    push('رسوم غرفة المشرف', 'مشرف', 'EGP', (_supOwn.exclusive ? _supOwn.sups : 1),
+      pr('رسوم غرفة المشرف', cfg.supRoomFee || 200), 0, row.company || '');
     push('إشراف', 'كبير', 'EGP', row.adults + row.children, pr('إشراف'), 0, '');
     // ✈️ بيان التذاكر من إشعار الرحلة إن وُجد: الخطوط + خط السير (مثل: تذاكر مصر للطيران القاهرة/المدينة - جدة/القاهرة)
     var tkRoute = (hz.arrRoute || '') + (hz.depRoute ? ' - ' + hz.depRoute : '');
@@ -15641,6 +15671,10 @@ function accGenerateDraft(authToken, client, trip, mode) {
     visaPilgrims.forEach(function(p) {
       push('تأشيرة ' + p.name + ' (' + p.notes + ')', 'كبير', 'SAR', 1, 0, 0, '');
     });
+    // 🧑‍✈️ (V4.156) تأشيرة المشرف — تُولَّد فقط حين يكون المشرف خاصاً بهذا العميل (الرحلة له وحده)،
+    // ويبقى للمستخدم اعتمادها أو إلغاء تحديدها من نافذة التوليد
+    if (_supOwn.exclusive) push('تأشيرة المشرف', 'مشرف', 'SAR', _supOwn.sups, pr('تأشيرة المشرف'), 0, '',
+      _supOwn.names.join('، '));
     push('نقل سعودي', 'أخرى', 'SAR', 1, pr('نقل سعودي'), 0, '');
     // 🏨 (V4.39) الفندق + فترة الإقامة (دخول/خروج) معًا بحقل الشركة، مثال: «ديوان المدينة من 1-8 الى 4-8»
     var madStay = hz.madHotel ? (hz.madHotel + _accStayRange_(hz.madCheckIn, hz.madCheckOut)) : '';
@@ -15675,6 +15709,12 @@ function accGenerateDraft(authToken, client, trip, mode) {
     visaPilgrims.forEach(function(p) {
       push('خصم تأشيرة - ' + p.name + ' (' + p.notes + ')', 'خصم', 'EGP', 1, 0, 0, '');
     });
+    // 🧑‍✈️ (V4.156) المشرف الخاص بهذا العميل (الرحلة له وحده): بندا رسوم الغرفة والتأشيرة يُقترحان
+    // هنا أيضاً ليعتمدهما المستخدم أو يلغي تحديدهما — نمط «برنامج» لم يكن يقترح أي بند للمشرف
+    if (_supOwn.exclusive) {
+      push('رسوم غرفة المشرف', 'مشرف', 'EGP', _supOwn.sups, cfg.supRoomFee || 200, 0, row.company || '', _supOwn.names.join('، '));
+      push('تأشيرة المشرف', 'مشرف', 'SAR', _supOwn.sups, 0, 0, '', _supOwn.names.join('، '));
+    }
   }
   return { success: true, items: items, counts: { a: row.adults, c: row.children, i: row.infants, t: row.total } };
 }

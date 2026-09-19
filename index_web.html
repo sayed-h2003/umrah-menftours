@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.155 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.156 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.155)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.156)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.155</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.156</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6681,7 +6681,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.155";
+var CLIENT_APP_VERSION = "4.156";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -23355,6 +23355,16 @@ function _accRenderLegacy_() { // ⛔ النسخة القديمة قبل الن�
    💰 (V4.08) النموذج A «مساحة العمل»: قائمة رحلات جانبية بحالة ملونة
    + مساحة تفاصيل بتبويبات (بنود/دفعات) — رحلة واحدة معروضة = صفر تشتت
    ============================================================ */
+/* 🧮 (V4.156) جمع أصفية إدخالات الشريط الجانبي (كل رحلة + القسم العام) في إجمالي واحد — هو
+   مصدر «الرصيد العام» أعلى الكشف، فيطابق ما يراه المستخدم بالشريط الجانبي بالضبط. */
+function _accSumEntries_(entries) {
+  var T = { dueE: 0, dueS: 0, discE: 0, discS: 0, paidE: 0, paidS: 0, fxE: 0, fxS: 0, netE: 0, netS: 0 };
+  (entries || []).forEach(function (e) {
+    var t = e && e.t; if (!t) return;
+    Object.keys(T).forEach(function (k) { T[k] += Number(t[k]) || 0; });
+  });
+  return T;
+}
 var _accSelKey = null, _accSelTab = 'items';
 function _accSelect_(key) { _accSelKey = key; _accSelTab = 'items'; _accRender_(); }
 function _accTab_(tab) { _accSelTab = tab; _accRender_(); }
@@ -23394,20 +23404,20 @@ function _accRender_() {
   var canAdd = _accCan_('add'), canEdit = _accCan_('edit'), canDel = _accCan_('delete');
 
   // ===== الرصيد العام (شريط علوي مضغوط) =====
-  var tAll = _accCalc_(d.items, d.payments);
+  // 🧮 (V4.156) يُبنى بعد قائمة الرحلات ليكون مطابقاً تماماً لمجموع أرصدتها + القسم العام. كان
+  // يُحسب بتجميع كل البنود والدفعات في حوض واحد (_accCalc_(d.items, d.payments))، فيختلف عن مجموع
+  // ما يراه المستخدم بالشريط الجانبي لسببين: تصنيف قيود التحويل يُحسَم حسب رصيد عملة المصدر لحظته
+  // وهو يختلف بين حوض واحد وحساب كل رحلة على حدة، وبنود/دفعات رحلات لم تعد ضمن كشوف العميل كانت
+  // تدخل الحوض العام ولا تظهر بأي رحلة. الآن: الرصيد العام = مجموع الرحلات، والمتبقّي خارجها
+  // يظهر صراحةً بشارة تنبيه بدل أن يختفي داخل الرقم.
   var hasSarAll = d.items.some(function(i) { return i.currency === 'SAR'; }) ||
                   d.payments.some(function(p) { return p.currency === 'SAR' || p.ptype === 'تحويل'; });
-  sum.innerHTML = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2 p-2 rounded" style="background:#f0fdfa;border:1.5px solid #99f6e4;">' +
-    '<span class="small fw-bold" style="color:#0f4c4c;">⚖️ الرصيد العام:</span>' +
-    _accNetBadge_(tAll.netE, 'جنيه', true) + (hasSarAll ? _accNetBadge_(tAll.netS, 'ريال', true) : '') +
-    // 🔤 (V4.46) اسم العملة صراحة بلا اختصار وبلا فرض LTR — الاتجاه الطبيعي RTL بطلب صريح
-    '<span class="small text-muted" style="margin-inline-start:auto;">📄 مستحق (قبل الخصم): <b>' + _accFmt_(tAll.dueE + tAll.fxE) + ' جنيه' + (hasSarAll ? ' / ' + _accFmt_(tAll.dueS) + ' ريال' : '') + '</b>' +
-    ' · 💵 مدفوع: <b>' + _accFmt_(tAll.paidE) + ' جنيه' + (hasSarAll ? ' / ' + _accFmt_(tAll.paidS + tAll.fxS) + ' ريال' : '') + '</b></span></div>';
 
   // ⚠️ (V4.33) شريط تنبيه أعلى الشاشة يلخّص كل الرحلات التي تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ الحساب
+  var alertsHtml = '';
   var alertTrips = Object.keys(d.alerts || {});
   if (alertTrips.length) {
-    sum.innerHTML += '<div class="d-flex flex-wrap gap-2 align-items-center mb-2 p-2 rounded" style="background:#fef2f2;border:1.5px solid #fecaca;">' +
+    alertsHtml = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2 p-2 rounded" style="background:#fef2f2;border:1.5px solid #fecaca;">' +
       '<span class="small fw-bold" style="color:#991b1b;">⚠️ ' + alertTrips.length + ' رحلة تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ الحساب — تحتاج مراجعة:</span>' +
       alertTrips.map(function(tn) {
         return '<button class="btn btn-outline-danger btn-sm py-0" style="font-size:11px;" onclick="_accSelect_(\'' + _accJs_(tn) + '\');">' + esc(_accTripDisplay_(tn)) + '</button>';
@@ -23453,6 +23463,21 @@ function _accRender_() {
   if (genItems.length || genPays.length || canAdd) {
     entries.push({ key: 'عام', row: null, items: genItems, pays: genPays, t: _accCalc_(genItems, genPays) });
   }
+  // 🧮 (V4.156) الرصيد العام = مجموع أصفية كل الرحلات + القسم العام (نفس أرقام الشريط الجانبي حرفياً)
+  var tAll = _accSumEntries_(entries);
+  var known = {}; entries.forEach(function (e) { known[e.key] = 1; });
+  var orphanN = d.items.filter(function (i) { return !known[i.trip]; }).length +
+                d.payments.filter(function (p) { return !known[p.trip]; }).length;
+  sum.innerHTML = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2 p-2 rounded" style="background:#f0fdfa;border:1.5px solid #99f6e4;">' +
+    '<span class="small fw-bold" style="color:#0f4c4c;">⚖️ الرصيد العام:</span>' +
+    _accNetBadge_(tAll.netE, 'جنيه', true) + (hasSarAll ? _accNetBadge_(tAll.netS, 'ريال', true) : '') +
+    (orphanN ? '<span class="badge" style="background:#fff7ed;color:#9a3412;border:1.5px solid #fed7aa;font-size:11px;" ' +
+      'title="بنود أو دفعات مسجَّلة على رحلات لم تعد ضمن كشوف هذا العميل — غير محسوبة بالرصيد العام أعلاه">⚠️ ' +
+      orphanN + ' سطر خارج كشوف الرحلات</span>' : '') +
+    // 🔤 (V4.46) اسم العملة صراحة بلا اختصار وبلا فرض LTR — الاتجاه الطبيعي RTL بطلب صريح
+    '<span class="small text-muted" style="margin-inline-start:auto;">📄 مستحق (قبل الخصم): <b>' + _accFmt_(tAll.dueE + tAll.fxE) + ' جنيه' + (hasSarAll ? ' / ' + _accFmt_(tAll.dueS) + ' ريال' : '') + '</b>' +
+    ' · 💵 مدفوع: <b>' + _accFmt_(tAll.paidE) + ' جنيه' + (hasSarAll ? ' / ' + _accFmt_(tAll.paidS + tAll.fxS) + ' ريال' : '') + '</b></span></div>' + alertsHtml;
+
   if (!entries.length) {
     body.innerHTML = '<div class="alert alert-light border text-center small">لا توجد رحلات مسجَّلة لهذا العميل بالكشوف' +
       (d.noTripCount ? ' — ولديه ' + d.noTripCount + ' معتمر بدون رحلة' : '') + '</div>';
@@ -34704,8 +34729,69 @@ function mfToggleDetail(id) {
   mfSelect(id);
   var title = '📋 تفاصيل الملف ' + (mfStr(f.fileNo) ? mfEsc(f.fileNo) : '(بدون رقم)') +
     (f.clientLabel ? ' — ' + mfEsc(f.clientLabel) : '');
-  mfModal(title, mfDetail(f),
+  // 🗂️ (V4.156) نافذة التفاصيل بتبويبين: الأول بيانات الملف كاملة حقلاً حقلاً، والثاني التفاصيل
+  // التحليلية الحالية (التوجيه المحاسبي والقواعد والسكن والتتبع) كما كانت تماماً
+  var tabBtn = function (n, lbl, on) {
+    return '<button type="button" class="mf-btn' + (on ? ' pri' : '') + '" id="mfDetTabBtn' + n + '" ' +
+      'style="font-size:12px;" onclick="mfDetTab(' + n + ')">' + lbl + '</button>';
+  };
+  var body = '<div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;">' +
+      tabBtn(1, '📋 بيانات الملف كاملة', true) + tabBtn(2, '📑 التفاصيل والتوجيه المحاسبي', false) + '</div>' +
+    '<div id="mfDetPane1">' + mfDetailFull(f) + '</div>' +
+    '<div id="mfDetPane2" style="display:none;">' + mfDetail(f) + '</div>';
+  mfModal(title, body,
     '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إغلاق</button>', 1040);
+}
+function mfDetTab(n) {
+  [1, 2].forEach(function (i) {
+    var p = document.getElementById('mfDetPane' + i), b = document.getElementById('mfDetTabBtn' + i);
+    if (p) p.style.display = (i === n) ? '' : 'none';
+    if (b) b.classList.toggle('pri', i === n);
+  });
+}
+/* 📋 (V4.156) بيانات الملف كاملة — كل حقول الملف حقلاً حقلاً (شاملة الأعمدة المخفية بالجدول)
+   مرتّبة بأقسامها كما هي معرَّفة في MF_COLS، ثم أقسام العملاء والمشرفين والسكن التفصيلية. */
+function mfDetailFull(f) {
+  var groups = {}, order = [];
+  MF_COLS.forEach(function (c) {
+    if (c.k === 'act' || c.k === 'sel') return;
+    var g = c.g || 'بيانات عامة';
+    if (!groups[g]) { groups[g] = []; order.push(g); }
+    groups[g].push(c);
+  });
+  var half = Math.ceil(order.length / 2);
+  var col = function (keys) {
+    return '<div>' + keys.map(function (g) {
+      return '<div class="mf-dcard"><h6>' + mfEsc(g) + '</h6><table class="mf-mini"><tbody>' +
+        groups[g].map(function (c) {
+          var raw = mfRaw(c.k, f);
+          return mfKV(mfEsc(c.l), (raw === '' || raw == null) ? '—' : mfCell(c, f));
+        }).join('') + '</tbody></table></div>';
+    }).join('') + '</div>';
+  };
+  var h = '<div class="mf-dgrid">' + col(order.slice(0, half)) + col(order.slice(half)) + '</div>';
+  // 🧾 العملاء داخل الملف + 🧑‍✈️ المشرفون: جداول مستقلة (لا تتّسع لها خانة مفتاح/قيمة)
+  var bd = f.breakdown || [];
+  if (bd.length) {
+    h += '<div class="mf-dcard mt-2"><h6>🧾 بنود العملاء (' + bd.length + ')</h6>' +
+      '<table class="mf-mini"><thead><tr><th>العميل</th><th>المعتمرون</th><th>المشرفون</th><th>ملاحظة</th></tr></thead><tbody>' +
+      bd.map(function (b) {
+        return '<tr><td>' + mfEsc(b.name || '—') + '</td><td>' + mfL(mfNum(b.count)) + '</td><td>' + mfL(mfNum(b.sups)) + '</td><td>' + mfEsc(b.note || '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  var sp = f.sups || [];
+  if (sp.length) {
+    h += '<div class="mf-dcard mt-2"><h6>🧑‍✈️ المشرفون (' + sp.length + ')</h6>' +
+      '<table class="mf-mini"><thead><tr><th>الاسم</th><th>النوع</th><th>موجَّه إلى</th></tr></thead><tbody>' +
+      sp.map(function (s) {
+        return '<tr><td>' + mfEsc(s.name || '—') + '</td><td>' + mfEsc(s.type || '—') + '</td><td>' + mfEsc(s.directTo || '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  h += '<div class="mf-dcard mt-2"><h6>📜 التسجيل</h6><table class="mf-mini"><tbody>' +
+    mfKV('أنشئ بواسطة', mfEsc(f.createdBy || '—') + ' · ' + mfL(f.createdAt || '—')) +
+    mfKV('آخر تعديل', mfEsc(f.updatedBy || '—') + ' · ' + mfL(f.updatedAt || '—')) +
+    '</tbody></table></div>';
+  return h;
 }
 function mfToggleApproved(id) {
   var f = mfGet(id); if (!f) return;
