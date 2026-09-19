@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.153 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.154 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.153)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.154)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.153</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.154</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6681,7 +6681,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.153";
+var CLIENT_APP_VERSION = "4.154";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -37612,10 +37612,19 @@ function vzEsc(v) { return escapeHtml_(String(v == null ? '' : v)); }
 function vzJs(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 function vzFmt(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
 function vzL(v) { return '<span class="vz-latin">' + vzEsc(v) + '</span>'; }
-function vzInit() { if (!VZ.loaded) vzLoad(false); else vzRender(); }
-function vzLoad(force) {
+function vzInit() {
+  // 🛡️ (V4.154) عناصر البحث التنبؤي/التقويم/تصفية الأعمدة مكتوبة بالـHTML داخل قسم شاشة الوزارة،
+  // ولا تُنقل لجذر الصفحة إلا داخل mfInit. فمن يدخل شاشة التأشيرات مباشرة تظل هذه العناصر داخل
+  // قسم مخفي (display:none) فلا تظهر قائمة الرحلات/العملاء إطلاقاً عند "ربط برحلة" — وتبدو
+  // للمستخدم وكأنها خلف النموذج. النقل هنا أيضاً يجعلها تعمل من أي شاشة.
+  if (typeof mfDetachFloats === 'function') mfDetachFloats();
+  if (!VZ.loaded) vzLoad(false); else vzRender();
+}
+// ⚡ (V4.154) silent=true يحدّث البيانات بالخلفية بلا شاشة "جاري التحميل" وبلا وميض الجدول —
+// يُستخدَم بعد الحفظ الفوري (الذي دمج السجل محلياً بالفعل) لتحديث الأرصدة المحسوبة بالخادم فقط
+function vzLoad(force, silent) {
   var wrap = document.getElementById('vzTableWrap');
-  if (wrap && (force || !VZ.loaded)) wrap.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
+  if (wrap && !silent && (force || !VZ.loaded)) wrap.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { if (wrap) wrap.innerHTML = '<div class="alert alert-danger m-2">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
@@ -37629,8 +37638,27 @@ function vzLoad(force) {
       vzApplyFinanceUI();
       vzRender();
     })
-    .withFailureHandler(function (e) { if (wrap) wrap.innerHTML = '<div class="alert alert-danger m-2">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
+    .withFailureHandler(function (e) { if (wrap && !silent) wrap.innerHTML = '<div class="alert alert-danger m-2">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
     .getVisaBootstrap(window.authToken);
+}
+// ⚡ (V4.154) دمج المجموعة المحفوظة في الذاكرة فوراً بدل إعادة تحميل البوتستراب كاملاً — نفس أسلوب
+// mfApplySaved بشاشة ملفات الوزارة. هذا يُصلح أيضاً ظهور البيانات القديمة بالجدول بعد الحفظ: كان
+// الجدول يُرسَم من نسخة قديمة ريثما تصل دورة التحميل الكاملة (وأحياناً من نسخة مخبأة أقدم).
+// الأرصدة المحسوبة بالخادم تُحدَّث بعدها بهدوء بالخلفية بلا وميض.
+function vzApplySavedFile_(res) {
+  if (!res || !res.file) { vzLoad(true); return; }
+  var f = res.file, i = -1;
+  (VZ.files || []).forEach(function (x, ix) { if (x.id === f.id) i = ix; });
+  if (i >= 0) VZ.files[i] = f; else VZ.files.push(f);
+  VZ.selId = f.id;
+  vzRender();
+  vzRefreshSoon_();
+}
+// تحديث خلفي مؤجَّل وموحَّد — حفظات متتابعة سريعة تُجمَّع في تحديث واحد بدل تحديث لكل حفظة
+var _vzRefreshTimer_ = null;
+function vzRefreshSoon_() {
+  if (_vzRefreshTimer_) clearTimeout(_vzRefreshTimer_);
+  _vzRefreshTimer_ = setTimeout(function () { _vzRefreshTimer_ = null; vzLoad(true, true); }, 1200);
 }
 // 💰 (V4.133) الجانب المالي صلاحية منفصلة: من لا يملكها لا يرى الأسعار ولا المستحق ولا كشوف حسابات الوكلاء
 function vzFin() { return !!(VZ.can && VZ.can.finance); }
@@ -37717,7 +37745,7 @@ function vzMatch(f) {
 var VZ_COL_DEFS_ = [
   { k: 'sel', label: '☑', nof: true, w: 30 },
   { k: 'seq', label: 'م', num: true, w: 40 },
-  { k: 'ref', label: 'رقم المجموعة', w: 95 },
+  { k: 'ref', label: 'المجموعة', w: 95 },
   { k: 'entryNo', label: 'القيد', w: 85 },
   { k: 'status', label: 'الحالة', w: 90 },
   { k: 'date', label: 'تاريخ السداد', date: true, w: 90 },
@@ -38157,7 +38185,7 @@ function vzQuickLinkSave(id) {
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
-      mfCloseModal(); _showPopup('تم الربط', 'success'); vzLoad(true);
+      mfCloseModal(); _showPopup('تم الربط', 'success'); vzApplySavedFile_(res);
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveVisaFile(window.authToken, payload);
@@ -38628,17 +38656,28 @@ function vzPickIsInfant(p) { return String((p && p.type) || '').indexOf('رضي�
 function vzPickClientOf(p) { return mfStr((p && p.client) || '') || '(بدون عميل)'; }
 // ⚠️ (V4.144) هل هذا المعتمر مُسجَّل بالفعل ضمن مجموعة تأشيرات أخرى لنفس الرحلة؟ يُرجع بيانات
 // تلك المجموعة (باستثناء المجموعة الجاري تعديلها حالياً) ليُعرض باهتاً مع رقمها كتنبيه للمستخدم.
+// ⚠️ (V4.154) فهرس «مُسجَّل بمجموعة تأشيرات أخرى» لكل المجموعات بكل الرحلات — كان الفحص محصوراً
+// بمجموعات نفس الرحلة فقط عبر _vzTripLinks، فلا يُنبِّه لو سُجِّل المعتمر بمجموعة رحلة أخرى.
+// المطابقة برقم الجواز وحده (مفاتيح الاختيار بلا جواز رقمُها مرتبط بترتيب كشف رحلته فلا تصلح للمقارنة).
+function vzOtherGroupsIdx_(exceptId) {
+  var idx = {};
+  (VZ.files || []).forEach(function (g) {
+    if (mfStr(g.id) === mfStr(exceptId)) return;
+    (g.selected || []).forEach(function (k) {
+      var key = mfStr(k).replace(/^P:/, '');
+      if (!key || key.charAt(0) === '#') return;
+      if (!idx[key]) idx[key] = g;
+    });
+  });
+  return idx;
+}
+function vzGroupLbl_(g) { return mfStr(g && (g.ref || ('#' + g.seq))) || '—'; }
 function vzPickAlreadyIn_(p) {
-  var d = VZ._draft, tripName = mfStr(d.tripName); if (!tripName) return null;
-  var pass = mfStr(p && p.passport);
-  var groups = (window._vzTripLinks && window._vzTripLinks[tripName]) || [];
-  for (var i = 0; i < groups.length; i++) {
-    var g = groups[i];
-    if (mfStr(g.id) === mfStr(d.id)) continue; // نفس المجموعة الجاري تعديلها — تجاهل
-    if (!(g.selected || []).length) continue;
-    if (pass && (g.selected.indexOf(pass) >= 0 || g.selected.indexOf('P:' + pass) >= 0)) return g;
-  }
-  return null;
+  var d = VZ._draft;
+  if (!VZ._pick) return null;
+  if (!VZ._pick._otherIdx) VZ._pick._otherIdx = vzOtherGroupsIdx_(d && d.id);
+  var pass = mfStr(p && (p.passport || p.passportNo));
+  return pass ? (VZ._pick._otherIdx[pass] || null) : null;
 }
 function vzPickRender() {
   var box = document.getElementById('vzPickBox'); if (!box) return;
@@ -38646,7 +38685,6 @@ function vzPickRender() {
   var groups = {}, order = [];
   P.list.forEach(function (p, i) { var c = vzPickClientOf(p); if (!groups[c]) { groups[c] = []; order.push(c); } groups[c].push({ p: p, i: i, k: vzPickKey(p, i) }); });
   var sel = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
-  var counted = sel.filter(function (k) { return !P._inf || !P._inf[k]; });
   var h = '<div class="vz-bar" style="border-radius:10px;"><div class="d-flex align-items-center gap-2 flex-wrap mb-1">' +
     '<b style="font-size:12px;color:#0f4c4c;">👥 معتمرو الرحلة: ' + P.list.length + '</b>' +
     '<span class="small text-muted">مختار: ' + sel.length + '</span>' +
@@ -38674,12 +38712,16 @@ function vzPickRender() {
   box.innerHTML = h + '</div>';
 }
 function vzPickOne(k, on, alreadyRef) {
-  // ⚠️ (V4.144) لو المعتمر مُرسَل من قبل ضمن مجموعة أخرى، نُنبِّه المستخدم قبل تحديده هنا أيضاً —
-  // وله حرية القرار بالمتابعة أو التراجع
+  // ⚠️ (V4.144) لو المعتمر مُسجَّل ضمن مجموعة أخرى نُنبِّه قبل تحديده هنا أيضاً — تنبيه غير مانع،
+  // القرار للمستخدم. (V4.154) صار بنافذة البرنامج بدل confirm المتصفح، ويشمل كل المجموعات لا رحلةً واحدة
   if (on && alreadyRef) {
-    if (!confirm('⚠️ هذا المعتمر مُرسَل من قبل ضمن مجموعة «' + alreadyRef + '» لنفس الرحلة.\nهل تريد تحديده أيضاً في هذه المجموعة؟')) {
-      vzPickRender(); return;
-    }
+    showElegantConfirm({ icon: '⚠️', title: 'مُسجَّل بمجموعة تأشيرات أخرى',
+      message: 'هذا المعتمر مُسجَّل بالفعل ضمن المجموعة «' + alreadyRef + '». التنبيه غير مانع — يمكنك تحديده هنا أيضاً إن كان مقصوداً.',
+      buttons: [
+        { label: 'تحديده رغم ذلك', class: 'btn-primary', onClick: function () { VZ._pick.sel[k] = true; vzPickRender(); } },
+        { label: 'تراجع', class: 'btn-secondary', onClick: function () { vzPickRender(); } }
+      ] });
+    return;
   }
   VZ._pick.sel[k] = on; vzPickRender();
 }
@@ -38688,28 +38730,23 @@ function vzPickAll(on) { var P = VZ._pick; P.list.forEach(function (p, i) { P.se
 function vzPickApply() {
   var P = VZ._pick, d = VZ._draft, keys = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
   d.selected = keys;
-  var perClient = {}, order = [], infants = 0;
+  // 👶 (V4.154) الأطفال والرضّع يُحتسَبون كالكبار تماماً — لكل منهم تأشيرة مستقلة، فلا يُستبعَد أحد
+  // من عدد المجموعة ولا من بنود العملاء (كان الرضيع يُستبعَد من العدّ فيخرج العدد ناقصاً)
+  var perClient = {}, order = [];
   P.list.forEach(function (p, i) {
     var k = vzPickKey(p, i); if (!P.sel[k]) return;
-    if (vzPickIsInfant(p)) { infants++; return; }
     var c = vzPickClientOf(p); if (!(c in perClient)) { perClient[c] = 0; order.push(c); } perClient[c]++;
   });
   d.breakdown = order.map(function (c) { return { name: c, count: perClient[c] }; });
   d.visaCount = order.reduce(function (a, c) { return a + perClient[c]; }, 0);
-  _showPopup('اعتُمد ' + keys.length + ' اسماً — المُحتسَب ' + d.visaCount + (infants ? (' (استُبعد ' + infants + ' رضيع)') : ''), 'success');
+  _showPopup('اعتُمد ' + keys.length + ' اسماً — عدد المجموعة ' + d.visaCount + ' (شامل الأطفال والرضّع)', 'success');
   vzFormRender();
 }
 function vzFormSave() {
   var d = VZ._draft;
   if (!mfStr(d.agent)) { VZ._tab = 'basic'; vzFormRender(); _showPopup('اختر الوكيل السعودي', 'error'); return; }
   if (!mfNum(d.visaCount)) { VZ._tab = 'basic'; vzFormRender(); _showPopup('أدخل عدد المجموعة', 'error'); return; }
-  var diff = vzBdMismatch();
-  if (diff) {
-    VZ._tab = 'basic'; vzFormRender();
-    _showPopup('مجموع أعداد العملاء (' + vzBdTotal() + ') لا يساوي عدد المجموعة (' + mfNum(d.visaCount) + ')', 'error');
-    return;
-  }
-  // 🏨 مجموع أعداد فنادق كل مدينة = عدد المجموعة
+  // 🏨 مجموع أعداد فنادق كل مدينة = عدد المجموعة (يبقى مانعاً — خطأ تسكين صريح لا التباس فيه)
   var ht = vzHzTotals(), bad = null;
   ['مكة', 'المدينة'].forEach(function (c) {
     if (!vzHzList().some(function (h) { return h.city === c; })) return;
@@ -38720,11 +38757,52 @@ function vzFormSave() {
     _showPopup('مجموع أعداد فنادق ' + bad + ' — يجب أن يساوي عدد المجموعة', 'error');
     return;
   }
+  // ⚠️ (V4.154) تنبيهات غير مانعة تُجمَع في نافذة تأكيد واحدة بدل منع الحفظ: نقص عدد الأسماء عن
+  // عدد المجموعة، اختلاف مجموع بنود العملاء، ووجود معتمرين مسجَّلين بمجموعات تأشيرات أخرى
+  var warns = [];
+  if (vzBdMismatch()) warns.push('مجموع أعداد العملاء (' + vzBdTotal() + ') لا يساوي عدد المجموعة (' + mfNum(d.visaCount) + ').');
+  var selCount = (d.selected || []).length;
+  if (selCount && selCount < mfNum(d.visaCount)) {
+    warns.push('عدد الأسماء المختارة (' + selCount + ') أقل من عدد المجموعة بالبيانات الأساسية (' + mfNum(d.visaCount) + ').');
+  }
+  var dup = vzSelectedInOtherGroups_(d);
+  if (dup.length) {
+    warns.push('يوجد ' + dup.length + ' معتمراً مسجَّلاً بمجموعات تأشيرات أخرى: ' +
+      dup.slice(0, 5).map(function (x) { return x.passport + ' (مجموعة ' + x.ref + ')'; }).join('، ') +
+      (dup.length > 5 ? ' وغيرهم…' : '') + '.');
+  }
+  if (warns.length) {
+    showElegantConfirm({ icon: '⚠️', title: 'تنبيه قبل الحفظ (غير مانع)',
+      messageHtml: '<div style="text-align:start;line-height:1.9;">' +
+        warns.map(function (w) { return '• ' + vzEsc(w); }).join('<br>') +
+        '<br><br><b>يمكنك المتابعة والحفظ رغم ذلك.</b></div>',
+      buttons: [
+        { label: '💾 حفظ رغم التنبيه', class: 'btn-primary', onClick: function () { _vzFormSaveGo_(); } },
+        { label: 'مراجعة البيانات', class: 'btn-secondary', onClick: function () {} }
+      ] });
+    return;
+  }
+  _vzFormSaveGo_();
+}
+// ⚠️ (V4.154) المعتمرون المختارون بهذه المجموعة والمسجَّلون أيضاً بمجموعة تأشيرات أخرى (أي رحلة)
+function vzSelectedInOtherGroups_(d) {
+  var idx = vzOtherGroupsIdx_(d && d.id), out = [];
+  (d.selected || []).forEach(function (k) {
+    var key = mfStr(k).replace(/^P:/, '');
+    if (!key || key.charAt(0) === '#') return;
+    var g = idx[key]; if (g) out.push({ passport: key, ref: vzGroupLbl_(g) });
+  });
+  return out;
+}
+function _vzFormSaveGo_() {
+  var d = VZ._draft;
   var warn = document.getElementById('vzFormWarn'); if (warn) warn.textContent = '⏳ جاري الحفظ…';
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { if (warn) warn.textContent = ''; _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
-      vzFormClose(); _showPopup('تم حفظ المجموعة', 'success'); vzLoad(true);
+      // ⚡ (V4.154) دمج فوري بالذاكرة ثم تحديث خلفي هادئ — بدل إعادة تحميل البوتستراب كاملاً التي
+      // كانت تُبطئ الحفظ وتُظهر الصف بقيمه القديمة ريثما تصل
+      vzFormClose(); _showPopup('تم حفظ المجموعة', 'success'); vzApplySavedFile_(res);
     })
     .withFailureHandler(function (e) { if (warn) warn.textContent = ''; _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveVisaFile(window.authToken, d);
@@ -38898,12 +38976,36 @@ function vzTPriceRender() {
     (d.length ? d.map(function (p, i) {
       return '<tr><td><input style="' + inp + '" value="' + vzEsc(p.price) + '" oninput="VZ._tprDraft[' + i + '].price=mfNum(this.value)"></td>' +
         '<td>' + dt(i, 'from') + '</td><td>' + dt(i, 'to') + '</td>' +
-        '<td><button class="vz-rowbtn" style="color:#dc2626;" title="حذف الفترة" onclick="VZ._tprDraft.splice(' + i + ',1);vzTPriceRender()">🗑️</button></td></tr>';
+        '<td class="d-flex gap-1"><button class="vz-btn sm" title="طبّق هذا السعر على كل دورات النقل بالفترة التي بلا سعر يدوي" onclick="vzTPriceApplyToRuns(' + i + ')">📌 تطبيق</button>' +
+        '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف الفترة" onclick="VZ._tprDraft.splice(' + i + ',1);vzTPriceRender()">🗑️</button></td></tr>';
     }).join('') : '<tr><td colspan="4" class="text-muted" style="padding:14px;">لا فترات سعرية لهذا الوكيل بعد.</td></tr>') + '</tbody></table>' +
     '<div class="mt-2 d-flex gap-2 flex-wrap"><button class="vz-btn sm" onclick="VZ._tprDraft.push({price:0,from:VZ.today,to:\'\'});vzTPriceRender()">➕ فترة سعر جديدة</button>' +
     '<button class="vz-btn pri sm" onclick="vzTPriceSave()">💾 حفظ تسعير دورات النقل</button></div></div>';
 }
 function vzTPrCal(i, k) { _vzCal_('vzTPr_' + k + '_' + i, function (v) { VZ._tprDraft[i][k] = v; }); }
+// 📌 (V4.154) تطبيق سعر الفترة فعلياً على دورات النقل المسجَّلة ضمنها بلا سعر يدوي — يكتبه بشيت
+// الإشعارات فيصير سعراً مسجَّلاً قابلاً للتعديل الفردي لاحقاً، ولا يمسّ أي دورة لها سعر مسجَّل
+function vzTPriceApplyToRuns(i) {
+  var a = mfStr(document.getElementById('vzTPrAgent').value);
+  var p = (VZ._tprDraft || [])[i]; if (!a || !p) return;
+  if (!mfNum(p.price)) { _showPopup('أدخِل السعر أولاً', 'error'); return; }
+  showElegantConfirm({ icon: '📌', title: 'تطبيق السعر على دورات النقل',
+    message: 'سيُطبَّق سعر ' + mfFmt(p.price) + ' ريال على كل دورات نقل «' + a + '» بين ' + (p.from || 'البداية') + ' و' + (p.to || 'الآن') +
+      ' والتي ليس لها سعر باص مسجَّل يدوياً. الدورات التي لها سعر مسجَّل لن تتغيّر. متابعة؟',
+    buttons: [
+      { label: 'تطبيق', class: 'btn-primary', onClick: function () {
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر التطبيق', 'error'); return; }
+            _showPopup(res.count ? ('طُبِّق السعر على ' + res.count + ' دورة نقل') : 'لا توجد دورات بلا سعر ضمن هذه الفترة', res.count ? 'success' : 'info');
+            if (VZ._acc) vzAccFetch();
+          })
+          .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+          .applyTransportPriceToRuns(window.authToken, a, p.price, p.from || '', p.to || '');
+      } },
+      { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }
+    ] });
+}
 function vzTPriceSave() {
   var a = mfStr(document.getElementById('vzTPrAgent').value);
   if (!a) { _showPopup('اختر الوكيل', 'error'); return; }
@@ -38966,10 +39068,11 @@ function vzAccFetch() {
         cs.innerHTML = '<option value="">الكل</option>' + (res.companies || []).map(function (c) { return '<option>' + vzEsc(c) + '</option>'; }).join('');
         cs.value = keep;
       }
+      // 🚌 (V4.147) دورات النقل تظهر تلقائياً عند فتح الحساب بلا ضغط زر "تحديث" يدوياً، وتشمل كل
+      // الدورات حتى لو لم يُسجَّل سعرها بعد. ⚡ (V4.154) صارت تصل ضمن نفس استجابة الكشف بدل نداء
+      // ثانٍ متتالٍ، فزمن فتح الحساب المحسوس انخفض للنصف تقريباً.
+      VZ._accTransport = res.transportRuns || [];
       vzAccRender();
-      // 🚌 (V4.147) جلب دورات النقل تلقائياً عند فتح الحساب — بلا حاجة لضغط زر "تحديث" يدوياً،
-      // وتشمل كل الدورات حتى لو لم يُسجَّل سعرها بعد (تظهر بقيمة صفر ريثما يُضبَط السعر)
-      vzAccRefreshTransport(true);
     })
     .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
     .getAgentAccount(window.authToken, VZ._accKey, VZ._accF);
@@ -39211,7 +39314,7 @@ function vzAccDelSelected() {
       if (payIds.length) calls.push(new Promise(function (res) {
         google.script.run.withSuccessHandler(res).withFailureHandler(function () { res(null); }).deleteAgentPaymentsBatch(window.authToken, payIds);
       }));
-      Promise.all(calls).then(function () { VZ._accSel = {}; _showPopup('تم الحذف الجماعي', 'success'); vzAccFetch(); vzLoad(true); });
+      Promise.all(calls).then(function () { VZ._accSel = {}; _showPopup('تم الحذف الجماعي', 'success'); vzAccFetch(); vzRefreshSoon_(); });
     } }, { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
 }
 // 📋 (V4.146) يفكّك أسطر ملصوقة من إكسيل (Tab-separated عادةً) إلى {date, type, desc, amount} —
@@ -39283,7 +39386,7 @@ function vzAccAddPaySingleSave() {
   var r = VZ._acc;
   var obj = { agent: r.agent, date: mfDate(vzFV('vzPaySDate')) || VZ.today, amount: mfNum(vzFV('vzPaySAmt')), currency: 'SAR', notes: vzFV('vzPaySNotes'), entryNo: vzFV('vzPaySEntry') };
   if (!obj.amount) { _showPopup('أدخِل المبلغ', 'error'); return; }
-  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت الدفعة', 'success'); vzAccFetch(); vzLoad(true); })
+  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت الدفعة', 'success'); vzAccFetch(); vzRefreshSoon_(); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPayment(window.authToken, obj);
 }
 function _vzPayPastePreview() {
@@ -39303,7 +39406,7 @@ function vzAccAddPayMultiSave() {
   var rows = _vzParsePasteLines_(vzFV('vzPayPasteArea')).filter(function (x) { return x.amount; })
     .map(function (x) { return { date: x.date, amount: x.amount, notes: x.desc, entryNo: x.entryNo }; });
   if (!rows.length) return;
-  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت ' + res.count + ' دفعة', 'success'); vzAccFetch(); vzLoad(true); })
+  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت ' + res.count + ' دفعة', 'success'); vzAccFetch(); vzRefreshSoon_(); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPaymentsBatch(window.authToken, r.agent, rows);
 }
 function vzAccAddItem() {
@@ -39344,7 +39447,7 @@ function vzAccAddItemSingleSave() {
   var r = VZ._acc;
   var obj = { agent: r.agent, desc: vzFV('vzItSDesc'), currency: 'SAR', value: mfNum(vzFV('vzItSVal')), isCredit: vzFV('vzItSCredit') === 'true', notes: '', entryNo: vzFV('vzItSEntry') };
   if (!obj.desc || !obj.value) { _showPopup('أكمل البيان والقيمة', 'error'); return; }
-  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzItemAddOv').remove(); _showPopup('أُضيف البند', 'success'); vzAccFetch(); vzLoad(true); })
+  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzItemAddOv').remove(); _showPopup('أُضيف البند', 'success'); vzAccFetch(); vzRefreshSoon_(); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentAccItem(window.authToken, obj);
 }
 function _vzItPastePreview() {
@@ -39364,17 +39467,17 @@ function vzAccAddItemMultiSave() {
   var rows = _vzParsePasteLines_(vzFV('vzItPasteArea')).filter(function (x) { return x.amount && x.desc; })
     .map(function (x) { return { desc: (x.type && x.type !== x.desc ? (x.type + ' — ' + x.desc) : x.desc), value: x.amount, entryNo: x.entryNo }; });
   if (!rows.length) return;
-  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzItemAddOv').remove(); _showPopup('أُضيف ' + res.count + ' بند', 'success'); vzAccFetch(); vzLoad(true); })
+  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzItemAddOv').remove(); _showPopup('أُضيف ' + res.count + ' بند', 'success'); vzAccFetch(); vzRefreshSoon_(); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentAccItemsBatch(window.authToken, r.agent, isCredit, rows);
 }
 function vzAccDelItem(id) {
   var r = VZ._acc; showElegantConfirm({ icon: '🗑️', title: 'حذف البند', message: 'حذف هذا البند من حساب الوكيل؟', buttons: [
-    { label: 'حذف', class: 'btn-danger', onClick: function () { google.script.run.withSuccessHandler(function () { vzAccFetch(); vzLoad(true); }).deleteAgentAccItem(window.authToken, id); } },
+    { label: 'حذف', class: 'btn-danger', onClick: function () { google.script.run.withSuccessHandler(function () { vzAccFetch(); vzRefreshSoon_(); }).deleteAgentAccItem(window.authToken, id); } },
     { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
 }
 function vzAccDelPay(id) {
   var r = VZ._acc; showElegantConfirm({ icon: '🗑️', title: 'حذف الدفعة', message: 'حذف هذه الدفعة من حساب الوكيل؟', buttons: [
-    { label: 'حذف', class: 'btn-danger', onClick: function () { google.script.run.withSuccessHandler(function () { vzAccFetch(); vzLoad(true); }).deleteAgentPayment(window.authToken, id); } },
+    { label: 'حذف', class: 'btn-danger', onClick: function () { google.script.run.withSuccessHandler(function () { vzAccFetch(); vzRefreshSoon_(); }).deleteAgentPayment(window.authToken, id); } },
     { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
 }
 // ✏️ (V4.144) زر تعديل موحَّد لأي سطر بالدفتر — مجموعة تفتح نموذج المجموعة، دورة نقل تفتح
@@ -39382,15 +39485,9 @@ function vzAccDelPay(id) {
 function vzAccEditRow(kind, id) {
   var r = VZ._acc;
   if (kind === 'group') { vzAccClose(); vzEditFile(id); return; }
-  if (kind === 'transport') {
-    // 🚌 (V4.146) taEditRow يعتمد على بيانات شاشة حسابات النقل السعودي (window.taRawData) —
-    // لو لم تُفتَح تلك الشاشة بعد بهذه الجلسة نجلبها أولاً كي لا يفشل التعديل بخطأ "لم يُعثر على الصف"
-    if ((window.taFilteredData || window.taRawData || []).length) { vzAccClose(); taEditRow(id); return; }
-    google.script.run.withSuccessHandler(function (rows) { window.taRawData = rows || []; vzAccClose(); taEditRow(id); })
-      .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
-      .getTransportAccountsData(window.authToken);
-    return;
-  }
+  // 🚌 (V4.154) تعديل دورة النقل صار داخل كشف الحساب نفسه بنفس حقول شاشة حسابات النقل السعودي —
+  // كان يُغلق الكشف ويقفز لتلك الشاشة (taEditRow) فيفقد المستخدم مكانه ويحتاج فتح الحساب من جديد
+  if (kind === 'transport') { vzAccEditTransport_(id); return; }
   if (kind === 'item') {
     var it = (r.items || []).filter(function (x) { return x.id === id; })[0]; if (!it) return;
     _vzMiniForm('✏️ تعديل بند حساب للوكيل', [
@@ -39400,7 +39497,7 @@ function vzAccEditRow(kind, id) {
       { k: 'notes', l: 'ملاحظات' }
     ], { id: it.id, agent: it.agent, desc: it.desc, value: it.value, currency: it.currency, isCredit: String(!!it.isCredit), notes: it.notes, entryNo: it.entryNo }, function (obj) {
       obj.isCredit = (String(obj.isCredit) === 'true');
-      google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } _showPopup('حُفظ التعديل', 'success'); vzAccFetch(); vzLoad(true); })
+      google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } _showPopup('حُفظ التعديل', 'success'); vzAccFetch(); vzRefreshSoon_(); })
         .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentAccItem(window.authToken, obj);
     });
     return;
@@ -39411,11 +39508,55 @@ function vzAccEditRow(kind, id) {
       { k: 'entryNo', l: 'رقم القيد' }, { k: 'date', l: 'التاريخ', date: 1 }, { k: 'amount', l: 'المبلغ', num: 1 },
       { k: 'currency', l: 'العملة', opts: ['SAR', 'EGP'] }, { k: 'notes', l: 'ملاحظات' }
     ], { id: p.id, agent: p.agent, date: p.date, amount: p.amount, currency: p.currency, notes: p.notes, entryNo: p.entryNo }, function (obj) {
-      google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } _showPopup('حُفظ التعديل', 'success'); vzAccFetch(); vzLoad(true); })
+      google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } _showPopup('حُفظ التعديل', 'success'); vzAccFetch(); vzRefreshSoon_(); })
         .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPayment(window.authToken, obj);
     });
     return;
   }
+}
+/* 🚌 (V4.154) نموذج تعديل دورة نقل من داخل كشف حساب الوكيل — بنفس حقول شاشة حسابات النقل
+   السعودي (المورد/البيان/سعر الباص/الملاحظات وعدد الباصات وقيمة التشغيلة محسوبة)، ويُحدِّث
+   الكشف فور الحفظ بجلب دورات النقل وحدها (سريع) بدل إعادة تحميل الحساب كاملاً. */
+function vzAccEditTransport_(id) {
+  var x = (VZ._accTransport || []).filter(function (t) { return mfStr(t.id) === mfStr(id); })[0];
+  if (!x) { _showPopup('لم يُعثر على بيانات دورة النقل', 'error'); return; }
+  var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzTaEdOv';
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(600px,96vw);"><div class="vz-hd"><b>🚌 تعديل دورة نقل — إشعار ' + vzEsc(x.id) + '</b>' +
+    '<button class="vz-btn sm" onclick="document.getElementById(\'vzTaEdOv\').remove()">✕</button></div><div class="p-3">' +
+    '<div class="vz-fld mb-2"><label>المورد (الوكيل)</label><input id="vzTaSup" value="' + vzEsc(x.supplier || '') + '"></div>' +
+    '<div class="vz-fld mb-2"><label>البيان</label><input id="vzTaDesc" value="' + vzEsc(x.rawDesc || '') + '"></div>' +
+    '<div class="d-flex gap-2">' +
+      '<div class="vz-fld mb-2" style="flex:1;"><label>عدد الباصات</label><input id="vzTaCount" value="' + vzEsc(x.busCount) + '" disabled></div>' +
+      '<div class="vz-fld mb-2" style="flex:1;"><label>سعر الباص (ريال)</label><input id="vzTaPrice" type="number" value="' + vzEsc(x.busPrice) + '" oninput="vzTaEdRecalc_()"></div>' +
+      '<div class="vz-fld mb-2" style="flex:1;"><label>قيمة التشغيلة</label><input id="vzTaVal" value="' + vzEsc(vzFmt(x.value)) + '" disabled></div>' +
+    '</div>' +
+    '<div class="vz-fld mb-2"><label>ملاحظات</label><input id="vzTaNotes" value="' + vzEsc(x.notes || '') + '"></div>' +
+    '<div class="mf-note info mb-2"><span>ℹ️</span><div>' + (x.priceIsDefault
+      ? 'السعر المعروض افتراضي من تسعير دورات النقل — حفظه هنا يجعله سعراً يدوياً مسجَّلاً لهذه الدورة وحدها.'
+      : 'قيمة التشغيلة = عدد الباصات × سعر الباص، وتُحسب تلقائياً عند الحفظ.') + '</div></div>' +
+    '<button class="vz-btn pri" onclick="vzAccSaveTransport_(\'' + vzJs(x.id) + '\')">💾 حفظ وتحديث الكشف</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+}
+function vzTaEdRecalc_() {
+  var c = mfNum((document.getElementById('vzTaCount') || {}).value);
+  var p = mfNum((document.getElementById('vzTaPrice') || {}).value);
+  var v = document.getElementById('vzTaVal'); if (v) v.value = vzFmt(c * p);
+}
+function vzAccSaveTransport_(id) {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      var o = document.getElementById('vzTaEdOv'); if (o) o.remove();
+      _showPopup('حُفظ تعديل دورة النقل', 'success');
+      vzAccRefreshTransport(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveTransportRowEdit(window.authToken, {
+      id: id, supplier: vzFV('vzTaSup'), desc: vzFV('vzTaDesc'),
+      busPrice: vzFV('vzTaPrice'), notes: vzFV('vzTaNotes')
+    });
 }
 // 📜 (V4.144) سجل تعديلات سطر واحد بالدفتر — مجموعة/بند/دفعة/دورة نقل، كلٌّ بسجله المستقل
 function vzAccRowHistory(kind, id) {
@@ -39843,16 +39984,21 @@ function vzImportRender() {
   var box = document.getElementById('vzImpBody'); if (!box) return;
   var rows = VZ._imp || [];
   var existing = {}; (VZ.files || []).forEach(function (f) { if (f.ref) existing[mfStr(f.ref)] = 1; });
+  // 🚫 (V4.154) يُستورَد فقط ما رقم مجموعته جديد — المكرَّر والفارغ يُعرضان مظلَّلين ويُتخطَّيان
   var dupN = rows.filter(function (r) { return r.ref && existing[mfStr(r.ref)]; }).length;
+  var noRefN = rows.filter(function (r) { return !mfStr(r.ref); }).length;
+  var okN = rows.length - dupN - noRefN;
   var inp = 'width:100%;min-width:90px;font-size:12px;padding:5px 7px;border:1.5px solid var(--vzBorder);border-radius:7px;font-weight:600;background:#fff;color:#0f2a23;';
   box.innerHTML = '<div class="vz-sec"><div class="vz-sec-h">2️⃣ معاينة وتعديل قبل الاستيراد' +
-      '<span class="vz-badge b" style="margin-inline-start:auto;">' + rows.length + ' صف</span>' +
-      (dupN ? '<span class="vz-badge y">⚠️ ' + dupN + ' برقم مسجَّل — ستُتخطّى</span>' : '') + '</div>' +
+      '<span class="vz-badge b" style="margin-inline-start:auto;">' + rows.length + ' صف · ' + okN + ' ستُستورَد</span>' +
+      (dupN ? '<span class="vz-badge y">⚠️ ' + dupN + ' برقم مسجَّل — ستُتخطّى</span>' : '') +
+      (noRefN ? '<span class="vz-badge y">⚠️ ' + noRefN + ' بلا رقم مجموعة — ستُتخطّى</span>' : '') + '</div>' +
     '<div style="overflow:auto;max-height:52vh;"><table class="vz-tab"><thead><tr><th style="width:34px;">م</th>' +
       VZ_IMP_COLS_.map(function (c) { return '<th>' + c[1] + '</th>'; }).join('') + '<th style="width:40px;">⚙</th></tr></thead><tbody>' +
     rows.map(function (r, i) {
-      var dup = r.ref && existing[mfStr(r.ref)];
-      return '<tr' + (dup ? ' style="background:#fef3c7;"' : '') + '><td>' + (i + 1) + (dup ? ' ⚠️' : '') + '</td>' +
+      var dup = r.ref && existing[mfStr(r.ref)], blank = !mfStr(r.ref);
+      return '<tr' + (dup || blank ? ' style="background:#fef3c7;" title="' + (blank ? 'بلا رقم مجموعة — ستُتخطّى' : 'رقم مسجَّل من قبل — ستُتخطّى') + '"' : '') +
+        '><td>' + (i + 1) + (dup || blank ? ' ⚠️' : '') + '</td>' +
         VZ_IMP_COLS_.map(function (c) {
           // 🔎 (V4.140) بحث تنبّئي عند مراجعة الاستيراد: العملاء من قائمة العملاء، والرحلة من قائمة الرحلات
           var dl = c[0] === 'clients' ? ' list="vzImpClientsDL"' : (c[0] === 'tripName' ? ' list="vzImpTripsDL"' : '');
@@ -39882,7 +40028,8 @@ function vzImportRun(btn) {
       btn.disabled = false; btn.innerHTML = orig;
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الاستيراد', 'error'); return; }
       vzImportClose();
-      _showPopup('استُورد ' + res.imported + ' مجموعة' + (res.skipped ? ' — تُخطِّي ' + res.skipped + ' مسجَّلة من قبل' : ''), 'success');
+      _showPopup('استُورد ' + res.imported + ' مجموعة' + (res.skipped ? ' — تُخطِّي ' + res.skipped + ' برقم مسجَّل من قبل' : '') +
+        (res.noRef ? ' — تُخطِّي ' + res.noRef + ' بلا رقم مجموعة' : ''), 'success');
       vzLoad(true);
     })
     .withFailureHandler(function (e) { btn.disabled = false; btn.innerHTML = orig; _showPopup(e && e.message ? e.message : e, 'error'); })

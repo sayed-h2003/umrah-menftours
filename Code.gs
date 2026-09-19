@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.153";
+var APP_VERSION = "4.154";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22217,11 +22217,14 @@ function importVisaFilesBatch(authToken, rows) {
     all.forEach(function (f) { if (f.ref) existing[f.ref] = 1; });
     var seq = all.reduce(function (m, f) { return Math.max(m, _mfNum_(f.seq)); }, 0);
     var now = _mfStamp_();
-    var out = [], skipped = [], imported = 0;
+    var out = [], skipped = [], noRef = 0, imported = 0;
     rows.forEach(function (r) {
       var ref = _mfStr_(r.ref);
-      if (ref && existing[ref]) { skipped.push(ref); return; }
-      if (ref) existing[ref] = 1;
+      // 🚫 (V4.154) لا يُستورَد إلا صف له رقم مجموعة جديد: الصف بلا رقم مجموعة لا يمكن التحقق من
+      // جِدَّته فيُتخطّى، والرقم المسجَّل من قبل (بالشيت أو بنفس دفعة الاستيراد) يُتخطّى كذلك
+      if (!ref) { noRef++; return; }
+      if (existing[ref]) { skipped.push(ref); return; }
+      existing[ref] = 1;
       var bd = Array.isArray(r.breakdown) ? r.breakdown.map(function (b) {
         return { name: _mfStr_(b.name), count: _mfNum_(b.count) };
       }).filter(function (b) { return b.name; }) : [];
@@ -22248,9 +22251,9 @@ function importVisaFilesBatch(authToken, rows) {
     if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, VZ_FILES_HEADERS.length).setValues(out);
     SpreadsheetApp.flush();
     logChange_(session.username, 'استيراد مجموعات تأشيرات', '-', 'استيراد دفعة',
-      '-', 'استُورد ' + imported + ' — تُخطِّي ' + skipped.length);
+      '-', 'استُورد ' + imported + ' — تُخطِّي ' + skipped.length + (noRef ? (' — بلا رقم مجموعة ' + noRef) : ''));
     _vzClearCache_();
-    return { success: true, imported: imported, skipped: skipped.length, skippedRefs: skipped };
+    return { success: true, imported: imported, skipped: skipped.length, skippedRefs: skipped, noRef: noRef };
   } finally { lock.releaseLock(); }
 }
 
@@ -22358,6 +22361,53 @@ function saveVisaAgentTransportPrices(authToken, agent, periods) {
     return { success: true, count: mine.length };
   } finally { lock.releaseLock(); }
 }
+/* 💲 (V4.154) تطبيق سعر الفترة فعلياً على دورات النقل المسجَّلة ضمنها والتي لا سعر باص يدوي لها —
+   يكتب السعر وقيمة التشغيلة بشيت الإشعارات دفعةً واحدة. أي دورة لها سعر مسجَّل مسبقاً لا تُمسّ
+   إطلاقاً (السعر اليدوي دائماً أولى من الافتراضي). */
+function applyTransportPriceToRuns(authToken, agent, price, from, to) {
+  var session = _vzFinancePerm_(authToken);   // 🔒 مالي
+  agent = _mfStr_(agent); price = _mfNum_(price);
+  if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
+  if (!price) return { success: false, error: 'السعر مطلوب' };
+  var fromMs = _mfMs_(_mfDate_(from)); if (isNaN(fromMs)) fromMs = -8640000000000000;
+  var toMs = _mfMs_(_mfDate_(to)); if (isNaN(toMs)) toMs = 8640000000000000;
+  var map = _vzAcctMap_();
+  var targets = {};
+  _taReadRowsRaw_().forEach(function (r) {
+    if (_mfNum_(r.busPrice)) return;   // لها سعر يدوي — لا تُمسّ
+    if (!_vzFileInAcct_({ agent: r.supplier, company: r.company }, agent, map)) return;
+    var t = _mfMs_(_mfDate_(r.arrivalDate));
+    if (isNaN(t) || t < fromMs || t > toMs) return;
+    targets[_mfStr_(r.id)] = true;
+  });
+  if (!Object.keys(targets).length) return { success: true, count: 0 };
+  var bsh = getSpreadsheet_().getSheetByName('Bookings');
+  if (!bsh || bsh.getLastRow() < 2) return { success: false, error: 'شيت الإشعارات غير متاح' };
+  var colMap = _robustColMap_(bsh, BOOKINGS_HEADERS_);
+  var iId = colMap[BOOKINGS_COL_.id], iPrice = colMap[BOOKINGS_COL_.busPrice],
+      iVal = colMap[BOOKINGS_COL_.operationValue], iCount = colMap[BOOKINGS_COL_.busCount];
+  if (iId === undefined || iPrice === undefined) return { success: false, error: 'أعمدة السعر غير موجودة بشيت الإشعارات' };
+  var n = bsh.getLastRow() - 1;
+  var idCol = bsh.getRange(2, iId + 1, n, 1).getValues();
+  var priceCol = bsh.getRange(2, iPrice + 1, n, 1).getValues();
+  var countCol = (iCount !== undefined) ? bsh.getRange(2, iCount + 1, n, 1).getValues() : null;
+  var valCol = (iVal !== undefined) ? bsh.getRange(2, iVal + 1, n, 1).getValues() : null;
+  var applied = 0;
+  for (var i = 0; i < n; i++) {
+    if (!targets[_mfStr_(idCol[i][0])]) continue;
+    priceCol[i][0] = price;
+    if (valCol && countCol) valCol[i][0] = _accNum_(countCol[i][0]) * price;
+    applied++;
+  }
+  if (!applied) return { success: true, count: 0 };
+  bsh.getRange(2, iPrice + 1, n, 1).setValues(priceCol);
+  if (valCol) bsh.getRange(2, iVal + 1, n, 1).setValues(valCol);
+  SpreadsheetApp.flush();
+  logChange_(session.username, 'تطبيق تسعير دورات النقل', agent, 'عدد الدورات', '-',
+    applied + ' دورة بسعر ' + price + ' من ' + (_mfDate_(from) || 'البداية') + ' إلى ' + (_mfDate_(to) || 'الآن'));
+  _vzClearCache_();
+  return { success: true, count: applied };
+}
 
 // 💲 (V4.143) تطبيق سعر فترة معيّنة على كل مجموعات هذا الوكيل الواقعة تواريخها ضمن الفترة —
 // بدل تعديل كل مجموعة يدوياً بعد تسجيل فترة سعر جديدة.
@@ -22427,7 +22477,12 @@ function getAgentTransportRuns(authToken, acctKey) {
   _vzFinancePerm_(authToken);   // 🔒 مالي
   acctKey = _mfStr_(acctKey);
   if (!acctKey) return { success: false, error: 'حساب الوكيل مطلوب' };
-  var map = _vzAcctMap_();
+  var out = _vzTransportRunsFor_(acctKey, _vzAcctMap_());
+  return { success: true, rows: out.rows, diag: out.diag };
+}
+// ⚡ (V4.154) نواة جلب دورات النقل لحساب بعينه — استُخرجت من getAgentTransportRuns كي يستدعيها
+// getAgentAccount أيضاً فيُجلب الكشف ودوراته بنداء واحد (كانا نداءين متتاليين عند كل فتح حساب)
+function _vzTransportRunsFor_(acctKey, map) {
   var rows = _taReadRowsRaw_();
   // 💲 (V4.152) دورات بلا سعر يدوي (busPrice فارغ/صفر) تأخذ افتراضياً سعر فترة تسعير النقل
   // السارية بتاريخ الدورة لنفس الوكيل — بنفس منطق تسعير التأشيرات بالفترات
@@ -22443,7 +22498,10 @@ function getAgentTransportRuns(authToken, acctKey) {
       id: r.id, date: r.arrivalDate, groupRef: 'نقل ' + r.id,
       desc: 'دورة نقل ' + (r.tripName || r.client || '—') + ' (' + busCount + ' × ' + busPrice + ')' + (priceIsDefault ? ' — سعر افتراضي' : ''),
       busCount: busCount, busPrice: busPrice, priceIsDefault: priceIsDefault, value: busCount * busPrice,
-      client: r.client, tripName: r.tripName, company: r.company
+      client: r.client, tripName: r.tripName, company: r.company,
+      // 🚌 (V4.154) الحقول الخام اللازمة لتعديل الدورة من داخل كشف الحساب مباشرة بلا فتح شاشة النقل
+      // (البيان والمورد والملاحظات تُكتب كتجاوزات، فلا بد من إرسال قيمها الحالية كي لا تُمحى)
+      supplier: r.supplier, rawDesc: r.desc, notes: r.editNotes
     };
   });
   // 🔎 (V4.147) تشخيص عند 0 نتيجة: نعرض أزواج (المورد، الشركة) الفعلية الموجودة بشيت النقل
@@ -22451,7 +22509,6 @@ function getAgentTransportRuns(authToken, acctKey) {
   // (بدل تخمين السبب) — لا يُرسَل إلا عند الحاجة تفادياً لحمل زائد على الاستجابة المعتادة.
   var diag = null;
   if (!out.length) {
-    var agentPart = acctKey.split(' - ')[0];
     var seen = {};
     rows.forEach(function (r) {
       if (!r.supplier || r.supplier.indexOf(agentPart) < 0) return;
@@ -22461,7 +22518,7 @@ function getAgentTransportRuns(authToken, acctKey) {
     });
     diag = Object.keys(seen).map(function (k) { return seen[k]; });
   }
-  return { success: true, rows: out, diag: diag };
+  return { rows: out, diag: diag };
 }
 // 🧩 (V4.147) كل أزواج (المورد، الشركة) الفعلية بشيت النقل — تُستخدَم لتوليد روابط حسابات
 // الوكلاء تلقائياً حتى لو لم تظهر هذه الشركة إطلاقاً بمجموعات التأشيرات أو إعدادات الشركات
@@ -22515,18 +22572,21 @@ function getAgentAccount(authToken, agent, filters) {
   if (isGeneral) {
     _vzAcctKeys_([agent], map).forEach(function (ac) { if (ac.agent === agent && myKeys.indexOf(ac.key) < 0) myKeys.push(ac.key); });
   }
-  var items = [], pays = [];
-  myKeys.forEach(function (k) {
-    _vzReadItems_(k).forEach(function (x) { items.push(x); });
-    _vzReadPays_(k).forEach(function (x) { pays.push(x); });
-  });
+  // ⚡ (V4.154) شيتا البنود والدفعات يُقرآن مرة واحدة ثم تُصفّى الصفوف بالذاكرة لكل مفتاح حساب —
+  // كانا يُقرآن كاملين مرة لكل حساب فرعي (N+1 قراءة كاملة لكل شيت)، وهو أثقل ما في فتح الكشف
+  var keySet = {}; myKeys.forEach(function (k) { keySet[k] = true; });
+  var items = _vzReadItems_('').filter(function (x) { return keySet[x.agent]; });
+  var pays = _vzReadPays_('').filter(function (x) { return keySet[x.agent]; });
   pays = pays.filter(function (p) { return inRange(p.date); });
   items.forEach(function (x) { delete x._row; }); pays.forEach(function (x) { delete x._row; });
   pays.sort(function (a, b) { var x = _mfMs_(a.date), y = _mfMs_(b.date); return (isNaN(x) ? 0 : x) - (isNaN(y) ? 0 : y); });
   // الشركات التي يضمّها هذا الحساب فعلياً (تُعرض بترويسة الكشف)
   var comps = {}; files.forEach(function (f) { if (f.company) comps[f.company] = 1; });
+  // ⚡ (V4.154) دورات النقل تُرسَل ضمن نفس الاستجابة — كانت نداءً ثانياً متتالياً بعد وصول الكشف،
+  // فيتضاعف زمن فتح الحساب المحسوس بلا داعٍ (نفس خريطة الحسابات تُعاد استخدامها بلا قراءة جديدة)
   return {
     success: true, agent: agent, files: files, items: items, payments: pays,
+    transportRuns: _vzTransportRunsFor_(agent, map).rows,
     companies: Object.keys(comps).sort(),
     filters: { from: _mfDate_(filters.from), to: _mfDate_(filters.to), company: compF },
     balance: _vzAgentBalance_(agent, files, items, pays)
