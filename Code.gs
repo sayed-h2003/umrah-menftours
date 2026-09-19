@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.154";
+var APP_VERSION = "4.155";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12866,7 +12866,8 @@ var NOTIF_TYPES_ = [
   { key: 'mf_quota_exceeded', name: 'تجاوز حصة الأفراد الشهرية عند التسجيل', desc: 'تنبيه غير مانع عند تسجيل ملف فردي يتجاوز الحصة الشهرية أو حد 9 أفراد للملف الواحد، مع ترشيح شركة بديلة' },
   { key: 'trips_no_notice', name: 'رحلات بلا إشعار خلال 72 ساعة',     desc: 'كارت التنبيه الأحمر بلوحة التحكم للرحلات التي بلا إشعار وسفرها قريب' },
   { key: 'trips_urgent48', name: 'رقاقة «عاجل 48 ساعة» للرحلات',      desc: 'الرقاقة الحمراء النابضة بشريط تصفية الرحلات للرحلات التي يقترب سفرها' },
-  { key: 'passport_expiry', name: 'جوازات منتهية أو قاربت الانتهاء',  desc: 'شريط التنبيه بالسجل العام للمعتمرين (منتهية / تنتهي خلال 6 أشهر)' }
+  { key: 'passport_expiry', name: 'جوازات منتهية أو قاربت الانتهاء',  desc: 'شريط التنبيه بالسجل العام للمعتمرين (منتهية / تنتهي خلال 6 أشهر) — لا يشمل من سافر وعاد ما لم يُسجَّل لرحلة جديدة' },
+  { key: 'pilgrim_no_client', name: 'معتمرون بلا اسم عميل',           desc: 'شريط التنبيه بالسجل العام للمعتمرين المسجَّلين بلا عميل (العميل حقل إلزامي عند الحفظ بكشف الرحلة والسجل العام)' }
 ];
 function _notifCfg_() {
   var cfg = null;
@@ -21706,7 +21707,11 @@ var VZ_FILES_HEADERS = ['المعرف','مسلسل','رقم المجموعة','�
   'السكن والاتفاقيات (JSON)',
   // 📝 (V4.149) رقم القيد — حقل نصي حر يُسجَّله المستخدم يدوياً (رقم القيد المحاسبي من دفاتره
   // الخاصة)، منفصل تماماً عن "رقم المجموعة" وعن رقم التسلسل الداخلي
-  'رقم القيد'];
+  'رقم القيد',
+  // 🧳 (V4.155) رحلات إضافية مرتبطة بنفس المجموعة (مفصولة بفاصلة) — «الرحلة المرتبطة» تبقى الرحلة
+  // الأساسية كما هي بكل المنطق القائم (السكن/الإعاشة/الشارات)، وهذه إضافة اختيارية فوقها فقط،
+  // فتُجلَب أسماء معتمري كل الرحلات المربوطة معاً للاختيار منها بنفس الآلية
+  'رحلات إضافية'];
 var VZ_PAY_STATUSES_ = ['', 'تم إصدار الموقّع', 'تم الإرسال', 'تم السداد'];
 var VZ_PRICES_SHEET  = 'VisaAgentPrices';
 var VZ_PRICES_HEADERS = ['الوكيل','السعر','من تاريخ','إلى تاريخ','أنشئ بواسطة','أنشئ في'];
@@ -21741,8 +21746,16 @@ function _vzRowToObj_(r) {
     madinahIn: _mfDate_(r[20]), madinahOut: _mfDate_(r[21]),
     makkahHousingAgr: _mfStr_(r[22]), madinahHousingAgr: _mfStr_(r[23]),
     makkahCateringAgr: _mfStr_(r[24]), madinahCateringAgr: _mfStr_(r[25]),
-    housing: hz, entryNo: _mfStr_(r[27])
+    housing: hz, entryNo: _mfStr_(r[27]), extraTrips: _mfStr_(r[28])
   };
+}
+// 🧳 (V4.155) كل رحلات المجموعة: الرحلة الأساسية + الرحلات الإضافية (مفصولة بفاصلة عربية أو لاتينية)
+function _vzTripsOf_(f) {
+  var out = [], seen = {};
+  [_mfStr_(f && f.tripName)].concat(_mfStr_(f && f.extraTrips).split(/[،,]/)).forEach(function (t) {
+    t = _mfStr_(t); if (!t || seen[t]) return; seen[t] = 1; out.push(t);
+  });
+  return out;
 }
 // 🏨 (V4.134) ترقية السكن القديم (حقول مكة/المدينة المفردة) إلى مصفوفة السكن المتعدد
 function _vzHousingNormalize_(f) {
@@ -21775,7 +21788,7 @@ function _vzObjToRow_(f) {
     f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
     _mfStr_(f.payStatus), _mfDate_(f.makkahIn), _mfDate_(f.makkahOut), _mfDate_(f.madinahIn), _mfDate_(f.madinahOut),
     _mfStr_(f.makkahHousingAgr), _mfStr_(f.madinahHousingAgr), _mfStr_(f.makkahCateringAgr), _mfStr_(f.madinahCateringAgr),
-    JSON.stringify(f.housing || []), _mfStr_(f.entryNo)];
+    JSON.stringify(f.housing || []), _mfStr_(f.entryNo), _mfStr_(f.extraTrips)];
 }
 function _vzReadAll_() {
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
@@ -22089,13 +22102,16 @@ function getVisaTripLinks(authToken) {
       !_sessionHasPerm_(session, 'trips.view')) return { success: true, links: {} };
   var links = {};
   _vzReadAll_().forEach(function (f) {
-    var t = _mfStr_(f.tripName); if (!t) return;
-    if (!links[t]) links[t] = [];
-    links[t].push({
+    // 🧳 (V4.155) المجموعة تُفهرَس تحت كل رحلاتها (الأساسية + الإضافية) فتظهر شارتها بكل رحلة مربوطة
+    var entry = {
       id: f.id, ref: f.ref, seq: f.seq, status: f.status, date: f.date,
       agent: f.agent, company: f.company,
       clients: (f.breakdown || []).map(function (b) { return _mfStr_(b.name); }),
       selected: Array.isArray(f.selected) ? f.selected : []
+    };
+    _vzTripsOf_(f).forEach(function (t) {
+      if (!links[t]) links[t] = [];
+      links[t].push(entry);
     });
   });
   return { success: true, links: links };
@@ -22111,7 +22127,7 @@ function _vzFinancePerm_(authToken) {
 var VZ_FIELD_LABELS_ = {
   ref: 'رقم المجموعة', status: 'الحالة', date: 'تاريخ السداد', company: 'الشركة المصرية',
   agent: 'الوكيل السعودي', tripName: 'الرحلة المرتبطة', visaCount: 'العدد', price: 'سعر الفرد',
-  notes: 'ملاحظات', payStatus: 'حالة السداد', entryNo: 'رقم القيد',
+  notes: 'ملاحظات', payStatus: 'حالة السداد', entryNo: 'رقم القيد', extraTrips: 'رحلات إضافية',
   breakdown: 'بنود العملاء', selected: 'المعتمرون المختارون', housing: 'السكن والاتفاقيات'
 };
 function getVisaFileHistory(authToken, id) {
@@ -22165,7 +22181,7 @@ function saveVisaFile(authToken, data) {
       makkahHousingAgr: _mfStr_(data.makkahHousingAgr), madinahHousingAgr: _mfStr_(data.madinahHousingAgr),
       makkahCateringAgr: _mfStr_(data.makkahCateringAgr), madinahCateringAgr: _mfStr_(data.madinahCateringAgr),
       housing: Array.isArray(data.housing) ? data.housing : (old ? old.housing : []),
-      entryNo: _mfStr_(data.entryNo)
+      entryNo: _mfStr_(data.entryNo), extraTrips: _mfStr_(data.extraTrips)
     };
     // 🏨 (V4.134) تطبيع السكن المتعدد + مزامنة الحقول المفردة منه (أول فندق لكل مدينة)
     f.housing = _vzHousingNormalize_(f);

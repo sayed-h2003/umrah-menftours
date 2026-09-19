@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.154 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.155 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.154)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.155)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.154</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.155</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6681,7 +6681,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.154";
+var CLIENT_APP_VERSION = "4.155";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -9633,12 +9633,9 @@ function _registryFilteredRows() {
       });
       if (!hit) return false;
     }
-    if (window._regExpiryFilter) {
-      var d = parseD(r.expiryDate);
-      if (!d) return false;
-      if (window._regExpiryFilter === 'expired' && !(d < today)) return false;
-      if (window._regExpiryFilter === 'soon' && !(d >= today && d <= soonLimit)) return false;
-    }
+    // 🛂 (V4.155) الفلترة تستخدم نفس تصنيف الشارة بالضبط (شامل استبعاد من سافر وعاد)
+    if (window._regExpiryFilter && _regPassportRisk_(r) !== window._regExpiryFilter) return false;
+    if (window._regNoClientFilter && String(r.client || '').trim()) return false;
     return true;
   });
 }
@@ -9817,29 +9814,63 @@ function _clearAllRegFilters() {
 }
 
 // لوحة تنبيهات الجوازات المنتهية/قاربت الانتهاء (≤ 6 أشهر) — تُحسب من كل السجل
+/* 🛂 (V4.155) تصنيف خطر الجواز لمعتمر بعينه — مصدر واحد تستخدمه شارة التنبيه وفلترتها معاً.
+   القاعدة الجديدة: من سافر وعاد فعلاً (كل رحلاته انتهت عودتها) لا يُنبَّه على جوازه، لأنه لم يعد
+   على سفر؛ فإن سُجِّل مجدداً بنفس الجواز لرحلة جارية أو لم تسافر بعد عاد التنبيه تلقائياً. */
+function _regPassportRisk_(r) {
+  var parse = function (s) { var m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
+  var d = parse(r && r.expiryDate);
+  if (!d) return '';
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var trips = (r && r.trips) || [];
+  if (trips.length) {
+    var stillRelevant = trips.some(function (t) {
+      if (t.active) return true;
+      var ret = parse(t.ret), dep = parse(t.depart);
+      if (ret) return ret >= today;        // رحلة لم تنتهِ عودتها بعد
+      return dep ? dep >= today : true;    // بلا تاريخ عودة: تُعتبَر قائمة ما لم يمضِ ذهابها
+    });
+    if (!stillRelevant) return '';
+  }
+  var soonLimit = new Date(today.getTime() + 180 * 86400000);
+  if (d < today) return 'expired';
+  if (d <= soonLimit) return 'soon';
+  return '';
+}
 function _renderRegistryExpiryAlert() {
   var box = document.getElementById('regExpiryAlert');
   if (!box) return;
+  var h = '';
   // 🔕 (V4.127) مفتاح «جوازات منتهية أو قاربت الانتهاء» من قسم التنبيهات بشاشة الإعدادات
-  if (!_notifOn_('passport_expiry')) { box.innerHTML = ''; return; }
-  var today = new Date(); today.setHours(0, 0, 0, 0);
-  var soonLimit = new Date(today.getTime() + 180 * 86400000);
-  var expired = 0, soon = 0;
-  var parse = function(s) { var m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
-  (window._registryCache || []).forEach(function(r) {
-    var d = parse(r.expiryDate);
-    if (!d) return;
-    if (d < today) expired++;
-    else if (d <= soonLimit) soon++;
-  });
-  if (!expired && !soon) { box.innerHTML = ''; return; }
-  var actClass = function(k) { return window._regExpiryFilter === k ? ' border border-3 border-dark' : ''; };
-  box.innerHTML = '<div class="alert alert-warning py-2 mb-0 d-flex align-items-center gap-2 flex-wrap" style="border-right:4px solid #f59e0b;">' +
-    '<b>🛂 تنبيه الجوازات:</b>' +
-    (expired ? '<span class="badge bg-danger' + actClass('expired') + '" style="cursor:pointer;" title="اضغط لعرض أصحابها فقط" onclick="_setRegExpiryFilter(\'expired\')">منتهية: ' + expired + '</span>' : '') +
-    (soon ? '<span class="badge bg-warning text-dark' + actClass('soon') + '" style="cursor:pointer;" title="اضغط لعرض أصحابها فقط" onclick="_setRegExpiryFilter(\'soon\')">تنتهي خلال 6 أشهر: ' + soon + '</span>' : '') +
-    (window._regExpiryFilter ? '<button class="btn btn-outline-dark btn-sm py-0" onclick="_setRegExpiryFilter(null)">✖ إلغاء فلتر الجوازات</button>' : '<span class="text-muted small">اضغط على أي شارة للتصفية بها</span>') +
-    '</div>';
+  if (_notifOn_('passport_expiry')) {
+    var expired = 0, soon = 0;
+    (window._registryCache || []).forEach(function(r) {
+      var k = _regPassportRisk_(r);
+      if (k === 'expired') expired++; else if (k === 'soon') soon++;
+    });
+    var actClass = function(k) { return window._regExpiryFilter === k ? ' border border-3 border-dark' : ''; };
+    if (expired || soon) h += '<div class="alert alert-warning py-2 mb-0 d-flex align-items-center gap-2 flex-wrap" style="border-right:4px solid #f59e0b;">' +
+      '<b>🛂 تنبيه الجوازات:</b>' +
+      (expired ? '<span class="badge bg-danger' + actClass('expired') + '" style="cursor:pointer;" title="اضغط لعرض أصحابها فقط" onclick="_setRegExpiryFilter(\'expired\')">منتهية: ' + expired + '</span>' : '') +
+      (soon ? '<span class="badge bg-warning text-dark' + actClass('soon') + '" style="cursor:pointer;" title="اضغط لعرض أصحابها فقط" onclick="_setRegExpiryFilter(\'soon\')">تنتهي خلال 6 أشهر: ' + soon + '</span>' : '') +
+      (window._regExpiryFilter ? '<button class="btn btn-outline-dark btn-sm py-0" onclick="_setRegExpiryFilter(null)">✖ إلغاء فلتر الجوازات</button>' : '<span class="text-muted small">اضغط على أي شارة للتصفية بها</span>') +
+      '</div>';
+  }
+  // 🧾 (V4.155) تنبيه المعتمرين بلا اسم عميل — العميل صار حقلاً إلزامياً عند الحفظ، وهذا الشريط
+  // يكشف السجلات القديمة التي حُفظت قبل ذلك (قابل للتعطيل من قسم إدارة التنبيهات)
+  if (_notifOn_('pilgrim_no_client')) {
+    var noCl = (window._registryCache || []).filter(function (r) { return String(r.name || '').trim() && !String(r.client || '').trim(); }).length;
+    if (noCl) h += '<div class="alert alert-danger py-2 mb-0 mt-1 d-flex align-items-center gap-2 flex-wrap" style="border-right:4px solid #dc2626;">' +
+      '<b>🧾 معتمرون بلا اسم عميل:</b>' +
+      '<span class="badge bg-danger" style="cursor:pointer;" title="اضغط لعرضهم فقط" onclick="_setRegNoClientFilter()">' + noCl + ' معتمر</span>' +
+      (window._regNoClientFilter ? '<button class="btn btn-outline-dark btn-sm py-0" onclick="_setRegNoClientFilter()">✖ إلغاء الفلتر</button>'
+        : '<span class="text-muted small">العميل حقل إلزامي — أكمِله لهم من زر التعديل</span>') + '</div>';
+  }
+  box.innerHTML = h;
+}
+function _setRegNoClientFilter() {
+  window._regNoClientFilter = !window._regNoClientFilter;
+  renderRegistryTable();
 }
 function _setRegExpiryFilter(kind) {
   window._regExpiryFilter = (window._regExpiryFilter === kind) ? null : kind;
@@ -10107,6 +10138,8 @@ function saveRegistryForm(btn) {
     notes: document.getElementById('regFormNotes').value.trim()
   };
   if (!p.name) { alert('اسم المعتمر مطلوب'); return; }
+  // 🧾 (V4.155) اسم العميل حقل إلزامي — لا يُقبَل حفظ معتمر بلا عميل بالسجل العام ولا بكشف الرحلة
+  if (!p.client) { _showPopup('اسم العميل حقل إلزامي — أدخِل العميل التابع له هذا المعتمر قبل الحفظ.', 'error', '🧾 العميل مطلوب'); return; }
   var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ...';
   google.script.run
     .withSuccessHandler(function(res) {
@@ -10114,11 +10147,32 @@ function saveRegistryForm(btn) {
       if (res && res.success) {
         showToast(res.existed ? '✅ تم تحديث بيانات المعتمر في كل رحلاته (' + res.updatedRows + ' صف)' : '✅ سُجِّل المعتمر بالسجل العام (بدون رحلة)');
         closeRegistryForm();
-        loadGlobalRegistry();
+        // ⚡ (V4.155) تحديث السجل بالذاكرة وإعادة رسم الجدول فقط — كان يُعيد جلب السجل كاملاً من
+        // الخادم ثم يرسم الجدول من جديد بعد كل تعديل، وهو سبب البطء الملحوظ بعد كل حفظ
+        _regApplySaved_(p);
       } else alert('تعذر الحفظ');
     })
     .withFailureHandler(function(e) { btn.disabled = false; btn.innerHTML = orig; alert('❌ ' + (e.message || e)); })
     .saveGlobalPilgrim(window.authToken, p);
+}
+
+/* ⚡ (V4.155) دمج المعتمر المحفوظ في نسخة السجل بالذاكرة ثم إعادة رسم الجدول محلياً — بديل
+   loadGlobalRegistry() التي كانت تُعيد جلب السجل كله من الخادم بعد كل حفظ. رحلات المعتمر
+   ومعرّفه تبقى كما هي (لا يغيّرها هذا النموذج)، وبقية الحقول تُحدَّث من النموذج مباشرة. */
+function _regApplySaved_(p) {
+  var cache = window._registryCache;
+  if (!Array.isArray(cache)) { loadGlobalRegistry(); return; }
+  var pass = String(p.passport || '').trim(), nm = String(p.name || '').trim();
+  var hit = null;
+  cache.forEach(function (r) {
+    if (hit) return;
+    if (pass && String(r.passport || '').trim() === pass) hit = r;
+    else if (!pass && !String(r.passport || '').trim() && String(r.name || '').trim() === nm) hit = r;
+  });
+  if (hit) { ['name', 'latinName', 'passport', 'type', 'birthDate', 'issueDate', 'expiryDate', 'client', 'notes'].forEach(function (k) { hit[k] = p[k]; }); }
+  else cache.push({ name: p.name, latinName: p.latinName, passport: p.passport, type: p.type,
+    birthDate: p.birthDate, issueDate: p.issueDate, expiryDate: p.expiryDate, client: p.client, notes: p.notes, trips: [] });
+  renderRegistryTable();
 }
 
 /* ----- منتقي الرحلات (يُستخدم للتخصيص من السجل وللنقل بين الرحلات) ----- */
@@ -11124,8 +11178,12 @@ function _vzTripChip_(t) {
   }
   var nos = links.map(function (g) { return g.ref || ('#' + g.seq); }).join('، ');
   var badgeNos = escapeHtml_(links[0].ref || ('#' + links[0].seq)) + (links.length > 1 ? (' +' + (links.length - 1)) : '');
+  // 🛂 (V4.155) الضغط يفتح شاشة التأشيرات على «كل» مجموعات هذه الرحلة (فلتر باسم الرحلة) بدل
+  // الاكتفاء برقم أول مجموعة — الرحلة قد ترتبط بعدة مجموعات وكان الباقي يختفي خلف الفلتر
+  var tripJs = escapeHtml_(String(t.name || '')).replace(/'/g, "\\'");
   var openJs = "event.stopPropagation();if(typeof switchPage==='function'){switchPage('visas');" +
-    "setTimeout(function(){var e=document.getElementById('vzF_ref');if(e){e.value='" + escapeHtml_(String(links[0].ref || '')).replace(/'/g, "\\'") + "';if(typeof vzRender==='function')vzRender();}},400);}";
+    "setTimeout(function(){var r=document.getElementById('vzF_ref');if(r)r.value='';" +
+    "var e=document.getElementById('vzF_client');if(e){e.value='" + tripJs + "';if(typeof vzRender==='function')vzRender();}},400);}";
   return '<span class="badge" style="background:#0b7a5e;color:#fff;font-size:10px;cursor:pointer;" title="أرقام المجموعات: ' + escapeHtml_(nos) + '" onclick="' + openJs + '">🛂 ' + badgeNos + '</span>';
 }
 function _mfLoadTripLinks_() {
@@ -14518,10 +14576,16 @@ function _checkDuplicateInline(inputEl) {
   if (!val) return;
   var isPassport = inputEl.classList.contains('p-passport');
   var dup = false;
+  // 🛂 (V4.155) الاسم المكرَّر لا يُعتبَر تكراراً إلا إذا كان الصفّان بلا رقم جواز يميّزهما —
+  // يجوز تسجيل المعتمر أكثر من مرة برقم جواز مختلف (تجديد جواز أو تشابه أسماء)
+  var myPass = (tr.querySelector('.p-passport') || {}).value;
   document.querySelectorAll('#pilgrimsTableBody .pilgrim-row').forEach(function(other) {
     if (other === tr || dup) return;
-    var otherVal = isPassport ? other.querySelector('.p-passport').value.trim() : other.querySelector('.p-name').value.trim();
-    if (otherVal && otherVal === val) dup = true;
+    var otherPass = String((other.querySelector('.p-passport') || {}).value || '').trim();
+    var otherVal = isPassport ? otherPass : other.querySelector('.p-name').value.trim();
+    if (!otherVal || otherVal !== val) return;
+    if (isPassport) dup = true;
+    else if (!otherPass && !String(myPass || '').trim()) dup = true;
   });
   if (dup) {
     alert('⚠️ ' + (isPassport ? 'رقم الجواز' : 'الاسم') + ' "' + val + '" مكرر داخل هذه الرحلة');
@@ -14784,15 +14848,27 @@ function addPilgrimRow() {
 }
 
 // يكشف التكرار داخل الكشف (نفس الجواز أو نفس الاسم في صفّين) — يُستدعى قبل الحفظ ليمنع الازدواج
+// 🛂 (V4.155) المكرَّر الحقيقي هو تكرار رقم الجواز فقط — يجوز تكرار الاسم ما دام الجواز مختلفاً
+// (معتمر جدَّد جوازه، أو تشابه أسماء). الاسم المكرَّر بلا جواز لصفّين يبقى مانعاً لتعذُّر التمييز.
 function _findKashfDuplicates() {
-  var seenP = {}, seenN = {}, dups = [];
+  var seenP = {}, seenNoPass = {}, dups = [];
   document.querySelectorAll('#pilgrimsTableBody .pilgrim-row').forEach(function(tr) {
     var p = tr.querySelector('.p-passport').value.trim();
     var n = tr.querySelector('.p-name').value.trim();
     if (p) { if (seenP[p]) dups.push('رقم الجواز ' + p + ' (' + n + ')'); else seenP[p] = true; }
-    if (n) { if (seenN[n]) dups.push('الاسم ' + n); else seenN[n] = true; }
+    else if (n) { if (seenNoPass[n]) dups.push('الاسم ' + n + ' (مكرر بلا رقم جواز يميّزه)'); else seenNoPass[n] = true; }
   });
   return dups;
+}
+// 🧾 (V4.155) صفوف الكشف التي بلا اسم عميل — العميل حقل إلزامي بكشف الرحلة والسجل العام
+function _findKashfNoClient() {
+  var out = [];
+  document.querySelectorAll('#pilgrimsTableBody .pilgrim-row').forEach(function(tr, i) {
+    var n = (tr.querySelector('.p-name') || {}).value;
+    var c = (tr.querySelector('.p-client') || {}).value;
+    if (String(n || '').trim() && !String(c || '').trim()) out.push('صف ' + (i + 1) + ': ' + String(n).trim());
+  });
+  return out;
 }
 
 // 📊 إحصائية العملاء أسفل كشف الرحلة: لكل عميل — الإجمالي/رجال/سيدات/أطفال ورضّع + توزيعه على كل فندق
@@ -15413,6 +15489,17 @@ function savePilgrimsFromTable(btn) {
       icon: '⚠️', title: 'تكرار داخل الكشف',
       message: 'يوجد معتمرون مكرّرون في هذا الكشف ويجب حذف المكرر قبل الحفظ:\n' + kdups.join('\n'),
       buttons: [{ label: 'حسناً — سأصحّح', class: 'btn-warning' }]
+    });
+    return;
+  }
+  // 🧾 (V4.155) اسم العميل حقل إلزامي — الحفظ يتوقف حتى يُسجَّل عميل لكل معتمر بالكشف
+  var noClient = _findKashfNoClient();
+  if (noClient.length) {
+    showElegantConfirm({
+      icon: '🧾', title: 'اسم العميل مطلوب',
+      message: 'لا يمكن حفظ معتمر بلا اسم عميل. أكمِل العميل لهذه الصفوف (' + noClient.length + '):\n' +
+        noClient.slice(0, 12).join('\n') + (noClient.length > 12 ? '\n…' : ''),
+      buttons: [{ label: 'حسناً — سأكمل العميل', class: 'btn-warning' }]
     });
     return;
   }
@@ -37651,6 +37738,9 @@ function vzApplySavedFile_(res) {
   (VZ.files || []).forEach(function (x, ix) { if (x.id === f.id) i = ix; });
   if (i >= 0) VZ.files[i] = f; else VZ.files.push(f);
   VZ.selId = f.id;
+  // 🛂 (V4.155) روابط الرحلات بالمجموعات مخبَّأة بالذاكرة لشاشتي الرحلات والسجل العام — إبطالها
+  // هنا يجعل شارة "التأشيرات" بجوار اسم الرحلة تعكس الربط الجديد فور فتح تلك الشاشة
+  window._vzTripLinks = null;
   vzRender();
   vzRefreshSoon_();
 }
@@ -38363,6 +38453,11 @@ function vzFormRender() {
       '<div class="col-md-4 vz-fld"><label>الوكيل السعودي</label><input list="vzAgentsDL" autocomplete="off" value="' + vzEsc(d.agent) + '" oninput="vzSet(\'agent\',this.value)" onchange="vzSet(\'agent\',this.value);vzSetPrice()" placeholder="ابحث بالاسم…"></div>' +
       '<div class="col-md-5 vz-fld"><label>الرحلة المرتبطة</label><input list="vzTripsDL" id="vzfTrip" autocomplete="off" value="' + vzEsc(d.tripName) + '" oninput="vzSet(\'tripName\',this.value)" onchange="vzSet(\'tripName\',this.value);vzTripChanged()" placeholder="ابحث باسم الرحلة…"></div>' +
       '<div class="col-md-3 vz-fld"><label>عدد المجموعة</label><input id="vzfCount" value="' + vzEsc(d.visaCount) + '" oninput="vzSet(\'visaCount\',this.value,true)"></div>' +
+      // 🧳 (V4.155) رحلات إضافية: المجموعة الواحدة قد تجمع معتمرين من أكثر من رحلة/عميل — تُكتب هنا
+      // مفصولة بفاصلة، وتُجلَب أسماء معتمريها جميعاً مع الرحلة الأساسية للاختيار منها بنفس الآلية
+      '<div class="col-md-8 vz-fld"><label>رحلات إضافية مرتبطة (اختياري — افصل بفاصلة)</label>' +
+        '<input list="vzTripsDL" id="vzfExtraTrips" autocomplete="off" value="' + vzEsc(d.extraTrips || '') + '" ' +
+        'oninput="vzSet(\'extraTrips\',this.value)" onchange="vzSet(\'extraTrips\',this.value);vzTripChanged()" placeholder="مثال: رحلة ٢٠ رمضان، رحلة ٢٥ رمضان"></div>' +
       '<div class="col-12 vz-fld"><label>ملاحظات</label><input value="' + vzEsc(d.notes) + '" oninput="vzSet(\'notes\',this.value)" placeholder="أي ملاحظات على المجموعة"></div>' +
     '</div></div>' +
     '<div class="vz-sec"><div class="vz-sec-h">🧾 العملاء داخل المجموعة <span id="vzBdChip"></span></div>' +
@@ -38627,29 +38722,51 @@ function vzTripChanged() {
   vzSetPrice();
   vzFormRender();
 }
+// 🧳 (V4.155) كل رحلات المجموعة: الأساسية + الإضافية (نفس منطق _vzTripsOf_ بالخادم)
+function vzTripsOfDraft_(d) {
+  var out = [], seen = {};
+  [mfStr(d && d.tripName)].concat(mfStr(d && d.extraTrips).split(/[،,]/)).forEach(function (t) {
+    t = mfStr(t); if (!t || seen[t]) return; seen[t] = 1; out.push(t);
+  });
+  return out;
+}
 function vzEnsurePick() {
-  var d = VZ._draft; if (!mfStr(d.tripName)) return;
-  if (VZ._pick && VZ._pick.trip === mfStr(d.tripName)) { vzPickRender(); return; }
+  var d = VZ._draft; var trips = vzTripsOfDraft_(d); if (!trips.length) return;
+  if (VZ._pick && VZ._pick.trip === trips.join('|')) { vzPickRender(); return; }
   if (VZ._pickLoading) return;
   vzPullPilgrims(true);
 }
 function vzPullPilgrims(quiet) {
-  var d = VZ._draft; if (!mfStr(d.tripName)) { if (!quiet) _showPopup('اربط القيد برحلة أولاً', 'error'); return; }
+  var d = VZ._draft, trips = vzTripsOfDraft_(d);
+  if (!trips.length) { if (!quiet) _showPopup('اربط القيد برحلة أولاً', 'error'); return; }
   // ⚠️ (V4.144) نحمّل روابط مجموعات التأشيرات بالرحلات لو لم تُحمَّل بعد — تلزم لتمييز المعتمرين
   // المُرسَلين من قبل ضمن مجموعة أخرى لنفس الرحلة
   if (!window._vzTripLinks && typeof _vzLoadTripLinks_ === 'function') _vzLoadTripLinks_();
   VZ._pickLoading = true;
-  var box = document.getElementById('vzPickBox'); if (box) box.innerHTML = '<div class="text-muted small p-2">⏳ جاري تحميل معتمري الرحلة…</div>';
-  google.script.run
-    .withSuccessHandler(function (list) {
-      VZ._pickLoading = false;
-      VZ._pick = { trip: mfStr(d.tripName), list: (list || []), sel: {} };
-      (d.selected || []).forEach(function (k) { VZ._pick.sel[k] = true; });
-      if (!quiet && !mfNum(d.visaCount)) VZ._pick.list.forEach(function (p, i) { VZ._pick.sel[vzPickKey(p, i)] = true; });
-      vzPickRender();
-    })
-    .withFailureHandler(function (e) { VZ._pickLoading = false; if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
-    .getTripPilgrims(window.authToken, d.tripName);
+  var box = document.getElementById('vzPickBox');
+  if (box) box.innerHTML = '<div class="text-muted small p-2">⏳ جاري تحميل معتمري ' + (trips.length > 1 ? (trips.length + ' رحلات') : 'الرحلة') + '…</div>';
+  // 🧳 (V4.155) الجلب من كل الرحلات المربوطة ودمجها في قائمة واحدة، مع وسم كل معتمر برحلته
+  var merged = [], done = 0, failed = null;
+  trips.forEach(function (tn, ti) {
+    google.script.run
+      .withSuccessHandler(function (list) {
+        (list || []).forEach(function (p) { p._trip = tn; merged.push(p); });
+        if (++done === trips.length) finish();
+      })
+      .withFailureHandler(function (e) { failed = e; if (++done === trips.length) finish(); })
+      .getTripPilgrims(window.authToken, tn);
+  });
+  function finish() {
+    VZ._pickLoading = false;
+    if (!merged.length && failed) {
+      if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + vzEsc(failed && failed.message ? failed.message : failed) + '</div>';
+      return;
+    }
+    VZ._pick = { trip: trips.join('|'), trips: trips, list: merged, sel: {} };
+    (d.selected || []).forEach(function (k) { VZ._pick.sel[k] = true; });
+    if (!quiet && !mfNum(d.visaCount)) VZ._pick.list.forEach(function (p, i) { VZ._pick.sel[vzPickKey(p, i)] = true; });
+    vzPickRender();
+  }
 }
 function vzPickKey(p, i) { return mfStr(p.passport || p.passportNo) || ('#' + i + '_' + mfStr(p.name)); }
 function vzPickIsInfant(p) { return String((p && p.type) || '').indexOf('رضيع') >= 0; }
@@ -38686,7 +38803,7 @@ function vzPickRender() {
   P.list.forEach(function (p, i) { var c = vzPickClientOf(p); if (!groups[c]) { groups[c] = []; order.push(c); } groups[c].push({ p: p, i: i, k: vzPickKey(p, i) }); });
   var sel = Object.keys(P.sel).filter(function (k) { return P.sel[k]; });
   var h = '<div class="vz-bar" style="border-radius:10px;"><div class="d-flex align-items-center gap-2 flex-wrap mb-1">' +
-    '<b style="font-size:12px;color:#0f4c4c;">👥 معتمرو الرحلة: ' + P.list.length + '</b>' +
+    '<b style="font-size:12px;color:#0f4c4c;">👥 معتمرو ' + ((P.trips || []).length > 1 ? ((P.trips.length) + ' رحلات مربوطة') : 'الرحلة') + ': ' + P.list.length + '</b>' +
     '<span class="small text-muted">مختار: ' + sel.length + '</span>' +
     '<button class="vz-btn sm" onclick="vzPickAll(true)">تحديد الكل</button>' +
     '<button class="vz-btn sm" onclick="vzPickAll(false)">إفراغ</button>' +
@@ -38705,7 +38822,8 @@ function vzPickRender() {
         '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="vzPickOne(\'' + vzJs(r.k) + '\',this.checked,' + (already ? ('\'' + vzJs(already.ref || ('#' + already.seq)) + '\'') : 'null') + ')">' +
         '<span style="flex:1;">' + vzEsc(r.p.name || ('معتمر ' + (r.i + 1))) + (inf ? ' <span class="vz-badge y" style="font-size:8px;">👶</span>' : '') +
         (already ? ' <span class="vz-badge r" style="font-size:8px;" title="مُرسَل من قبل ضمن مجموعة ' + vzEsc(already.ref || ('#' + already.seq)) + '">⚠️ مجموعة ' + vzEsc(already.ref || ('#' + already.seq)) + '</span>' : '') +
-        '<div style="font-size:9px;color:#94a3b8;" class="vz-latin">' + vzEsc(r.p.passport || '') + '</div></span></label>';
+        '<div style="font-size:9px;color:#94a3b8;"><span class="vz-latin">' + vzEsc(r.p.passport || '') + '</span>' +
+        ((P.trips || []).length > 1 && r.p._trip ? ' · 🧳 ' + vzEsc(r.p._trip) : '') + '</div></span></label>';
     });
     h += '</div></div>';
   });
