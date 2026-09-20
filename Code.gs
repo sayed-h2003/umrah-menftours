@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.161";
+var APP_VERSION = "4.162";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -10872,6 +10872,7 @@ function runAdminSetupAction(authToken, actionName) {
     'clearAllCacheManual': { fn: clearAllCacheManual, label: 'مسح الذاكرة المؤقتة (Cache)' },
     'verifyMyGeminiKey': { fn: verifyMyGeminiKey, label: 'التحقق من صلاحية مفتاح Gemini' },
     'setupTelegramWebhook': { fn: setupTelegramWebhook, label: 'تفعيل Webhook تيليجرام التفاعلي' },
+    'setTelegramBotCommands': { fn: setTelegramBotCommands, label: 'تثبيت قائمة الأوامر (زر Menu) بالبوت' },
     'removeTelegramWebhook': { fn: removeTelegramWebhook, label: 'إلغاء Webhook تيليجرام' },
     'getTelegramWebhookInfo': { fn: getTelegramWebhookInfo, label: 'التحقق من حالة Webhook تيليجرام' },
     'addBusPriceColumns': { fn: addBusPriceColumns_, label: 'إضافة عمودي سعر الباص وقيمة التشغيلة' },
@@ -11243,6 +11244,40 @@ function setupTelegramWebhook() {
     } else {
       return "❌ فشل التفعيل: " + (result.description || JSON.stringify(result));
     }
+  } catch (e) {
+    return "❌ خطأ في الاتصال: " + e.message;
+  }
+}
+
+/* 📋 (V4.162) تثبيت قائمة أوامر البوت (زر Menu بجوار مربع الكتابة، كما في بوتات تليجرام
+   الجاهزة) — يستدعي setMyCommands بقائمة الأوامر المدعومة فعلياً بـdoPost، ثم setChatMenuButton
+   لضمان ظهور الزر بشكله "Menu" الثابت بدل أيقونة "/" الافتراضية. يُشغَّل مرة واحدة من الإعدادات. */
+function setTelegramBotCommands() {
+  var token = TELEGRAM_CONFIG.token;
+  if (!token) return "❌ لم يتم ضبط توكن بوت تيليجرام في الإعدادات";
+
+  var commands = [
+    { command: 'start', description: '🏠 فتح القائمة الرئيسية' },
+    { command: 'menu', description: '📋 عرض قائمة الأوامر التفاعلية (تحركات/وصول/بحث)' },
+    { command: 'id', description: '🆔 عرض معرّف هذه المحادثة (للإعدادات)' }
+  ];
+
+  try {
+    var respCmd = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/setMyCommands', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      payload: JSON.stringify({ commands: commands })
+    });
+    var resultCmd = JSON.parse(respCmd.getContentText());
+    if (!resultCmd.ok) return "❌ فشل تثبيت قائمة الأوامر: " + (resultCmd.description || JSON.stringify(resultCmd));
+
+    var respBtn = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/setChatMenuButton', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      payload: JSON.stringify({ menu_button: { type: 'commands' } })
+    });
+    var resultBtn = JSON.parse(respBtn.getContentText());
+    if (!resultBtn.ok) return "⚠️ ثُبِّتت الأوامر لكن تعذّر ضبط زر القائمة: " + (resultBtn.description || JSON.stringify(resultBtn));
+
+    return "✅ تم تثبيت قائمة الأوامر (زر Menu) بنجاح — افتح الجروب وستجد الزر بجوار مربع الكتابة كما بالصورة المرفقة.";
   } catch (e) {
     return "❌ خطأ في الاتصال: " + e.message;
   }
