@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.158";
+var APP_VERSION = "4.159";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -115,12 +115,12 @@ try {
     // بناء جزء الصفحة من نفس القالب الموحّد المستخدم في المشاركة أيضاً (مصدر واحد فقط للتصميم)
     template.reportHtml = buildBookingNoticeHtml_(data, true);
 
-    // إرفاق التذكرة (إن وجدت) بنفس الطريقة المستخدمة في ملف المشاركة تماماً
+    // 📎 (V4.159) الملحقات كلها (التذكرة ← مستند المستضيف ← أسماء المعتمرين ← المرفقات) من نفس
+    // المصدر الموحَّد المستخدَم بملف المشاركة — كانت الطباعة تُرفق التذكرة وحدها
     try {
-      var ticketSection = buildTicketPdfSection_(data.ticketUrl);
-      if (ticketSection) template.reportHtml += ticketSection;
+      template.reportHtml += buildBookingExtraSections_(data);
     } catch(tErr) {
-      Logger.log('Print ticket embed failed: ' + tErr);
+      Logger.log('Print extras embed failed: ' + tErr);
     }
 
     var safeDate =
@@ -10019,6 +10019,45 @@ function buildPilgrimNamesPdfSection_(rows) {
          '</div>';
 }
 
+/* 📎 (V4.159) كل الصفحات الملحقة بمستند الإشعار في مصدر واحد: التذكرة ← مستند المستضيف ←
+   أسماء المعتمرين ← المرفقات الإضافية. كانت كل جهة إخراج تجمّع ملحقاتها بنفسها (الطباعة تُرفق
+   التذكرة وحدها، والمشاركة تُرفق الأربعة، والصورة لا تُرفق شيئاً)، فظهرت المرفقات وكشف الأسماء
+   في مسار المشاركة فقط. توحيدها هنا يضمن أن أي مسار إخراج يعرض نفس الملحقات بنفس الترتيب. */
+function buildBookingExtraSections_(data) {
+  data = data || {};
+  var out = '';
+  try {
+    var t = buildTicketPdfSection_(data.ticketUrl);
+    if (t) out += t;
+  } catch (eTk) { Logger.log('تعذر إرفاق التذكرة: ' + eTk); }
+  // 🏠 (V4.10) مستند بيانات المستضيف (سكن استضافة عبر البوت) — يُرفق بعد التذكرة تماماً
+  try {
+    var hostMatch = String(data.notes || '').match(/مستند المستضيف:\s*(https?:\/\/\S+)/);
+    if (hostMatch) {
+      var h = buildTicketPdfSection_(hostMatch[1], '🏠 مستند بيانات المستضيف');
+      if (h) out += h;
+    }
+  } catch (eHs) { Logger.log('تعذر إرفاق مستند المستضيف: ' + eHs); }
+  // 👥 (V4.157) صفحة أسماء المعتمرين — فقط عند تفعيل خانة «إرفاق أسماء المعتمرين» بالإشعار
+  if (String(data.attachNames || '') === 'نعم') {
+    try {
+      var n = buildPilgrimNamesPdfSection_(_bkPilgrimNamesRows_(data.visaGroups || ''));
+      if (n) out += n;
+    } catch (eNm) { Logger.log('تعذر إرفاق صفحة الأسماء: ' + eNm); }
+  }
+  // 📎 المرفقات الإضافية (صور/PDF) بنفس ترتيب رفعها
+  try {
+    var atts = typeof data.attachmentsJson === 'string'
+      ? JSON.parse(data.attachmentsJson || '[]') : (data.attachmentsJson || []);
+    (Array.isArray(atts) ? atts : []).forEach(function (att) {
+      if (!att || !att.url) return;
+      var a = buildTicketPdfSection_(att.url, 'مرفق: ' + (att.name || ''));
+      if (a) out += a;
+    });
+  } catch (eAt) { Logger.log('تعذر إرفاق المرفقات الإضافية: ' + eAt); }
+  return out;
+}
+
 /**
  * ينشئ ملف PDF مؤقت للمشاركة (واتساب/بريد/أي وسيلة) من نفس قالب الطباعة (buildBookingNoticeHtml_) + التذكرة المرفقة.
  * 📞 يُستدعى من: secureShareBookingFile() في index_web.html (زر مشاركة الواتساب في جدول الحجوزات)
@@ -10054,37 +10093,10 @@ function generateBookingPdfForShare(authToken, bookingId) {
   // buildBookingNoticeHtml_ يرجع مستند HTML كامل (نفس تصميم الطباعة القديم بالظبط)
   var fullHtml = buildBookingNoticeHtml_(data);
 
-  // إرفاق التذكرة كصفحة تالية (إن وجدت) — بحقنها داخل الـ padding wrapper نفسه قبل </div></body>
-  // بدل خارجه، حتى تحصل على نفس الهامش الجانبي والداخلي
-  var ticketSection = buildTicketPdfSection_(data.ticketUrl);
-  if (ticketSection) {
-    fullHtml = fullHtml.replace('</div></body>', ticketSection + '</div></body>');
-  }
-
-  // 🏠 (V4.10) مستند بيانات المستضيف (سكن استضافة عبر البوت): يُرفق كصفحة بعد التذكرة تمامًا
-  var hostMatch = String(data.notes || '').match(/مستند المستضيف:\s*(https?:\/\/\S+)/);
-  if (hostMatch) {
-    var hostSection = buildTicketPdfSection_(hostMatch[1], '🏠 مستند بيانات المستضيف');
-    if (hostSection) fullHtml = fullHtml.replace('</div></body>', hostSection + '</div></body>');
-  }
-
-  // 👥 (V4.157) صفحة أسماء المعتمرين ثم المرفقات الإضافية — بنفس ترتيب الحقن (كل واحدة قبل
-  // </div></body> فتظهر بعد سابقتها): التذكرة ← الأسماء ← المرفقات
-  if (String(data.attachNames || '') === 'نعم') {
-    try {
-      var namesSection = buildPilgrimNamesPdfSection_(_bkPilgrimNamesRows_(data.visaGroups || ''));
-      if (namesSection) fullHtml = fullHtml.replace('</div></body>', namesSection + '</div></body>');
-    } catch (eNm) { Logger.log('تعذر إرفاق صفحة الأسماء: ' + eNm); }
-  }
-
-  try {
-    var atts = typeof data.attachmentsJson === 'string' ? JSON.parse(data.attachmentsJson || '[]') : (data.attachmentsJson || []);
-    (Array.isArray(atts) ? atts : []).forEach(function (att) {
-      if (!att || !att.url) return;
-      var attSection = buildTicketPdfSection_(att.url, 'مرفق: ' + (att.name || ''));
-      if (attSection) fullHtml = fullHtml.replace('</div></body>', attSection + '</div></body>');
-    });
-  } catch (eAt) { Logger.log('تعذر إرفاق المرفقات الإضافية: ' + eAt); }
+  // 📎 (V4.159) كل الصفحات الملحقة من مصدر واحد — تُحقَن داخل الـ padding wrapper نفسه قبل
+  // </div></body> فتأخذ نفس الهامش الجانبي والداخلي للمستند
+  var extras = buildBookingExtraSections_(data);
+  if (extras) fullHtml = fullHtml.replace('</div></body>', extras + '</div></body>');
 
   var safeDate = (data.arrivalDate || '').toString().replace(/\//g, '-');
   var fileName = (data.company || 'شركة').toString().replace(/[\\/:*?"<>|]/g, '-').trim() +
@@ -10117,6 +10129,9 @@ function getBookingNoticeHtmlForImage(authToken, bookingId) {
     throw new Error('لا يمكن تصدير صورة لإشعار غير معتمد. يرجى اعتماد الإشعار أولاً.');
   }
   var fullHtml = buildBookingNoticeHtml_(data);
+  // 📎 (V4.159) صورة الإشعار تعرض نفس ملحقات ملف الطباعة/المشاركة (التذكرة والأسماء والمرفقات)
+  var extrasImg = buildBookingExtraSections_(data);
+  if (extrasImg) fullHtml = fullHtml.replace('</div></body>', extrasImg + '</div></body>');
   var safeDate = (data.arrivalDate || '').toString().replace(/\//g, '-');
   var fileName = (data.company || 'شركة').toString().replace(/[\\/:*?"<>|]/g, '-').trim() +
     ' - اشعار وصول رقم ' + data.id + ' - ' + safeDate;

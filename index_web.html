@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.158 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.159 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.158)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.159)', diag);
 }, 6000);
 </script>
 
@@ -1497,7 +1497,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.158</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.159</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6729,7 +6729,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.158";
+var CLIENT_APP_VERSION = "4.159";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -28958,10 +28958,17 @@ function selectBookingRow(id, evt) {
             <p class="text-muted mb-0" style="white-space: pre-line;">${b.notes || 'لا توجد ملاحظات إضافية مسجلة على هذا الإشعار.'}</p>
           </div>
         </div>
+
+        <!-- 📎 (V4.159) المرفقات والربط وكشف الأسماء — نفس ما يظهر بآخر ملف الإشعار -->
+        <div class="col-md-12">
+          <div class="detail-card mb-0" id="bkDetailAttachCard">${_bkDetailAttachHtml_(b)}</div>
+        </div>
       </div>
     `;
-    
+
     document.getElementById('modalContentBody').innerHTML = html;
+    // 👥 كشف الأسماء يُجلب من السيرفر بعد فتح النافذة (يحتاج قراءة شيت المعتمرين)
+    _bkDetailLoadNames_(b);
     
     var editBtn = document.getElementById('modalEditBtn');
     if(editBtn) {
@@ -29337,6 +29344,54 @@ function _fillSupervisors(list, primaryName, primaryRole) {
   } else if (supEl) {
     supEl.value = primaryName || '';
   }
+}
+
+/* 📎 (V4.159) بطاقة المرفقات والربط وكشف الأسماء داخل نافذة «تفاصيل الإشعار» — نفس ما يُلحَق
+   بآخر ملف الإشعار (PDF/طباعة/صورة)، فيراه المستخدم قبل الطباعة بلا فتح نموذج التعديل. */
+function _bkDetailAttachHtml_(b) {
+  var atts = [];
+  try { atts = typeof b.attachmentsJson === 'string' ? JSON.parse(b.attachmentsJson || '[]') : (b.attachmentsJson || []); }
+  catch (e) { atts = []; }
+  if (!Array.isArray(atts)) atts = [];
+  var groups = String(b.visaGroups || '').trim();
+  var mf = String(b.mfFiles || '').trim();
+  var wantNames = String(b.attachNames || '') === 'نعم';
+  var h = '<div class="detail-title">📎 المرفقات والربط وكشف الأسماء</div>';
+  h += '<div class="small mb-2">' +
+    '<b>🛂 مجموعات التأشيرات:</b> ' + (groups ? escapeHtml_(groups) : '<span class="text-muted">—</span>') +
+    ' &nbsp;|&nbsp; <b>🏛️ ملفات الوزارة:</b> ' + (mf ? escapeHtml_(mf) : '<span class="text-muted">—</span>') + '</div>';
+  h += '<div class="small mb-2"><b>📄 مرفقات إضافية:</b> ' +
+    (atts.length ? atts.map(function (a) {
+      return '<a href="' + escapeHtml_(a.url) + '" target="_blank" class="badge bg-light text-dark border text-decoration-none me-1">📄 ' +
+        escapeHtml_(a.name || 'مرفق') + '</a>';
+    }).join('') : '<span class="text-muted">لا توجد مرفقات</span>') +
+    '<div class="text-muted" style="font-size:11px;">تظهر كصفحات بآخر ملف الإشعار بعد صورة التذكرة.</div></div>';
+  h += '<div id="bkDetailNamesBox" class="small">' +
+    (wantNames ? '<span class="text-muted">⏳ جاري تحميل كشف الأسماء…</span>'
+               : '<span class="text-muted">👥 كشف أسماء المعتمرين غير مُفعَّل لهذا الإشعار.</span>') + '</div>';
+  return h;
+}
+function _bkDetailLoadNames_(b) {
+  if (String(b.attachNames || '') !== 'نعم') return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var box = document.getElementById('bkDetailNamesBox'); if (!box) return;
+      var rows = (res && res.rows) || [];
+      if (!rows.length) { box.innerHTML = '<span class="text-muted">👥 لا توجد أسماء مرتبطة بهذا الإشعار.</span>'; return; }
+      box.innerHTML = '<b>👥 كشف أسماء المعتمرين (' + rows.length + ')</b>' +
+        '<div class="table-responsive mt-1" style="max-height:240px;overflow:auto;">' +
+        '<table class="table table-sm table-bordered mb-0" style="font-size:11.5px;background:#fff;">' +
+        '<thead class="table-light"><tr><th style="width:42px;">م</th><th>المجموعة</th><th>الاسم</th><th>رقم الجواز</th></tr></thead><tbody>' +
+        rows.map(function (r) {
+          return '<tr><td>' + r.seq + '</td><td>' + escapeHtml_(r.group || '') + '</td><td class="text-end">' +
+            escapeHtml_(r.name || '') + '</td><td dir="ltr">' + escapeHtml_(r.passport || '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    })
+    .withFailureHandler(function () {
+      var box = document.getElementById('bkDetailNamesBox');
+      if (box) box.innerHTML = '<span class="text-danger">تعذّر تحميل كشف الأسماء.</span>';
+    })
+    .getBookingPilgrimNames(window.authToken, String(b.visaGroups || ''));
 }
 
 /* ===== 📎 (V4.157) مرفقات إشعار الوصول + الربط اليدوي بالمجموعات وملفات الوزارة ===== */
