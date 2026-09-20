@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.162";
+var APP_VERSION = "4.163";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -7708,7 +7708,7 @@ function doPost(e) {
           if (!_srchPerson) {
             sendTelegramMessageDirect(chatId, "⚠️ انتهت صلاحية نتائج هذا البحث. أعد البحث من جديد.");
           } else {
-            sendTelegramMessageDirect(chatId, _tgPilgrimDetailMsg_(_srchPerson));
+            sendTelegramMessageDirect(chatId, _tgPilgrimDetailMsg_(_srchPerson, cq.from));
           }
         } catch (srchErr2) {
           sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء عرض بيانات المعتمر:</b>\n<code>" + srchErr2.toString() + "</code>");
@@ -7718,10 +7718,10 @@ function doPost(e) {
 
       // تنفيذ جلب التقارير مع حماية كشف الأخطاء
       try {
-        if (callbackData === 'moves_today')      sendTelegramArrivalAlerts_Custom('today', chatId);
-        if (callbackData === 'moves_tomorrow')   sendTelegramArrivalAlerts_Custom('tomorrow', chatId);
-        if (callbackData === 'arrival_today')    sendTelegramBookings_Custom('today', chatId);
-        if (callbackData === 'arrival_tomorrow') sendTelegramBookings_Custom('tomorrow', chatId);
+        if (callbackData === 'moves_today')      sendTelegramArrivalAlerts_Custom('today', chatId, cq.from);
+        if (callbackData === 'moves_tomorrow')   sendTelegramArrivalAlerts_Custom('tomorrow', chatId, cq.from);
+        if (callbackData === 'arrival_today')    sendTelegramBookings_Custom('today', chatId, cq.from);
+        if (callbackData === 'arrival_tomorrow') sendTelegramBookings_Custom('tomorrow', chatId, cq.from);
       } catch (innerError) {
         sendTelegramMessageDirect(chatId, "❌ <b>فشل جلب البيانات بسبب خطأ داخلي:</b>\n<code>" + innerError.toString() + "</code>");
       }
@@ -7755,7 +7755,7 @@ function doPost(e) {
     if (srchDirect) {
       try {
         if (msg.from) _tgSrchClearState_(chatId, msg.from.id); // إلغاء أي محادثة بحث معلَّقة لهذا المستخدم
-        _tgRunSearch_(chatId, srchDirect[1]);
+        _tgRunSearch_(chatId, srchDirect[1], msg.from);
       } catch (srchErr3) {
         sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث:</b>\n<code>" + srchErr3.toString() + "</code>");
       }
@@ -7770,7 +7770,7 @@ function doPost(e) {
       if (_srchFileId) {
         // 📸 صورة/ملف: لا نُنهي حالة الانتظار إلا بعد اكتمال الاستخلاص (فقد تصل الصورة كرسالة منفصلة)
         try {
-          _tgRunSearchByImage_(chatId, _srchFileId);
+          _tgRunSearchByImage_(chatId, _srchFileId, msg.from);
         } catch (srchImgErr) {
           sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء استخلاص الصورة:</b>\n<code>" + srchImgErr.toString() + "</code>");
         }
@@ -7780,7 +7780,7 @@ function doPost(e) {
       if (!text) return; // رسالة بلا نص ولا صورة (ملصق مثلاً) — تجاهلها وابقَ بانتظار الرد الحقيقي
       _tgSrchClearState_(chatId, msg.from.id);
       try {
-        _tgRunSearch_(chatId, text);
+        _tgRunSearch_(chatId, text, msg.from);
       } catch (srchErr4) {
         sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث:</b>\n<code>" + srchErr4.toString() + "</code>");
       }
@@ -7792,7 +7792,7 @@ function doPost(e) {
       if (!text) return;
       _tgSupClearState_(chatId, msg.from.id);
       try {
-        _tgSupRunMatch_(chatId, text);
+        _tgSupRunMatch_(chatId, text, msg.from);
       } catch (supErr) {
         sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث عن المشرف:</b>\n<code>" + supErr.toString() + "</code>");
       }
@@ -7809,7 +7809,7 @@ function doPost(e) {
           _tgbnSend_(chatId, "⚠️ صيغة تاريخ غير صحيحة. اكتب مثل <code>12/9</code> أو <code>12/9/2026</code>، أو ألغِ الطلب.", [[{ text: '✖️ إلغاء', callback_data: 'mvq_cancel' }]]);
         } else {
           _tgMoveClearState_(chatId, msg.from.id);
-          sendTelegramMovementsByDate_(mvDate, chatId);
+          sendTelegramMovementsByDate_(mvDate, chatId, msg.from);
         }
       } catch (mvErr) {
         _tgMoveClearState_(chatId, msg.from.id);
@@ -7893,7 +7893,7 @@ function sendTelegramMenu(chatId) {
 }
 
 // ⚡ دالة مرنة لجلب تحركات أي يوم (معدلة بصيغة HTML)
-function sendTelegramArrivalAlerts_Custom(type, chatId) {
+function sendTelegramArrivalAlerts_Custom(type, chatId, from) {
   var movements = _tgAlertableMovements_(getAllMovements());
   var now = new Date();
   var targetStr = "";
@@ -7916,7 +7916,7 @@ function sendTelegramArrivalAlerts_Custom(type, chatId) {
     return m.movementDate && String(m.movementDate).trim() === targetStr; 
   });
 
-  var msg = "🚌 <b>" + title + " (" + targetStr + ")</b> 📋 العدد: (" + filtered.length + ")\n━━━━━━━━━━━━━━━━━━\n";
+  var msg = "🚌 <b>" + title + " (" + targetStr + ")</b> 📋 العدد: (" + filtered.length + ")\n" + _tgReqTag_(from) + "━━━━━━━━━━━━━━━━━━\n";
   if(filtered.length === 0) { 
     msg += "⚪ لا توجد تحركات مجدولة لهذا اليوم."; 
   } else {
@@ -7932,7 +7932,7 @@ function sendTelegramArrivalAlerts_Custom(type, chatId) {
 }
 
 // ⚡ دالة مرنة لجلب وصولات المعتمرين (معدلة بصيغة HTML)
-function sendTelegramBookings_Custom(type, chatId) {
+function sendTelegramBookings_Custom(type, chatId, from) {
   var bookings = getAllBookings();
   var now = new Date();
   var targetStr = "";
@@ -7955,7 +7955,7 @@ function sendTelegramBookings_Custom(type, chatId) {
     return b.arrivalDate && String(b.arrivalDate).trim() === targetStr; 
   });
 
-  var msg = "🛬 <b>" + title + " (" + targetStr + ")</b> 📋 العدد: (" + filtered.length + ")\n━━━━━━━━━━━━━━━━━━\n";
+  var msg = "🛬 <b>" + title + " (" + targetStr + ")</b> 📋 العدد: (" + filtered.length + ")\n" + _tgReqTag_(from) + "━━━━━━━━━━━━━━━━━━\n";
   if(filtered.length === 0) { 
     msg += "⚪ لا توجد وصولات مجدولة لهذا اليوم."; 
   } else {
@@ -8886,6 +8886,11 @@ function _tgbnUserLabel_(from) {
   if (!from) return 'غير معروف';
   if (from.username) return '@' + from.username;
   return ((from.first_name || '') + ' ' + (from.last_name || '')).trim() || ('ID:' + from.id);
+}
+// 👤 (V4.163) سطر «طلب الأمر: <الاسم>» يُلصَق أعلى أي رد على زر أو أمر تليجرام — نفس مُسمِّي
+// المستخدم المُستخدَم أصلاً بسجل التعديلات (_tgbnUserLabel_)، فلا تكرار منطق تسمية
+function _tgReqTag_(from) {
+  return '👤 <b>طلب الأمر:</b> ' + _tgbnEsc_(_tgbnUserLabel_(from)) + '\n';
 }
 
 // ---------- أدوات تحقق وتطبيع ----------
@@ -21922,7 +21927,8 @@ function _tgSupPickLatest_(rows) {
   });
   return best;
 }
-function _tgSupRunMatch_(chatId, text) {
+function _tgSupRunMatch_(chatId, text, from) {
+  var reqLabel = _tgbnUserLabel_(from);
   var mobile = _tgNormMobile_((String(text).match(/(?:\+?9665|009665|05|5)\d{7,8}/) || [])[0] || '');
   // اسم المشرف = ما تبقّى بعد نزع الرقم وأي رموز
   var namePart = String(text).replace(/(?:\+?966|00966)?\d[\d\s\-]{6,}/g, ' ').replace(/\s+/g, ' ').trim();
@@ -21956,8 +21962,11 @@ function _tgSupRunMatch_(chatId, text) {
   }
   var cands = names.map(function (n) {
     var pick = _tgSupPickLatest_(byName[n]);
+    // 👤 (V4.163) اسم مُقدِّم الطلب يُخزَّن مع المرشَّح نفسه بالكاش — يظهر بالمراجعة وبرسالة التأكيد
+    // النهائية حتى لو جاء ضغط زر الاعتماد من مستخدم آخر بنفس المحادثة
     return { name: n, trip: pick.trip, departDate: pick.departDate, returnDate: pick.returnDate,
-      company: pick.company, agent: pick.agent, active: !!pick._active, oldMobile: pick.mobile || '', mobile: mobile };
+      company: pick.company, agent: pick.agent, active: !!pick._active, oldMobile: pick.mobile || '', mobile: mobile,
+      reqLabel: reqLabel };
   });
   var sid = Utilities.getUuid().replace(/-/g, '').substring(0, 8);
   CacheService.getScriptCache().put(_tgSupCandKey_(chatId, sid), JSON.stringify(cands), 600);
@@ -21971,10 +21980,11 @@ function _tgSupRunMatch_(chatId, text) {
     return [{ text: (c.active ? '🟢 ' : '') + c.name + ' — ' + (c.trip || 'بلا رحلة'), callback_data: 'supph:' + sid + ':' + i }];
   });
   rows.push([{ text: '✖️ إلغاء', callback_data: 'supphq_cancel' }]);
-  sendTelegramMessageDirect(chatId, "👥 <b>" + cands.length + " مشرفاً مطابقاً</b> — اختر الصحيح لمراجعة بياناته قبل تسجيل الرقم <code>" + mobile + "</code>:", rows);
+  sendTelegramMessageDirect(chatId, "👥 <b>" + cands.length + " مشرفاً مطابقاً</b> — اختر الصحيح لمراجعة بياناته قبل تسجيل الرقم <code>" + mobile + "</code>:\n" + _tgReqTag_(from), rows);
 }
 function _tgSupReviewMsg_(c) {
   return "📱 <b>مراجعة قبل الاعتماد</b>\n" +
+    (c.reqLabel ? ("👤 <b>طلب الأمر:</b> " + _tgbnEsc_(c.reqLabel) + "\n") : "") +
     "👤 المشرف: <b>" + _tgbnEsc_(c.name) + "</b>\n" +
     "🧳 الرحلة: <b>" + _tgbnEsc_(c.trip || '—') + "</b>" + (c.active ? " (جارية الآن)" : "") + "\n" +
     "📅 " + _tgbnEsc_(c.departDate || '—') + " ← " + _tgbnEsc_(c.returnDate || '—') + "\n" +
@@ -22016,7 +22026,8 @@ function _tgSupSaveMobile_(c) {
     SpreadsheetApp.flush();
     try { clearAllCache(); } catch (eC) {}
     logChange_('💠 بوت تليجرام', 'تسجيل جوال مشرف', c.trip, c.name, c.oldMobile || '-', c.mobile);
-    return "✅ <b>تم التسجيل</b>\n👤 " + _tgbnEsc_(c.name) + "\n🧳 " + _tgbnEsc_(c.trip) + "\n📞 <code>" + _tgbnEsc_(c.mobile) + "</code>";
+    return "✅ <b>تم التسجيل</b>\n" + (c.reqLabel ? ("👤 <b>طلب الأمر:</b> " + _tgbnEsc_(c.reqLabel) + "\n") : "") +
+      "🧑‍✈️ المشرف: " + _tgbnEsc_(c.name) + "\n🧳 " + _tgbnEsc_(c.trip) + "\n📞 <code>" + _tgbnEsc_(c.mobile) + "</code>";
   }
   return "⚠️ لم أعثر على الرحلة «" + _tgbnEsc_(c.trip) + "» بشيت الرحلات.";
 }
@@ -22190,10 +22201,10 @@ function _tgSrchLoadResult_(chatId, sid, idx) {
   return { row: row, trip: trip, active: active };
 }
 // رسالة بيانات معتمر واحد كاملة — بكل الحقول المطلوبة
-function _tgPilgrimDetailMsg_(person) {
+function _tgPilgrimDetailMsg_(person, from) {
   var r = person.row, t = person.trip || {};
   var stay = _tgCurrentStay_(r, t);
-  var msg = '🔎 <b>بيانات المعتمر</b>\n━━━━━━━━━━━━━━━━━━\n';
+  var msg = '🔎 <b>بيانات المعتمر</b>\n' + _tgReqTag_(from) + '━━━━━━━━━━━━━━━━━━\n';
   msg += '👤 <b>الاسم:</b> ' + (r.name || '—') + '\n';
   msg += '🛂 <b>رقم الجواز:</b> ' + (r.passport || '—') + '\n';
   msg += '👥 <b>العميل:</b> ' + (r.client || '—') + '\n';
@@ -22226,7 +22237,7 @@ function _tgPilgrimDetailMsg_(person) {
   return msg;
 }
 // نقطة الدخول الموحَّدة: يُشغَّل من الأمر المباشر «بحث: ...» ومن محادثة الزر معاً
-function _tgRunSearch_(chatId, query) {
+function _tgRunSearch_(chatId, query, from) {
   query = String(query || '').trim();
   if (!query) { sendTelegramMessageDirect(chatId, '⚠️ اكتب اسم المعتمر أو رقم جوازه بعد «بحث:».'); return; }
   var people = _tgSearchPilgrim_(query);
@@ -22235,7 +22246,7 @@ function _tgRunSearch_(chatId, query) {
     return;
   }
   if (people.length === 1) {
-    sendTelegramMessageDirect(chatId, _tgPilgrimDetailMsg_(people[0]));
+    sendTelegramMessageDirect(chatId, _tgPilgrimDetailMsg_(people[0], from));
     return;
   }
   if (people.length > 20) {
@@ -22253,7 +22264,7 @@ function _tgRunSearch_(chatId, query) {
   var url = "https://api.telegram.org/bot" + token + "/sendMessage";
   var payload = {
     "chat_id": chatId,
-    "text": "🔎 <b>تعدَّدت المطابقات (" + people.length + ") — اختر المعتمر المطلوب:</b>",
+    "text": "🔎 <b>تعدَّدت المطابقات (" + people.length + ") — اختر المعتمر المطلوب:</b>\n" + _tgReqTag_(from),
     "parse_mode": "HTML",
     "reply_markup": JSON.stringify({ "inline_keyboard": rows })
   };
@@ -22262,7 +22273,7 @@ function _tgRunSearch_(chatId, query) {
 /* 📸 (V4.140) بحث عن معتمر برفع صورة الجواز أو التأشيرة — يستخلص الاسم ورقم الجواز بالذكاء
    الاصطناعي (نفس محرك استخلاص الجوازات المستخدَم بشاشة الرحلات) ثم يبحث بهما تلقائياً. تدعم
    الصورة أكثر من مستند (جوازان جنباً إلى جنب) فتُجمَع نتائج البحث عن كل شخص مستخلَص معاً. */
-function _tgRunSearchByImage_(chatId, fileId) {
+function _tgRunSearchByImage_(chatId, fileId, from) {
   sendTelegramMessageDirect(chatId, '⏳ جاري استخلاص بيانات الجواز/التأشيرة من الصورة…');
   var fetched = _tgccFetchFileBase64_(TELEGRAM_CONFIG.token, fileId);
   if (!fetched) { sendTelegramMessageDirect(chatId, '❌ تعذّر تحميل الملف من تليجرام.'); return; }
@@ -22290,7 +22301,7 @@ function _tgRunSearchByImage_(chatId, fileId) {
     return;
   }
   if (found.length === 1) {
-    sendTelegramMessageDirect(chatId, extractedLine + _tgPilgrimDetailMsg_(found[0]));
+    sendTelegramMessageDirect(chatId, extractedLine + _tgPilgrimDetailMsg_(found[0], from));
     return;
   }
   if (found.length > 20) {
@@ -22303,7 +22314,7 @@ function _tgRunSearchByImage_(chatId, fileId) {
     if (label.length > 60) label = label.substring(0, 57) + '...';
     return [{ text: label, callback_data: 'srch:' + sid + ':' + i }];
   });
-  sendTelegramMessageDirect(chatId, extractedLine + '🔎 <b>تعدَّدت المطابقات (' + found.length + ') — اختر المعتمر المطلوب:</b>', rows);
+  sendTelegramMessageDirect(chatId, extractedLine + '🔎 <b>تعدَّدت المطابقات (' + found.length + ') — اختر المعتمر المطلوب:</b>\n' + _tgReqTag_(from), rows);
 }
 
 /* ==================================================================================
@@ -23818,13 +23829,13 @@ function deleteHousingAllocation(authToken, id) {
 }
 
 // يعرض كل التحركات المسجَّلة في تاريخ بعينه — نفس تنسيق أزرار «تحركات اليوم/الغد» (غير مُصفّاة)
-function sendTelegramMovementsByDate_(dateStr, chatId) {
+function sendTelegramMovementsByDate_(dateStr, chatId, from) {
   // 🔕 (V4.125) مفتاح التفعيل من قسم التنبيهات بشاشة الإعدادات
   if (!_notifEnabled_('tg_movements')) return { sent: 0, disabled: true };
   var movements = getAllMovements();
   var filtered = movements.filter(function (m) { return m.movementDate && String(m.movementDate).trim() === dateStr; });
 
-  var msg = "🚌 <b>تحركات بتاريخ (" + dateStr + ")</b> 📋 العدد: (" + filtered.length + ")\n━━━━━━━━━━━━━━━━━━\n";
+  var msg = "🚌 <b>تحركات بتاريخ (" + dateStr + ")</b> 📋 العدد: (" + filtered.length + ")\n" + _tgReqTag_(from) + "━━━━━━━━━━━━━━━━━━\n";
   if (filtered.length === 0) {
     msg += "⚪ لا توجد تحركات مسجَّلة في هذا التاريخ.";
   } else {
