@@ -80,6 +80,10 @@ function showDebugError(msg) {
 
 var bookingId = null;
 var isInvalidLink = false;
+// 📄 (V4.160) رمز الطباعة — تُطلب به بايتات مرفقات PDF (لا توجد جلسة تطبيق بهذه الصفحة)
+var _printToken_ = '';
+try { _printToken_ = <?!= JSON.stringify(printToken) ?>; } catch (e) { _printToken_ = ''; }
+window._printToken_ = _printToken_;
 
 try {
   isInvalidLink = <?!= JSON.stringify(invalidLink) ?>;
@@ -101,11 +105,92 @@ if (isInvalidLink || !bookingId) {
   var titleTag = document.querySelector('title');
   var pageTitle = titleTag ? titleTag.textContent : '';
 
-  setTimeout(function () {
-    window.focus();
-    window.print();
-  }, 1200);
+  // 📄 (V4.160) مرفقات PDF: Drive لا يُرجع صورة لغير الصفحة الأولى، فنقرأ الملف هنا ونحوّل كل
+  // صفحاته لصور عبر pdf.js مستبعدين الصفحات الفارغة، ثم نطبع. لو تعذّر ذلك تُطبع الصفحة الأولى
+  // (الصورة البديلة الموجودة أصلاً داخل الحاوية) فلا يضيع المرفق.
+  var _attEls = document.querySelectorAll('.pdf-att-sec');
+  if (!_attEls.length) { _printSoon_(1200); }
+  else { _loadPdfJs_(function (ok) { ok ? _expandAllAtt_(_attEls) : _printSoon_(600); }); }
+}
 
+function _printSoon_(ms) {
+  setTimeout(function () { window.focus(); window.print(); }, ms || 800);
+}
+function _loadPdfJs_(cb) {
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  s.onload = function () {
+    try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}
+    cb(!!window.pdfjsLib);
+  };
+  s.onerror = function () { cb(false); };
+  document.head.appendChild(s);
+}
+function _canvasBlank_(canvas) {
+  try {
+    var d = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    var total = 0, light = 0;
+    for (var i = 0; i < d.length; i += 16) {
+      total++;
+      if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) light++;
+    }
+    return total > 0 && (light / total) >= 0.999;
+  } catch (e) { return false; }
+}
+function _expandAllAtt_(els) {
+  var pending = els.length;
+  var done = function () { if (--pending <= 0) _printSoon_(500); };
+  Array.prototype.forEach.call(els, function (el) {
+    var fid = el.getAttribute('data-fid');
+    var title = el.getAttribute('data-title') || '🎫 مرفق';
+    if (!fid) { done(); return; }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success || !res.base64) { done(); return; }
+        try {
+          var bin = atob(res.base64), bytes = new Uint8Array(bin.length);
+          for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          pdfjsLib.getDocument({ data: bytes }).promise.then(function (doc) {
+            var pages = [], chain = Promise.resolve();
+            for (var p = 1; p <= doc.numPages; p++) {
+              (function (no) {
+                chain = chain.then(function () {
+                  return doc.getPage(no).then(function (page) {
+                    var vp = page.getViewport({ scale: doc.numPages > 12 ? 1.4 : 2 });
+                    var c = document.createElement('canvas');
+                    c.width = vp.width; c.height = vp.height;
+                    var ctx = c.getContext('2d');
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+                    return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
+                      if (_canvasBlank_(c)) return;
+                      pages.push({ no: no, data: c.toDataURL('image/jpeg', 0.82) });
+                    });
+                  });
+                });
+              })(p);
+            }
+            return chain.then(function () {
+              if (!pages.length) return;
+              var bar = function (t) {
+                return '<table style="width:100%;border-collapse:collapse;margin:0 0 6px 0;"><tr>' +
+                  '<td bgcolor="#1e3d59" style="background:#1e3d59;padding:6px 14px;border-radius:8px;font-weight:700;' +
+                  'font-size:14px;color:#ffffff;font-family:\'Cairo\',Tahoma,Arial,sans-serif;">' + t + '</td></tr></table>';
+              };
+              var css = 'width:100%;max-height:265mm;object-fit:contain;border:1px solid #ccc;border-radius:12px;display:block;';
+              var html = '';
+              pages.forEach(function (pg, i) {
+                var lbl = title + (doc.numPages > 1 ? (' — صفحة ' + pg.no + ' من ' + doc.numPages) : '');
+                html += (i === 0 ? '' : '<div style="page-break-before:always;"></div>') +
+                  bar(lbl) + '<img src="' + pg.data + '" style="' + css + '">';
+              });
+              el.innerHTML = html;
+            });
+          }).then(done, done);
+        } catch (e) { done(); }
+      })
+      .withFailureHandler(done)
+      .getPrintAttachmentBase64(window._printToken_ || '', fid);
+  });
 }
 
 </script>

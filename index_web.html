@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.159 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.160 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.159)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.160)', diag);
 }, 6000);
 </script>
 
@@ -125,6 +125,10 @@ setTimeout(function () {
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script>try { window.__h2cStandalone = window.html2canvas; } catch (e) {}</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <!-- 📄 (V4.160) pdf.js — لعرض كل صفحات مرفقات PDF داخل ملف الإشعار (Drive لا يوفّر صورة لغير
+       الصفحة الأولى، فالتوسيع لا يتم إلا بقراءة الملف وتحويل صفحاته بالمتصفّح) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>try { if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}</script>
   <style>
     body { background-color: #f1f5f9; font-family: 'Cairo', sans-serif; font-size: 0.9rem; }
     .navbar { background-color: #1e3d59 !important; box-shadow: 0 4px 15px rgba(0,0,0,0.15); }
@@ -1497,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.159</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.160</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6729,7 +6733,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.159";
+var CLIENT_APP_VERSION = "4.160";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7153,7 +7157,10 @@ function _noticeExportImage_(id, btn) {
       btn.innerHTML = orig; // 🔁 يعيدها للأيقونة الأصلية قبل تسليم الزر لـexportReportAsImage —
       // التي تلتقط innerHTML الحالي كـ"orig" الخاص بها وتُعيده تلقائياً عند انتهاء الالتقاط
       if (!res || !res.success || !res.html) { btn.disabled = false; showToast('❌ تعذّر جلب بيانات الإشعار', true); if (typeof _rejectPendingClipboard_ === 'function') _rejectPendingClipboard_(); return; }
-      exportReportAsImage(function() { return res.html; }, res.fileName || ('إشعار ' + id), btn);
+      // 📄 (V4.160) صورة الإشعار تعرض كل صفحات مرفقات PDF كما يفعل ملف المشاركة تماماً
+      _pdfExpandHtmlString_(res.html).then(function (finalHtml) {
+        exportReportAsImage(function() { return finalHtml; }, res.fileName || ('إشعار ' + id), btn);
+      });
     })
     .withFailureHandler(function(err) { btn.disabled = false; btn.innerHTML = orig; if (typeof _rejectPendingClipboard_ === 'function') _rejectPendingClipboard_(); if (_handleSessErr_(err)) return; showToast('❌ ' + (err.message || err), true); })
     .getBookingNoticeHtmlForImage(window.authToken, id);
@@ -29346,6 +29353,118 @@ function _fillSupervisors(list, primaryName, primaryRole) {
   }
 }
 
+/* ============================================================
+   📄 (V4.160) توسيع مرفقات PDF داخل مستند الإشعار إلى كل صفحاتها
+   Drive لا يُرجع صورة لأي صفحة غير الأولى، لذا يقرأ المتصفّح الملف نفسه ويحوّل كل صفحة لصورة
+   عبر pdf.js، ثم يستبعد الصفحات الفارغة (فحص بكسلات: الصفحة التي تكاد تكون بيضاء بالكامل).
+   يُستدعى قبل بناء ملف المشاركة وقبل تصدير الصورة، وتوجد نسخة مطابقة داخل صفحة الطباعة.
+   ============================================================ */
+var _PDFATT_SCALE_ = 2;           // دقة عرض الصفحة (2 ≈ 150dpi) — تنخفض تلقائياً للمرفقات الطويلة
+var _PDFATT_BLANK_RATIO_ = 0.999; // نسبة البكسلات شبه البيضاء التي تُعتبر معها الصفحة فارغة
+// هل هذه الصفحة فارغة فعلاً؟ نفحص عيّنة من البكسلات: لو شبه كلها بيضاء فهي فارغة
+function _pdfCanvasIsBlank_(canvas) {
+  try {
+    var ctx = canvas.getContext('2d');
+    var d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    var total = 0, light = 0;
+    // عيّنة كل 4 بكسلات (خطوة 16 بايت) — أسرع كثيراً ونتيجتها مطابقة عملياً
+    for (var i = 0; i < d.length; i += 16) {
+      total++;
+      if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) light++;
+    }
+    return total > 0 && (light / total) >= _PDFATT_BLANK_RATIO_;
+  } catch (e) { return false; }   // تعذّر الفحص = لا نستبعد الصفحة
+}
+function _pdfB64ToBytes_(b64) {
+  var bin = atob(b64), len = bin.length, out = new Uint8Array(len);
+  for (var i = 0; i < len; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function _pdfFetchBytes_(fileId) {
+  return new Promise(function (resolve, reject) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success || !res.base64) { reject(new Error((res && res.error) || 'تعذّر قراءة المرفق')); return; }
+        resolve(_pdfB64ToBytes_(res.base64));
+      })
+      .withFailureHandler(reject)
+      .getDriveFileBase64(window.authToken, fileId);
+  });
+}
+// يحوّل حاوية مرفق PDF واحدة إلى صور كل صفحاتها (بلا الفارغة)
+function _pdfExpandOne_(el) {
+  var fid = el.getAttribute('data-fid');
+  var title = el.getAttribute('data-title') || '🎫 مرفق';
+  if (!fid || !window.pdfjsLib) return Promise.resolve();
+  return _pdfFetchBytes_(fid)
+    .then(function (bytes) { return pdfjsLib.getDocument({ data: bytes }).promise; })
+    .then(function (doc) {
+      var pages = [], chain = Promise.resolve();
+      for (var p = 1; p <= doc.numPages; p++) {
+        (function (pageNo) {
+          chain = chain.then(function () {
+            return doc.getPage(pageNo).then(function (page) {
+              var vp = page.getViewport({ scale: doc.numPages > 12 ? 1.4 : _PDFATT_SCALE_ });
+              var canvas = document.createElement('canvas');
+              canvas.width = vp.width; canvas.height = vp.height;
+              var ctx = canvas.getContext('2d');
+              ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+              return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
+                if (_pdfCanvasIsBlank_(canvas)) return;   // 🚫 صفحة فارغة — تُستبعَد
+                pages.push({ no: pageNo, data: canvas.toDataURL('image/jpeg', 0.82) });
+              });
+            });
+          });
+        })(p);
+      }
+      return chain.then(function () { return { pages: pages, total: doc.numPages }; });
+    })
+    .then(function (r) {
+      if (!r.pages.length) return;   // لا صفحات صالحة — نُبقي الصورة البديلة كما هي
+      var bar = function (t) {
+        return '<table style="width:100%;border-collapse:collapse;margin:0 0 6px 0;"><tr>' +
+          '<td bgcolor="#1e3d59" style="background:#1e3d59;padding:6px 14px;border-radius:8px;font-weight:700;' +
+          'font-size:14px;color:#ffffff;font-family:\'Cairo\',Tahoma,Arial,sans-serif;">' + t + '</td></tr></table>';
+      };
+      var imgCss = 'width:100%;max-height:265mm;object-fit:contain;border:1px solid #ccc;border-radius:12px;display:block;';
+      var html = '';
+      r.pages.forEach(function (pg, i) {
+        var lbl = title + (r.total > 1 ? (' — صفحة ' + pg.no + ' من ' + r.total) : '');
+        html += (i === 0 ? '' : '<div style="page-break-before:always;"></div>') +
+          bar(lbl) + '<img src="' + pg.data + '" style="' + imgCss + '">';
+      });
+      el.innerHTML = html;
+    })
+    .catch(function (e) { try { console.warn('PDF attachment expand failed:', e); } catch (e2) {} });
+}
+// يوسّع كل مرفقات PDF داخل عنصر جذر ويُرجع Promise ينتهي بعد آخر صفحة
+function _pdfExpandAttachments_(root) {
+  var els = root ? root.querySelectorAll('.pdf-att-sec') : [];
+  if (!els.length) return Promise.resolve(0);
+  return Promise.all(Array.prototype.map.call(els, _pdfExpandOne_)).then(function () { return els.length; });
+}
+/* يأخذ مستند HTML كاملاً كنص، يوسّع مرفقات PDF داخله، ويُعيد النص بعد التوسيع.
+   مهم: لا نُمرِّر المستند كاملاً إلى innerHTML — المتصفّح يُسقط <head> (وبالتالي @page والتنسيق).
+   لذا نستخرج جسم المستند وحده، نوسّعه، ثم نُعيده مكانه بنفس ترويسة المستند الأصلية. */
+function _pdfExpandHtmlString_(html) {
+  html = String(html || '');
+  var m = html.match(/<body([^>]*)>([\s\S]*)<\/body>/i);
+  var bodyInner = m ? m[2] : html;
+  if (bodyInner.indexOf('pdf-att-sec') < 0) return Promise.resolve(html);
+  var holder = document.createElement('div');
+  holder.style.cssText = 'position:fixed;left:-99999px;top:0;width:1000px;';
+  holder.innerHTML = bodyInner;
+  document.body.appendChild(holder);
+  return _pdfExpandAttachments_(holder)
+    .then(function () {
+      var expanded = holder.innerHTML;
+      holder.remove();
+      return m ? (html.slice(0, m.index) + '<body' + m[1] + '>' + expanded + '</body>' +
+                  html.slice(m.index + m[0].length)) : expanded;
+    })
+    .catch(function () { try { holder.remove(); } catch (e) {} return html; });
+}
+
 /* 📎 (V4.159) بطاقة المرفقات والربط وكشف الأسماء داخل نافذة «تفاصيل الإشعار» — نفس ما يُلحَق
    بآخر ملف الإشعار (PDF/طباعة/صورة)، فيراه المستخدم قبل الطباعة بلا فتح نموذج التعديل. */
 function _bkDetailAttachHtml_(b) {
@@ -32447,8 +32566,9 @@ function secureShareBookingFile(id, btn) {
 
   var fallbackFileName = 'اشعار وصول رقم ' + id;
 
-  google.script.run
-    .withSuccessHandler(function (res) {
+  // 📄 (V4.160) بناء الملف يمر بالمتصفّح أولاً لتوسيع مرفقات PDF لكل صفحاتها قبل تحويله PDF
+  _shareNoticeBuild_(id, modalBody,
+    function (res) {
       if (btn) { btn.disabled = false; }
 
       if (!res || !res.pdfBase64) {
@@ -32465,12 +32585,34 @@ function secureShareBookingFile(id, btn) {
         shareText: 'إشعار وصول رحلة عمرة رقم ' + id,
         cleanupOnHide: true
       });
-    })
-    .withFailureHandler(function (err) {
+    },
+    function (err) {
       if (btn) { btn.disabled = false; }
       modalBody.innerHTML = '<div class="text-center text-danger p-4">تعذر إنشاء ملف PDF: ' + (err.message || err) + '</div>';
+    });
+}
+/* 📄 (V4.160) بناء ملف الإشعار للمشاركة: نجلب مستند الإشعار كـHTML، نوسّع مرفقات PDF لكل صفحاتها
+   بالمتصفّح (pdf.js)، ثم نُعيده للخادم ليحوّله PDF ويرفعه. لو لم توجد مرفقات PDF (أو تعذّر
+   التوسيع) نسقط تلقائياً للمسار القديم الذي يبني الملف كاملاً بالخادم — فلا تتعطّل المشاركة أبداً. */
+function _shareNoticeBuild_(id, modalBody, onDone, onFail) {
+  var fallback = function () {
+    google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail)
+      .generateBookingPdfForShare(window.authToken, id);
+  };
+  if (!window.pdfjsLib) { fallback(); return; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success || !res.html || res.html.indexOf('pdf-att-sec') < 0) { fallback(); return; }
+      if (modalBody) modalBody.innerHTML = '<div class="text-center p-4">⏳ جاري تجهيز صفحات المرفقات…</div>';
+      _pdfExpandHtmlString_(res.html)
+        .then(function (finalHtml) {
+          google.script.run.withSuccessHandler(onDone).withFailureHandler(onFail)
+            .createBookingPdfFromHtml(window.authToken, id, finalHtml);
+        })
+        .catch(fallback);
     })
-    .generateBookingPdfForShare(window.authToken, id);
+    .withFailureHandler(fallback)
+    .getBookingNoticeHtmlForImage(window.authToken, id);
 }
 
 // حذف ملف PDF المشترك من Drive - يستدعى مرة واحدة فقط لكل ملف (يستخدم علامة داخلية لمنع الاستدعاء المكرر)

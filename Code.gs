@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.159";
+var APP_VERSION = "4.160";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -98,6 +98,8 @@ var bookingId = resolvePrintAccessToken_(printToken);
 Logger.log("📄 doGet/print → printToken: " + printToken + " | bookingId: " + bookingId + " | invalidLink سيكون: " + (!bookingId));
 
 template.id = bookingId || "";
+// 📄 (V4.160) الرمز يُمرَّر للصفحة كي تطلب بايتات مرفقات PDF بصلاحية هذا الإشعار وحده
+template.printToken = printToken || "";
 template.invalidLink = !bookingId;
 template.reportHtml = "";
 
@@ -9964,18 +9966,94 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
     // page-break-before + inline styles = محوّل Google هيبدأها في صفحة جديدة والعنوان يظهر فوق الصورة مباشرة
     // ملاحظة: بدون padding خارجي هنا لأن @page margin: 6mm يوفّر الهامش الكافي،
     // وأي padding إضافي كان بيدفع الصورة لصفحة تالتة
-    return '<div style="page-break-before:always;">' +
-             '<table style="width:100%;border-collapse:collapse;margin:0 0 6px 0;">' +
+    var titleBar = '<table style="width:100%;border-collapse:collapse;margin:0 0 6px 0;">' +
                '<tr>' +
                  '<td bgcolor="#1e3d59" style="background:#1e3d59;padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;color:#ffffff;font-family:\'Cairo\',Tahoma,Arial,sans-serif;">' + (sectionTitle || '🎫 التذكرة المرفقة') + '</td>' +
                '</tr>' +
-             '</table>' +
-             '<img src="data:' + ticketImgMime + ';base64,' + ticketImgBase64 + '" style="width:100%;max-height:265mm;object-fit:contain;border:1px solid #ccc;border-radius:12px;display:block;">' +
-           '</div>';
+             '</table>';
+    var imgTag = '<img src="data:' + ticketImgMime + ';base64,' + ticketImgBase64 + '" style="width:100%;max-height:265mm;object-fit:contain;border:1px solid #ccc;border-radius:12px;display:block;">';
+    // 📄 (V4.160) مرفق PDF: يُلفّ بحاوية تحمل معرّف الملف كي يوسّعها المتصفّح لكل صفحات الملف
+    // (pdf.js) قبل الطباعة أو بناء ملف المشاركة. الصورة بالداخل هي الصفحة الأولى وتبقى كبديل
+    // آمن لو لم يعمل التوسيع لأي سبب — فلا يضيع المرفق أبداً.
+    if (ticketImgMime === 'image/png' && ticketMime === 'application/pdf') {
+      return '<div class="pdf-att-sec" data-fid="' + ticketFileId + '" data-title="' +
+               String(sectionTitle || '🎫 التذكرة المرفقة').replace(/"/g, '&quot;') + '" style="page-break-before:always;">' +
+               titleBar + imgTag +
+             '</div>';
+    }
+    return '<div style="page-break-before:always;">' + titleBar + imgTag + '</div>';
   } catch (e) {
     Logger.log('تعذر إرفاق التذكرة بملف المشاركة: ' + e);
     return '';
   }
+}
+
+/* 📄 (V4.160) بايتات ملف Drive كنص base64 — يحتاجها المتصفّح ليعرض كل صفحات مرفق PDF عبر pdf.js
+   (Drive لا يوفّر صورة لأي صفحة غير الأولى، فالتوسيع لا يتم إلا بقراءة الملف نفسه). */
+function getDriveFileBase64(authToken, fileId) {
+  requireAuth_(authToken);
+  try {
+    var f = DriveApp.getFileById(String(fileId || '').trim());
+    var blob = f.getBlob();
+    return { success: true, base64: Utilities.base64Encode(blob.getBytes()), mime: f.getMimeType(), name: f.getName() };
+  } catch (e) {
+    return { success: false, error: 'تعذّر قراءة الملف: ' + e.message };
+  }
+}
+
+/* 📄 (V4.160) بايتات مرفق PDF لصفحة الطباعة — لا تملك جلسة تطبيق، فتُصرَّح برمز الطباعة نفسه:
+   الرمز يُترجَم لرقم إشعار، ولا يُسلَّم إلا ملف يخص هذا الإشعار تحديداً (تذكرته أو أحد مرفقاته). */
+function getPrintAttachmentBase64(printToken, fileId) {
+  var bookingId = resolvePrintAccessToken_(String(printToken || ''));
+  if (!bookingId) return { success: false, error: 'رابط الطباعة غير صالح' };
+  var data = getPrintDataForView(bookingId);
+  if (!data || !data.id) return { success: false, error: 'تعذر العثور على بيانات الإشعار' };
+  fileId = String(fileId || '').trim();
+  var allowed = {};
+  var addUrl = function (u) { var id = extractDriveFileId_(u); if (id) allowed[id] = 1; };
+  addUrl(data.ticketUrl);
+  var hostMatch = String(data.notes || '').match(/مستند المستضيف:\s*(https?:\/\/\S+)/);
+  if (hostMatch) addUrl(hostMatch[1]);
+  try {
+    var atts = typeof data.attachmentsJson === 'string'
+      ? JSON.parse(data.attachmentsJson || '[]') : (data.attachmentsJson || []);
+    (Array.isArray(atts) ? atts : []).forEach(function (a) { if (a && a.url) addUrl(a.url); });
+  } catch (eA) {}
+  if (!allowed[fileId]) return { success: false, error: 'هذا الملف لا يخص هذا الإشعار' };
+  try {
+    var f = DriveApp.getFileById(fileId);
+    return { success: true, base64: Utilities.base64Encode(f.getBlob().getBytes()), mime: f.getMimeType() };
+  } catch (e) {
+    return { success: false, error: 'تعذّر قراءة المرفق: ' + e.message };
+  }
+}
+
+/* 📄 (V4.160) يبني ملف PDF للمشاركة من HTML جاهز أرسلته الواجهة بعد توسيع مرفقات PDF لكل صفحاتها.
+   نفس التحقق والتسمية والرفع المستخدَمة في generateBookingPdfForShare — الفارق الوحيد أن مصدر
+   الـHTML هنا هو المتصفّح (لأنه وحده يستطيع تحويل صفحات PDF إلى صور عبر pdf.js). */
+function createBookingPdfFromHtml(authToken, bookingId, html) {
+  requireAuth_(authToken);
+  var data = getPrintDataForView(bookingId);
+  if (!data || data.error || !data.id) throw new Error((data && data.error) || 'تعذر العثور على بيانات الإشعار');
+  if (data.status !== 'معتمد') throw new Error('لا يمكن مشاركة إشعار غير معتمد. يرجى اعتماد الإشعار أولاً.');
+  html = String(html || '');
+  if (!html) throw new Error('محتوى الإشعار فارغ');
+
+  var folder = _ensureTempShareFolder_();
+  var safeDate = (data.arrivalDate || '').toString().replace(/\//g, '-');
+  var fileName = (data.company || 'شركة').toString().replace(/[\\/:*?"<>|]/g, '-').trim() +
+    ' - اشعار وصول رقم ' + data.id + ' - ' + safeDate;
+
+  var pdfBlob = Utilities.newBlob(html, 'text/html', fileName + '.html').getAs('application/pdf');
+  pdfBlob.setName(fileName + '.pdf');
+  var file = folder.createFile(pdfBlob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return {
+    fileId: file.getId(),
+    downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
+    pdfBase64: Utilities.base64Encode(pdfBlob.getBytes()),
+    fileName: fileName
+  };
 }
 
 // 👥 (V4.157) صفحة أسماء المعتمرين داخل ملف الإشعار — بنفس شريط العنوان المستخدم بصفحة التذكرة.
