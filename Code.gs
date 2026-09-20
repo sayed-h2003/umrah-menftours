@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.160";
+var APP_VERSION = "4.161";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -9985,6 +9985,22 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
   } catch (e) {
     Logger.log('تعذر إرفاق التذكرة بملف المشاركة: ' + e);
     return '';
+  }
+}
+
+/* 🗑️ (V4.161) حذف ملف مرفق إشعار من Drive — يقبل معرّف الملف أو رابطه، فالمرفقات المسجَّلة قبل
+   هذه النسخة تحمل الرابط وحده بلا معرّف. يُستدعى عند حذف المرفق أو الخروج بلا حفظ. */
+function deleteBookingAttachmentFile(authToken, fileIdOrUrl) {
+  requireAuth_(authToken);
+  var raw = String(fileIdOrUrl || '').trim();
+  if (!raw) return { success: false, error: 'معرّف الملف مطلوب' };
+  var id = (raw.indexOf('/') >= 0 || raw.indexOf('http') === 0) ? extractDriveFileId_(raw) : raw;
+  if (!id) return { success: false, error: 'تعذّر استخراج معرّف الملف' };
+  try {
+    DriveApp.getFileById(id).setTrashed(true);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: 'تعذّر حذف الملف: ' + e.message };
   }
 }
 

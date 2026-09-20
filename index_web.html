@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.160 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.161 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.160)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.161)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.160</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.161</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6733,7 +6733,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.160";
+var CLIENT_APP_VERSION = "4.161";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7677,6 +7677,9 @@ if (
     );
 
 }
+
+// 🗑️ (V4.161) وكذلك مرفقات الإشعار التي رُفعت ولم يُحفَظ الإشعار — تُحذف من Drive بنفس المنطق
+if (typeof _bkPurgeTempAttachments_ === 'function') _bkPurgeTempAttachments_();
 
 // إعادة ضبط الحالة
 
@@ -29514,7 +29517,34 @@ function _bkDetailLoadNames_(b) {
 }
 
 /* ===== 📎 (V4.157) مرفقات إشعار الوصول + الربط اليدوي بالمجموعات وملفات الوزارة ===== */
-window._bkAttachments = window._bkAttachments || []; // [{url, name}] — تُسلسَل في attachmentsJson عند الحفظ
+window._bkAttachments = window._bkAttachments || []; // [{url, name, fileId, temp}] — تُسلسَل في attachmentsJson عند الحفظ
+/* 🗑️ (V4.161) دورة حياة ملفات المرفقات على Drive — بنفس منطق تذكرة الطيران تماماً:
+   • مرفق رُفع ولم يُحفَظ الإشعار بعد = «مؤقت» (temp) — يُحذف من Drive فور حذفه من القائمة،
+     وكذلك عند إغلاق النموذج أو تصفيره بلا حفظ، فلا تتراكم ملفات يتيمة بالمجلد.
+   • مرفق محفوظ بالفعل مع الإشعار — حذفه من القائمة لا يمسّ Drive فوراً، بل يُؤجَّل لطابور
+     يُنفَّذ بعد نجاح الحفظ؛ فلو أغلق المستخدم بلا حفظ يبقى الملف سليماً كما هو بالسجل. */
+window._bkAttachDelQueue = window._bkAttachDelQueue || [];
+function _bkDropDriveFile_(fileId) {
+  if (!fileId) return;
+  try {
+    google.script.run.withSuccessHandler(function () {}).withFailureHandler(function (e) {
+      try { console.warn('تعذّر حذف ملف المرفق من Drive:', e); } catch (e2) {}
+    }).deleteBookingAttachmentFile(window.authToken, fileId);
+  } catch (e) {}
+}
+// تُستدعى عند إغلاق/تصفير النموذج بلا حفظ — تحذف المرفقات المؤقتة وتُلغي طابور الحذف المؤجَّل
+function _bkPurgeTempAttachments_() {
+  (window._bkAttachments || []).forEach(function (a) { if (a && a.temp && (a.fileId || a.url)) _bkDropDriveFile_(a.fileId || a.url); });
+  window._bkAttachments = [];
+  window._bkAttachDelQueue = [];
+  if (typeof renderBookingAttachments === 'function') renderBookingAttachments();
+}
+// تُستدعى بعد نجاح حفظ الإشعار — المرفقات صارت نهائية، والمحذوف منها يُحذف فعلياً من Drive
+function _bkFinalizeAttachments_() {
+  (window._bkAttachDelQueue || []).forEach(_bkDropDriveFile_);
+  window._bkAttachDelQueue = [];
+  (window._bkAttachments || []).forEach(function (a) { if (a) a.temp = false; });
+}
 
 function renderBookingAttachments() {
   var box = document.getElementById('bookingAttachList');
@@ -29532,6 +29562,14 @@ function renderBookingAttachments() {
 }
 
 function removeBookingAttachment(idx) {
+  var a = (window._bkAttachments || [])[idx];
+  // المرفقات المسجَّلة قبل V4.161 بلا معرّف ملف — يكفي رابطها لاستخراجه بالخادم
+  var ref = a && (a.fileId || a.url);
+  if (ref) {
+    // 🗑️ (V4.161) المؤقت يُحذف من Drive فوراً، والمحفوظ يُؤجَّل حذفه لما بعد نجاح حفظ الإشعار
+    if (a.temp) _bkDropDriveFile_(ref);
+    else (window._bkAttachDelQueue = window._bkAttachDelQueue || []).push(ref);
+  }
   (window._bkAttachments || []).splice(idx, 1);
   renderBookingAttachments();
 }
@@ -29556,7 +29594,8 @@ function handleBookingAttachmentSelect(input) {
       google.script.run
         .withSuccessHandler(function(res) {
           if (res && res.success) {
-            window._bkAttachments.push({ url: res.fileUrl, name: res.name || file.name });
+            // 🗑️ (V4.161) معرّف الملف يُحفَظ ليمكن حذفه من Drive، و temp=true حتى يُحفَظ الإشعار
+            window._bkAttachments.push({ url: res.fileUrl, name: res.name || file.name, fileId: res.fileId, temp: true });
             showToast('📎 تم رفع المرفق: ' + (res.name || file.name));
           } else {
             showToast((res && res.error) || 'فشل رفع المرفق', true);
@@ -29779,6 +29818,8 @@ function _fillFormFromData(b) {
     try { window._bkAttachments = (typeof b.attachmentsJson === 'string' ? JSON.parse(b.attachmentsJson || '[]') : (b.attachmentsJson || [])) || []; }
     catch (eAt) { window._bkAttachments = []; }
     if (!Array.isArray(window._bkAttachments)) window._bkAttachments = [];
+    window._bkAttachments.forEach(function (a) { if (a) a.temp = false; });   // 🗑️ (V4.161) محفوظة بالفعل
+    window._bkAttachDelQueue = [];
     renderBookingAttachments();
     if (document.getElementById('visaGroupsLink')) document.getElementById('visaGroupsLink').value = b.visaGroups || '';
     if (document.getElementById('mfFilesLink')) document.getElementById('mfFilesLink').value = b.mfFiles || '';
@@ -29874,7 +29915,9 @@ currentTicketTemporary = false;
   var _tsList = document.getElementById('transportSegmentsList'); if (_tsList) _tsList.innerHTML = ""; // 🧩 (V4.43)
 
   // 📎 (V4.157) تصفير المرفقات والربط اليدوي (form.reset لا يمسّ المصفوفة المحفوظة بالذاكرة)
-  window._bkAttachments = [];
+  // 🗑️ (V4.161) المرفقات المؤقتة (رُفعت ولم يُحفَظ الإشعار) تُحذف من Drive كي لا تبقى يتيمة
+  if (typeof _bkPurgeTempAttachments_ === 'function') _bkPurgeTempAttachments_();
+  else window._bkAttachments = [];
   window._bkAttachNamesWanted = false;
   window._bkTripHasPilgrims = false;
   if (typeof renderBookingAttachments === 'function') renderBookingAttachments();
@@ -30181,6 +30224,7 @@ bookingObj.allMovements = buildMovements(bookingObj);
           sbT.removeAttribute('disabled');
           sbT.innerHTML = '💾 حفظ الرحلة (مسودة كاملة بدون رقم)';
           currentTicketTemporary = false;
+          if (typeof _bkFinalizeAttachments_ === 'function') _bkFinalizeAttachments_();   // 🗑️ (V4.161)
           _exitTripModes();
           clearFormAndResetPattern();
           hideEntryForm();
@@ -30266,6 +30310,8 @@ function _proceedSaveBooking_(bookingObj) {
 
 // أصبحت التذكرة نهائية
 currentTicketTemporary = false;
+// 🗑️ (V4.161) المرفقات صارت نهائية، وما حُذف منها أثناء التعديل يُحذف الآن فعلياً من Drive
+if (typeof _bkFinalizeAttachments_ === 'function') _bkFinalizeAttachments_();
 
 clearFormAndResetPattern();
 
