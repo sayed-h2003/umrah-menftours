@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.163";
+var APP_VERSION = "4.164";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -11640,7 +11640,9 @@ function _taSaudiPort_(v, isArrival) {
    خاص بالشاشة فقط (لا يمسّ الإشعار)، أما سعر الباص وقيمة التشغيلة فيُكتبان في الإشعار
    نفسه — «دون التأثير على بيانات الإشعار إلا في السعر فقط». */
 var TA_OVR_SHEET   = 'TransportAccounts_Overrides';
-var TA_OVR_HEADERS = ['رقم الإشعار','المورد','البيان','ملاحظات','عُدّل بواسطة','عُدّل في'];
+// 📝 (V4.164) «رقم القيد» أُضيف بآخر القائمة (نفس قاعدة كل توسعات الأعمدة بهذا التطبيق) — يتيح
+// تسجيل رقم قيد دورة النقل من داخل كشف حساب الوكيل، كباقي أنواع السطور (تأشيرات/بنود/دفعات)
+var TA_OVR_HEADERS = ['رقم الإشعار','المورد','البيان','ملاحظات','عُدّل بواسطة','عُدّل في','رقم القيد'];
 
 function _taOverrides_() {
   var out = {};
@@ -11650,7 +11652,7 @@ function _taOverrides_() {
     sh.getRange(2, 1, last - 1, TA_OVR_HEADERS.length).getValues().forEach(function (r, i) {
       var id = String(r[0] || '').trim(); if (!id) return;
       out[id] = { id: id, supplier: String(r[1] || '').trim(), desc: String(r[2] || '').trim(),
-        notes: String(r[3] || '').trim(), _row: i + 2 };
+        notes: String(r[3] || '').trim(), entryNo: String(r[6] || '').trim(), _row: i + 2 };
     });
   } catch (e) {}
   return out;
@@ -11661,11 +11663,18 @@ function saveTransportRowEdit(authToken, data) {
   var id = String(data.id || '').trim();
   if (!id) return { success: false, error: 'رقم الإشعار مطلوب' };
   var now = _mfStamp_();
-  // 1) التجاوزات الخاصة بالشاشة: المورد + البيان
+  // 1) التجاوزات الخاصة بالشاشة: المورد + البيان + رقم القيد
   var sh = _accSheet_(TA_OVR_SHEET, TA_OVR_HEADERS);
   var ovr = _taOverrides_();
-  var row = [id, String(data.supplier || '').trim(), String(data.desc || '').trim(),
-    String(data.notes || '').trim(), session.username || '', now];
+  // 📝 (V4.164) رقم القيد وحده قد يُحفَظ من كشف حساب الوكيل بلا بقية الحقول (تعديل سريع بالخلية) —
+  // فيبقي المورد/البيان/الملاحظات كما كانا بدل مسحهم لو لم تُرسَل هذه المرة
+  var old = ovr[id] || {};
+  var row = [id,
+    data.supplier !== undefined ? String(data.supplier || '').trim() : old.supplier || '',
+    data.desc !== undefined ? String(data.desc || '').trim() : old.desc || '',
+    data.notes !== undefined ? String(data.notes || '').trim() : old.notes || '',
+    session.username || '', now,
+    data.entryNo !== undefined ? String(data.entryNo || '').trim() : old.entryNo || ''];
   if (ovr[id]) sh.getRange(ovr[id]._row, 1, 1, TA_OVR_HEADERS.length).setValues([row]);
   else sh.appendRow(row);
   // 2) السعر: يُكتب بالإشعار، وقيمة التشغيلة تُعاد حسابها تلقائياً = عدد الباصات × سعر الباص —
@@ -11701,6 +11710,12 @@ function saveTransportRowEdit(authToken, data) {
   logChange_(session.username, 'تعديل صف كشف النقل السعودي', 'إشعار ' + id, 'مورد/بيان/سعر',
     priceChanged || '-', (data.supplier || '') + ' — ' + (data.desc || ''));
   return { success: true };
+}
+// 📝 (V4.164) تعديل رقم قيد دورة نقل وحده — كتابة سريعة بلا التأثير على المورد/البيان/السعر،
+// تُستخدَم من عمود "القيد" القابل للتحرير المباشر بكشف حساب الوكيل (نفس أسلوب باقي أنواع السطور)
+function setTransportRowEntryNo(authToken, id, entryNo) {
+  var res = saveTransportRowEdit(authToken, { id: id, entryNo: entryNo });
+  return res;
 }
 function deleteTransportRowEdit(authToken, id) {
   requireTransportAccountsPermission_(authToken);
@@ -11779,6 +11794,7 @@ function _taReadRowsRaw_() {
     result.push({
       edited: !!_ov,
       editNotes: _ov ? _ov.notes : "",
+      entryNo: _ov ? _ov.entryNo : "",
       id: _bid,
       operationNo: String(row[idx["رقم التشغيلة"]] || ""),
       client: String(row[idx["العميل"]] || ""),
@@ -22365,7 +22381,26 @@ function _vzPerm_(authToken, cap) {
   if (_sessionHasPerm_(session, 'visas.' + cap)) return session;
   throw new Error('لا تملك صلاحية ' + ({view:'عرض',add:'إضافة',edit:'تعديل',delete:'حذف'}[cap] || cap) + ' متابعة التأشيرات والوكلاء');
 }
-function _vzClearCache_() { try { CacheService.getScriptCache().remove(VZ_BOOTSTRAP_CACHE_KEY); } catch (e) {} }
+// 🐛 (V4.164) عدّاد إصدار بسيط بذاكرة السكريبت (PropertiesService، تبقى محدَّثة فوراً بلا أي كاش
+// وسيط) — كل استدعاء لهذه الدالة (أي عملية كتابة) يزيد الرقم. getVisaBootstrap يقرأ الرقم قبل
+// إعادة بناء الكاش وبعده، ولا يكتب نتيجته بالكاش إلا لو لم يتغيّر الرقم أثناء البناء. هذا يمنع
+// "إحياء" كاش قديم: نداء بطيء بدأ قبل الحفظ وانتهى بعده كان يكتب بالكاش نسخة قديمة فتُقرأ لاحقاً
+// بدل النسخة المحدَّثة فعلياً — وهو السبب الجذري لظهور القيمة القديمة بعد الحفظ الأول بالجدول.
+function _vzBumpVer_() {
+  try {
+    var p = PropertiesService.getScriptProperties();
+    var n = (parseInt(p.getProperty('VZ_DATA_VER'), 10) || 0) + 1;
+    p.setProperty('VZ_DATA_VER', String(n));
+  } catch (e) {}
+}
+function _vzDataVer_() {
+  try { return parseInt(PropertiesService.getScriptProperties().getProperty('VZ_DATA_VER'), 10) || 0; }
+  catch (e) { return 0; }
+}
+function _vzClearCache_() {
+  try { CacheService.getScriptCache().remove(VZ_BOOTSTRAP_CACHE_KEY); } catch (e) {}
+  _vzBumpVer_();
+}
 
 function _vzRowToObj_(r) {
   var bd = []; try { bd = JSON.parse(_mfStr_(r[8]) || '[]'); if (!Array.isArray(bd)) bd = []; } catch (e) { bd = []; }
@@ -22629,11 +22664,15 @@ function saveAgentCompanyAccounts(authToken, rows) {
   return { success: true, count: out.length };
 }
 
-function _vzAgentBalance_(agent, files, items, pays) {
+// 🚌 (V4.164) transportDueS: إجمالي قيمة دورات النقل (ريال) الخاصة بهذا الحساب — بند مستحق مثل
+// التأشيرات تماماً، وكان غائباً كلياً عن هذا الحساب فيظهر رصيد الوكيل أعلى مما يجب بشاشتي
+// "حسابات الوكلاء" وكروت كشف الحساب العلوية، بينما دفتر الحساب التفصيلي (شامل صفوف النقل) يحسبه
+function _vzAgentBalance_(agent, files, items, pays, transportDueS) {
   // ملاحظة: القائمة تصل مُصفّاة مسبقاً على حساب الوكيل (قد يكون حساباً فرعياً مع شركة بعينها)
   var visaDueS = 0;
   (files || []).forEach(function (f) { visaDueS += _mfNum_(f.visaCount) * _mfNum_(f.price); });
-  var dueS = visaDueS, dueE = 0, credS = 0, credE = 0, paidS = 0, paidE = 0;
+  transportDueS = _mfNum_(transportDueS);
+  var dueS = visaDueS + transportDueS, dueE = 0, credS = 0, credE = 0, paidS = 0, paidE = 0;
   (items || []).forEach(function (it) {
     var v = _accNum_(it.value), sar = it.currency !== 'EGP';
     if (it.isCredit) { if (sar) credS += v; else credE += v; }
@@ -22641,12 +22680,19 @@ function _vzAgentBalance_(agent, files, items, pays) {
   });
   (pays || []).forEach(function (p) { if (p.currency === 'EGP') paidE += _accNum_(p.amount); else paidS += _accNum_(p.amount); });
   return {
-    visaDueS: visaDueS, dueS: dueS, dueE: dueE, credS: credS, credE: credE, paidS: paidS, paidE: paidE,
+    visaDueS: visaDueS, transportDueS: transportDueS, dueS: dueS, dueE: dueE, credS: credS, credE: credE, paidS: paidS, paidE: paidE,
     netS: Math.round((dueS - credS - paidS) * 100) / 100,
     netE: Math.round((dueE - credE - paidE) * 100) / 100
   };
 }
 
+// 🔄 (V4.164) نداء خفيف يُعيد خريطتَي اتفاقيات السكن/الإعاشة فقط بدون إعادة بناء كامل بوتستراب
+// التأشيرات — يُستدعى فور حفظ/تعديل/حذف اتفاقية أو تخصيصها لمجموعة، فتنعكس فوراً بشاشة المجموعات
+// المفتوحة (الجدول ونموذج التعديل) بلا حاجة لإعادة تحميل الصفحة كاملة.
+function getHousingCateringByGroup(authToken) {
+  requireAuth_(authToken);
+  return { success: true, cateringByGroup: _vzCateringByGroup_(), housingByGroup: _vzHousingAgrByGroup_() };
+}
 // 🍽️ (V4.132) خريطة أرقام اتفاقيات الإعاشة المسجَّلة بشاشة اتفاقيات الإعاشة، مفهرسة برقم المجموعة
 // ثم بالمنطقة (مكة/المدينة) — تُعرض تلقائياً بشاشة المجموعات لو المجموعة مسجَّلة هناك.
 // { "رقم المجموعة": { makkah: ["25456", ...], madinah: [...] } }
@@ -22675,6 +22721,9 @@ function getVisaBootstrap(authToken) {
   var session = _vzPerm_(authToken, 'view');
   var shared = getCachedData(VZ_BOOTSTRAP_CACHE_KEY);
   if (!shared) {
+    // 🐛 (V4.164) رقم الإصدار لحظة بدء إعادة البناء — يُقارَن بعد الانتهاء (انظر التعليق أسفل
+    // setCachedData) لمنع كتابة نتيجة بُنيت من بيانات سبقت حفظاً وقع أثناء هذا البناء بالذات
+    var _verAtStart = _vzDataVer_();
     var files = _vzReadAll_();
     var prices = _vzReadPrices_();
     var transportPrices = _vzReadTransportPrices_();
@@ -22693,12 +22742,20 @@ function getVisaBootstrap(authToken) {
     var acctRowsRaw = _vzAcctRead_();
     var acctMap = _vzAcctMap_(acctRowsRaw);
     var accounts = _vzAcctKeys_(Object.keys(agentsSet), acctMap);
+    // 🚌 (V4.164) دورات النقل تدخل حساب الرصيد أيضاً — كانت غائبة كلياً عن هذا الحساب فيظهر
+    // رصيد الوكيل بشاشة "حسابات الوكلاء" أكبر مما يجب (بقيمة كل دورات نقله)، بينما كشف حسابه
+    // التفصيلي (المبني من صفوف الدفتر شاملة النقل) يُظهر الرصيد الصحيح — قراءة شيت النقل مرة واحدة
+    // فقط هنا وتمريرها لكل حساب بدل قراءته من جديد لكل وكيل (كان سيصبح N قراءة كاملة للشيت)
+    var taRowsAll = _taReadRowsRaw_();
     var agentBalances = {};
     accounts.forEach(function (ac) {
+      var transDebit = 0;
+      _vzTransportRunsFor_(ac.key, acctMap, taRowsAll).rows.forEach(function (t) { transDebit += _mfNum_(t.value); });
       agentBalances[ac.key] = _vzAgentBalance_(ac.key,
         files.filter(function (f) { return _vzFileInAcct_(f, ac.key, acctMap); }),
         allItems.filter(function (it) { return it.agent === ac.key; }),
-        allPays.filter(function (p) { return p.agent === ac.key; }));
+        allPays.filter(function (p) { return p.agent === ac.key; }),
+        transDebit);
     });
     shared = {
       files: files, prices: prices, transportPrices: transportPrices, companies: base.companies, trips: base.trips, clients: base.clients,
@@ -22708,7 +22765,9 @@ function getVisaBootstrap(authToken) {
       agentBalances: agentBalances, cateringByGroup: _vzCateringByGroup_(),
       housingByGroup: _vzHousingAgrByGroup_(), today: _mfToday_()
     };
-    setCachedData(VZ_BOOTSTRAP_CACHE_KEY, shared);
+    // 🐛 (V4.164) لا نكتب بالكاش إلا لو لم يقع أي حفظ (_vzClearCache_) أثناء هذا البناء بالذات —
+    // وإلا فهذا البناء قرأ بيانات قديمة جزئياً ولا يجوز أن "يُحيي" الكاش بنسخة تسبق الحفظ الأحدث
+    if (_vzDataVer_() === _verAtStart) setCachedData(VZ_BOOTSTRAP_CACHE_KEY, shared);
   }
   var out = {}; for (var k in shared) out[k] = shared[k];
   out.success = true; out.user = session.username;
@@ -23131,13 +23190,15 @@ function getAgentTransportRuns(authToken, acctKey) {
   return { success: true, rows: out.rows, diag: out.diag };
 }
 // ⚡ (V4.154) نواة جلب دورات النقل لحساب بعينه — استُخرجت من getAgentTransportRuns كي يستدعيها
-// getAgentAccount أيضاً فيُجلب الكشف ودوراته بنداء واحد (كانا نداءين متتاليين عند كل فتح حساب)
-function _vzTransportRunsFor_(acctKey, map) {
-  var rows = _taReadRowsRaw_();
+// getAgentAccount أيضاً فيُجلب الكشف ودوراته بنداء واحد (كانا نداءين متتاليين عند كل فتح حساب).
+// preRows/prePrices (V4.164): تُمرَّران عند استدعاء هذه الدالة لعدة حسابات متتالية (بوتستراب كل
+// الوكلاء) فلا تُعاد قراءة شيتي النقل والتسعير كاملين لكل حساب على حدة (كان سيصبح N قراءة كاملة).
+function _vzTransportRunsFor_(acctKey, map, preRows, prePrices) {
+  var rows = preRows || _taReadRowsRaw_();
   // 💲 (V4.152) دورات بلا سعر يدوي (busPrice فارغ/صفر) تأخذ افتراضياً سعر فترة تسعير النقل
   // السارية بتاريخ الدورة لنفس الوكيل — بنفس منطق تسعير التأشيرات بالفترات
   var agentPart = acctKey.split(' - ')[0];
-  var tPrices = _vzReadTransportPrices_();
+  var tPrices = prePrices || _vzReadTransportPrices_();
   var out = rows.filter(function (r) {
     return _vzFileInAcct_({ agent: r.supplier, company: r.company }, acctKey, map);
   }).map(function (r) {
@@ -23145,7 +23206,7 @@ function _vzTransportRunsFor_(acctKey, map) {
     var priceIsDefault = false;
     if (!busPrice) { busPrice = _vzTransportPriceAt_(agentPart, r.arrivalDate, tPrices); priceIsDefault = !!busPrice; }
     return {
-      id: r.id, date: r.arrivalDate, groupRef: 'نقل ' + r.id,
+      id: r.id, date: r.arrivalDate, groupRef: 'نقل ' + r.id, entryNo: r.entryNo || '',
       desc: 'دورة نقل ' + (r.tripName || r.client || '—') + ' (' + busCount + ' × ' + busPrice + ')' + (priceIsDefault ? ' — سعر افتراضي' : ''),
       busCount: busCount, busPrice: busPrice, priceIsDefault: priceIsDefault, value: busCount * busPrice,
       client: r.client, tripName: r.tripName, company: r.company,
@@ -23206,12 +23267,13 @@ function getAgentAccount(authToken, agent, filters) {
   var fromMs = _mfMs_(_mfDate_(filters.from)); if (isNaN(fromMs)) fromMs = -8640000000000000;
   var toMs = _mfMs_(_mfDate_(filters.to)); if (isNaN(toMs)) toMs = 8640000000000000;
   var compF = _mfStr_(filters.company);
+  var statusF = _mfStr_(filters.status);
   var inRange = function (dateStr) {
     var t = _mfMs_(_mfDate_(dateStr));
     if (isNaN(t)) return (fromMs === -8640000000000000 && toMs === 8640000000000000);
     return t >= fromMs && t <= toMs;
   };
-  files = files.filter(function (f) { return inRange(f.date) && (!compF || f.company === compF); });
+  files = files.filter(function (f) { return inRange(f.date) && (!compF || f.company === compF) && (!statusF || f.status === statusF); });
   files.sort(function (a, b) { var x = _mfMs_(a.date), y = _mfMs_(b.date); return (isNaN(x) ? 0 : x) - (isNaN(y) ? 0 : y); });
   // 🧮 الحساب العام (اسم الوكيل وحده) يُجمِّع أيضاً بنود ودفعات حساباته الفرعية، فيكون كشفاً
   // موحَّداً صادقاً؛ أما الحساب الفرعي فيرى بنوده ودفعاته وحده كما طُلب.
@@ -23234,12 +23296,22 @@ function getAgentAccount(authToken, agent, filters) {
   var comps = {}; files.forEach(function (f) { if (f.company) comps[f.company] = 1; });
   // ⚡ (V4.154) دورات النقل تُرسَل ضمن نفس الاستجابة — كانت نداءً ثانياً متتالياً بعد وصول الكشف،
   // فيتضاعف زمن فتح الحساب المحسوس بلا داعٍ (نفس خريطة الحسابات تُعاد استخدامها بلا قراءة جديدة)
+  var transportRuns = _vzTransportRunsFor_(agent, map).rows;
+  // 🚌 (V4.164) قيمة النقل داخل نطاق الفلتر الحالي (تاريخ/شركة) — لتحسب ضمن الرصيد بنفس نطاق بقية
+  // بنود الكشف، ونفس التصفية التي يطبّقها الجدول نفسه على صفوف النقل بالضبط (vzAccBuildRows_)
+  var transDebit = 0;
+  transportRuns.forEach(function (t) {
+    if (compF && t.company !== compF) return;
+    if (!inRange(t.date)) return;
+    transDebit += _mfNum_(t.value);
+  });
   return {
     success: true, agent: agent, files: files, items: items, payments: pays,
-    transportRuns: _vzTransportRunsFor_(agent, map).rows,
+    transportRuns: transportRuns,
     companies: Object.keys(comps).sort(),
-    filters: { from: _mfDate_(filters.from), to: _mfDate_(filters.to), company: compF },
-    balance: _vzAgentBalance_(agent, files, items, pays)
+    statuses: VZ_STATUSES_,
+    filters: { from: _mfDate_(filters.from), to: _mfDate_(filters.to), company: compF, status: statusF },
+    balance: _vzAgentBalance_(agent, files, items, pays, transDebit)
   };
 }
 function saveAgentAccItem(authToken, item) {
