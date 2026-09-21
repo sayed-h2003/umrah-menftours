@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.164";
+var APP_VERSION = "4.165";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -17965,6 +17965,15 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
   if (!tripName) throw new Error("اسم الرحلة مطلوب");
   pilgrims = pilgrims || [];
 
+  // 🧾 (V4.165) اسم العميل حقل إلزامي — تحقق حاسم بالسيرفر (لا يكتفى بالفحص الجانبي بالواجهة، الذي
+  // بعض مسارات الحفظ كانت تتخطاه، مثل الحفظ عند الخروج من كشف الرحلة _saveThen/_saveThenCore)
+  var _noClientNames_ = pilgrims.filter(function(p) { return String(p.name || "").trim() && !String(p.client || "").trim(); })
+    .map(function(p) { return String(p.name || "").trim(); });
+  if (_noClientNames_.length) {
+    throw new Error("اسم العميل مطلوب لكل معتمر — أكمِل العميل لهؤلاء المعتمرين قبل الحفظ: " +
+      _noClientNames_.slice(0, 12).join("، ") + (_noClientNames_.length > 12 ? " …" : ""));
+  }
+
   var sheet = _getPilgrimsSheet_();
   var lastRow = sheet.getLastRow();
 
@@ -20971,6 +20980,69 @@ function saveMinistrySupervisor(authToken, sup) {
   _mfClearBootstrapCache_();
   return { success: true };
 }
+// 📤 (V4.165) تسجيل مجمَّع لعدة مشرفين دفعة واحدة (لصق نصي أو استيراد إكسيل بالواجهة) — كل صف
+// اسم مسجَّل من قبل يُحدَّث ببياناته الجديدة (نفس منطق الحفظ الفردي)، والاسم/الشركة إلزاميان فقط.
+function bulkSaveMinistrySupervisors(authToken, rows) {
+  var session = _mfPerm_(authToken, 'edit');
+  rows = Array.isArray(rows) ? rows : [];
+  var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
+  var list = _mfReadSupervisors_();
+  var byName = {}; list.forEach(function(x) { byName[x.name] = x; });
+  var added = [], updated = [], skipped = [];
+  rows.forEach(function(r) {
+    var name = _mfStr_(r && r.name), home = _mfStr_(r && r.home);
+    if (!name || !home) { skipped.push(name || '(بلا اسم)'); return; }
+    var old = byName[name];
+    var shared = Array.isArray(r.shared) ? r.shared.map(_mfStr_).filter(String) : [];
+    var row = [ name, _mfStr_(r.type) || 'مرافق', home, shared.join('، '),
+      _mfStr_(r.mobile), _mfStr_(r.notes),
+      old ? old.createdBy : session.username, old ? old.createdAt : _mfStamp_(),
+      session.username, _mfStamp_() ];
+    if (old) {
+      sh.getRange(old._row, 1, 1, MF_SUP_HEADERS.length).setValues([row]);
+      updated.push(name);
+    } else {
+      sh.appendRow(row);
+      added.push(name);
+      byName[name] = { name: name, _row: sh.getLastRow() }; // منع تكرار نفس الاسم مرتين بنفس الدفعة
+    }
+  });
+  if (added.length || updated.length) {
+    logChange_(session.username, 'تسجيل مجمَّع لمشرفين', added.concat(updated).join('، '),
+      '-', '-', 'أُضيف ' + added.length + ' وحُدِّث ' + updated.length);
+    SpreadsheetApp.flush();
+    _mfClearBootstrapCache_();
+  }
+  return { success: true, added: added, updated: updated, skipped: skipped };
+}
+// 🔗 (V4.165) مشاركة جماعية: يضيف شركة أو أكثر لقائمة "مشاركة" أكثر من مشرف دفعة واحدة، بدل فتح
+// نافذة تعديل كل مشرف على حدة — إضافة فقط (لا يحذف مشاركة موجودة بشركة أخرى لم تُختَر)
+function bulkShareMinistrySupervisors(authToken, names, companies) {
+  var session = _mfPerm_(authToken, 'edit');
+  names = Array.isArray(names) ? names.map(_mfStr_).filter(String) : [];
+  companies = Array.isArray(companies) ? companies.map(_mfStr_).filter(String) : [];
+  if (!names.length) return { success: false, error: 'اختر مشرفاً واحداً على الأقل' };
+  if (!companies.length) return { success: false, error: 'اختر شركة واحدة على الأقل' };
+  var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
+  var list = _mfReadSupervisors_();
+  var updated = [];
+  names.forEach(function(nm) {
+    var hit = list.filter(function(x) { return x.name === nm; })[0];
+    if (!hit) return;
+    var shared = (hit.shared || []).slice();
+    var added = false;
+    companies.forEach(function(c) { if (shared.indexOf(c) < 0) { shared.push(c); added = true; } });
+    if (!added) return;
+    var row = [hit.name, hit.type || 'مرافق', hit.home, shared.join('، '), hit.mobile, hit.notes,
+      hit.createdBy, hit.createdAt, session.username, _mfStamp_()];
+    sh.getRange(hit._row, 1, 1, MF_SUP_HEADERS.length).setValues([row]);
+    logChange_(session.username, 'مشاركة جماعية لمشرف', hit.name, (hit.shared || []).join('، ') || '-', shared.join('، '));
+    updated.push({ name: hit.name, shared: shared });
+  });
+  SpreadsheetApp.flush();
+  _mfClearBootstrapCache_();
+  return { success: true, updated: updated };
+}
 function deleteMinistrySupervisor(authToken, name) {
   var session = _mfPerm_(authToken, 'delete');
   var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
@@ -22419,10 +22491,17 @@ function _vzRowToObj_(r) {
   };
 }
 // 🧳 (V4.155) كل رحلات المجموعة: الرحلة الأساسية + الرحلات الإضافية (مفصولة بفاصلة عربية أو لاتينية)
+// ✂️ (V4.165) نفس فاصل الرحلات المتعددة المطبَّق بالواجهة: فاصلة، أو "-" شرط مسافة على جانب واحد
+// منها على الأقل (لتفادي كسر تواريخ داخل اسم الرحلة نفسه بلا مسافات مثل "15-9")
+function _vzTripSplit_(s) {
+  s = _mfStr_(s); if (!s) return [];
+  var norm = s.replace(/\s+-\s*|\s*-\s+/g, '،');
+  return norm.split(/[،,]/).map(function (t) { return _mfStr_(t); }).filter(String);
+}
 function _vzTripsOf_(f) {
   var out = [], seen = {};
-  [_mfStr_(f && f.tripName)].concat(_mfStr_(f && f.extraTrips).split(/[،,]/)).forEach(function (t) {
-    t = _mfStr_(t); if (!t || seen[t]) return; seen[t] = 1; out.push(t);
+  _vzTripSplit_(f && f.tripName).concat(_vzTripSplit_(f && f.extraTrips)).forEach(function (t) {
+    if (!t || seen[t]) return; seen[t] = 1; out.push(t);
   });
   return out;
 }

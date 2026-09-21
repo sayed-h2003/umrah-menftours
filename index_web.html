@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.164 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.165 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.164)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.165)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.164</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.165</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6777,7 +6777,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.164";
+var CLIENT_APP_VERSION = "4.165";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -15895,6 +15895,18 @@ window.__step('8️⃣.7 _saveThen ✅');
 <script>
 function _saveThen(after) {
   if (!window.currentTripName) { after(); return; }
+  // 🧾 (V4.165) نفس فحص "اسم العميل إلزامي" المُطبَّق بزر الحفظ العادي — كان هذا المسار (الحفظ
+  // عند الخروج من كشف الرحلة) يتخطاه فيصل الطلب للسيرفر ليُرفَض هناك بلا فرصة تصحيح سريعة هنا أولاً
+  var noClient = _findKashfNoClient();
+  if (noClient.length) {
+    showElegantConfirm({
+      icon: '🧾', title: 'اسم العميل مطلوب',
+      message: 'لا يمكن حفظ معتمر بلا اسم عميل. أكمِل العميل لهذه الصفوف (' + noClient.length + ') قبل الخروج:\n' +
+        noClient.slice(0, 12).join('\n') + (noClient.length > 12 ? '\n…' : ''),
+      buttons: [{ label: 'حسناً — سأكمل العميل', class: 'btn-warning' }]
+    });
+    return;
+  }
   var pilgrims = _collectPilgrimsFromTable();
 
   google.script.run
@@ -37265,20 +37277,189 @@ function mfHistory(id) {
 }
 
 /* ---------- سجل المشرفين ---------- */
+var MF_SUP_SEL_ = {}; // ☑️ (V4.165) تحديد متعدد لمشرفين لمشاركتهم جماعياً بشركة/شركات دفعة واحدة
 function mfOpenSupReg() {
+  MF_SUP_SEL_ = {};
   mfModal('🧑‍✈️ سجل المشرفين والشركات',
     '<div style="font-size:11.5px;color:#5c6b83;margin-bottom:9px;">كل مشرف يُسجَّل على شركته الأساسية ويمكن منحه <b>مشاركة</b> في شركات أخرى. ' +
-    'لا يُسمح باختياره على شركة غير مسجّل ولا مُشارَك فيها.</div><div id="mfSupRegBox"></div>',
-    '<button class="mf-btn pri" onclick="mfSupEdit(null)">➕ إضافة مشرف</button>', 820);
+    'لا يُسمح باختياره على شركة غير مسجّل ولا مُشارَك فيها. حدِّد عدة مشرفين بمربعات الاختيار لمشاركتهم بشركة/شركات دفعة واحدة.</div>' +
+    '<div id="mfSupBulkBar" class="mb-2"></div><div id="mfSupRegBox"></div>',
+    '<button class="mf-btn pri" onclick="mfSupEdit(null)">➕ إضافة مشرف</button>' +
+    '<button class="mf-btn" onclick="mfSupBulkAddOpen()">📤 تسجيل مجمَّع (نص/إكسيل)</button>', 820);
   mfSupRegRender();
 }
+function mfSupSelToggle(name, on) { MF_SUP_SEL_[name] = on; mfSupBulkBarRender_(); }
+function mfSupSelToggleAll(on) {
+  (MF.sups || []).forEach(function (s) { MF_SUP_SEL_[s.name] = on; });
+  mfSupRegRender();
+}
+function mfSupBulkBarRender_() {
+  var bar = document.getElementById('mfSupBulkBar'); if (!bar) return;
+  var n = Object.keys(MF_SUP_SEL_).filter(function (k) { return MF_SUP_SEL_[k]; }).length;
+  bar.innerHTML = n ? ('<button class="mf-btn pri" onclick="mfSupBulkShareOpen()">🔗 مشاركة جماعية مع شركة/شركات (' + n + ' مشرف محدَّد)</button>') : '';
+}
+// 🔗 (V4.165) نافذة اختيار الشركات لمشاركة كل المشرفين المحدَّدين بها دفعة واحدة
+function mfSupBulkShareOpen() {
+  var names = Object.keys(MF_SUP_SEL_).filter(function (k) { return MF_SUP_SEL_[k]; });
+  if (!names.length) return;
+  var comps = (MF.companies || []).map(function (c) { return c.company; });
+  var h = '<div style="font-size:11.5px;color:#5c6b83;margin-bottom:8px;">سيُضاف مشاركة الشركات المحدَّدة أدناه لكل من: <b>' + mfEsc(names.join('، ')) + '</b> (إضافة فقط — لا تُحذف أي مشاركة سابقة بشركة أخرى).</div>' +
+    '<div class="d-flex gap-3 flex-wrap">' +
+    comps.map(function (c) { return '<label style="font-size:11.5px;display:flex;gap:5px;align-items:center;"><input type="checkbox" class="mfsu-bulk-comp" value="' + mfEsc(c) + '"> ' + mfEsc(c) + '</label>'; }).join('') +
+    '</div>';
+  mfModal('🔗 مشاركة جماعية (' + names.length + ' مشرف)', h,
+    '<div style="flex:1;"></div><button class="mf-btn" onclick="mfOpenSupReg()">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="mfSupBulkShareApply()">💾 تطبيق</button>', 560);
+}
+function mfSupBulkShareApply() {
+  var names = Object.keys(MF_SUP_SEL_).filter(function (k) { return MF_SUP_SEL_[k]; });
+  var comps = []; document.querySelectorAll('.mfsu-bulk-comp:checked').forEach(function (c) { comps.push(c.value); });
+  if (!comps.length) { _showPopup('اختر شركة واحدة على الأقل', 'error'); return; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر التطبيق', 'error'); return; }
+      // ⚡ (V4.165) دمج فوري محلي — نفس مبدأ الحفظ الفردي، بلا انتظار إعادة تحميل كامل
+      (res.updated || []).forEach(function (u) {
+        var hit = (MF.sups || []).filter(function (s) { return s.name === u.name; })[0];
+        if (hit) hit.shared = u.shared;
+      });
+      _showPopup('تمت المشاركة الجماعية لـ' + names.length + ' مشرف', 'success');
+      MF_SUP_SEL_ = {};
+      mfOpenSupReg();
+      mfLoad(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .bulkShareMinistrySupervisors(window.authToken, names, comps);
+}
+
+/* ---------- 📤 (V4.165) تسجيل مجمَّع لعدة مشرفين دفعة واحدة — لصق نصي أو استيراد إكسيل ---------- */
+var MF_SUP_BULK_COLS_ = [
+  ['name', 'اسم المشرف', ['اسم المشرف', 'الاسم', 'name']],
+  ['type', 'النوع', ['النوع', 'type']],
+  ['home', 'الشركة الأساسية', ['الشركة الأساسية', 'الشركة', 'company', 'home']],
+  ['mobile', 'الجوال', ['الجوال', 'رقم الجوال', 'موبايل', 'mobile']],
+  ['shared', 'مشاركة في', ['مشاركة في', 'مشاركة', 'shared']],
+  ['notes', 'ملاحظات', ['ملاحظات', 'notes']]
+];
+function mfSupBulkAddOpen() {
+  MF._supBulkRows = [];
+  var h = '<div class="mf-note info">📤<div>سجِّل عدة مشرفين دفعة واحدة: الصق أسطراً نصية (سطر لكل مشرف) أو ارفع ملف إكسيل. ' +
+    'الاسم والشركة الأساسية إلزاميان فقط لكل صف، وأي اسم مسجَّل من قبل تُحدَّث بياناته.</div></div>' +
+    '<div class="mb-2"><label style="font-size:11px;font-weight:800;color:#5c6b83;">لصق نصي (سطر لكل مشرف): الاسم، النوع، الشركة الأساسية، الجوال، ملاحظات</label>' +
+    '<textarea id="mfsbText" class="form-control form-control-sm" rows="4" placeholder="مثال:\nأحمد محمد، مرافق، واي تش ام، 0555555555، —\nسارة علي، استقبال، ريادة الرؤى"></textarea>' +
+    '<button class="mf-btn sm pri mt-1" onclick="mfSupBulkParseText()">🔎 معاينة من النص</button></div>' +
+    '<div class="mb-2"><label style="font-size:11px;font-weight:800;color:#5c6b83;">أو ملف إكسيل (رأس أعمدة: اسم المشرف / النوع / الشركة الأساسية / الجوال / مشاركة في / ملاحظات)</label>' +
+    '<input type="file" id="mfsbFile" class="form-control form-control-sm" accept=".xlsx,.xls" onchange="mfSupBulkParseExcel()"></div>' +
+    '<div id="mfsbPreview"></div>';
+  mfModal('📤 تسجيل مجمَّع لمشرفين', h,
+    '<span id="mfsbCnt" style="font-size:11.5px;font-weight:700;"></span><div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfOpenSupReg()">إلغاء</button>' +
+    '<button class="mf-btn pri" id="mfsbGoBtn" style="display:none;" onclick="mfSupBulkCommit()">💾 تسجيل الصفوف الصالحة</button>', 820);
+}
+function mfSupBulkParseText() {
+  var txt = (document.getElementById('mfsbText') || {}).value || '';
+  var rows = txt.split('\n').map(function (line) { return line.trim(); }).filter(Boolean).map(function (line) {
+    var p = line.split(/[،,]/).map(function (x) { return x.trim(); });
+    return { name: p[0] || '', type: p[1] || 'مرافق', home: p[2] || '', mobile: p[3] || '', notes: p[4] || '', shared: [] };
+  });
+  MF._supBulkRows = rows;
+  mfSupBulkRenderPreview_();
+}
+function mfSupBulkParseExcel() {
+  var finp = document.getElementById('mfsbFile');
+  var out = document.getElementById('mfsbPreview');
+  if (!finp.files || !finp.files.length) return;
+  if (typeof XLSX === 'undefined') { out.innerHTML = '<div class="alert alert-danger small">مكتبة قراءة الإكسيل غير محمَّلة</div>'; return; }
+  out.innerHTML = '<div class="text-muted small p-2">⏳ جاري قراءة الملف…</div>';
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    try {
+      var wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+      var norm = function (s) { return mfStr(s).replace(/[ً-ْ]/g, '').toLowerCase(); };
+      var hRow = -1, colMap = {};
+      for (var r = 0; r < Math.min(aoa.length, 10); r++) {
+        var hits = 0, m = {};
+        (aoa[r] || []).forEach(function (cell, ci) {
+          var n = norm(cell); if (!n) return;
+          MF_SUP_BULK_COLS_.forEach(function (c) {
+            if (m[c[0]] !== undefined) return;
+            if (c[2].some(function (alias) { return n.indexOf(norm(alias)) >= 0; })) { m[c[0]] = ci; hits++; }
+          });
+        });
+        if (hits >= 2) { hRow = r; colMap = m; break; }
+      }
+      if (hRow < 0) { out.innerHTML = '<div class="alert alert-danger small">لم يُعثر على صف عناوين معروف بالملف.</div>'; return; }
+      var rows = [];
+      for (var i = hRow + 1; i < aoa.length; i++) {
+        var raw = aoa[i] || [];
+        var get = function (k) { var ci = colMap[k]; return ci === undefined ? '' : mfStr(raw[ci]); };
+        var name = get('name'); if (!name) continue;
+        rows.push({ name: name, type: get('type') || 'مرافق', home: get('home'), mobile: get('mobile'),
+          notes: get('notes'), shared: get('shared') ? get('shared').split(/[،,]/).map(function (x) { return x.trim(); }).filter(Boolean) : [] });
+      }
+      MF._supBulkRows = rows;
+      mfSupBulkRenderPreview_();
+    } catch (err) {
+      out.innerHTML = '<div class="alert alert-danger small">❌ تعذّرت قراءة الملف: ' + escapeHtml_(err && err.message ? err.message : err) + '</div>';
+    }
+  };
+  reader.readAsBinaryString(finp.files[0]);
+}
+function mfSupBulkRenderPreview_() {
+  var out = document.getElementById('mfsbPreview'), cnt = document.getElementById('mfsbCnt'), go = document.getElementById('mfsbGoBtn');
+  var rows = MF._supBulkRows || [];
+  if (!rows.length) { out.innerHTML = '<div class="text-muted small p-2">لا صفوف بعد.</div>'; if (go) go.style.display = 'none'; if (cnt) cnt.textContent = ''; return; }
+  var valid = 0;
+  var h = '<table class="mf-mini" style="background:#fff;"><thead><tr><th>الاسم</th><th>النوع</th><th>الشركة الأساسية</th><th>الجوال</th><th>مشاركة في</th><th>ملاحظات</th></tr></thead><tbody>';
+  rows.forEach(function (r) {
+    var ok = mfStr(r.name) && mfStr(r.home);
+    if (ok) valid++;
+    h += '<tr' + (ok ? '' : ' style="background:#fef2f2;"') + '>' +
+      '<td>' + mfEsc(r.name || '⛔ بلا اسم') + '</td><td>' + mfEsc(r.type) + '</td>' +
+      '<td>' + mfEsc(r.home || '⛔ بلا شركة') + '</td><td class="mf-latin">' + mfEsc(r.mobile) + '</td>' +
+      '<td>' + mfEsc((r.shared || []).join('، ')) + '</td><td>' + mfEsc(r.notes) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  out.innerHTML = h;
+  if (cnt) cnt.textContent = valid + ' صف صالح من ' + rows.length;
+  if (go) go.style.display = valid ? '' : 'none';
+}
+function mfSupBulkCommit() {
+  var rows = (MF._supBulkRows || []).filter(function (r) { return mfStr(r.name) && mfStr(r.home); });
+  if (!rows.length) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر التسجيل', 'error'); return; }
+      // ⚡ (V4.165) دمج فوري محلي بدون انتظار — نفس مبدأ الحفظ الفردي والمشاركة الجماعية
+      MF.sups = MF.sups || [];
+      rows.forEach(function (r) {
+        if ((res.skipped || []).indexOf(r.name) >= 0) return;
+        var idx = -1; MF.sups.forEach(function (s, i) { if (s.name === r.name) idx = i; });
+        var rec = { name: r.name, type: r.type || 'مرافق', home: r.home, shared: r.shared || [], mobile: r.mobile, notes: r.notes };
+        if (idx >= 0) MF.sups[idx] = rec; else MF.sups.push(rec);
+      });
+      _showPopup('تسجيل مجمَّع: أُضيف ' + (res.added || []).length + ' وحُدِّث ' + (res.updated || []).length +
+        ((res.skipped || []).length ? (' — تُخُطِّي ' + res.skipped.length + ' (بلا اسم/شركة)') : ''), 'success');
+      mfOpenSupReg();
+      mfLoad(true);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .bulkSaveMinistrySupervisors(window.authToken, rows);
+}
+
 function mfSupRegRender() {
-  var h = '<table class="mf-mini" style="background:#fff;"><thead><tr><th>المشرف</th><th>النوع</th><th>الشركة الأساسية</th>' +
+  var allOn = (MF.sups || []).length > 0 && (MF.sups || []).every(function (s) { return MF_SUP_SEL_[s.name]; });
+  var h = '<table class="mf-mini" style="background:#fff;"><thead><tr>' +
+    '<th style="width:26px;"><input type="checkbox" ' + (allOn ? 'checked' : '') + ' onchange="mfSupSelToggleAll(this.checked)" title="تحديد الكل"></th>' +
+    '<th>المشرف</th><th>النوع</th><th>الشركة الأساسية</th>' +
     '<th>مشاركة في</th><th>العبء الحالي</th><th style="width:90px;"></th></tr></thead><tbody>';
   (MF.sups || []).forEach(function (s) {
     var load = 0;
     MF.files.forEach(function (f) { (f.sups || []).forEach(function (x) { if (mfStr(x.name) === mfStr(s.name)) load += mfNum(f.pilgrims); }); });
-    h += '<tr><td style="font-weight:800;">' + mfEsc(s.name) + '</td>' +
+    h += '<tr><td><input type="checkbox" ' + (MF_SUP_SEL_[s.name] ? 'checked' : '') + ' onchange="mfSupSelToggle(\'' + mfEsc(s.name).replace(/'/g, "\\'") + '\',this.checked)"></td>' +
+      '<td style="font-weight:800;">' + mfEsc(s.name) + '</td>' +
       '<td><span class="mf-badge ' + (String(s.type).indexOf('مرافق') >= 0 ? 'norm' : 'off') + '">' + mfEsc(s.type) + '</span></td>' +
       '<td>' + mfEsc(s.home) + '</td>' +
       '<td>' + ((s.shared || []).length ? mfEsc((s.shared || []).join('، ')) : '<span style="color:#94a3b8;">—</span>') + '</td>' +
@@ -37286,9 +37467,10 @@ function mfSupRegRender() {
       '<td><button class="mf-btn" onclick="mfSupEdit(\'' + mfEsc(s.name).replace(/'/g, "\\'") + '\')">✏️</button> ' +
       '<button class="mf-btn" style="color:#dc2626;" onclick="mfSupRegDel(\'' + mfEsc(s.name).replace(/'/g, "\\'") + '\')">🗑️</button></td></tr>';
   });
-  if (!(MF.sups || []).length) h += '<tr><td colspan="6" style="color:#94a3b8;">لا يوجد مشرفون مسجلون</td></tr>';
+  if (!(MF.sups || []).length) h += '<tr><td colspan="7" style="color:#94a3b8;">لا يوجد مشرفون مسجلون</td></tr>';
   h += '</tbody></table>';
   document.getElementById('mfSupRegBox').innerHTML = h;
+  mfSupBulkBarRender_();
 }
 function mfSupEdit(name) {
   var s = name ? (MF.sups || []).filter(function (x) { return x.name === name; })[0] : null;
@@ -37324,17 +37506,34 @@ function mfSupRegSave(origName) {
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
       _showPopup('تم حفظ بيانات المشرف', 'success');
-      mfLoad(true); setTimeout(mfOpenSupReg, 500);
+      // ⚡ (V4.165) دمج فوري محلي بدل انتظار إعادة تحميل كامل البوتستراب ثم إعادة فتح النافذة بعد
+      // نصف ثانية — كان هذا سباقاً فعلياً: لو تأخر التحميل الخلفي عن نصف ثانية يُعاد رسم الجدول
+      // بالبيانات القديمة، فيبدو أن المشرف المضاف/المعدَّل لم يُحفَظ رغم نجاح الحفظ فعلياً بالسيرفر
+      MF.sups = MF.sups || [];
+      var oldKey = mfStr(origName) || payload.name;
+      var idx = -1;
+      MF.sups.forEach(function (s, i) { if (mfStr(s.name) === oldKey) idx = i; });
+      var rec = { name: payload.name, type: payload.type, home: payload.home, shared: payload.shared, mobile: payload.mobile, notes: payload.notes };
+      if (idx >= 0) MF.sups[idx] = rec; else MF.sups.push(rec);
+      mfSupEditClose_();
+      mfSupRegRender();
+      mfLoad(true);
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveMinistrySupervisor(window.authToken, payload);
 }
+// ⚡ (V4.165) إغلاق نافذة تعديل/إضافة مشرف والعودة لسجل المشرفين فوراً بلا انتظار تحميل — نفس بيانات
+// الجدول المُحدَّثة محلياً بالفعل بنجاح الحفظ (mfSupRegSave)
+function mfSupEditClose_() { mfOpenSupReg(); }
 function mfSupRegDel(name) {
   if (!confirm('حذف المشرف «' + name + '» من السجل؟')) return;
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
-      _showPopup('تم حذف المشرف', 'success'); mfLoad(true); setTimeout(mfOpenSupReg, 500);
+      _showPopup('تم حذف المشرف', 'success');
+      MF.sups = (MF.sups || []).filter(function (s) { return mfStr(s.name) !== mfStr(name); });
+      mfSupRegRender();
+      mfLoad(true);
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .deleteMinistrySupervisor(window.authToken, name);
@@ -39232,9 +39431,9 @@ function vzFormRender() {
       '<div class="col-md-3 vz-fld"><label>عدد المجموعة</label><input id="vzfCount" value="' + vzEsc(d.visaCount) + '" oninput="vzSet(\'visaCount\',this.value,true)"></div>' +
       // 🧳 (V4.155) رحلات إضافية: المجموعة الواحدة قد تجمع معتمرين من أكثر من رحلة/عميل — تُكتب هنا
       // مفصولة بفاصلة، وتُجلَب أسماء معتمريها جميعاً مع الرحلة الأساسية للاختيار منها بنفس الآلية
-      '<div class="col-md-8 vz-fld"><label>رحلات إضافية مرتبطة (اختياري — افصل بفاصلة)</label>' +
+      '<div class="col-md-8 vz-fld"><label>رحلات إضافية مرتبطة (اختياري — افصل بعلامة "-" أو فاصلة)</label>' +
         '<input list="vzTripsDL" id="vzfExtraTrips" autocomplete="off" value="' + vzEsc(d.extraTrips || '') + '" ' +
-        'oninput="vzSet(\'extraTrips\',this.value)" onchange="vzSet(\'extraTrips\',this.value);vzTripChanged()" placeholder="مثال: رحلة ٢٠ رمضان، رحلة ٢٥ رمضان"></div>' +
+        'oninput="vzSet(\'extraTrips\',this.value)" onchange="vzSet(\'extraTrips\',this.value);vzTripChanged()" placeholder="مثال: رحلة ٢٠ رمضان - رحلة ٢٥ رمضان"></div>' +
       '<div class="col-12 vz-fld"><label>ملاحظات</label><input value="' + vzEsc(d.notes) + '" oninput="vzSet(\'notes\',this.value)" placeholder="أي ملاحظات على المجموعة"></div>' +
     '</div></div>' +
     '<div class="vz-sec"><div class="vz-sec-h">🧾 العملاء داخل المجموعة <span id="vzBdChip"></span></div>' +
@@ -39254,6 +39453,9 @@ function vzFormRender() {
       '<button class="vz-btn sm" onclick="vzHzAdd(\'مكة\')">➕ سكن مكة</button>' +
       '<button class="vz-btn sm" onclick="vzHzAdd(\'المدينة\')">➕ سكن المدينة</button>' +
       (mfStr(d.tripName) ? '<button class="vz-btn sm pri" onclick="vzHzFromTrip()">🧳 جلب فنادق الرحلة</button>' : '') +
+      // 🔄 (V4.164) زر واحد يجلب اتفاقيتَي السكن والإعاشة لكل من مكة والمدينة معاً برقم هذه المجموعة —
+      // بدل زر منفصل بكل سكن، لو لم تُسحب تلقائياً
+      '<button class="vz-btn sm" title="جلب أرقام اتفاقيات السكن والإعاشة المسجَّلة مسبقاً برقم هذه المجموعة (مكة والمدينة معاً) — لو لم تُسحب تلقائياً" onclick="vzHzFetchAgrAll()">🔄 جلب اتفاقيات السكن والإعاشة</button>' +
       '</span></div>' +
       '<div style="font-size:11px;color:#4e7a6e;margin-bottom:8px;line-height:1.7;">' +
       'المجموعة الواحدة قد تُوزَّع على أكثر من فندق في المدينة الواحدة — سجّل لكل فندق عدده وتواريخه ورقم اتفاقية سكنه والمورد. ' +
@@ -39412,23 +39614,33 @@ function vzHzSupplierHint(i) {
   }
   vzHzRender();
 }
-// 🔄 (V4.164) جلب أرقام اتفاقيتَي السكن/الإعاشة المسجَّلتين مسبقاً بشاشة اتفاقيات السكن لنفس رقم
-// المجموعة والمدينة، لو لم يُسحبا تلقائياً (مثلاً لو الاتفاقية سُجِّلت بعد فتح نموذج المجموعة)
-function vzHzFetchAgr(i) {
-  var L = vzHzList(), h = L[i]; if (!h) return;
+// 🔄 (V4.164) زر واحد يجلب اتفاقيتَي السكن والإعاشة لكل من مكة والمدينة معاً برقم هذه المجموعة —
+// من شاشة اتفاقيات السكن، لو لم تُسحب تلقائياً (مثلاً لو الاتفاقية سُجِّلت بعد فتح نموذج المجموعة).
+// لو لا يوجد سكن مسجَّل بعد لمدينة لها اتفاقيات مطابقة، يُضاف سكن جديد لتلك المدينة تلقائياً.
+function vzHzFetchAgrAll() {
   var ref = mfStr(VZ._draft.ref);
   if (!ref) { _showPopup('أدخل رقم المجموعة أولاً حتى يمكن مطابقتها باتفاقيات مسجَّلة', 'error'); return; }
   var g = (VZ.housingByGroup || {})[ref];
   if (!g) { _showPopup('لا اتفاقيات مسجَّلة بعد لرقم المجموعة «' + ref + '» بشاشة اتفاقيات السكن', 'error'); return; }
-  var bucket = (h.city === 'المدينة' ? 'madinah' : 'makkah');
-  var hHits = g[bucket] || [], cHits = g[bucket + 'Catering'] || [];
+  var L = vzHzList();
   var filled = [];
-  if (hHits.length) { var hNo = hHits.map(function (x) { return x.agrNo; }).join('، '); if (mfStr(h.hAgr) !== hNo) { h.hAgr = hNo; filled.push('🏨 سكن'); } }
-  if (cHits.length) { var cNo = cHits.map(function (x) { return x.agrNo; }).join('، '); if (mfStr(h.cAgr) !== cNo) { h.cAgr = cNo; filled.push('🍽️ إعاشة'); } }
-  if (!mfStr(h.supplier) && (hHits[0] || cHits[0])) h.supplier = (hHits[0] || cHits[0]).supplier || h.supplier;
-  if (!mfStr(h.hotel) && (hHits[0] || cHits[0])) h.hotel = (hHits[0] || cHits[0]).hotel || h.hotel;
+  ['مكة', 'المدينة'].forEach(function (city) {
+    var bucket = (city === 'المدينة' ? 'madinah' : 'makkah');
+    var hHits = g[bucket] || [], cHits = g[bucket + 'Catering'] || [];
+    if (!hHits.length && !cHits.length) return;
+    var rows = L.filter(function (h) { return h.city === city; });
+    if (!rows.length) { vzHzAdd(city); rows = [vzHzList()[vzHzList().length - 1]]; }
+    rows.forEach(function (h) {
+      var hNo = hHits.map(function (x) { return x.agrNo; }).join('، ');
+      var cNo = cHits.map(function (x) { return x.agrNo; }).join('، ');
+      if (hHits.length && mfStr(h.hAgr) !== hNo) { h.hAgr = hNo; filled.push('🏨 سكن ' + city); }
+      if (cHits.length && mfStr(h.cAgr) !== cNo) { h.cAgr = cNo; filled.push('🍽️ إعاشة ' + city); }
+      if (!mfStr(h.supplier) && (hHits[0] || cHits[0])) h.supplier = (hHits[0] || cHits[0]).supplier || h.supplier;
+      if (!mfStr(h.hotel) && (hHits[0] || cHits[0])) h.hotel = (hHits[0] || cHits[0]).hotel || h.hotel;
+    });
+  });
   vzHzRender();
-  _showPopup(filled.length ? ('جُلبت اتفاقية ' + filled.join(' و') + ' لـ' + h.city) : 'لا اتفاقيات مطابقة لمدينة «' + h.city + '» برقم هذه المجموعة', filled.length ? 'success' : 'error');
+  _showPopup(filled.length ? ('جُلبت اتفاقيات: ' + filled.join('، ')) : 'لا اتفاقيات مسجَّلة مطابقة لمكة أو المدينة برقم هذه المجموعة', filled.length ? 'success' : 'error');
 }
 // مجموع أعداد الفنادق لكل مدينة مقابل عدد المجموعة
 function vzHzTotals() {
@@ -39477,9 +39689,6 @@ function vzHzRender() {
         // 🍽️ (V4.164) رقم اتفاقية الإعاشة — كان موجوداً بنموذج البيانات (h.cAgr) بلا أي حقل يُدخله المستخدم
         '<div class="col-md-4 vz-fld"><label>رقم اتفاقية الإعاشة</label><input style="' + inp + '" value="' + vzEsc(h.cAgr) + '" oninput="vzHzSet(' + i + ',\'cAgr\',this.value)" onblur="vzHzSupplierHint(' + i + ')"></div>' +
         '<div class="col-md-4 vz-fld"><label>المورد</label><input list="vzSuppliersDL" style="' + inp + '" value="' + vzEsc(h.supplier) + '" oninput="vzHzSet(' + i + ',\'supplier\',this.value)" placeholder="الفندق أو الوكيل أو مورد آخر"></div>' +
-        '<div class="col-12">' +
-          '<button type="button" class="vz-btn sm" title="جلب أرقام اتفاقيات السكن/الإعاشة المسجَّلة مسبقاً لهذا الرقم مجموعة (شاشة اتفاقيات السكن) — لو لم تُسحب تلقائياً" onclick="vzHzFetchAgr(' + i + ')">🔄 جلب اتفاقيات مسجَّلة لهذه المجموعة/المدينة</button>' +
-        '</div>' +
       '</div></div>';
   }).join('');
   vzHzChip();
@@ -39511,6 +39720,16 @@ function vzHzFromTrip() {
    تاريخ السفر، العدد، وفنادق مكة والمدينة بأعدادها وتواريخها) — وكلها قابلة للتعديل. */
 function vzTripChanged() {
   var d = VZ._draft; VZ._pick = null; VZ._pickLoading = false;
+  // 🔀 (V4.165) لو المستخدم كتب أكثر من رحلة بحقل «الرحلة المرتبطة» الأساسي نفسه (بفاصلة أو "-")،
+  // نُبقي أول قيمة رحلة أساسية وننقل الباقي تلقائياً لحقل «رحلات إضافية مرتبطة» — بدل أن يُسجَّل
+  // كل النص كاسم رحلة واحد حرفي غير موجود فعلياً (وهذا كان يمنع جلب أسماء معتمري أي من الرحلتين)
+  var mainParts = _vzTripSplit_(d.tripName);
+  if (mainParts.length > 1) {
+    d.tripName = mainParts[0];
+    var seenExtra = {}; var extra = [];
+    _vzTripSplit_(d.extraTrips).concat(mainParts.slice(1)).forEach(function (t) { if (!seenExtra[t]) { seenExtra[t] = 1; extra.push(t); } });
+    d.extraTrips = extra.join('، ');
+  }
   var t = (VZ.trips || []).filter(function (x) { return x.name === d.tripName; })[0];
   if (t) {
     if (t.company && !mfStr(d.company)) d.company = t.company;
@@ -39535,11 +39754,18 @@ function vzTripChanged() {
   vzSetPrice();
   vzFormRender();
 }
+// ✂️ (V4.165) فاصل أسماء الرحلات المتعددة: فاصلة عادية/عربية، أو علامة "-" شرط وجود مسافة على
+// جانب واحد منها على الأقل (لتفادي كسر تواريخ مكتوبة داخل اسم الرحلة نفسه بلا مسافات مثل "15-9")
+function _vzTripSplit_(s) {
+  s = mfStr(s); if (!s) return [];
+  var norm = s.replace(/\s+-\s*|\s*-\s+/g, '،');
+  return norm.split(/[،,]/).map(function (t) { return mfStr(t); }).filter(Boolean);
+}
 // 🧳 (V4.155) كل رحلات المجموعة: الأساسية + الإضافية (نفس منطق _vzTripsOf_ بالخادم)
 function vzTripsOfDraft_(d) {
   var out = [], seen = {};
-  [mfStr(d && d.tripName)].concat(mfStr(d && d.extraTrips).split(/[،,]/)).forEach(function (t) {
-    t = mfStr(t); if (!t || seen[t]) return; seen[t] = 1; out.push(t);
+  _vzTripSplit_(d && d.tripName).concat(_vzTripSplit_(d && d.extraTrips)).forEach(function (t) {
+    if (!t || seen[t]) return; seen[t] = 1; out.push(t);
   });
   return out;
 }
