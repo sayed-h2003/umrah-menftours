@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.168 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.169 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.168)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.169)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.168</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.169</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5123,9 +5123,9 @@ input[type="date"]:not(:focus):not(:valid) {
     white-space:normal; word-break:break-word; line-height:1.25; font-size:11px;
     position:sticky; top:0; z-index:2; border:1px solid var(--vzGD); }
   /* ↔️ (V4.145) مقبض تغيير عرض العمود بالسحب — نفس أسلوب شاشة ملفات الوزارة */
-  #section-visas .vz-rsz{ position:absolute; top:0; bottom:0; inset-inline-end:-3px; width:7px; cursor:col-resize; z-index:3; }
-  #section-visas .vz-rsz::after{ content:""; position:absolute; top:5px; bottom:5px; inset-inline-end:3px; width:1px; background:rgba(255,255,255,.28); }
-  #section-visas .vz-rsz:hover::after{ background:var(--vzGold); width:2px; }
+  #section-visas .vz-rsz, .vz-dlg .vz-rsz{ position:absolute; top:0; bottom:0; inset-inline-end:-3px; width:7px; cursor:col-resize; z-index:3; }
+  #section-visas .vz-rsz::after, .vz-dlg .vz-rsz::after{ content:""; position:absolute; top:5px; bottom:5px; inset-inline-end:3px; width:1px; background:rgba(255,255,255,.28); }
+  #section-visas .vz-rsz:hover::after, .vz-dlg .vz-rsz:hover::after{ background:var(--vzGold); width:2px; }
   body.vz-resizing, body.vz-resizing *{ cursor:col-resize !important; user-select:none !important; }
   /* 🔎↕️ أيقونتا التصفية الديناميكية والترتيب برأس كل عمود — نفس أسلوب شاشة ملفات الوزارة */
   #section-visas .vz-thin, .vz-dlg .vz-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
@@ -5164,7 +5164,7 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-visas .vz-actbar .vz-btn:hover{ background:rgba(255,255,255,.27); color:#fff; border-color:rgba(255,255,255,.42); }
   #section-visas .vz-actbar .vz-btn.dgr{ background:rgba(220,38,38,.32); border-color:rgba(220,38,38,.55); color:#ffdada; }
   .vz-dlg table.vz-tab{ width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
-  .vz-dlg table.vz-tab th{ background:var(--vzGD); color:#fff; padding:7px 6px; border:1px solid var(--vzGD); }
+  .vz-dlg table.vz-tab th{ background:var(--vzGD); color:#fff; padding:7px 6px; border:1px solid var(--vzGD); position:relative; }
   /* 🖨️ (V4.164) كل خلية بسطر واحد بلا التفاف — عمودا البيان والتوجيه المحاسبي فقط يُسمح قصّهما */
   .vz-dlg table.vz-tab td{ padding:6px; border:1px solid #e0efe9; text-align:center; white-space:nowrap; }
   .vz-dlg #vzAccBody table.vz-tab td[style*="text-align:right"]{ overflow:hidden; text-overflow:ellipsis; max-width:220px; }
@@ -5925,7 +5925,10 @@ function _tblApply_(id, rows, cols, rawFn) {
 // يبني خلايا <th> لكل الأعمدة — thClass: 'mf-thic' (شاشات كحلية) أو 'vz-thic' (شاشة التأشيرات الزمردية)
 // reorderCols (V4.164، اختياري): مصفوفة أعمدة الجدول الأصلية (بلا تصفية إظهار/إخفاء) — تمريرها
 // يُفعِّل سحب/إفلات عناوين الأعمدة لإعادة ترتيبها بها مباشرة (splice في نفس المصفوفة بالمرجع)
-function _tblHead_(id, cols, thClass, reorderCols, reorderSaveFn) {
+// colWMap/colWSaveFn (V4.169، اختياريان): كائن {مفتاح_العمود: عرض}، تمريره يُفعِّل مقبض تغيير
+// العرض بالسحب بكل رأس عمود — يتطلب من المستدعي بناء <colgroup><col style="width:..."> مطابق و
+// table-layout:fixed على جدوله (انظر مثال vzAccRender) حتى يُطبَّق العرض المحفوظ فعلياً بعد أي رسم
+function _tblHead_(id, cols, thClass, reorderCols, reorderSaveFn, colWMap, colWSaveFn) {
   thClass = thClass || 'mf-thic';
   var thinCls = thClass === 'vz-thic' ? 'vz-thin' : 'mf-thin';
   _TBL_COLS_[id] = cols;
@@ -5935,16 +5938,106 @@ function _tblHead_(id, cols, thClass, reorderCols, reorderSaveFn) {
       ' ondragleave="_tblDragLeave_(event)" ondrop="_tblDrop_(event,\'' + id + '\',\'' + k + '\')" ondragend="_tblDragEnd_(event)"';
   } : function () { return ''; };
   if (reorderCols) { _TBL_REORDER_[id] = reorderCols; _TBL_REORDER_SAVE_[id] = reorderSaveFn; }
+  if (colWMap) { _TBL_COLW_[id] = colWMap; _TBL_COLW_SAVE_[id] = colWSaveFn; }
+  var rszHandle = colWMap ? function (k) {
+    return '<span class="vz-rsz" title="اسحب لتغيير عرض العمود · ضغطتان = ملائمة تلقائية"' +
+      ' onmousedown="_tblRszStart_(event,\'' + id + '\',\'' + k + '\')" ondblclick="_tblRszReset_(event,\'' + id + '\',\'' + k + '\')"></span>';
+  } : function () { return ''; };
+  var wStyle = function (c) {
+    var w = colWMap ? ((colWMap[c.k]) || c.w) : null;
+    return w ? ('width:' + w + 'px;min-width:' + w + 'px;max-width:' + w + 'px;' + (c.style || '')) : (c.style || '');
+  };
   return (cols || []).map(function (c) {
+    var st2 = wStyle(c);
     // ☑️ (V4.151) عمود تحديد يحمل خيار "تحديد الكل" — يمرَّره المستدعي عبر c.selAll {checked, onchange}
-    if (c.selAll) return '<th' + (c.style ? ' style="' + c.style + '"' : '') + drag(c.k) + '><input type="checkbox" ' +
+    if (c.selAll) return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + '><input type="checkbox" ' +
       (c.selAll.checked ? 'checked' : '') + ' onchange="' + c.selAll.onchange + '" title="تحديد الكل/إلغاء الكل"></th>';
-    if (c.nof) return '<th' + (c.style ? ' style="' + c.style + '"' : '') + drag(c.k) + '>' + escapeHtml_(c.label) + '</th>';
+    if (c.nof) return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + '>' + escapeHtml_(c.label) + '</th>';
     var si = st.sort.key === c.k ? (st.sort.dir > 0 ? '▲' : '▼') : '⇅';
-    return '<th' + (c.style ? ' style="' + c.style + '"' : '') + drag(c.k) + ' title="اسحب لإعادة ترتيب الأعمدة"><div class="' + thinCls + '"><span>' + escapeHtml_(c.label) + '</span>' +
+    return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + ' title="اسحب لإعادة ترتيب الأعمدة"><div class="' + thinCls + '"><span>' + escapeHtml_(c.label) + '</span>' +
       '<button class="' + thClass + (st.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();_tblColFilter_(\'' + id + '\',event,\'' + c.k + '\')">🔽</button>' +
-      '<button class="' + thClass + (st.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();_tblSortBy_(\'' + id + '\',\'' + c.k + '\')">' + si + '</button></div></th>';
+      '<button class="' + thClass + (st.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();_tblSortBy_(\'' + id + '\',\'' + c.k + '\')">' + si + '</button></div>' + rszHandle(c.k) + '</th>';
   }).join('');
+}
+// ↔️ (V4.169) تغيير عرض عمود بالسحب — نسخة عامة تعمل مع أي جدول يمرِّر colWMap لـ_tblHead_
+// (نفس تقنية vzRszStart/vzColWGet_ الخاصة بجدول المجموعات، معمَّمة هنا بمعرِّف جدول id)
+var _TBL_COLW_ = {}, _TBL_COLW_SAVE_ = {}, _TBL_RSZ_ = null;
+function _tblRszStart_(ev, id, k) {
+  ev.preventDefault(); ev.stopPropagation();
+  var th = ev.currentTarget.parentNode; if (!th) return;
+  var m = _TBL_COLW_[id] || {};
+  var startW = m[k] || th.getBoundingClientRect().width;
+  var rtl = true;
+  try { rtl = getComputedStyle(th.closest('table') || document.body).direction === 'rtl'; } catch (e) {}
+  _TBL_RSZ_ = { id: id, k: k, th: th, startX: ev.clientX, startW: startW, rtl: rtl };
+  document.body.classList.add('vz-resizing');
+  document.addEventListener('mousemove', _tblRszMove_);
+  document.addEventListener('mouseup', _tblRszEnd_);
+}
+function _tblRszMove_(ev) {
+  var R = _TBL_RSZ_; if (!R) return;
+  var delta = R.rtl ? (R.startX - ev.clientX) : (ev.clientX - R.startX);
+  var w = Math.max(38, Math.min(700, Math.round(R.startW + delta)));
+  R.live = w;
+  R.th.style.width = w + 'px'; R.th.style.minWidth = w + 'px'; R.th.style.maxWidth = w + 'px';
+  var idx = Array.prototype.indexOf.call(R.th.parentNode.children, R.th);
+  if (idx >= 0) {
+    var table = R.th.closest('table');
+    var cg = table.querySelector('colgroup');
+    if (cg && cg.children[idx]) cg.children[idx].style.width = w + 'px';
+    var rows = table.querySelectorAll('tbody tr');
+    for (var i = 0; i < rows.length; i++) {
+      var cell = rows[i].children[idx];
+      if (cell) { cell.style.maxWidth = w + 'px'; cell.style.minWidth = w + 'px'; }
+    }
+  }
+}
+function _tblRszEnd_() {
+  var R = _TBL_RSZ_;
+  document.removeEventListener('mousemove', _tblRszMove_);
+  document.removeEventListener('mouseup', _tblRszEnd_);
+  document.body.classList.remove('vz-resizing');
+  _TBL_RSZ_ = null;
+  if (R && R.live) {
+    var m = _TBL_COLW_[R.id] || (_TBL_COLW_[R.id] = {});
+    m[R.k] = R.live;
+    var saveFn = _TBL_COLW_SAVE_[R.id];
+    if (saveFn && typeof window[saveFn] === 'function') window[saveFn]();
+    if (_TBL_REFRESH_[R.id]) _TBL_REFRESH_[R.id]();
+  }
+}
+// ضغطتان على المقبض = ملاءمة عرض العمود تلقائياً لأعرض محتوى فيه (رأسه أو أي خلية)
+function _tblRszReset_(ev, id, k) {
+  ev.preventDefault(); ev.stopPropagation();
+  var th = ev.currentTarget.parentNode;
+  var table = th ? th.closest('table') : null;
+  if (!th || !table) return;
+  var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+  var probe = document.createElement('span');
+  probe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;visibility:hidden;white-space:nowrap;font-family:inherit;font-size:12px;';
+  document.body.appendChild(probe);
+  var maxW = 0;
+  var measure = function (text, bold) {
+    if (!text) return;
+    probe.style.fontWeight = bold ? '800' : '600';
+    probe.textContent = text;
+    maxW = Math.max(maxW, probe.getBoundingClientRect().width);
+  };
+  var headSpan = th.querySelector('.vz-thin > span, .mf-thin > span');
+  measure(headSpan ? headSpan.textContent : th.textContent, true);
+  var rows = table.querySelectorAll('tbody tr');
+  for (var i = 0; i < rows.length; i++) {
+    var cell = rows[i].children[idx];
+    if (!cell) continue;
+    var inp = cell.querySelector('input');
+    measure(inp ? inp.value : (cell.getAttribute('title') || cell.textContent), false);
+  }
+  document.body.removeChild(probe);
+  var w = Math.max(38, Math.min(700, Math.round(maxW + 36)));
+  var m = _TBL_COLW_[id] || (_TBL_COLW_[id] = {});
+  m[k] = w;
+  var saveFn = _TBL_COLW_SAVE_[id]; if (saveFn && typeof window[saveFn] === 'function') window[saveFn]();
+  if (_TBL_REFRESH_[id]) _TBL_REFRESH_[id]();
 }
 var _TBL_REORDER_ = {}, _TBL_REORDER_SAVE_ = {}, _tblDragKey_ = null;
 function _tblDragStart_(e, k) { _tblDragKey_ = k; e.currentTarget.classList.add('tbl-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch (x) {} }
@@ -6777,7 +6870,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.168";
+var CLIENT_APP_VERSION = "4.169";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -39053,7 +39146,12 @@ function vzRszMove(ev) {
   // لو كانت بعض الأعمدة مُخفاة بتخصيص الأعمدة، فتختلف فهرسة الأعمدة الظاهرة عن التعريف الكامل
   var idx = Array.prototype.indexOf.call(R.th.parentNode.children, R.th);
   if (idx >= 0) {
-    var rows = R.th.closest('table').querySelectorAll('tbody tr.vz-row');
+    var table = R.th.closest('table');
+    // 🐛 (V4.169) مع colgroup + table-layout:fixed (انظر vzRender)، عرض <col> هو المُلزِم فعلياً —
+    // تحديث th/td فقط أثناء السحب لا يُحرِّك العمود بصرياً بلا تحديث الـ<col> المقابل أيضاً
+    var cg = table.querySelector('colgroup');
+    if (cg && cg.children[idx]) cg.children[idx].style.width = w + 'px';
+    var rows = table.querySelectorAll('tbody tr.vz-row');
     for (var i = 0; i < rows.length; i++) {
       var cell = rows[i].children[idx];
       if (cell) { cell.style.maxWidth = w + 'px'; cell.style.minWidth = w + 'px'; }
@@ -39328,7 +39426,12 @@ function vzRender() {
   // موروثاً فقط) لأن قاعدة td العامة تفرض لوناً داكناً أقوى تحديداً من لون الصف الموروث.
   var totalsTxt = 'الإجمالي (' + list.length + ' مجموعة) — إجمالي العدد: ' + vzL(vzFmt(totCount));
   var totalsRow = '<tr style="background:#075c46;"><td colspan="' + cols.length + '" style="color:#fff;font-weight:800;text-align:center;">' + totalsTxt + '</td></tr>';
-  wrap.innerHTML = '<table class="vz-tab"><thead><tr>' +
+  // 🐛 (V4.169) إصلاح عدم بقاء عرض الأعمدة بعد إعادة الدخول: كان يُطبَّق فقط على رأس العمود (th)
+  // لا خلاياه، وبلا table-layout:fixed كان المتصفح يتجاهل عرض الرأس ويُعيد حساب عرض كل عمود من
+  // أوسع محتوى بداخله (auto layout) — فيبدو الأمر وكأن الحفظ لم يعمل رغم أنه محفوظ فعلاً بالمتصفح.
+  // colgroup + fixed layout يُلزمان كل عمود بعرضه المحفوظ بصرامة بصرف النظر عن طول محتواه.
+  var colgroup = '<colgroup>' + cols.map(function (c) { var w = colW[c.k] || c.w; return '<col' + (w ? (' style="width:' + w + 'px;"') : '') + '>'; }).join('') + '</colgroup>';
+  wrap.innerHTML = '<table class="vz-tab" style="table-layout:fixed;">' + colgroup + '<thead><tr>' +
     headCells + '</tr></thead><tbody>' + body +
     totalsRow +
     '</tbody></table>';
@@ -40493,19 +40596,23 @@ function vzOpenAccount(agent) {
   vzAccFetch();
 }
 function vzAccCal(id) { _vzCal_(id, function () { vzAccApply(); }); }
+// ⚡ (V4.169) فلاتر الكشف (تاريخ/شركة/حالة) صارت محلية بالكامل — بلا أي نداء خادم جديد. الكشف
+// يُجلب من الخادم مرة واحدة فقط بلا فلاتر عند فتح الحساب (كل تاريخ/بند متاح محلياً أصلاً)، وأي
+// تعديل للفلاتر بعدها يُعيد بناء الجدول من البيانات المحمَّلة فوراً — كان كل تعديل فلتر يُعيد نداء
+// getAgentAccount كاملاً من الخادم فيبدو الكشف بطيئاً جداً عند أي تصفية
 function vzAccApply() {
   VZ._accF = { from: mfDate(vzFV('vzAccFrom')), to: mfDate(vzFV('vzAccTo')), company: vzFV('vzAccComp'), status: vzFV('vzAccStatus') };
-  vzAccFetch();
+  vzAccRender();
 }
 function vzAccClearFilters() {
   ['vzAccFrom', 'vzAccTo', 'vzAccComp', 'vzAccStatus'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; });
   VZ._accF = { from: '', to: '', company: '', status: '' };
-  vzAccFetch();
+  vzAccRender();
 }
 function vzAccClearOne(k) {
   var id = k === 'from' ? 'vzAccFrom' : (k === 'to' ? 'vzAccTo' : (k === 'company' ? 'vzAccComp' : 'vzAccStatus'));
   var e = document.getElementById(id); if (e) e.value = '';
-  VZ._accF[k] = ''; vzAccFetch();
+  VZ._accF[k] = ''; vzAccRender();
 }
 function vzAccFetch() {
   var b = document.getElementById('vzAccBody');
@@ -40550,12 +40657,14 @@ function vzAccClose() { var o = document.getElementById('vzAccOv'); if (o) o.rem
    التوجيه المحاسبي، مع زر ترس لتخصيص إظهار/إخفاء الأعمدة وزر لجلب دورات النقل السعودي
    الخاصة بهذا الحساب تحديداً (بمطابقة الوكيل/المورد + الشركة المصرية).
    ============================================================ */
+// 📏 (V4.169) عرض افتراضي معقول (w) لكل عمود — يُستخدَم فقط لو لم يُخصِّص المستخدم عرضاً يدوياً
+// بالسحب (يُحفَظ ويُستعاد من localStorage عندها، انظر vzAccColWGet_)
 var VZ_ACC_LEDGER_COLS_ = [
-  { k: 'sel', label: '☑', nof: true }, { k: 'entryNo', label: 'القيد' }, { k: 'date', label: 'التاريخ', date: true },
-  { k: 'groupRef', label: 'رقم المجموعة' }, { k: 'desc', label: 'البيان' }, { k: 'count', label: 'العدد', num: true },
-  { k: 'price', label: 'السعر', num: true }, { k: 'debit', label: 'مدين', num: true }, { k: 'credit', label: 'دائن', num: true },
-  { k: 'balance', label: 'الرصيد التراكمي', num: true }, { k: 'posting', label: 'التوجيه المحاسبي' },
-  { k: 'act', label: '⚙', nof: true }
+  { k: 'sel', label: '☑', nof: true, w: 32 }, { k: 'entryNo', label: 'القيد', w: 85 }, { k: 'date', label: 'التاريخ', date: true, w: 90 },
+  { k: 'groupRef', label: 'رقم المجموعة', w: 100 }, { k: 'status', label: 'حالة المجموعة', w: 130 }, { k: 'desc', label: 'البيان', w: 170 }, { k: 'count', label: 'العدد', num: true, w: 60 },
+  { k: 'price', label: 'السعر', num: true, w: 75 }, { k: 'debit', label: 'مدين', num: true, w: 90 }, { k: 'credit', label: 'دائن', num: true, w: 90 },
+  { k: 'balance', label: 'الرصيد التراكمي', num: true, w: 110 }, { k: 'posting', label: 'التوجيه المحاسبي', w: 150 },
+  { k: 'act', label: '⚙', nof: true, w: 70 }
 ];
 // 🖱️ (V4.164) ترتيب أعمدة كشف حساب الوكيل يُحفَظ محلياً (لكل جهاز/متصفح) بعد سحب/إفلات أي عمود
 var VZ_ACC_COLORDER_KEY_ = 'vzAccLedgerColOrder';
@@ -40573,11 +40682,20 @@ function vzAccColOrderSave() {
     ordered.forEach(function (c) { VZ_ACC_LEDGER_COLS_.push(c); });
   } catch (e) {}
 })();
+// ↔️ (V4.169) عرض أعمدة كشف حساب الوكيل بالسحب — محفوظ محلياً بنفس أسلوب ترتيب الأعمدة أعلاه
+var VZ_ACC_COLW_KEY_ = 'vzAccLedgerColW';
+function vzAccColWGet_() {
+  if (VZ._accColW) return VZ._accColW;
+  var v = {}; try { v = JSON.parse(localStorage.getItem(VZ_ACC_COLW_KEY_) || '{}') || {}; } catch (e) { v = {}; }
+  VZ._accColW = v; _TBL_COLW_.vzAccLedger = v; // نفس الكائن بالمرجع — يقرأه محرك التحجيم العام مباشرة
+  return v;
+}
+function vzAccColWSave() { try { localStorage.setItem(VZ_ACC_COLW_KEY_, JSON.stringify(VZ._accColW || {})); } catch (e) {} }
 // القيمة الخام لعمود بعينه بدفتر الحساب — للتصفية الديناميكية والترتيب (نفس محرك بقية الشاشات)
 function _vzAccLedgerRaw_(k, x) {
   switch (k) {
     case 'entryNo': return mfStr(x.entryNo); case 'date': return mfStr(x.date); case 'groupRef': return mfStr(x.groupRef);
-    case 'desc': return mfStr(x.desc); case 'count': return mfNum(x.count); case 'price': return mfNum(x.price);
+    case 'status': return mfStr(x.status); case 'desc': return mfStr(x.desc); case 'count': return mfNum(x.count); case 'price': return mfNum(x.price);
     case 'debit': return mfNum(x.debit); case 'credit': return mfNum(x.credit); case 'balance': return mfNum(x.balance);
     case 'posting': return mfStr(x.posting); default: return '';
   }
@@ -40614,10 +40732,13 @@ function vzAccBuildRows_() {
   var fromMs = f.from ? mfMs(mfDate(f.from)) : -Infinity, toMs = f.to ? mfMs(mfDate(f.to)) : Infinity;
   var rows = [];
   (r.files || []).forEach(function (x) {
+    // ⚡ (V4.169) فلترة الشركة والحالة أصبحت محلية هنا (بلا نداء خادم) — انظر تعليق vzAccApply
+    if (f.company && x.company !== f.company) return;
+    if (f.status && x.status !== f.status) return;
     var v = mfNum(x.visaCount) * mfNum(x.price);
     rows.push({ kind: 'group', id: x.id, entryNo: x.entryNo, date: x.date, groupRef: x.ref || ('#' + x.seq),
       desc: x.tripName || x.clientsLabel || '—', count: mfNum(x.visaCount), price: mfNum(x.price),
-      debit: v, credit: 0, posting: x.clientsLabel || x.tripName || '—' });
+      debit: v, credit: 0, posting: x.clientsLabel || x.tripName || '—', status: x.status || '' });
   });
   (r.items || []).forEach(function (x) {
     var v = mfNum(x.value);
@@ -40665,7 +40786,7 @@ function vzAccRender() {
   var allAccSel = deletableRows.length > 0 && deletableRows.every(function (x) { return VZ._accSel[selKey(x)]; });
   var selColDef = cols.filter(function (c) { return c.k === 'sel'; })[0];
   if (selColDef) selColDef.selAll = { checked: allAccSel, onchange: 'vzAccSelToggleAll(this.checked)' };
-  var thead = _tblHead_('vzAccLedger', cols, 'vz-thic', VZ_ACC_LEDGER_COLS_, 'vzAccColOrderSave');
+  var thead = _tblHead_('vzAccLedger', cols, 'vz-thic', VZ_ACC_LEDGER_COLS_, 'vzAccColOrderSave', vzAccColWGet_(), 'vzAccColWSave');
   var totCount = 0, totBus = 0, totDebit = 0, totCredit = 0, groupDebit = 0, payCredit = 0;
   var editBtns = function (x) {
     var h = '<button class="vz-rowbtn" title="تعديل" onclick="vzAccEditRow(\'' + x.kind + '\',\'' + vzJs(x.id) + '\')">✏️</button>' +
@@ -40691,6 +40812,7 @@ function vzAccRender() {
           '<input class="vz-inline-inp" value="' + vzEsc(x.entryNo || '') + '" onchange="vzAccEntryNoEdit(\'' + x.kind + '\',\'' + vzJs(x.id) + '\',this.value)">' + '</td>';
         case 'date': return '<td dir="ltr">' + vzEsc(x.date || '—') + '</td>';
         case 'groupRef': return '<td>' + vzEsc(x.groupRef || '—') + '</td>';
+        case 'status': return '<td>' + (x.status ? _vzStatusBadge(x.status) : '—') + '</td>';
         case 'desc': return '<td style="text-align:right;">' + vzEsc(x.desc || '—') + '</td>';
         case 'count': return '<td>' + (x.count !== '' ? vzL(vzFmt(x.count)) : '—') + '</td>';
         case 'price': return '<td>' + (x.price !== '' ? vzL(vzFmt(x.price)) : '—') + '</td>';
@@ -40706,7 +40828,7 @@ function vzAccRender() {
   var finalBalance = rows.length ? rows[rows.length - 1].balance : 0;
   // 📏 (V4.150) الأعمدة الضيقة (تحديد/القيد/التاريخ/رقم المجموعة/البيان/العدد/السعر) تُدمَج في
   // خلية واحدة بجملة الإجمالي بدل إجبارها على الاتّساع، ومدين/دائن/الرصيد تبقى أعمدة رقمية مستقلة
-  var preCols = ['sel', 'entryNo', 'date', 'groupRef', 'desc', 'count', 'price'];
+  var preCols = ['sel', 'entryNo', 'date', 'groupRef', 'status', 'desc', 'count', 'price'];
   var preSpan = cols.filter(function (c) { return preCols.indexOf(c.k) >= 0; }).length;
   var wroteLabel = false;
   var totalsRow = '<tr style="background:#075c46;">' + cols.map(function (c) {
@@ -40737,7 +40859,9 @@ function vzAccRender() {
       // 🐛 (V4.164) الكروت العلوية تُحسَب الآن من نفس صفوف الدفتر المعروضة بالضبط (لا من رصيد
       // الخادم المنفصل) فتطابق صف الإجماليات بأسفل الكشف دائماً — كان اختلاف مصدري الحساب (خادم
       // بلا دورات نقل، شاشة تضم دورات النقل) هو سبب التضارب المُبلَّغ عنه
-      kpi('مستحق التأشيرات (ريال)', vzFmt(groupDebit), '#b45309') +
+      // 💰 (V4.169) إجمالي المستحق = كل الجانب المدين (تأشيرات + دورات نقل + أي بند مدين آخر) لا
+      // التأشيرات وحدها — بطلب صريح، ليطابق فعلياً صف "إجمالي مدين" بأسفل الكشف تماماً
+      kpi('إجمالي المستحق (ريال)', vzFmt(totDebit), '#b45309') +
       kpi('مدفوع (ريال)', vzFmt(payCredit), '#166534') +
       kpi('الصافي (ريال)', netCell(finalBalance, 'ريال'), '') +
       (Math.abs(bal.netE) > 0.5 ? kpi('الصافي (جنيه)', netCell(bal.netE, 'جنيه'), '') : '') +
@@ -40749,7 +40873,12 @@ function vzAccRender() {
       '<button class="vz-btn sm" onclick="vzAccAddPay()">➕ دفعة</button>' +
       '<button class="vz-btn sm" onclick="vzAccAddItem()">➕ بند</button>' +
       '<button class="vz-btn sm" onclick="vzAccColsToggle(this)">⚙️ الأعمدة</button></span></div>' +
-      '<div style="overflow:auto;"><table class="vz-tab"><thead><tr>' + thead + '</tr></thead><tbody>' + bodyRows + totalsRow + '</tbody></table></div></div>';
+      // ↔️ (V4.169) colgroup + table-layout:fixed يُلزمان كل عمود بعرضه المحفوظ (سحب أو افتراضي)
+      // بصرامة — بلا هذا، auto layout يتجاهل عرض الرأس ويحسب كل عمود من أوسع محتوى بداخله فيبدو
+      // أن حفظ العرض لا يعمل بعد إعادة الرسم رغم أنه محفوظ فعلاً
+      '<div style="overflow:auto;"><table class="vz-tab" style="table-layout:fixed;">' +
+      '<colgroup>' + cols.map(function (c) { var w = vzAccColWGet_()[c.k] || c.w; return '<col' + (w ? (' style="width:' + w + 'px;"') : '') + '>'; }).join('') + '</colgroup>' +
+      '<thead><tr>' + thead + '</tr></thead><tbody>' + bodyRows + totalsRow + '</tbody></table></div></div>';
 }
 function vzAccEntryNoEdit(kind, id, val) {
   var fn = kind === 'item' ? 'setAgentAccItemEntryNo' : kind === 'pay' ? 'setAgentPaymentEntryNo' : kind === 'transport' ? 'setTransportRowEntryNo' : null;
@@ -41116,8 +41245,8 @@ function vzAccBuildDoc(forPrint) {
   VZ_ACC_FLT_.forEach(function (m) { var v = mfStr(f[m[0]]); if (v) flt.push(m[1] + ': ' + v); });
   // 💰 (V4.164) نفس أساس الحساب المعروض بأعلى الشاشة (بند-بند من الكشف نفسه) — يضمن تطابق الكشف
   // المطبوع مع كروت الشاشة العلوية تماماً بلا أي فرق في نطاق الاحتساب (دورات النقل مثلاً)
-  var groupDebit = 0, payCredit = 0;
-  rows.forEach(function (x) { if (x.kind === 'group') groupDebit += mfNum(x.debit); if (x.kind === 'pay') payCredit += mfNum(x.credit); });
+  var payCredit = 0;
+  rows.forEach(function (x) { if (x.kind === 'pay') payCredit += mfNum(x.credit); });
 
   // 🖨️ (V4.164) أعمدة الطباعة = نفس أعمدة الشاشة المفعَّلة بالضبط (تخصيص الأعمدة يُطبَّق على الطباعة أيضاً)
   var pcols = VZ_ACC_LEDGER_COLS_.filter(function (c) { return !c.nof && vzAccColsOn_(c.k); });
@@ -41125,6 +41254,7 @@ function vzAccBuildDoc(forPrint) {
     entryNo: function (x) { return vzEsc(x.entryNo || '—'); },
     date: function (x) { return vzEsc(x.date || '—'); },
     groupRef: function (x) { return vzEsc(x.groupRef || '—'); },
+    status: function (x) { return vzEsc(x.status || '—'); },
     desc: function (x) { return vzEsc(x.desc || '—'); },
     count: function (x) { return x.count !== '' ? vzFmt(x.count) : '—'; },
     price: function (x) { return x.price !== '' ? vzFmt(x.price) : '—'; },
@@ -41179,7 +41309,7 @@ function vzAccBuildDoc(forPrint) {
                 : '<div class="flt">🔎 بلا فلاتر — الكشف كامل</div>') +
     '<table><thead>' + head + '</thead><tbody>' + trs + totalsTr + '</tbody></table>' +
     '<table class="sum"><tr>' +
-      '<td>مستحق المجموعات</td><td>' + money(groupDebit) + ' ريال</td>' +
+      '<td>إجمالي المستحق</td><td>' + money(totDebit) + ' ريال</td>' +
       '<td>مدفوع</td><td>' + money(payCredit) + ' ريال</td>' +
       '<td>الصافي</td><td><b>' + money(finalBalance) + ' ريال ' + (finalBalance >= 0 ? 'مستحق له' : 'دائن') + '</b></td>' +
       '</tr>' + (Math.abs(bal.netE) > 0.5 ? '<tr><td colspan="4">الصافي بالجنيه</td><td colspan="2"><b>' +
@@ -41216,7 +41346,7 @@ async function vzAccExportExcel(btn) {
     var pcols = VZ_ACC_LEDGER_COLS_.filter(function (c) { return !c.nof && vzAccColsOn_(c.k); });
     var textCols = { desc: 1, posting: 1, groupRef: 1, entryNo: 1 };
     var moneyCols = { price: 1, debit: 1, credit: 1, balance: 1 };
-    var colW = { entryNo: 12, date: 12, groupRef: 14, desc: 26, count: 9, price: 11, debit: 13, credit: 13, balance: 14, posting: 22 };
+    var colW = { entryNo: 12, date: 12, groupRef: 14, status: 16, desc: 26, count: 9, price: 11, debit: 13, credit: 13, balance: 14, posting: 22 };
 
     var wb = new ExcelJS.Workbook();
     var ws = wb.addWorksheet('كشف الحساب', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 3 }] });
@@ -41255,6 +41385,7 @@ async function vzAccExportExcel(btn) {
           case 'entryNo': cell.value = x.entryNo || ''; return;
           case 'date': { var sd = _mfXlSerial(x.date); cell.value = sd != null ? new Date(sd * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(x.date || ''); cell.numFmt = 'dd/mm/yyyy'; return; }
           case 'groupRef': cell.value = x.groupRef || ''; return;
+          case 'status': cell.value = x.status || ''; return;
           case 'desc': cell.value = x.desc || ''; return;
           case 'count': cell.value = x.count !== '' ? mfNum(x.count) : ''; return;
           case 'price': cell.value = x.price !== '' ? mfNum(x.price) : ''; if (x.price !== '') cell.numFmt = '#,##0'; return;
