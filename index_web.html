@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.169 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.170 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.169)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.170)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.169</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.170</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6870,7 +6870,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.169";
+var CLIENT_APP_VERSION = "4.170";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7397,7 +7397,12 @@ var currentTicketTemporary = false;
   
   
   var localBookingsCache = [];
-  
+  // ⚡ (V4.170) كاش شاشة الفرز والبحث الديناميكي — يُجلب مرة واحدة فقط (بلا فلاتر) ثم كل تغيير
+  // بالفلاتر/البحث يُصفَّى محلياً بالمتصفح بدل نداء الخادم من جديد مع كل حرف يُكتب. يُصفَّر (null)
+  // عند أي تحديث فعلي لبيانات الحجوزات (loadBookingsTable) حتى لا تظهر بيانات قديمة.
+  var _dynSearchCache = null;
+  var _dynMovementsCache = null;
+
 // 🩺 يقارن إصدار الخادم الفعلي المنشور (APP_VERSION في Code.gs) بإصدار الواجهة الحالي —
 // لو اختلفا، يبقى النشر الحالي (Deploy) قديم ولسه ما التقطش آخر تعديل بالكود، فنلوّن
 // شارة الإصدار بالأحمر ونطبع تحذيراً واضحاً بدل ما يفضل المستخدم يشك إن فيه مشكلة غامضة.
@@ -28939,6 +28944,7 @@ function selectBookingRow(id, evt) {
     _ensureBookingsSortModeDefault_(function() {
       google.script.run.withSuccessHandler(function(bookings) {
         localBookingsCache = bookings;
+        _dynSearchCache = null; // ⚡ (V4.170) بيانات الحجوزات تغيّرت — كاش شاشة البحث الديناميكي بات قديماً
         _bkRenderSections_();
       }).withFailureHandler(function(err) {
         if (_handleSessErr_(err)) return;
@@ -33086,6 +33092,85 @@ function clearSingleFilter(fieldId) {
   executeDynamicSearch();
 }
 
+// ⚡ (V4.170) يجلب كاش شاشة الفرز والبحث الديناميكي (الحجوزات بدون فلاتر + كل التحركات)
+// مرة واحدة فقط عند الحاجة، ثم يستدعي cb() — أي نداء لاحق يستخدم نفس الكاش المحمَّل بالذاكرة
+// بلا أي طلب شبكة إضافي، إلى أن يُصفَّر الكاش (null) بعد تحديث فعلي لبيانات الحجوزات.
+function _dynEnsureCaches_(cb) {
+  var needBookings = !_dynSearchCache;
+  var needMovements = !_dynMovementsCache;
+  if (!needBookings && !needMovements) { cb(); return; }
+  var pending = (needBookings ? 1 : 0) + (needMovements ? 1 : 0);
+  var failed = false;
+  function done() { pending--; if (pending <= 0 && !failed) cb(); }
+  if (needBookings) {
+    google.script.run.withSuccessHandler(function (results) {
+      _dynSearchCache = results || [];
+      done();
+    }).withFailureHandler(function (err) {
+      failed = true; console.error(err); alert('حدث خطأ أثناء البحث');
+    }).searchDynamicBookings(window.authToken, {});
+  }
+  if (needMovements) {
+    google.script.run.withSuccessHandler(function (movements) {
+      _dynMovementsCache = movements || [];
+      done();
+    }).withFailureHandler(function (err) {
+      failed = true; console.error(err); alert('خطأ في تحميل التحركات');
+    }).getAllMovementsAuth(window.authToken);
+  }
+}
+
+// ⚡ (V4.170) نفس منطق فلترة searchDynamicBookings بالخادم (Code.gs) — منسوخ حرفياً هنا حتى تُطبَّق
+// كل عملية تصفية محلياً بالمتصفح فوراً بلا أي نداء خادم، على نفس الكاش المحمَّل مرة واحدة.
+function _dynParseDDMMYYYY_(d) {
+  if (!d) return null;
+  var p = String(d).split('/');
+  if (p.length !== 3) return null;
+  return new Date(+p[2], p[1] - 1, +p[0]);
+}
+function _dynOverlap_(start, end, filterStart, filterEnd) {
+  if (!start || !end) return false;
+  if (filterStart && filterEnd) return start <= filterEnd && end >= filterStart;
+  if (filterStart) return end >= filterStart;
+  if (filterEnd) return start <= filterEnd;
+  return true;
+}
+function _dynContains_(fieldVal, needle) {
+  if (!needle) return true;
+  return String(fieldVal || '').toLowerCase().indexOf(String(needle).toLowerCase()) !== -1;
+}
+function _dynFilterBookingsClient_(rows, filters) {
+  return (rows || []).filter(function (row) {
+    if (!_dynContains_(row['رقم الإشعار'], filters.bookingId)) return false;
+    if (!_dynContains_(row['العميل'], filters.client)) return false;
+    if (!_dynContains_(row['الشركة المصرية'], filters.company)) return false;
+    if (!_dynContains_(row['الوكيل السعودي'], filters.agent)) return false;
+    if (!_dynContains_(row['المشرف'], filters.supervisor)) return false;
+    if (!_dynContains_(row['اسم المجموعة'], filters.groupName)) return false;
+
+    if (filters.flight) {
+      var f = String(filters.flight).toLowerCase();
+      var ok = String(row['رقم رحلة الوصول'] || '').toLowerCase().indexOf(f) !== -1 ||
+               String(row['رقم رحلة المغادرة'] || '').toLowerCase().indexOf(f) !== -1;
+      if (!ok) return false;
+    }
+
+    if (!filters.enableCityFilter) return true;
+
+    if (filters.stayLocation) {
+      var from = _dynParseDDMMYYYY_(filters.rangeStart);
+      var to = _dynParseDDMMYYYY_(filters.rangeEnd);
+      if (filters.stayLocation === 'المدينة') {
+        return _dynOverlap_(_dynParseDDMMYYYY_(row['دخول المدينة']), _dynParseDDMMYYYY_(row['خروج المدينة']), from, to);
+      }
+      if (filters.stayLocation === 'مكة') {
+        return _dynOverlap_(_dynParseDDMMYYYY_(row['دخول مكة']), _dynParseDDMMYYYY_(row['خروج مكة']), from, to);
+      }
+    }
+    return true;
+  });
+}
+
 function executeDynamicSearch() {
 
   // 🚌 (V4.123) بحث يدوي جديد — يلغي وضع "زر تبديل النقل" الخاص بكروت اليوم/الغد (لا يظهر الزر
@@ -33151,41 +33236,16 @@ function executeDynamicSearch() {
       rangeEnd
     )
   );
-  
+
   if (movementModeEnabled) {
 
     movementMode = true;
 
-    google.script.run
-
-      .withSuccessHandler(
-
-        function(movements){
-
-          renderMovementResults(
-            movements
-          );
-
-        }
-
-      )
-
-      .withFailureHandler(
-
-        function(err){
-
-          console.error(
-            err
-          );
-
-          alert(
-            'خطأ في تحميل التحركات'
-          );
-        }
-
-      )
-
-      .getAllMovementsAuth(window.authToken);
+    // ⚡ (V4.170) بيانات التحركات كاملة (بلا فلاتر) — تُجلب مرة واحدة فقط، والتصفية الفعلية تتم
+    // داخل renderMovementResults نفسها من قراءة حقول النموذج مباشرة (كانت كذلك بالفعل)
+    _dynEnsureCaches_(function () {
+      renderMovementResults(_dynMovementsCache || []);
+    });
 
     return;
   }
@@ -33249,94 +33309,79 @@ function executeDynamicSearch() {
     enableCityFilter
   };
 
-google.script.run
-  .withSuccessHandler(function(results){
+  // ⚡ (V4.170) لم يعد يُستدعى الخادم مع كل تغيير فلتر — الكاش الكامل (بلا فلاتر) يُجلب مرة واحدة
+  // فقط، وكل تصفية لاحقة (بند-بند، فترة، مدينة) تتم محلياً بالمتصفح فوراً بدون أي طلب شبكة.
+  _dynEnsureCaches_(function () {
 
-    google.script.run
-      .withSuccessHandler(function(allMovements){
+    const allMovements = _dynMovementsCache || [];
+    const results = _dynFilterBookingsClient_(_dynSearchCache, filters);
 
-        // ==========================
-        // ربط التحركات بالإشعارات
-        // ==========================
+    // ==========================
+    // ربط التحركات بالإشعارات
+    // ==========================
 
-        results.forEach(row => {
+    results.forEach(row => {
 
-          const bookingId =
-            String(
-              row['رقم الإشعار'] || ''
-            );
-
-          const relatedMovements =
-
-            allMovements.filter(m =>
-
-              String(
-                m.bookingId
-              ) === bookingId
-            );
-
-          // إزالة الوصول والمغادرة الأساسية
-          const extraMovements =
-
-            relatedMovements.filter(m => {
-
-              const type =
-                String(
-                  m.movementType || ''
-                );
-
-              return !(
-                type.includes('استقبال')
-                ||
-                type.includes('المغادرة')
-                ||
-                type.includes('إلى مطار')
-              );
-
-            });
-
-          // ==========================
-          // أعمدة ديناميكية
-          // ==========================
-
-          extraMovements.forEach((move,index)=>{
-
-  const i = index + 1;
-
-  row[`تحرك إضافي ${i}`] =
-    move.movementType || '';
-
-  row[`موعد تحرك ${i}`] =
-    [
-      move.movementDate || '',
-      move.movementTime || ''
-    ]
-    .filter(Boolean)
-    .join(' - ');
-
-});
-});
-
-        renderSearchResults(
-          results
+      const bookingId =
+        String(
+          row['رقم الإشعار'] || ''
         );
 
-      })
-      .getAllMovementsAuth(window.authToken);
+      const relatedMovements =
 
-  })    .withFailureHandler(err => {
+        allMovements.filter(m =>
 
-      console.error(err);
+          String(
+            m.bookingId
+          ) === bookingId
+        );
 
-      alert(
-        'حدث خطأ أثناء البحث'
-      );
+      // إزالة الوصول والمغادرة الأساسية
+      const extraMovements =
 
-    })
-    .searchDynamicBookings(
-      window.authToken,
-      filters
+        relatedMovements.filter(m => {
+
+          const type =
+            String(
+              m.movementType || ''
+            );
+
+          return !(
+            type.includes('استقبال')
+            ||
+            type.includes('المغادرة')
+            ||
+            type.includes('إلى مطار')
+          );
+
+        });
+
+      // ==========================
+      // أعمدة ديناميكية
+      // ==========================
+
+      extraMovements.forEach((move,index)=>{
+
+        const i = index + 1;
+
+        row[`تحرك إضافي ${i}`] =
+          move.movementType || '';
+
+        row[`موعد تحرك ${i}`] =
+          [
+            move.movementDate || '',
+            move.movementTime || ''
+          ]
+          .filter(Boolean)
+          .join(' - ');
+
+      });
+    });
+
+    renderSearchResults(
+      results
     );
+  });
 }
 
 /* ==========================
