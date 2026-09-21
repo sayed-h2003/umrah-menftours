@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.165";
+var APP_VERSION = "4.166";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -20935,6 +20935,26 @@ function deleteRoomFeeReceipt(authToken, receiptNo) {
 }
 
 /* ---------- سجل المشرفين ---------- */
+// ⚡ (V4.166) نداء خفيف يُرجع المشرفين والشركات فقط — بديل استدعاء getMinistryBootstrap الكامل
+// (الذي يقرأ كل ملفات المراجعة والإيصالات ويحسب أعلامها بالكامل) بعد أي حفظ/حذف/مشاركة لمشرف،
+// فتصير هذه العمليات أسرع ملموساً خصوصاً لو شيت ملفات المراجعة كبير
+function getMinistrySupervisorsOnly(authToken) {
+  _mfPerm_(authToken, 'view');
+  var companies = [];
+  try {
+    var ash = getSpreadsheet_().getSheetByName('Agents_Settings');
+    if (ash && ash.getLastRow() > 1) {
+      var need = Math.max(4, ash.getLastColumn());
+      var av = ash.getRange(2, 1, ash.getLastRow() - 1, need).getValues();
+      av.forEach(function(r, i) {
+        if (!_mfStr_(r[1])) return;
+        companies.push({ row: i + 2, agent: _mfStr_(r[0]), company: _mfStr_(r[1]),
+          logoUrl: _mfStr_(r[2]), licence: _mfStr_(r[3]) });
+      });
+    }
+  } catch (e) {}
+  return { success: true, supervisors: _mfReadSupervisors_(), companies: companies };
+}
 function _mfReadSupervisors_() {
   var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
   var last = sh.getLastRow();
@@ -23793,10 +23813,16 @@ function _vzHousingAgrByGroup_() {
    تخصيصاً في شاشة اتفاقيات السكن تلقائياً (إن لم يكن مسجَّلاً) — والعكس في saveHousingAllocation. */
 function _vzSyncGroupHousingAllocs_(f, username) {
   var ref = _mfStr_(f.ref); if (!ref) return;
+  // ⚡ (V4.166) خروج مبكر بلا أي قراءة شيت إطلاقاً لو لا يوجد رقم اتفاقية سكن/إعاشة مكتوب أصلاً —
+  // كانت تُقرأ شيتا الاتفاقيات والتخصيصات كاملَين بكل حفظ مجموعة حتى لو لا علاقة لها بأي اتفاقية،
+  // وهذا أبطأ الحفظ ملموساً خصوصاً بعد إتاحة حقل اتفاقية الإعاشة (V4.164) الذي زاد استخدام هذا المسار
+  var hasAnyAgrNo = (f.housing || []).some(function (h) { return _mfStr_(h.hAgr) || _mfStr_(h.cAgr); });
+  if (!hasAnyAgrNo) return;
   var agrs = _vzHaReadAll_(); if (!agrs.length) return;
   var allocs = _vzAllocReadAll_();
   var sh = _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS);
   var stamp = _mfStamp_();
+  var added = false;
   (f.housing || []).forEach(function (h) {
     [[_mfStr_(h.hAgr), 'سكن'], [_mfStr_(h.cAgr), 'إعاشة']].forEach(function (pair) {
       var no = pair[0], kind = pair[1]; if (!no) return;
@@ -23806,9 +23832,10 @@ function _vzSyncGroupHousingAllocs_(f, username) {
       sh.appendRow(['HL' + new Date().getTime() + Math.floor(Math.random() * 999), a.id, ref,
         _mfNum_(h.count) || _mfNum_(f.visaCount), _mfDate_(h.in) || a.from, _mfDate_(h.out) || a.to,
         'ربط تلقائي من بيانات المجموعة', username, stamp]);
+      added = true;
     });
   });
-  _vzHaClearCache_();
+  if (added) _vzHaClearCache_();
 }
 
 function saveHousingAgreement(authToken, data) {

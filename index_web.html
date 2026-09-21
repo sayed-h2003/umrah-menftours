@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.165 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.166 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.165)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.166)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.165</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.166</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6777,7 +6777,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.165";
+var CLIENT_APP_VERSION = "4.166";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -36127,6 +36127,7 @@ function mfRszEnd() {
     R.col.w = R.live;
     mfRender();                                     // إعادة رسم واحدة عند الإفلات (لضبط إزاحات التثبيت)
     if (_mfColWinOpen) mfBuildColWin();
+    mfSaveColPrefsQuiet_();                          // 💾 (V4.166) حفظ تلقائي فور الإفلات
   }
 }
 // ضغطتان على المقبض = إعادة العمود لعرضه الافتراضي
@@ -36137,6 +36138,7 @@ function mfRszReset(ev, k) {
   if (!col || i < 0) return;
   col.w = MF_COLS_W[i] || col.w;
   mfRender();
+  mfSaveColPrefsQuiet_();
 }
 function mfNudgeCol(k, dir) {
   var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
@@ -36144,8 +36146,9 @@ function mfNudgeCol(k, dir) {
   if (i < 0 || j < 0 || j >= MF_COLS.length) return;
   var t = MF_COLS[i]; MF_COLS[i] = MF_COLS[j]; MF_COLS[j] = t;
   mfRender(); mfBuildColWin();
+  mfSaveColPrefsQuiet_();
 }
-function mfSetCol(k, on) { MF.hidden[k] = !on; mfRender(); mfBuildColWin(); }
+function mfSetCol(k, on) { MF.hidden[k] = !on; mfRender(); mfBuildColWin(); mfSaveColPrefsQuiet_(); }
 function mfTogglePin(k) {
   var i = -1; MF_COLS.forEach(function (c, ix) { if (c.k === k) i = ix; });
   if (i < 0) return;
@@ -36160,6 +36163,7 @@ function mfTogglePin(k) {
   }
   // 🧩 (V4.111) بلا رسالة منبثقة عند كل تثبيت — كانت تُشتّت وتُوحي بأن النافذة أُغلقت
   mfRender(); mfBuildColWin();
+  mfSaveColPrefsQuiet_();
 }
 function mfMoveCol(from, to) {
   var fi = -1, ti = -1;
@@ -36168,6 +36172,7 @@ function mfMoveCol(from, to) {
   var it = MF_COLS.splice(fi, 1)[0];
   MF_COLS.splice(ti, 0, it);
   mfRender(); mfBuildColWin();
+  mfSaveColPrefsQuiet_();
 }
 var _mfDragKey = null;
 function mfDragStart(e, k) { _mfDragKey = k; _mfColDragActive = true; if (e.currentTarget.classList) e.currentTarget.classList.add('mf-dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', k); } catch (x) {} }
@@ -36190,7 +36195,9 @@ function mfColPrefsKey() {
   var u = (window.currentUser && window.currentUser.username) ? window.currentUser.username : '__anon__';
   return 'mfCols_' + u;
 }
-function mfSaveColPrefs() {
+// 💾 (V4.166) حفظ صامت (بلا رسالة منبثقة) — يُستدعى تلقائياً بعد كل تعديل بالأعمدة (سحب لتغيير
+// العرض، سحب لإعادة الترتيب، إخفاء/تثبيت) بدل انتظار ضغطة يدوية على زر «حفظ» منفصل
+function mfSaveColPrefsQuiet_() {
   try {
     localStorage.setItem(mfColPrefsKey(), JSON.stringify({
       order: MF_COLS.map(function (c) { return c.k; }),
@@ -36200,8 +36207,11 @@ function mfSaveColPrefs() {
       w: MF_COLS.reduce(function (o, c) { o[c.k] = c.w || 100; return o; }, {}),
       g: MF_COLS.reduce(function (o, c) { o[c.k] = c.g; return o; }, {})
     }));
-    _showPopup('تم حفظ ترتيب الأعمدة وعروضها وأقسامها وتثبيتها كافتراضي لهذا المستخدم', 'success');
-  } catch (e) { _showPopup('تعذّر الحفظ محلياً: ' + (e.message || e), 'error'); }
+  } catch (e) {}
+}
+function mfSaveColPrefs() {
+  mfSaveColPrefsQuiet_();
+  _showPopup('تم حفظ ترتيب الأعمدة وعروضها وأقسامها وتثبيتها كافتراضي لهذا المستخدم', 'success');
 }
 function mfRestoreColPrefs() {
   try {
@@ -36598,17 +36608,20 @@ function mfFormRender() {
     '<button class="mf-btn sm" onclick="mfSupAdd()">➕ إضافة مشرف</button></div>';
   h += '<table class="mf-mini" style="background:#fff;"><thead><tr><th style="width:36%;">المشرف</th><th style="width:22%;">النوع</th>' +
     '<th>يُحمَّل على بند التوجيه</th><th style="width:36px;"></th></tr></thead><tbody>';
+  // 🧑‍✈️ (V4.166) قائمة البحث التنبؤي تُقصَر على مشرفي شركة الملف الحالية + المشارَكين معها فقط
+  // (لا كل المشرفين مهما كانت شركتهم) — مع قبول أي اسم آخر يكتبه المستخدم، وتنبيه غير مانع فقط
+  var scopedSups = _mfScopedSups_(d.company);
   (d.sups || []).forEach(function (s, i) {
     var opts = [''].concat((d.breakdown || []).map(function (b) { return b.name; }));
     var isAgent = mfStr(s.name) && mfStr(s.name) === mfStr(d.agent);
-    h += '<tr><td><input class="form-control form-control-sm" list="mfSupList" value="' + mfEsc(s.name) + '" oninput="mfSupSet(' + i + ',\'name\',this.value)">' +
-      (isAgent ? '<div class="mf-hint auto">✅ يطابق الوكيل السعودي ⇒ النوع «استقبال»</div>' : '') + '</td>' +
+    h += '<tr><td><input class="form-control form-control-sm" list="mfSupList" value="' + mfEsc(s.name) + '" oninput="mfSupSet(' + i + ',\'name\',this.value)" onblur="mfSupCheckHint_(' + i + ')">' +
+      (isAgent ? '<div class="mf-hint auto">✅ يطابق الوكيل السعودي ⇒ النوع «استقبال»</div>' : '<div class="mf-hint auto" id="mfSupHint_' + i + '" style="display:' + (mfSupHintText_(s.name, d.company, d.agent) ? '' : 'none') + ';color:#b45309;">' + mfEsc(mfSupHintText_(s.name, d.company, d.agent) || '') + '</div>') + '</td>' +
       '<td>' + mfSel('', ['مرافق', 'استقبال', 'بدون مشرف'], s.type, 'mfSupSet(' + i + ',\'type\',this.value)') + '</td>' +
       '<td>' + mfSel('', opts, s.directTo, 'mfSupSet(' + i + ',\'directTo\',this.value)') + '</td>' +
       '<td><button class="mf-btn sm dgr" onclick="mfSupDel(' + i + ')">✕</button></td></tr>';
   });
   if (!(d.sups || []).length) h += '<tr><td colspan="4" style="color:#94a3b8;">لا يوجد مشرفون</td></tr>';
-  h += '</tbody></table><datalist id="mfSupList">' + (MF.sups || []).map(function (s) { return '<option value="' + mfEsc(s.name) + '">'; }).join('') + '</datalist>';
+  h += '</tbody></table><datalist id="mfSupList">' + scopedSups.map(function (s) { return '<option value="' + mfEsc(s.name) + '">'; }).join('') + '</datalist>';
   h += '<div class="mf-note info mt-2"><span>⚖️</span><div>المشرف «مرافق» فقط له رسوم غرفة (' +
     mfL(mfFmt(c.supRoomFee)) + ' ج) والحد الأقصى 50 معتمراً لكل مرافق · «استقبال» و«الوكيل» بلا رسوم غرفة ولا مخالصة.</div></div>';
   h += '</div>';
@@ -37042,6 +37055,29 @@ function mfSupSet(i, k, v) {
   mfFormLiveCalc();
   mfFormValidate();
 }
+// 🧑‍✈️ (V4.166) مشرفو شركة بعينها: المسجَّلون عليها أساساً + المشارَكون معها
+function _mfScopedSups_(company) {
+  company = mfStr(company);
+  return (MF.sups || []).filter(function (s) { return s.home === company || (s.shared || []).indexOf(company) >= 0; });
+}
+// نص التنبيه غير المانع (أو '' لو لا داعي له) لو المشرف المكتوب ليس ضمن مشرفي/مشارَكي شركة الملف
+function mfSupHintText_(name, company, agent) {
+  name = mfStr(name); if (!name || name === mfStr(agent)) return '';
+  var scoped = _mfScopedSups_(company);
+  if (scoped.some(function (s) { return s.name === name; })) return '';
+  var known = (MF.sups || []).some(function (s) { return s.name === name; });
+  return known
+    ? '⚠️ هذا المشرف مسجَّل بشركة أخرى ولا مشاركة له بشركة الملف الحالية — تأكد من الاختيار'
+    : '⚠️ هذا الاسم غير مسجَّل بسجل المشرفين بعد — يمكن المتابعة، أو سجِّله لاحقاً من «سجل المشرفين»';
+}
+// يُحدِّث التنبيه أسفل حقل اسم المشرف مباشرة (بلا إعادة رسم النموذج كله فيُفقَد التركيز)
+function mfSupCheckHint_(i) {
+  var d = MF._draft, s = (d.sups || [])[i]; if (!s) return;
+  var el = document.getElementById('mfSupHint_' + i); if (!el) return;
+  var txt = mfSupHintText_(s.name, d.company, d.agent);
+  el.style.display = txt ? '' : 'none';
+  el.textContent = txt || '';
+}
 function mfSyncCounts() {
   var d = MF._draft;
   d.pilgrims = (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.count); }, 0);
@@ -37277,20 +37313,38 @@ function mfHistory(id) {
 }
 
 /* ---------- سجل المشرفين ---------- */
+// ⚡ (V4.166) تحديث خلفي خفيف (مشرفون + شركات فقط) بدل mfLoad(true) الذي كان يعيد بناء كل بوتستراب
+// ملفات المراجعة الثقيل (كل الملفات والإيصالات وحساب أعلامها) بعد أي حفظ/حذف/مشاركة لمشرف بسيط
+function mfSupRefreshLight_() {
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) return;
+      MF.sups = res.supervisors || MF.sups;
+      MF.companies = res.companies || MF.companies;
+    })
+    .withFailureHandler(function () {})
+    .getMinistrySupervisorsOnly(window.authToken);
+}
 var MF_SUP_SEL_ = {}; // ☑️ (V4.165) تحديد متعدد لمشرفين لمشاركتهم جماعياً بشركة/شركات دفعة واحدة
 function mfOpenSupReg() {
   MF_SUP_SEL_ = {};
   mfModal('🧑‍✈️ سجل المشرفين والشركات',
     '<div style="font-size:11.5px;color:#5c6b83;margin-bottom:9px;">كل مشرف يُسجَّل على شركته الأساسية ويمكن منحه <b>مشاركة</b> في شركات أخرى. ' +
     'لا يُسمح باختياره على شركة غير مسجّل ولا مُشارَك فيها. حدِّد عدة مشرفين بمربعات الاختيار لمشاركتهم بشركة/شركات دفعة واحدة.</div>' +
+    // 🔎 (V4.166) بحث لحظي بالاسم/الجوال/الشركة — يُصفِّي الجدول فوراً أثناء الكتابة
+    '<div class="row g-2 mb-2"><div class="col-md-5"><input id="mfSupSearch" class="form-control form-control-sm" ' +
+    'placeholder="🔎 بحث لحظي: الاسم / الجوال / الشركة..." oninput="mfSupRegRender()" autocomplete="off"></div>' +
+    '<div class="col-md-7 d-flex align-items-center small text-muted" id="mfSupCnt"></div></div>' +
     '<div id="mfSupBulkBar" class="mb-2"></div><div id="mfSupRegBox"></div>',
     '<button class="mf-btn pri" onclick="mfSupEdit(null)">➕ إضافة مشرف</button>' +
-    '<button class="mf-btn" onclick="mfSupBulkAddOpen()">📤 تسجيل مجمَّع (نص/إكسيل)</button>', 820);
+    '<button class="mf-btn" onclick="mfSupBulkAddOpen()">📤 تسجيل مجمَّع (نص/إكسيل)</button>' +
+    '<button class="mf-btn" onclick="mfSupPrint()">🖨️ طباعة</button>', 920);
   mfSupRegRender();
 }
 function mfSupSelToggle(name, on) { MF_SUP_SEL_[name] = on; mfSupBulkBarRender_(); }
-function mfSupSelToggleAll(on) {
-  (MF.sups || []).forEach(function (s) { MF_SUP_SEL_[s.name] = on; });
+// ☑️ (V4.166) "تحديد الكل" يشمل فقط الصفوف الظاهرة حالياً (بعد البحث اللحظي)، لا كل المشرفين
+function mfSupSelToggleAllVisible_(on) {
+  _mfSupVisibleList_().forEach(function (s) { MF_SUP_SEL_[s.name] = on; });
   mfSupRegRender();
 }
 function mfSupBulkBarRender_() {
@@ -37326,7 +37380,7 @@ function mfSupBulkShareApply() {
       _showPopup('تمت المشاركة الجماعية لـ' + names.length + ' مشرف', 'success');
       MF_SUP_SEL_ = {};
       mfOpenSupReg();
-      mfLoad(true);
+      mfSupRefreshLight_();
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .bulkShareMinistrySupervisors(window.authToken, names, comps);
@@ -37443,34 +37497,113 @@ function mfSupBulkCommit() {
       _showPopup('تسجيل مجمَّع: أُضيف ' + (res.added || []).length + ' وحُدِّث ' + (res.updated || []).length +
         ((res.skipped || []).length ? (' — تُخُطِّي ' + res.skipped.length + ' (بلا اسم/شركة)') : ''), 'success');
       mfOpenSupReg();
-      mfLoad(true);
+      mfSupRefreshLight_();
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .bulkSaveMinistrySupervisors(window.authToken, rows);
 }
 
+// 🐌➡️⚡ (V4.166) أعمدة جدول المشرفين عبر محرك الجداول العام (_tbl*) — نفس محرك جداول الوزارة/
+// التأشيرات: أيقونات تصفية بكل رأس عمود + ترتيب تصاعدي/تنازلي، بدل جدول ثابت بلا تصفية أعمدة
+var MF_SUP_TBL_COLS_ = [
+  { k: 'sel', label: '☑', nof: true },
+  { k: 'name', label: 'المشرف' }, { k: 'type', label: 'النوع' }, { k: 'home', label: 'الشركة الأساسية' },
+  { k: 'shared', label: 'مشاركة في' }, { k: 'mobile', label: 'الجوال' },
+  { k: 'load', label: 'العبء الحالي', num: true }, { k: 'notes', label: 'ملاحظات' },
+  { k: 'act', label: '⚙', nof: true }
+];
+function _mfSupLoad_(name) {
+  var load = 0;
+  MF.files.forEach(function (f) { (f.sups || []).forEach(function (x) { if (mfStr(x.name) === mfStr(name)) load += mfNum(f.pilgrims); }); });
+  return load;
+}
+function _mfSupTblRaw_(key, s) {
+  switch (key) {
+    case 'name': return s.name; case 'type': return s.type; case 'home': return s.home;
+    case 'shared': return (s.shared || []).join('، '); case 'mobile': return s.mobile;
+    case 'load': return _mfSupLoad_(s.name); case 'notes': return s.notes;
+    default: return '';
+  }
+}
+// 🔎 (V4.166) القائمة الظاهرة حالياً بعد البحث اللحظي + تصفية الأعمدة + الترتيب — تُستخدَم للعرض،
+// "تحديد الكل"، والطباعة معاً (نفس النتيجة بالضبط أينما استُخدمت)
+function _mfSupVisibleList_() {
+  var q = mfStr((document.getElementById('mfSupSearch') || {}).value).toLowerCase();
+  var list = MF.sups || [];
+  if (q) {
+    list = list.filter(function (s) {
+      var hay = [s.name, s.mobile, s.home, (s.shared || []).join(' ')].join(' ').toLowerCase();
+      return hay.indexOf(q) >= 0;
+    });
+  }
+  return _tblApply_('mfSupTbl', list, MF_SUP_TBL_COLS_, _mfSupTblRaw_);
+}
 function mfSupRegRender() {
-  var allOn = (MF.sups || []).length > 0 && (MF.sups || []).every(function (s) { return MF_SUP_SEL_[s.name]; });
-  var h = '<table class="mf-mini" style="background:#fff;"><thead><tr>' +
-    '<th style="width:26px;"><input type="checkbox" ' + (allOn ? 'checked' : '') + ' onchange="mfSupSelToggleAll(this.checked)" title="تحديد الكل"></th>' +
-    '<th>المشرف</th><th>النوع</th><th>الشركة الأساسية</th>' +
-    '<th>مشاركة في</th><th>العبء الحالي</th><th style="width:90px;"></th></tr></thead><tbody>';
-  (MF.sups || []).forEach(function (s) {
-    var load = 0;
-    MF.files.forEach(function (f) { (f.sups || []).forEach(function (x) { if (mfStr(x.name) === mfStr(s.name)) load += mfNum(f.pilgrims); }); });
+  _tblRefresh_('mfSupTbl', mfSupRegRender);
+  var rows = _mfSupVisibleList_();
+  var allOn = rows.length > 0 && rows.every(function (s) { return MF_SUP_SEL_[s.name]; });
+  var cols = MF_SUP_TBL_COLS_.slice();
+  var selCol = cols.filter(function (c) { return c.k === 'sel'; })[0];
+  if (selCol) selCol.selAll = { checked: allOn, onchange: 'mfSupSelToggleAllVisible_(this.checked)' };
+  var thead = _tblHead_('mfSupTbl', cols, 'mf-thic');
+  var h = '<div style="overflow:auto;"><table class="mf-mini" style="background:#fff;"><thead><tr>' + thead + '</tr></thead><tbody>';
+  rows.forEach(function (s) {
+    var load = _mfSupLoad_(s.name);
     h += '<tr><td><input type="checkbox" ' + (MF_SUP_SEL_[s.name] ? 'checked' : '') + ' onchange="mfSupSelToggle(\'' + mfEsc(s.name).replace(/'/g, "\\'") + '\',this.checked)"></td>' +
       '<td style="font-weight:800;">' + mfEsc(s.name) + '</td>' +
       '<td><span class="mf-badge ' + (String(s.type).indexOf('مرافق') >= 0 ? 'norm' : 'off') + '">' + mfEsc(s.type) + '</span></td>' +
       '<td>' + mfEsc(s.home) + '</td>' +
       '<td>' + ((s.shared || []).length ? mfEsc((s.shared || []).join('، ')) : '<span style="color:#94a3b8;">—</span>') + '</td>' +
+      '<td class="mf-latin">' + mfEsc(s.mobile || '—') + '</td>' +
       '<td class="mf-latin">' + (String(s.type).indexOf('مرافق') >= 0 ? (load + ' / 50') : '—') + '</td>' +
+      '<td>' + mfEsc(s.notes || '') + '</td>' +
       '<td><button class="mf-btn" onclick="mfSupEdit(\'' + mfEsc(s.name).replace(/'/g, "\\'") + '\')">✏️</button> ' +
       '<button class="mf-btn" style="color:#dc2626;" onclick="mfSupRegDel(\'' + mfEsc(s.name).replace(/'/g, "\\'") + '\')">🗑️</button></td></tr>';
   });
-  if (!(MF.sups || []).length) h += '<tr><td colspan="7" style="color:#94a3b8;">لا يوجد مشرفون مسجلون</td></tr>';
-  h += '</tbody></table>';
+  if (!rows.length) h += '<tr><td colspan="9" style="color:#94a3b8;">لا يوجد مشرفون مطابقون</td></tr>';
+  h += '</tbody></table></div>';
   document.getElementById('mfSupRegBox').innerHTML = h;
+  var cnt = document.getElementById('mfSupCnt');
+  if (cnt) cnt.textContent = rows.length + ' من ' + (MF.sups || []).length + ' مشرف';
   mfSupBulkBarRender_();
+}
+// 🖨️ (V4.166) طباعة احترافية لكشف المشرفين — كل النتائج الظاهرة حالياً (بحث/تصفية مُطبَّقة إن وُجدت)
+// أو كل السجل لو بلا بحث/تصفية — مع تاريخ ووقت الطباعة وترقيم صفحات تلقائي (يدعمه Chrome بالطباعة)
+function mfSupPrint() {
+  var rows = _mfSupVisibleList_();
+  if (!rows.length) { _showPopup('لا يوجد مشرفون لطباعتهم', 'error'); return; }
+  var now = new Date(), p2 = function (n) { return (n < 10 ? '0' : '') + n; };
+  var stamp = p2(now.getDate()) + '/' + p2(now.getMonth() + 1) + '/' + now.getFullYear() + ' — ' + p2(now.getHours()) + ':' + p2(now.getMinutes());
+  var q = mfStr((document.getElementById('mfSupSearch') || {}).value);
+  var trs = rows.map(function (s, i) {
+    var load = _mfSupLoad_(s.name);
+    return '<tr><td>' + (i + 1) + '</td><td class="ar">' + mfEsc(s.name) + '</td><td>' + mfEsc(s.type) + '</td>' +
+      '<td class="ar">' + mfEsc(s.home) + '</td><td class="ar">' + mfEsc((s.shared || []).join('، ') || '—') + '</td>' +
+      '<td dir="ltr">' + mfEsc(s.mobile || '—') + '</td><td>' + (String(s.type).indexOf('مرافق') >= 0 ? load : '—') + '</td>' +
+      '<td class="ar">' + mfEsc(s.notes || '') + '</td></tr>';
+  }).join('');
+  var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>سجل المشرفين</title><style>' +
+    '@page{size:A4 portrait;margin:12mm 10mm 16mm;' +
+      '@bottom-center{content:"صفحة " counter(page) " من " counter(pages);font-size:9px;color:#64748b;}}' +
+    'body{font-family:"Cairo",Tahoma,sans-serif;margin:0;color:#14312a;background:#fff;}' +
+    '.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1e3d59;padding-bottom:5px;margin-bottom:8px;}' +
+    'h1{font-size:16px;color:#1e3d59;margin:0;} .stamp{font-size:9.5px;color:#64748b;text-align:left;line-height:1.7;}' +
+    '.flt{font-size:9.5px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:5px;padding:3px 8px;margin-bottom:6px;color:#3730a3;font-weight:700;}' +
+    'table{width:100%;border-collapse:collapse;font-size:10.5px;}' +
+    'th,td{border:1px solid #cbd5e1;padding:5px 6px;text-align:center;} td.ar{text-align:right;}' +
+    'th{background:#1e3d59;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'tbody tr:nth-child(even){background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    '.pfoot{margin-top:8px;padding-top:5px;border-top:1px solid #e2e8f0;font-size:9px;color:#64748b;text-align:center;}' +
+    '</style></head><body>' +
+    '<div class="hd"><div><h1>🧑‍✈️ سجل المشرفين والشركات</h1></div>' +
+    '<div class="stamp">منظومة منف للسياحة<br>طُبع في: ' + mfEsc(stamp) + '<br>الإجمالي: ' + rows.length + ' مشرف' + (rows.length !== (MF.sups || []).length ? (' (من أصل ' + (MF.sups || []).length + ')') : '') + '</div></div>' +
+    (q ? ('<div class="flt">🔎 بحث نشط: ' + mfEsc(q) + '</div>') : '') +
+    '<table><thead><tr><th>م</th><th>المشرف</th><th>النوع</th><th>الشركة الأساسية</th><th>مشاركة في</th><th>الجوال</th><th>العبء</th><th>ملاحظات</th></tr></thead><tbody>' + trs + '</tbody></table>' +
+    '<div class="pfoot">منظومة منف للسياحة — سجل المشرفين</div>' +
+    '<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},400);};</' + 'script>' +
+    '</body></html>';
+  var w = window.open('', '_blank'); if (!w) { _showPopup('اسمح بالنوافذ المنبثقة للطباعة', 'error'); return; }
+  w.document.write(html); w.document.close();
 }
 function mfSupEdit(name) {
   var s = name ? (MF.sups || []).filter(function (x) { return x.name === name; })[0] : null;
@@ -37517,7 +37650,7 @@ function mfSupRegSave(origName) {
       if (idx >= 0) MF.sups[idx] = rec; else MF.sups.push(rec);
       mfSupEditClose_();
       mfSupRegRender();
-      mfLoad(true);
+      mfSupRefreshLight_();
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveMinistrySupervisor(window.authToken, payload);
@@ -37533,7 +37666,7 @@ function mfSupRegDel(name) {
       _showPopup('تم حذف المشرف', 'success');
       MF.sups = (MF.sups || []).filter(function (s) { return mfStr(s.name) !== mfStr(name); });
       mfSupRegRender();
-      mfLoad(true);
+      mfSupRefreshLight_();
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .deleteMinistrySupervisor(window.authToken, name);
@@ -39186,26 +39319,80 @@ function vzRenderActBar() {
     '</div>';
 }
 /* -------- 👥 معتمرو المجموعة المحدَّدون -------- */
+// 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
+// الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
+// (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
   mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
-    '<div id="vzFpBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 700);
-  if (!mfStr(f.tripName)) {
+    '<div id="vzFpBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 900);
+  var trips = vzTripsOfDraft_(f);
+  if (!trips.length) {
     document.getElementById('vzFpBox').innerHTML = '<div class="alert alert-warning small">المجموعة غير مرتبطة برحلة — لا يمكن عرض أسماء المعتمرين.</div>';
     return;
   }
-  google.script.run
-    .withSuccessHandler(function (list) {
-      var box = document.getElementById('vzFpBox'); if (!box) return;
-      var keys = f.selected || [];
-      var rows = (list || []).filter(function (p, i) { return keys.indexOf(vzPickKey(p, i)) >= 0; });
-      if (!rows.length) { box.innerHTML = '<div class="text-muted small">لا يوجد معتمرون مُختارون بأسمائهم لهذه المجموعة.</div>'; return; }
-      box.innerHTML = '<table class="vz-tab"><thead><tr><th>الاسم</th><th>الجواز</th><th>العميل</th></tr></thead><tbody>' +
-        rows.map(function (p) { return '<tr><td>' + vzEsc(p.name || '') + '</td><td class="vz-latin">' + vzEsc(p.passport || '') + '</td><td>' + vzEsc(p.client || '') + '</td></tr>'; }).join('') +
-        '</tbody></table>';
-    })
-    .withFailureHandler(function (e) { var box = document.getElementById('vzFpBox'); if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
-    .getTripPilgrims(window.authToken, f.tripName);
+  var keys = f.selected || [];
+  var merged = [], done = 0;
+  trips.forEach(function (tn) {
+    google.script.run
+      .withSuccessHandler(function (list) {
+        (list || []).forEach(function (p, i) { p._trip = tn; if (keys.indexOf(vzPickKey(p, i)) >= 0) merged.push(p); });
+        if (++done === trips.length) finish();
+      })
+      .withFailureHandler(function () { if (++done === trips.length) finish(); })
+      .getTripPilgrims(window.authToken, tn);
+  });
+  function finish() {
+    var box = document.getElementById('vzFpBox'); if (!box) return;
+    if (!merged.length) { box.innerHTML = '<div class="text-muted small">لا يوجد معتمرون مُختارون بأسمائهم لهذه المجموعة.</div>'; return; }
+    window._vzFpLast = { f: f, rows: merged };
+    box.innerHTML = '<div class="d-flex justify-content-between align-items-center mb-2">' +
+      '<span class="small text-muted">' + merged.length + ' معتمر — من ' + trips.length + (trips.length > 1 ? ' رحلات مرتبطة' : ' رحلة') + '</span>' +
+      '<button class="vz-btn sm pri" onclick="vzPrintGroupPilgrims()">🖨️ طباعة احترافية</button></div>' +
+      vzGroupPilgrimsTableHtml_(f, merged);
+  }
+}
+// 🧱 جدول الشاشة نفسه (يُعاد استخدامه بمستند الطباعة أيضاً لضمان تطابق البيانات تماماً)
+function vzGroupPilgrimsTableHtml_(f, rows) {
+  return '<table class="vz-tab"><thead><tr><th>م</th><th>الاسم</th><th>الجواز</th><th>العميل</th><th>الرحلة</th><th>تاريخ السفر</th><th>تاريخ العودة</th></tr></thead><tbody>' +
+    rows.map(function (p, i) {
+      var t = (VZ.trips || []).filter(function (x) { return x.name === p._trip; })[0];
+      return '<tr><td>' + (i + 1) + '</td><td>' + vzEsc(p.name || '') + '</td><td class="vz-latin">' + vzEsc(p.passport || '') + '</td>' +
+        '<td>' + vzEsc(p.client || '') + '</td><td>' + vzEsc(p._trip || '') + '</td>' +
+        '<td dir="ltr">' + vzEsc((t && t.goDate) || '—') + '</td><td dir="ltr">' + vzEsc((t && t.retDate) || '—') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+// 🖨️ (V4.166) مستند طباعة احترافي منسَّق — نفس أسلوب طباعة كشف حساب الوكيل (ترويسة + طابع زمني + ترقيم صفحات تلقائي بالمتصفح)
+function vzPrintGroupPilgrims() {
+  var L = window._vzFpLast; if (!L || !L.rows.length) return;
+  var f = L.f, rows = L.rows, meta = _vzPrintMeta();
+  var trs = rows.map(function (p, i) {
+    var t = (VZ.trips || []).filter(function (x) { return x.name === p._trip; })[0];
+    return '<tr><td>' + (i + 1) + '</td><td class="ar">' + vzEsc(p.name || '') + '</td><td dir="ltr">' + vzEsc(p.passport || '') + '</td>' +
+      '<td class="ar">' + vzEsc(p.client || '') + '</td><td class="ar">' + vzEsc(p._trip || '') + '</td>' +
+      '<td dir="ltr">' + vzEsc((t && t.goDate) || '—') + '</td><td dir="ltr">' + vzEsc((t && t.retDate) || '—') + '</td></tr>';
+  }).join('');
+  var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>معتمرو مجموعة ' + vzEsc(f.ref || f.seq) + '</title><style>' +
+    '@page{size:A4 portrait;margin:10mm;}' +
+    'body{font-family:"Cairo",Tahoma,sans-serif;margin:0;color:#14312a;background:#fff;}' +
+    '.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #075c46;padding-bottom:5px;margin-bottom:8px;}' +
+    'h1{font-size:16px;color:#075c46;margin:0;} .who{font-size:12px;font-weight:800;color:#0b7a5e;margin-top:2px;}' +
+    '.stamp{font-size:9.5px;color:#64748b;text-align:left;line-height:1.7;}' +
+    'table{width:100%;border-collapse:collapse;font-size:11px;}' +
+    'th,td{border:1px solid #9fb8b0;padding:5px 6px;text-align:center;}' +
+    'td.ar{text-align:right;} th{background:#075c46;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'tbody tr:nth-child(even){background:#f4fbf8;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    '.pfoot{position:fixed;bottom:0;left:0;right:0;font-size:9px;color:#64748b;text-align:center;border-top:1px solid #cfe6de;padding-top:4px;}' +
+    '</style></head><body>' +
+    '<div class="hd"><div><h1>👥 كشف معتمري مجموعة التأشيرات</h1>' +
+    '<div class="who">رقم المجموعة: ' + vzEsc(f.ref || ('#' + f.seq)) + ' — ' + vzEsc(f.agent || '') + ((f.company) ? ' — ' + vzEsc(f.company) : '') + '</div></div>' +
+    '<div class="stamp">منظومة منف للسياحة<br>طُبع في: ' + vzEsc(meta.stamp) + '<br>الإجمالي: ' + rows.length + ' معتمر</div></div>' +
+    '<table><thead><tr><th>م</th><th>الاسم</th><th>الجواز</th><th>العميل</th><th>الرحلة</th><th>تاريخ السفر</th><th>تاريخ العودة</th></tr></thead><tbody>' + trs + '</tbody></table>' +
+    '<div class="pfoot">منظومة منف للسياحة — كشف معتمري مجموعة ' + vzEsc(f.ref || f.seq) + '</div>' +
+    '<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},400);};</' + 'script>' +
+    '</body></html>';
+  var w = window.open('', '_blank'); if (!w) { _showPopup('اسمح بالنوافذ المنبثقة للطباعة', 'error'); return; }
+  w.document.write(html); w.document.close();
 }
 /* -------- 🔗 ربط سريع برحلة -------- */
 function vzQuickLinkTrip(id) {
