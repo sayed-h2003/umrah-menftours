@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.166 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.167 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.166)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.167)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.166</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.167</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5192,7 +5192,7 @@ input[type="date"]:not(:focus):not(:valid) {
     <div class="ms-auto d-flex gap-2 flex-wrap">
       <button class="vz-btn pri" onclick="vzNewFile()">➕ مجموعة جديدة</button>
       <button class="vz-btn" onclick="vzHaOpen()">🏨 اتفاقيات السكن</button>
-      <button class="vz-btn" onclick="vzImportOpen()">📥 استيراد مجموعات</button>
+      <button class="vz-btn" id="vzImportBtn" onclick="vzImportOpen()">📥 استيراد مجموعات</button>
       <!-- 💰 (V4.145) مدخل واحد فقط للماليات — التسعير والأرصدة وإعدادات الحسابات كلها انتقلت
            داخل هذه النافذة الموحَّدة، فلا تظهر أي ماليات مباشرة بشاشة متابعة الوكلاء العامة -->
       <button class="vz-btn gold vz-fin" id="vzBtnAcctPick" onclick="vzAcctHubOpen()">💰 حسابات الوكلاء</button>
@@ -6777,7 +6777,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.166";
+var CLIENT_APP_VERSION = "4.167";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -25048,7 +25048,7 @@ function _ccExtractNext_(results) {
               res2.contracts.forEach(function(d, k) {
                 results.push({
                   file: f.name + (res2.contracts.length > 1 ? ' — اتفاقية ' + (k + 1) + '/' + res2.contracts.length : '') + ' 🔠',
-                  data: d, ok: true, viaLocal: true
+                  data: d, ok: true, viaLocal: true, _srcFile: f // 📎 (V4.167)
                 });
               });
             } else {
@@ -25092,7 +25092,8 @@ function _ccExtractNext_(results) {
             arr.forEach(function(d, k) {
               results.push({
                 file: f.name + (arr.length > 1 ? ' — اتفاقية ' + (k + 1) + '/' + arr.length : ''),
-                data: d, ok: true, viaManual: !!res.viaManual
+                data: d, ok: true, viaManual: !!res.viaManual,
+                _srcFile: f // 📎 (V4.167) يبقى مرجع الملف الأصلي متاحاً حتى بعد نجاح الاستخلاص، لإرفاقه بالاتفاقية عند الاستيراد
               });
             });
             setTimeout(function() { _ccExtractNext_(results); }, 50);
@@ -25129,7 +25130,7 @@ function _ccRetryFailedItem_(idx) {
         if (res && res.success && (res.contracts || []).length) {
           var arr = res.contracts;
           var newItems = arr.map(function(d, k) {
-            return { file: f.name + (arr.length > 1 ? ' — اتفاقية ' + (k + 1) + '/' + arr.length : ''), data: d, ok: true, viaManual: !!res.viaManual };
+            return { file: f.name + (arr.length > 1 ? ' — اتفاقية ' + (k + 1) + '/' + arr.length : ''), data: d, ok: true, viaManual: !!res.viaManual, _srcFile: f };
           });
           items.splice.apply(items, [idx, 1].concat(newItems));
         } else {
@@ -25307,30 +25308,63 @@ function _ccReviewImport_(btn) {
     var idx = +chk.getAttribute('data-idx');
     var item = items[idx];
     if (!item || !item.ok) return;
-    var vals = { sourceFile: item.file, _isEdit: !!item.isEdit };
+    var vals = { sourceFile: item.file, _isEdit: !!item.isEdit, _srcFile: item._srcFile || null };
     document.querySelectorAll('#ccReview input[data-idx="' + idx + '"][data-key], #ccReview select[data-idx="' + idx + '"][data-key]').forEach(function(inp) {
       vals[inp.getAttribute('data-key')] = inp.value.trim();
     });
     if (vals.contractNo) selected.push(vals);
   });
   if (!selected.length) { alert('⚠️ لم تُحدَّد أي اتفاقية للاستيراد'); return; }
-  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…';
-  google.script.run
-    .withSuccessHandler(function(res) {
-      btn.disabled = false; btn.innerHTML = orig;
-      if (res && res.success) {
-        alert('✅ تم الحفظ — جديدة: ' + res.created + ' · مُحدَّثة (استكمال): ' + res.updated + (res.skipped ? ' · متخطاة: ' + res.skipped : ''));
-        _ccReviewCancel_();
-        _ccLoad_();
-      } else {
-        alert('❌ فشل الحفظ: ' + ((res && res.error) || 'خطأ غير معروف'));
-      }
-    })
-    .withFailureHandler(function(err) {
-      btn.disabled = false; btn.innerHTML = orig;
-      alert('❌ خطأ: ' + (err.message || err));
-    })
-    .saveCateringContracts(window.authToken, selected);
+  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري رفع المرفقات…';
+  // 📎 (V4.167) نرفع كل ملف أصلي (لو موجود) إلى Drive أولاً ونربط رابطه بالاتفاقية — لتبقى الصورة/الملف
+  // الذي استُخلصت منه البيانات مرفقاً بالاتفاقية نفسها يمكن مراجعته وفتحه لاحقاً بأي وقت.
+  // نفس الملف قد يتكرر بين عدة اتفاقيات (ملف واحد فيه أكثر من اتفاقية) فنرفعه مرة واحدة فقط.
+  var uploadCache = []; // [{file, url}]
+  var pending = selected.length;
+  var finishUploads = function () {
+    if (--pending > 0) return;
+    selected.forEach(function (v) { delete v._srcFile; });
+    btn.innerHTML = '⏳ جاري الحفظ…';
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.disabled = false; btn.innerHTML = orig;
+        if (res && res.success) {
+          alert('✅ تم الحفظ — جديدة: ' + res.created + ' · مُحدَّثة (استكمال): ' + res.updated + (res.skipped ? ' · متخطاة: ' + res.skipped : ''));
+          _ccReviewCancel_();
+          _ccLoad_();
+        } else {
+          alert('❌ فشل الحفظ: ' + ((res && res.error) || 'خطأ غير معروف'));
+        }
+      })
+      .withFailureHandler(function(err) {
+        btn.disabled = false; btn.innerHTML = orig;
+        alert('❌ خطأ: ' + (err.message || err));
+      })
+      .saveCateringContracts(window.authToken, selected);
+  };
+  if (!pending) { finishUploads(); return; }
+  selected.forEach(function (v) {
+    var f = v._srcFile;
+    if (!f) { finishUploads(); return; }
+    var cached = uploadCache.filter(function (c) { return c.file === f; })[0];
+    if (cached) {
+      cached.promise.then(function (url) { v.attachmentUrl = url; finishUploads(); });
+      return;
+    }
+    var p = new Promise(function (resolve) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        google.script.run
+          .withSuccessHandler(function (res) { resolve(res && res.success ? res.fileUrl : ''); })
+          .withFailureHandler(function () { resolve(''); })
+          .uploadCateringAttachment(window.authToken, reader.result, f.name);
+      };
+      reader.onerror = function () { resolve(''); };
+      reader.readAsDataURL(f);
+    });
+    uploadCache.push({ file: f, promise: p });
+    p.then(function (url) { v.attachmentUrl = url; finishUploads(); });
+  });
 }
 
 // 🎯 بحث تنبؤي لحقل العميل/الرحلة بشاشة المراجعة
@@ -25511,6 +25545,10 @@ function _ccRenderTable_() {
         return '<td class="' + cls + '" title="' + esc(v) + '" onclick="this.classList.toggle(\'cc-expand\')">' + esc(v) + '</td>';
       }).join('') +
       '<td class="cc-actions">' +
+        // 📎 (V4.167) مؤشر مرفق الاتفاقية — أخضر وقابل للضغط لفتحه لو موجود، رمادي باهت لو لا مرفق لها
+        (r.attachmentUrl
+          ? '<a href="' + esc(r.attachmentUrl) + '" target="_blank" rel="noopener" class="btn btn-outline-success btn-sm py-0 px-2" title="فتح مرفق هذه الاتفاقية (الملف/الصورة المستخلَصة منها)">📎</a> '
+          : '<span class="btn btn-outline-secondary btn-sm py-0 px-2" style="opacity:.4;cursor:default;" title="لا يوجد مرفق لهذه الاتفاقية">📎</span> ') +
         // 🎯 (V4.63) مسار مزدوج — onclick سطري + data-* للتفويض
         '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="تعديل" data-cc-act="edit" data-cc-no="' + esc(r.contractNo) + '" onclick="try{_ccEditRow_(this.getAttribute(\'data-cc-no\'))}catch(e){alert(\'خطأ: \'+e)}">✏️</button> ' +
         '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" title="سجل تعديلات هذه الاتفاقية" data-cc-act="log" data-cc-no="' + esc(r.contractNo) + '" onclick="try{openCateringChangeLog(this.getAttribute(\'data-cc-no\'))}catch(e){alert(\'خطأ: \'+e)}">🕘</button> ' +
@@ -25969,6 +26007,15 @@ function _ccEditRow_(no) {
       mkFld('vendor', 'المورد') +
       mkFld('notes', 'ملاحظات') +
     '</div>' +
+    // 📎 (V4.167) إرفاق/استبدال ملف الاتفاقية يدوياً — ليبقى مرجعاً قابلاً للمراجعة والفتح دوماً
+    '<div class="mt-2 pt-2 border-top">' +
+      '<label style="font-size:11.5px;font-weight:800;color:#5c6b83;">📎 مرفق الاتفاقية</label><br>' +
+      (r.attachmentUrl ? '<a href="' + esc(r.attachmentUrl) + '" target="_blank" rel="noopener" class="btn btn-outline-success btn-sm">📎 فتح المرفق الحالي</a> ' : '<span class="text-muted small">لا يوجد مرفق حالياً — </span>') +
+      '<button type="button" class="btn btn-outline-primary btn-sm" onclick="document.getElementById(\'ccEditAttFile\').click()">' + (r.attachmentUrl ? '🔄 استبدال المرفق' : '📎 إرفاق ملف') + '</button>' +
+      '<input type="file" id="ccEditAttFile" accept="image/*,application/pdf" style="display:none;" onchange="_ccEditAttPick_(this.files)">' +
+      '<span id="ccEditAttStatus" class="small text-muted ms-2"></span>' +
+      '<input type="hidden" id="ccEditAttUrl" value="' + esc(r.attachmentUrl || '') + '">' +
+    '</div>' +
     '<div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">' +
       '<button class="btn btn-outline-secondary btn-sm" onclick="this.closest(\'.cc-edit-backdrop\').remove()">✖ إلغاء</button>' +
       '<button class="btn btn-sm fw-bold" style="background:#0f4c4c;color:#fff;" onclick="_ccEditSave_(this,\'' + esc(no).replace(/'/g, "\\'") + '\')">💾 حفظ التعديلات</button>' +
@@ -25976,10 +26023,31 @@ function _ccEditRow_(no) {
   backdrop.appendChild(panel);
   document.body.appendChild(backdrop);
 }
+// 📎 (V4.167) رفع ملف مرفق يدوياً من نافذة تعديل اتفاقية — يُحدَّث الحقل المخفي فور نجاح الرفع
+function _ccEditAttPick_(files) {
+  if (!files || !files.length) return;
+  var f = files[0];
+  var st = document.getElementById('ccEditAttStatus');
+  if (st) st.textContent = '⏳ جاري الرفع…';
+  var reader = new FileReader();
+  reader.onload = function () {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { if (st) st.textContent = '❌ ' + ((res && res.error) || 'فشل الرفع'); return; }
+        var el = document.getElementById('ccEditAttUrl'); if (el) el.value = res.fileUrl;
+        if (st) st.textContent = '✅ رُفع الملف — سيُرتبط عند الحفظ';
+      })
+      .withFailureHandler(function (e) { if (st) st.textContent = '❌ ' + (e && e.message ? e.message : e); })
+      .uploadCateringAttachment(window.authToken, reader.result, f.name);
+  };
+  reader.readAsDataURL(f);
+}
 function _ccEditSave_(btn, no) {
   var wrap = document.getElementById('ccEditFldsWrap');
   var vals = { sourceFile: '(تعديل)', _isEdit: true };
   wrap.querySelectorAll('input[data-key], select[data-key]').forEach(function(inp) { vals[inp.getAttribute('data-key')] = inp.value.trim(); });
+  var attEl = document.getElementById('ccEditAttUrl');
+  if (attEl && attEl.value) vals.attachmentUrl = attEl.value;
   if (!vals.contractNo) { alert('⚠️ رقم الاتفاقية مطلوب'); return; }
   var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…';
   google.script.run
@@ -38714,7 +38782,8 @@ function mfExportImage(btn) {
 var VZ = { files: [], prices: [], transportPrices: [], companies: [], trips: [], clients: [], agents: [], statuses: [],
   agentBalances: {}, today: '', can: {}, loaded: false, _draft: null, _pick: null, _pickLoading: false,
   // 🔎↕️ تصفية ديناميكية لحظية من رأس كل عمود + ترتيب تصاعدي/تنازلي بالعمود
-  colFilters: {}, sort: { key: 'seq', dir: -1 }, selId: null, colW: {}, _filesSel: {} };
+  // 📅 (V4.167) الترتيب الافتراضي أصبح بتاريخ السداد (الأحدث أولاً) بطلب صريح، بدل رقم التسلسل
+  colFilters: {}, sort: { key: 'date', dir: -1 }, selId: null, colW: {}, _filesSel: {} };
 function vzEsc(v) { return escapeHtml_(String(v == null ? '' : v)); }
 function vzJs(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 function vzFmt(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
@@ -38726,6 +38795,9 @@ function vzInit() {
   // للمستخدم وكأنها خلف النموذج. النقل هنا أيضاً يجعلها تعمل من أي شاشة.
   if (typeof mfDetachFloats === 'function') mfDetachFloats();
   if (!VZ.loaded) vzLoad(false); else vzRender();
+  // 🔒 (V4.167) زر استيراد المجموعات من إكسيل — للأدمن فقط (نفس قاعدة استيراد ملفات المراجعة)
+  var ib = document.getElementById('vzImportBtn');
+  if (ib) ib.style.display = hasPermission('admin') ? '' : 'none';
 }
 // ⚡ (V4.154) silent=true يحدّث البيانات بالخلفية بلا شاشة "جاري التحميل" وبلا وميض الجدول —
 // يُستخدَم بعد الحفظ الفوري (الذي دمج السجل محلياً بالفعل) لتحديث الأرصدة المحسوبة بالخادم فقط
@@ -39183,8 +39255,8 @@ function vzRender() {
   var agrCell = function (housing, cateringAuto) {
     var h = mfStr(housing), c = mfStr(cateringAuto);
     var parts = [];
-    if (h) parts.push('<span class="vz-agr-lnk" onclick="event.stopPropagation();vzOpenAgrNo(\'' + vzJs(h) + '\')">🏨 ' + vzEsc(h) + '</span>');
-    if (c) parts.push('<span class="vz-agr-lnk" onclick="event.stopPropagation();vzOpenAgrNo(\'' + vzJs(c) + '\')">🍽️ ' + vzEsc(c) + '</span>');
+    if (h) parts.push('<span class="vz-agr-lnk" onclick="event.stopPropagation();vzOpenAgrNo(\'' + vzJs(h) + '\',\'سكن\')">🏨 ' + vzEsc(h) + '</span>');
+    if (c) parts.push('<span class="vz-agr-lnk" onclick="event.stopPropagation();vzOpenAgrNo(\'' + vzJs(c) + '\',\'إعاشة\')">🍽️ ' + vzEsc(c) + '</span>');
     if (!parts.length) return '<td>—</td>';
     var plain = (h ? '🏨 ' + h : '') + (h && c ? ' · ' : '') + (c ? '🍽️ ' + c : '');
     return '<td class="vz-latin" style="max-width:150px;" title="' + vzEsc(plain) + '">' + parts.join(' · ') + '</td>';
@@ -41351,6 +41423,7 @@ var VZ_IMP_COLS_ = [
   ['notes', 'ملاحظات', ['ملاحظات', 'notes']]
 ];
 function vzImportOpen() {
+  if (!hasPermission('admin')) { _showPopup('استيراد المجموعات من إكسيل للأدمن فقط', 'error'); return; }
   if (!VZ.can.add) { _showPopup('لا تملك صلاحية إضافة مجموعات', 'error'); return; }
   VZ._imp = null;
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzImpOv';
@@ -41592,11 +41665,16 @@ function vzStatsExport(btn) {
    ============================================================ */
 var HA = { agreements: [], groups: [], cities: [], statuses: [], today: '', loaded: false, _draft: null, _alloc: null };
 // 🔗 (V4.164) فتح شاشة اتفاقيات السكن/الإعاشة مصفّاة مباشرة برقم اتفاقية بعينه — من جدول المجموعات
-function vzOpenAgrNo(agrNo) {
+// 🐛 (V4.167) kind (سكن/إعاشة) يُحدَّد أيضاً فلتر «النوع» — كان يفتح دوماً على عرض غير مصفَّى
+// بالنوع فيبدو الأمر وكأنه فتح شاشة الاتفاقيات على «سكن» حتى عند الضغط على رقم اتفاقية إعاشة
+function vzOpenAgrNo(agrNo, kind) {
   agrNo = mfStr(agrNo); if (!agrNo) return;
   vzHaOpen();
   var q = document.getElementById('haF_q');
-  if (q) { q.value = agrNo; if (HA.loaded) vzHaRender(); }
+  if (q) q.value = agrNo;
+  var kEl = document.getElementById('haF_kind');
+  if (kEl && kind) kEl.value = kind;
+  if (HA.loaded) vzHaRender();
 }
 function vzHaOpen() {
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzHaOv';

@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.166";
+var APP_VERSION = "4.167";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6455,7 +6455,8 @@ var FOLDER_KEYS = {
   LOGOS:   'FOLDER_ID_LOGOS',
   EXPORTS: 'FOLDER_ID_EXPORTS',
   TEMP:    'FOLDER_ID_TEMP',
-  BACKUPS: 'FOLDER_ID_BACKUPS'
+  BACKUPS: 'FOLDER_ID_BACKUPS',
+  CATERING: 'FOLDER_ID_CATERING' // 📎 (V4.167) مرفقات اتفاقيات الإعاشة (الملف/الصورة المستخلَص منها)
 };
 
 var FOLDER_DEFAULTS = {
@@ -6465,7 +6466,8 @@ var FOLDER_DEFAULTS = {
   LOGOS:   'Logos',
   EXPORTS:  'Exports',
   TEMP:    'Temp',
-  BACKUPS: 'Backups'
+  BACKUPS: 'Backups',
+  CATERING: 'CateringAttachments'
 };
 
 /**
@@ -10375,6 +10377,23 @@ function uploadBookingAttachment(authToken, base64Data, fileName) {
     return { success: false, error: "فشل رفع المرفق: " + e.message };
   }
 }
+// 📎 (V4.167) رفع الملف/الصورة الذي استُخلصت منه بيانات اتفاقية إعاشة — ليبقى مرفقاً بالاتفاقية
+// نفسها ويمكن مراجعته/فتحه لاحقاً في أي وقت (نفس أسلوب مرفقات إشعار الوصول بالضبط)
+function uploadCateringAttachment(authToken, base64Data, fileName) {
+  requireAuth_(authToken);
+  try {
+    var folder = getDriveFolder_('CATERING');
+    var contentType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";"));
+    var rawBase64 = base64Data.substring(base64Data.indexOf(",") + 1);
+    var blob = Utilities.newBlob(Utilities.base64Decode(rawBase64), contentType, fileName);
+    var file = folder.createFile(blob);
+    file.setName('CC_' + new Date().getTime() + '_' + fileName);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return { success: true, fileUrl: file.getUrl(), fileId: file.getId(), name: fileName };
+  } catch (e) {
+    return { success: false, error: "فشل رفع مرفق الاتفاقية: " + e.message };
+  }
+}
 
 // 🔗 (V4.157) اقتراحات الربط اليدوي لإشعار الوصول: مجموعات التأشيرات وملفات الوزارة الخاصة برحلة الإشعار.
 // لا تُرمى أخطاء صلاحيات — من لا يملك صلاحية العرض يحصل على قائمة فارغة فقط (نفس أسلوب getVisaTripLinks)
@@ -13210,7 +13229,8 @@ var CATERING_HEADERS = [
   'رقم الاتفاقية', 'اسم مقدم الخدمة', 'منطقة الخدمة', 'عدد أيام الاتفاقية',
   'تاريخ بداية الاتفاقية', 'تاريخ نهاية الاتفاقية', 'عدد المعتمرين', 'المدة',
   'المبلغ الإجمالي للمعتمرين', 'العميل / الرحلة', 'اسم شركة العمرة', 'رقم المجموعة',
-  'أنشئ بواسطة', 'أنشئ في', 'عُدّل بواسطة', 'عُدّل في', 'مصدر الملف', 'المورد', 'ملاحظات'
+  'أنشئ بواسطة', 'أنشئ في', 'عُدّل بواسطة', 'عُدّل في', 'مصدر الملف', 'المورد', 'ملاحظات',
+  'رابط مرفق الاتفاقية' // 📎 (V4.167) الملف/الصورة الذي استُخلصت منه البيانات — إضافي بحت بآخر القائمة
 ];
 // 🕘 (V4.86) أعمدة meta لا تُسجَّل كـ"حقل تغيّر" بسجل التعديلات (تُدار تلقائياً، وليست إدخال مستخدم)
 var CATERING_LOG_SKIP_COLS_ = { 12: 1, 13: 1, 14: 1, 15: 1 };
@@ -14939,7 +14959,8 @@ function getCateringContracts(authToken) {
       updatedAt: fmt(r[15]),
       sourceFile: String(r[16] || '').trim(),
       vendor: String(r[17] || '').trim(),
-      notes: String(r[18] || '').trim()
+      notes: String(r[18] || '').trim(),
+      attachmentUrl: String(r[19] || '').trim() // 📎 (V4.167)
     });
   });
   return { success: true, contracts: out };
@@ -14972,7 +14993,8 @@ function saveCateringContracts(authToken, list) {
       _accNum_(c.days) || '', String(c.fromDate || '').trim(), String(c.toDate || '').trim(),
       _accNum_(c.pilgrims) || '', _accNum_(c.duration) || '', _accNum_(c.totalAmount) || '',
       String(c.tripClient || '').trim(), String(c.umrahCompany || '').trim(), String(c.groupNo || '').trim(),
-      session.username, now, '', '', String(c.sourceFile || '').trim(), String(c.vendor || '').trim(), String(c.notes || '').trim()
+      session.username, now, '', '', String(c.sourceFile || '').trim(), String(c.vendor || '').trim(), String(c.notes || '').trim(),
+      String(c.attachmentUrl || '').trim() // 📎 (V4.167)
     ];
     var isEmpty_ = function(v) { return v === '' || v === null || v === undefined; };
     if (byNo[no]) {
@@ -14986,6 +15008,7 @@ function saveCateringContracts(authToken, list) {
         if (c.sourceFile) oldRow[16] = String(c.sourceFile).trim();
         oldRow[17] = String(c.vendor || '').trim(); // 📑 (V4.76) المورد — يُستبدَل صراحةً في وضع التعديل
         oldRow[18] = String(c.notes || '').trim(); // 📝 (V4.77) ملاحظات — يُستبدَل صراحةً في وضع التعديل
+        if (c.attachmentUrl) oldRow[19] = String(c.attachmentUrl).trim(); // 📎 (V4.167) لا يُمسَح لو لم يُرسَل مرفق جديد
         updates.push({ row: byNo[no].row, values: oldRow });
         updatedFilled++;
         logEntries = logEntries.concat(_ccLogDiffEntries_(no, origRow, oldRow));
@@ -15000,6 +15023,7 @@ function saveCateringContracts(authToken, list) {
         }
         if (isEmpty_(oldRow[17]) && !isEmpty_(newVals[17])) { oldRow[17] = newVals[17]; anyFilled = true; } // المورد
         if (isEmpty_(oldRow[18]) && !isEmpty_(newVals[18])) { oldRow[18] = newVals[18]; anyFilled = true; } // ملاحظات
+        if (isEmpty_(oldRow[19]) && !isEmpty_(newVals[19])) { oldRow[19] = newVals[19]; anyFilled = true; } // 📎 (V4.167) رابط المرفق
         if (anyFilled) {
           oldRow[14] = session.username; oldRow[15] = now;
           if (c.sourceFile && !oldRow[16]) oldRow[16] = String(c.sourceFile).trim();
