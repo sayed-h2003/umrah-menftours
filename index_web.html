@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.167 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.168 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.167)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.168)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.167</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.168</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6777,7 +6777,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.167";
+var CLIENT_APP_VERSION = "4.168";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -38783,7 +38783,8 @@ var VZ = { files: [], prices: [], transportPrices: [], companies: [], trips: [],
   agentBalances: {}, today: '', can: {}, loaded: false, _draft: null, _pick: null, _pickLoading: false,
   // 🔎↕️ تصفية ديناميكية لحظية من رأس كل عمود + ترتيب تصاعدي/تنازلي بالعمود
   // 📅 (V4.167) الترتيب الافتراضي أصبح بتاريخ السداد (الأحدث أولاً) بطلب صريح، بدل رقم التسلسل
-  colFilters: {}, sort: { key: 'date', dir: -1 }, selId: null, colW: {}, _filesSel: {} };
+  // 📅 (V4.168) الترتيب الافتراضي بتاريخ السداد تصاعدياً (الأقدم أولاً) بطلب صريح
+  colFilters: {}, sort: { key: 'date', dir: 1 }, selId: null, colW: {}, _filesSel: {} };
 function vzEsc(v) { return escapeHtml_(String(v == null ? '' : v)); }
 function vzJs(v) { return String(v == null ? '' : v).replace(/'/g, "\\'"); }
 function vzFmt(n) { return (Math.round(Number(n) || 0)).toLocaleString('en-US'); }
@@ -40467,20 +40468,21 @@ function vzOpenAccount(agent) {
   agent = mfStr(agent); if (!agent) return;
   if (!vzFin()) { _showPopup('كشوف حسابات الوكلاء تتطلب صلاحية مالية خاصة', 'error'); return; }
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzAccOv';
-  // 🗂️ (V4.164) فلتر الحالة الافتراضي "تم إصدار الموفا" — هو الوضع الأكثر استخداماً، والمستخدم يستطيع تغييره
-  VZ._accKey = agent; VZ._accF = { from: '', to: '', company: '', status: 'تم إصدار الموفا' }; VZ._accTransport = [];
+  // 🗂️ (V4.168) فلتر الحالة الافتراضي "الكل" بطلب صريح (كان "تم إصدار الموفا")
+  VZ._accKey = agent; VZ._accF = { from: '', to: '', company: '', status: '' }; VZ._accTransport = [];
   ov.innerHTML = '<div class="vz-dlg" style="width:min(1450px,98vw);"><div class="vz-hd"><b>🧑‍💼 كشف حساب: ' + vzEsc(agent) + '</b>' +
     '<span class="d-flex gap-2">' +
     '<button class="vz-btn sm" onclick="vzAccPrint()">🖨️ طباعة / PDF</button>' +
     '<button class="vz-btn sm" onclick="vzAccExport(this)">📸 صورة</button>' +
+    '<button class="vz-btn sm" onclick="vzAccExportExcel(this)">📊 تصدير إكسل</button>' +
     '<button class="vz-btn sm" onclick="vzAccClose()">✕</button></span></div>' +
     '<div class="p-3">' +
     '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🔎 فلاتر الكشف</div><div class="row g-2 align-items-end">' +
       '<div class="col-md-3 vz-fld"><label>من تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzAccCal(\'vzAccFrom\')">📅</button><input id="vzAccFrom" maxlength="10" placeholder="dd/mm/yyyy" onchange="vzAccApply()"></div></div>' +
       '<div class="col-md-3 vz-fld"><label>إلى تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzAccCal(\'vzAccTo\')">📅</button><input id="vzAccTo" maxlength="10" placeholder="dd/mm/yyyy" onchange="vzAccApply()"></div></div>' +
       '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><select id="vzAccComp" onchange="vzAccApply()"><option value="">الكل</option></select></div>' +
-      '<div class="col-md-3 vz-fld"><label>حالة المجموعة</label><select id="vzAccStatus" onchange="vzAccApply()"><option value="">الكل</option>' +
-        (VZ.statuses || []).map(function (s) { return '<option' + (s === 'تم إصدار الموفا' ? ' selected' : '') + '>' + vzEsc(s) + '</option>'; }).join('') + '</select></div>' +
+      '<div class="col-md-3 vz-fld"><label>حالة المجموعة</label><select id="vzAccStatus" onchange="vzAccApply()"><option value="" selected>الكل</option>' +
+        (VZ.statuses || []).map(function (s) { return '<option>' + vzEsc(s) + '</option>'; }).join('') + '</select></div>' +
       '<div class="col-md-12 d-flex gap-2"><button class="vz-btn" onclick="vzAccClearFilters()">✖ إلغاء الكل</button></div>' +
       '<div class="col-12"><div id="vzAccChips" class="d-flex gap-2 flex-wrap"></div></div>' +
     '</div></div>' +
@@ -41200,6 +41202,99 @@ function vzAccExport(btn) {
   if (typeof exportReportAsImage !== 'function') { _showPopup('نظام تصدير الصور غير متاح', 'error'); return; }
   if (!vzAccBuildDoc(false)) { _showPopup('لا توجد حركات للتصدير في هذا النطاق', 'error'); return; }
   exportReportAsImage(function () { return vzAccBuildDoc(false); }, _vzAccPdfName(), btn);
+}
+// 📊 (V4.168) تصدير كشف حساب الوكيل إلى إكسيل منسَّق (نفس مكتبة ومنهج تصدير ملفات مراجعة الوزارة:
+// ExcelJS بألوان/حدود/عرض أعمدة/صيغ أرقام وتواريخ حقيقية وتجميد رأس الجدول) — بدل صورة أو طباعة فقط
+async function vzAccExportExcel(btn) {
+  if (typeof ExcelJS === 'undefined') { _showPopup('مكتبة تصدير الإكسيل غير محمَّلة — أعد تحميل الصفحة', 'error'); return; }
+  var r = VZ._acc; if (!r) { _showPopup('لا توجد بيانات للتصدير', 'error'); return; }
+  var rows = vzAccBuildRows_();
+  if (!rows.length) { _showPopup('لا توجد حركات للتصدير في هذا النطاق', 'error'); return; }
+  var orig = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳...'; }
+  try {
+    var pcols = VZ_ACC_LEDGER_COLS_.filter(function (c) { return !c.nof && vzAccColsOn_(c.k); });
+    var textCols = { desc: 1, posting: 1, groupRef: 1, entryNo: 1 };
+    var moneyCols = { price: 1, debit: 1, credit: 1, balance: 1 };
+    var colW = { entryNo: 12, date: 12, groupRef: 14, desc: 26, count: 9, price: 11, debit: 13, credit: 13, balance: 14, posting: 22 };
+
+    var wb = new ExcelJS.Workbook();
+    var ws = wb.addWorksheet('كشف الحساب', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 3 }] });
+    ws.columns = pcols.map(function (c) { return { width: colW[c.k] || 14 }; });
+
+    var nCols = pcols.length;
+    var meta = _vzPrintMeta();
+    ws.mergeCells(2, 1, 2, nCols);
+    var title = ws.getCell(2, 1);
+    title.value = '🧾 كشف حساب الوكيل: ' + mfStr(VZ._accKey || '') + ((r.companies || []).length ? ' — ' + r.companies.join('، ') : '') + ' — طُبع في ' + meta.stamp;
+    title.font = { name: 'Arial', size: 13, bold: true, color: { argb: 'FF075C46' } };
+    title.alignment = { horizontal: 'center', vertical: 'middle' };
+    ws.getRow(2).height = 22;
+
+    var border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+    pcols.forEach(function (c, ci) {
+      var cell = ws.getCell(3, ci + 1);
+      cell.value = c.label;
+      cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF075C46' } };
+      cell.border = border;
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+    ws.getRow(3).height = 24;
+
+    var totDebit = 0, totCredit = 0;
+    rows.forEach(function (x, ri) {
+      totDebit += mfNum(x.debit); totCredit += mfNum(x.credit);
+      var xr = 4 + ri;
+      pcols.forEach(function (c, ci) {
+        var cell = ws.getCell(xr, ci + 1);
+        cell.border = border;
+        cell.font = { name: 'Arial', size: 10.5, bold: !!moneyCols[c.k], color: { argb: (c.k === 'debit' && x.debit) ? 'FFB45309' : (c.k === 'credit' && x.credit) ? 'FF166534' : 'FF14312A' } };
+        cell.alignment = { horizontal: textCols[c.k] ? 'right' : 'center', vertical: 'middle', wrapText: !!textCols[c.k] };
+        switch (c.k) {
+          case 'entryNo': cell.value = x.entryNo || ''; return;
+          case 'date': { var sd = _mfXlSerial(x.date); cell.value = sd != null ? new Date(sd * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(x.date || ''); cell.numFmt = 'dd/mm/yyyy'; return; }
+          case 'groupRef': cell.value = x.groupRef || ''; return;
+          case 'desc': cell.value = x.desc || ''; return;
+          case 'count': cell.value = x.count !== '' ? mfNum(x.count) : ''; return;
+          case 'price': cell.value = x.price !== '' ? mfNum(x.price) : ''; if (x.price !== '') cell.numFmt = '#,##0'; return;
+          case 'debit': cell.value = x.debit || ''; if (x.debit) cell.numFmt = '#,##0'; return;
+          case 'credit': cell.value = x.credit || ''; if (x.credit) cell.numFmt = '#,##0'; return;
+          case 'balance': cell.value = x.balance; cell.numFmt = '#,##0'; return;
+          case 'posting': cell.value = x.posting || ''; return;
+        }
+      });
+      ws.getRow(xr).height = 18;
+    });
+
+    var finalBalance = rows[rows.length - 1].balance;
+    var totRow = 4 + rows.length;
+    pcols.forEach(function (c, ci) {
+      var cell = ws.getCell(totRow, ci + 1);
+      cell.border = border;
+      cell.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF7030A0' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      if (c.k === 'debit') { cell.value = totDebit; cell.numFmt = '#,##0'; }
+      else if (c.k === 'credit') { cell.value = totCredit; cell.numFmt = '#,##0'; }
+      else if (c.k === 'balance') { cell.value = finalBalance; cell.numFmt = '#,##0'; }
+      else if (ci === 0) cell.value = 'الإجمالي';
+      else cell.value = '';
+    });
+    ws.getRow(totRow).height = 20;
+
+    var buf = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = _vzAccPdfName() + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    _showPopup('تم تصدير الإكسيل', 'success');
+  } catch (e) {
+    _showPopup('تعذّر التصدير: ' + (e && e.message ? e.message : e), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+  }
 }
 // نموذج صغير عام لإدخال دفعة/بند
 function _vzMiniForm(title, fields, data, onSave) {
