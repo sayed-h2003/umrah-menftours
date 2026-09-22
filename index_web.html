@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.175 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.176 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.175)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.176)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.175</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.176</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6875,7 +6875,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.175";
+var CLIENT_APP_VERSION = "4.176";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -38039,7 +38039,13 @@ function mfCurrentMonthKey_() {
 }
 function mfOpenQuotaStats(monthKey) {
   monthKey = monthKey || mfCurrentMonthKey_();
-  mfModal('📊 حصص الأفراد الشهرية (ملفات «فردي»)', '<div id="mfQuotaOut">⏳ جاري التحميل…</div>', '', 760);
+  mfModal('📊 حصص الأفراد الشهرية (ملفات «فردي»)',
+    '<div class="d-flex align-items-center gap-2 flex-wrap mb-2">' +
+    '<label style="font-size:11.5px;font-weight:800;">📅 الشهر</label>' +
+    '<input type="month" id="mfQuotaMonth" class="form-control form-control-sm" style="width:150px;" value="' + mfEsc(monthKey) + '" onchange="mfLoadQuotaStats(this.value)">' +
+    '<div style="flex:1;"></div>' +
+    (MF.can.edit ? '<button class="mf-btn sm gold" onclick="mfQuotaTransferOpen()">🔁 ترحيل حصة بين الأشهر</button>' : '') +
+    '</div><div id="mfQuotaOut">⏳ جاري التحميل…</div>', '', 800);
   mfLoadQuotaStats(monthKey);
 }
 function mfLoadQuotaStats(monthKey) {
@@ -38056,23 +38062,99 @@ function mfLoadQuotaStats(monthKey) {
 function mfRenderQuotaStats(res) {
   var out = document.getElementById('mfQuotaOut'); if (!out) return;
   var h = '<div class="small text-muted mb-2" style="font-weight:700;">الشهر: ' + mfEsc(res.monthKey) +
-    ' · الحد الشهري لكل شركة: ' + res.monthlyLimit + ' فرد · حد الملف الواحد: ' + res.perFileLimit + ' فرد</div>';
+    ' · الحد الأساسي لكل شركة: ' + res.monthlyLimit + ' فرد (يتغيّر بترحيل الحصص) · حد الملف الواحد: ' + res.perFileLimit + ' فرد</div>';
   if (!res.companies.length) {
-    h += '<div class="text-muted small p-2">لا توجد ملفات فردية مسجَّلة بهذا الشهر</div>';
+    h += '<div class="text-muted small p-2">لا توجد ملفات فردية أو ترحيلات حصة مسجَّلة بهذا الشهر</div>';
   } else {
     h += res.companies.map(function (c, i) {
-      var pct = Math.max(0, Math.min(100, Math.round(c.pilgrims / (res.monthlyLimit || 1) * 100)));
-      return '<div class="mf-note ' + (c.nearLimit ? 'bad' : 'info') + '" style="cursor:pointer;flex-direction:column;align-items:stretch;margin-bottom:8px;" onclick="mfQuotaCardClick(' + i + ')">' +
-        '<div style="display:flex;justify-content:space-between;gap:8px;font-weight:800;">' +
+      var pct = Math.max(0, Math.min(100, Math.round(c.pilgrims / (c.limit || 1) * 100)));
+      var transBits = [];
+      if (c.transferOut) transBits.push('⬅️ رُحِّل منه لأشهر أخرى ' + mfL(c.transferOut));
+      if (c.transferIn) transBits.push('➡️ رُحِّل إليه من أشهر أخرى ' + mfL(c.transferIn));
+      return '<div class="mf-note ' + (c.nearLimit ? 'bad' : 'info') + '" style="flex-direction:column;align-items:stretch;margin-bottom:8px;">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;font-weight:800;cursor:pointer;" onclick="mfQuotaCardClick(' + i + ')">' +
         '<span>' + (c.nearLimit ? '⚠️ ' : '') + mfEsc(c.company) + '</span>' +
-        '<span>' + mfL(c.pilgrims) + ' / ' + res.monthlyLimit + ' · ' + mfL(c.files) + ' ملف</span></div>' +
-        '<div style="background:#e2e8f0;border-radius:99px;height:7px;margin-top:6px;overflow:hidden;">' +
+        '<span>' + mfL(c.pilgrims) + ' / ' + mfL(c.limit) + ' · ' + mfL(c.files) + ' ملف</span></div>' +
+        (transBits.length ? '<div style="font-size:10px;color:#5c6b83;margin-top:2px;">' + transBits.join(' · ') + '</div>' : '') +
+        '<div style="background:#e2e8f0;border-radius:99px;height:7px;margin-top:6px;overflow:hidden;cursor:pointer;" onclick="mfQuotaCardClick(' + i + ')">' +
         '<div style="background:' + (c.nearLimit ? '#dc2626' : '#2563eb') + ';height:100%;width:' + pct + '%;"></div></div>' +
         '</div>';
     }).join('');
   }
   h += '<div id="mfQuotaBreak"></div>';
+  h += mfQuotaTransfersListHtml_(res);
   out.innerHTML = h;
+}
+// 🔁 (V4.176) جدول الترحيلات المؤثرة على الشهر المعروض حالياً (صادرة منه أو واردة إليه)
+function mfQuotaTransfersListHtml_(res) {
+  var rows = [];
+  (res.companies || []).forEach(function (c) {
+    (c.transfersOut || []).forEach(function (t) { rows.push(t); });
+    (c.transfersIn || []).forEach(function (t) { rows.push(t); });
+  });
+  if (!rows.length) return '';
+  var h = '<div style="margin-top:14px;border-top:1px dashed var(--mfBorder);padding-top:10px;">' +
+    '<div style="font-weight:800;font-size:12px;margin-bottom:6px;">🔁 الترحيلات المؤثرة على شهر ' + mfEsc(res.monthKey) + '</div>' +
+    '<table class="mf-mini" style="background:#fff;"><thead><tr><th>الشركة</th><th>من شهر</th><th>إلى شهر</th><th>العدد</th><th>ملاحظات</th><th style="width:36px;"></th></tr></thead><tbody>';
+  rows.forEach(function (t) {
+    h += '<tr><td>' + mfEsc(t.company) + '</td><td class="mf-latin">' + mfEsc(t.fromMonth) + '</td><td class="mf-latin">' + mfEsc(t.toMonth) + '</td>' +
+      '<td class="mf-latin">' + mfL(t.amount) + '</td><td>' + mfEsc(t.notes || '—') + '</td>' +
+      (MF.can.edit ? ('<td><button class="mf-btn sm dgr" onclick="mfQuotaTransferDelete(\'' + t.id + '\')">🗑️</button></td>') : '<td></td>') + '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+// ➕ (V4.176) نموذج ترحيل عدد من حصة شهر إلى شهر آخر لنفس الشركة
+function mfQuotaTransferOpen() {
+  if (!MF.can.edit) { _showPopup('لا تملك صلاحية التعديل', 'error'); return; }
+  var res = window._mfQuotaStats;
+  var curMonth = (res && res.monthKey) || mfCurrentMonthKey_();
+  var comps = (MF.companies || []).map(function (c) { return c.company; });
+  var h = '<div class="mf-note info" style="margin-bottom:8px;"><span>ℹ️</span><div>يُخصَم العدد من حصة «من شهر» ويُضاف لحصة «إلى شهر» لنفس الشركة — لا يجوز أن يتجاوز إجمالي ما يُرحَّل من شهر معيَّن إجمالي حصته الأساسية (36 فرد).</div></div>' +
+    '<div class="row g-2">' +
+    mfFld('الشركة', mfSel('mfQt_company', comps, '', ''), 6) +
+    mfFld('العدد المطلوب ترحيله', '<input type="number" min="1" class="form-control form-control-sm" id="mfQt_amount" value="">', 6) +
+    mfFld('من شهر (يُخصَم منه)', '<input type="month" class="form-control form-control-sm" id="mfQt_from" value="' + mfEsc(curMonth) + '">', 6) +
+    mfFld('إلى شهر (يُضاف إليه)', '<input type="month" class="form-control form-control-sm" id="mfQt_to" value="">', 6) +
+    mfFld('ملاحظات', '<input class="form-control form-control-sm" id="mfQt_notes">', 12) +
+    '</div>';
+  mfModal('🔁 ترحيل حصة أفراد شهرية', h,
+    '<span id="mfQtWarn" style="font-size:11px;color:#c2670a;font-weight:700;"></span><div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfOpenQuotaStats(\'' + curMonth + '\')">إلغاء</button>' +
+    '<button class="mf-btn pri" onclick="mfQuotaTransferSave()">💾 حفظ الترحيل</button>', 620);
+}
+function mfQuotaTransferSave() {
+  var data = {
+    company: mfFV('mfQt_company'), fromMonth: mfFV('mfQt_from'), toMonth: mfFV('mfQt_to'),
+    amount: mfNum(mfFV('mfQt_amount')), notes: mfFV('mfQt_notes')
+  };
+  var warnEl = document.getElementById('mfQtWarn');
+  if (!data.company) { if (warnEl) warnEl.textContent = '⚠️ اختر الشركة'; return; }
+  if (!data.fromMonth || !data.toMonth) { if (warnEl) warnEl.textContent = '⚠️ حدِّد الشهرين'; return; }
+  if (data.fromMonth === data.toMonth) { if (warnEl) warnEl.textContent = '⚠️ لا يمكن ترحيل حصة لنفس الشهر'; return; }
+  if (!data.amount || data.amount <= 0) { if (warnEl) warnEl.textContent = '⚠️ أدخل عدداً أكبر من صفر'; return; }
+  if (warnEl) warnEl.textContent = '⏳ جاري الحفظ…';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { if (warnEl) warnEl.textContent = ''; _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      _showPopup('تم حفظ الترحيل', 'success');
+      mfOpenQuotaStats(data.toMonth);
+    })
+    .withFailureHandler(function (e) { if (warnEl) warnEl.textContent = ''; _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveMfQuotaTransfer(window.authToken, data);
+}
+function mfQuotaTransferDelete(id) {
+  if (!confirm('حذف سجل الترحيل هذا؟ سيعود توزيع الحصة إلى وضعه قبل الترحيل.')) return;
+  var res = window._mfQuotaStats;
+  var monthKey = (res && res.monthKey) || mfCurrentMonthKey_();
+  google.script.run
+    .withSuccessHandler(function (r) {
+      if (!r || !r.success) { _showPopup((r && r.error) || 'تعذّر الحذف', 'error'); return; }
+      _showPopup('تم حذف الترحيل', 'success');
+      mfLoadQuotaStats(monthKey);
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .deleteMfQuotaTransfer(window.authToken, id);
 }
 function mfQuotaCardClick(i) {
   var res = window._mfQuotaStats; if (!res) return;

@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.175";
+var APP_VERSION = "4.176";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21568,6 +21568,68 @@ function _mfCompanyList_() {
   } catch (e) {}
   return out;
 }
+/* ---------- (V4.176) ترحيل حصة الأفراد الشهرية بين الأشهر ---------- */
+// يسمح بخصم عدد من حصة شهر (الحد الأساسي 36 فرد/شركة) وإضافته لحصة شهر آخر لنفس الشركة —
+// بشرط ألا يتجاوز إجمالي ما يُرحَّل من شهر بعينه إجمالي حصته الأساسية (36 فرد)
+var MF_QUOTA_TRANSFER_SHEET = 'MfQuotaTransfers';
+var MF_QUOTA_TRANSFER_HEADERS = ['معرف', 'الشركة', 'من شهر', 'إلى شهر', 'العدد', 'ملاحظات', 'أنشئ بواسطة', 'أنشئ في'];
+function _mfReadQuotaTransfers_() {
+  var sh = _accSheet_(MF_QUOTA_TRANSFER_SHEET, MF_QUOTA_TRANSFER_HEADERS);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var vals = sh.getRange(2, 1, last - 1, MF_QUOTA_TRANSFER_HEADERS.length).getValues();
+  var out = [];
+  for (var i = 0; i < vals.length; i++) {
+    var id = _mfStr_(vals[i][0]); if (!id) continue;
+    out.push({
+      id: id, company: _mfStr_(vals[i][1]), fromMonth: _mfStr_(vals[i][2]), toMonth: _mfStr_(vals[i][3]),
+      amount: _mfNum_(vals[i][4]), notes: _mfStr_(vals[i][5]), createdBy: _mfStr_(vals[i][6]), createdAt: _mfStr_(vals[i][7]),
+      _row: i + 2
+    });
+  }
+  return out;
+}
+function saveMfQuotaTransfer(authToken, data) {
+  var session = _mfPerm_(authToken, 'edit');
+  var company = _mfStr_(data && data.company);
+  var fromMonth = _mfStr_(data && data.fromMonth);
+  var toMonth = _mfStr_(data && data.toMonth);
+  var amount = _mfNum_(data && data.amount);
+  if (!company) return { success: false, error: 'اختر الشركة' };
+  if (!/^\d{4}-\d{2}$/.test(fromMonth) || !/^\d{4}-\d{2}$/.test(toMonth)) return { success: false, error: 'حدِّد الشهرين بصيغة صحيحة' };
+  if (fromMonth === toMonth) return { success: false, error: 'لا يمكن ترحيل حصة لنفس الشهر' };
+  if (!amount || amount <= 0) return { success: false, error: 'أدخل عدداً صحيحاً أكبر من صفر' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(15000); }
+  catch (e) { return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' }; }
+  try {
+    var all = _mfReadQuotaTransfers_();
+    var outFromSum = all.filter(function(t) { return t.company === company && t.fromMonth === fromMonth; })
+      .reduce(function(a, t) { return a + t.amount; }, 0);
+    if (outFromSum + amount > 36) {
+      return { success: false, error: 'لا يمكن ترحيل أكثر من إجمالي حصة الشهر المرحَّل منه (36 فرد) — المتبقي القابل للترحيل من ' +
+        fromMonth + ': ' + (36 - outFromSum) + ' فرد' };
+    }
+    var sh = _accSheet_(MF_QUOTA_TRANSFER_SHEET, MF_QUOTA_TRANSFER_HEADERS);
+    var id = _accId_('MFQT');
+    sh.appendRow([id, company, fromMonth, toMonth, amount, _mfStr_(data.notes), session.username, _mfStamp_()]);
+    SpreadsheetApp.flush();
+    logChange_(session.username, 'ترحيل حصة أفراد شهرية', company, '-', fromMonth + ' → ' + toMonth + ' (' + amount + ' فرد)');
+    return { success: true, id: id };
+  } finally { lock.releaseLock(); }
+}
+function deleteMfQuotaTransfer(authToken, id) {
+  var session = _mfPerm_(authToken, 'edit');
+  id = _mfStr_(id);
+  var sh = _accSheet_(MF_QUOTA_TRANSFER_SHEET, MF_QUOTA_TRANSFER_HEADERS);
+  var hit = _mfReadQuotaTransfers_().filter(function(t) { return t.id === id; })[0];
+  if (!hit) return { success: false, error: 'سجل الترحيل غير موجود' };
+  sh.deleteRow(hit._row);
+  SpreadsheetApp.flush();
+  logChange_(session.username, 'حذف ترحيل حصة أفراد شهرية', hit.company,
+    hit.fromMonth + ' → ' + hit.toMonth + ' (' + hit.amount + ' فرد)', '-');
+  return { success: true };
+}
 /* ---------- إحصاء حصة الأفراد الشهرية لكل شركة (ملفات «فردي» فقط) ---------- */
 function getMfIndividualQuotaStats(authToken, monthKey) {
   _mfPerm_(authToken, 'view');
@@ -21590,10 +21652,33 @@ function getMfIndividualQuotaStats(authToken, monthKey) {
       g.clientsMap[nm2] = (g.clientsMap[nm2] || 0) + _mfNum_(f.pilgrims);
     }
   });
+  // 🔁 (V4.176) الترحيلات المؤثرة على هذا الشهر (صادرة منه أو واردة إليه) — لكل شركة، حتى لو لم
+  // يكن لها ملفات «فردي» بهذا الشهر أصلاً (يظهر لها كارت بحصة معدَّلة فقط)
+  var transfers = _mfReadQuotaTransfers_();
+  var outByCompany = {}, inByCompany = {}, outListByCompany = {}, inListByCompany = {};
+  transfers.forEach(function(t) {
+    if (t.fromMonth === monthKey) {
+      outByCompany[t.company] = (outByCompany[t.company] || 0) + t.amount;
+      (outListByCompany[t.company] = outListByCompany[t.company] || []).push(t);
+      if (!byCompany[t.company]) { byCompany[t.company] = { company: t.company, pilgrims: 0, files: 0, clientsMap: {} }; order.push(t.company); }
+    }
+    if (t.toMonth === monthKey) {
+      inByCompany[t.company] = (inByCompany[t.company] || 0) + t.amount;
+      (inListByCompany[t.company] = inListByCompany[t.company] || []).push(t);
+      if (!byCompany[t.company]) { byCompany[t.company] = { company: t.company, pilgrims: 0, files: 0, clientsMap: {} }; order.push(t.company); }
+    }
+  });
   var companies = order.map(function(c) {
     var g = byCompany[c];
     var clients = Object.keys(g.clientsMap).map(function(n) { return { name: n, count: g.clientsMap[n] }; });
-    return { company: g.company, pilgrims: g.pilgrims, files: g.files, clients: clients, nearLimit: g.pilgrims >= 31 };
+    var transOut = outByCompany[c] || 0, transIn = inByCompany[c] || 0;
+    var limit = 36 - transOut + transIn;
+    return {
+      company: g.company, pilgrims: g.pilgrims, files: g.files, clients: clients,
+      limit: limit, transferOut: transOut, transferIn: transIn,
+      transfersOut: outListByCompany[c] || [], transfersIn: inListByCompany[c] || [],
+      nearLimit: g.pilgrims >= (limit - 5)
+    };
   }).sort(function(a, b) { return b.pilgrims - a.pilgrims; });
   return { success: true, monthKey: monthKey, monthlyLimit: 36, perFileLimit: 9, companies: companies };
 }
