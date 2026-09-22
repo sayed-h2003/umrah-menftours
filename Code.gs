@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.176";
+var APP_VERSION = "4.177";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6658,6 +6658,25 @@ function setCachedData(key, data) {
   }
 }
 
+/* 🧹 (V4.177) مسح مفتاح كاش واحد مسحاً كاملاً — شاملاً صيغته المجزَّأة (chunked).
+   🐛 السبب الجذري لمشكلة «الحفظ يُطبَّق ثم ترجع القيم القديمة بعد ثوانٍ»:
+   setCachedData يحفظ البيانات الأكبر من 90KB مجزّأةً تحت مفاتيح key_chunked/key_count/key_0..n
+   ولا يكتب المفتاح المجرَّد (key) إطلاقاً — بل يحذفه (انظر أعلاه)، وgetCachedData يفحص
+   key_chunked أولاً ويُعيد تجميع الأجزاء. وبيانات شاشتَي ملفات الوزارة ومتابعة الوكلاء أكبر
+   بكثير من 90KB فتُخزَّن دائماً بالصيغة المجزَّأة. لذلك كان cache.remove(key) المجرَّد — المستخدَم
+   بكل دوال إبطال الكاش — لا يمسح شيئاً على الإطلاق: تبقى كل الأجزاء وعلامة _chunked حيّة،
+   فيُعيد أول تحميل بعد الحفظ نفس النسخة القديمة تماماً فتُستبدل بها البيانات المحدَّثة بالشاشة.
+   هذه الدالة تمسح المفتاح بكل صيغه في نداء removeAll واحد (نفس ما يفعله clearAllCache أصلاً). */
+function clearCachedData(key) {
+  try {
+    var keys = [key, key + '_chunked', key + '_count'];
+    for (var i = 0; i < _CACHE_MAX_CHUNKS_; i++) keys.push(key + '_' + i);
+    CacheService.getScriptCache().removeAll(keys);
+  } catch (e) {
+    Logger.log('Cache clear error: ' + e);
+  }
+}
+
 // مفاتيح الـ Cache المركزية (تُستخدم في clearAllCache وكل دالة تضع بيانات في الـ Cache)
 var ALL_CACHE_KEYS = [
   'bookings_cache',
@@ -6670,6 +6689,7 @@ var ALL_CACHE_KEYS = [
   'trips_list_cache',   // قائمة الرحلات (تقرأ 3 شيتات — تُمسح مع أي تعديل رحلة/كشف)
   'registry_cache',     // السجل العام للمعتمرين
   'ministry_bootstrap_cache', // 🏛️ (V4.109) بيانات شاشة مراجعة ملفات الوزارة المشتركة بين المستخدمين
+  'notifications_rows_cache', // 🔔 (V4.177) صفوف التنبيهات الخام (تُبطَّل أيضاً مع كل كتابة تنبيه)
   'visa_bootstrap_cache' // 🧑‍💼 (V4.142) بيانات شاشة متابعة التأشيرات والوكلاء — كانت مفقودة من هذه القائمة
                          // فيظل ربط الوكيل بالشركة (زر إعدادات الوكيل) قديماً في هذه الشاشة حتى تنتهي صلاحية الكاش تلقائياً
 ];
@@ -13371,14 +13391,30 @@ function _notifPush_(type, message, client, trip, perm, username) {
   try {
     var sh = _accSheet_(NOTIF_SHEET, NOTIF_HEADERS);
     sh.appendRow([_accId_('N'), type, message, client || '', trip || '', perm || '', 'لا', username || '', new Date()]);
+    clearCachedData(NOTIF_CACHE_KEY);   // ⚡ (V4.177) تنبيه جديد — أبطل الكاش ليظهر فوراً
   } catch (e) { Logger.log('notif push failed: ' + e); }
 }
 
+/* ⚡ (V4.177) كاش صفوف التنبيهات الخام — كانت هذه الدالة تقرأ شيت التنبيهات كاملاً عند كل نداء،
+   وهي تُنادى دورياً من كل متصفح مفتوح (شارة الجرس) فتكلّف 3 - 7 ثوانٍ في كل مرة بسجلات التنفيذ.
+   نُخزِّن الصفوف الخام فقط (بلا أي تصفية) ثم تُطبَّق صلاحية كل مستخدم على النسخة المخزَّنة كما كان
+   تماماً — فلا يرى أحد تنبيهاً ليس من حقه. يُمسح الكاش فوراً مع أي كتابة (إضافة/تعليم كمقروء/حذف). */
+var NOTIF_CACHE_KEY = 'notifications_rows_cache';
 function getNotifications(authToken) {
   var session = requireAuth_(authToken);
-  var sh = _accSheet_(NOTIF_SHEET, NOTIF_HEADERS);
-  if (sh.getLastRow() < 2) return { success: true, notifications: [] };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, NOTIF_HEADERS.length).getValues();
+  var vals = getCachedData(NOTIF_CACHE_KEY);
+  if (!vals) {
+    var sh = _accSheet_(NOTIF_SHEET, NOTIF_HEADERS);
+    if (sh.getLastRow() < 2) return { success: true, notifications: [] };
+    vals = sh.getRange(2, 1, sh.getLastRow() - 1, NOTIF_HEADERS.length).getValues();
+    // التواريخ تتحوّل لنصوص عبر JSON داخل الكاش — نُوحّد الصيغة قبل التخزين لتبقى العودة متطابقة
+    vals = vals.map(function(r) {
+      var c = r.slice();
+      c[8] = (c[8] instanceof Date) ? Utilities.formatDate(c[8], Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : String(c[8] || '');
+      return c;
+    });
+    setCachedData(NOTIF_CACHE_KEY, vals);
+  }
   var out = [];
   vals.forEach(function(r) {
     var perm = String(r[5] || '').trim();
@@ -13399,7 +13435,7 @@ function markNotificationRead(authToken, id) {
   if (sh.getLastRow() < 2) return { success: true };
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
   for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0]) === String(id)) { sh.getRange(i + 2, 7).setValue('نعم'); return { success: true }; }
+    if (String(vals[i][0]) === String(id)) { sh.getRange(i + 2, 7).setValue('نعم'); clearCachedData(NOTIF_CACHE_KEY); return { success: true }; }
   }
   return { success: false };
 }
@@ -13416,6 +13452,7 @@ function markAllNotificationsRead(authToken) {
     return [visible ? 'نعم' : r[6]];
   });
   sh.getRange(2, 7, col7.length, 1).setValues(col7);
+  clearCachedData(NOTIF_CACHE_KEY);   // ⚡ (V4.177)
   return { success: true };
 }
 
@@ -13425,7 +13462,7 @@ function deleteNotification(authToken, id) {
   if (sh.getLastRow() < 2) return { success: true };
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
   for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0]) === String(id)) { sh.deleteRow(i + 2); return { success: true }; }
+    if (String(vals[i][0]) === String(id)) { sh.deleteRow(i + 2); clearCachedData(NOTIF_CACHE_KEY); return { success: true }; }
   }
   return { success: false };
 }
@@ -13730,22 +13767,30 @@ function getAllClientsSummary(authToken) {
 }
 
 // ---------- إعدادات التسعير (رسوم الغرف بفترات + ثوابت) ----------
+/* ⚡ (V4.177) ذاكرة مؤقتة لمدة الطلب الواحد فقط (كل طلب بـApps Script يبدأ بسياق جديد، فتُصفَّر
+   تلقائياً مع كل نداء) — كانت هذه الدالة تقرأ PropertiesService وتُحلِّل JSON في *كل* استدعاء،
+   وهي تُستدعى مرة لكل ملف داخل _mfCompute_/_mfRules_/_mfBalances_ أثناء بناء بوتستراب الوزارة.
+   نداء PropertiesService يكلّف عشرات الملّي ثانية، فمع مئات الملفات كان يلتهم ثوانيَ كاملة من
+   زمن كل فتح للشاشة بلا أي داعٍ (الإعدادات نفسها لا تتغيّر أثناء الطلب الواحد). */
+var _ACC_PRICING_MEMO_ = null;
 function _accPricing_() {
+  if (_ACC_PRICING_MEMO_) return _ACC_PRICING_MEMO_;
   // ملاحظة: أسعار التذاكر ليست تسعيرًا عامًا — تُدخل داخل بنود كل رحلة على حدة (بطلب صريح)
   // 🏛️ (V4.106) barcodePeriods = رسوم تجديد الباركود بفترات صلاحية · vipSurcharge = زيادة رسوم غرفة المعتمر في VIP (قديم)
   // 🏛️ (V4.113) vipRoomFee = إجمالي رسوم غرفة المعتمر الثابت عند المراجعة VIP (بدل روم فى + الزيادة)
   var d = { roomFeePeriods: [], supRoomFee: 200, barcodePeriods: [], vipSurcharge: 100, vipRoomFee: 3100 };
   try {
     var raw = PropertiesService.getScriptProperties().getProperty('ACC_PRICING');
-    if (!raw) return d;
+    if (!raw) { _ACC_PRICING_MEMO_ = d; return d; }
     var c = JSON.parse(raw);
     if (!Array.isArray(c.roomFeePeriods)) c.roomFeePeriods = [];
     if (!Array.isArray(c.barcodePeriods)) c.barcodePeriods = [];
     if (c.supRoomFee === undefined) c.supRoomFee = d.supRoomFee;
     if (c.vipSurcharge === undefined) c.vipSurcharge = d.vipSurcharge;
     if (c.vipRoomFee === undefined) c.vipRoomFee = d.vipRoomFee;
+    _ACC_PRICING_MEMO_ = c;
     return c;
-  } catch (e) { return d; }
+  } catch (e) { _ACC_PRICING_MEMO_ = d; return d; }
 }
 
 function getAccPricing(authToken) {
@@ -13776,6 +13821,7 @@ function saveAccPricing(authToken, cfg) {
     clean.barcodePeriods.push({ from: from, to: to, price: price });
   });
   PropertiesService.getScriptProperties().setProperty('ACC_PRICING', JSON.stringify(clean));
+  _ACC_PRICING_MEMO_ = null;   // ⚡ (V4.177) إبطال ذاكرة الطلب حتى يقرأ ما بعده القيم الجديدة
   logChange_(session.username, 'تعديل تسعير الحسابات', '-', 'ACC_PRICING', '-',
     clean.roomFeePeriods.length + ' فترة رسوم غرفة، رسوم غرفة المشرف ' + clean.supRoomFee + ' ج');
   return { success: true, cfg: clean };
@@ -16436,7 +16482,28 @@ function _propagateTripChangesToBooking_(tripName) {
   // 🔒 خريطة أعمدة الإشعارات بالاسم + كاتب صف بالاسم (يقاوم إعادة الترتيب)
   var BC = _robustColMap_(bookingsSheet, BOOKINGS_HEADERS_);
   var BR = _cellReader_(BC, BOOKINGS_COL_);
-  var setB = function(rowIdx, key, value) { var idx = BC[BOOKINGS_COL_[key]]; if (idx !== undefined) bookingsSheet.getRange(rowIdx, idx + 1).setValue(value); };
+  /* ⚡ (V4.177) كانت كل حقل يُكتب بنداء getRange().setValue() مستقل — أي نحو 22 نداء كتابة منفصلاً
+     لكل إشعار مرتبط، وكل نداء يكلّف عشرات إلى مئات الملّي ثانية، وهو السبب الأكبر لبطء حفظ الرحلة
+     (15 ثانية بسجلات التنفيذ). الآن تُجمَّع الكتابات في الذاكرة ثم تُكتب دفعةً واحدة على هيئة
+     نطاقات متجاورة (setValues) — بنفس النتيجة تماماً: لا يُكتب إلا الأعمدة التي تغيّرت فعلاً،
+     فلا نمسّ أي عمود آخر بالصف. */
+  var _pendW = {};
+  var setB = function(rowIdx, key, value) {
+    var idx = BC[BOOKINGS_COL_[key]];
+    if (idx !== undefined) _pendW[idx] = value;
+  };
+  var flushB = function(rowIdx) {
+    var idxs = Object.keys(_pendW).map(Number).sort(function(a, b) { return a - b; });
+    if (!idxs.length) return;
+    var run = [idxs[0]];
+    for (var n = 1; n <= idxs.length; n++) {
+      if (n < idxs.length && idxs[n] === idxs[n - 1] + 1) { run.push(idxs[n]); continue; }
+      var vals = run.map(function(ix) { return _pendW[ix]; });
+      bookingsSheet.getRange(rowIdx, run[0] + 1, 1, run.length).setValues([vals]);
+      if (n < idxs.length) run = [idxs[n]];
+    }
+    _pendW = {};
+  };
 
   for (var b = 1; b < bData.length; b++) {
     var _bId = String(BR(bData[b], 'id') || "").trim();
@@ -16492,6 +16559,7 @@ function _propagateTripChangesToBooking_(tripName) {
       if (_makCO)  setB(rowIdx, 'makkahCheckOut', _makCO); // خروج مكة
       if (_makN !== "" && _makN !== null && _makN !== undefined) setB(rowIdx, 'makkahNights', _makN); // ليالي مكة
       if (_dir) setB(rowIdx, 'direction', _dir); // اتجاه الإقامة
+      flushB(rowIdx);   // ⚡ (V4.177) كتابة واحدة مجمَّعة بدل ~22 نداء منفصلاً — انظر تعليق setB
       clearAllCache();
       return true;
     }
@@ -21181,8 +21249,9 @@ function _mfDataVer_() {
 function getMinistryBootstrap(authToken) {
   var session = _mfPerm_(authToken, 'view');
   var shared = getCachedData(MF_BOOTSTRAP_CACHE_KEY);
+  var _verAtStart = _mfDataVer_(), _built = false;
   if (!shared) {
-    var _verAtStart = _mfDataVer_();
+    _built = true;
     shared = _mfBuildSharedBootstrap_();
     // 🐛 (V4.172) لا نكتب بالكاش إلا لو لم يقع أي حفظ (_mfClearBootstrapCache_) أثناء هذا البناء —
     // وإلا فهذا البناء قرأ بيانات قديمة جزئياً ولا يجوز أن "يُحيي" الكاش بنسخة تسبق الحفظ الأحدث
@@ -21198,6 +21267,10 @@ function getMinistryBootstrap(authToken) {
     del: _sessionHasPerm_(session, 'ministry.delete'),
     approve: _sessionHasPerm_(session, 'ministry.approve')
   };
+  // 🐛 (V4.177) بناء بدأ قبل عملية حفظ وانتهى بعدها ⇒ يحمل بيانات تسبق الحفظ — نُعلم الواجهة
+  // كي لا تستبدل به الصفوف المحدَّثة محلياً (نفس منطق getVisaBootstrap تماماً)
+  out.dataVer = _mfDataVer_();
+  out.stale = _built && (out.dataVer !== _verAtStart);
   return out;
 }
 // قراءة عمود JSON كمصفوفة بأمان (الفنادق الإضافية بالرحلات)
@@ -21280,7 +21353,7 @@ function _mfBuildSharedBootstrap_() {
 }
 // تُستدعى بعد أي حفظ/حذف في شاشة مراجعة ملفات الوزارة حتى لا يرى المستخدمون بيانات قديمة من الكاش
 function _mfClearBootstrapCache_() {
-  try { CacheService.getScriptCache().remove(MF_BOOTSTRAP_CACHE_KEY); } catch (e) {}
+  clearCachedData(MF_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData
   _mfBumpVer_();
 }
 
@@ -22691,7 +22764,7 @@ function _vzDataVer_() {
   catch (e) { return 0; }
 }
 function _vzClearCache_() {
-  try { CacheService.getScriptCache().remove(VZ_BOOTSTRAP_CACHE_KEY); } catch (e) {}
+  clearCachedData(VZ_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData
   _vzBumpVer_();
 }
 
@@ -23020,16 +23093,25 @@ function _vzCateringByGroup_() {
 function getVisaBootstrap(authToken) {
   var session = _vzPerm_(authToken, 'view');
   var shared = getCachedData(VZ_BOOTSTRAP_CACHE_KEY);
+  // 🐛 (V4.164) رقم الإصدار لحظة بدء إعادة البناء — يُقارَن بعد الانتهاء (انظر التعليق أسفل
+  // setCachedData) لمنع كتابة نتيجة بُنيت من بيانات سبقت حفظاً وقع أثناء هذا البناء بالذات
+  var _verAtStart = _vzDataVer_(), _built = false;
   if (!shared) {
-    // 🐛 (V4.164) رقم الإصدار لحظة بدء إعادة البناء — يُقارَن بعد الانتهاء (انظر التعليق أسفل
-    // setCachedData) لمنع كتابة نتيجة بُنيت من بيانات سبقت حفظاً وقع أثناء هذا البناء بالذات
-    var _verAtStart = _vzDataVer_();
+    _built = true;
     var files = _vzReadAll_();
     var prices = _vzReadPrices_();
     var transportPrices = _vzReadTransportPrices_();
     files.forEach(function (f) { f.dueSAR = _mfNum_(f.visaCount) * _mfNum_(f.price); delete f._row; });
     // نُعيد استخدام نفس شركات/وكلاء/رحلات/عملاء بوتستراب الوزارة (بلا تكرار الكود)
-    var base = _mfBuildSharedBootstrap_();
+    // ⚡ (V4.177) وأيضاً نفس *كاشه* لا الباني وحده: كان فتح شاشة الوكلاء يُعيد بناء بوتستراب
+    // الوزارة كاملاً من الشيتات (ملفات + إيصالات + مشرفون + أرصدة + شركات + رحلات + عملاء) حتى
+    // لو كان كاش الوزارة ساخناً بالفعل — وهو وحده عدة ثوانٍ من زمن البناء البالغ 18 ثانية.
+    var base = getCachedData(MF_BOOTSTRAP_CACHE_KEY);
+    if (!base) {
+      var _mfVerAtStart = _mfDataVer_();
+      base = _mfBuildSharedBootstrap_();
+      if (_mfDataVer_() === _mfVerAtStart) setCachedData(MF_BOOTSTRAP_CACHE_KEY, base);
+    }
     // أرصدة الوكلاء (صافي كل وكيل) من التأشيرات + البنود + الدفعات
     var allItems = _vzReadItems_(''), allPays = _vzReadPays_('');
     var agentsSet = {};
@@ -23071,6 +23153,10 @@ function getVisaBootstrap(authToken) {
   }
   var out = {}; for (var k in shared) out[k] = shared[k];
   out.success = true; out.user = session.username;
+  // 🐛 (V4.177) بناء بدأ قبل عملية حفظ وانتهى بعدها ⇒ ما يحمله يسبق الحفظ فعلاً (ولذلك لم يُكتب
+  // بالكاش أعلاه أيضاً) — نُعلم الواجهة صراحةً أنه قديم كي لا تستبدل به الصف المحدَّث محلياً
+  out.dataVer = _vzDataVer_();
+  out.stale = _built && (out.dataVer !== _verAtStart);
   var finance = _vzHasFinance_(session);
   out.can = {
     add: _sessionHasPerm_(session, 'visas.add'), edit: _sessionHasPerm_(session, 'visas.edit'),
@@ -23842,7 +23928,7 @@ var VZ_HA_CITIES_    = ['مكة','المدينة'];
 var VZ_HA_STATUSES_  = ['مبدئية','مؤكَّدة','مُوقَّعة','ملغاة'];
 var VZ_HA_CACHE_KEY  = 'visa_housing_cache';
 
-function _vzHaClearCache_() { try { CacheService.getScriptCache().remove(VZ_HA_CACHE_KEY); } catch (e) {} try { _vzClearCache_(); } catch (e2) {} }
+function _vzHaClearCache_() { clearCachedData(VZ_HA_CACHE_KEY); try { _vzClearCache_(); } catch (e2) {} }
 
 function _vzHaRowToObj_(r) {
   return { id: _mfStr_(r[0]), seq: _mfNum_(r[1]), agrNo: _mfStr_(r[2]), city: _mfStr_(r[3]), hotel: _mfStr_(r[4]),

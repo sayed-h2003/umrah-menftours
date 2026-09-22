@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.176 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.177 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.176)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.177)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.176</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.177</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6596,6 +6596,8 @@ appDiv.style.backgroundColor = "white";
               showForceChangePasswordModal();
             } else {
               window.__step('🔐 [دخول 7] بدء تحميل بيانات الشاشة الرئيسية');
+              // ⚡ (V4.177) نُعلِّم أن تحميل بيانات البداية تمّ من هنا، فلا يُكرّره window.onload
+              window._bootInitDone = true;
               // تحديث الواجهة إذا كان لديك دوال أخرى للتحديث
               _runStep('تحميل القوائم المنسدلة (loadSetupData)', loadSetupData);
               _runStep('تحميل جدول الحجوزات (loadBookingsTable)', loadBookingsTable);
@@ -6875,7 +6877,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.176";
+var CLIENT_APP_VERSION = "4.177";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7431,7 +7433,11 @@ function _checkAppVersionMismatch() {
 window.onload = function() {
   _checkAppVersionMismatch();
   initFlatpickr();
-  if (window.authToken) {
+  // ⚡ (V4.177) هذه الثلاثة يُشغّلها تسلسل تسجيل الدخول نفسه بالفعل — كان تشغيلها هنا أيضاً
+  // يُضاعف ثلاثة نداءات ثقيلة (القوائم المنسدلة + جدول الإشعارات + لوحة الإحصائيات) عند كل
+  // دخول بجلسة مستعادة. نُشغّلها هنا فقط لو لم يكن تسلسل الدخول قد شغّلها لتوّه.
+  if (window.authToken && !window._bootInitDone) {
+    window._bootInitDone = true;
     loadSetupData();
     loadBookingsTable();
     loadSmartDashboard();
@@ -11317,15 +11323,36 @@ function _trFilterChipsHtml_() {
   '</div>';
 }
 
+/* ⚡ (V4.177) حارس «نداء واحد فقط في الطريق» لقائمة الرحلات — كانت تُستدعى 6 إلى 8 مرات متزامنة
+   عند كل تسجيل دخول (من تسلسل الدخول + الشاشة الافتراضية + لوحة الإحصائيات + بطاقة الرحلات
+   العاجلة + إعادة الرسم + قوائم الاقتراح)، وكل نداء يقرأ 4 شيتات كاملة ويستغرق 7-9 ثوانٍ بسجلات
+   التنفيذ، والأسوأ أنها تتزامن فلا يستفيد أي منها من كاش الآخر (thundering herd) فتُبنى النتيجة
+   نفسها 8 مرات. الآن: نداء واحد فقط يذهب للخادم، وأي نداء يصل أثناءه يُخدَم بنتيجته نفسها.
+   ⚠️ عمداً لا يوجد أي كاش زمني هنا: كل نداء بعد اكتمال السابق يذهب للخادم فعلاً، حتى لا يُخفى
+   أي تعديل حُفظ للتو (نفس الدرس المستفاد من مشكلة رجوع القيم القديمة بعد الحفظ). */
+var _tripsListInFlight_ = false, _tripsListAgain_ = false;
 function loadTripsList() {
   var area = document.getElementById('tripsListArea');
-  area.innerHTML = '<div class="alert alert-light border text-center">⏳ جاري تحميل الرحلات...</div>';
 
+  // نداء جارٍ بالفعل لنفس البيانات — لا نُطلق ثانياً؛ ونُعلِّم أن طلباً لاحقاً وصل أثناءه كي
+  // نُعيد الجلب مرة واحدة بعد انتهائه (يضمن ظهور أي حفظ وقع أثناء النداء الجاري)
+  if (_tripsListInFlight_) { _tripsListAgain_ = true; return; }
+
+  _tripsListInFlight_ = true;
+  if (area && !(window.tripsCache || []).length) {
+    area.innerHTML = '<div class="alert alert-light border text-center">⏳ جاري تحميل الرحلات...</div>';
+  }
+
+  var done = function () {
+    _tripsListInFlight_ = false;
+    if (_tripsListAgain_) { _tripsListAgain_ = false; loadTripsList(); }
+  };
   google.script.run
-    .withSuccessHandler(_tripsRenderList_)
-    .withFailureHandler(function(err) {
+    .withSuccessHandler(function (list) { done(); _tripsRenderList_(list); })
+    .withFailureHandler(function (err) {
+      _tripsListInFlight_ = false; _tripsListAgain_ = false;
       if (_handleSessErr_(err)) return;
-      area.innerHTML = '<div class="alert alert-danger text-center">❌ ' + (err.message || err) + '</div>';
+      if (area) area.innerHTML = '<div class="alert alert-danger text-center">❌ ' + (err.message || err) + '</div>';
     })
     .getTripsList(window.authToken);
 }
@@ -21807,6 +21834,10 @@ document
     return;
   }
 
+  // 🪟 (V4.177) قبل أي تنظيف: تُصغَّر النوافذ المفتوحة (نموذج ملف الوزارة، نموذج مجموعة التأشيرات،
+  // كشف حساب الوكيل، وأي نافذة Bootstrap) لشريط النوافذ أسفل الشاشة بدل إخفائها وضياع ما كُتب فيها —
+  // فيمكن التنقل لأي شاشة أخرى للمراجعة ثم العودة للنافذة بضغطة واحدة وكل الحقول كما تُركت تماماً.
+  _autoMinimizeOpenWindows_();
   // 🧹 عند مغادرة أي شاشة: أزل النوافذ العائمة المؤقتة وصفّر فلاتر الشاشات (تُطبَّق من جديد عند العودة)
   _removeTransientOverlays();
   _resetAllScreenFilters();
@@ -22705,6 +22736,10 @@ function _notifOpen_() {
 }
 function _notifRefreshBadge_() {
   if (!window.authToken) return;
+  // ⚡ (V4.177) لا نستهلك الخادم والتبويب مخفي/غير نشط — كل نداء تنبيهات يقرأ شيت التنبيهات
+  // كاملاً (3 - 7 ثوانٍ بسجلات التنفيذ). يُستأنف فوراً عند العودة للتبويب (انظر مستمع
+  // visibilitychange أسفل مؤقّت التنبيهات).
+  if (typeof document.visibilityState === 'string' && document.visibilityState !== 'visible') return;
   google.script.run
     .withSuccessHandler(function(res) { window._notifCache = (res && res.notifications) || []; _notifRenderBadge_(); })
     .withFailureHandler(function() {})
@@ -22768,6 +22803,12 @@ function _notifMarkAllRead_() {
       if (wrap) wrap.classList.toggle('d-none', !(hasPermission('admin') || hasPermission('accounts.view')));
       _notifRefreshBadge_();
       setInterval(_notifRefreshBadge_, 90000);
+      // ⚡ (V4.177) تحديث فوري بمجرد العودة للتبويب — يعوّض الدورات التي تُتخطّى وهو مخفي
+      try {
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') _notifRefreshBadge_();
+        });
+      } catch (e) {}
     } else if (tries > 600) clearInterval(iv);
   }, 1000);
 })();
@@ -34529,30 +34570,11 @@ function toggleExtraMovements(){
 })();
 
 
-// --- كود التحديث التلقائي عند التنقل بين الشاشات ---
-
-// دالة تعمل في الخلفية فور الضغط على أي زر تنقل
-function autoRefreshOnNavigate() {
-  if (!window.authToken) return; // لسه مافيش تسجيل دخول، متعملش أي طلب
-  console.log("جاري مزامنة أحدث البيانات من السيرفر بسبب انتقال المستخدم...");
-  google.script.run
-    .withSuccessHandler(function(latestData) {
-       console.log("تمت المزامنة اللحظية للبيانات بنجاح.");
-    })
-    .getLatestDataFromServer(window.authToken); 
-}
-
-// مراقبة جميع أزرار التنقل والقوائم الداخلية في تصميمك وتفعيل التحديث عند الضغط عليها
-document.addEventListener("DOMContentLoaded", function() {
-  // يقوم الكود بالبحث عن أي عناصر تنقل مثل الأزرار أو القوائم الجانبية
-  // (يمكنك تغيير الكلاسات .nav-link أو .menu-item بما يناسب تسميات الأزرار في كودك)
-  document.querySelectorAll('button, .nav-link, .menu-item, a').forEach(function(element) {
-    element.addEventListener('click', function() {
-      // الانتظار 400 جزء من الثانية لفتح الشاشة الجديدة أولاً ثم تحديث بياناتها صامتاً
-      setTimeout(autoRefreshOnNavigate, 400);
-    });
-  });
-});
+/* ⚡ (V4.177) أُلغيت هنا "المزامنة التلقائية عند التنقل" نهائياً — كانت أثقل مصدر بطء بالبرنامج كله:
+   كان يُربَط مستمع نقر بكل زر ورابط وعنصر قائمة بالصفحة، وأي نقرة في أي مكان تُطلق بعد 400ms نداء
+   getLatestDataFromServer الذي يقرأ شيت الإشعارات وشيت التحركات بالكامل من الخادم (1.7 - 5.5 ثانية
+   لكل نقرة بسجلات التنفيذ) — ثم يُرمى الناتج بالكامل ولا يُستخدم في أي شيء سوى سطر console.log.
+   كل شاشة تُحمِّل بياناتها بنفسها عند فتحها (switchPage)، فلا حاجة لهذه المزامنة إطلاقاً. */
 
 // ===== تغيير كلمة المرور الإجباري عند أول دخول =====
 
@@ -35139,6 +35161,9 @@ function mfLoad(force) {
         if (wrap) wrap.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_((res && res.error) || 'تعذّر التحميل') + '</div>';
         return;
       }
+      // 🐛 (V4.177) رد بُني من بيانات تسبق آخر حفظ — لا نستبدل به الصفوف المحدَّثة محلياً، ونعيد
+      // المحاولة بعد لحظة (إلا لو كانت هذه أول تحميلة أصلاً فلا بديل لدينا سوى عرض ما وصل)
+      if (res.stale && MF.loaded) { setTimeout(function () { mfLoad(true); }, 1500); return; }
       MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
       MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
       MF.balances = res.balances || {}; MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
@@ -36634,6 +36659,39 @@ function mfMinimizeModal(ov) {
 /* 🪟 (V4.114) نفس الميزة لكل نوافذ التطبيق العادية (Bootstrap) — التصغير هنا يستخدم إخفاء
    Bootstrap القياسي الذي يُبقي محتوى النافذة وكل قيم حقولها كما هي في الـDOM، والاستعادة تُعيد
    إظهارها بنفس الحالة تماماً. يُضاف الزر تلقائياً لرأس أي نافذة تُفتح. */
+/* 🪟 (V4.177) تصغير أي نافذة عامة مُلحَقة بـbody (نموذج مجموعة التأشيرات #vzFormOv، كشف حساب
+   الوكيل #vzAccOv، وغيرها) — تبقى كما هي تماماً في الـDOM بكل حقولها المكتوبة، نُخفيها فقط
+   ونُغيّر مُعرِّفها مؤقتاً كي لا يجدها كود الإغلاق فيُزيلها، وتعود بمُعرِّفها الأصلي عند الاستعادة. */
+function mfMinimizeGenericWin(el, title) {
+  if (!el || !el.id) return;
+  var id = 'mfMinWin_' + (++_mfMinSeq);
+  MF_MIN.push({ id: id, title: title || 'نافذة', el: el, kind: 'gen', origId: el.id, disp: el.style.display || '' });
+  el.id = id;
+  el.style.display = 'none';
+  mfRenderTaskbar();
+}
+/* 🪟 (V4.177) عند مغادرة الشاشة: بدل أن تختفي النوافذ المفتوحة (أو تبقى معلَّقة فوق الشاشة
+   الجديدة) وتضيع البيانات المكتوبة فيها — تُصغَّر تلقائياً لشريط النوافذ أسفل الشاشة، فيمكن فتح
+   أي شاشة أخرى للمراجعة ثم العودة للنافذة بضغطة واحدة وكل حقل كما تُرك تماماً. */
+function _autoMinimizeOpenWindows_() {
+  try {
+    var mfOv = document.getElementById('mfModalOv');
+    if (mfOv && typeof mfMinimizeModal === 'function') mfMinimizeModal(mfOv);
+  } catch (e) {}
+  // النوافذ العامة المعروفة التي تحمل بيانات قيد التحرير
+  [['vzFormOv', '🛂 مجموعة تأشيرات'], ['vzAccOv', '📒 كشف حساب وكيل'], ['vzHaOv', '🏨 اتفاقيات السكن']]
+    .forEach(function (p) {
+      try {
+        var el = document.getElementById(p[0]);
+        if (el) mfMinimizeGenericWin(el, p[1]);
+      } catch (e) {}
+    });
+  try {
+    document.querySelectorAll('.modal.show').forEach(function (m) {
+      if (typeof mfMinimizeBsModal === 'function') mfMinimizeBsModal(m);
+    });
+  } catch (e) {}
+}
 function mfMinimizeBsModal(modalEl) {
   if (!modalEl) return;
   var t = modalEl.querySelector('.modal-title');
@@ -36694,6 +36752,13 @@ function mfRestoreMin(id) {
         ? bootstrap.Modal.getOrCreateInstance(el) : null;
       if (inst) inst.show(); else el.classList.add('show');
     } catch (e) {}
+    mfRenderTaskbar();
+    return;
+  }
+  // 🪟 (V4.177) نافذة عامة (نموذج مجموعة تأشيرات/كشف حساب...) — تعود بمُعرِّفها الأصلي كما كانت
+  if (w.kind === 'gen') {
+    el.style.display = w.disp || 'flex';
+    el.id = w.origId;
     mfRenderTaskbar();
     return;
   }
@@ -39108,6 +39173,9 @@ function vzLoad(force, silent) {
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { if (wrap) wrap.innerHTML = '<div class="alert alert-danger m-2">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
+      // 🐛 (V4.177) رد بُني من بيانات تسبق آخر حفظ (بدأ بناؤه قبل الحفظ وانتهى بعده) — تجاهله
+      // تماماً ولا تستبدل به الصف المحدَّث محلياً، وأعد المحاولة بهدوء بعد لحظة بدل إظهار القيم القديمة
+      if (res.stale) { setTimeout(function () { vzLoad(true, true); }, 1500); return; }
       VZ.files = res.files || []; VZ.prices = res.prices || []; VZ.transportPrices = res.transportPrices || []; VZ.companies = res.companies || [];
       VZ.trips = res.trips || []; VZ.clients = res.clients || []; VZ.agents = res.agents || [];
       VZ.statuses = res.statuses || []; VZ.agentBalances = res.agentBalances || {};
@@ -39962,6 +40030,10 @@ function vzFormOpen(f) {
   VZ._pick = null; VZ._pickLoading = false; VZ._tab = VZ._tab || 'basic';
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzFormOv';
   ov.innerHTML = '<div class="vz-dlg vz-dlg-form"><div class="vz-hd"><b>🛂 ' + (f ? 'تعديل مجموعة تأشيرات' : 'مجموعة تأشيرات جديدة') + '</b>' +
+    // 🪟 (V4.177) تصغير النافذة لشريط النوافذ أسفل الشاشة — تبقى بكل ما كُتب فيها ويمكن فتح أي
+    // شاشة أخرى للمراجعة ثم العودة إليها بضغطة واحدة (نفس زر التصغير بنوافذ ملفات الوزارة)
+    '<button class="vz-btn sm" title="تصغير — افتح شاشة أخرى ثم عُد للنافذة كما تركتها" ' +
+    'onclick="mfMinimizeGenericWin(document.getElementById(\'vzFormOv\'),\'🛂 مجموعة تأشيرات\')">−</button>' +
     '<button class="vz-btn sm" onclick="vzFormClose()">✕</button></div>' +
     '<div class="vz-tabs" id="vzTabs"></div>' +
     '<div class="px-3 pb-3 pt-2" id="vzFormBody"></div>' +
