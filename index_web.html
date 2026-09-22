@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.178 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.179 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.178)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.179)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.178</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.179</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5079,18 +5079,21 @@ input[type="date"]:not(:focus):not(:valid) {
 <!-- ================= 🛂 (V4.133) متابعة التأشيرات والوكلاء — هوية بصرية زمردية/ذهبية مميّزة ================= -->
 <style>
   /* هوية زمردية عميقة + ذهبي (مختلفة عن كحلي شاشة الوزارة) — تباين عالٍ وخطوط أوضح */
-  #section-visas, .vz-dlg{ --vzG:#0b7a5e; --vzGD:#075c46; --vzGL:#e7f6f1; --vzGold:#c98a1e; --vzInk:#153b32;
+  /* 🩹 (V4.179) .mf-dlg مُضافة هنا أيضاً: جداول/أزرار شاشة الوكلاء (vz-tab، vz-btn...) المعروضة
+     داخل النافذة العامة المشتركة (mfModal — كشف معتمري المجموعة، سجل التعديلات...) كانت بلا أي
+     تنسيق لأن متغيرات الألوان هذه (--vzG وغيرها) لم تكن مُعرَّفة إلا ضمن #section-visas/.vz-dlg */
+  #section-visas, .vz-dlg, .mf-dlg{ --vzG:#0b7a5e; --vzGD:#075c46; --vzGL:#e7f6f1; --vzGold:#c98a1e; --vzInk:#153b32;
     --vzBorder:#cfe6de; --vzSurf:#f4fbf8; --vzLbl:#3b6b5e; }
-  #section-visas .vz-latin{ direction:ltr; unicode-bidi:embed; display:inline-block; font-variant-numeric:tabular-nums; }
+  #section-visas .vz-latin, .mf-dlg .vz-latin{ direction:ltr; unicode-bidi:embed; display:inline-block; font-variant-numeric:tabular-nums; }
   #section-visas .vz-bar{ background:#fff; border:1px solid var(--vzBorder); border-radius:13px; padding:11px 13px; box-shadow:0 1px 3px rgba(11,122,94,.06); }
-  #section-visas .vz-btn, .vz-dlg .vz-btn{ font-size:12px; font-weight:800; border-radius:10px; padding:7px 13px; border:1.5px solid var(--vzBorder);
+  #section-visas .vz-btn, .vz-dlg .vz-btn, .mf-dlg .vz-btn{ font-size:12px; font-weight:800; border-radius:10px; padding:7px 13px; border:1.5px solid var(--vzBorder);
     background:#fff; color:var(--vzInk); cursor:pointer; transition:.15s; display:inline-flex; align-items:center; gap:6px; }
-  #section-visas .vz-btn:hover, .vz-dlg .vz-btn:hover{ border-color:var(--vzG); color:var(--vzG); background:var(--vzGL); }
-  #section-visas .vz-btn.pri, .vz-dlg .vz-btn.pri{ background:linear-gradient(135deg,var(--vzG),var(--vzGD)); color:#fff; border-color:transparent; box-shadow:0 3px 8px rgba(11,122,94,.28); }
-  #section-visas .vz-btn.pri:hover, .vz-dlg .vz-btn.pri:hover{ color:#fff; filter:brightness(1.08); }
-  #section-visas .vz-btn.gold, .vz-dlg .vz-btn.gold{ background:linear-gradient(135deg,#eab74a,#c98a1e); color:#3a2a05; border-color:transparent; box-shadow:0 3px 8px rgba(201,138,30,.25); }
-  #section-visas .vz-btn.sm, .vz-dlg .vz-btn.sm{ font-size:11px; padding:5px 10px; border-radius:8px; }
-  #section-visas .vz-btn.dgr, .vz-dlg .vz-btn.dgr{ background:#fef2f2; border-color:#f6b8b8; color:#dc2626; }
+  #section-visas .vz-btn:hover, .vz-dlg .vz-btn:hover, .mf-dlg .vz-btn:hover{ border-color:var(--vzG); color:var(--vzG); background:var(--vzGL); }
+  #section-visas .vz-btn.pri, .vz-dlg .vz-btn.pri, .mf-dlg .vz-btn.pri{ background:linear-gradient(135deg,var(--vzG),var(--vzGD)); color:#fff; border-color:transparent; box-shadow:0 3px 8px rgba(11,122,94,.28); }
+  #section-visas .vz-btn.pri:hover, .vz-dlg .vz-btn.pri:hover, .mf-dlg .vz-btn.pri:hover{ color:#fff; filter:brightness(1.08); }
+  #section-visas .vz-btn.gold, .vz-dlg .vz-btn.gold, .mf-dlg .vz-btn.gold{ background:linear-gradient(135deg,#eab74a,#c98a1e); color:#3a2a05; border-color:transparent; box-shadow:0 3px 8px rgba(201,138,30,.25); }
+  #section-visas .vz-btn.sm, .vz-dlg .vz-btn.sm, .mf-dlg .vz-btn.sm{ font-size:11px; padding:5px 10px; border-radius:8px; }
+  #section-visas .vz-btn.dgr, .vz-dlg .vz-btn.dgr, .mf-dlg .vz-btn.dgr{ background:#fef2f2; border-color:#f6b8b8; color:#dc2626; }
   #section-visas .vz-fld label, .vz-dlg .vz-fld label{ font-size:11px; font-weight:800; color:var(--vzLbl); display:block; margin-bottom:3px; }
   #section-visas .vz-fld input, #section-visas .vz-fld select, .vz-dlg .vz-fld input, .vz-dlg .vz-fld select{
     font-size:13px; padding:8px 10px; border:1.5px solid var(--vzBorder); border-radius:9px; width:100%; background:#fff; color:#0f2a23; font-weight:600; }
@@ -5124,14 +5127,17 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-visas table.vz-tab th{ background:linear-gradient(180deg,var(--vzG),var(--vzGD)); color:#fff; font-weight:800; padding:8px 5px;
     white-space:normal; word-break:break-word; line-height:1.25; font-size:11px;
     position:sticky; top:0; z-index:2; border:1px solid var(--vzGD); }
-  /* ↔️ (V4.145) مقبض تغيير عرض العمود بالسحب — نفس أسلوب شاشة ملفات الوزارة */
-  #section-visas .vz-rsz, .vz-dlg .vz-rsz{ position:absolute; top:0; bottom:0; inset-inline-end:-3px; width:7px; cursor:col-resize; z-index:3; }
-  #section-visas .vz-rsz::after, .vz-dlg .vz-rsz::after{ content:""; position:absolute; top:5px; bottom:5px; inset-inline-end:3px; width:1px; background:rgba(255,255,255,.28); }
-  #section-visas .vz-rsz:hover::after, .vz-dlg .vz-rsz:hover::after{ background:var(--vzGold); width:2px; }
+  /* ↔️ (V4.145) مقبض تغيير عرض العمود بالسحب — نفس أسلوب شاشة ملفات الوزارة
+     🩹 (V4.179) .mf-dlg مُضافة أيضاً: جداول vz-tab المعروضة داخل النافذة العامة المشتركة (mfModal —
+     مثل كشف معتمري المجموعة وسجل التعديلات) كانت بلا أي تنسيق إطلاقاً لأن هذه القواعد لم تكن
+     تغطّي سوى #section-visas و.vz-dlg، فتظهر الأعمدة متلاصقة بلا حدود ولا رأس ملوَّن على الشاشة */
+  #section-visas .vz-rsz, .vz-dlg .vz-rsz, .mf-dlg .vz-rsz{ position:absolute; top:0; bottom:0; inset-inline-end:-3px; width:7px; cursor:col-resize; z-index:3; }
+  #section-visas .vz-rsz::after, .vz-dlg .vz-rsz::after, .mf-dlg .vz-rsz::after{ content:""; position:absolute; top:5px; bottom:5px; inset-inline-end:3px; width:1px; background:rgba(255,255,255,.28); }
+  #section-visas .vz-rsz:hover::after, .vz-dlg .vz-rsz:hover::after, .mf-dlg .vz-rsz:hover::after{ background:var(--vzGold); width:2px; }
   body.vz-resizing, body.vz-resizing *{ cursor:col-resize !important; user-select:none !important; }
   /* 🔎↕️ أيقونتا التصفية الديناميكية والترتيب برأس كل عمود — نفس أسلوب شاشة ملفات الوزارة */
-  #section-visas .vz-thin, .vz-dlg .vz-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
-  #section-visas .vz-thic, .vz-dlg .vz-thic{ background:none; border:none; color:#cdeee1; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
+  #section-visas .vz-thin, .vz-dlg .vz-thin, .mf-dlg .vz-thin{ display:flex; align-items:center; justify-content:center; gap:3px; }
+  #section-visas .vz-thic, .vz-dlg .vz-thic, .mf-dlg .vz-thic{ background:none; border:none; color:#cdeee1; cursor:pointer; font-size:9.5px; padding:1px 2px; border-radius:4px; line-height:1; }
   /* 🖱️ (V4.164) سحب/إفلات عناوين الأعمدة لإعادة ترتيبها — عام لأي جدول (ليس شاشة الوزارة فقط) */
   th.tbl-dragging{ opacity:.4; }
   th.tbl-dragover{ box-shadow:inset 3px 0 0 #2563eb; }
@@ -5140,8 +5146,8 @@ input[type="date"]:not(:focus):not(:valid) {
   /* 🔗 (V4.164) رقم اتفاقية قابل للضغط بجدول المجموعات — يفتح شاشة الاتفاقيات مصفّاة عليه */
   .vz-agr-lnk{ cursor:pointer; text-decoration:underline; text-decoration-style:dotted; }
   .vz-agr-lnk:hover{ color:var(--vzG); font-weight:800; }
-  #section-visas .vz-thic:hover, .vz-dlg .vz-thic:hover{ color:#fff; background:rgba(255,255,255,.18); }
-  #section-visas .vz-thic.on, .vz-dlg .vz-thic.on{ color:var(--vzGold); }
+  #section-visas .vz-thic:hover, .vz-dlg .vz-thic:hover, .mf-dlg .vz-thic:hover{ color:#fff; background:rgba(255,255,255,.18); }
+  #section-visas .vz-thic.on, .vz-dlg .vz-thic.on, .mf-dlg .vz-thic.on{ color:var(--vzGold); }
   /* 📏 (V4.146) كل خلية بجدول المجموعات سطر واحد فقط دوماً — تُقتصّ بعلامة … ويظهر النص كاملاً
      بالتحويم عبر title، مهما طال المحتوى (رأس العمود وحده يُسمح له بسطرين) */
   #section-visas table.vz-tab td{ padding:7px 6px; border:1px solid #e0efe9; text-align:center; white-space:nowrap;
@@ -5165,12 +5171,13 @@ input[type="date"]:not(:focus):not(:valid) {
   #section-visas .vz-actbar .vz-btn{ background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.24); color:#fff; }
   #section-visas .vz-actbar .vz-btn:hover{ background:rgba(255,255,255,.27); color:#fff; border-color:rgba(255,255,255,.42); }
   #section-visas .vz-actbar .vz-btn.dgr{ background:rgba(220,38,38,.32); border-color:rgba(220,38,38,.55); color:#ffdada; }
-  .vz-dlg table.vz-tab{ width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
-  .vz-dlg table.vz-tab th{ background:var(--vzGD); color:#fff; padding:7px 6px; border:1px solid var(--vzGD); position:relative; }
+  .vz-dlg table.vz-tab, .mf-dlg table.vz-tab{ width:100%; border-collapse:separate; border-spacing:0; font-size:12px; background:#fff; }
+  .vz-dlg table.vz-tab th, .mf-dlg table.vz-tab th{ background:var(--vzGD); color:#fff; padding:7px 6px; border:1px solid var(--vzGD); position:relative; }
   /* 🖨️ (V4.164) كل خلية بسطر واحد بلا التفاف — عمودا البيان والتوجيه المحاسبي فقط يُسمح قصّهما */
-  .vz-dlg table.vz-tab td{ padding:6px; border:1px solid #e0efe9; text-align:center; white-space:nowrap; }
-  .vz-dlg #vzAccBody table.vz-tab td[style*="text-align:right"]{ overflow:hidden; text-overflow:ellipsis; max-width:220px; }
-  #section-visas .vz-badge, .vz-dlg .vz-badge{ display:inline-block; border-radius:7px; padding:2px 9px; font-size:10.5px; font-weight:800; }
+  .vz-dlg table.vz-tab td, .mf-dlg table.vz-tab td{ padding:6px; border:1px solid #e0efe9; text-align:center; white-space:nowrap; }
+  .vz-dlg #vzAccBody table.vz-tab td[style*="text-align:right"], .mf-dlg table.vz-tab td[style*="text-align:right"]{ overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+  .vz-dlg table.vz-tab tbody tr:nth-child(even), .mf-dlg table.vz-tab tbody tr:nth-child(even){ background:#f6fcfa; }
+  #section-visas .vz-badge, .vz-dlg .vz-badge, .mf-dlg .vz-badge{ display:inline-block; border-radius:7px; padding:2px 9px; font-size:10.5px; font-weight:800; }
   .vz-badge.g{ background:#d6f5e6; color:#0f6b46; } .vz-badge.y{ background:#fef3c7; color:#92620a; }
   .vz-badge.r{ background:#fde2e2; color:#b91c1c; } .vz-badge.b{ background:#dbeafe; color:#1d4ed8; }
   #section-visas .vz-rowbtn{ border:none; background:transparent; cursor:pointer; font-size:15px; padding:1px 3px; }
@@ -6877,7 +6884,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.178";
+var CLIENT_APP_VERSION = "4.179";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -38157,9 +38164,69 @@ function mfOpenQuotaStats(monthKey) {
     '<label style="font-size:11.5px;font-weight:800;">📅 الشهر</label>' +
     '<input type="month" id="mfQuotaMonth" class="form-control form-control-sm" style="width:150px;" value="' + mfEsc(monthKey) + '" onchange="mfLoadQuotaStats(this.value)">' +
     '<div style="flex:1;"></div>' +
+    '<button class="mf-btn sm" onclick="mfPrintQuota_()">🖨️ طباعة التقرير</button>' +
     (MF.can.edit ? '<button class="mf-btn sm gold" onclick="mfQuotaTransferOpen()">🔁 ترحيل حصة بين الأشهر</button>' : '') +
     '</div><div id="mfQuotaOut">⏳ جاري التحميل…</div>', '', 800);
   mfLoadQuotaStats(monthKey);
+}
+// 🖨️ (V4.179) طباعة تقرير حصص الأفراد الشهرية بتنسيق احترافي — جدول شركات (المستخدَم/الحد الفعلي
+// بعد الترحيل/عدد الملفات/بيان الترحيلات) + جدول الترحيلات المؤثرة على الشهر، بترويسة وتاريخ طباعة
+function mfPrintQuota_() {
+  var res = window._mfQuotaStats; if (!res) { _showPopup('لا توجد بيانات لطباعتها بعد', 'error'); return; }
+  var meta = (typeof _vzPrintMeta === 'function') ? _vzPrintMeta() : { stamp: '' };
+  var rows = (res.companies || []).slice().sort(function (a, b) { return b.pilgrims - a.pilgrims; });
+  var trs = rows.map(function (c) {
+    var transBits = [];
+    if (c.transferOut) transBits.push('رُحِّل منه ' + mfL(c.transferOut));
+    if (c.transferIn) transBits.push('رُحِّل إليه ' + mfL(c.transferIn));
+    return '<tr' + (c.nearLimit ? ' style="background:#fef2f2;"' : '') + '>' +
+      '<td class="ar">' + mfEsc(c.company) + (c.nearLimit ? ' ⚠️' : '') + '</td>' +
+      '<td>' + mfL(c.pilgrims) + '</td>' + '<td>' + mfL(c.limit) + '</td>' + '<td>' + mfL(c.files) + '</td>' +
+      '<td class="ar" style="font-size:9.5px;color:#5c6b83;">' + (transBits.join(' · ') || '—') + '</td></tr>';
+  }).join('');
+  var totPilg = rows.reduce(function (a, c) { return a + mfNum(c.pilgrims); }, 0);
+  var totLimit = rows.reduce(function (a, c) { return a + mfNum(c.limit); }, 0);
+  var totFiles = rows.reduce(function (a, c) { return a + mfNum(c.files); }, 0);
+  var transferRows = [];
+  rows.forEach(function (c) {
+    (c.transfersOut || []).forEach(function (t) { transferRows.push(t); });
+    (c.transfersIn || []).forEach(function (t) { transferRows.push(t); });
+  });
+  var trHtml = transferRows.length ? (
+    '<h3 style="font-size:12.5px;color:#1e3d59;margin:18px 0 6px;">🔁 الترحيلات المؤثرة على هذا الشهر</h3>' +
+    '<table><thead><tr><th>الشركة</th><th>من شهر</th><th>إلى شهر</th><th>العدد</th><th>ملاحظات</th></tr></thead><tbody>' +
+    transferRows.map(function (t) {
+      return '<tr><td class="ar">' + mfEsc(t.company) + '</td><td dir="ltr">' + mfEsc(t.fromMonth) + '</td>' +
+        '<td dir="ltr">' + mfEsc(t.toMonth) + '</td><td>' + mfL(t.amount) + '</td><td class="ar">' + mfEsc(t.notes || '—') + '</td></tr>';
+    }).join('') + '</tbody></table>'
+  ) : '';
+  var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>حصص الأفراد الشهرية — ' + mfEsc(res.monthKey) + '</title><style>' +
+    '@page{size:A4 portrait;margin:12mm;}' +
+    'body{font-family:"Cairo",Tahoma,sans-serif;margin:0;color:#14312a;padding:6px;}' +
+    '.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2.5px solid #1e3d59;padding-bottom:6px;margin-bottom:10px;}' +
+    'h1{font-size:16px;color:#1e3d59;margin:0;} .sub{font-size:11.5px;font-weight:800;color:#075c46;margin-top:3px;}' +
+    '.stamp{font-size:9.5px;color:#64748b;text-align:left;line-height:1.6;}' +
+    'table{width:100%;border-collapse:collapse;font-size:11px;margin-top:4px;}' +
+    'th,td{border:1px solid #9fb8b0;padding:5px 6px;text-align:center;} td.ar,th.ar{text-align:right;}' +
+    'th{background:#1e3d59;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'tbody tr:nth-child(even){background:#f4fbf8;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    'tfoot td{background:#eefaf5;font-weight:900;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+    '.pfoot{margin-top:14px;padding-top:6px;border-top:1px solid #cfe6de;display:flex;justify-content:space-between;font-size:9px;color:#64748b;}' +
+    '</style></head><body>' +
+    '<div class="hd"><div><h1>📊 تقرير حصص الأفراد الشهرية (ملفات «فردي»)</h1>' +
+    '<div class="sub">الشهر: ' + mfEsc(res.monthKey) + ' — الحد الأساسي ' + res.monthlyLimit + ' فرد/شركة · حد الملف الواحد ' + res.perFileLimit + ' فرد</div></div>' +
+    '<div class="stamp">منظومة منف للسياحة<br>طُبع في: ' + mfEsc(meta.stamp) + '</div></div>' +
+    (rows.length
+      ? '<table><thead><tr><th class="ar">الشركة</th><th>المستخدَم</th><th>الحد الفعلي</th><th>عدد الملفات</th><th class="ar">الترحيلات</th></tr></thead><tbody>' +
+        trs + '</tbody><tfoot><tr><td class="ar">الإجمالي</td><td>' + mfL(totPilg) + '</td><td>' + mfL(totLimit) + '</td><td>' + mfL(totFiles) + '</td><td></td></tr></tfoot></table>'
+      : '<div style="padding:24px;text-align:center;color:#94a3b8;">لا توجد ملفات فردية أو ترحيلات حصة مسجَّلة بهذا الشهر</div>') +
+    trHtml +
+    '<div class="pfoot"><span>تقرير حصص الأفراد الشهرية — ' + mfEsc(res.monthKey) + '</span><span>منظومة منف للسياحة</span></div>' +
+    '</body></html>';
+  var w = window.open('', '_blank');
+  if (!w) { _showPopup('اسمح بالنوافذ المنبثقة للطباعة', 'error'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  w.onload = function () { setTimeout(function () { w.focus(); w.print(); }, 400); };
 }
 function mfLoadQuotaStats(monthKey) {
   var out = document.getElementById('mfQuotaOut'); if (!out) return;
