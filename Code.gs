@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.172";
+var APP_VERSION = "4.173";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21483,10 +21483,10 @@ function saveMinistryFile(authToken, data) {
     return ret;
   } finally { lock.releaseLock(); }
 }
-// 🔍 (V4.171) فحص الملفات المرشَّحة لتكون «فردي»: عدد معتمريها 9 فأقل، ومشرفوها إما بدون مشرف
-// حقيقي (فارغ) أو المشرف هو الوكيل نفسه فقط — نفس شرط الاحتساب التلقائي بـ saveMinistryFile لكن
-// كمسح رجعي على الملفات المسجَّلة بالفعل والمصنَّفة «مجموعات» — يعرضها للمستخدم ليراجعها ويحدِّد
-// أيها فعلاً فردي قبل التغيير المجمَّع (لا يُغيَّر شيء تلقائياً بهذه الدالة، فقط عرض)
+// 🔍 (V4.171/V4.173) فحص الملفات المرشَّحة لتكون «فردي»: عدد معتمريها من 1 إلى 9، ومشرفوها إما
+// بدون مشرف حقيقي (فارغ) أو المشرف هو الوكيل نفسه فقط (مقارنة بعد تطبيع الاسم — تتجاهل اختلاف
+// رسم الياء وغيره، فـ"المشرف = الوكيل" تُحسب حتى لو اختلف رسم الاسم قليلاً) — يعرضها للمستخدم
+// ليراجعها ويحدِّد أيها فعلاً فردي قبل التغيير المجمَّع (لا يُغيَّر شيء تلقائياً بهذه الدالة، فقط عرض)
 function getMfIndividualFileCandidates(authToken) {
   _mfPerm_(authToken, 'view');
   var all = _mfReadAll_();
@@ -21494,9 +21494,15 @@ function getMfIndividualFileCandidates(authToken) {
   all.forEach(function(f) {
     if (f.fileType === 'فردي') return;
     var pilg = _mfNum_(f.pilgrims);
-    if (!pilg || pilg > 9) return;
-    var agentNm = _mfStr_(f.agent);
-    var hasRealSup = (f.sups || []).some(function(s) { return _mfStr_(s.name) && _mfStr_(s.name) !== agentNm; });
+    if (pilg < 1 || pilg > 9) return;
+    // 🔤 (V4.173) المقارنة بعد تطبيع الاسم (تجاهل اختلاف رسم الياء/الألف/التاء المربوطة، انظر
+    // _normalizeArabicName_) — بطلب صريح: مشرف بنفس اسم الوكيل تقريباً (مثال: "علي"/"على") يُعتبر
+    // بلا مشرف حقيقي أيضاً، لا فقط تطابق حرفي تام
+    var agentNorm = _normalizeArabicName_(f.agent);
+    var hasRealSup = (f.sups || []).some(function(s) {
+      var nm = _mfStr_(s.name);
+      return nm && _normalizeArabicName_(nm) !== agentNorm;
+    });
     if (hasRealSup) return;
     out.push({
       id: f.id, fileNo: f.fileNo, company: f.company, agent: f.agent, clientLabel: f.clientLabel,
