@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.179 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.180 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.179)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.180)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.179</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.180</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6884,7 +6884,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.179";
+var CLIENT_APP_VERSION = "4.180";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -36886,6 +36886,10 @@ function mfEditFile(id) {
   MF._levels = null; MF._levelMode = 'single';   // 🏨 (V4.123) حالة مستويات التسكين تخصّ هذا الملف وحده
   MF._tripPick = null; MF._tripPickLoading = false;   // قائمة المعتمرين تخصّ هذا الملف وحده
   mfEditFileFromDraft(d);
+  // 💱 (V4.180) عند تسجيل ملف جديد: جلب سعر بيع الريال من بنك مصر تلقائياً بتاريخ اليوم (يوم إنشاء
+  // الملف — mfFetchFx يستخدم reviewDate أو MF.today، وreviewDate فارغ في ملف جديد فيستخدم اليوم
+  // تلقائياً)، فلا يحتاج المستخدم الضغط يدوياً على زر 🔄 إلا لتحديثه لاحقاً لو غيَّر تاريخ المراجعة
+  if (!id && !mfNum(d.fxRate)) mfFetchFx();
 }
 
 /* ================= (V4.111) نموذج الملف بعد إعادة الهيكلة =================
@@ -37301,6 +37305,35 @@ function mfTripPickApply() {
     (infants ? (' (استُبعد ' + infants + ' رضيع من الأعداد)') : '') +
     ' على ' + order.length + ' عميل', 'success');
   mfFormRender();
+  // 🏨💰 (V4.180) جلب السكن (مكة/المدينة) وسعر البيع تلقائياً بناءً على المعتمرين المختارين فعلياً
+  // (لا فندق الرحلة الافتراضي فقط) — الرحلة قد تحوي عدة فنادق/أسعار حسب طبيعة تسكين كل معتمر
+  mfSmartFillHousing_(keys);
+}
+// 🏨💰 (V4.180) انظر تعليق mfTripPickApply أعلاه. مستوى واحد فقط بين المختارين ⇒ تعبئة تلقائية
+// مباشرة للسكن والسعر (قابلة للتعديل اليدوي بعدها كأي حقل استرشادي آخر بالنموذج)؛ أكثر من مستوى
+// ⇒ تنبيه غير مانع فقط يعرض التفصيل ويترك المراجعة والتعديل للمستخدم.
+function mfSmartFillHousing_(keys) {
+  var d = MF._draft;
+  if (!mfStr(d.tripName) || !keys || !keys.length) return;
+  var _tripAtCall = mfStr(d.tripName);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success || !res.levels || !res.levels.length) return;
+      if (mfStr(MF._draft.tripName) !== _tripAtCall) return; // تغيّرت الرحلة قبل وصول الرد
+      if (res.levels.length === 1) {
+        var lv = res.levels[0];
+        if (lv.madinahHotel) MF._draft.madinahHotel = lv.madinahHotel;
+        if (lv.makkahHotel) MF._draft.makkahHotel = lv.makkahHotel;
+        if (lv.price) MF._draft.progPrice = lv.price;
+        _showPopup('🏨 تم جلب السكن وسعر البيع تلقائياً من بيانات المعتمرين المختارين (' + lv.label + ')', 'success');
+      } else {
+        var lbls = res.levels.map(function (x) { return x.label + ' — ' + x.count + ' معتمر' + (x.price ? ' — ' + mfFmt(x.price) + ' ج' : ''); }).join('، ');
+        _showPopup('⚠️ المعتمرون المختارون بأكثر من مستوى تسكين مختلف: ' + lbls + ' — راجع السكن وسعر البيع يدوياً', 'warning');
+      }
+      mfFormRender();
+    })
+    .withFailureHandler(function () {})
+    .getMfHousingForSelectedPilgrims(window.authToken, d.tripName, keys);
 }
 
 function mfFld(label, inner, cols) {

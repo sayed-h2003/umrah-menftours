@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.179";
+var APP_VERSION = "4.180";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21402,6 +21402,62 @@ function getTripAccommodationLevels(authToken, tripName) {
     var price = priceRow ? _accNum_(priceRow[g.acc]) : 0;
     return {
       key: key, label: (g.hotel ? g.hotel + ' ' : '') + g.acc, count: g.count,
+      madinahHotel: g.madinahHotel, makkahHotel: g.makkahHotel, price: price
+    };
+  });
+  return { success: true, levels: levels };
+}
+/* 🏨💰 (V4.180) نفس تجميع مستويات التسكين أعلاه، لكن مُقتصَراً على مجموعة معتمرين بعينها (المُختارين
+   فعلياً لملف مراجعة معيَّن) بدل كل معتمري الرحلة — تُستخدَم لجلب السكن (مكة/المدينة) وسعر البيع
+   تلقائياً عند اعتماد اختيار الأسماء داخل نموذج الملف، بدل تخمين فندق واحد للرحلة كلها رغم احتمال
+   وجود عدة فنادق/أسعار بها. المفاتيح (selectedKeys) بنفس منطق mfPickKey بالواجهة تماماً: رقم
+   الجواز، أو "idx:"+الفهرس بترتيب ظهور صفوف نفس الرحلة بالضبط (بلا أي تخطٍّ قبل حساب الفهرس) —
+   نفس ترتيب/فهرسة getTripPilgrims حرفياً حتى تتطابق المفاتيح.
+   نتيجة بمستوى واحد فقط = تعبئة تلقائية مباشرة؛ أكثر من مستوى = تنبيه غير مانع فقط للمستخدم. */
+function getMfHousingForSelectedPilgrims(authToken, tripName, selectedKeys) {
+  _mfPerm_(authToken, 'view');
+  tripName = String(tripName || '').trim();
+  var keys = Array.isArray(selectedKeys) ? selectedKeys : [];
+  if (!tripName || !keys.length) return { success: true, levels: [] };
+  var keySet = {}; keys.forEach(function(k) { keySet[String(k)] = true; });
+
+  var pSheet = _getPilgrimsSheet_();
+  if (!pSheet || pSheet.getLastRow() < 2) return { success: true, levels: [] };
+  var C = _robustColMap_(pSheet, PILGRIMS_HEADERS_);
+  var P = _cellReader_(C, PILGRIMS_COL_);
+  var data = pSheet.getRange(2, 1, pSheet.getLastRow() - 1, pSheet.getLastColumn()).getValues();
+
+  var groups = {}, order = [];
+  var idx = 0;
+  for (var i = 0; i < data.length; i++) {
+    var r = data[i];
+    if (String(P(r, 'tripName') || '').trim() !== tripName) continue;
+    var passport = String(P(r, 'passport') || '').trim();
+    var key = passport || ('idx:' + idx);
+    idx++;
+    if (!keySet[key]) continue;
+    var type = String(P(r, 'type') || '').trim();
+    if (type === 'رضيع') continue; // لا يُحتسب مستوى مستقل
+    var acc = String(P(r, 'accommodation') || '').trim();
+    if (['رباعي', 'خماسي', 'سداسي', 'رباعي أسرة', 'خماسي أسرة'].indexOf(acc) > -1) acc = '';
+    var mHotel = String(P(r, 'hotelMakkah') || '').trim();
+    var dHotel = String(P(r, 'hotelMadinah') || '').trim();
+    var hotel = mHotel || dHotel;
+    var gkey = hotel + '|' + (acc || 'عادي');
+    if (!(gkey in groups)) {
+      groups[gkey] = { hotel: hotel, acc: acc || 'عادي', count: 0, madinahHotel: dHotel, makkahHotel: mHotel };
+      order.push(gkey);
+    }
+    groups[gkey].count++;
+  }
+  if (!order.length) return { success: true, levels: [] };
+  var pricing = _accTripPricing_(tripName);
+  var levels = order.map(function(gkey) {
+    var g = groups[gkey];
+    var priceRow = pricing ? (pricing.hotels || {})[g.hotel || ''] : null;
+    var price = priceRow ? _accNum_(priceRow[g.acc]) : 0;
+    return {
+      key: gkey, label: (g.hotel ? g.hotel + ' ' : '') + g.acc, count: g.count,
       madinahHotel: g.madinahHotel, makkahHotel: g.makkahHotel, price: price
     };
   });
