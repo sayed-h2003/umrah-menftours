@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.177";
+var APP_VERSION = "4.178";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6690,6 +6690,7 @@ var ALL_CACHE_KEYS = [
   'registry_cache',     // السجل العام للمعتمرين
   'ministry_bootstrap_cache', // 🏛️ (V4.109) بيانات شاشة مراجعة ملفات الوزارة المشتركة بين المستخدمين
   'notifications_rows_cache', // 🔔 (V4.177) صفوف التنبيهات الخام (تُبطَّل أيضاً مع كل كتابة تنبيه)
+  'ministry_trip_links_cache', // 🔗 (V4.178) روابط الرحلة⇄ملف الوزارة (تُبطَّل مع حفظ ملف أو رحلة)
   'visa_bootstrap_cache' // 🧑‍💼 (V4.142) بيانات شاشة متابعة التأشيرات والوكلاء — كانت مفقودة من هذه القائمة
                          // فيظل ربط الوكيل بالشركة (زر إعدادات الوكيل) قديماً في هذه الشاشة حتى تنتهي صلاحية الكاش تلقائياً
 ];
@@ -21354,6 +21355,7 @@ function _mfBuildSharedBootstrap_() {
 // تُستدعى بعد أي حفظ/حذف في شاشة مراجعة ملفات الوزارة حتى لا يرى المستخدمون بيانات قديمة من الكاش
 function _mfClearBootstrapCache_() {
   clearCachedData(MF_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData
+  clearCachedData(MF_TRIP_LINKS_CACHE_KEY);  // ⚡ (V4.178) كاش روابط الرحلة⇄الملف يتغيّر مع كل حفظ ملف
   _mfBumpVer_();
 }
 
@@ -21413,6 +21415,7 @@ function saveMinistryFile(authToken, data) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(15000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  var _lockReleased = false;
   try {
     var sh = _accSheet_(MF_SHEET, MF_HEADERS);
     var all = _mfReadAll_();
@@ -21464,11 +21467,19 @@ function saveMinistryFile(authToken, data) {
 
     // نوع المراجعة التلقائي (جمعة/سبت أو أقل من 3 أيام) — ما لم يُثبّته الموظف يدوياً
     if (!data._manualType) f.reviewType = _mfAutoReviewType_(f.reviewDate, f.goDate, f.reviewType);
-    // 🎯 نوع الملف التلقائي: «فردي» لو مشرفو الملف ليس بينهم أي مشرف فعلي (مستقل عن الوكيل نفسه)،
-    // وإلا فـ«مجموعات» — ما لم يُثبّته الموظف يدوياً (نفس أسلوب نوع المراجعة أعلاه بالضبط)
+    // 🎯 (V4.178) نوع الملف التلقائي: «فردي» لو لا مشرف حقيقي (المشرف = الوكيل نفسه أو نص «الوكيل
+    // السعودي»/«بدون مشرف» أو فارغ — بعد تطبيع الاسم، نفس قاعدة فحص الملفات الفردية) وكان العدد من
+    // 1 إلى 9؛ خلاف ذلك «مجموعات» — ما لم يُثبّته الموظف يدوياً
     if (!data._manualFileType) {
-      var hasRealSup = f.sups.some(function(s) { return s.name && s.name !== _mfStr_(f.agent); });
-      f.fileType = hasRealSup ? 'مجموعات' : 'فردي';
+      var _agN = _normalizeArabicName_(f.agent);
+      var _noSup = ['الوكيل السعودي', 'بدون مشرف'].map(_normalizeArabicName_);
+      var hasRealSup = f.sups.some(function(s) {
+        var nm = _mfStr_(s.name); if (!nm) return false;
+        var nn = _normalizeArabicName_(nm);
+        return nn !== _agN && _noSup.indexOf(nn) < 0;
+      });
+      var _pc = _mfNum_(f.pilgrims);
+      f.fileType = (!hasRealSup && _pc >= 1 && _pc <= 9) ? 'فردي' : 'مجموعات';
     }
     // 🧾 (V4.111) الملف الذي له رقم قيد مسجَّل يُعتبر معتمداً تلقائياً
     if (_mfStr_(f.ref)) f.approved = true;
@@ -21496,7 +21507,12 @@ function saveMinistryFile(authToken, data) {
     var row = _mfObjToRow_(f);
     if (isNew) sh.appendRow(row);
     else sh.getRange(old._row, 1, 1, MF_HEADERS.length).setValues([row]);
-    SpreadsheetApp.flush();
+    // ⚡ (V4.178) أُفرِج عن القفل فور اكتمال الكتابة — releaseLock يفرغ التغييرات للشيت ضمنياً (فلا
+    // حاجة لـSpreadsheetApp.flush الذي كان يفرض دورة تزامن زائدة داخل القفل). كل ما يلي (تسجيل
+    // السجل، إبطال الكاش، حساب الأرصدة والقواعد) قراءة/حساب لا يحتاج تسلسلاً — فلا يظل القفل محجوزاً
+    // خلاله، وهو ما كان يجعل الحفظات المتتابعة تنتظر بعضها حتى 48 ثانية بسجلات التنفيذ.
+    lock.releaseLock(); _lockReleased = true;
+    _mfClearBootstrapCache_();
 
     // سجل التعديلات: فرق حقل بحقل
     var recId = 'MF:' + f.id;
@@ -21521,7 +21537,6 @@ function saveMinistryFile(authToken, data) {
       }
     }
     if (entries.length) logChangesBatch_(session.username, entries);
-    _mfClearBootstrapCache_();
 
     // ⚡ (V4.126) كان هنا قراءة كاملة ثانية للشيت (_mfReadAll_) بعد الكتابة مباشرةً — أي أن كل حفظ
     // (وكل ضغطة «اعتماد») كان يقرأ شيت الملفات مرتين كاملتين، وهو السبب الأساسي لبطء الحفظ
@@ -21554,7 +21569,7 @@ function saveMinistryFile(authToken, data) {
       }
     }
     return ret;
-  } finally { lock.releaseLock(); }
+  } finally { if (!_lockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
 }
 // 🔍 (V4.171/V4.173) فحص الملفات المرشَّحة لتكون «فردي»: عدد معتمريها من 1 إلى 9، ومشرفوها إما
 // بدون مشرف حقيقي (فارغ) أو المشرف هو الوكيل نفسه فقط (مقارنة بعد تطبيع الاسم — تتجاهل اختلاف
@@ -21836,11 +21851,18 @@ function getMinistryFileHistory(authToken, id) {
 }
 
 // 🔗 ربط شاشة الرحلات: أي رحلة مرتبطة بملف مراجعة + الرحلات التي تسافر خلال 3 أيام ولم تُراجع
+// ⚡ (V4.178) كاش النتيجة كاملةً — كانت هذه الدالة تُنفَّذ بعد *كل* حفظ ملف وزارة (يستدعيها العميل
+// في ذيل mfApplySaved) وعند كل فتح لشاشة الرحلات/الوزارة، وتقرأ شيت الملفات + شيت الرحلات بالكامل
+// (5 إلى 26 ثانية بسجلات التنفيذ). محتواها لا يعتمد على المستخدم (عدا فحص الصلاحية أول الدالة)،
+// فنُخزِّنه ونُبطله فوراً مع أي حفظ ملف وزارة (_mfClearBootstrapCache_) أو حفظ رحلة (clearAllCache).
+var MF_TRIP_LINKS_CACHE_KEY = 'ministry_trip_links_cache';
 function getMinistryTripLinks(authToken) {
   var session = requireAuth_(authToken);
   if (!_sessionHasPerm_(session, 'ministry.view') && !_sessionHasPerm_(session, 'trips.view')) {
     return { success: true, links: {}, alerts: [] };
   }
+  var _cachedTL = getCachedData(MF_TRIP_LINKS_CACHE_KEY);
+  if (_cachedTL) return _cachedTL;
   var files = _mfReadAll_();
   var links = {}, alerts = [];
   var todayMs = _mfMs_(_mfToday_());
@@ -21889,7 +21911,9 @@ function getMinistryTripLinks(authToken) {
       });
     }
   } catch (e) {}
-  return { success: true, links: links, alerts: alerts, tripInfo: tripInfo, byBooking: byBooking };
+  var _outTL = { success: true, links: links, alerts: alerts, tripInfo: tripInfo, byBooking: byBooking };
+  setCachedData(MF_TRIP_LINKS_CACHE_KEY, _outTL);
+  return _outTL;
 }
 
 /* ==================================================================================
@@ -22844,7 +22868,13 @@ function _vzReadAll_() {
   }
   return out;
 }
-function _vzNextSeq_() {
+// ⚡ (V4.178) يقبل قائمة المجموعات المقروءة سلفاً (all) فيحسب الرقم التالي منها بلا قراءة ثانية
+// للشيت — كان saveVisaFile يقرأ الشيت كاملاً مرتين (مرة _vzReadAll_ ومرة هنا) في كل حفظ
+function _vzNextSeq_(all) {
+  if (Array.isArray(all)) {
+    var mx0 = 0; all.forEach(function (x) { var n = _mfNum_(x.seq); if (n > mx0) mx0 = n; });
+    return mx0 + 1;
+  }
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
   var last = sh.getLastRow();
   if (last < 2) return 1;
@@ -23234,6 +23264,7 @@ function saveVisaFile(authToken, data) {
   var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
   var lock = LockService.getScriptLock();
   try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
+  var _vzLockReleased = false;
   try {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
     var all = _vzReadAll_();
@@ -23248,7 +23279,7 @@ function saveVisaFile(authToken, data) {
     if (!price) price = _vzPriceAt_(data.agent, data.date);
     var now = _mfStamp_();
     var f = {
-      id: isNew ? _accId_('VZ') : old.id, seq: isNew ? _vzNextSeq_() : old.seq,
+      id: isNew ? _accId_('VZ') : old.id, seq: isNew ? _vzNextSeq_(all) : old.seq,
       ref: _mfStr_(data.ref), status: _mfStr_(data.status) || VZ_STATUSES_[0], date: _mfDate_(data.date),
       company: _mfStr_(data.company), agent: _mfStr_(data.agent), tripName: _mfStr_(data.tripName),
       breakdown: bd, selected: Array.isArray(data.selected) ? data.selected : (old ? old.selected : []),
@@ -23269,7 +23300,10 @@ function saveVisaFile(authToken, data) {
     if (_hMd) { f.madinahIn = _hMd.in; f.madinahOut = _hMd.out; f.madinahHousingAgr = _hMd.hAgr; f.madinahCateringAgr = _hMd.cAgr; }
     var row = _vzObjToRow_(f);
     if (isNew) sh.appendRow(row); else sh.getRange(old._row, 1, 1, VZ_FILES_HEADERS.length).setValues([row]);
-    SpreadsheetApp.flush();
+    // ⚡ (V4.178) أُفرِج عن القفل فور اكتمال الكتابة (releaseLock يفرغ ضمنياً، فلا حاجة لـflush) — كل
+    // ما يلي (مزامنة السكن، السجل، إبطال الكاش) لا يحتاج تسلسلاً فلا يظل القفل محجوزاً خلاله
+    lock.releaseLock(); _vzLockReleased = true;
+    _vzClearCache_();
     // 🔗 (V4.134) ربط ثنائي الاتجاه: أرقام اتفاقيات السكن المكتوبة بالمجموعة تُسجَّل تخصيصاً
     // في شاشة اتفاقيات السكن تلقائياً (والعكس مُنفَّذ في saveHousingAllocation)
     try { _vzSyncGroupHousingAllocs_(f, session.username); } catch (eSync) {}
@@ -23291,10 +23325,9 @@ function saveVisaFile(authToken, data) {
       });
       if (entries.length) logChangesBatch_(session.username, entries);
     }
-    _vzClearCache_();
     f.dueSAR = f.visaCount * f.price;
     return { success: true, file: f };
-  } finally { lock.releaseLock(); }
+  } finally { if (!_vzLockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
 }
 
 /* 📥 (V4.134) استيراد المجموعات القديمة دفعةً واحدة بعد معاينتها وتعديلها بالشاشة.

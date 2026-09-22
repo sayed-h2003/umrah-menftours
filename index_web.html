@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.177 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.178 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.177)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.178)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.177</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.178</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6877,7 +6877,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.177";
+var CLIENT_APP_VERSION = "4.178";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -34942,12 +34942,42 @@ function mfAutoType(reviewDate, goDate, current) {
   }
   return current === 'VIP' ? 'VIP' : 'عادية';
 }
-// 🎯 نوع الملف التلقائي: «فردي» لو مشرفو الملف ليس بينهم أي مشرف فعلي مستقل عن الوكيل نفسه،
-// وإلا فـ«مجموعات» — نفس منطق الخادم بالضبط (saveMinistryFile)
-function mfAutoFileType_(sups, agent) {
-  var ag = mfStr(agent);
-  var hasRealSup = (sups || []).some(function (s) { return mfStr(s.name) && mfStr(s.name) !== ag; });
-  return hasRealSup ? 'مجموعات' : 'فردي';
+// 🔤 (V4.178) تطبيع اسم عربي (تجاهل التشكيل واختلاف رسم الياء/الألف/التاء المربوطة) — نفس منطق
+// _normalizeArabicName_ بالخادم، لمقارنة اسم المشرف باسم الوكيل ونصوص «بلا مشرف حقيقي».
+function mfNormName_(s) {
+  return String(s == null ? '' : s).replace(/[ً-ْٰ]/g, '')
+    .replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim();
+}
+// المشرف يُعتبر «حقيقياً» فقط لو اسمه ليس فارغاً، وليس اسم الوكيل نفسه (بعد التطبيع)، وليس أحد
+// النصوص الدالة على غياب مشرف منفصل («الوكيل السعودي» أو «بدون مشرف») — مطابق تماماً لقاعدة فحص
+// الملفات الفردية بالخادم (getMfIndividualFileCandidates)
+function mfHasRealSup_(sups, agent) {
+  var ag = mfNormName_(agent);
+  var noSup = ['الوكيل السعودي', 'بدون مشرف'].map(mfNormName_);
+  return (sups || []).some(function (s) {
+    var nm = mfStr(s.name); if (!nm) return false;
+    var nn = mfNormName_(nm);
+    return nn !== ag && noSup.indexOf(nn) < 0;
+  });
+}
+// 🎯 (V4.178) نوع الملف التلقائي: «فردي» لو لا مشرف حقيقي (المشرف = الوكيل أو «الوكيل السعودي»
+// أو «بدون مشرف» أو فارغ) وكان العدد من 1 إلى 9 — نفس قواعد الملف الفردي بالضبط؛ خلاف ذلك «مجموعات»
+function mfAutoFileType_(sups, agent, pilgrims) {
+  if (mfHasRealSup_(sups, agent)) return 'مجموعات';
+  var n = mfNum(pilgrims);
+  return (n >= 1 && n <= 9) ? 'فردي' : 'مجموعات';
+}
+// يُطبّق نوع الملف التلقائي على المسوَّدة الحالية ما لم يُثبّته الموظف يدوياً؛ لا يغيّر شيئاً قبل
+// إدخال العدد (n < 1) حتى لا يقلب النوع الافتراضي لملف جديد لم تُدخَل بياناته بعد
+function mfMaybeAutoFileType_() {
+  var d = MF._draft; if (!d || d._manualFileType) return;
+  if (mfNum(d.pilgrims) < 1) return;
+  var next = mfAutoFileType_(d.sups, d.agent, d.pilgrims);
+  if (next === d.fileType) return;
+  d.fileType = next;
+  // مزامنة بصرية لحظية لحقل نوع الملف بلا إعادة رسم النموذج كله (فلا يُفقَد تركيز الكتابة)
+  var sel = document.getElementById('mfd_fileType');
+  if (sel) sel.value = next;
 }
 // مفتاح الشهر yyyy-mm من تاريخ dd/mm/yyyy — لحصة الأفراد الشهرية بالواجهة (نفس _mfMonthKey_ بالخادم)
 function mfMonthKey_(dateStr) {
@@ -35707,8 +35737,22 @@ function mfApplySaved(res, opts) {
   MF.selId = f.id;
   mfRender();
   if (!opts.silent) _showPopup('تم الحفظ وتحديث الصف فقط', 'success');
-  // تحديث شارات شاشة الرحلات بالخلفية دون إعادة تحميل هذه الشاشة
-  if (typeof _mfLoadTripLinks_ === 'function') { window._mfTripLinksLoading = false; _mfLoadTripLinks_(); }
+  // ⚡ (V4.178) تحديث روابط الرحلة⇄الملف (لشارات شاشة الرحلات فقط، لا تخصّ شاشة الوزارة نفسها):
+  // كان يُطلَق نداءً ثقيلاً (getMinistryTripLinks، 5 - 26 ثانية) بعد *كل* حفظ ملف، وهو أثقل ما
+  // يشعر به المستخدم عند التعديل. الآن:
+  //  • لا نُطلقه إطلاقاً إن كان الملف بلا رحلة مرتبطة (لا يؤثر على أي رابط رحلة).
+  //  • ولو له رحلة: نؤجّله ونُجمِّع الحفظات المتتابعة في نداء واحد بالخلفية (debounce)، فلا ينتظره
+  //    المستخدم ولا يتكرر مع كل حفظة — والخادم صار يُخزّن النتيجة فتُخدَم بقية الشاشات فوراً.
+  if (mfStr(f.tripName) && typeof _mfLoadTripLinks_ === 'function') mfRefreshTripLinksSoon_();
+}
+var _mfTripLinksTimer_ = null;
+function mfRefreshTripLinksSoon_() {
+  if (_mfTripLinksTimer_) clearTimeout(_mfTripLinksTimer_);
+  _mfTripLinksTimer_ = setTimeout(function () {
+    _mfTripLinksTimer_ = null;
+    window._mfTripLinksLoading = false;
+    _mfLoadTripLinks_();
+  }, 2500);
 }
 function mfRemoveLocal(id) {
   MF.files = MF.files.filter(function (x) { return x.id !== id; });
@@ -37289,7 +37333,7 @@ function mfApplyAgentRule() {
   var d = MF._draft, ag = mfStr(d.agent);
   if (ag) (d.sups || []).forEach(function (s) { if (mfStr(s.name) && mfStr(s.name) === ag) s.type = 'استقبال'; });
   d.supCount = mfMurafiqCount(d.sups);
-  if (!d._manualFileType) d.fileType = mfAutoFileType_(d.sups, d.agent);
+  mfMaybeAutoFileType_();   // 🎯 (V4.178) نوع الملف التلقائي (فردي لو ≤9 بلا مشرف حقيقي)
 }
 function mfDraftTrip(v) {
   var d = MF._draft;
@@ -37367,7 +37411,7 @@ function mfDraftReviewDate(v) {
 function mfDraftGo(v) {
   MF._draft.goDate = mfDate(v);
   if (!MF._draft._manualType) MF._draft.reviewType = mfAutoType(MF._draft.reviewDate, MF._draft.goDate, MF._draft.reviewType);
-  if (!MF._draft._manualFileType) MF._draft.fileType = mfAutoFileType_(MF._draft.sups, MF._draft.agent);
+  mfMaybeAutoFileType_();
   mfFormRender();
 }
 function mfDraftRet(v) { MF._draft.retDate = mfDate(v); mfFormRender(); }
@@ -37389,13 +37433,13 @@ function mfSupAdd() {
   MF._draft.sups = MF._draft.sups || [];
   MF._draft.sups.push({ name: '', type: 'مرافق', directTo: '' });
   MF._draft.supCount = mfMurafiqCount(MF._draft.sups);
-  if (!MF._draft._manualFileType) MF._draft.fileType = mfAutoFileType_(MF._draft.sups, MF._draft.agent);
+  mfMaybeAutoFileType_();
   mfFormRender();
 }
 function mfSupDel(i) {
   MF._draft.sups.splice(i, 1);
   MF._draft.supCount = mfMurafiqCount(MF._draft.sups);
-  if (!MF._draft._manualFileType) MF._draft.fileType = mfAutoFileType_(MF._draft.sups, MF._draft.agent);
+  mfMaybeAutoFileType_();
   mfFormRender();
 }
 function mfSupSet(i, k, v) {
@@ -37403,6 +37447,8 @@ function mfSupSet(i, k, v) {
   // لا نُعيد رسم النموذج أثناء الكتابة (يفقد التركيز) — القاعدة تُطبَّق على البيانات فوراً
   // وتظهر بصرياً عند أول إعادة رسم أو عند الحفظ.
   mfApplyAgentRule();   // يُعيد أيضاً حساب عدد المشرفين (مرافق فقط)
+  // 🎯 (V4.178) اختيار المشرف «الوكيل السعودي» (أو اسم = الوكيل/بدون مشرف) يجعل النوع «فردي» تلقائياً
+  if (k === 'name') mfMaybeAutoFileType_();
   mfFormLiveCalc();
   mfFormValidate();
 }
@@ -37433,6 +37479,8 @@ function mfSyncCounts() {
   var d = MF._draft;
   d.pilgrims = (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.count); }, 0);
   if (!mfNum(d.pct)) d.pct = mfDefaultPct(d.pilgrims);
+  // 🎯 (V4.178) العدد من 1 إلى 9 بلا مشرف حقيقي ⇒ «فردي» تلقائياً (يتحدّث فور تغيّر العدد)
+  mfMaybeAutoFileType_();
 }
 function mfFormValidate() {
   var d = MF._draft, msgs = [];
