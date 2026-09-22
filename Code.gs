@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.171";
+var APP_VERSION = "4.172";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21163,12 +21163,30 @@ function suggestMinistrySupervisors(authToken, opts) {
 // الكاش 5 دقائق — كان يُعاد قراءة 6 شيتات كاملة عند كل فتح للشاشة، وأي بحث عام، وأي اقتراح مشرف،
 // وهو ما ساهم في تباطؤ التطبيق كله تحت الاستخدام المتزامن. يُمسح تلقائياً مع أي حفظ/حذف بالشاشة.
 var MF_BOOTSTRAP_CACHE_KEY = 'ministry_bootstrap_cache';
+// 🐛 (V4.172) نفس عدّاد الإصدار المستخدَم بشاشة الوكلاء (_vzBumpVer_/_vzDataVer_، انظر تعليقه) —
+// كان غائباً هنا، وهو السبب الجذري لعدم ظهور تعديل/ربط ملف بالرحلة فوراً بعد الحفظ أحياناً:
+// نداء getMinistryBootstrap بطيء بدأ قبل الحفظ وانتهى بعد _mfClearBootstrapCache_ كان يكتب
+// بالكاش المشترك نسخة قديمة (لكل المستخدمين، لمدة تصل لـ5 دقائق) تُحيي بيانات ما قبل الحفظ.
+function _mfBumpVer_() {
+  try {
+    var p = PropertiesService.getScriptProperties();
+    var n = (parseInt(p.getProperty('MF_DATA_VER'), 10) || 0) + 1;
+    p.setProperty('MF_DATA_VER', String(n));
+  } catch (e) {}
+}
+function _mfDataVer_() {
+  try { return parseInt(PropertiesService.getScriptProperties().getProperty('MF_DATA_VER'), 10) || 0; }
+  catch (e) { return 0; }
+}
 function getMinistryBootstrap(authToken) {
   var session = _mfPerm_(authToken, 'view');
   var shared = getCachedData(MF_BOOTSTRAP_CACHE_KEY);
   if (!shared) {
+    var _verAtStart = _mfDataVer_();
     shared = _mfBuildSharedBootstrap_();
-    setCachedData(MF_BOOTSTRAP_CACHE_KEY, shared);
+    // 🐛 (V4.172) لا نكتب بالكاش إلا لو لم يقع أي حفظ (_mfClearBootstrapCache_) أثناء هذا البناء —
+    // وإلا فهذا البناء قرأ بيانات قديمة جزئياً ولا يجوز أن "يُحيي" الكاش بنسخة تسبق الحفظ الأحدث
+    if (_mfDataVer_() === _verAtStart) setCachedData(MF_BOOTSTRAP_CACHE_KEY, shared);
   }
   var out = {};
   for (var k in shared) out[k] = shared[k];
@@ -21263,6 +21281,7 @@ function _mfBuildSharedBootstrap_() {
 // تُستدعى بعد أي حفظ/حذف في شاشة مراجعة ملفات الوزارة حتى لا يرى المستخدمون بيانات قديمة من الكاش
 function _mfClearBootstrapCache_() {
   try { CacheService.getScriptCache().remove(MF_BOOTSTRAP_CACHE_KEY); } catch (e) {}
+  _mfBumpVer_();
 }
 
 /* ============================================================
