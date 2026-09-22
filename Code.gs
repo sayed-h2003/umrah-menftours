@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.180";
+var APP_VERSION = "4.181";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21717,6 +21717,29 @@ function _mfCompanyList_() {
 // بشرط ألا يتجاوز إجمالي ما يُرحَّل من شهر بعينه إجمالي حصته الأساسية (36 فرد)
 var MF_QUOTA_TRANSFER_SHEET = 'MfQuotaTransfers';
 var MF_QUOTA_TRANSFER_HEADERS = ['معرف', 'الشركة', 'من شهر', 'إلى شهر', 'العدد', 'ملاحظات', 'أنشئ بواسطة', 'أنشئ في'];
+// 🐞 (V4.181) السبب الجذري لعدم ظهور أي أثر للترحيل: جوجل شيت يحوِّل النص "2026-09" تلقائياً إلى
+// تاريخ (1 سبتمبر 2026) عند appendRow، فيُقرأ لاحقاً ككائن Date نصُّه "Tue Sep 01 2026 …" ولا يطابق
+// مفتاح الشهر "2026-09" أبداً — فتبقى الحصة 36 ولا يظهر جدول الترحيلات. هذه الدالة تُطبِّع أي صيغة
+// (Date / "2026-09" / "2026/9" / "09/2026" / "01/09/2026") إلى "yyyy-MM"، فتُصلح السجلات القديمة المحفوظة
+// كتواريخ دون الحاجة لإعادة إدخالها.
+function _mfQtMonth_(v) {
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    var tz = 'Asia/Riyadh';
+    try { tz = getSpreadsheet_().getSpreadsheetTimeZone() || Session.getScriptTimeZone() || tz; } catch (e) {}
+    return Utilities.formatDate(v, tz, 'yyyy-MM');
+  }
+  var s = _mfStr_(v);
+  if (!s) return '';
+  var p = s.split(/[-\/.\s]+/).filter(String);
+  var y = '', m = '';
+  if (p.length === 2) {
+    if (p[0].length === 4) { y = p[0]; m = p[1]; } else { m = p[0]; y = p[1]; }
+  } else if (p.length >= 3) {
+    if (p[0].length === 4) { y = p[0]; m = p[1]; } else { m = p[1]; y = p[2]; }
+  }
+  if (!/^\d{4}$/.test(y) || !/^\d{1,2}$/.test(m)) return s;
+  return y + '-' + (m.length < 2 ? '0' : '') + m;
+}
 function _mfReadQuotaTransfers_() {
   var sh = _accSheet_(MF_QUOTA_TRANSFER_SHEET, MF_QUOTA_TRANSFER_HEADERS);
   var last = sh.getLastRow();
@@ -21726,7 +21749,7 @@ function _mfReadQuotaTransfers_() {
   for (var i = 0; i < vals.length; i++) {
     var id = _mfStr_(vals[i][0]); if (!id) continue;
     out.push({
-      id: id, company: _mfStr_(vals[i][1]), fromMonth: _mfStr_(vals[i][2]), toMonth: _mfStr_(vals[i][3]),
+      id: id, company: _mfStr_(vals[i][1]), fromMonth: _mfQtMonth_(vals[i][2]), toMonth: _mfQtMonth_(vals[i][3]),
       amount: _mfNum_(vals[i][4]), notes: _mfStr_(vals[i][5]), createdBy: _mfStr_(vals[i][6]), createdAt: _mfStr_(vals[i][7]),
       _row: i + 2
     });
@@ -21736,8 +21759,8 @@ function _mfReadQuotaTransfers_() {
 function saveMfQuotaTransfer(authToken, data) {
   var session = _mfPerm_(authToken, 'edit');
   var company = _mfStr_(data && data.company);
-  var fromMonth = _mfStr_(data && data.fromMonth);
-  var toMonth = _mfStr_(data && data.toMonth);
+  var fromMonth = _mfQtMonth_(data && data.fromMonth);
+  var toMonth = _mfQtMonth_(data && data.toMonth);
   var amount = _mfNum_(data && data.amount);
   if (!company) return { success: false, error: 'اختر الشركة' };
   if (!/^\d{4}-\d{2}$/.test(fromMonth) || !/^\d{4}-\d{2}$/.test(toMonth)) return { success: false, error: 'حدِّد الشهرين بصيغة صحيحة' };
@@ -21756,7 +21779,12 @@ function saveMfQuotaTransfer(authToken, data) {
     }
     var sh = _accSheet_(MF_QUOTA_TRANSFER_SHEET, MF_QUOTA_TRANSFER_HEADERS);
     var id = _accId_('MFQT');
-    sh.appendRow([id, company, fromMonth, toMonth, amount, _mfStr_(data.notes), session.username, _mfStamp_()]);
+    // 🐞 (V4.181) كتابة الصف بتنسيق «نص عادي» (@) مسبقاً — بدل appendRow الذي يحوِّل "2026-09" لتاريخ
+    var newRow = sh.getLastRow() + 1;
+    var rng = sh.getRange(newRow, 1, 1, MF_QUOTA_TRANSFER_HEADERS.length);
+    rng.setNumberFormat('@');
+    rng.setValues([[id, company, fromMonth, toMonth, String(amount), _mfStr_(data.notes), session.username, _mfStamp_()]]);
+    sh.getRange(newRow, 5).setNumberFormat('0').setValue(amount);
     SpreadsheetApp.flush();
     logChange_(session.username, 'ترحيل حصة أفراد شهرية', company, '-', fromMonth + ' → ' + toMonth + ' (' + amount + ' فرد)');
     return { success: true, id: id };
