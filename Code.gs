@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.174";
+var APP_VERSION = "4.175";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21501,12 +21501,14 @@ function getMfIndividualFileCandidates(authToken) {
     // الملفات تُسجَّل بحقل المشرف نص "الوكيل السعودي" حرفياً (بدل تكرار اسم الوكيل نفسه) للدلالة
     // على نفس المعنى بالضبط — فيُعامَل هذا النص أيضاً كـ"بلا مشرف حقيقي".
     var agentNorm = _normalizeArabicName_(f.agent);
-    var agentLabelNorm = _normalizeArabicName_('الوكيل السعودي');
+    // 🔤 (V4.175) نصوص شائعة بالبيانات الفعلية تدل على "بلا مشرف حقيقي" حتى لو لم يُترَك الحقل
+    // فارغاً — بالإضافة لتطابق اسم المشرف مع اسم الوكيل نفسه
+    var noSupLabels = ['الوكيل السعودي', 'بدون مشرف'].map(_normalizeArabicName_);
     var hasRealSup = (f.sups || []).some(function(s) {
       var nm = _mfStr_(s.name);
       if (!nm) return false;
       var nmNorm = _normalizeArabicName_(nm);
-      return nmNorm !== agentNorm && nmNorm !== agentLabelNorm;
+      return nmNorm !== agentNorm && noSupLabels.indexOf(nmNorm) < 0;
     });
     if (hasRealSup) return;
     out.push({
