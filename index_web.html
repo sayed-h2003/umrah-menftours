@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.170 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.171 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.170)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.171)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.170</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.171</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4949,6 +4949,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="mf-btn gold" onclick="mfExportExcel()">📊 تصدير Excel</button>
       <button class="mf-btn" onclick="mfLoad(true)">🔄 تحديث</button>
       <button class="mf-btn" id="mfImportBtn" style="display:none;" onclick="mfOpenImport()">📤 استيراد ملفات قديمة (إكسيل)</button>
+      <button class="mf-btn gold" onclick="mfScanIndividualOpen()">🔍 فحص الملفات الفردية</button>
     </div>
 
     <!-- 🔔 (V4.111) قسم التنبيهات — مطويّ افتراضياً ويومض عند وجود تنبيهات -->
@@ -4995,6 +4996,7 @@ input[type="date"]:not(:focus):not(:valid) {
         <button class="mf-facet" data-q="vip" onclick="mfToggleFacet(this)">⭐ VIP</button>
         <button class="mf-facet" data-q="urgent" onclick="mfToggleFacet(this)">⏰ سفر خلال 3 أيام</button>
         <button class="mf-facet" data-q="nobal" onclick="mfToggleFacet(this)">🏦 بلا رصيد كافٍ</button>
+        <button class="mf-facet" data-q="notrip" onclick="mfToggleFacet(this)">🧳 غير مربوطة برحلة</button>
       </div>
       </div>
     </div>
@@ -5217,6 +5219,9 @@ input[type="date"]:not(:focus):not(:valid) {
       <div class="vz-fld"><label>رقم اتفاقية</label><input id="vzF_agr" autocomplete="off" placeholder="سكن/إعاشة"></div>
       <div class="vz-fld"><label>من تاريخ السداد</label><div class="vz-date"><button type="button" class="vz-calbtn" onclick="vzCal('vzF_from')" title="تقويم">📅</button><input id="vzF_from" maxlength="10" placeholder="dd/mm/yyyy"></div></div>
       <div class="vz-fld"><label>إلى تاريخ السداد</label><div class="vz-date"><button type="button" class="vz-calbtn" onclick="vzCal('vzF_to')" title="تقويم">📅</button><input id="vzF_to" maxlength="10" placeholder="dd/mm/yyyy"></div></div>
+      <!-- 🧳 (V4.171) فلتر المجموعات غير المربوطة بأي رحلة -->
+      <div class="vz-fld"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:5px;white-space:nowrap;font-weight:700;font-size:11.5px;height:31px;">
+        <input type="checkbox" id="vzF_noTrip" onchange="vzRender()"> 🧳 غير مربوطة برحلة</label></div>
     </div>
     <div id="vzChips" class="d-flex align-items-center gap-2 flex-wrap mt-2"></div>
   </div>
@@ -6870,7 +6875,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.170";
+var CLIENT_APP_VERSION = "4.171";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -35205,6 +35210,8 @@ function mfMatch(f) {
   if (MF.facets.nobal && !mfHasFlag(f, 'NOBAL')) return false;
   // 👁️ (V4.111) العرض الافتراضي: يحتاج متابعة = لم تُراجع أو بلا رقم ملف أو بلا رقم قيد أو لم يسافر بعد
   if (MF.facets.needsWork && !mfNeedsWork(f)) return false;
+  // 🧳 (V4.171) الملفات غير المربوطة بأي رحلة
+  if (MF.facets.notrip && mfStr(f.tripName)) return false;
   return true;
 }
 function mfNeedsWork(f) {
@@ -35402,7 +35409,7 @@ function mfRenderApplied(list) {
     chips.push({ l: '🔽 ' + (c ? c.l : k) + ': ' + MF.colFilters[k], f: function () { delete MF.colFilters[k]; } });
   });
   var FL = { needsWork: 'يحتاج متابعة', unreviewed: 'لم تُراجع بعد', flag: 'به تنبيه قاعدة', approved: 'معتمد', notapproved: 'غير معتمد',
-    posted: 'له رقم قيد', noref: 'بدون قيد', vip: 'VIP', urgent: 'سفر خلال 3 أيام', nobal: 'بلا رصيد كافٍ' };
+    posted: 'له رقم قيد', noref: 'بدون قيد', vip: 'VIP', urgent: 'سفر خلال 3 أيام', nobal: 'بلا رصيد كافٍ', notrip: 'غير مربوطة برحلة' };
   Object.keys(MF.facets).forEach(function (k) {
     if (!MF.facets[k]) return;
     chips.push({ l: FL[k] || k, f: function () {
@@ -35719,6 +35726,79 @@ function mfQuickLinkSave(id) {
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveMinistryFile(window.authToken, Object.assign({}, mfPayload(f), { tripName: name }));
 }
+
+/* ---------- (V4.171) فحص الملفات المرشَّحة لتكون «فردي» — تحويل مجمَّع بعد مراجعة يدوية ---------- */
+function mfScanIndividualOpen() {
+  if (!MF.can.edit) { _showPopup('لا تملك صلاحية تعديل ملفات المراجعة', 'error'); return; }
+  mfModal('🔍 فحص الملفات الفردية (٩ أفراد فأقل بلا مشرف حقيقي)',
+    '<div id="mfScanBox"><div class="p-3 text-center text-muted small">⏳ جاري الفحص…</div></div>',
+    '<span id="mfScanCnt" style="font-size:11.5px;font-weight:700;"></span><div style="flex:1;"></div>' +
+    '<button class="mf-btn" onclick="mfScanSelAll(true)">تحديد الكل</button>' +
+    '<button class="mf-btn" onclick="mfScanSelAll(false)">إلغاء التحديد</button>' +
+    '<button class="mf-btn" onclick="mfCloseModal()">إغلاق</button>' +
+    '<button class="mf-btn pri" onclick="mfScanApply()">💾 تحويل المحدَّد إلى «فردي»</button>', 960);
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var box = document.getElementById('mfScanBox'); if (!box) return;
+      if (!res || !res.success) { box.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_((res && res.error) || 'تعذّر الفحص') + '</div>'; return; }
+      MF._scan = { list: res.candidates || [], sel: {} };
+      mfScanRender();
+    })
+    .withFailureHandler(function (e) {
+      var box = document.getElementById('mfScanBox');
+      if (box) box.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>';
+    })
+    .getMfIndividualFileCandidates(window.authToken);
+}
+function mfScanRender() {
+  var S = MF._scan; if (!S) return;
+  var box = document.getElementById('mfScanBox'); if (!box) return;
+  var cntEl = document.getElementById('mfScanCnt');
+  var selCount = Object.keys(S.sel).filter(function (k) { return S.sel[k]; }).length;
+  if (cntEl) cntEl.textContent = selCount + ' / ' + S.list.length + ' محدَّد';
+  if (!S.list.length) {
+    box.innerHTML = '<div class="mf-note info">ℹ️<div>لا توجد ملفات مطابقة لشرط الفحص حالياً (كلها إما «فردي» بالفعل، أو تتجاوز 9 أفراد، أو لها مشرف حقيقي).</div></div>';
+    return;
+  }
+  var h = '<div class="mf-note info" style="margin-bottom:8px;"><span>ℹ️</span><div>الملفات التالية عدد معتمريها 9 فأقل، ومشرفوها إما بدون مشرف حقيقي أو المشرف هو الوكيل نفسه فقط — راجعها وحدِّد أيها فعلاً «فردي» ثم اضغط تحويل.</div></div>';
+  h += '<table class="mf-mini" style="background:#fff;"><thead><tr>' +
+    '<th style="width:30px;"><input type="checkbox" onclick="mfScanSelAll(this.checked)"></th>' +
+    '<th>رقم الملف</th><th>الشركة</th><th>الوكيل</th><th>العميل</th><th>المعتمرون</th><th>المشرفون</th><th>الرحلة</th><th>تاريخ الذهاب</th></tr></thead><tbody>';
+  S.list.forEach(function (f) {
+    h += '<tr><td><input type="checkbox" ' + (S.sel[f.id] ? 'checked' : '') + ' onclick="mfScanSelToggle(\'' + f.id + '\',this.checked)"></td>' +
+      '<td>' + mfEsc(f.fileNo || '—') + '</td><td>' + mfEsc(f.company) + '</td><td>' + mfEsc(f.agent) + '</td>' +
+      '<td>' + mfEsc(f.clientLabel || '—') + '</td><td class="mf-latin">' + mfL(f.pilgrims) + '</td>' +
+      '<td>' + mfEsc(f.supNames) + '</td><td>' + mfEsc(f.tripName || '—') + '</td><td class="mf-latin">' + mfL(f.goDate || '—') + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  box.innerHTML = h;
+}
+function mfScanSelToggle(id, on) { if (MF._scan) { MF._scan.sel[id] = on; mfScanRender(); } }
+function mfScanSelAll(on) {
+  if (!MF._scan) return;
+  MF._scan.list.forEach(function (f) { MF._scan.sel[f.id] = on; });
+  mfScanRender();
+}
+function mfScanApply() {
+  var S = MF._scan; if (!S) return;
+  var ids = Object.keys(S.sel).filter(function (k) { return S.sel[k]; });
+  if (!ids.length) { _showPopup('حدِّد ملفاً واحداً على الأقل', 'error'); return; }
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      (res.files || []).forEach(function (f) {
+        var i = -1; MF.files.forEach(function (x, ix) { if (x.id === f.id) i = ix; });
+        if (i >= 0) MF.files[i] = f; else MF.files.push(f);
+      });
+      if (res.balances) MF.balances = res.balances;
+      mfCloseModal();
+      mfRender();
+      _showPopup('تم تحويل ' + (res.files || []).length + ' ملف إلى «فردي»', 'success');
+    })
+    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .bulkSetMfFileType(window.authToken, ids, 'فردي');
+}
+
 /* ---------- (V4.111) عرض معتمري الملف ---------- */
 function mfShowFilePilgrims(id) {
   var f = mfGet(id); if (!f) return;
@@ -39059,6 +39139,9 @@ function vzMatch(f) {
   var st = document.getElementById('vzF_status'); if (st && st.value && f.status !== st.value) return false;
   var fr = mfDate(vzFV('vzF_from')); if (fr && !isNaN(mfMs(fr)) && !(mfMs(f.date) >= mfMs(fr))) return false;
   var to = mfDate(vzFV('vzF_to')); if (to && !isNaN(mfMs(to)) && !(mfMs(f.date) <= mfMs(to))) return false;
+  // 🧳 (V4.171) المجموعات غير المربوطة بأي رحلة (لا رحلة أساسية ولا رحلات إضافية)
+  var noTripEl = document.getElementById('vzF_noTrip');
+  if (noTripEl && noTripEl.checked && (mfStr(f.tripName) || mfStr(f.extraTrips))) return false;
   return true;
 }
 /* 🧱 (V4.136) تعريف أعمدة جدول المجموعات — يُستخدَم لبناء الرأس (تصفية + ترتيب) ولقراءة
@@ -39278,6 +39361,12 @@ function vzRenderChips() {
     chips.push('<span class="vz-badge b" style="font-size:11px;padding:3px 8px;">' + vzEsc(m[1]) + ': ' + vzEsc(el.value) +
       ' <span style="cursor:pointer;font-weight:900;" onclick="vzClearFilter(\'' + m[0] + '\')">✕</span></span>');
   });
+  // 🧳 (V4.171) شريحة فلتر «غير مربوطة برحلة» (checkbox — لا يُقرأ بنفس منطق .value أعلاه)
+  var noTripEl = document.getElementById('vzF_noTrip');
+  if (noTripEl && noTripEl.checked) {
+    chips.push('<span class="vz-badge b" style="font-size:11px;padding:3px 8px;">🧳 غير مربوطة برحلة' +
+      ' <span style="cursor:pointer;font-weight:900;" onclick="document.getElementById(\'vzF_noTrip\').checked=false;vzRender();">✕</span></span>');
+  }
   // 🔎 (V4.136) شرائح تصفية الأعمدة الديناميكية أيضاً — كل فلتر عمود بعلامة X خاصة به
   Object.keys(VZ.colFilters).forEach(function (k) {
     if (!VZ.colFilters[k]) return;
@@ -39297,6 +39386,7 @@ function vzClearFilters() {
   VZ_FILTER_META.forEach(function (m) { var e = document.getElementById(m[0]); if (e) e.value = ''; });
   VZ.colFilters = {};
   VZ._compSel = []; vzCompBtnSync_();
+  var noTripEl = document.getElementById('vzF_noTrip'); if (noTripEl) noTripEl.checked = false;
   vzRender();
 }
 // 🏢 (V4.164) فلتر الشركة المصرية باختيار متعدد — نافذة منبثقة بمربعات اختيار، الفلترة الفعلية

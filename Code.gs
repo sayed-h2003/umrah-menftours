@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.170";
+var APP_VERSION = "4.171";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21462,6 +21462,66 @@ function saveMinistryFile(authToken, data) {
       }
     }
     return ret;
+  } finally { lock.releaseLock(); }
+}
+// 🔍 (V4.171) فحص الملفات المرشَّحة لتكون «فردي»: عدد معتمريها 9 فأقل، ومشرفوها إما بدون مشرف
+// حقيقي (فارغ) أو المشرف هو الوكيل نفسه فقط — نفس شرط الاحتساب التلقائي بـ saveMinistryFile لكن
+// كمسح رجعي على الملفات المسجَّلة بالفعل والمصنَّفة «مجموعات» — يعرضها للمستخدم ليراجعها ويحدِّد
+// أيها فعلاً فردي قبل التغيير المجمَّع (لا يُغيَّر شيء تلقائياً بهذه الدالة، فقط عرض)
+function getMfIndividualFileCandidates(authToken) {
+  _mfPerm_(authToken, 'view');
+  var all = _mfReadAll_();
+  var out = [];
+  all.forEach(function(f) {
+    if (f.fileType === 'فردي') return;
+    var pilg = _mfNum_(f.pilgrims);
+    if (!pilg || pilg > 9) return;
+    var agentNm = _mfStr_(f.agent);
+    var hasRealSup = (f.sups || []).some(function(s) { return _mfStr_(s.name) && _mfStr_(s.name) !== agentNm; });
+    if (hasRealSup) return;
+    out.push({
+      id: f.id, fileNo: f.fileNo, company: f.company, agent: f.agent, clientLabel: f.clientLabel,
+      pilgrims: pilg, tripName: f.tripName, goDate: f.goDate, retDate: f.retDate,
+      supNames: (f.sups || []).map(function(s) { return s.name; }).filter(String).join('، ') || 'بدون مشرف',
+      approved: !!f.approved, ref: f.ref
+    });
+  });
+  return { success: true, candidates: out };
+}
+// 🔍 (V4.171) تغيير «نوع الملف» بشكل مجمَّع لمجموعة ملفات محدَّدة دفعة واحدة (بعد مراجعة المستخدم
+// لنتيجة getMfIndividualFileCandidates أعلاه واختياره يدوياً أيها فعلاً «فردي»)
+function bulkSetMfFileType(authToken, ids, fileType) {
+  var session = _mfPerm_(authToken, 'edit');
+  ids = Array.isArray(ids) ? ids.map(_mfStr_).filter(String) : [];
+  fileType = (_mfStr_(fileType) === 'فردي') ? 'فردي' : 'مجموعات';
+  if (!ids.length) return { success: false, error: 'لم يُحدَّد أي ملف' };
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); }
+  catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  try {
+    var sh = _accSheet_(MF_SHEET, MF_HEADERS);
+    var all = _mfReadAll_();
+    var byId = {}; all.forEach(function(f) { byId[f.id] = f; });
+    var iFileType = MF_HEADERS.indexOf('نوع الملف');
+    var iUpdBy = MF_HEADERS.indexOf('عُدّل بواسطة');
+    var iUpdAt = MF_HEADERS.indexOf('عُدّل في');
+    var entries = [], updatedFiles = [];
+    ids.forEach(function(id) {
+      var f = byId[id];
+      if (!f || f.fileType === fileType) return;
+      sh.getRange(f._row, iFileType + 1).setValue(fileType);
+      sh.getRange(f._row, iUpdBy + 1, 1, 2).setValues([[session.username, _mfStamp_()]]);
+      entries.push({ action: 'تعديل مجمَّع لنوع الملف', recordId: 'MF:' + f.id, field: MF_FIELD_LABELS_.fileType,
+        oldVal: f.fileType || '-', newVal: fileType });
+      f.fileType = fileType;
+      updatedFiles.push(f);
+    });
+    SpreadsheetApp.flush();
+    if (entries.length) logChangesBatch_(session.username, entries);
+    _mfClearBootstrapCache_();
+    var balances = _mfBalances_(all, _mfReadReceipts_());
+    updatedFiles.forEach(function(f) { f.calc = _mfCompute_(f); f.flags = _mfRules_(f, all, balances); });
+    return { success: true, files: updatedFiles, balances: balances };
   } finally { lock.releaseLock(); }
 }
 // قائمة أسماء الشركات المصرية الفريدة — نفس مصدر MF.companies بالواجهة (شيت Agents_Settings)
