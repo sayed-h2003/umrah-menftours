@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.173";
+var APP_VERSION = "4.174";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21495,13 +21495,18 @@ function getMfIndividualFileCandidates(authToken) {
     if (f.fileType === 'فردي') return;
     var pilg = _mfNum_(f.pilgrims);
     if (pilg < 1 || pilg > 9) return;
-    // 🔤 (V4.173) المقارنة بعد تطبيع الاسم (تجاهل اختلاف رسم الياء/الألف/التاء المربوطة، انظر
+    // 🔤 (V4.174) المقارنة بعد تطبيع الاسم (تجاهل اختلاف رسم الياء/الألف/التاء المربوطة، انظر
     // _normalizeArabicName_) — بطلب صريح: مشرف بنفس اسم الوكيل تقريباً (مثال: "علي"/"على") يُعتبر
-    // بلا مشرف حقيقي أيضاً، لا فقط تطابق حرفي تام
+    // بلا مشرف حقيقي أيضاً، لا فقط تطابق حرفي تام. كما تبيَّن من مراجعة بيانات فعلية أن كثيراً من
+    // الملفات تُسجَّل بحقل المشرف نص "الوكيل السعودي" حرفياً (بدل تكرار اسم الوكيل نفسه) للدلالة
+    // على نفس المعنى بالضبط — فيُعامَل هذا النص أيضاً كـ"بلا مشرف حقيقي".
     var agentNorm = _normalizeArabicName_(f.agent);
+    var agentLabelNorm = _normalizeArabicName_('الوكيل السعودي');
     var hasRealSup = (f.sups || []).some(function(s) {
       var nm = _mfStr_(s.name);
-      return nm && _normalizeArabicName_(nm) !== agentNorm;
+      if (!nm) return false;
+      var nmNorm = _normalizeArabicName_(nm);
+      return nmNorm !== agentNorm && nmNorm !== agentLabelNorm;
     });
     if (hasRealSup) return;
     out.push({
