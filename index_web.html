@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.188 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.189 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.188)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.189)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.188</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.189</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7034,6 +7034,24 @@ function _perfLog_(label, t0, res) {
       (p.files != null ? (' · ' + p.files + ' صف') : ''));
   } catch (e) {}
 }
+/* ✂️ (V4.189) تفكيك قائمة الرحلات الإضافية: رحلة بكل سطر. أُلغي الفصل بـ«-» و«،» لأن أسماء رحلات
+   حقيقية تحتويها. القيم القديمة المكتوبة بفواصل تُفصل فقط لو كانت كل أجزائها رحلات موجودة فعلاً. */
+function _knownTripNames_() {
+  var set = {};
+  [(window.VZ && VZ.trips) || [], (window.MF && MF.trips) || [], window.tripsCache || []].forEach(function (arr) {
+    (arr || []).forEach(function (t) { var n = String((t && t.name) || '').trim(); if (n) set[n] = 1; });
+  });
+  return set;
+}
+function tripListSplit_(s) {
+  s = String(s == null ? '' : s).trim(); if (!s) return [];
+  if (/\n/.test(s)) return s.split(/\r?\n/).map(function (t) { return t.trim(); }).filter(Boolean);
+  if (!/[،,]|\s-\s/.test(s)) return [s];
+  var known = _knownTripNames_();
+  if (known[s]) return [s];
+  var parts = s.split(/\s*[،,]\s*|\s+-\s+/).map(function (t) { return t.trim(); }).filter(Boolean);
+  return (parts.length > 1 && parts.every(function (p) { return known[p]; })) ? parts : [s];
+}
 function pilgrimVisaNote_(p) {
   var n = String((p && p.notes) || '').trim();
   if (!n) return '';
@@ -7042,7 +7060,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.188";
+var CLIENT_APP_VERSION = "4.189";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -15346,17 +15364,31 @@ function _renderClientStatsTable() {
   // 💰 (V4.10) عمود «المستحق» لكل عميل من واقع حسابات الرحلة — لأصحاب صلاحية الحسابات حصراً
   if ((hasPermission('admin') || hasPermission('accounts.view')) && window.currentTripName) {
     var _bt = window.currentTripName;
-    google.script.run.withSuccessHandler(function(res) {
+    var _applyBal = function(balances) {
       // 🔒 نداء أقدم رجع متأخراً بعد نداء أحدث — تجاهله كليًا (الأحدث بالفعل عرض بياناته الصحيحة)
       if (mySeq !== window._clientStatsReqSeq) return;
-      if (!res || !res.success || window.currentTripName !== _bt) return;
-      window._tripBalancesMap = res.balances || {};
+      if (window.currentTripName !== _bt) return;
+      window._tripBalancesMap = balances || {};
       var _src = window._statsSourceData['clientStatsTable'];
-      if (_src) _src.balMap = res.balances || {}; // 💰 حفظ الأرصدة مع المصدر — فلا تختفي عند تبديل «إظهار سكن المدينة»
+      if (_src) _src.balMap = balances || {}; // 💰 حفظ الأرصدة مع المصدر — فلا تختفي عند تبديل «إظهار سكن المدينة»
       box.innerHTML = _buildClientStatsHtml_(pilgrims, 'clientStatsTable', '📊 إحصائية العملاء', prevMadinahState);
       _wireStatsTableInteractivity_('clientStatsTable');
       window._tripBalancesMap = null; // حتى لا يتسرب العمود لجداول إحصائية أخرى
-    }).getTripClientsBalances(window.authToken, _bt);
+    };
+    // ⚡ (V4.189) هذه الدالة تُستدعى مع رسم/تعديل كل صف بالكشف — فكانت تُرسل طلب أرصدة للخادم مع كل
+    // صف (ظهر بسجل التنفيذ ~45 طلب getTripClientsBalances بنفس الثانية عند فتح رحلة واحدة). الآن:
+    // أرصدة الرحلة تُحفظ دقيقة واحدة بالذاكرة، وأي طلب جديد يُجمَّع (تأخير 800م.ث) في طلب واحد فقط
+    window._tripBalCache = window._tripBalCache || {};
+    var _c = window._tripBalCache[_bt];
+    if (_c && (Date.now() - _c.at) < 60000) { _applyBal(_c.balances); return; }
+    clearTimeout(window._tripBalTimer);
+    window._tripBalTimer = setTimeout(function() {
+      google.script.run.withSuccessHandler(function(res) {
+        if (!res || !res.success) return;
+        window._tripBalCache[_bt] = { at: Date.now(), balances: res.balances || {} };
+        _applyBal(res.balances);
+      }).getTripClientsBalances(window.authToken, _bt);
+    }, 800);
   }
 }
 
@@ -36981,13 +37013,10 @@ function _prPickRun_() {
 /* ============================================================
    ➕ (V4.188) محرِّر «الرحلات الإضافية» المشترك بين مجموعات التأشيرات (ns='vz') وملفات الوزارة (ns='mf'):
    خانة لكل رحلة + 🔍 بحث بمعتمر + 🗑️ حذف، وزر «➕ رحلة أخرى». الحالة أثناء التحرير في d._xtRows (تسمح
-   بخانة فارغة جديدة)، والتخزين الفعلي كما هو: d.extraTrips نص واحد مفصول بفاصلة عربية.
+   بخانة فارغة جديدة)، والتخزين الفعلي: d.extraTrips نص واحد، رحلة بكل سطر (V4.189).
    ============================================================ */
 function _xtDraft_(ns) { return ns === 'vz' ? VZ._draft : MF._draft; }
-function _xtSplit_(s) {
-  s = mfStr(s); if (!s) return [];
-  return s.replace(/\s+-\s*|\s*-\s+/g, '،').split(/[،,]/).map(function (t) { return mfStr(t); }).filter(Boolean);
-}
+function _xtSplit_(s) { return tripListSplit_(s); }
 function _xtRows_(ns) {
   var d = _xtDraft_(ns); if (!d) return [''];
   var fromField = _xtSplit_(d.extraTrips);
@@ -37030,7 +37059,7 @@ function _xtCanon_(d, rows) {
 }
 function _xtSync_(ns, commit) {
   var d = _xtDraft_(ns); if (!d) return;
-  var joined = _xtCanon_(d, d._xtRows).join('، ');
+  var joined = _xtCanon_(d, d._xtRows).join('\n');   // (V4.189) رحلة بكل سطر — بلا أي فاصل داخل الأسماء
   if (ns === 'vz') {
     d.extraTrips = joined;
     if (commit) vzTripChanged();   // يُعيد رسم النموذج ويجلب بيانات الرحلات كما كان
@@ -38019,11 +38048,7 @@ function mfDeleteFile(id) {
 
 /* ---------- اختيار المعتمرين (حسب العميل + فردي معاً) ---------- */
 // 🧳 (V4.184) كل رحلات الملف: الأساسية + الإضافية (نفس منطق vzTripsOfDraft_ بمجموعات التأشيرات)
-function mfTripSplit_(s) {
-  s = mfStr(s); if (!s) return [];
-  var norm = s.replace(/\s+-\s*|\s*-\s+/g, '،');
-  return norm.split(/[،,]/).map(function (t) { return mfStr(t); }).filter(Boolean);
-}
+function mfTripSplit_(s) { return tripListSplit_(s); }
 function mfTripsOf_(f) {
   var out = [], seen = {};
   mfTripSplit_(f && f.tripName).concat(mfTripSplit_(f && f.extraTrips)).forEach(function (t) {
@@ -40519,7 +40544,7 @@ function vzToggleDetail(id) {
     '<b>تاريخ السداد:</b> ' + vzL(f.date || '—') + '<br>' +
     '<b>الشركة المصرية:</b> ' + vzEsc(f.company || '—') + '<br>' +
     '<b>الوكيل السعودي:</b> ' + vzEsc(f.agent || '—') + '<br>' +
-    '<b>الرحلة:</b> ' + vzEsc(f.tripName || '—') + (mfStr(f.extraTrips) ? (' <span style="color:#64748b;">+ ' + vzEsc(f.extraTrips) + '</span>') : '') + '<br>' +
+    '<b>الرحلة:</b> ' + vzEsc(f.tripName || '—') + (mfStr(f.extraTrips) ? (' <span style="color:#64748b;">+ ' + vzEsc(tripListSplit_(f.extraTrips).join(' • ')) + '</span>') : '') + '<br>' +
     // 📨 (V4.186) رقم/أرقام إشعارات الوصول الخاصة بمعتمري هذه المجموعة — تُملأ بعد لحظة (انظر vzDetailNotices_)
     '<b>رقم الإشعار:</b> <span id="vzDetNotices">⏳</span><br>' +
     '<b>العدد:</b> ' + vzL(vzFmt(f.visaCount)) + '<br>' +
@@ -41091,13 +41116,7 @@ function vzTripChanged() {
   // 🔀 (V4.165) لو المستخدم كتب أكثر من رحلة بحقل «الرحلة المرتبطة» الأساسي نفسه (بفاصلة أو "-")،
   // نُبقي أول قيمة رحلة أساسية وننقل الباقي تلقائياً لحقل «رحلات إضافية مرتبطة» — بدل أن يُسجَّل
   // كل النص كاسم رحلة واحد حرفي غير موجود فعلياً (وهذا كان يمنع جلب أسماء معتمري أي من الرحلتين)
-  var mainParts = _vzTripSplit_(d.tripName);
-  if (mainParts.length > 1) {
-    d.tripName = mainParts[0];
-    var seenExtra = {}; var extra = [];
-    _vzTripSplit_(d.extraTrips).concat(mainParts.slice(1)).forEach(function (t) { if (!seenExtra[t]) { seenExtra[t] = 1; extra.push(t); } });
-    d.extraTrips = extra.join('، ');
-  }
+  // (V4.189) أُلغي تقسيم الخانة الأساسية بالفواصل — اسم الرحلة يُؤخذ كما هو حرفياً (قد يحتوي «-» أو «،»)
   var t = (VZ.trips || []).filter(function (x) { return x.name === d.tripName; })[0];
   if (t) {
     if (t.company && !mfStr(d.company)) d.company = t.company;
@@ -41124,11 +41143,7 @@ function vzTripChanged() {
 }
 // ✂️ (V4.165) فاصل أسماء الرحلات المتعددة: فاصلة عادية/عربية، أو علامة "-" شرط وجود مسافة على
 // جانب واحد منها على الأقل (لتفادي كسر تواريخ مكتوبة داخل اسم الرحلة نفسه بلا مسافات مثل "15-9")
-function _vzTripSplit_(s) {
-  s = mfStr(s); if (!s) return [];
-  var norm = s.replace(/\s+-\s*|\s*-\s+/g, '،');
-  return norm.split(/[،,]/).map(function (t) { return mfStr(t); }).filter(Boolean);
-}
+function _vzTripSplit_(s) { return tripListSplit_(s); }
 // 🧳 (V4.155) كل رحلات المجموعة: الأساسية + الإضافية (نفس منطق _vzTripsOf_ بالخادم)
 function vzTripsOfDraft_(d) {
   var out = [], seen = {};

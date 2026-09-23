@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.188";
+var APP_VERSION = "4.189";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -192,11 +192,21 @@ return template
 // ⚠️ ضع مفتاح Gemini API المجاني الخاص بك هنا لتفعيل استخلاص البيانات تلقائياً
 // مفتاح Gemini يُقرأ من Script Properties (يُضبط من شاشة الإعدادات)
 // لا توجد قيمة احتياطية مُضمَّنة في الكود لأسباب أمنية
-var GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY") || "";
-var GEMINI_API_KEY_2 = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY_2") || "";
+// ⚡ (V4.189) كل خصائص السكربت كانت تُقرأ عند *تحميل* السكربت (5 نداءات لخدمة الخصائص) — أي مع كل
+// نداء من الواجهة مهما كان بسيطاً (نبضة المتصلين، رقم الإصدار…) حتى لو لم يحتج لها أصلاً. صارت تُقرأ
+// فقط عند أول احتياج فعلي، مرة واحدة لكل تنفيذ.
+var _SP_MEMO_ = {};
+function _sp_(key) {
+  if (!Object.prototype.hasOwnProperty.call(_SP_MEMO_, key)) {
+    try { _SP_MEMO_[key] = PropertiesService.getScriptProperties().getProperty(key) || ""; } catch (e) { _SP_MEMO_[key] = ""; }
+  }
+  return _SP_MEMO_[key];
+}
+function _geminiKey1_() { return _sp_("GEMINI_API_KEY"); }
+function _geminiKey2_() { return _sp_("GEMINI_API_KEY_2"); }
 
 function _geminiKeys_() {
-  return [GEMINI_API_KEY, GEMINI_API_KEY_2].filter(function(k) {
+  return [_geminiKey1_(), _geminiKey2_()].filter(function(k) {
     return k && k !== "YOUR_GEMINI_API_KEY";
   });
 }
@@ -7048,7 +7058,8 @@ function getAllMovementsAuth(authToken) {
 
 // بريد الإشعارات - غيّره لعنوانك الفعلي
 // بريد التنبيهات يُقرأ من Script Properties (يُضبط من شاشة الإعدادات)
-var NOTIFICATION_EMAIL = PropertiesService.getScriptProperties().getProperty('NOTIFICATION_EMAILS') || "";
+// ⚡ (V4.189) تُقرأ عند الحاجة فقط (انظر _sp_)
+function _notificationEmail_() { return _sp_('NOTIFICATION_EMAILS'); }
 
 /**
  * يبني ويرسل تقرير التنبيه اليومي بالبريد (وصول/مغادرة اليوم والغد).
@@ -7212,7 +7223,7 @@ ${tomorrowMovements.length}
 
     GmailApp.sendEmail(
 
-      NOTIFICATION_EMAIL,
+      _notificationEmail_(),
 
       subject,
 
@@ -7433,9 +7444,10 @@ function testSendAlerts() {
 
 // إعدادات تيليجرام تُقرأ من Script Properties (تُضبط من شاشة الإعدادات)
 // لا توجد قيم احتياطية مُضمَّنة في الكود لأسباب أمنية
+// ⚡ (V4.189) قراءة كسولة (getter) — لا تُقرأ الخاصية إلا عند استخدام التوكن فعلاً
 var TELEGRAM_CONFIG = {
-  token: PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN') || "",
-  chatId: PropertiesService.getScriptProperties().getProperty('TELEGRAM_CHAT_ID') || ""
+  get token() { return _sp_('TELEGRAM_BOT_TOKEN'); },
+  get chatId() { return _sp_('TELEGRAM_CHAT_ID'); }
 };
 
 // 📣 (V4.18) نفس منطق sendTelegramMessage لكن لأي chatId — أساس تعدد جروبات تنبيهات الحركات
@@ -10671,7 +10683,7 @@ function getServicesStatus(authToken) {
   }
 
   // حالة Gemini
-  var geminiConfigured = !!GEMINI_API_KEY;
+  var geminiConfigured = !!_geminiKey1_();
 
   // بريد التنبيهات
   var emailConfigured = !!(props.getProperty('NOTIFICATION_EMAILS'));
@@ -10698,9 +10710,9 @@ function getServicesStatus(authToken) {
     gemini: {
       // مفاتيح Gemini (حتى المُقنَّعة) تُخفى عن مستخدم «الإعدادات الأساسية»
       configured: _fullAdmin ? geminiConfigured : false,
-      key2Configured: _fullAdmin ? !!GEMINI_API_KEY_2 : false,
-      masked1: _fullAdmin ? _maskKey_(GEMINI_API_KEY) : '',
-      masked2: _fullAdmin ? _maskKey_(GEMINI_API_KEY_2) : ''
+      key2Configured: _fullAdmin ? !!_geminiKey2_() : false,
+      masked1: _fullAdmin ? _maskKey_(_geminiKey1_()) : '',
+      masked2: _fullAdmin ? _maskKey_(_geminiKey2_()) : ''
     }
   };
 }
@@ -21054,11 +21066,7 @@ function _mfObjToRow_(f) {
   ];
 }
 // 🧳 (V4.184) كل رحلات ملف المراجعة: الأساسية + الإضافية (نفس منطق _vzTripSplit_/_vzTripsOf_)
-function _mfTripSplit_(s) {
-  s = _mfStr_(s); if (!s) return [];
-  var norm = s.replace(/\s+-\s*|\s*-\s+/g, '،');
-  return norm.split(/[،,]/).map(function(t) { return _mfStr_(t); }).filter(String);
-}
+function _mfTripSplit_(s) { return _tripListSplit_(s); }
 function _mfTripsOf_(f) {
   var out = [], seen = {};
   _mfTripSplit_(f && f.tripName).concat(_mfTripSplit_(f && f.extraTrips)).forEach(function(t) {
@@ -23084,11 +23092,36 @@ function _vzRowToObj_(r) {
 // 🧳 (V4.155) كل رحلات المجموعة: الرحلة الأساسية + الرحلات الإضافية (مفصولة بفاصلة عربية أو لاتينية)
 // ✂️ (V4.165) نفس فاصل الرحلات المتعددة المطبَّق بالواجهة: فاصلة، أو "-" شرط مسافة على جانب واحد
 // منها على الأقل (لتفادي كسر تواريخ داخل اسم الرحلة نفسه بلا مسافات مثل "15-9")
-function _vzTripSplit_(s) {
+/* ✂️ (V4.189) قائمة الرحلات الإضافية تُخزَّن الآن رحلةً بكل سطر (فاصل = سطر جديد) — أُلغي الفصل بـ«-»
+   و«،» و«,» لأن أسماء رحلات حقيقية تحتويها (مثال: «رحلة المكتب 8-9 سعودى ق-م-جدة-ق») فكان يُقطَّع
+   الاسم الواحد لعدة «رحلات». القيم القديمة المكتوبة بفواصل (بلا أسطر) تُفصل فقط لو كانت كل أجزائها
+   أسماء رحلات موجودة فعلاً — وإلا تُعامل كاسم رحلة واحد كما هو. */
+function _tripListSplit_(s) {
   s = _mfStr_(s); if (!s) return [];
-  var norm = s.replace(/\s+-\s*|\s*-\s+/g, '،');
-  return norm.split(/[،,]/).map(function (t) { return _mfStr_(t); }).filter(String);
+  if (/\n/.test(s)) return s.split(/\r?\n/).map(function (t) { return _mfStr_(t); }).filter(String);
+  if (!/[،,]|\s-\s/.test(s)) return [s];
+  var known = _tripNamesSet_();
+  if (known[s]) return [s];
+  var parts = s.split(/\s*[،,]\s*|\s+-\s+/).map(function (t) { return _mfStr_(t); }).filter(String);
+  return (parts.length > 1 && parts.every(function (p) { return known[p]; })) ? parts : [s];
 }
+var _TRIP_NAMES_MEMO_ = null;
+function _tripNamesSet_() {
+  if (_TRIP_NAMES_MEMO_) return _TRIP_NAMES_MEMO_;
+  var set = {};
+  try {
+    var tsh = getSpreadsheet_().getSheetByName(TRIPS_SHEET_NAME_);
+    if (tsh && tsh.getLastRow() > 1) {
+      var rd = _cellReader_(_robustColMap_(tsh, TRIPS_HEADERS_), TRIPS_COL_);
+      tsh.getRange(2, 1, tsh.getLastRow() - 1, tsh.getLastColumn()).getValues().forEach(function (row) {
+        var nm = _mfStr_(rd(row, 'name')); if (nm) set[nm] = 1;
+      });
+    }
+  } catch (e) {}
+  _TRIP_NAMES_MEMO_ = set;
+  return set;
+}
+function _vzTripSplit_(s) { return _tripListSplit_(s); }
 function _vzTripsOf_(f) {
   var out = [], seen = {};
   _vzTripSplit_(f && f.tripName).concat(_vzTripSplit_(f && f.extraTrips)).forEach(function (t) {
