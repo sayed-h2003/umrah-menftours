@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.181";
+var APP_VERSION = "4.182";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -24429,4 +24429,63 @@ function sendTelegramMovementsByDate_(dateStr, chatId, from) {
     });
   }
   sendTelegramMessageDirect(chatId, msg);
+}
+
+/* ============================================================
+   ⚙️ (V4.182) تفضيلات واجهة المستخدم — حفظ تخصيصات الأعمدة (إظهار/إخفاء/ترتيب/عرض)
+   والفرز لكل شاشة، لكل مستخدم على حدة، على السيرفر (وليس فقط بمتصفحه) — فتظل هذه
+   التخصيصات محفوظة ومطبَّقة تلقائياً حتى لو سجَّل الدخول من متصفح أو جهاز آخر.
+   تخزين عام (screenKey حر النص) يخدم أي شاشة بالتطبيق دون تغيير بنية الشيت لاحقاً.
+   ============================================================ */
+var UI_PREFS_SHEET = 'UserUiPrefs';
+var UI_PREFS_HEADERS = ['المستخدم', 'الشاشة', 'التفضيلات', 'عُدّل في'];
+
+// يعيد كل تفضيلات المستخدم الحالي دفعة واحدة (كل الشاشات) — تُستدعى مرة واحدة عند
+// تسجيل الدخول/استعادة الجلسة، فيُطبَّق كل شيء من الذاكرة بعدها بلا نداءات إضافية
+function getMyUiPrefs(authToken) {
+  var session = requireAuth_(authToken);
+  var sh = _accSheet_(UI_PREFS_SHEET, UI_PREFS_HEADERS);
+  var last = sh.getLastRow();
+  var out = {};
+  if (last >= 2) {
+    var vals = sh.getRange(2, 1, last - 1, UI_PREFS_HEADERS.length).getValues();
+    for (var i = 0; i < vals.length; i++) {
+      if (_mfStr_(vals[i][0]) !== session.username) continue;
+      var screenKey = _mfStr_(vals[i][1]); if (!screenKey) continue;
+      try { out[screenKey] = JSON.parse(vals[i][2]); } catch (e) {}
+    }
+  }
+  return { success: true, prefs: out };
+}
+// يحفظ/يحدِّث تفضيلات شاشة واحدة لهذا المستخدم فقط (لا يؤثر على أي مستخدم آخر) —
+// يُستدعى بصمت (بلا رسالة منبثقة) بعد كل تعديل بالأعمدة (إخفاء/إظهار/سحب لتغيير العرض/
+// إعادة ترتيب/فرز) حتى تبقى التخصيصات مطبَّقة تلقائياً عند إعادة تسجيل الدخول من جديد
+function saveUiPref(authToken, screenKey, prefsObj) {
+  var session = requireAuth_(authToken);
+  screenKey = _mfStr_(screenKey);
+  if (!screenKey) return { success: false, error: 'معرِّف الشاشة مفقود' };
+  var json = '';
+  try { json = JSON.stringify(prefsObj || {}); } catch (e) { return { success: false, error: 'تعذّر ترميز التفضيلات' }; }
+  var lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); }
+  catch (e) { return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' }; }
+  try {
+    var sh = _accSheet_(UI_PREFS_SHEET, UI_PREFS_HEADERS);
+    var last = sh.getLastRow();
+    var row = -1;
+    if (last >= 2) {
+      var vals = sh.getRange(2, 1, last - 1, 2).getValues();
+      for (var i = 0; i < vals.length; i++) {
+        if (_mfStr_(vals[i][0]) === session.username && _mfStr_(vals[i][1]) === screenKey) { row = i + 2; break; }
+      }
+    }
+    var stamp = _mfStamp_();
+    if (row > 0) {
+      sh.getRange(row, 3, 1, 2).setValues([[json, stamp]]);
+    } else {
+      sh.appendRow([session.username, screenKey, json, stamp]);
+    }
+    SpreadsheetApp.flush();
+    return { success: true };
+  } finally { lock.releaseLock(); }
 }

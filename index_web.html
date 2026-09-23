@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.181 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.182 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.181)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.182)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.181</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.182</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6147,6 +6147,54 @@ document.addEventListener('click', function(ev) {
   btn.dataset.lastGuardedClick = String(now);
 }, true);
 
+/* ============================================================
+   ⚙️ (V4.182) UIP — تفضيلات واجهة المستخدم (إظهار/إخفاء الأعمدة، ترتيبها، عرضها، الفرز)
+   محفوظة على السيرفر لكل مستخدم — بدل الاكتفاء بـlocalStorage الذي يبقى حبيس متصفح
+   بعينه. localStorage ما زال يُستخدَم كـ"كاش" لرسم فوري بلا وميض قبل وصول رد السيرفر،
+   لكن السيرفر هو المصدر الحقيقي الذي يُتّبع دوماً بمجرد وصول ردّه (فيعمل عبر أي جهاز/متصفح).
+   UIP.load(): تُستدعى مرة واحدة بعد تسجيل الدخول (أو استعادة الجلسة عند إعادة فتح الصفحة).
+   UIP.get(screenKey): يعيد كائن تفضيلات الشاشة المخزَّن (أو {} إن لم يوجد).
+   UIP.save(screenKey, obj): يحفظ فورياً بمحلي المتصفح (استجابة لحظية) ثم يُرحِّل الحفظ
+   للسيرفر بعد تهدئة قصيرة (debounce) حتى لا نُرسل نداءً مع كل حركة سحب صغيرة.
+   ============================================================ */
+var UIP = {
+  data: {}, loaded: false, _timers: {},
+  _lsKey: function () {
+    var u = (window.currentUser && window.currentUser.username) ? window.currentUser.username : '__anon__';
+    return 'uiPrefsCache_' + u;
+  },
+  load: function (cb) {
+    // 🚀 تطبيق فوري من الكاش المحلي (إن وُجد) قبل وصول رد السيرفر — يمنع "وميض" رجوع
+    // الأعمدة لوضعها الافتراضي للحظة ثم القفز للوضع المخصَّص بعد وصول الرد
+    try {
+      var raw = localStorage.getItem(UIP._lsKey());
+      if (raw) { var p = JSON.parse(raw); if (p && typeof p === 'object') UIP.data = p; }
+    } catch (e) {}
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success && res.prefs) {
+          UIP.data = res.prefs;
+          try { localStorage.setItem(UIP._lsKey(), JSON.stringify(UIP.data)); } catch (e) {}
+        }
+        UIP.loaded = true;
+        if (typeof cb === 'function') cb();
+      })
+      .withFailureHandler(function () { UIP.loaded = true; if (typeof cb === 'function') cb(); })
+      .getMyUiPrefs(window.authToken);
+  },
+  get: function (screenKey) { return (UIP.data && UIP.data[screenKey]) || {}; },
+  save: function (screenKey, obj) {
+    UIP.data[screenKey] = obj;
+    try { localStorage.setItem(UIP._lsKey(), JSON.stringify(UIP.data)); } catch (e) {}
+    clearTimeout(UIP._timers[screenKey]);
+    UIP._timers[screenKey] = setTimeout(function () {
+      if (!window.authToken) return;
+      google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {})
+        .saveUiPref(window.authToken, screenKey, obj);
+    }, 600);
+  }
+};
+
 /* ===============================
    نظام إدارة الجلسة والصلاحيات (مطور وآمن)
 ================================ */
@@ -6207,6 +6255,13 @@ function checkAuthOnLoad() {
 
   appContainer.style.display =
     "block";
+
+  // ⚙️ (V4.182) استعادة جلسة بإعادة فتح الصفحة (لا مرور بـhandleLogin) — نحمِّل تفضيلات
+  // الأعمدة/الفرز المحفوظة لهذا المستخدم مرة واحدة فقط لكل تحميل صفحة
+  if (!window._uipLoadedOnce) {
+    window._uipLoadedOnce = true;
+    try { if (typeof UIP === 'object') UIP.load(); } catch (e) {}
+  }
 
   var navUser =
     document.getElementById(
@@ -6488,6 +6543,8 @@ try { sessionStorage.setItem('authToken', res.token || ''); } catch(e) {}
 try { localStorage.setItem('smartManagerUser', JSON.stringify(res)); } catch(e) {}
 // 🔔 (V4.125) مفاتيح تفعيل التنبيهات — تُحمَّل مبكراً فتحترمها التنبيهات المحسوبة بالواجهة
 try { if (typeof loadNotifSettings === 'function') loadNotifSettings(); } catch(e) {}
+// ⚙️ (V4.182) تفضيلات الأعمدة/الفرز المحفوظة لهذا المستخدم — تُحمَّل مرة واحدة هنا
+try { if (typeof UIP === 'object') UIP.load(); } catch(e) {}
 
         var navUser =
   document.getElementById(
@@ -6884,7 +6941,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.181";
+var CLIENT_APP_VERSION = "4.182";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -28856,6 +28913,29 @@ function selectBookingRow(id, evt) {
   ];
   window._bkColFilters = window._bkColFilters || {}; // {colKey: 'نص التصفية'}
   window._bkColSort = window._bkColSort || null;      // {key, dir} | null = الترتيب المدمج القياسي
+  // ⚙️ (V4.182) الفرز/التصفية بجدول الإشعارات (الحجوزات) كانا يعودان لوضعهما الافتراضي بكل
+  // إعادة دخول — تُحفَظ الآن لكل مستخدم على حدة (سيرفر + كاش محلي) وتُستعاد تلقائياً عند فتح الشاشة
+  function _bkPrefsKey_() {
+    var u = (window.currentUser && window.currentUser.username) ? window.currentUser.username : '__anon__';
+    return 'bkPrefs_' + u;
+  }
+  function _bkSavePrefsQuiet_() {
+    var p = { sort: window._bkColSort, filters: window._bkColFilters };
+    try { localStorage.setItem(_bkPrefsKey_(), JSON.stringify(p)); } catch (e) {}
+    try { if (typeof UIP === 'object') UIP.save('bookings', p); } catch (e) {}
+  }
+  function _bkRestorePrefsOnce_() {
+    try {
+      var p = (typeof UIP === 'object' && UIP.loaded) ? UIP.get('bookings') : null;
+      if (!p || !Object.keys(p).length) {
+        var raw = localStorage.getItem(_bkPrefsKey_());
+        if (raw) { try { p = JSON.parse(raw); } catch (e2) { p = null; } }
+      }
+      if (!p) return;
+      if (p.sort && p.sort.key) window._bkColSort = p.sort;
+      if (p.filters && typeof p.filters === 'object') window._bkColFilters = p.filters;
+    } catch (e) {}
+  }
   function _bkNorm_(s) {
     s = String(s == null ? '' : s).toLowerCase();
     return (typeof _normalizeArabic_ === 'function') ? _normalizeArabic_(s) : s;
@@ -28990,6 +29070,9 @@ function selectBookingRow(id, evt) {
   }
 
   function loadBookingsTable() {
+    // ⚙️ (V4.182) استعادة الفرز/التصفية المحفوظَين لهذا المستخدم — قبل أول رسم، وإلا فإن أول
+    // استدعاء لـ_bkRenderSections_ سيحفظ الحالة الافتراضية (فارغة) فوق ما كان محفوظاً فيمحوه
+    _bkRestorePrefsOnce_();
     var area = document.getElementById('bookingsSectionsArea');
     area.innerHTML = '<div class="text-muted p-3 text-center">⏳ جاري مزامنة السجلات الحالية...</div>';
     _ensureTripsCacheForHover_();
@@ -29012,6 +29095,9 @@ function selectBookingRow(id, evt) {
   function _bkRenderSections_() {
     // 🔗 (V4.115) نضمن تحميل خريطة الربط (رحلة ⇄ إشعار ⇄ ملف وزارة) لعرضها داخل صفوف الإشعارات
     if (!window._mfTripLinks && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_();
+    // ⚙️ (V4.182) كل مسارات تعديل الفرز/التصفية (يدوياً أو من شرائح الفلاتر) تمر من هنا — نقطة
+    // واحدة كافية لحفظ التفضيلات بصمت بعد كل تغيير
+    _bkSavePrefsQuiet_();
     var area = document.getElementById('bookingsSectionsArea');
     var bookings = localBookingsCache || [];
     if (!bookings.length) {
@@ -35297,7 +35383,7 @@ function mfVisible() {
   return list;
 }
 function mfToggleFacet(btn) { btn.classList.toggle('on'); MF.facets[btn.dataset.q] = btn.classList.contains('on'); mfRender(); }
-function mfSort(k) { if (MF.sort.key === k) MF.sort.dir *= -1; else { MF.sort.key = k; MF.sort.dir = 1; } mfRender(); }
+function mfSort(k) { if (MF.sort.key === k) MF.sort.dir *= -1; else { MF.sort.key = k; MF.sort.dir = 1; } mfRender(); mfSaveColPrefsQuiet_(); }
 function mfClearFilters() {
   ['mfSearch', 'mfF_fileNo', 'mfF_company', 'mfF_agent', 'mfF_fileType', 'mfF_clientLabel', 'mfF_tripName', 'mfF_supName',
     'mfF_madinahHotel', 'mfF_makkahHotel', 'mfF_goFrom', 'mfF_goTo', 'mfF_retTo'].forEach(function (id) {
@@ -36560,16 +36646,20 @@ function mfColPrefsKey() {
 // 💾 (V4.166) حفظ صامت (بلا رسالة منبثقة) — يُستدعى تلقائياً بعد كل تعديل بالأعمدة (سحب لتغيير
 // العرض، سحب لإعادة الترتيب، إخفاء/تثبيت) بدل انتظار ضغطة يدوية على زر «حفظ» منفصل
 function mfSaveColPrefsQuiet_() {
-  try {
-    localStorage.setItem(mfColPrefsKey(), JSON.stringify({
-      order: MF_COLS.map(function (c) { return c.k; }),
-      pin: MF_COLS.filter(function (c) { return c.pin; }).map(function (c) { return c.k; }),
-      hidden: Object.keys(MF.hidden).filter(function (k) { return MF.hidden[k]; }),
-      // ↔️ (V4.114) عرض كل عمود بعد التحجيم بالماوس + قسمه الحالي
-      w: MF_COLS.reduce(function (o, c) { o[c.k] = c.w || 100; return o; }, {}),
-      g: MF_COLS.reduce(function (o, c) { o[c.k] = c.g; return o; }, {})
-    }));
-  } catch (e) {}
+  var p = {
+    order: MF_COLS.map(function (c) { return c.k; }),
+    pin: MF_COLS.filter(function (c) { return c.pin; }).map(function (c) { return c.k; }),
+    hidden: Object.keys(MF.hidden).filter(function (k) { return MF.hidden[k]; }),
+    // ↔️ (V4.114) عرض كل عمود بعد التحجيم بالماوس + قسمه الحالي
+    w: MF_COLS.reduce(function (o, c) { o[c.k] = c.w || 100; return o; }, {}),
+    g: MF_COLS.reduce(function (o, c) { o[c.k] = c.g; return o; }, {}),
+    // ⇅ (V4.182) الفرز الحالي (عمود + اتجاه) — لم يكن محفوظاً من قبل فيعود دوماً لترتيب المسلسل
+    // الافتراضي بعد كل إعادة دخول رغم أن المستخدم رتّب الجدول حسب عمود آخر
+    sortKey: MF.sort.key, sortDir: MF.sort.dir
+  };
+  try { localStorage.setItem(mfColPrefsKey(), JSON.stringify(p)); } catch (e) {}
+  // 💾 (V4.182) نفس التفضيلات تُرحَّل للسيرفر أيضاً — فتتبع المستخدم من أي جهاز/متصفح يسجّل منه دخوله
+  try { if (typeof UIP === 'object') UIP.save('ministry', p); } catch (e) {}
 }
 function mfSaveColPrefs() {
   mfSaveColPrefsQuiet_();
@@ -36577,8 +36667,14 @@ function mfSaveColPrefs() {
 }
 function mfRestoreColPrefs() {
   try {
-    var raw = localStorage.getItem(mfColPrefsKey()); if (!raw) return;
-    var p = JSON.parse(raw); if (!p) return;
+    // 🌐 (V4.182) الأولوية لتفضيلات السيرفر (مصدر الحقيقة عبر كل الأجهزة)؛ ولو لم تصل بعد
+    // (UIP لم يُحمَّل حتى الآن) نستخدم كاش المتصفح المحلي مؤقتاً لرسم فوري بلا وميض
+    var p = (typeof UIP === 'object' && UIP.loaded) ? UIP.get('ministry') : null;
+    if (!p || !Object.keys(p).length) {
+      var raw = localStorage.getItem(mfColPrefsKey());
+      if (raw) { try { p = JSON.parse(raw); } catch (e2) { p = null; } }
+    }
+    if (!p) return;
     if (Array.isArray(p.order)) {
       MF_COLS.sort(function (a, b) {
         var ia = p.order.indexOf(a.k), ib = p.order.indexOf(b.k);
@@ -36592,6 +36688,8 @@ function mfRestoreColPrefs() {
     if (p.g) MF_COLS.forEach(function (c) { if (p.g[c.k]) c.g = p.g[c.k]; });
     MF.hidden = {};
     if (Array.isArray(p.hidden)) p.hidden.forEach(function (k) { MF.hidden[k] = true; });
+    // ⇅ (V4.182) استعادة الفرز المحفوظ
+    if (p.sortKey) { MF.sort.key = p.sortKey; MF.sort.dir = (p.sortDir === -1) ? -1 : 1; }
   } catch (e) {}
 }
 var _mfColWinOpen = false;
@@ -39331,6 +39429,7 @@ function vzLoad(force, silent) {
       VZ.housingByGroup = res.housingByGroup || {};
       VZ.accounts = res.accounts || []; VZ.acctRows = res.acctRows || []; VZ.acctModes = res.acctModes || [];
       VZ.today = res.today || ''; VZ.can = res.can || {}; VZ.loaded = true;
+      vzRestoreColPrefs();
       vzApplyFinanceUI();
       vzRender();
     })
@@ -39535,6 +39634,7 @@ function vzVisible() {
 function vzSortBy(k) {
   if (VZ.sort.key === k) VZ.sort.dir *= -1; else { VZ.sort.key = k; VZ.sort.dir = 1; }
   vzRender();
+  vzSaveColPrefsQuiet_();
 }
 /* ↔️ (V4.145) تغيير عرض عمود جدول المجموعات بالسحب — نفس تقنية شاشة ملفات الوزارة، بحجم مُطبَّق
    على رأس العمود وخلاياه لحظياً أثناء السحب. (V4.150) يُحفَظ بالمتصفح (localStorage) فيبقى بعد
@@ -39547,7 +39647,33 @@ function vzColWGet_() {
   VZ.colW = v;
   return v;
 }
-function vzColWSave_() { try { localStorage.setItem(VZ_COLW_KEY_, JSON.stringify(VZ.colW || {})); } catch (e) {} }
+function vzColWSave_() { try { localStorage.setItem(VZ_COLW_KEY_, JSON.stringify(VZ.colW || {})); } catch (e) {} vzSaveColPrefsQuiet_(); }
+// ⚙️ (V4.182) تفضيلات جدول المجموعات (إخفاء/إظهار الأعمدة، عرضها، الفرز) — محفوظة لكل مستخدم
+// على حدة على السيرفر (وكاش فوري بالمتصفح)، فتظل مطبَّقة تلقائياً عند إعادة تسجيل الدخول من
+// أي جهاز. كانت الأعمدة المخفاة (VZ.colsOn) والفرز لا يُحفظان إطلاقاً (يعودان لوضعهما الافتراضي
+// بكل إعادة تحميل)، وعرض الأعمدة (VZ.colW) كان يُحفَظ بمفتاح واحد مشترك لكل المستخدمين بلا تمييز.
+function vzPrefsKey_() {
+  var u = (window.currentUser && window.currentUser.username) ? window.currentUser.username : '__anon__';
+  return 'vzGroupsPrefs_' + u;
+}
+function vzSaveColPrefsQuiet_() {
+  var p = { colW: VZ.colW || {}, colsOn: VZ.colsOn || {}, sortKey: VZ.sort.key, sortDir: VZ.sort.dir };
+  try { localStorage.setItem(vzPrefsKey_(), JSON.stringify(p)); } catch (e) {}
+  try { if (typeof UIP === 'object') UIP.save('visas', p); } catch (e) {}
+}
+function vzRestoreColPrefs() {
+  try {
+    var p = (typeof UIP === 'object' && UIP.loaded) ? UIP.get('visas') : null;
+    if (!p || !Object.keys(p).length) {
+      var raw = localStorage.getItem(vzPrefsKey_());
+      if (raw) { try { p = JSON.parse(raw); } catch (e2) { p = null; } }
+    }
+    if (!p) return;
+    if (p.colW) VZ.colW = p.colW;
+    if (p.colsOn) VZ.colsOn = p.colsOn;
+    if (p.sortKey) { VZ.sort.key = p.sortKey; VZ.sort.dir = (p.sortDir === -1) ? -1 : 1; }
+  } catch (e) {}
+}
 var VZ_RSZ = null;
 function vzRszStart(ev, k) {
   ev.preventDefault(); ev.stopPropagation();
@@ -39899,7 +40025,7 @@ function vzColsToggle(btn) {
     });
   }, 0);
 }
-function vzColSet(k, on) { if (!VZ.colsOn) VZ.colsOn = {}; VZ.colsOn[k] = on; vzRender(); }
+function vzColSet(k, on) { if (!VZ.colsOn) VZ.colsOn = {}; VZ.colsOn[k] = on; vzRender(); vzSaveColPrefsQuiet_(); }
 /* ============================================================
    🖱️ (V4.142) تحديد صف المجموعة + شريط إجراءات + تنقّل بالأسهم — نفس أسلوب شاشة ملفات المراجعة
    ============================================================ */
