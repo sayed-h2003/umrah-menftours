@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.194 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.195 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.194)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.195)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.194</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.195</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7093,7 +7093,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.194";
+var CLIENT_APP_VERSION = "4.195";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -43079,7 +43079,62 @@ function vzHaRender() {
   var box = document.getElementById('haBody'); if (!box) return;
   var list = vzHaVisible();
   if (!list.length) { box.innerHTML = '<div class="vz-sec"><div class="text-muted text-center py-3">لا توجد اتفاقيات مطابقة</div></div>'; return; }
-  box.innerHTML = list.map(function (a) {
+  // 📋 (V4.195) الوضع الافتراضي: كل اتفاقية مطويّة في سطر واحد (المدينة · الفندق · الدخول · الخروج · العدد ·
+  // المخصَّص · المتاح) مع حالتها بلون مميز — «منتهية» لو تاريخ الخروج اليوم أو قبله، «نشطة» لو بها متاح،
+  // «مكتملة» لو لا متاح. الضغط على السطر يوسّعه، وأزرار «توسعة الكل / طي الكل» أعلى القائمة.
+  HA._open = HA._open || {};
+  var todayMs = mfMs(mfDate(HA.today || '')); if (isNaN(todayMs)) { var _t = new Date(); _t.setHours(0, 0, 0, 0); todayMs = _t.getTime(); }
+  var stats = { expired: 0, active: 0, full: 0 };
+  var statusOf = function (a) {
+    var toMs = mfMs(mfDate(a.to || ''));
+    if (!isNaN(toMs) && toMs <= todayMs) return 'expired';
+    return mfNum(a.minRemaining) > 0 ? 'active' : 'full';
+  };
+  var ST = {
+    expired: { lbl: '⌛ منتهية', bg: '#f1f5f9', fg: '#64748b', bd: '#94a3b8' },
+    active:  { lbl: '✅ نشطة',   bg: '#dcfce7', fg: '#166534', bd: '#16a34a' },
+    full:    { lbl: '⛔ مكتملة', bg: '#fee2e2', fg: '#991b1b', bd: '#dc2626' }
+  };
+  list.forEach(function (a) { stats[statusOf(a)]++; });
+  var anyOpen = list.some(function (a) { return HA._open[a.id]; });
+  var toolbar = '<div class="d-flex align-items-center gap-2 flex-wrap mb-2" style="font-size:12px;">' +
+    '<b style="color:#0f4c4c;">' + list.length + ' اتفاقية</b>' +
+    '<span class="vz-badge" style="background:' + ST.active.bg + ';color:' + ST.active.fg + ';">' + ST.active.lbl + ': ' + stats.active + '</span>' +
+    '<span class="vz-badge" style="background:' + ST.full.bg + ';color:' + ST.full.fg + ';">' + ST.full.lbl + ': ' + stats.full + '</span>' +
+    '<span class="vz-badge" style="background:' + ST.expired.bg + ';color:' + ST.expired.fg + ';">' + ST.expired.lbl + ': ' + stats.expired + '</span>' +
+    '<span style="flex:1;"></span>' +
+    '<button class="vz-btn sm" onclick="vzHaToggleAll(true)">⬇️ توسعة الكل</button>' +
+    '<button class="vz-btn sm" onclick="vzHaToggleAll(false)"' + (anyOpen ? '' : ' disabled') + '>⬆️ طي الكل</button></div>';
+  box.innerHTML = toolbar + list.map(function (a) {
+    var st = statusOf(a), S = ST[st], isOpen = !!HA._open[a.id];
+    var full = a.minRemaining <= 0;
+    var isCat = (a.kind || 'سكن') === 'إعاشة';
+    var actions = '<span style="display:flex;gap:6px;" onclick="event.stopPropagation();">' +
+        (VZ.can.add ? '<button class="vz-btn sm" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',null)">➕ تخصيص لمجموعة</button>' : '') +
+        (vzFin() && mfStr(a.supplier) && (VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0
+          ? '<button class="vz-btn sm gold" title="ترحيل قيمة الاتفاقية دائناً لحساب الوكيل" onclick="vzHaPost(\'' + vzJs(a.id) + '\')">💳 ترحيل</button>' : '') +
+        (VZ.can.edit ? '<button class="vz-btn sm" title="تعديل بيانات الاتفاقية" onclick="vzHaForm(\'' + vzJs(a.id) + '\')">✏️</button>' : '') +
+        (VZ.can.del ? '<button class="vz-btn sm dgr" title="حذف الاتفاقية وكل تخصيصاتها" onclick="vzHaDel(\'' + vzJs(a.id) + '\')">🗑️</button>' : '') +
+      '</span>';
+    var cell = function (lbl, val, w) {
+      return '<span style="min-width:' + (w || 70) + 'px;"><span style="display:block;font-size:9px;color:#94a3b8;font-weight:700;">' + lbl + '</span><b style="font-size:12px;">' + val + '</b></span>';
+    };
+    var row = '<div onclick="vzHaToggle(\'' + vzJs(a.id) + '\')" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 10px;cursor:pointer;">' +
+      '<span style="font-size:13px;color:#64748b;width:12px;">' + (isOpen ? '▾' : '▸') + '</span>' +
+      '<span class="vz-badge" style="background:' + S.bg + ';color:' + S.fg + ';border:1px solid ' + S.bd + ';min-width:74px;text-align:center;">' + S.lbl + '</span>' +
+      cell('الاتفاقية', '<span class="vz-latin">' + vzEsc(a.agrNo) + '</span>' + (isCat ? ' 🍽️' : ''), 80) +
+      cell('المدينة', (a.city === 'مكة' ? '🕋 ' : '🕌 ') + vzEsc(a.city || '—'), 70) +
+      cell('الفندق', vzEsc(a.hotel || '—'), 150) +
+      cell('الدخول', vzL(a.from || '—'), 80) +
+      cell('الخروج', vzL(a.to || '—'), 80) +
+      cell('إجمالي العدد', vzFmt(a.capacity), 60) +
+      cell('المخصَّص', vzFmt(a.totalAllocated), 60) +
+      cell('المتاح', '<span style="color:' + (full ? '#dc2626' : '#16a34a') + ';">' + vzFmt(Math.max(0, mfNum(a.minRemaining))) + '</span>', 50) +
+      (HA.onDate ? cell('متاح بتاريخ ' + vzEsc(HA.onDate), vzFmt(a.onDateRemaining), 70) : '') +
+      '<span style="flex:1;"></span>' + actions + '</div>';
+    if (!isOpen) {
+      return '<div class="vz-sec" style="padding:0;margin-bottom:6px;border-inline-start:5px solid ' + S.bd + ';' + (st === 'expired' ? 'opacity:.8;' : '') + '">' + row + '</div>';
+    }
     var allocTblId = 'vzHaAlloc_' + a.id;
     _tblRefresh_(allocTblId, vzHaRender);
     var allocList = _tblApply_(allocTblId, a.allocations || [], VZ_HA_ALLOC_COLS_, _vzHaAllocRaw);
@@ -43096,8 +43151,6 @@ function vzHaRender() {
         (VZ.can.del ? '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف التخصيص" onclick="vzHaAllocDel(\'' + vzJs(x.id) + '\')">🗑️</button>' : '') +
         (!VZ.can.edit && !VZ.can.del ? '<span class="text-muted">—</span>' : '') + '</td></tr>';
     }).join('') || '<tr><td colspan="7" class="text-muted" style="padding:10px;">لم تُخصَّص هذه الاتفاقية لأي مجموعة بعد</td></tr>';
-    var full = a.minRemaining <= 0;
-    var isCat = (a.kind || 'سكن') === 'إعاشة';
     // 👁️ لقطة تاريخ بعينه: من بالداخل الآن وكم المتاح
     var onBox = '';
     if (HA.onDate) {
@@ -43115,16 +43168,9 @@ function vzHaRender() {
           : '<div style="font-size:11.5px;color:#6b8c82;margin-top:4px;">لا مجموعات بالداخل في هذا التاريخ.</div>') +
         '</div>';
     }
-    return '<div class="vz-sec">' +
-      '<div class="vz-sec-h">' + (a.city === 'مكة' ? '🕋' : '🕌') + ' اتفاقية ' + (isCat ? 'إعاشة' : 'سكن') + ' ' + vzEsc(a.agrNo) + ' — ' + vzEsc(a.city) +
-        '<span style="margin-inline-start:auto;display:flex;gap:6px;">' +
-        (VZ.can.add ? '<button class="vz-btn sm" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',null)">➕ تخصيص لمجموعة</button>' : '') +
-        (vzFin() && mfStr(a.supplier) && (VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0
-          ? '<button class="vz-btn sm gold" title="ترحيل قيمة الاتفاقية دائناً لحساب الوكيل" onclick="vzHaPost(\'' + vzJs(a.id) + '\')">💳 ترحيل لحساب الوكيل</button>' : '') +
-        (VZ.can.edit ? '<button class="vz-btn sm" title="تعديل بيانات الاتفاقية" onclick="vzHaForm(\'' + vzJs(a.id) + '\')">✏️ تعديل</button>' : '') +
-        (VZ.can.del ? '<button class="vz-btn sm dgr" title="حذف الاتفاقية وكل تخصيصاتها" onclick="vzHaDel(\'' + vzJs(a.id) + '\')">🗑️ حذف</button>' : '') +
-        '</span></div>' +
-      '<div class="d-flex gap-2 flex-wrap mb-2">' +
+    return '<div class="vz-sec" style="padding:0;margin-bottom:6px;border-inline-start:5px solid ' + S.bd + ';">' + row +
+      '<div style="padding:4px 12px 12px;border-top:1px dashed var(--vzBorder);">' +
+      '<div class="d-flex gap-2 flex-wrap mb-2 mt-2">' +
         '<span class="vz-badge ' + (isCat ? 'y' : 'b') + '">' + (isCat ? '🍽️ إعاشة' : '🏨 سكن') + '</span>' +
         '<span class="vz-badge b">🏨 ' + vzEsc(a.hotel || 'بلا فندق') + '</span>' +
         '<span class="vz-badge ' + ((VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0 ? 'g' : 'b') + '">🏢 المورد: ' + vzEsc(a.supplier || '—') + '</span>' +
@@ -43137,8 +43183,14 @@ function vzHaRender() {
       _haBar(a) +
       '<div style="overflow:auto;margin-top:8px;"><table class="vz-tab"><thead><tr>' + _tblHead_(allocTblId, VZ_HA_ALLOC_COLS_, 'vz-thic') + '</tr></thead><tbody>' + allocRows + '</tbody></table></div>' +
       (a.notes ? '<div style="font-size:11px;color:#64748b;margin-top:6px;">📝 ' + vzEsc(a.notes) + '</div>' : '') +
-    '</div>';
+    '</div></div>';
   }).join('');
+}
+function vzHaToggle(id) { HA._open = HA._open || {}; HA._open[id] = !HA._open[id]; vzHaRender(); }
+function vzHaToggleAll(open) {
+  HA._open = {};
+  if (open) vzHaVisible().forEach(function (a) { HA._open[a.id] = true; });
+  vzHaRender();
 }
 /* ---- نموذج الاتفاقية ---- */
 function vzHaForm(id, seed) {
