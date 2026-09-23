@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.184 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.185 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.184)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.185)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.184</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.185</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7012,7 +7012,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.184";
+var CLIENT_APP_VERSION = "4.185";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -40546,7 +40546,11 @@ function vzFormRender() {
       '<div class="col-md-3">' + dateFld('date', 'تاريخ السداد', 'vzSetPrice();') + '</div>' +
       '<div class="col-md-3 vz-fld"><label>الشركة المصرية</label><input list="vzCompDL" autocomplete="off" value="' + vzEsc(d.company) + '" oninput="vzSet(\'company\',this.value)" onchange="vzCompanyChanged(this.value)" placeholder="ابحث باسم الشركة…"></div>' +
       '<div class="col-md-4 vz-fld"><label>الوكيل السعودي</label><input list="vzAgentsDL" autocomplete="off" value="' + vzEsc(d.agent) + '" oninput="vzSet(\'agent\',this.value)" onchange="vzSet(\'agent\',this.value);vzSetPrice()" placeholder="ابحث بالاسم…"></div>' +
-      '<div class="col-md-5 vz-fld"><label>الرحلة المرتبطة</label><input list="vzTripsDL" id="vzfTrip" autocomplete="off" value="' + vzEsc(d.tripName) + '" oninput="vzSet(\'tripName\',this.value)" onchange="vzSet(\'tripName\',this.value);vzTripChanged()" placeholder="ابحث باسم الرحلة…"></div>' +
+      '<div class="col-md-5 vz-fld"><label>الرحلة المرتبطة</label><div class="d-flex gap-1">' +
+        '<input list="vzTripsDL" id="vzfTrip" autocomplete="off" value="' + vzEsc(d.tripName) + '" oninput="vzSet(\'tripName\',this.value)" onchange="vzSet(\'tripName\',this.value);vzTripChanged()" placeholder="ابحث باسم الرحلة…" style="flex:1;">' +
+        // 🔍 (V4.185) لا تعرف اسم الرحلة؟ ابحث عن أي معتمر بالاسم/الجواز واختر رحلته من نتائجه
+        '<button type="button" class="mf-btn sm" title="بحث عن معتمر لمعرفة رحلته" onclick="openPilgrimTripPicker_(function(tn){document.getElementById(\'vzfTrip\').value=tn;vzSet(\'tripName\',tn);vzTripChanged();})">🔍</button>' +
+      '</div></div>' +
       '<div class="col-md-3 vz-fld"><label>عدد المجموعة</label><input id="vzfCount" value="' + vzEsc(d.visaCount) + '" oninput="vzSet(\'visaCount\',this.value,true)"></div>' +
       // 🧳 (V4.155) رحلات إضافية: المجموعة الواحدة قد تجمع معتمرين من أكثر من رحلة/عميل — تُكتب هنا
       // مفصولة بفاصلة، وتُجلَب أسماء معتمريها جميعاً مع الرحلة الأساسية للاختيار منها بنفس الآلية
