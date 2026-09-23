@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.186 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.187 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.186)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.187)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.186</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.187</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7039,7 +7039,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.186";
+var CLIENT_APP_VERSION = "4.187";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -40439,7 +40439,9 @@ function vzToggleDetail(id) {
     '<b>تاريخ السداد:</b> ' + vzL(f.date || '—') + '<br>' +
     '<b>الشركة المصرية:</b> ' + vzEsc(f.company || '—') + '<br>' +
     '<b>الوكيل السعودي:</b> ' + vzEsc(f.agent || '—') + '<br>' +
-    '<b>الرحلة:</b> ' + vzEsc(f.tripName || '—') + '<br>' +
+    '<b>الرحلة:</b> ' + vzEsc(f.tripName || '—') + (mfStr(f.extraTrips) ? (' <span style="color:#64748b;">+ ' + vzEsc(f.extraTrips) + '</span>') : '') + '<br>' +
+    // 📨 (V4.186) رقم/أرقام إشعارات الوصول الخاصة بمعتمري هذه المجموعة — تُملأ بعد لحظة (انظر vzDetailNotices_)
+    '<b>رقم الإشعار:</b> <span id="vzDetNotices">⏳</span><br>' +
     '<b>العدد:</b> ' + vzL(vzFmt(f.visaCount)) + '<br>' +
     (vzFin() ? ('<b>سعر الفرد:</b> ' + vzL(vzFmt(f.price)) + ' ريال<br><b>المستحق:</b> ' + vzL(vzFmt(due)) + ' ريال<br>') : '') +
     '<b>العملاء:</b> ' + vzEsc(clients || '—') + '<br>' +
@@ -40451,6 +40453,50 @@ function vzToggleDetail(id) {
     '</div>';
   mfModal('📋 تفاصيل المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)), body,
     '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إغلاق</button>', 640);
+  vzDetailNotices_(f);
+}
+/* 📨 (V4.186) أرقام إشعارات الوصول لمجموعة تأشيرات: من إشعار كل معتمر مختار بالمجموعة فعلياً (رقم الإشعار
+   المسجَّل له بكشف رحلته) — ولو لم يُختر معتمرون أو بلا أرقام، فمن الإشعارات المرتبطة برحلات المجموعة. */
+function vzDetailNotices_(f) {
+  var trips = vzTripsOfDraft_(f);
+  var paint = function (ids, note) {
+    var el = document.getElementById('vzDetNotices'); if (!el) return;
+    if (!ids.length) { el.innerHTML = '<span class="text-muted">لا يوجد إشعار مرتبط</span>'; return; }
+    el.innerHTML = ids.map(function (id) {
+      var inCache = (localBookingsCache || []).some(function (b) { return String(b.id) === String(id); });
+      return '<span class="vz-badge b" style="font-size:11px;' + (inCache ? 'cursor:pointer;' : '') + '"' +
+        (inCache ? (' title="عرض الإشعار" onclick="mfCloseModal();viewDetailedBooking(\'' + vzJs(String(id)) + '\')"') : '') + '>📨 ' + vzEsc(String(id)) + '</span>';
+    }).join(' ') + (note ? ' <span style="font-size:10.5px;color:#94a3b8;">' + note + '</span>' : '');
+  };
+  var fromTrips = function () {
+    var ids = [];
+    (localBookingsCache || []).forEach(function (b) {
+      if (b && b.id && trips.indexOf(mfStr(b.tripName)) >= 0 && ids.indexOf(String(b.id)) < 0) ids.push(String(b.id));
+    });
+    return ids;
+  };
+  if (!trips.length) { paint([], ''); return; }
+  var sel = {}; (f.selected || []).forEach(function (k) { k = mfStr(k); if (k && k.charAt(0) !== '#') sel[k] = 1; });
+  var hasSel = Object.keys(sel).length > 0;
+  var ids = [], done = 0;
+  trips.forEach(function (tn) {
+    google.script.run
+      .withSuccessHandler(function (list) {
+        (list || []).forEach(function (p) {
+          if (hasSel && !sel[mfStr(p.passport || p.passportNo)]) return;
+          var bid = mfStr(p.bookingId);
+          if (bid && ids.indexOf(bid) < 0) ids.push(bid);
+        });
+        if (++done === trips.length) finish();
+      })
+      .withFailureHandler(function () { if (++done === trips.length) finish(); })
+      .getTripPilgrims(window.authToken, tn);
+  });
+  function finish() {
+    if (ids.length) { paint(ids.sort(), hasSel ? '(من إشعارات معتمري المجموعة)' : '(إشعارات معتمري الرحلة)'); return; }
+    var t = fromTrips();
+    paint(t, t.length ? '(الإشعارات المرتبطة برحلة المجموعة)' : '');
+  }
 }
 // ⌨️ (V4.146) تنقّل بالأسهم بين صفوف المجموعات — رأسي فقط (Up/Down) لأن الجدول قائمة صفوف
 // وليس شبكة ثنائية الأبعاد؛ حذفنا استخدام Left/Right لتفادي الإرباك (لا يوجد "يمين/يسار" حقيقي
