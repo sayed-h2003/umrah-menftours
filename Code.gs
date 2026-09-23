@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.193";
+var APP_VERSION = "4.194";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -15240,7 +15240,26 @@ function saveCateringContracts(authToken, list) {
   // «سجل تعديلات الاتفاقية» بجوار كل اتفاقية بشاشة الاتفاقيات
   if (logEntries.length) logChangesBatch_(session.username, logEntries);
   else logChange_(session.username, 'حفظ اتفاقيات إعاشة', '-', CATERING_SHEET, '-', 'حفظ بلا تغييرات فعلية (' + list.length + ')');
-  return { success: true, created: created, updated: updatedFilled, skipped: skipped };
+  // 🔗 (V4.194) الاتجاه العكسي: اتفاقية إعاشة بها رقم مجموعة ⇒ يُكتب رقمها في سكن تلك المجموعة (المدينة من
+  // «منطقة الخدمة») — نفس ما يحدث مع اتفاقيات السكن، ولا يمسّ رقماً كتبه المستخدم يدوياً بالمجموعة
+  var linkedGroups = 0;
+  list.forEach(function(c) {
+    var no = String(c.contractNo || '').trim(); if (!no) return;
+    var cur = byNo[no] ? byNo[no].values : null;
+    var grps = _agrNosSplit_((cur && cur[11]) || c.groupNo);
+    if (!grps.length) return;
+    var area = String((cur && cur[2]) || c.area || '');
+    var city = (area.indexOf('مكة') >= 0 || area.indexOf('مكه') >= 0) ? 'مكة' : (area.indexOf('مدين') >= 0 ? 'المدينة' : '');
+    if (!city) return;
+    grps.forEach(function(ref) {
+      try {
+        _vzSyncAllocToGroup_({ agrNo: no, city: city, kind: 'إعاشة', hotel: '', supplier: String((cur && cur[17]) || c.vendor || '') },
+          ref, _accNum_((cur && cur[6]) || c.pilgrims), _mfDate_((cur && cur[4]) || c.fromDate), _mfDate_((cur && cur[5]) || c.toDate), session.username);
+        linkedGroups++;
+      } catch (eG) {}
+    });
+  });
+  return { success: true, created: created, updated: updatedFilled, skipped: skipped, linkedGroups: linkedGroups };
   } finally { lock.releaseLock(); }
 }
 
@@ -23461,13 +23480,16 @@ function _vzCateringByGroup_() {
     var iNo = H.indexOf('رقم الاتفاقية'), iArea = H.indexOf('منطقة الخدمة'), iGrp = H.indexOf('رقم المجموعة');
     if (iGrp < 0 || iNo < 0) return out;
     sh.getRange(2, 1, sh.getLastRow() - 1, H.length).getValues().forEach(function (r) {
-      var grp = _mfStr_(r[iGrp]); if (!grp) return;
+      // (V4.194) الخلية قد تحمل أكثر من رقم مجموعة (اتفاقية واحدة لعدة مجموعات) — تُفهرَس تحت كلٍّ منها
+      var grps = _agrNosSplit_(r[iGrp]); if (!grps.length) return;
       var no = _mfStr_(r[iNo]); if (!no) return;
       var area = _mfStr_(iArea >= 0 ? r[iArea] : '');
       var city = (area.indexOf('مكة') >= 0 || area.indexOf('مكه') >= 0) ? 'makkah'
         : (area.indexOf('مدين') >= 0 ? 'madinah' : 'other');
-      if (!out[grp]) out[grp] = { makkah: [], madinah: [], other: [] };
-      if (out[grp][city].indexOf(no) < 0) out[grp][city].push(no);
+      grps.forEach(function (grp) {
+        if (!out[grp]) out[grp] = { makkah: [], madinah: [], other: [] };
+        if (out[grp][city].indexOf(no) < 0) out[grp][city].push(no);
+      });
     });
   } catch (e) {}
   return out;
@@ -24502,31 +24524,102 @@ function _vzHousingAgrByGroup_() {
 }
 /* 🔁 (V4.134) عند حفظ المجموعة: كل رقم اتفاقية سكن مكتوب بأحد سكنات المجموعة يُسجَّل
    تخصيصاً في شاشة اتفاقيات السكن تلقائياً (إن لم يكن مسجَّلاً) — والعكس في saveHousingAllocation. */
+/* 🔗 (V4.194) ربط تلقائي كامل بين المجموعة واتفاقيات السكن والإعاشة عند حفظ المجموعة:
+   • رقم اتفاقية سكن مكتوب بالمجموعة وغير مسجَّل بشاشة اتفاقيات السكن ⇒ تُنشأ الاتفاقية تلقائياً (بالمدينة
+     والفندق والعدد والتواريخ من سطر السكن) ومسجَّل بها رقم المجموعة (تخصيص) — كانت تُربط فقط لو الاتفاقية
+     مسجَّلة من قبل، وإلا لا يحدث شيء.
+   • رقم اتفاقية إعاشة ⇒ يُضاف لشاشة «اتفاقيات الإعاشة» (أو يُضاف رقم المجموعة لاتفاقية موجودة بها).
+   • أكثر من رقم بنفس الخانة (مفصولة بفاصلة) ⇒ كل رقم على حدة. */
+function _agrNosSplit_(s) {
+  return String(s == null ? '' : s).split(/[،,\/\s]+/).map(function (x) { return _mfStr_(x); }).filter(String);
+}
 function _vzSyncGroupHousingAllocs_(f, username) {
   var ref = _mfStr_(f.ref); if (!ref) return;
-  // ⚡ (V4.166) خروج مبكر بلا أي قراءة شيت إطلاقاً لو لا يوجد رقم اتفاقية سكن/إعاشة مكتوب أصلاً —
-  // كانت تُقرأ شيتا الاتفاقيات والتخصيصات كاملَين بكل حفظ مجموعة حتى لو لا علاقة لها بأي اتفاقية،
-  // وهذا أبطأ الحفظ ملموساً خصوصاً بعد إتاحة حقل اتفاقية الإعاشة (V4.164) الذي زاد استخدام هذا المسار
+  // ⚡ (V4.166) خروج مبكر بلا أي قراءة شيت لو لا يوجد رقم اتفاقية سكن/إعاشة مكتوب أصلاً
   var hasAnyAgrNo = (f.housing || []).some(function (h) { return _mfStr_(h.hAgr) || _mfStr_(h.cAgr); });
   if (!hasAnyAgrNo) return;
-  var agrs = _vzHaReadAll_(); if (!agrs.length) return;
+  var agrs = _vzHaReadAll_();
   var allocs = _vzAllocReadAll_();
-  var sh = _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS);
+  var hsh = _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS);
+  var ash = _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS);
   var stamp = _mfStamp_();
-  var added = false;
+  var seq = agrs.reduce(function (m, a) { return Math.max(m, _mfNum_(a.seq)); }, 0);
+  var changed = false, catering = [], logs = [];
+  var link = function (a, h) {
+    if (allocs.some(function (x) { return x.agrId === a.id && x.groupRef === ref; })) return;
+    var id = 'HL' + new Date().getTime() + Math.floor(Math.random() * 999);
+    ash.appendRow([id, a.id, ref, _mfNum_(h.count) || _mfNum_(f.visaCount), _mfDate_(h.in) || a.from, _mfDate_(h.out) || a.to,
+      'ربط تلقائي من بيانات المجموعة', username, stamp]);
+    allocs.push({ id: id, agrId: a.id, groupRef: ref });
+    changed = true;
+    logs.push({ action: 'إضافة تخصيص سكن', recordId: 'HL:' + id, field: 'اتفاقية ' + a.agrNo + ' — مجموعة ' + ref,
+      oldVal: '-', newVal: 'ربط تلقائي من بيانات المجموعة' });
+  };
   (f.housing || []).forEach(function (h) {
-    [[_mfStr_(h.hAgr), 'سكن'], [_mfStr_(h.cAgr), 'إعاشة']].forEach(function (pair) {
-      var no = pair[0], kind = pair[1]; if (!no) return;
-      var a = agrs.filter(function (x) { return x.agrNo === no && x.city === h.city && (x.kind || 'سكن') === kind; })[0];
-      if (!a) return;
-      if (allocs.some(function (x) { return x.agrId === a.id && x.groupRef === ref; })) return;
-      sh.appendRow(['HL' + new Date().getTime() + Math.floor(Math.random() * 999), a.id, ref,
-        _mfNum_(h.count) || _mfNum_(f.visaCount), _mfDate_(h.in) || a.from, _mfDate_(h.out) || a.to,
-        'ربط تلقائي من بيانات المجموعة', username, stamp]);
-      added = true;
+    _agrNosSplit_(h.hAgr).forEach(function (no) {
+      var a = agrs.filter(function (x) { return x.agrNo === no && x.city === h.city && (x.kind || 'سكن') === 'سكن'; })[0];
+      if (!a) {
+        // 🆕 اتفاقية سكن غير مسجَّلة ⇒ تُنشأ تلقائياً من بيانات سطر السكن
+        var nid = 'HA' + new Date().getTime() + Math.floor(Math.random() * 999);
+        seq++;
+        a = { id: nid, seq: seq, agrNo: no, city: h.city, hotel: _mfStr_(h.hotel),
+          capacity: _mfNum_(h.count) || _mfNum_(f.visaCount), from: _mfDate_(h.in), to: _mfDate_(h.out), kind: 'سكن' };
+        hsh.appendRow([nid, seq, no, h.city, a.hotel, a.capacity, a.from, a.to, 'مبدئية',
+          'أُنشئت تلقائياً من مجموعة تأشيرات ' + ref, username, stamp, '', '', _mfStr_(h.supplier), 'سكن']);
+        agrs.push(a);
+        changed = true;
+        logs.push({ action: 'إضافة اتفاقية سكن', recordId: 'HA:' + nid, field: 'اتفاقية ' + no + ' — ' + h.city,
+          oldVal: '-', newVal: 'أُنشئت تلقائياً من مجموعة ' + ref + (a.hotel ? ' · ' + a.hotel : '') + ' · سعة ' + a.capacity });
+      }
+      link(a, h);
+    });
+    _agrNosSplit_(h.cAgr).forEach(function (no) {
+      // اتفاقيات إعاشة قديمة مسجَّلة بشاشة السكن (نوع إعاشة) — يبقى ربطها كما كان
+      var a = agrs.filter(function (x) { return x.agrNo === no && x.city === h.city && (x.kind || 'سكن') === 'إعاشة'; })[0];
+      if (a) link(a, h);
+      catering.push({ no: no, h: h });
     });
   });
-  if (added) _vzHaClearCache_();
+  if (logs.length) { try { logChangesBatch_(username, logs); } catch (eL) {} }
+  if (catering.length) { try { if (_vzSyncGroupCatering_(f, ref, catering, username)) changed = true; } catch (eC) {} }
+  if (changed) _vzHaClearCache_();
+}
+// 🍽️ (V4.194) مزامنة أرقام اتفاقيات الإعاشة المكتوبة بالمجموعة مع شاشة «اتفاقيات الإعاشة»
+function _vzSyncGroupCatering_(f, ref, items, username) {
+  var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
+  var H = CATERING_HEADERS, W = H.length;
+  var vals = sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, W).getValues() : [];
+  var byNo = {}; vals.forEach(function (r, i) { var no = _mfStr_(r[0]); if (no) byNo[no] = { row: i + 2, r: r }; });
+  var now = new Date(), touched = false, logs = [];
+  items.forEach(function (it) {
+    var h = it.h, no = it.no, hit = byNo[no];
+    if (hit) {
+      var r = hit.r.slice(), grps = _agrNosSplit_(r[11]);
+      if (grps.indexOf(ref) >= 0) return;   // مسجَّل بها رقم المجموعة بالفعل
+      var oldG = _mfStr_(r[11]);
+      r[11] = oldG ? (oldG + '، ' + ref) : ref;
+      if (!_mfStr_(r[2])) r[2] = h.city;
+      if (!_mfStr_(r[4])) r[4] = _mfDate_(h.in);
+      if (!_mfStr_(r[5])) r[5] = _mfDate_(h.out);
+      if (!_mfNum_(r[6])) r[6] = _mfNum_(h.count) || _mfNum_(f.visaCount) || '';
+      r[14] = username; r[15] = now;
+      sh.getRange(hit.row, 1, 1, W).setValues([r]);
+      hit.r = r; touched = true;
+      logs.push({ action: 'تعديل اتفاقية إعاشة', recordId: no, field: 'رقم المجموعة', oldVal: oldG || '-', newVal: r[11] });
+    } else {
+      var row = [no, '', h.city, '', _mfDate_(h.in), _mfDate_(h.out), _mfNum_(h.count) || _mfNum_(f.visaCount) || '', '', '',
+        _mfStr_(f.tripName), _mfStr_(f.company), ref, username, now, '', '', '', _mfStr_(h.supplier),
+        'أُنشئت تلقائياً من مجموعة تأشيرات ' + ref, ''];
+      while (row.length < W) row.push('');
+      sh.appendRow(row.slice(0, W));
+      byNo[no] = { row: sh.getLastRow(), r: row };
+      touched = true;
+      logs.push({ action: 'إنشاء اتفاقية إعاشة', recordId: no, field: 'اتفاقية جديدة', oldVal: '-',
+        newVal: 'أُنشئت تلقائياً من مجموعة ' + ref + ' — ' + h.city });
+    }
+  });
+  if (logs.length) { try { logChangesBatch_(username, logs); } catch (eL) {} }
+  return touched;
 }
 
 function saveHousingAgreement(authToken, data) {
@@ -24542,27 +24635,55 @@ function saveHousingAgreement(authToken, data) {
   // منع تكرار رقم الاتفاقية داخل نفس المدينة
   var kind = _mfStr_(data.kind) || 'سكن';
   var dup = all.filter(function (a) { return a.agrNo === agrNo && a.city === city && (a.kind || 'سكن') === kind && a.id !== _mfStr_(data.id); });
+  // 📄 (V4.194) اتفاقية أُنشئت تلقائياً من بيانات مجموعة (برقمها فقط) ثم رُفع ملفها الفعلي لاحقاً ⇒ يُكمَّل
+  // نفس السجل ببيانات الملف بدل رفضه كتكرار
+  if (isNew && dup.length === 1 && /أُنشئت تلقائياً/.test(_mfStr_(dup[0].notes))) {
+    data.id = dup[0].id; isNew = false;
+    if (!_mfStr_(data.notes) || /أُنشئت تلقائياً/.test(_mfStr_(data.notes))) data.notes = dup[0].notes.replace(/أُنشئت تلقائياً/, 'أُنشئت تلقائياً ثم استُكملت من ملف');
+    dup = [];
+  }
   if (dup.length) throw new Error('اتفاقية ' + kind + ' رقم ' + agrNo + ' مسجَّلة من قبل في ' + city);
   var stamp = _mfStamp_();
+  var _savedId = '';
   var row = [null, 0, agrNo, city, _mfStr_(data.hotel), _mfNum_(data.capacity),
     _mfDate_(data.from), _mfDate_(data.to), _mfStr_(data.status), _mfStr_(data.notes)];
   if (isNew) {
     var seq = all.reduce(function (m, a) { return Math.max(m, _mfNum_(a.seq)); }, 0) + 1;
     row[0] = 'HA' + new Date().getTime(); row[1] = seq;
     sh.appendRow(row.concat([session.username, stamp, '', '', _mfStr_(data.supplier), kind]));
+    _savedId = row[0];
   } else {
     var cur = all.filter(function (a) { return a.id === _mfStr_(data.id); })[0];
     if (!cur) throw new Error('الاتفاقية غير موجودة');
     row[0] = cur.id; row[1] = cur.seq;
     sh.getRange(cur._row, 1, 1, VZ_HAGR_HEADERS.length)
       .setValues([row.concat([cur.createdBy, cur.createdAt, session.username, stamp, _mfStr_(data.supplier), kind])]);
+    _savedId = cur.id;
   }
+  // 🔗 (V4.194) الاتجاه العكسي: اتفاقية مُدخَل بها رقم مجموعة (أو أكثر) ⇒ تُخصَّص للمجموعة تلقائياً ويُكتب
+  // رقم الاتفاقية في سكن المجموعة (نفس أثر «➕ تخصيص لمجموعة» + مزامنة سكن المجموعة) بلا خطوة يدوية منفصلة
+  var linked = [];
+  _agrNosSplit_(data.groupRef).forEach(function (ref) {
+    try {
+      var allocsNow = _vzAllocReadAll_();
+      if (!allocsNow.some(function (x) { return x.agrId === _savedId && x.groupRef === ref; })) {
+        var cnt = _mfNum_(data.groupCount) || _mfNum_(data.capacity);
+        var alId = 'HL' + new Date().getTime() + Math.floor(Math.random() * 999);
+        _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS).appendRow([alId, _savedId, ref, cnt, _mfDate_(data.from), _mfDate_(data.to),
+          'ربط تلقائي من بيانات الاتفاقية', session.username, stamp]);
+        logChange_(session.username, 'إضافة تخصيص سكن', 'HL:' + alId, 'اتفاقية ' + agrNo + ' — مجموعة ' + ref, '-', 'ربط تلقائي من بيانات الاتفاقية');
+      }
+      _vzSyncAllocToGroup_({ agrNo: agrNo, city: city, kind: kind, hotel: _mfStr_(data.hotel), supplier: _mfStr_(data.supplier) },
+        ref, _mfNum_(data.groupCount) || _mfNum_(data.capacity), _mfDate_(data.from), _mfDate_(data.to), session.username);
+      linked.push(ref);
+    } catch (eLink) {}
+  });
   _vzHaClearCache_();
   // 📜 (V4.186) تسجيل اتفاقيات السكن/الإعاشة بسجل التعديلات (لم تكن تُسجَّل إطلاقاً)
   logChange_(session.username, (isNew ? 'إضافة اتفاقية سكن' : 'تعديل اتفاقية سكن') + (kind === 'إعاشة' ? ' (إعاشة)' : ''),
     'HA:' + row[0], 'اتفاقية ' + agrNo + ' — ' + city, '-',
     [_mfStr_(data.hotel), 'سعة ' + _mfNum_(data.capacity), _mfDate_(data.from) + ' → ' + _mfDate_(data.to), _mfStr_(data.status)].filter(String).join(' · '));
-  return { success: true };
+  return { success: true, id: _savedId, linkedGroups: linked };
 }
 
 function deleteHousingAgreement(authToken, id) {
@@ -24785,4 +24906,70 @@ function saveUiPref(authToken, screenKey, prefsObj) {
     SpreadsheetApp.flush();
     return { success: true };
   } finally { lock.releaseLock(); }
+}
+
+/* ============================================================
+   📄 (V4.194) استخلاص بيانات اتفاقية سكن من صورة أو PDF — نفس أسلوب استخلاص اتفاقيات الإعاشة
+   (Gemini بتنقّل بين المفاتيح والنماذج). يُرجع قائمة اتفاقيات (قد يحمل الملف أكثر من اتفاقية)
+   بحقول نموذج اتفاقية السكن نفسه، ليراجعها المستخدم في النموذج قبل الحفظ.
+   ============================================================ */
+function extractHousingAgreement(authToken, base64Data, mimeType, fileName) {
+  _vzPerm_(authToken, 'add');
+  if (!base64Data) return { success: false, error: 'لا يوجد ملف' };
+  var GKEYS = _geminiKeys_();
+  if (!GKEYS.length) return { success: false, error: 'مفتاح Gemini غير مُعدّ — أضفه من شاشة الإعدادات' };
+  var prompt =
+    "This image/PDF contains ONE OR MORE Arabic Umrah HOTEL HOUSING agreements ('اتفاقية سكن' / 'عقد سكن' / 'حجز سكن' — e.g. from Nusuk/Masar/Umrah systems). " +
+    "Scan the ENTIRE document/all pages; every separate agreement (card, table row, or detail screen) is ONE entry. " +
+    "Extract DATA values only — NEVER return field labels as values. Dates may be dd/mm/yyyy or yyyy-mm-dd — ALWAYS output dd/mm/yyyy. Numbers digits only.\n" +
+    "Fields per agreement:\n" +
+    "- agrNo: the agreement/contract/booking number (رقم الاتفاقية / رقم العقد / رقم الحجز) — digits as printed.\n" +
+    "- city: 'مكة' or 'المدينة' (from المدينة/المنطقة/الموقع or the hotel's city).\n" +
+    "- hotel: hotel name in Arabic if printed, else as printed.\n" +
+    "- capacity: total number of PILGRIMS/beds covered (عدد المعتمرين / عدد الأسرّة / السعة). If only rooms are given with room type (e.g. 10 rooms رباعي), compute beds = rooms × persons per room.\n" +
+    "- from: check-in / start date (تاريخ الدخول / من تاريخ / تاريخ البداية).\n" +
+    "- to: check-out / end date (تاريخ الخروج / إلى تاريخ / تاريخ النهاية).\n" +
+    "- supplier: the housing provider / hotel company / Saudi agent providing the housing (مقدم الخدمة / المورد / الشركة).\n" +
+    "- groupNo: Umrah GROUP number if printed (رقم المجموعة), else empty.\n" +
+    "- notes: short extra info worth keeping (room types, meals) or empty.\n" +
+    'Return ONLY pure JSON: {"agreements":[{"agrNo":"","city":"","hotel":"","capacity":"","from":"","to":"","supplier":"","groupNo":"","notes":""}]}. ' +
+    'If unreadable: {"agreements":[]}.';
+  var payload = { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType || 'image/jpeg', data: base64Data } }] }] };
+  var MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro'];
+  var rawText = '', lastErr = '', minQuotaWait = 0;
+  for (var ki = 0; ki < GKEYS.length && !rawText; ki++) {
+    for (var mi = 0; mi < MODELS.length; mi++) {
+      var resp = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki],
+        { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+      var code = resp.getResponseCode(), j = null;
+      try { j = JSON.parse(resp.getContentText()); } catch (pe) {}
+      if (code === 200 && j && j.candidates && j.candidates.length && j.candidates[0].content) {
+        rawText = (j.candidates[0].content.parts[0] || {}).text || ''; if (rawText) break;
+      }
+      lastErr = (j && j.error && j.error.message) ? j.error.message : ('HTTP ' + code);
+      var rm = String(lastErr).match(/retry in ([0-9.]+)s/i);
+      if (rm) { var w = Math.ceil(parseFloat(rm[1])); if (!minQuotaWait || w < minQuotaWait) minQuotaWait = w; }
+      if (code === 401 || code === 403) break;
+    }
+  }
+  if (!rawText) return { success: false, error: 'تعذّر الاستخلاص: ' + (lastErr || 'رد غير صالح'), quotaWait: minQuotaWait };
+  var text = rawText.replace(/```json|```/g, '').trim();
+  var m = text.match(/\{[\s\S]*\}/); if (m) text = m[0];
+  var data;
+  try { data = JSON.parse(text); } catch (e) { return { success: false, error: 'رد الذكاء الاصطناعي غير مفهوم' }; }
+  var arr = Array.isArray(data.agreements) ? data.agreements : (data && data.agrNo ? [data] : []);
+  var labels = /رقم الاتفاقية|اسم الفندق|تاريخ الدخول|تاريخ الخروج|المدينة|مقدم الخدمة/;
+  var clean = function (v) { var s2 = _mfStr_(v); return labels.test(s2) && s2.length < 20 ? '' : s2; };
+  var out = arr.map(function (a) {
+    var city = _mfStr_(a.city);
+    city = (city.indexOf('مدين') >= 0 || /madin/i.test(city)) ? 'المدينة' : ((city.indexOf('مك') >= 0 || /mak|mec/i.test(city)) ? 'مكة' : '');
+    return {
+      agrNo: String(clean(a.agrNo)).replace(/[^\d\-\/A-Za-z]/g, ''), city: city, hotel: clean(a.hotel),
+      capacity: _mfNum_(String(a.capacity || '').replace(/[^\d.]/g, '')) || '',
+      from: _mfDate_(a.from), to: _mfDate_(a.to), supplier: clean(a.supplier),
+      groupNo: String(clean(a.groupNo)).replace(/[^\d\-\/A-Za-z]/g, ''), notes: clean(a.notes), sourceFile: fileName || ''
+    };
+  }).filter(function (a) { return a.agrNo || a.hotel; });
+  if (!out.length) return { success: false, error: 'لم يُعثر على بيانات اتفاقية سكن مقروءة بالملف' };
+  return { success: true, agreements: out };
 }

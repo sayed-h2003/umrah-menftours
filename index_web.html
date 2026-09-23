@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.193 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.194 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.193)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.194)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.193</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.194</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7093,7 +7093,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.193";
+var CLIENT_APP_VERSION = "4.194";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -40814,6 +40814,8 @@ function vzFormRender() {
       // 🔄 (V4.164) زر واحد يجلب اتفاقيتَي السكن والإعاشة لكل من مكة والمدينة معاً برقم هذه المجموعة —
       // بدل زر منفصل بكل سكن، لو لم تُسحب تلقائياً
       '<button class="vz-btn sm" title="جلب أرقام اتفاقيات السكن والإعاشة المسجَّلة مسبقاً برقم هذه المجموعة (مكة والمدينة معاً) — لو لم تُسحب تلقائياً" onclick="vzHzFetchAgrAll()">🔄 جلب اتفاقيات السكن والإعاشة</button>' +
+      // 📄 (V4.194) رفع اتفاقية سكن من صورة/PDF — تُستخلص بياناتها وتُسجَّل مرتبطة برقم هذه المجموعة تلقائياً
+      '<button class="vz-btn sm" title="رفع صورة أو PDF اتفاقية سكن — تُستخلص بياناتها وتُسجَّل بشاشة اتفاقيات السكن مرتبطة برقم هذه المجموعة" onclick="vzHaUpload(true)">📄 رفع اتفاقية سكن</button>' +
       '</span></div>' +
       '<div style="font-size:11px;color:#4e7a6e;margin-bottom:8px;line-height:1.7;">' +
       'المجموعة الواحدة قد تُوزَّع على أكثر من فندق في المدينة الواحدة — سجّل لكل فندق عدده وتواريخه ورقم اتفاقية سكنه والمورد. ' +
@@ -42972,7 +42974,8 @@ function vzHaOpen() {
     '<button class="vz-btn sm" onclick="vzHaClose()">✕</button></span></div>' +
     '<div class="p-3">' +
       '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🔎 بحث وتصفية' +
-        (VZ.can.add ? '<button class="vz-btn sm pri" style="margin-inline-start:auto;" onclick="vzHaForm(null)">➕ اتفاقية جديدة</button>' : '<span style="margin-inline-start:auto;"></span>') +
+        (VZ.can.add ? '<button class="vz-btn sm pri" style="margin-inline-start:auto;" onclick="vzHaForm(null)">➕ اتفاقية جديدة</button>' +
+          '<button class="vz-btn sm" title="رفع صورة أو PDF اتفاقية سكن واستخلاص بياناتها تلقائياً" onclick="vzHaUpload(false)">📄 رفع اتفاقية (استخلاص)</button>' : '<span style="margin-inline-start:auto;"></span>') +
         '<button class="vz-btn sm" onclick="vzHaLoad(true)">🔄 تحديث</button></div>' +
         '<div class="row g-2">' +
           '<div class="col-md-4 vz-fld"><label>بحث (رقم الاتفاقية / الفندق / رقم مجموعة)</label><input id="haF_q" oninput="vzHaRender()" autocomplete="off"></div>' +
@@ -43138,13 +43141,17 @@ function vzHaRender() {
   }).join('');
 }
 /* ---- نموذج الاتفاقية ---- */
-function vzHaForm(id) {
+function vzHaForm(id, seed) {
   if (id && !VZ.can.edit) { _showPopup('لا تملك صلاحية تعديل اتفاقيات السكن', 'error'); return; }
   if (!id && !VZ.can.add) { _showPopup('لا تملك صلاحية إضافة اتفاقيات السكن', 'error'); return; }
-  var a = id ? HA.agreements.filter(function (x) { return x.id === id; })[0] : null;
+  if (!HA.cities || !HA.cities.length) HA.cities = ['مكة', 'المدينة'];   // النموذج قد يُفتح من نموذج المجموعة قبل تحميل الشاشة
+  var a = id ? (HA.agreements || []).filter(function (x) { return x.id === id; })[0] : null;
   // 🔕 (V4.140) اتفاقيات السكن هنا فقط — اتفاقيات الإعاشة تُسجَّل حصراً من شاشتها المستقلة
   HA._draft = a ? JSON.parse(JSON.stringify(a)) : { id: '', agrNo: '', city: HA.cities[0] || 'مكة', kind: 'سكن', hotel: '', supplier: '', capacity: 0, from: HA.today, to: '', notes: '' };
   HA._draft.kind = 'سكن';
+  // 📄 (V4.194) بيانات مُستخلَصة من ملف (أو مُمرَّرة من نموذج المجموعة) تُعبَّأ مسبقاً للمراجعة قبل الحفظ
+  if (seed) Object.keys(seed).forEach(function (k) { if (seed[k] !== '' && seed[k] != null) HA._draft[k] = seed[k]; });
+  if (HA._draft.groupRef == null) HA._draft.groupRef = '';
   var d = HA._draft;
   var selOf = function (val, opts) { return opts.map(function (o) { return '<option' + (String(o) === String(val || '') ? ' selected' : '') + '>' + vzEsc(o) + '</option>'; }).join(''); };
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzHaFormOv'; ov.style.zIndex = '2147483200';
@@ -43160,8 +43167,13 @@ function vzHaForm(id) {
       '<div class="col-md-4 vz-fld"><label>العدد (السعة)</label><input value="' + vzEsc(d.capacity) + '" oninput="HA._draft.capacity=mfNum(this.value)"></div>' +
       '<div class="col-md-2 vz-fld"><label>من تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" onclick="vzHaCal(\'haFrom\',\'from\')">📅</button><input id="haFrom" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(d.from) + '" oninput="HA._draft.from=this.value" onblur="HA._draft.from=mfDate(this.value);this.value=HA._draft.from"></div></div>' +
       '<div class="col-md-2 vz-fld"><label>إلى تاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" onclick="vzHaCal(\'haTo\',\'to\')">📅</button><input id="haTo" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(d.to) + '" oninput="HA._draft.to=this.value" onblur="HA._draft.to=mfDate(this.value);this.value=HA._draft.to"></div></div>' +
-      '<div class="col-12 vz-fld"><label>ملاحظات</label><input value="' + vzEsc(d.notes) + '" oninput="HA._draft.notes=this.value"></div>' +
+      // 🔗 (V4.194) رقم المجموعة (أو أكثر) — يُخصَّص لها تلقائياً ويُكتب رقم الاتفاقية في سكنها عند الحفظ
+      '<div class="col-md-6 vz-fld"><label>🔗 رقم المجموعة المرتبطة (اختياري — يُربط تلقائياً)</label><input list="haGroupRefsDL" autocomplete="off" value="' + vzEsc(d.groupRef || '') + '" oninput="HA._draft.groupRef=this.value" placeholder="رقم مجموعة التأشيرات"></div>' +
+      '<div class="col-md-6 vz-fld"><label>ملاحظات</label><input value="' + vzEsc(d.notes) + '" oninput="HA._draft.notes=this.value"></div>' +
+      (d.sourceFile ? '<div class="col-12" style="font-size:10.5px;color:#0f766e;">📄 مُستخلَصة من: ' + vzEsc(d.sourceFile) + ' — راجع البيانات قبل الحفظ</div>' : '') +
+      (HA._queue && HA._queue.length ? '<div class="col-12" style="font-size:10.5px;color:#8a5a06;">⏭️ بعد الحفظ: ' + HA._queue.length + ' اتفاقية أخرى مستخلَصة بانتظار المراجعة</div>' : '') +
     '</div></div>' +
+    '<datalist id="haGroupRefsDL">' + (VZ.files || []).map(function (g) { return g.ref ? '<option value="' + vzEsc(g.ref) + '">' + vzEsc((g.agent || '') + (g.tripName ? ' — ' + g.tripName : '')) + '</option>' : ''; }).join('') + '</datalist>' +
     '<div class="d-flex gap-2 mt-2"><button class="vz-btn pri" onclick="vzHaSave()">💾 حفظ الاتفاقية</button>' +
     '<button class="vz-btn" onclick="vzHaFormClose()">إلغاء</button></div>' +
     '<datalist id="haHotelsDL">' + (typeof vzHotelOptions === 'function' ? vzHotelOptions() : '') + '</datalist>' +
@@ -43171,6 +43183,69 @@ function vzHaForm(id) {
   document.body.appendChild(ov);
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzHaFormClose(); });
 }
+/* 📄 (V4.194) رفع اتفاقية سكن (صورة/PDF) واستخلاص بياناتها — من شاشة اتفاقيات السكن أو من تبويب السكن
+   بنموذج المجموعة (وحينها يُسجَّل رقم المجموعة تلقائياً بالاتفاقية). كل اتفاقية مستخلَصة تُفتح بالنموذج
+   للمراجعة قبل الحفظ، والمتبقية تُفتح تباعاً بعد حفظ كل واحدة. */
+function vzHaUpload(fromGroup) {
+  if (!VZ.can.add) { _showPopup('لا تملك صلاحية إضافة اتفاقيات السكن', 'error'); return; }
+  var groupRef = fromGroup && VZ._draft ? mfStr(VZ._draft.ref) : '';
+  if (fromGroup && !groupRef) { _showPopup('أدخل رقم المجموعة أولاً (تبويب البيانات الأساسية) حتى تُربط الاتفاقية بها', 'error'); return; }
+  var inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*,application/pdf'; inp.multiple = true; inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.onchange = function () {
+    var files = Array.prototype.slice.call(inp.files || []); inp.remove();
+    if (!files.length) return;
+    var found = [], errs = [], i = 0;
+    _showPopup('⏳ جاري استخلاص بيانات ' + files.length + ' ملف…', 'info');
+    var next = function () {
+      if (i >= files.length) return done();
+      var f = files[i++];
+      _compressForAI(f).then(function (b64) {
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (res && res.success) (res.agreements || []).forEach(function (a) { found.push(a); });
+            else errs.push(f.name + ': ' + ((res && res.error) || 'تعذّر الاستخلاص'));
+            next();
+          })
+          .withFailureHandler(function (e) { errs.push(f.name + ': ' + (e && e.message ? e.message : e)); next(); })
+          .extractHousingAgreement(window.authToken, b64, _extractionMimeType_(f), f.name);
+      }).catch(function () { errs.push(f.name + ': تعذّرت قراءة الملف'); next(); });
+    };
+    var done = function () {
+      if (!found.length) { _showPopup('لم تُستخلص أي اتفاقية' + (errs.length ? ('\n' + errs.join('\n')) : ''), 'error'); return; }
+      var seeds = found.map(function (a) {
+        var d = { agrNo: a.agrNo, city: a.city || '', hotel: a.hotel, capacity: a.capacity, from: a.from, to: a.to,
+          supplier: a.supplier, notes: a.notes, sourceFile: a.sourceFile, groupRef: groupRef || a.groupNo || '' };
+        if (!d.city && fromGroup && VZ._draft) {
+          var h0 = (VZ._draft.housing || []).filter(function (h) { return mfStr(h.hotel) && mfStr(h.hotel) === mfStr(a.hotel); })[0];
+          if (h0) d.city = h0.city;
+        }
+        return d;
+      });
+      HA._queue = seeds.slice(1);
+      if (errs.length) _showPopup('تعذّر استخلاص بعض الملفات:\n' + errs.join('\n'), 'warning');
+      vzHaForm(null, seeds[0]);
+    };
+    next();
+  };
+  inp.click();
+}
+// يكتب رقم اتفاقية السكن المحفوظة في سطر سكن المدينة المطابق بمسودة نموذج المجموعة المفتوح (أو يُضيف سطراً)
+function _vzDraftApplyAgr_(a) {
+  var d = VZ._draft; if (!d) return;
+  var L = vzHzList(), no = mfStr(a.agrNo), city = a.city || 'مكة';
+  var row = L.filter(function (h) { return h.city === city && mfStr(h.hAgr).split(/[،,\s]+/).indexOf(no) >= 0; })[0] ||
+            L.filter(function (h) { return h.city === city && !mfStr(h.hAgr) && (!mfStr(a.hotel) || !mfStr(h.hotel) || mfStr(h.hotel) === mfStr(a.hotel)); })[0];
+  if (!row) { row = { city: city, hotel: '', count: 0, in: '', out: '', hAgr: '', cAgr: '', supplier: '' }; L.push(row); }
+  row.hAgr = no;
+  if (!mfStr(row.hotel) && a.hotel) row.hotel = a.hotel;
+  if (!mfNum(row.count) && mfNum(a.capacity)) row.count = mfNum(a.capacity);
+  if (!mfStr(row.in) && a.from) row.in = a.from;
+  if (!mfStr(row.out) && a.to) row.out = a.to;
+  if (!mfStr(row.supplier) && a.supplier) row.supplier = a.supplier;
+  if (typeof vzHzRender === 'function') vzHzRender();
+}
 function vzHaFormClose() { var o = document.getElementById('vzHaFormOv'); if (o) o.remove(); }
 function vzHaCal(inputId, key) { _vzCal_(inputId, function (v) { HA._draft[key] = v; }); }
 function vzHaSave() {
@@ -43178,7 +43253,17 @@ function vzHaSave() {
   if (!mfStr(d.agrNo)) { _showPopup('أدخل رقم الاتفاقية', 'error'); return; }
   if (!mfNum(d.capacity)) { _showPopup('أدخل عدد (سعة) الاتفاقية', 'error'); return; }
   google.script.run
-    .withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; } vzHaFormClose(); _showPopup('تم حفظ الاتفاقية', 'success'); vzHaLoad(true); vzRefreshAgrMaps_(); })
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحفظ', 'error'); return; }
+      vzHaFormClose();
+      var linked = res.linkedGroups || [];
+      // 🔗 (V4.194) لو نموذج مجموعة مرتبطة مفتوح الآن: نكتب الرقم في مسودته أيضاً، وإلا فحفظ المجموعة لاحقاً
+      // من المسودة القديمة كان سيمحو الرقم الذي كُتب بالشيت للتو
+      if (VZ._draft && linked.indexOf(mfStr(VZ._draft.ref)) >= 0) _vzDraftApplyAgr_(d);
+      _showPopup('تم حفظ الاتفاقية' + (linked.length ? (' ورُبطت بالمجموعة ' + linked.join('، ')) : ''), 'success');
+      vzHaLoad(true); vzRefreshAgrMaps_();
+      if (HA._queue && HA._queue.length) { var nx = HA._queue.shift(); setTimeout(function () { vzHaForm(null, nx); }, 350); }
+    })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .saveHousingAgreement(window.authToken, d);
 }
