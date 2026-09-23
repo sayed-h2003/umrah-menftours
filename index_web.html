@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.182 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.183 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.182)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.183)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.182</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.183</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1516,6 +1516,18 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="btn btn-sm flex-shrink-0 fw-bold d-flex align-items-center gap-2" type="button" onclick="switchPage('entry')" title="سجل إشعارات الوصول والتحركات"
               style="background: linear-gradient(135deg, #19b56b, #149957); color: white; border: none; border-radius: 9px; padding: 6px 11px; font-size: 12.5px; box-shadow: 0 4px 12px rgba(25,181,107,.25);">
         <i class="fas fa-file-alt"></i> إشعارات الوصول
+      </button>
+      <!-- 🏛️ (V4.183) زر مختصر لملفات المراجعة (مراجعة ملفات الوزارة) بالشريط الأفقي أعلى —
+           بجوار زري الرحلات وإشعارات الوصول. مخفي افتراضياً ويظهر فقط لمن يملك صلاحية ministry.view -->
+      <button id="link-ministry-top" class="btn btn-sm flex-shrink-0 fw-bold d-flex align-items-center gap-2 d-none" type="button" onclick="switchPage('ministry')" title="مراجعة ملفات الوزارة"
+              style="background: linear-gradient(135deg, #e0b357, #c08c2c); color: white; border: none; border-radius: 9px; padding: 6px 11px; font-size: 12.5px; box-shadow: 0 4px 12px rgba(192,140,44,.25);">
+        <i class="fas fa-landmark"></i> ملفات المراجعة
+      </button>
+      <!-- 🛂 (V4.183) زر مختصر لمتابعة التأشيرات والوكلاء بالشريط الأفقي أعلى — مخفي افتراضياً
+           ويظهر فقط لمن يملك صلاحية visas.view -->
+      <button id="link-visas-top" class="btn btn-sm flex-shrink-0 fw-bold d-flex align-items-center gap-2 d-none" type="button" onclick="switchPage('visas')" title="متابعة التأشيرات والوكلاء"
+              style="background: linear-gradient(135deg, #075c46, #0a7a5c); color: white; border: none; border-radius: 9px; padding: 6px 11px; font-size: 12.5px; box-shadow: 0 4px 12px rgba(7,92,70,.25);">
+        <i class="fas fa-passport"></i> متابعة الوكلاء
       </button>
       <div id="smartDashboard" class="d-flex align-items-center justify-content-center gap-2 text-nowrap" style="overflow-x: auto; min-width: 0;">
       </div>
@@ -6375,16 +6387,18 @@ function toggleAdminOnlyLinks_() {
     else el.classList.add("d-none");
   });
 
-  // 🏛️ (V4.106) رابط مراجعة ملفات الوزارة — صلاحية مستقلة ministry.view
-  ['link-ministry-side'].forEach(function (id) {
+  // 🏛️ (V4.106/V4.183) رابط مراجعة ملفات الوزارة — صلاحية مستقلة ministry.view (الشريط الجانبي
+  // وزر الشريط الأفقي أعلى معاً)
+  ['link-ministry-side', 'link-ministry-top'].forEach(function (id) {
     var el = document.getElementById(id);
     if (!el) return;
     if (hasPermission("admin") || hasPermission("ministry.view")) el.classList.remove("d-none");
     else el.classList.add("d-none");
   });
 
-  // 🛂 (V4.131) رابط متابعة التأشيرات والوكلاء — صلاحية مستقلة visas.view
-  ['link-visas-side'].forEach(function (id) {
+  // 🛂 (V4.131/V4.183) رابط متابعة التأشيرات والوكلاء — صلاحية مستقلة visas.view (الشريط الجانبي
+  // وزر الشريط الأفقي أعلى معاً)
+  ['link-visas-side', 'link-visas-top'].forEach(function (id) {
     var el = document.getElementById(id);
     if (!el) return;
     if (hasPermission("admin") || hasPermission("visas.view")) el.classList.remove("d-none");
@@ -6941,7 +6955,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.182";
+var CLIENT_APP_VERSION = "4.183";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
