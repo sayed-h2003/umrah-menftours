@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.187 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.188 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.187)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.188)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.187</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.188</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6600,6 +6600,9 @@ function _refreshHomeScreenMenu() {
 
 function handleLogin(e) {
   e.preventDefault();
+  // 🐛 (V4.188) النموذج مربوط بمعالجَين (onsubmit بالوسم + مستمع احتياطي عند الإقلاع) فكانت نفس ضغطة
+  // الدخول تُرسِل loginUser مرتين وتُحمِّل كل بيانات البدء مرتين (ظاهر بسجل الإقلاع) — نفس الحدث يُعالَج مرة
+  if (e) { if (e.__loginHandled) return; try { e.__loginHandled = true; } catch (x) {} }
   window.__step('🔐 [دخول 1] ضُغِط زر الدخول — بدأت handleLogin');
     var btn = document.getElementById("btnLogin");
   btn.innerHTML = "⏳ جاري تسجيل الدخول...";
@@ -7039,7 +7042,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.187";
+var CLIENT_APP_VERSION = "4.188";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -36975,6 +36978,83 @@ function _prPickRun_() {
       '<div style="margin-top:5px;">' + tripsHtml + '</div></div>';
   }).join('');
 }
+/* ============================================================
+   ➕ (V4.188) محرِّر «الرحلات الإضافية» المشترك بين مجموعات التأشيرات (ns='vz') وملفات الوزارة (ns='mf'):
+   خانة لكل رحلة + 🔍 بحث بمعتمر + 🗑️ حذف، وزر «➕ رحلة أخرى». الحالة أثناء التحرير في d._xtRows (تسمح
+   بخانة فارغة جديدة)، والتخزين الفعلي كما هو: d.extraTrips نص واحد مفصول بفاصلة عربية.
+   ============================================================ */
+function _xtDraft_(ns) { return ns === 'vz' ? VZ._draft : MF._draft; }
+function _xtSplit_(s) {
+  s = mfStr(s); if (!s) return [];
+  return s.replace(/\s+-\s*|\s*-\s+/g, '،').split(/[،,]/).map(function (t) { return mfStr(t); }).filter(Boolean);
+}
+function _xtRows_(ns) {
+  var d = _xtDraft_(ns); if (!d) return [''];
+  var fromField = _xtSplit_(d.extraTrips);
+  // لو تغيّر الحقل من مكان آخر (مثلاً نقل رحلات كُتبت بالخانة الأساسية) نعيد البناء منه
+  if (!d._xtRows || _xtCanon_(d, d._xtRows).join('،') !== fromField.join('،')) {
+    var keepEmpty = d._xtRows && d._xtRows.length && !mfStr(d._xtRows[d._xtRows.length - 1]);
+    d._xtRows = fromField.slice();
+    if (keepEmpty || !d._xtRows.length) d._xtRows.push('');
+  }
+  return d._xtRows;
+}
+function xtEditorHtml_(ns, d) {
+  var rows = _xtRows_(ns);
+  var dl = ns === 'vz' ? 'vzTripsDL' : 'mfXtTripsDL';
+  var names = ns === 'mf' ? (MF.trips || []).map(function (t) { return t.name; }) : null;
+  var inpSt = 'flex:1;min-width:0;font-size:12.5px;padding:6px 9px;border:1.5px solid #cbd5e1;border-radius:8px;';
+  return rows.map(function (v, i) {
+    return '<div class="d-flex gap-1 mb-1 align-items-center">' +
+      '<span style="font-size:11px;color:#64748b;min-width:18px;">' + (i + 2) + '.</span>' +
+      '<input list="' + dl + '" autocomplete="off" style="' + inpSt + '" value="' + mfEsc(v) + '" placeholder="اسم الرحلة الإضافية…"' +
+      ' oninput="_xtSet(\'' + ns + '\',' + i + ',this.value,false)" onchange="_xtSet(\'' + ns + '\',' + i + ',this.value,true)">' +
+      '<button type="button" class="mf-btn sm" title="بحث عن معتمر لاختيار رحلته" onclick="_xtPick(\'' + ns + '\',' + i + ')">🔍</button>' +
+      '<button type="button" class="mf-btn sm dgr" title="حذف هذه الرحلة" onclick="_xtDel(\'' + ns + '\',' + i + ')">🗑️</button></div>';
+  }).join('') +
+    '<button type="button" class="mf-btn sm" onclick="_xtAdd(\'' + ns + '\')">➕ رحلة أخرى</button>' +
+    (names ? ('<datalist id="mfXtTripsDL">' + names.map(function (n) { return '<option value="' + mfEsc(n) + '">'; }).join('') + '</datalist>') : '');
+}
+function _xtRerender_(ns) {
+  var box = document.getElementById(ns === 'vz' ? 'vzXtBox' : 'mfXtBox');
+  if (box) box.innerHTML = xtEditorHtml_(ns, _xtDraft_(ns));
+}
+// مزامنة الخانات مع الحقل المحفوظ؛ commit=true (اكتمال اختيار/حذف) يُطلق نفس أثر تغيير الرحلة سابقاً
+// نفس التطبيع بالضبط عند الحفظ وعند المقارنة: تفكيك، إزالة المكرر، واستبعاد الرحلة الأساسية
+function _xtCanon_(d, rows) {
+  var seen = {}, list = [];
+  (rows || []).forEach(function (t) {
+    _xtSplit_(t).forEach(function (x) { if (!seen[x] && x !== mfStr(d.tripName)) { seen[x] = 1; list.push(x); } });
+  });
+  return list;
+}
+function _xtSync_(ns, commit) {
+  var d = _xtDraft_(ns); if (!d) return;
+  var joined = _xtCanon_(d, d._xtRows).join('، ');
+  if (ns === 'vz') {
+    d.extraTrips = joined;
+    if (commit) vzTripChanged();   // يُعيد رسم النموذج ويجلب بيانات الرحلات كما كان
+  } else {
+    mfDraftSet('extraTrips', joined);
+    if (commit && typeof mfEnsureTripPick === 'function') { MF._tripPick = null; }
+  }
+}
+function _xtSet(ns, i, v, commit) {
+  var rows = _xtRows_(ns); rows[i] = v;
+  _xtSync_(ns, commit);
+}
+function _xtAdd(ns) { var rows = _xtRows_(ns); if (rows.length && !mfStr(rows[rows.length - 1])) { _xtRerender_(ns); return; } rows.push(''); _xtRerender_(ns); }
+function _xtDel(ns, i) {
+  var rows = _xtRows_(ns); rows.splice(i, 1); if (!rows.length) rows.push('');
+  _xtSync_(ns, true); _xtRerender_(ns);
+}
+function _xtPick(ns, i) {
+  openPilgrimTripPicker_(function (tn) {
+    var rows = _xtRows_(ns); rows[i] = tn;
+    if (!rows.some(function (r) { return !mfStr(r); })) rows.push('');   // خانة فارغة جاهزة للرحلة التالية
+    _xtSync_(ns, true); _xtRerender_(ns);
+  });
+}
 function _prPickChoose_(tripName) {
   var cb = window._prPickOnPick_;
   _prPickClose_();
@@ -37266,9 +37346,9 @@ function mfFormRender() {
     (mfStr(d.tripName) ? '✅ مرتبط — تُجلب بيانات الرحلة استرشادياً' : 'اتركه فارغاً لملف غير مرتبط برحلة') + '</div>', 4);
   // 🧳 (V4.184) رحلات إضافية مرتبطة بنفس الملف (اختياري) — نفس فكرة extraTrips بمجموعات
   // التأشيرات: الملف قد يجمع معتمرين من أكثر من رحلة، فتُجلب أسماء معتمري كل الرحلات المرتبطة معاً
-  h += mfFld('رحلات إضافية مرتبطة (اختياري — افصل بـ"-" أو فاصلة)',
-    '<input class="form-control form-control-sm" id="mfd_extraTrips" autocomplete="off" value="' + mfEsc(d.extraTrips || '') +
-    '" placeholder="مثال: رحلة ٢٠ رمضان - رحلة ٢٥ رمضان" oninput="mfDraftSet(\'extraTrips\',this.value)">', 8);
+  // ➕ (V4.188) خانة مستقلة لكل رحلة إضافية + زر «➕ رحلة أخرى»، ولكل خانة زر 🔍 بحث بمعتمر — بدل كتابة
+  // كل الرحلات في خلية واحدة مفصولة بفواصل (التخزين كما هو: extraTrips نص واحد مفصول بفاصلة)
+  h += mfFld('رحلات إضافية مرتبطة (اختياري)', '<div id="mfXtBox">' + xtEditorHtml_('mf', d) + '</div>', 8);
   h += mfFld('العميل (العنوان الظاهر)', '<input class="form-control form-control-sm" value="' + mfEsc(d.clientLabel) + '" oninput="mfDraftSet(\'clientLabel\',this.value)" placeholder="يُملأ تلقائياً من بنود العميل">', 4);
   h += mfFld('تاريخ المراجعة', mfDateFld('mfd_reviewDate', d.reviewDate, 'mfDraftReviewDate') +
     '<div class="mf-hint">' + (mfDowName(d.reviewDate) ? ('يوم ' + mfDowName(d.reviewDate) + ' — ') : '') + 'الجمعة/السبت ⇒ VIP تلقائياً</div>', 2);
@@ -40652,9 +40732,8 @@ function vzFormRender() {
       '<div class="col-md-3 vz-fld"><label>عدد المجموعة</label><input id="vzfCount" value="' + vzEsc(d.visaCount) + '" oninput="vzSet(\'visaCount\',this.value,true)"></div>' +
       // 🧳 (V4.155) رحلات إضافية: المجموعة الواحدة قد تجمع معتمرين من أكثر من رحلة/عميل — تُكتب هنا
       // مفصولة بفاصلة، وتُجلَب أسماء معتمريها جميعاً مع الرحلة الأساسية للاختيار منها بنفس الآلية
-      '<div class="col-md-8 vz-fld"><label>رحلات إضافية مرتبطة (اختياري — افصل بعلامة "-" أو فاصلة)</label>' +
-        '<input list="vzTripsDL" id="vzfExtraTrips" autocomplete="off" value="' + vzEsc(d.extraTrips || '') + '" ' +
-        'oninput="vzSet(\'extraTrips\',this.value)" onchange="vzSet(\'extraTrips\',this.value);vzTripChanged()" placeholder="مثال: رحلة ٢٠ رمضان - رحلة ٢٥ رمضان"></div>' +
+      // ➕ (V4.188) خانة مستقلة لكل رحلة إضافية + زر «➕ رحلة أخرى» + 🔍 بحث بمعتمر لكل خانة
+      '<div class="col-md-8 vz-fld"><label>رحلات إضافية مرتبطة (اختياري)</label><div id="vzXtBox">' + xtEditorHtml_('vz', d) + '</div></div>' +
       '<div class="col-12 vz-fld"><label>ملاحظات</label><input value="' + vzEsc(d.notes) + '" oninput="vzSet(\'notes\',this.value)" placeholder="أي ملاحظات على المجموعة"></div>' +
     '</div></div>' +
     '<div class="vz-sec"><div class="vz-sec-h">🧾 العملاء داخل المجموعة <span id="vzBdChip"></span></div>' +
