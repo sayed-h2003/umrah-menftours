@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.185";
+var APP_VERSION = "4.186";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -999,7 +999,7 @@ function uploadAndParseTicketManual(authToken, base64Data, fileName, tempOldFile
           Utilities.sleep(1500); // انتظار لاكتمال التحويل
           var doc = DocumentApp.openById(ocrDocId);
           extractedText = doc.getBody().getText();
-          DriveApp.getFileById(ocrDocId).setTrashed(true);
+          _driveDeleteForever_(ocrDocId);   // 🗑️ (V4.186) حذف نهائي (لا سلة مهملات) توفيراً لمساحة الدرايف
           ocrDocId = null; // تم الحذف
         }
 
@@ -1009,7 +1009,7 @@ function uploadAndParseTicketManual(authToken, base64Data, fileName, tempOldFile
     } catch(ocrErr) {
       Logger.log('OCR failed: ' + ocrErr.message);
       // حذف الـ Doc المؤقت لو لم يُحذف بعد
-      if (ocrDocId) { try { DriveApp.getFileById(ocrDocId).setTrashed(true); } catch(e) {} }
+      if (ocrDocId) _driveDeleteForever_(ocrDocId);
       // حذف الملف المؤقت من TEMP عند الفشل الكلي
       if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {} }
 
@@ -3938,7 +3938,7 @@ function getPrintDataForView(bookingId) {
     
     // تنسيق موحّد يعالج 3 حالات: كائن Date، نص تاريخ/وقت نظيف، ونص Date.toString() خام محفوظ سابقاً
     // (مثل "Sat Dec 30 1899 01:35:00 GMT+0205") الذي كان يظهر كما هو في الإشعار المطبوع
-    var _tz_ = Session.getScriptTimeZone() || "Asia/Riyadh";
+    var _tz_ = _tz_() || "Asia/Riyadh";
     function fmtDate(v) {
       if (v instanceof Date) return Utilities.formatDate(v, _tz_, "dd/MM/yyyy");
       var s = String(v || "").trim();
@@ -5003,7 +5003,7 @@ function formatSheetTime(value) {
 
       return Utilities.formatDate(
         value,
-        Session.getScriptTimeZone(),
+        _tz_(),
         'HH:mm'
       );
     }
@@ -5489,7 +5489,7 @@ function exportMovementExcel(authToken, rows, selectedCols, reportTitle) {
     const now =
       Utilities.formatDate(
         new Date(),
-        Session.getScriptTimeZone(),
+        _tz_(),
         'yyyy-MM-dd_HH-mm'
       );
 
@@ -5531,7 +5531,7 @@ sheet
 
 const formattedDate = Utilities.formatDate(
   new Date(),
-  Session.getScriptTimeZone(),
+  _tz_(),
   "dd/MM/yyyy"
 );
 
@@ -6490,6 +6490,56 @@ function resolvePrintAccessToken_(printToken) {
    لتقليل وقت التحميل من 3-5 ثوانٍ إلى أقل من ثانية
    ============================================================ */
 
+// ⚡ (V4.186) المنطقة الزمنية للسكربت تُقرأ مرة واحدة لكل تنفيذ — Session.getScriptTimeZone() نداء
+// خدمة كان يُستدعى مع كل تاريخ يُنسَّق (عشرات الآلاف من المرات عند بناء بيانات ملفات الوزارة
+// والتأشيرات وسجل التعديلات)، وهو من أكبر أسباب بطء تحميل الجداول
+var _TZ_MEMO_;
+function _tz_() {
+  if (_TZ_MEMO_ === undefined) { try { _TZ_MEMO_ = Session.getScriptTimeZone(); } catch (e) { _TZ_MEMO_ = 'Asia/Riyadh'; } }
+  return _TZ_MEMO_;
+}
+/* 🗑️ (V4.186) حذف ملف من جوجل درايف نهائياً (بلا المرور بسلة المهملات) — Drive.Files.remove بخدمة
+   Drive المتقدمة يحذف الملف مباشرةً فتُسترَد مساحته فوراً، بعكس setTrashed(true) الذي يُبقيه بالسلة
+   (والسلة تُحتسب ضمن المساحة المستخدمة لحين تفريغها). لو تعذّر (خدمة Drive غير مفعّلة أو الملف ليس
+   ملكاً لحساب السكربت) نرجع للطريقة القديمة (السلة) كي لا يبقى الملف ظاهراً على الأقل. */
+function _driveDeleteForever_(fileId) {
+  if (!fileId) return false;
+  try { Drive.Files.remove(fileId); return true; }
+  catch (e) {
+    try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e2) {}
+    return false;
+  }
+}
+/* 🧹 (V4.186) تنظيف لمرة واحدة (ويمكن تكراره): يبحث بكل الدرايف — بما فيها سلة المهملات — عن بقايا ملفات
+   OCR المؤقتة القديمة (صور الجوازات والتذاكر والإيصالات المحوَّلة + شيتات استيراد الإكسيل المؤقتة) ويحذفها
+   نهائياً. مقيَّد بأسماء هذه الملفات المؤقتة فقط، فلا يمسّ أي ملف آخر. */
+function purgeOcrTempFiles_() {
+  var prefixes = ['PASSPORT_OCR_TEMP_', 'OCR_TEMP_', 'mf_ocr_', 'temp_pilgrims_import_'];
+  var started = Date.now(), removed = 0, failed = 0, capped = false;
+  prefixes.forEach(function(pfx) {
+    if (capped) return;
+    var pageToken = null;
+    do {
+      var res = null;
+      try {
+        res = Drive.Files.list({ q: "title contains '" + pfx + "'", maxResults: 200, pageToken: pageToken });
+      } catch (eV2) {
+        try { res = Drive.Files.list({ q: "name contains '" + pfx + "'", pageSize: 200, pageToken: pageToken }); } catch (eV3) { res = null; }
+      }
+      if (!res) break;
+      var items = res.items || res.files || [];
+      items.forEach(function(it) {
+        var nm = String(it.title || it.name || '');
+        if (nm.indexOf(pfx) !== 0) return;   // مطابقة بداية الاسم حرفياً — أمان إضافي
+        try { Drive.Files.remove(it.id); removed++; } catch (e) { failed++; }
+      });
+      pageToken = res.nextPageToken || null;
+      if (Date.now() - started > 4.5 * 60 * 1000) { capped = true; break; }   // هامش أمان قبل حد 6 دقائق
+    } while (pageToken);
+  });
+  return 'حُذف نهائياً ' + removed + ' ملف OCR مؤقت' + (failed ? (' — تعذّر حذف ' + failed) : '') +
+    (capped ? ' — توقف قبل انتهاء المهلة، شغّله مرة أخرى لإكمال الباقي' : '');
+}
 var CACHE_DURATION = 300; // 5 دقائق بالثواني
 
 /* ============================================================
@@ -7032,7 +7082,7 @@ function sendArrivalAlerts() {
     const targetDate =
       Utilities.formatDate(
         tomorrow,
-        Session.getScriptTimeZone(),
+        _tz_(),
         'dd/MM/yyyy'
       );
 
@@ -7605,7 +7655,7 @@ function testTelegramNow() {
     var result = sendTelegramMessage(
       "✅ *اختبار نظام تيليجرام*\n" +
       "🕋 نظام إشعارات رحلات العمرة\n" +
-      "📅 " + Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Riyadh", "dd/MM/yyyy HH:mm") + "\n" +
+      "📅 " + Utilities.formatDate(new Date(), _tz_() || "Asia/Riyadh", "dd/MM/yyyy HH:mm") + "\n" +
       "النظام يعمل بنجاح! 🎉"
     );
     if (result.success) {
@@ -8889,7 +8939,7 @@ function testTgNoticeBot(authToken) {
         checks.push({ ok: true, label: 'الويب هوك', detail: 'مضبوط ويطابق رابط النشر الحالي' });
       }
       if (wh.result.last_error_message) {
-        checks.push({ ok: false, label: 'آخر خطأ سجّله تليجرام', detail: wh.result.last_error_message + (wh.result.last_error_date ? ' — ' + Utilities.formatDate(new Date(wh.result.last_error_date * 1000), Session.getScriptTimeZone(), 'dd/MM HH:mm') : '') });
+        checks.push({ ok: false, label: 'آخر خطأ سجّله تليجرام', detail: wh.result.last_error_message + (wh.result.last_error_date ? ' — ' + Utilities.formatDate(new Date(wh.result.last_error_date * 1000), _tz_(), 'dd/MM HH:mm') : '') });
       }
     }
   } catch (e) { checks.push({ ok: false, label: 'الويب هوك', detail: e.toString() }); }
@@ -9795,7 +9845,7 @@ function _tgbnProcessHostDoc_(chatId, userId, state, fileRef) {
     blob.setContentType(ct);
     var folder = getDriveFolder_('TICKETS');
     var f = folder.createFile(blob);
-    f.setName('مستند المستضيف - ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd-MM-yyyy HHmmss') + (ct === 'application/pdf' ? '.pdf' : '.jpg'));
+    f.setName('مستند المستضيف - ' + Utilities.formatDate(new Date(), _tz_(), 'dd-MM-yyyy HHmmss') + (ct === 'application/pdf' ? '.pdf' : '.jpg'));
     f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     state.data.hostDocUrl = f.getUrl();
     _tgbnSetState_(chatId, userId, state);
@@ -9859,7 +9909,7 @@ function _tgbnDoSave_(chatId, userId, state, cfg, group) {
   var botToken = createSession_('TelegramBot', '💠 بوت تليجرام', 'all');
   var agent = '';
   try { agent = getAgentByCompany(botToken, d.company) || ''; } catch (e) { agent = ''; }
-  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+  var stamp = Utilities.formatDate(new Date(), _tz_(), 'dd/MM/yyyy HH:mm');
 
   // 🏨 تواريخ سكن المدينتين المحسوبة (نفس ما عُرض في بطاقة المراجعة) — تُسجَّل فعليًا بالإشعار
   var hd = _tgbnHotelDates_(d);
@@ -10266,7 +10316,7 @@ function generateBookingPdfForShare(authToken, bookingId) {
     var oldFiles = folder.getFiles();
     while (oldFiles.hasNext()) {
       var f = oldFiles.next();
-      if (f.getDateCreated() < oneHourAgo) f.setTrashed(true);
+      if (f.getDateCreated() < oneHourAgo) _driveDeleteForever_(f.getId());
     }
   } catch (e) { /* تجاهل */ }
 
@@ -10982,6 +11032,7 @@ function runAdminSetupAction(authToken, actionName) {
     'setupTripsSystem': { fn: setupTripsSystem_, label: 'إنشاء شيتات نظام الرحلات وكشوف المعتمرين' },
     'setupCompleteSystem': { fn: setupCompleteSystem_, label: 'التأسيس الكامل (كل الهياكل دفعة واحدة — آمن ولا يمسح بيانات)' },
     'cleanupTempFiles': { fn: cleanupTempFiles_, label: 'تنظيف الملفات المؤقتة (Temp + Exports)' },
+    'purgeOcrTempFiles': { fn: purgeOcrTempFiles_, label: 'حذف بقايا ملفات OCR المؤقتة من الدرايف والسلة نهائياً' },
     'setupTempCleanupTrigger': { fn: setupTempCleanupTrigger_, label: 'تفعيل التنظيف التلقائي اليومي للملفات المؤقتة' }
   };
 
@@ -11087,7 +11138,7 @@ function cleanupTempFiles_(maxAgeHours) {
         var f = files.next();
         folderSeen++;
         try {
-          if (f.getLastUpdated().getTime() < cutoff || hours === 0) { f.setTrashed(true); folderTrashed++; }
+          if (f.getLastUpdated().getTime() < cutoff || hours === 0) { _driveDeleteForever_(f.getId()); folderTrashed++; }
           else folderKept++;
         } catch (fe) { Logger.log('cleanupTempFiles_: file trash failed: ' + fe); }
       }
@@ -11098,7 +11149,7 @@ function cleanupTempFiles_(maxAgeHours) {
   });
   if (!scanned.length) return 'تعذّر الوصول لمجلدي Temp/Exports — تحقق من صلاحيات Drive';
   var ageMsg = hours === 0 ? 'كل الملفات (بلا شرط عمر)' : ('أقدم من ' + hours + ' ساعة');
-  return 'تم نقل ' + trashed + ' ملف مؤقت للمهملات (' + ageMsg + ')، وأُبقي على ' + kept + '. التفاصيل: ' + perFolder.join(' | ');
+  return 'تم حذف ' + trashed + ' ملف مؤقت نهائياً (' + ageMsg + ')، وأُبقي على ' + kept + '. التفاصيل: ' + perFolder.join(' | ');
 }
 
 /**
@@ -11178,7 +11229,7 @@ var BACKUP_MIN_KEEP_ = 5;
 function _doSystemBackup_() {
   var ss = getSpreadsheet_();
   var folder = getDriveFolder_('BACKUPS');
-  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Africa/Cairo', 'yyyy-MM-dd HH:mm');
+  var stamp = Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'yyyy-MM-dd HH:mm');
   var name = '💾 نسخة احتياطية — ' + ss.getName() + ' — ' + stamp;
   DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
 
@@ -11260,7 +11311,7 @@ function getBackupStatus(authToken) {
 function _backupSpreadsheet_(reason) {
   try {
     var ss = getSpreadsheet_();
-    var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Riyadh', 'yyyy-MM-dd_HH-mm');
+    var stamp = Utilities.formatDate(new Date(), _tz_() || 'Asia/Riyadh', 'yyyy-MM-dd_HH-mm');
     var copyName = ss.getName() + ' — نسخة احتياطية (' + (reason || 'قبل عملية خطرة') + ') ' + stamp;
     var file = DriveApp.getFileById(ss.getId()).makeCopy(copyName);
     Logger.log('نسخة احتياطية: ' + file.getUrl());
@@ -11466,7 +11517,7 @@ function logChange_(username, action, recordId, field, oldVal, newVal) {
   try {
     var sheet = ensureAuditLogSheet_();
     sheet.appendRow([
-      Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Riyadh", "dd/MM/yyyy HH:mm:ss"),
+      Utilities.formatDate(new Date(), _tz_() || "Asia/Riyadh", "dd/MM/yyyy HH:mm:ss"),
       username || "غير معروف",
       action || "-",
       recordId || "-",
@@ -11486,7 +11537,7 @@ function logChangesBatch_(username, entries) {
   if (!entries || entries.length === 0) return;
   try {
     var sheet = ensureAuditLogSheet_();
-    var ts = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || "Asia/Riyadh", "dd/MM/yyyy HH:mm:ss");
+    var ts = Utilities.formatDate(new Date(), _tz_() || "Asia/Riyadh", "dd/MM/yyyy HH:mm:ss");
     var rows = entries.map(function(e) {
       return [
         ts,
@@ -11637,7 +11688,7 @@ function exportTransportAccountsExcel(authToken, payload) {
     var subtitle = payload.subtitle || '';
     var totalsRow = payload.totalsRow || null; // مصفوفة بنفس طول columns، أو null
 
-    var now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd_HH-mm');
+    var now = Utilities.formatDate(new Date(), _tz_(), 'yyyy-MM-dd_HH-mm');
     var safeTitle = title.replace(/[^\u0600-\u06FFa-zA-Z0-9 ]/g, '').replace(/\s+/g, '_');
     var fileName = safeTitle + '_' + now;
 
@@ -11899,10 +11950,10 @@ function _taReadRowsRaw_() {
       company: String(row[idx["الشركة المصرية"]] || ""),
       agent: String(row[idx["الوكيل السعودي"]] || ""),
       arrivalDate: row[idx["تاريخ الوصول"]] instanceof Date
-        ? Utilities.formatDate(row[idx["تاريخ الوصول"]], Session.getScriptTimeZone(), "dd/MM/yyyy")
+        ? Utilities.formatDate(row[idx["تاريخ الوصول"]], _tz_(), "dd/MM/yyyy")
         : String(row[idx["تاريخ الوصول"]] || ""),
       departureDate: row[idx["تاريخ المغادرة"]] instanceof Date
-        ? Utilities.formatDate(row[idx["تاريخ المغادرة"]], Session.getScriptTimeZone(), "dd/MM/yyyy")
+        ? Utilities.formatDate(row[idx["تاريخ المغادرة"]], _tz_(), "dd/MM/yyyy")
         : String(row[idx["تاريخ المغادرة"]] || ""),
       transportCompany: transportCompany,
       isClientManaged: isClientManaged,
@@ -11946,7 +11997,7 @@ function getTripChangeLog(authToken, tripName) {
     if (String(r[3] || "").trim() !== tripName) continue;
     var ts = r[0];
     var tsStr = (ts instanceof Date)
-      ? Utilities.formatDate(ts, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss')
+      ? Utilities.formatDate(ts, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss')
       : String(ts || '-');
     result.push({
       timestamp: tsStr,
@@ -11961,8 +12012,17 @@ function getTripChangeLog(authToken, tripName) {
 }
 
 // يستنتج "الشاشة" من نوع العملية/الحقل لدعم الفلاتر المتتالية (الشاشة → قائمة العمليات)
-function _auditScreen_(action, field) {
+function _auditScreen_(action, field, recordId) {
   var a = String(action || '') + ' ' + String(field || '');
+  // 🏛️🛂 (V4.186) شاشتا «مراجعة ملفات الوزارة» و«متابعة التأشيرات والوكلاء» — أولاً بمرجع السجل نفسه
+  // (MF:/VZ:/AI:/AP:) ثم بنص العملية؛ كانت عملياتهما تتبعثر بين «أخرى» و«الإعدادات» و«الرحلات»
+  // و«حسابات العملاء» حسب اسم الحقل المعدَّل، ولا يوجد اختيار لهما بفلتر الشاشة إطلاقاً
+  var rid = String(recordId || '');
+  if (/^MF:/.test(rid)) return 'ministry';
+  if (/^(VZ|AI|AP|HA|HL):/.test(rid)) return 'visas';
+  var act = String(action || '');
+  if (/ملف مراجعة|ملفات مراجعة|رسوم غرفة|حصة أفراد|نوع الملف|إضافة مشرف|تعديل مشرف|حذف مشرف|لمشرفين|مشاركة جماعية لمشرف/.test(act)) return 'ministry';
+  if (/تأشيرات|وكيل|اتفاقية سكن|تخصيص سكن|حسابات الشركات للوكلاء|سعر جماعي/.test(act)) return 'visas';
   if (/مستخدم|دخول|خروج|كلمة المرور|صلاحي/.test(a)) return 'users';
   if (/معتمر|كشف|تسكين|جواز|محرم/.test(a))         return 'pilgrims';
   // ⚠️ (V4.91) قبل فحص «رحلة» عمداً: أفعال حسابات العملاء كثيرًا ما تذكر اسم الرحلة كحقل (مثال:
@@ -11976,7 +12036,8 @@ function _auditScreen_(action, field) {
 }
 var AUDIT_SCREEN_LABELS_ = {
   bookings: 'الإشعارات', trips: 'الرحلات', pilgrims: 'المعتمرون / الكشف', accounts: 'حسابات العملاء',
-  users: 'إدارة المستخدمين', settings: 'الإعدادات', catering: 'اتفاقيات الإعاشة', other: 'أخرى'
+  users: 'إدارة المستخدمين', settings: 'الإعدادات', catering: 'اتفاقيات الإعاشة',
+  ministry: 'ملفات الوزارة', visas: 'متابعة الوكلاء', other: 'أخرى'
 };
 
 function getAuditLog(authToken, filters) {
@@ -11988,7 +12049,11 @@ function getAuditLog(authToken, filters) {
   Logger.log('getAuditLog: lastRow=' + lastRow + ', filters=' + JSON.stringify(filters));
   if (lastRow < 2) return [];
 
-  var maxRows = 500;
+  // 🔎 (V4.186) بلا فلاتر: آخر 500 عملية كما كان. مع أي فلتر (شاشة/مستخدم/مرجع/…): نفحص حتى آخر
+  // 6000 عملية ثم نُعيد أحدث 500 مطابقة — كان الفلتر يبحث داخل آخر 500 صف فقط فتضيع نتائج أقدم قليلاً
+  var _hasFilter = ['recordId', 'username', 'action', 'screen', 'entity', 'fromDate', 'toDate']
+    .some(function(k) { return String(filters[k] || '').trim(); });
+  var maxRows = _hasFilter ? 6000 : 500;
   var startRow = Math.max(2, lastRow - maxRows + 1);
   var numRows = lastRow - startRow + 1;
   var data = sheet.getRange(startRow, 1, numRows, 7).getValues();
@@ -12037,7 +12102,7 @@ function getAuditLog(authToken, filters) {
     if (ts) {
       try {
         if (ts instanceof Date) {
-          tsStr = Utilities.formatDate(ts, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss');
+          tsStr = Utilities.formatDate(ts, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss');
         } else {
           // إذا كان نصاً (مكتوباً من logChange_)، نعيده كما هو
           tsStr = String(ts);
@@ -12053,7 +12118,7 @@ function getAuditLog(authToken, filters) {
       oldValue:  cleanDateVal(row[5]),
       newValue:  cleanDateVal(row[6])
     };
-    entry.screen = _auditScreen_(entry.action, entry.field);
+    entry.screen = _auditScreen_(entry.action, entry.field, entry.recordId);
     entry.screenLabel = AUDIT_SCREEN_LABELS_[entry.screen] || 'أخرى';
 
     // إخفاء عمليات الدخول/الخروج افتراضياً إلا لو الفلتر مفعّل صراحة
@@ -12075,6 +12140,7 @@ function getAuditLog(authToken, filters) {
     }
 
     result.push(entry);
+    if (result.length >= 500) break; // (V4.186) أحدث 500 نتيجة مطابقة تكفي للعرض
   }
   Logger.log('getAuditLog: returning ' + result.length + ' entries');
   return result;
@@ -12959,7 +13025,7 @@ function _getPilgrimsSheet_() {
 // تنسيق موحّد للتواريخ القادمة من الشيت (Date أو نص) إلى dd/MM/yyyy
 function _tripFormatDate_(val) {
   if (val instanceof Date) {
-    return Utilities.formatDate(val, Session.getScriptTimeZone(), "dd/MM/yyyy");
+    return Utilities.formatDate(val, _tz_(), "dd/MM/yyyy");
   }
   return val ? String(val) : "";
 }
@@ -12967,14 +13033,14 @@ function _tripFormatDate_(val) {
 // تنسيق موحّد لأوقات الشيت (Date أو نص خام) إلى "HH:mm"
 function _tripFormatTime_(val) {
   if (val instanceof Date) {
-    return Utilities.formatDate(val, Session.getScriptTimeZone() || "Asia/Riyadh", "HH:mm");
+    return Utilities.formatDate(val, _tz_() || "Asia/Riyadh", "HH:mm");
   }
   var s = val ? String(val).trim() : "";
   if (!s) return "";
   var m = s.match(/^(\d{1,2}):(\d{2})/);
   if (m && !/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/.test(s)) return ("0" + m[1]).slice(-2) + ":" + m[2];
   var d = new Date(s);
-  if (!isNaN(d.getTime())) return Utilities.formatDate(d, Session.getScriptTimeZone() || "Asia/Riyadh", "HH:mm");
+  if (!isNaN(d.getTime())) return Utilities.formatDate(d, _tz_() || "Asia/Riyadh", "HH:mm");
   return s;
 }
 
@@ -13469,7 +13535,7 @@ function getNotifications(authToken) {
     // التواريخ تتحوّل لنصوص عبر JSON داخل الكاش — نُوحّد الصيغة قبل التخزين لتبقى العودة متطابقة
     vals = vals.map(function(r) {
       var c = r.slice();
-      c[8] = (c[8] instanceof Date) ? Utilities.formatDate(c[8], Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : String(c[8] || '');
+      c[8] = (c[8] instanceof Date) ? Utilities.formatDate(c[8], _tz_(), 'dd/MM/yyyy HH:mm') : String(c[8] || '');
       return c;
     });
     setCachedData(NOTIF_CACHE_KEY, vals);
@@ -13481,7 +13547,7 @@ function getNotifications(authToken) {
     out.push({
       id: String(r[0]), type: String(r[1] || ''), message: String(r[2] || ''),
       client: String(r[3] || ''), trip: String(r[4] || ''), read: String(r[6]) === 'نعم',
-      date: (r[8] instanceof Date) ? Utilities.formatDate(r[8], Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : String(r[8] || '')
+      date: (r[8] instanceof Date) ? Utilities.formatDate(r[8], _tz_(), 'dd/MM/yyyy HH:mm') : String(r[8] || '')
     });
   });
   out.reverse(); // الأحدث أولاً
@@ -13934,7 +14000,7 @@ function getClientAccount(authToken, client) {
     pSh.getRange(2, 1, pSh.getLastRow() - 1, ACC_PAY_HEADERS.length).getValues().forEach(function(r) {
       if (String(r[1] || '').trim() !== client) return;
       payments.push({ id: String(r[0]), trip: String(r[2] || ''), ptype: String(r[3] || 'دفعة'),
-        date: (r[4] instanceof Date) ? Utilities.formatDate(r[4], Session.getScriptTimeZone(), 'dd/MM/yyyy') : String(r[4] || ''),
+        date: (r[4] instanceof Date) ? Utilities.formatDate(r[4], _tz_(), 'dd/MM/yyyy') : String(r[4] || ''),
         amount: _accNum_(r[5]), currency: String(r[6] || 'EGP'), rate: _accNum_(r[7]), desc: String(r[8] || ''),
         serial: r[11] || '' });
     });
@@ -13998,7 +14064,7 @@ function getClientAccountHistory(authToken, client) {
     if (String(r[3] || '').trim() !== client) continue;
     var ts = r[0];
     var tsStr = (ts instanceof Date)
-      ? Utilities.formatDate(ts, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss')
+      ? Utilities.formatDate(ts, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss')
       : String(ts || '-');
     result.push({
       timestamp: tsStr,
@@ -14244,7 +14310,7 @@ function carryForwardTripBalance(authToken, client, fromTrip, toTrip) {
   if (!netE && !netS) return { success: false, error: 'لا يوجد رصيد لترحيله من هذه الرحلة (مُقفلة أو بلا حساب)' };
 
   var now = new Date();
-  var nowStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+  var nowStr = Utilities.formatDate(now, _tz_(), 'dd/MM/yyyy');
   [['EGP', netE], ['SAR', netS]].forEach(function(cc) {
     var cur = cc[0], amt = cc[1];
     if (!amt) return;
@@ -15201,7 +15267,7 @@ function getCateringContractHistory(authToken, contractNo) {
     if (String(r[3] || '').trim() !== contractNo) continue;
     var ts = r[0];
     var tsStr = (ts instanceof Date)
-      ? Utilities.formatDate(ts, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss')
+      ? Utilities.formatDate(ts, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss')
       : String(ts || '-');
     result.push({
       timestamp: tsStr,
@@ -17686,7 +17752,7 @@ function getHousingNote(authToken, tripNames, city) {
       return { success: true, note: String(data[i][3] || ''),
         by: String(data[i][5] || ''),
         at: (data[i][4] instanceof Date)
-          ? Utilities.formatDate(data[i][4], Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm')
+          ? Utilities.formatDate(data[i][4], _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm')
           : String(data[i][4] || '') };
     }
   }
@@ -18618,7 +18684,7 @@ function parsePilgrimsExcel(authToken, base64Data, fileName, tripName) {
     return { success: false, error: 'تعذر قراءة الملف: ' + e.message };
   } finally {
     // تنظيف الملف المؤقت دائماً
-    try { if (tempFile) DriveApp.getFileById(tempFile.id).setTrashed(true); } catch (e2) {}
+    if (tempFile) _driveDeleteForever_(tempFile.id);   // 🗑️ (V4.186) حذف نهائي للشيت المؤقت
   }
 }
 
@@ -18742,7 +18808,7 @@ function createTripClientLink(authToken, tripName, clientFilter) {
 
   var sheet = _ensureClientLinksSheet_();
   var token = Utilities.getUuid().replace(/-/g, '');
-  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Africa/Cairo', 'dd/MM/yyyy HH:mm');
+  var stamp = Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'dd/MM/yyyy HH:mm');
   sheet.appendRow([token, tripName, clientFilter, stamp, session.username || '', true]);
 
   var url = ScriptApp.getService().getUrl() + '?view=trip&t=' + token;
@@ -19585,7 +19651,9 @@ function extractPassportDataManual(authToken, base64Image, mimeType) {
       if (footer) text += '\n' + footer.getText();
       if (header) text += '\n' + header.getText();
     } catch (e2) { /* تذييل/ترويسة غير موجودين — تجاهل */ }
-    DriveApp.getFileById(ocrDocId).setTrashed(true);
+    // 🗑️ (V4.186) حذف نهائي لمستند OCR المؤقت فور قراءته — كان يُنقل لسلة المهملات فتتراكم آلاف
+    // النسخ من صور الجوازات المحوَّلة وتستهلك مساحة الدرايف (السلة تُحتسب ضمن المساحة المستخدمة)
+    _driveDeleteForever_(ocrDocId);
     ocrDocId = null;
 
     if (!text || text.trim().length < 5) {
@@ -19600,7 +19668,7 @@ function extractPassportDataManual(authToken, base64Image, mimeType) {
     return _parsePassportMulti_(text);
 
   } catch (e) {
-    if (ocrDocId) { try { DriveApp.getFileById(ocrDocId).setTrashed(true); } catch(e2) {} }
+    if (ocrDocId) _driveDeleteForever_(ocrDocId);
     Logger.log('extractPassportDataManual ERROR: ' + e);
     return { success: false, error: "فشل OCR: " + e.message };
   }
@@ -20434,7 +20502,7 @@ function generateHousingPdf(authToken, htmlContent, tripName) {
     // الرحلات") — كانت البادئة الثابتة 'تسكين رحلة' هنا تمنع تحديد المدينة وتشوّه اسم الملخص المتعدد
     var safeName = String(tripName || "تسكين رحلة").replace(/[\\/:*?"<>|]/g, '-');
     var fileName = safeName + ' - ' +
-      Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      Utilities.formatDate(new Date(), _tz_(), 'yyyy-MM-dd');
 
     var htmlBlob = Utilities.newBlob(htmlContent, MimeType.HTML, fileName + '.html');
     var pdfBlob = htmlBlob.getAs(MimeType.PDF).setName(fileName + '.pdf');
@@ -20654,7 +20722,11 @@ function _mfPerm_(authToken, cap) {
 /* ---------- أدوات مساعدة ---------- */
 // تطبيع الأرقام العربية/الفارسية إلى لاتينية (يُطبَّق على كل مُدخل نصّي قادم من الموبايل)
 function _mfLatin_(s) {
-  return String(s == null ? '' : s)
+  var str = String(s == null ? '' : s);
+  // ⚡ (V4.186) مسار سريع: الغالبية العظمى من القيم بلا أي رقم عربي/فارسي أو فاصلة عربية —
+  // فحص واحد بدل أربع عمليات استبدال لكل قيمة (الدالة تُستدعى مئات الآلاف من المرات بكل تحميل)
+  if (!/[٠-٩۰-۹٫٬]/.test(str)) return str;
+  return str
     .replace(/[٠-٩]/g, function(d) { return String.fromCharCode(d.charCodeAt(0) - 0x0660 + 48); })
     .replace(/[۰-۹]/g, function(d) { return String.fromCharCode(d.charCodeAt(0) - 0x06F0 + 48); })
     .replace(/٫/g, '.').replace(/٬/g, ',');
@@ -20665,7 +20737,7 @@ function _mfNum_(v) { var n = parseFloat(_mfLatin_(v).replace(/,/g, '')); return
 // تاريخ إلى dd/mm/yyyy — يقبل Date أو نص بأي فاصل، ويكمل السنة الحالية لو غابت
 function _mfDate_(v) {
   if (v instanceof Date && !isNaN(v.getTime())) {
-    return Utilities.formatDate(v, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy');
+    return Utilities.formatDate(v, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy');
   }
   var s = _mfStr_(v).replace(/[-.\\]/g, '/');
   if (!s) return '';
@@ -20684,18 +20756,21 @@ function _mfMs_(dmy) {
   var m = String(dmy || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : NaN;
 }
+var _MF_TODAY_MEMO_ = null;
 function _mfToday_() {
-  return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy');
+  // ⚡ (V4.186) تاريخ اليوم يُحسب مرة واحدة لكل تنفيذ (كان يُعاد تنسيقه لكل ملف بفحص القواعد)
+  if (!_MF_TODAY_MEMO_) _MF_TODAY_MEMO_ = Utilities.formatDate(new Date(), _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy');
+  return _MF_TODAY_MEMO_;
 }
 function _mfStamp_() {
-  return Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
+  return Utilities.formatDate(new Date(), _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
 }
 // 🕓 (V4.111) خانات الإنشاء/آخر تعديل تُخزَّن كنص «dd/MM/yyyy HH:mm»، لكن جوجل شيت يحوّلها تلقائياً
 // إلى كائن Date، فكان _mfStr_ يُخرجها بالشكل الخام (Tue Sep 08 2026 23:57:00 GMT+0300 …) كما ظهر
 // للمستخدم بعمودَي الإنشاء والتعديل. هذه الدالة تُعيدها دائماً بالصيغة المطلوبة.
 function _mfDateTime_(v) {
   if (v instanceof Date && !isNaN(v.getTime())) {
-    return Utilities.formatDate(v, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
+    return Utilities.formatDate(v, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
   }
   var s = _mfStr_(v);
   if (!s) return '';
@@ -20703,7 +20778,7 @@ function _mfDateTime_(v) {
   if (/^[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d/.test(s)) {
     var d = new Date(s);
     if (!isNaN(d.getTime())) {
-      return Utilities.formatDate(d, Session.getScriptTimeZone() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
+      return Utilities.formatDate(d, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm');
     }
   }
   return s;
@@ -20711,7 +20786,7 @@ function _mfDateTime_(v) {
 // وقت الإيصال — يقبل Date (يحوّله لصيغة 12 ساعة) أو نصاً كما هو
 function _mfTime_(v) {
   if (v instanceof Date && !isNaN(v.getTime())) {
-    return Utilities.formatDate(v, Session.getScriptTimeZone() || 'Asia/Riyadh', 'hh:mm a');
+    return Utilities.formatDate(v, _tz_() || 'Asia/Riyadh', 'hh:mm a');
   }
   return _mfStr_(v);
 }
@@ -20816,6 +20891,26 @@ function _mfRoomFeeDetail_(f, c) {
 }
 
 /* ---------- فحص قواعد العمل ---------- */
+// ⚡ (V4.186) فهرس أحمال المشرفين لقائمة ملفات بعينها — يُخبَّأ على المصفوفة نفسها (خاصية غير
+// قابلة للعدّ فلا تُرسَل مع البيانات) فيُبنى مرة واحدة مهما تكرر فحص القواعد لكل ملف فيها
+function _mfSupIdx_(allFiles) {
+  allFiles = allFiles || [];
+  if (allFiles.__mfSupIdx && allFiles.__mfSupIdxLen === allFiles.length) return allFiles.__mfSupIdx;
+  var idx = { sums: {}, byId: {} };
+  allFiles.forEach(function(o) {
+    if (o && o.id) idx.byId[o.id] = o;
+    var base = _mfStr_(o.goDate) + '|' + _mfStr_(o.retDate) + '|';
+    (o.sups || []).forEach(function(os) {
+      var k = base + _mfStr_(os.name);
+      idx.sums[k] = (idx.sums[k] || 0) + _mfNum_(o.pilgrims);
+    });
+  });
+  try {
+    Object.defineProperty(allFiles, '__mfSupIdx', { value: idx, enumerable: false, configurable: true, writable: true });
+    Object.defineProperty(allFiles, '__mfSupIdxLen', { value: allFiles.length, enumerable: false, configurable: true, writable: true });
+  } catch (e) {}
+  return idx;
+}
 function _mfRules_(f, allFiles, balances) {
   var out = [];
   var c = _mfCompute_(f);
@@ -20828,15 +20923,19 @@ function _mfRules_(f, allFiles, balances) {
   var agentName = _mfStr_(f.agent);
 
   // 1) حد المشرف المرافق: 50 معتمر إجمالاً على الملفات المتطابقة في تاريخي السفر والعودة
+  // ⚡ (V4.186) فهرس مجمَّع (تاريخ ذهاب|عودة|مشرف ⇒ إجمالي المعتمرين) يُبنى مرة واحدة لكل قائمة ملفات
+  // بدل المرور على كل الملفات لكل مشرف لكل ملف — كان هذا وحده O(ن²) عند بناء بيانات الشاشة
+  var supIdx = _mfSupIdx_(allFiles);
   sups.forEach(function(s) {
     if (String(s.type || '').indexOf('مرافق') < 0) return;
     if (agentName && _mfStr_(s.name) === agentName) return;
-    var total = 0;
-    (allFiles || []).forEach(function(o) {
-      if (o.id === f.id) return;
-      if (_mfStr_(o.goDate) !== _mfStr_(f.goDate) || _mfStr_(o.retDate) !== _mfStr_(f.retDate)) return;
-      (o.sups || []).forEach(function(os) { if (_mfStr_(os.name) === _mfStr_(s.name)) total += _mfNum_(o.pilgrims); });
-    });
+    var sName = _mfStr_(s.name);
+    var total = supIdx.sums[_mfStr_(f.goDate) + '|' + _mfStr_(f.retDate) + '|' + sName] || 0;
+    // استبعاد مساهمة نفس الملف (بنسخته الموجودة داخل القائمة) — نفس شرط o.id !== f.id بالحلقة القديمة
+    var self = supIdx.byId[f.id];
+    if (self && _mfStr_(self.goDate) === _mfStr_(f.goDate) && _mfStr_(self.retDate) === _mfStr_(f.retDate)) {
+      (self.sups || []).forEach(function(os) { if (_mfStr_(os.name) === sName) total -= _mfNum_(self.pilgrims); });
+    }
     total += _mfNum_(f.pilgrims);
     if (total > 50) {
       out.push({ level:'warn', code:'SUP50',
@@ -21225,7 +21324,7 @@ function bulkShareMinistrySupervisors(authToken, names, companies) {
     var row = [hit.name, hit.type || 'مرافق', hit.home, shared.join('، '), hit.mobile, hit.notes,
       hit.createdBy, hit.createdAt, session.username, _mfStamp_()];
     sh.getRange(hit._row, 1, 1, MF_SUP_HEADERS.length).setValues([row]);
-    logChange_(session.username, 'مشاركة جماعية لمشرف', hit.name, (hit.shared || []).join('، ') || '-', shared.join('، '));
+    logChange_(session.username, 'مشاركة جماعية لمشرف', hit.name, 'شركات المشاركة', (hit.shared || []).join('، ') || '-', shared.join('، '));
     updated.push({ name: hit.name, shared: shared });
   });
   SpreadsheetApp.flush();
@@ -21324,6 +21423,7 @@ function _mfDataVer_() {
   catch (e) { return 0; }
 }
 function getMinistryBootstrap(authToken) {
+  var _t0 = Date.now();   // ⏱️ (V4.186) قياس زمن البناء بالخادم — يظهر بـConsole المتصفح للتقييم الدقيق
   var session = _mfPerm_(authToken, 'view');
   var shared = getCachedData(MF_BOOTSTRAP_CACHE_KEY);
   var _verAtStart = _mfDataVer_(), _built = false;
@@ -21348,6 +21448,7 @@ function getMinistryBootstrap(authToken) {
   // كي لا تستبدل به الصفوف المحدَّثة محلياً (نفس منطق getVisaBootstrap تماماً)
   out.dataVer = _mfDataVer_();
   out.stale = _built && (out.dataVer !== _verAtStart);
+  out.perf = { cache: _built ? 'miss' : 'hit', serverMs: Date.now() - _t0, files: (out.files || []).length };
   return out;
 }
 // قراءة عمود JSON كمصفوفة بأمان (الفنادق الإضافية بالرحلات)
@@ -21370,6 +21471,17 @@ function _mfBuildSharedBootstrap_() {
     delete f._row;
   });
 
+  var ref = _mfBuildRefLists_();
+  return {
+    files: files, receipts: receipts, supervisors: supervisors,
+    companies: ref.companies, trips: ref.trips, clients: ref.clients,
+    balances: balances, cfg: cfg, today: _mfToday_()
+  };
+}
+// ⚡ (V4.186) القوائم المرجعية وحدها (الشركات + الرحلات + العملاء) — تحتاجها شاشة متابعة الوكلاء فقط
+// من بوتستراب الوزارة؛ كانت تبني بوتستراب الوزارة كاملاً (قراءة كل الملفات والإيصالات والمشرفين
+// وحساب القواعد والأرصدة لكل ملف) لمجرد هذه القوائم الثلاث عندما يكون كاش الوزارة بارداً
+function _mfBuildRefLists_() {
   // الشركات مع رقم الترخيص والوكيل الافتراضي
   var companies = [];
   try {
@@ -21422,11 +21534,7 @@ function _mfBuildSharedBootstrap_() {
     }
   } catch (e) {}
 
-  return {
-    files: files, receipts: receipts, supervisors: supervisors,
-    companies: companies, trips: trips, clients: clients,
-    balances: balances, cfg: cfg, today: _mfToday_()
-  };
+  return { companies: companies, trips: trips, clients: clients };
 }
 // تُستدعى بعد أي حفظ/حذف في شاشة مراجعة ملفات الوزارة حتى لا يرى المستخدمون بيانات قديمة من الكاش
 function _mfClearBootstrapCache_() {
@@ -21803,7 +21911,7 @@ var MF_QUOTA_TRANSFER_HEADERS = ['معرف', 'الشركة', 'من شهر', 'إ�
 function _mfQtMonth_(v) {
   if (v instanceof Date && !isNaN(v.getTime())) {
     var tz = 'Asia/Riyadh';
-    try { tz = getSpreadsheet_().getSpreadsheetTimeZone() || Session.getScriptTimeZone() || tz; } catch (e) {}
+    try { tz = getSpreadsheet_().getSpreadsheetTimeZone() || _tz_() || tz; } catch (e) {}
     return Utilities.formatDate(v, tz, 'yyyy-MM');
   }
   var s = _mfStr_(v);
@@ -21864,7 +21972,7 @@ function saveMfQuotaTransfer(authToken, data) {
     rng.setValues([[id, company, fromMonth, toMonth, String(amount), _mfStr_(data.notes), session.username, _mfStamp_()]]);
     sh.getRange(newRow, 5).setNumberFormat('0').setValue(amount);
     SpreadsheetApp.flush();
-    logChange_(session.username, 'ترحيل حصة أفراد شهرية', company, '-', fromMonth + ' → ' + toMonth + ' (' + amount + ' فرد)');
+    logChange_(session.username, 'ترحيل حصة أفراد شهرية', company, 'الترحيل', '-', fromMonth + ' → ' + toMonth + ' (' + amount + ' فرد)');
     return { success: true, id: id };
   } finally { lock.releaseLock(); }
 }
@@ -21876,7 +21984,7 @@ function deleteMfQuotaTransfer(authToken, id) {
   if (!hit) return { success: false, error: 'سجل الترحيل غير موجود' };
   sh.deleteRow(hit._row);
   SpreadsheetApp.flush();
-  logChange_(session.username, 'حذف ترحيل حصة أفراد شهرية', hit.company,
+  logChange_(session.username, 'حذف ترحيل حصة أفراد شهرية', hit.company, 'الترحيل',
     hit.fromMonth + ' → ' + hit.toMonth + ' (' + hit.amount + ' فرد)', '-');
   return { success: true };
 }
@@ -21972,7 +22080,7 @@ function setMinistryFileApproved(authToken, id, approved) {
   if (iUpdAt !== -1) sh.getRange(row, iUpdAt + 1).setValue(_mfStamp_());
   _mfClearBootstrapCache_();
   logChange_(session.username, approved ? 'اعتماد ملف مراجعة' : 'إلغاء اعتماد ملف مراجعة',
-    _mfStr_(rowVals[MF_HEADERS.indexOf('رقم الملف')]) || id, 'معتمد',
+    'MF:' + id, 'معتمد' + (_mfStr_(rowVals[MF_HEADERS.indexOf('رقم الملف')]) ? (' — ملف ' + _mfStr_(rowVals[MF_HEADERS.indexOf('رقم الملف')])) : ''),
     wasApproved ? 'نعم' : 'لا', approved ? 'نعم' : 'لا');
   return { success: true, approved: approved };
 }
@@ -21998,7 +22106,7 @@ function getMinistryFileHistory(authToken, id) {
   if (last < 2) return { success: true, entries: [] };
   var vals = sh.getRange(2, 1, last - 1, 7).getValues();
   var key = 'MF:' + _mfStr_(id);
-  var tz = Session.getScriptTimeZone() || 'Asia/Riyadh';
+  var tz = _tz_() || 'Asia/Riyadh';
   var out = [];
   for (var i = vals.length - 1; i >= 0; i--) {
     if (_mfStr_(vals[i][3]) !== key) continue;
@@ -22238,7 +22346,7 @@ function extractRoomFeeReceiptSmart(authToken, base64Data, mimeType, aiFallback)
       { ocr: true, ocrLanguage: 'ar', convert: true });
     var doc = DocumentApp.openById(file.id);
     var txt = doc.getBody().getText();
-    try { DriveApp.getFileById(file.id).setTrashed(true); } catch (e) {}
+    _driveDeleteForever_(file.id);   // 🗑️ (V4.186) حذف نهائي لمستند OCR المؤقت
     var d = _mfParseReceiptText_(txt);
     if (d) {
       d.company = _mfMatchCompanyByLicence_(d.licence);
@@ -23021,6 +23129,20 @@ function _vzObjToRow_(f) {
     _mfStr_(f.makkahHousingAgr), _mfStr_(f.madinahHousingAgr), _mfStr_(f.makkahCateringAgr), _mfStr_(f.madinahCateringAgr),
     JSON.stringify(f.housing || []), _mfStr_(f.entryNo), _mfStr_(f.extraTrips)];
 }
+// ⚡ (V4.186) قراءة مجموعة واحدة بمعرِّفها: عمود المعرِّف وحده ثم صفها فقط (بدل قراءة الشيت كاملاً)
+function _vzReadOne_(sh, id) {
+  if (!id) return null;
+  sh = sh || _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+  var last = sh.getLastRow(); if (last < 2) return null;
+  var ids = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (_mfStr_(ids[i][0]) !== id) continue;
+    var o = _vzRowToObj_(sh.getRange(i + 2, 1, 1, VZ_FILES_HEADERS.length).getValues()[0]);
+    o._row = i + 2;
+    return o;
+  }
+  return null;
+}
 function _vzReadAll_() {
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
   var last = sh.getLastRow();
@@ -23165,9 +23287,25 @@ function _vzAcctMap_(rows) {
 // تحل تفاوت مسميات الشركة بين الشاشات (مثال: "جنات" بإعدادات الربط مقابل "جنات الربيع" بشيت
 // الإشعارات/النقل) دون الحاجة لتوحيد الأسماء يدوياً في كل الشيتات. النتيجة دوماً تُبنى من اسم
 // الشركة *المُعدَّل* (c.company) لا الاسم الخام المُمرَّر، فتتّحد كل المتغيّرات في مفتاح واحد ثابت.
+// ⚡ (V4.186) ذاكرة لكل خريطة حسابات: نفس (الوكيل، الشركة) يُحسب مفتاح حسابه مرة واحدة فقط لكل تنفيذ —
+// المطابقة التقريبية لاسم الشركة تمرّ على كل الخريطة، وكانت تُكرَّر آلاف المرات عند بناء أرصدة الوكلاء
+var _VZ_ACCTKEY_MEMO_ = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
 function _vzAcctKey_(agent, company, map) {
   agent = _mfStr_(agent); company = _mfStr_(company);
   if (!agent) return '';
+  var memo = null;
+  if (_VZ_ACCTKEY_MEMO_ && map && typeof map === 'object') {
+    memo = _VZ_ACCTKEY_MEMO_.get(map);
+    if (!memo) { memo = {}; _VZ_ACCTKEY_MEMO_.set(map, memo); }
+    var mk = agent + '\u0001' + company;
+    if (Object.prototype.hasOwnProperty.call(memo, mk)) return memo[mk];
+    var res = _vzAcctKeyCalc_(agent, company, map);
+    memo[mk] = res;
+    return res;
+  }
+  return _vzAcctKeyCalc_(agent, company, map);
+}
+function _vzAcctKeyCalc_(agent, company, map) {
   var c = map[agent + '|' + company];
   if (!c) {
     var normCompany = company.replace(/\s+/g, '');
@@ -23229,6 +23367,8 @@ function saveAgentCompanyAccounts(authToken, rows) {
   });
   if (out.length) sh.getRange(2, 1, out.length, VZ_ACCT_HEADERS.length).setValues(out);
   _vzClearCache_();
+  // 📜 (V4.186) كانت تُعيد كتابة ربط حسابات الوكلاء بالشركات كاملاً بلا أي أثر في سجل التعديلات
+  logChange_(session.username, 'حفظ حسابات الشركات للوكلاء', '-', 'عدد الروابط', '-', String(out.length));
   return { success: true, count: out.length };
 }
 
@@ -23286,6 +23426,7 @@ function _vzCateringByGroup_() {
 }
 
 function getVisaBootstrap(authToken) {
+  var _t0 = Date.now();   // ⏱️ (V4.186) قياس زمن البناء بالخادم
   var session = _vzPerm_(authToken, 'view');
   var shared = getCachedData(VZ_BOOTSTRAP_CACHE_KEY);
   // 🐛 (V4.164) رقم الإصدار لحظة بدء إعادة البناء — يُقارَن بعد الانتهاء (انظر التعليق أسفل
@@ -23302,11 +23443,8 @@ function getVisaBootstrap(authToken) {
     // الوزارة كاملاً من الشيتات (ملفات + إيصالات + مشرفون + أرصدة + شركات + رحلات + عملاء) حتى
     // لو كان كاش الوزارة ساخناً بالفعل — وهو وحده عدة ثوانٍ من زمن البناء البالغ 18 ثانية.
     var base = getCachedData(MF_BOOTSTRAP_CACHE_KEY);
-    if (!base) {
-      var _mfVerAtStart = _mfDataVer_();
-      base = _mfBuildSharedBootstrap_();
-      if (_mfDataVer_() === _mfVerAtStart) setCachedData(MF_BOOTSTRAP_CACHE_KEY, base);
-    }
+    // ⚡ (V4.186) كاش الوزارة بارد ⇒ نبني القوائم المرجعية الثلاث فقط (لا بوتستراب الوزارة كاملاً)
+    if (!base) base = _mfBuildRefLists_();
     // أرصدة الوكلاء (صافي كل وكيل) من التأشيرات + البنود + الدفعات
     var allItems = _vzReadItems_(''), allPays = _vzReadPays_('');
     var agentsSet = {};
@@ -23324,14 +23462,32 @@ function getVisaBootstrap(authToken) {
     // التفصيلي (المبني من صفوف الدفتر شاملة النقل) يُظهر الرصيد الصحيح — قراءة شيت النقل مرة واحدة
     // فقط هنا وتمريرها لكل حساب بدل قراءته من جديد لكل وكيل (كان سيصبح N قراءة كاملة للشيت)
     var taRowsAll = _taReadRowsRaw_();
+    // ⚡ (V4.186) توزيع المجموعات ودورات النقل والبنود والدفعات على مفاتيح الحسابات بمرور واحد
+    // (بدل تصفية كل القوائم كاملةً لكل حساب)، وتمرير أسعار النقل المقروءة بالفعل أعلاه — كانت
+    // _vzTransportRunsFor_ تُعيد قراءة شيت أسعار النقل من جديد لكل حساب وكيل (قراءة شيت لكل حساب)
+    var bucket = function (list, agentOf, companyOf) {
+      var out = {};
+      list.forEach(function (x) {
+        var ag = _mfStr_(agentOf(x)); if (!ag) return;
+        var k2 = _vzAcctKey_(ag, companyOf(x), acctMap);
+        (out[ag] = out[ag] || []).push(x);
+        if (k2 && k2 !== ag) (out[k2] = out[k2] || []).push(x);
+      });
+      return out;
+    };
+    var filesBy = bucket(files, function (f) { return f.agent; }, function (f) { return f.company; });
+    var taBy = bucket(taRowsAll, function (r) { return r.supplier; }, function (r) { return r.company; });
+    var itemsBy = {}, paysBy = {};
+    allItems.forEach(function (it) { (itemsBy[it.agent] = itemsBy[it.agent] || []).push(it); });
+    allPays.forEach(function (p) { (paysBy[p.agent] = paysBy[p.agent] || []).push(p); });
     var agentBalances = {};
     accounts.forEach(function (ac) {
       var transDebit = 0;
-      _vzTransportRunsFor_(ac.key, acctMap, taRowsAll).rows.forEach(function (t) { transDebit += _mfNum_(t.value); });
+      _vzTransportRunsFor_(ac.key, acctMap, taBy[ac.key] || [], transportPrices).rows.forEach(function (t) { transDebit += _mfNum_(t.value); });
       agentBalances[ac.key] = _vzAgentBalance_(ac.key,
-        files.filter(function (f) { return _vzFileInAcct_(f, ac.key, acctMap); }),
-        allItems.filter(function (it) { return it.agent === ac.key; }),
-        allPays.filter(function (p) { return p.agent === ac.key; }),
+        (filesBy[ac.key] || []).filter(function (f) { return _vzFileInAcct_(f, ac.key, acctMap); }),
+        itemsBy[ac.key] || [],
+        paysBy[ac.key] || [],
         transDebit);
     });
     shared = {
@@ -23352,6 +23508,7 @@ function getVisaBootstrap(authToken) {
   // بالكاش أعلاه أيضاً) — نُعلم الواجهة صراحةً أنه قديم كي لا تستبدل به الصف المحدَّث محلياً
   out.dataVer = _vzDataVer_();
   out.stale = _built && (out.dataVer !== _verAtStart);
+  out.perf = { cache: _built ? 'miss' : 'hit', serverMs: Date.now() - _t0, files: (out.files || []).length };
   var finance = _vzHasFinance_(session);
   out.can = {
     add: _sessionHasPerm_(session, 'visas.add'), edit: _sessionHasPerm_(session, 'visas.edit'),
@@ -23411,7 +23568,7 @@ function getVisaFileHistory(authToken, id) {
   if (last < 2) return { success: true, entries: [] };
   var vals = sh.getRange(2, 1, last - 1, 7).getValues();
   var key = 'VZ:' + _mfStr_(id);
-  var tz = Session.getScriptTimeZone() || 'Asia/Riyadh';
+  var tz = _tz_() || 'Asia/Riyadh';
   var out = [];
   for (var i = vals.length - 1; i >= 0; i--) {
     if (_mfStr_(vals[i][3]) !== key) continue;
@@ -23432,8 +23589,9 @@ function saveVisaFile(authToken, data) {
   var _vzLockReleased = false;
   try {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
-    var all = _vzReadAll_();
-    var old = isNew ? null : all.filter(function (x) { return x.id === _mfStr_(data.id); })[0];
+    // ⚡ (V4.186) لا نقرأ شيت المجموعات كاملاً (كل الأعمدة + تحليل JSON لكل صف) عند كل حفظ: التعديل
+    // يقرأ عمود المعرِّف وحده ثم صف المجموعة المعدَّلة فقط، والإضافة تقرأ عمود المسلسل وحده للرقم التالي
+    var old = isNew ? null : _vzReadOne_(sh, _mfStr_(data.id));
     if (!isNew && !old) return { success: false, error: 'القيد غير موجود' };
     var bd = Array.isArray(data.breakdown) ? data.breakdown.map(function (b) {
       return { name: _mfStr_(b.name), count: _mfNum_(b.count) };
@@ -23444,7 +23602,7 @@ function saveVisaFile(authToken, data) {
     if (!price) price = _vzPriceAt_(data.agent, data.date);
     var now = _mfStamp_();
     var f = {
-      id: isNew ? _accId_('VZ') : old.id, seq: isNew ? _vzNextSeq_(all) : old.seq,
+      id: isNew ? _accId_('VZ') : old.id, seq: isNew ? _vzNextSeq_() : old.seq,
       ref: _mfStr_(data.ref), status: _mfStr_(data.status) || VZ_STATUSES_[0], date: _mfDate_(data.date),
       company: _mfStr_(data.company), agent: _mfStr_(data.agent), tripName: _mfStr_(data.tripName),
       breakdown: bd, selected: Array.isArray(data.selected) ? data.selected : (old ? old.selected : []),
@@ -23569,7 +23727,7 @@ function deleteVisaFile(authToken, id) {
   var hit = _vzReadAll_().filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'القيد غير موجود' };
   sh.deleteRow(hit._row);
-  logChange_(session.username, 'حذف قيد تأشيرات', hit.agent || '-', 'قيد ' + (hit.ref || hit.seq), '-', '-');
+  logChange_(session.username, 'حذف قيد تأشيرات', 'VZ:' + hit.id, 'قيد ' + (hit.ref || hit.seq) + ' — ' + (hit.agent || '-'), '-', '-');
   _vzClearCache_();
   return { success: true };
 }
@@ -23584,7 +23742,7 @@ function deleteVisaFilesBatch(authToken, ids) {
   var hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
   hits.forEach(function (hit) {
     sh.deleteRow(hit._row);
-    logChange_(session.username, 'حذف قيد تأشيرات (جماعي)', hit.agent || '-', 'قيد ' + (hit.ref || hit.seq), '-', '-');
+    logChange_(session.username, 'حذف قيد تأشيرات (جماعي)', 'VZ:' + hit.id, 'قيد ' + (hit.ref || hit.seq) + ' — ' + (hit.agent || '-'), '-', '-');
   });
   _vzClearCache_();
   return { success: true, count: hits.length };
@@ -23728,7 +23886,7 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
       if (_mfNum_(f.price) === price) return;
       var oldP = f.price;
       sh.getRange(f._row, 12).setValue(price); // العمود 12 = السعر
-      logChange_(session.username, 'تطبيق سعر جماعي', f.ref || f.id, 'السعر', String(oldP), String(price));
+      logChange_(session.username, 'تطبيق سعر جماعي', 'VZ:' + f.id, 'السعر', String(oldP), String(price));
       touched++;
     });
     SpreadsheetApp.flush();
@@ -23749,7 +23907,7 @@ function getAgentAccRowHistory(authToken, kind, id) {
   var last = sh.getLastRow();
   if (last < 2) return { success: true, entries: [] };
   var vals = sh.getRange(2, 1, last - 1, 7).getValues();
-  var tz = Session.getScriptTimeZone() || 'Asia/Riyadh';
+  var tz = _tz_() || 'Asia/Riyadh';
   var out = [];
   for (var i = vals.length - 1; i >= 0; i--) {
     if (_mfStr_(vals[i][3]) !== key) continue;
@@ -24352,11 +24510,15 @@ function saveHousingAgreement(authToken, data) {
       .setValues([row.concat([cur.createdBy, cur.createdAt, session.username, stamp, _mfStr_(data.supplier), kind])]);
   }
   _vzHaClearCache_();
+  // 📜 (V4.186) تسجيل اتفاقيات السكن/الإعاشة بسجل التعديلات (لم تكن تُسجَّل إطلاقاً)
+  logChange_(session.username, (isNew ? 'إضافة اتفاقية سكن' : 'تعديل اتفاقية سكن') + (kind === 'إعاشة' ? ' (إعاشة)' : ''),
+    'HA:' + row[0], 'اتفاقية ' + agrNo + ' — ' + city, '-',
+    [_mfStr_(data.hotel), 'سعة ' + _mfNum_(data.capacity), _mfDate_(data.from) + ' → ' + _mfDate_(data.to), _mfStr_(data.status)].filter(String).join(' · '));
   return { success: true };
 }
 
 function deleteHousingAgreement(authToken, id) {
-  _vzPerm_(authToken, 'delete');
+  var session = _vzPerm_(authToken, 'delete');
   id = _mfStr_(id);
   var a = _vzHaReadAll_().filter(function (x) { return x.id === id; })[0];
   if (!a) throw new Error('الاتفاقية غير موجودة');
@@ -24367,6 +24529,8 @@ function deleteHousingAgreement(authToken, id) {
     .forEach(function (x) { ash.deleteRow(x._row); });
   _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS).deleteRow(a._row);
   _vzHaClearCache_();
+  logChange_(session.username, 'حذف اتفاقية سكن' + ((a.kind || 'سكن') === 'إعاشة' ? ' (إعاشة)' : ''), 'HA:' + a.id,
+    'اتفاقية ' + a.agrNo + ' — ' + a.city, [a.hotel, 'سعة ' + a.capacity].filter(String).join(' · '), '-');
   return { success: true };
 }
 
@@ -24406,6 +24570,8 @@ function saveHousingAllocation(authToken, data) {
   // 🔁 (V4.134) الاتجاه العكسي: رقم الاتفاقية يُسجَّل تلقائياً في بيانات سكن المجموعة
   try { _vzSyncAllocToGroup_(agr, ref, cnt, from, to, session.username); } catch (eBack) {}
   _vzHaClearCache_();
+  logChange_(session.username, isNew ? 'إضافة تخصيص سكن' : 'تعديل تخصيص سكن', 'HL:' + row[0],
+    'اتفاقية ' + agr.agrNo + ' — مجموعة ' + ref, '-', cnt + ' فرد · ' + from + ' → ' + to);
   return { success: true };
 }
 /* 🔁 (V4.134) تسجيل رقم الاتفاقية في سكن المجموعة المطابق للمدينة — ينشئ سطر سكن جديداً
@@ -24482,12 +24648,14 @@ function postAgreementToAgentAccount(authToken, payload) {
 }
 
 function deleteHousingAllocation(authToken, id) {
-  _vzPerm_(authToken, 'delete');
+  var session = _vzPerm_(authToken, 'delete');
   id = _mfStr_(id);
   var x = _vzAllocReadAll_().filter(function (a) { return a.id === id; })[0];
   if (!x) throw new Error('التخصيص غير موجود');
   _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS).deleteRow(x._row);
   _vzHaClearCache_();
+  logChange_(session.username, 'حذف تخصيص سكن', 'HL:' + x.id, 'مجموعة ' + x.groupRef,
+    x.count + ' فرد · ' + x.from + ' → ' + x.to, '-');
   return { success: true };
 }
 

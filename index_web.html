@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.185 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.186 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.185)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.186)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.185</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.186</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2712,7 +2712,9 @@ input[type="date"]:not(:focus):not(:valid) {
             <button class="btn btn-success btn-sm w-100 fw-bold text-start" onclick="runAdminAction('setupCompleteSystem', this)" title="يشغّل كل خطوات التأسيس دفعة واحدة (Bookings/Trips/Pilgrims/الأعمدة/الترحيل) — آمن ولا يمسح أي بيانات">🚀 التأسيس الكامل بضغطة واحدة (موصى به للنسخة الجديدة)</button>
           </div>
           <div class="col-md-6 col-lg-4">
-            <button class="btn btn-outline-warning btn-sm w-100 text-start" onclick="runAdminAction('cleanupTempFiles', this)" title="ينقل ملفات مجلد TEMP الأقدم من 6 ساعات للمهملات">🧽 تنظيف الملفات المؤقتة الآن</button>
+            <button class="btn btn-outline-warning btn-sm w-100 text-start" onclick="runAdminAction('cleanupTempFiles', this)" title="يحذف نهائياً ملفات مجلد TEMP الأقدم من 6 ساعات">🧽 تنظيف الملفات المؤقتة الآن</button>
+            <!-- 🗑️ (V4.186) حذف بقايا ملفات OCR (صور الجوازات المحوَّلة وغيرها) من الدرايف والسلة نهائياً -->
+            <button class="btn btn-outline-danger btn-sm w-100 text-start mt-1" onclick="runAdminAction('purgeOcrTempFiles', this)" title="يحذف نهائياً (بلا سلة مهملات) كل ملفات OCR المؤقتة القديمة المتراكمة بالدرايف — صور الجوازات والتذاكر والإيصالات المحوَّلة">🗑️ حذف بقايا ملفات OCR (الجوازات) نهائياً</button>
           </div>
           <div class="col-md-6 col-lg-4">
             <button class="btn btn-outline-warning btn-sm w-100 text-start" onclick="openCleanupScheduleModal()" title="اختر تكرار وموعد التنظيف التلقائي (يومي/أسبوعي)">⏰ جدولة التنظيف التلقائي <span id="cleanupSchedStatus" class="badge bg-secondary">...</span></button>
@@ -5337,6 +5339,10 @@ input[type="date"]:not(:focus):not(:valid) {
           <option value="users">👥 إدارة المستخدمين</option>
           <option value="catering">📑 اتفاقيات الإعاشة</option>
           <option value="settings">⚙️ الإعدادات</option>
+          <!-- 🏛️🛂 (V4.186) الشاشتان الجديدتان — كل عملياتهما تُراقَب هنا -->
+          <option value="ministry">🏛️ ملفات الوزارة</option>
+          <option value="visas">🛂 متابعة الوكلاء والتأشيرات</option>
+          <option value="other">📦 أخرى</option>
         </select>
         <select id="auditFilterAction" class="form-select form-select-sm audit-filter" style="width:auto;min-width:130px;" onchange="applyAuditLogFilters()" title="نوع العملية">
           <option value="">كل العمليات</option>
@@ -7009,10 +7015,31 @@ function _showPopup(message, type, title) {
 function _normalizeArabic_(s) {
   return String(s || '').replace(/[ً-ْٰ]/g, '').replace(/[إأآٱا]/g, 'ا').replace(/[ىئ]/g, 'ي').replace(/ة/g, 'ه').toLowerCase();
 }
+// 🎫 (V4.186) هل ملاحظات المعتمر تذكر أي تأشيرة (زيارة/عائلية/سياحة/حاصل على تأشيرة/فيزا…)؟ يُرجع
+// نص الملاحظة نفسه ليُعرض أسفل رقم الجواز — مشتركة بين اختيار معتمري مجموعات التأشيرات وملفات
+// الوزارة. المطابقة بعد التسوية فتلتقط «تأشيرة/تاشيرة/تأشيره» وغيرها، والقرار النهائي للمستخدم.
+// ⏱️ (V4.186) قياس زمن التحميل الفعلي (ذهاباً وإياباً) + زمن البناء بالخادم وهل خُدم من الكاش —
+// يُطبع في Console المتصفح (F12) ويُحفظ آخر 50 قياساً في window.__perfLog للتقييم الدقيق
+function _perfLog_(label, t0, res) {
+  try {
+    var total = Date.now() - t0, p = (res && res.perf) || {};
+    var rec = { at: new Date().toLocaleTimeString(), screen: label, totalMs: total, serverMs: p.serverMs, cache: p.cache, rows: p.files };
+    (window.__perfLog = window.__perfLog || []).push(rec);
+    if (window.__perfLog.length > 50) window.__perfLog.shift();
+    console.info('⏱️ ' + label + ': ' + (total / 1000).toFixed(2) + 'ث إجمالي' +
+      (p.serverMs != null ? (' · الخادم ' + (p.serverMs / 1000).toFixed(2) + 'ث (' + (p.cache === 'hit' ? 'من الكاش' : 'بناء جديد') + ')') : '') +
+      (p.files != null ? (' · ' + p.files + ' صف') : ''));
+  } catch (e) {}
+}
+function pilgrimVisaNote_(p) {
+  var n = String((p && p.notes) || '').trim();
+  if (!n) return '';
+  return /تاشير|فيزا|فيزه|visa/i.test(_normalizeArabic_(n)) ? n : '';
+}
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.185";
+var CLIENT_APP_VERSION = "4.186";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -21517,7 +21544,16 @@ var AUDIT_SCREEN_ACTIONS = {
   trips: [ {v:'', t:'كل عمليات الرحلات'}, {v:'إنشاء رحلة', t:'➕ إنشاء رحلة'}, {v:'تعديل رحلة', t:'✏️ تعديل رحلة'}, {v:'حذف رحلة', t:'🗑️ حذف رحلة'}, {v:'مسودة', t:'📝 مسودة رحلة'} ],
   pilgrims: [ {v:'', t:'كل عمليات المعتمرين'}, {v:'تسجيل معتمر', t:'➕ تسجيل معتمر'}, {v:'تحديث معتمر', t:'✏️ تحديث معتمر'}, {v:'حفظ الكشف', t:'💾 حفظ الكشف'}, {v:'تخصيص معتمر', t:'📎 تخصيص لرحلة'}, {v:'نقل معتمر', t:'🔀 نقل بين رحلتين'}, {v:'حذف معتمر', t:'🗑️ حذف معتمر'} ],
   users: [ {v:'', t:'كل عمليات المستخدمين'}, {v:'تعديل صلاحيات', t:'🔐 تعديل صلاحيات'}, {v:'حذف مستخدم', t:'🗑️ حذف مستخدم'}, {v:'كلمة المرور', t:'🔑 كلمة المرور'}, {v:'دخول', t:'🔓 دخول'}, {v:'خروج', t:'🔒 خروج'} ],
-  settings: [ {v:'', t:'كل عمليات الإعدادات'}, {v:'شركة', t:'🏢 شركات'}, {v:'إعدادات النظام', t:'🔧 إعدادات النظام'}, {v:'مجلد Drive', t:'📁 مجلد Drive'}, {v:'دالة إدارية', t:'⚙️ دالة إدارية'} ]
+  settings: [ {v:'', t:'كل عمليات الإعدادات'}, {v:'شركة', t:'🏢 شركات'}, {v:'إعدادات النظام', t:'🔧 إعدادات النظام'}, {v:'مجلد Drive', t:'📁 مجلد Drive'}, {v:'دالة إدارية', t:'⚙️ دالة إدارية'} ],
+  // 🏛️ (V4.186) مراجعة ملفات الوزارة
+  ministry: [ {v:'', t:'كل عمليات ملفات الوزارة'}, {v:'إنشاء ملف مراجعة', t:'➕ إنشاء ملف'}, {v:'تعديل ملف مراجعة', t:'✏️ تعديل ملف'},
+    {v:'حذف ملف مراجعة', t:'🗑️ حذف ملف'}, {v:'اعتماد ملف مراجعة', t:'✅ اعتماد / إلغاء اعتماد'}, {v:'نوع الملف', t:'🎯 نوع الملف'},
+    {v:'رسوم غرفة', t:'🏦 رسوم الغرفة والإيصالات'}, {v:'مشرف', t:'🧑‍✈️ المشرفون'}, {v:'حصة أفراد', t:'🔁 ترحيل حصص الأفراد'}, {v:'استيراد', t:'📥 استيراد'} ],
+  // 🛂 (V4.186) متابعة التأشيرات والوكلاء
+  visas: [ {v:'', t:'كل عمليات الوكلاء والتأشيرات'}, {v:'إضافة مجموعة تأشيرات', t:'➕ إضافة مجموعة'}, {v:'تعديل مجموعة تأشيرات', t:'✏️ تعديل مجموعة'},
+    {v:'حذف قيد تأشيرات', t:'🗑️ حذف مجموعة'}, {v:'رقم القيد', t:'🧾 رقم القيد'}, {v:'تسعير', t:'💲 التسعير'}, {v:'سعر جماعي', t:'💲 سعر جماعي'},
+    {v:'بند حساب وكيل', t:'📒 بنود حساب الوكيل'}, {v:'دفعة وكيل', t:'💳 دفعات الوكيل'}, {v:'اتفاقية سكن', t:'🏨 اتفاقيات السكن/الإعاشة'},
+    {v:'تخصيص سكن', t:'🛏️ تخصيصات السكن'}, {v:'حسابات الشركات للوكلاء', t:'🧑‍💼 حسابات الشركات'}, {v:'استيراد', t:'📥 استيراد'} ]
 };
 // عند تغيير الشاشة: أعِد بناء قائمة العمليات المطابقة لها ثم أعد التحميل
 function _onAuditScreenChange() {
@@ -21639,7 +21675,8 @@ function loadAuditLogTable() {
         var rowBg = (idx % 2 === 0) ? '' : 'style="background:#f8fafc;"';
         var actionBg = actionColors[r.action] || '#f1f5f9';
         var actionIcon = actionIcons[r.action] || '';
-        var screenColors = { bookings:'#dbeafe', trips:'#dcfce7', pilgrims:'#fef9c3', users:'#fce7f3', settings:'#f3e8ff', other:'#f1f5f9' };
+        var screenColors = { bookings:'#dbeafe', trips:'#dcfce7', pilgrims:'#fef9c3', users:'#fce7f3', settings:'#f3e8ff', other:'#f1f5f9',
+          accounts:'#ffedd5', catering:'#ecfccb', ministry:'#e0e7ff', visas:'#ccfbf1' };
         var scBg = screenColors[r.screen] || '#f1f5f9';
         return '<tr ' + rowBg + '>' +
           '<td class="px-3 py-2" style="vertical-align:top;">' + formatTs(r.timestamp) + '</td>' +
@@ -35352,8 +35389,10 @@ function mfWarmPilgrimSearch() {
 function mfLoad(force) {
   var wrap = document.getElementById('mfTableWrap');
   if (wrap) wrap.innerHTML = '<div class="p-4 text-center text-muted small">⏳ جاري تحميل ملفات المراجعة…</div>';
+  var _t0 = Date.now();
   google.script.run
     .withSuccessHandler(function (res) {
+      _perfLog_('ملفات الوزارة', _t0, res);
       if (!res || !res.success) {
         if (wrap) wrap.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_((res && res.error) || 'تعذّر التحميل') + '</div>';
         return;
@@ -37509,11 +37548,16 @@ function mfTripPickRender() {
       '</div><div class="mf-pk">';
     g.rows.forEach(function (r) {
       var on = !!P.sel[r.k], u = P.used[r.k], inf = mfPickIsInfant(r.p);
-      h += '<label class="mf-pkc' + (u ? ' used' : '') + (on ? ' on' : '') + '" title="' + (u ? ('مسجَّل في ملف ' + mfEsc(u)) : '') + '">' +
+      // 🎫 (V4.186) ملاحظات المعتمر تذكر تأشيرة ⇒ غالباً لا يحتاج مراجعة بالوزارة — يُعرض باهتاً مع
+      // نص الملاحظة أسفل رقم الجواز، والقرار النهائي للمستخدم (يبقى قابلاً للاختيار)
+      var vNote = pilgrimVisaNote_(r.p);
+      h += '<label class="mf-pkc' + ((u || vNote) && !on ? ' used' : '') + (on ? ' on' : '') + '" title="' +
+        mfEsc([u ? ('مسجَّل في ملف ' + u) : '', vNote ? ('🎫 ' + vNote) : ''].filter(Boolean).join(' — ')) + '">' +
         '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="mfTripPickOne(\'' + mfEsc(r.k).replace(/'/g, "\\'") + '\',this.checked)">' +
         '<span style="flex:1;">' + mfEsc(r.p.name || r.p.pilgrimName || ('معتمر ' + (r.i + 1))) +
         (inf ? ' <span class="mf-badge off" style="font-size:8.5px;">👶 رضيع — بلا احتساب</span>' : '') +
         '<div style="font-size:9.5px;color:#94a3b8;" class="mf-latin">' + mfEsc(r.p.passportNo || r.p.passport || '') + '</div>' +
+        (vNote ? '<div style="font-size:9.5px;font-weight:800;color:#b45309;">🎫 ' + mfEsc(vNote) + '</div>' : '') +
         '<div style="font-size:9.5px;color:#0f766e;">🧾 ' + mfEsc(g.client) + (u ? (' — ملف ' + mfEsc(u)) : '') + '</div>' +
         '</span></label>';
     });
@@ -37962,9 +38006,15 @@ function mfPickRender() {
       '<div id="mfPg' + gi + '" style="display:none;padding:5px 11px 9px;">';
     items.forEach(function (x) {
       var nm = mfStr(x.p.name || x.p.pilgrimName || ('معتمر ' + (x.i + 1)));
-      h += '<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-size:11px;border-radius:6px;">' +
+      // 🎫 (V4.186) ملاحظات تذكر تأشيرة ⇒ صف باهت + نص الملاحظة أسفل رقم الجواز (القرار للمستخدم)
+      var vNote = pilgrimVisaNote_(x.p);
+      h += '<label style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-size:11px;border-radius:6px;' +
+        (vNote && !P.sel[x.key] ? 'opacity:.5;background:#fffbeb;' : '') + '"' + (vNote ? ' title="🎫 ' + mfEsc(vNote) + '"' : '') + '>' +
         '<input type="checkbox" class="mf-pchk" data-k="' + mfEsc(x.key) + '" ' + (P.sel[x.key] ? 'checked' : '') + ' onchange="mfPickOne(this)">' +
-        mfEsc(nm) + '<span class="ms-auto mf-latin" style="font-size:10px;color:#94a3b8;">' + mfEsc(x.p.passportNo || x.p.passport || '') + '</span></label>';
+        mfEsc(nm) + '<span class="ms-auto" style="display:flex;flex-direction:column;align-items:flex-end;">' +
+        '<span class="mf-latin" style="font-size:10px;color:#94a3b8;">' + mfEsc(x.p.passportNo || x.p.passport || '') + '</span>' +
+        (vNote ? '<span style="font-size:9.5px;font-weight:800;color:#b45309;">🎫 ' + mfEsc(vNote) + '</span>' : '') +
+        '</span></label>';
     });
     h += '</div></div>';
   });
@@ -39605,8 +39655,10 @@ function vzInit() {
 function vzLoad(force, silent) {
   var wrap = document.getElementById('vzTableWrap');
   if (wrap && !silent && (force || !VZ.loaded)) wrap.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
+  var _t0 = Date.now();
   google.script.run
     .withSuccessHandler(function (res) {
+      _perfLog_('متابعة الوكلاء', _t0, res);
       if (!res || !res.success) { if (wrap) wrap.innerHTML = '<div class="alert alert-danger m-2">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
       // 🐛 (V4.177) رد بُني من بيانات تسبق آخر حفظ (بدأ بناؤه قبل الحفظ وانتهى بعده) — تجاهله
       // تماماً ولا تستبدل به الصف المحدَّث محلياً، وأعد المحاولة بهدوء بعد لحظة بدل إظهار القيم القديمة
@@ -40575,7 +40627,7 @@ function vzFormRender() {
       '<span style="margin-inline-start:auto;display:flex;gap:6px;">' +
       '<button class="vz-btn sm" onclick="vzHzAdd(\'مكة\')">➕ سكن مكة</button>' +
       '<button class="vz-btn sm" onclick="vzHzAdd(\'المدينة\')">➕ سكن المدينة</button>' +
-      (mfStr(d.tripName) ? '<button class="vz-btn sm pri" onclick="vzHzFromTrip()">🧳 جلب فنادق الرحلة</button>' : '') +
+      (mfStr(d.tripName) ? '<button class="vz-btn sm pri" onclick="vzHzFromTrip()">🧳 جلب سكن الرحلة بالأعداد (من التسكين)</button>' : '') +
       // 🔄 (V4.164) زر واحد يجلب اتفاقيتَي السكن والإعاشة لكل من مكة والمدينة معاً برقم هذه المجموعة —
       // بدل زر منفصل بكل سكن، لو لم تُسحب تلقائياً
       '<button class="vz-btn sm" title="جلب أرقام اتفاقيات السكن والإعاشة المسجَّلة مسبقاً برقم هذه المجموعة (مكة والمدينة معاً) — لو لم تُسحب تلقائياً" onclick="vzHzFetchAgrAll()">🔄 جلب اتفاقيات السكن والإعاشة</button>' +
@@ -40816,8 +40868,76 @@ function vzHzRender() {
   }).join('');
   vzHzChip();
 }
-// 🧳 جلب فنادق الرحلة (الأساسي + الفنادق الإضافية) بأعدادها وتواريخها — قابلة للتعديل
+// 🧳 (V4.186) جلب سكن الرحلة بعدد الأفراد الفعلي لكل فندق من واقع «تسكين الرحلة» نفسه (فندق مكة/
+// المدينة المسجَّل لكل معتمر بكشف الرحلة، أو فندق الرحلة الأساسي لو لم يُحدَّد له فندق) — لكل الرحلات
+// المرتبطة بالمجموعة (الأساسية + الإضافية). لو اختير معتمرو المجموعة بالفعل تُحسب أعدادهم هم فقط،
+// وإلا كل معتمري الرحلة. ولو الرحلة بلا كشف معتمرين بعد نرجع للطريقة القديمة (فنادق الرحلة بعدد المجموعة).
 function vzHzFromTrip() {
+  var d = VZ._draft, trips = vzTripsOfDraft_(d);
+  if (!trips.length || !(VZ.trips || []).some(function (x) { return trips.indexOf(x.name) >= 0; })) {
+    _showPopup('اختر رحلة مسجَّلة أولاً', 'error'); return;
+  }
+  var useList = function (list) {
+    if (VZ._draft !== d) return; // أُغلق النموذج أو فُتحت مجموعة أخرى قبل وصول الرد
+    if (!list || !list.length) { vzHzFromTripHotels_(); return; }
+    vzHzFromRooming_(list);
+  };
+  // نعيد استخدام قائمة معتمري الرحلات لو جُلبت بالفعل لنفس الرحلات (بلا نداء إضافي للسيرفر)
+  if (VZ._pick && VZ._pick.trip === trips.join('|') && (VZ._pick.list || []).length) { useList(VZ._pick.list); return; }
+  var merged = [], done = 0;
+  trips.forEach(function (tn) {
+    google.script.run
+      .withSuccessHandler(function (list) {
+        (list || []).forEach(function (p) { p._trip = tn; merged.push(p); });
+        if (++done === trips.length) useList(merged);
+      })
+      .withFailureHandler(function () { if (++done === trips.length) useList(merged); })
+      .getTripPilgrims(window.authToken, tn);
+  });
+}
+function vzHzFromRooming_(list) {
+  var d = VZ._draft;
+  // المعتمرون المختارون للمجموعة (بالجواز أو بالاسم لمن بلا جواز) — لو لم يُختر أحد نحسب كل معتمري الرحلة
+  var selPass = {}, selName = {}, hasSel = false;
+  (d.selected || []).forEach(function (k) {
+    k = mfStr(k); if (!k) return; hasSel = true;
+    if (k.charAt(0) === '#') selName[k.replace(/^#\d+_/, '')] = 1; else selPass[k] = 1;
+  });
+  var people = list.filter(function (p) {
+    if (!hasSel) return true;
+    var pass = mfStr(p.passport || p.passportNo);
+    return pass ? !!selPass[pass] : !!selName[mfStr(p.name)];
+  });
+  if (!people.length) { vzHzFromTripHotels_(); return; }
+  var buckets = {}, order = [];
+  var add = function (city, hotel, inD, outD) {
+    var key = city + '|' + hotel;
+    if (!buckets[key]) { buckets[key] = { city: city, hotel: hotel, count: 0, in: mfStr(inD), out: mfStr(outD) }; order.push(key); }
+    buckets[key].count++;
+  };
+  people.forEach(function (p) {
+    var t = (VZ.trips || []).filter(function (x) { return x.name === p._trip; })[0] || {};
+    var mk = (p.housingExcluded || p.housingExcludedMakkah) ? '(مستثنى من تسكين الرحلة)' : (mfStr(p.hotelMakkah) || mfStr(t.makkahHotel));
+    var md = (p.housingExcluded || p.housingExcludedMadinah) ? '(مستثنى من تسكين الرحلة)' : (mfStr(p.hotelMadinah) || mfStr(t.madinahHotel));
+    if (mk) add('مكة', mk, t.makkahIn, t.makkahOut);
+    if (md) add('المدينة', md, t.madinahIn, t.madinahOut);
+  });
+  var L = vzHzList(), added = 0, updated = 0;
+  order.forEach(function (key) {
+    var b = buckets[key];
+    var ex = L.filter(function (h) { return h.city === b.city && mfStr(h.hotel) === b.hotel; })[0];
+    if (ex) { if (mfNum(ex.count) !== b.count) { ex.count = b.count; updated++; } if (!mfStr(ex.in)) ex.in = b.in; if (!mfStr(ex.out)) ex.out = b.out; return; }
+    L.push({ city: b.city, hotel: b.hotel, count: b.count, in: b.in, out: b.out, hAgr: '', cAgr: '', supplier: '' });
+    added++;
+  });
+  vzHzRender();
+  var summary = order.map(function (k) { return buckets[k].city + ': ' + buckets[k].hotel + ' (' + buckets[k].count + ')'; }).join(' · ');
+  _showPopup((added || updated)
+    ? ('سكن الرحلة من واقع التسكين (' + people.length + ' فرد' + (hasSel ? ' مختار' : '') + '): ' + summary)
+    : 'سكن الرحلة مُسجَّل بالفعل بنفس الأعداد', (added || updated) ? 'success' : 'info');
+}
+// الطريقة القديمة (احتياطية): فنادق الرحلة المسجَّلة ببياناتها، الأساسي بعدد المجموعة
+function vzHzFromTripHotels_() {
   var t = (VZ.trips || []).filter(function (x) { return x.name === mfStr(VZ._draft.tripName); })[0];
   if (!t) { _showPopup('اختر رحلة مسجَّلة أولاً', 'error'); return; }
   var L = vzHzList(), added = 0;
@@ -40959,10 +41079,8 @@ function vzPickAlreadyIn_(p) {
   return pass ? (VZ._pick._otherIdx[pass] || null) : null;
 }
 // 🎫 (V4.164) هل ملاحظات هذا المعتمر تذكر أنه حاصل على تأشيرة بالفعل؟ يُرجع نص الملاحظة نفسه
-function vzPickVisaNote_(p) {
-  var n = mfStr(p && p.notes);
-  return /حاصل\s*على\s*تأشير/.test(n) ? n : '';
-}
+// (V4.186) صارت تلتقط أي ذكر لتأشيرة بالملاحظات (زيارة/عائلية/سياحة…) — انظر pilgrimVisaNote_
+function vzPickVisaNote_(p) { return pilgrimVisaNote_(p); }
 function vzPickRender() {
   var box = document.getElementById('vzPickBox'); if (!box) return;
   var P = VZ._pick; if (!P) { box.innerHTML = ''; return; }
@@ -40994,9 +41112,11 @@ function vzPickRender() {
         (already ? ('\'' + vzJs(already.ref || ('#' + already.seq)) + '\'') : 'null') + ',' + (visaNote ? ('\'' + vzJs(visaNote) + '\'') : 'null') + ')">' +
         '<span style="flex:1;">' + vzEsc(r.p.name || ('معتمر ' + (r.i + 1))) + (inf ? ' <span class="vz-badge y" style="font-size:8px;">👶</span>' : '') +
         (already ? ' <span class="vz-badge r" style="font-size:8px;" title="مُرسَل من قبل ضمن مجموعة ' + vzEsc(already.ref || ('#' + already.seq)) + '">⚠️ مجموعة ' + vzEsc(already.ref || ('#' + already.seq)) + '</span>' : '') +
-        (visaNote ? ' <span class="vz-badge y" style="font-size:8px;" title="' + vzEsc(visaNote) + '">🎫 ' + vzEsc(visaNote) + '</span>' : '') +
         '<div style="font-size:9px;color:#94a3b8;"><span class="vz-latin">' + vzEsc(r.p.passport || '') + '</span>' +
-        ((P.trips || []).length > 1 && r.p._trip ? ' · 🧳 ' + vzEsc(r.p._trip) : '') + '</div></span></label>';
+        ((P.trips || []).length > 1 && r.p._trip ? ' · 🧳 ' + vzEsc(r.p._trip) : '') + '</div>' +
+        // 🎫 (V4.186) نص التأشيرة المذكور بالملاحظات أسفل رقم الجواز مباشرة
+        (visaNote ? '<div style="font-size:9.5px;font-weight:800;color:#b45309;">🎫 ' + vzEsc(visaNote) + '</div>' : '') +
+        '</span></label>';
     });
     h += '</div></div>';
   });
@@ -41016,8 +41136,8 @@ function vzPickOne(k, on, alreadyRef, visaNote) {
   }
   // 🎫 (V4.164) نفس أسلوب التنبيه غير المانع، لمعتمر ملاحَظ عليه أنه حاصل على تأشيرة بالفعل
   if (on && visaNote) {
-    showElegantConfirm({ icon: '🎫', title: 'حاصل على تأشيرة بالفعل',
-      message: 'ملاحظات هذا المعتمر: «' + visaNote + '». التنبيه غير مانع — يمكنك تحديده هنا أيضاً إن كان مقصوداً.',
+    showElegantConfirm({ icon: '🎫', title: 'ملاحظات المعتمر تذكر تأشيرة',
+      message: 'ملاحظات هذا المعتمر: «' + visaNote + '» — غالباً لا يحتاج تأشيرة. التنبيه غير مانع — يمكنك تحديده هنا أيضاً إن كان مقصوداً.',
       buttons: [
         { label: 'تحديده رغم ذلك', class: 'btn-primary', onClick: function () { VZ._pick.sel[k] = true; vzPickRender(); } },
         { label: 'تراجع', class: 'btn-secondary', onClick: function () { vzPickRender(); } }
