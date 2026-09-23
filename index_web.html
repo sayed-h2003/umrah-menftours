@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.189 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.190 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.189)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.190)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.189</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.190</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7060,7 +7060,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.189";
+var CLIENT_APP_VERSION = "4.190";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -37018,13 +37018,14 @@ function _prPickRun_() {
 function _xtDraft_(ns) { return ns === 'vz' ? VZ._draft : MF._draft; }
 function _xtSplit_(s) { return tripListSplit_(s); }
 function _xtRows_(ns) {
-  var d = _xtDraft_(ns); if (!d) return [''];
+  var d = _xtDraft_(ns); if (!d) return [];
   var fromField = _xtSplit_(d.extraTrips);
   // لو تغيّر الحقل من مكان آخر (مثلاً نقل رحلات كُتبت بالخانة الأساسية) نعيد البناء منه
   if (!d._xtRows || _xtCanon_(d, d._xtRows).join('،') !== fromField.join('،')) {
     var keepEmpty = d._xtRows && d._xtRows.length && !mfStr(d._xtRows[d._xtRows.length - 1]);
     d._xtRows = fromField.slice();
-    if (keepEmpty || !d._xtRows.length) d._xtRows.push('');
+    // (V4.190) الافتراضي رحلة واحدة فقط (الأساسية) — لا خانة إضافية إلا بضغط «➕ رحلة إضافية»
+    if (keepEmpty) d._xtRows.push('');
   }
   return d._xtRows;
 }
@@ -37041,7 +37042,7 @@ function xtEditorHtml_(ns, d) {
       '<button type="button" class="mf-btn sm" title="بحث عن معتمر لاختيار رحلته" onclick="_xtPick(\'' + ns + '\',' + i + ')">🔍</button>' +
       '<button type="button" class="mf-btn sm dgr" title="حذف هذه الرحلة" onclick="_xtDel(\'' + ns + '\',' + i + ')">🗑️</button></div>';
   }).join('') +
-    '<button type="button" class="mf-btn sm" onclick="_xtAdd(\'' + ns + '\')">➕ رحلة أخرى</button>' +
+    '<button type="button" class="mf-btn sm" onclick="_xtAdd(\'' + ns + '\')">➕ رحلة إضافية</button>' +
     (names ? ('<datalist id="mfXtTripsDL">' + names.map(function (n) { return '<option value="' + mfEsc(n) + '">'; }).join('') + '</datalist>') : '');
 }
 function _xtRerender_(ns) {
@@ -37074,13 +37075,12 @@ function _xtSet(ns, i, v, commit) {
 }
 function _xtAdd(ns) { var rows = _xtRows_(ns); if (rows.length && !mfStr(rows[rows.length - 1])) { _xtRerender_(ns); return; } rows.push(''); _xtRerender_(ns); }
 function _xtDel(ns, i) {
-  var rows = _xtRows_(ns); rows.splice(i, 1); if (!rows.length) rows.push('');
+  var rows = _xtRows_(ns); rows.splice(i, 1);
   _xtSync_(ns, true); _xtRerender_(ns);
 }
 function _xtPick(ns, i) {
   openPilgrimTripPicker_(function (tn) {
     var rows = _xtRows_(ns); rows[i] = tn;
-    if (!rows.some(function (r) { return !mfStr(r); })) rows.push('');   // خانة فارغة جاهزة للرحلة التالية
     _xtSync_(ns, true); _xtRerender_(ns);
   });
 }
