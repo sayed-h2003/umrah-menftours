@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.192";
+var APP_VERSION = "4.193";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6807,6 +6807,7 @@ var ALL_CACHE_KEYS = [
   'trips_list_cache',   // قائمة الرحلات (تقرأ 3 شيتات — تُمسح مع أي تعديل رحلة/كشف)
   'registry_cache',     // السجل العام للمعتمرين
   'ministry_bootstrap_cache', // 🏛️ (V4.109) بيانات شاشة مراجعة ملفات الوزارة المشتركة بين المستخدمين
+  'mf_ref_lists_cache',       // ⚡ (V4.193) الشركات/الرحلات/العملاء لشاشتي الوزارة والوكلاء
   'notifications_rows_cache', // 🔔 (V4.177) صفوف التنبيهات الخام (تُبطَّل أيضاً مع كل كتابة تنبيه)
   'ministry_trip_links_cache', // 🔗 (V4.178) روابط الرحلة⇄ملف الوزارة (تُبطَّل مع حفظ ملف أو رحلة)
   'visa_bootstrap_cache' // 🧑‍💼 (V4.142) بيانات شاشة متابعة التأشيرات والوكلاء — كانت مفقودة من هذه القائمة
@@ -17267,6 +17268,7 @@ function addClientRecord(authToken, name, mobile, notes, force) {
     }
   }
   sheet.appendRow([name, String(mobile || '').trim(), String(notes || '').trim()]);
+  clearCachedData('mf_ref_lists_cache');   // ⚡ (V4.193) قائمة العملاء المرجعية لشاشتي الوزارة والوكلاء
   return { success: true, client: { name: name, mobile: String(mobile || '').trim(), notes: String(notes || '').trim() } };
 }
 
@@ -17362,6 +17364,7 @@ function updateClientRecord(authToken, row, newName, mobile, notes) {
     renamedCount += _cascadeClientRename_(oldName, newName);
   }
 
+  clearCachedData('mf_ref_lists_cache');   // ⚡ (V4.193) قائمة العملاء المرجعية
   return { success: true, renamedCount: renamedCount };
 }
 
@@ -21489,7 +21492,19 @@ function _mfBuildSharedBootstrap_() {
 // ⚡ (V4.186) القوائم المرجعية وحدها (الشركات + الرحلات + العملاء) — تحتاجها شاشة متابعة الوكلاء فقط
 // من بوتستراب الوزارة؛ كانت تبني بوتستراب الوزارة كاملاً (قراءة كل الملفات والإيصالات والمشرفين
 // وحساب القواعد والأرصدة لكل ملف) لمجرد هذه القوائم الثلاث عندما يكون كاش الوزارة بارداً
+// ⚡ (V4.193) القوائم المرجعية (الشركات/الرحلات/العملاء) تتغير نادراً، لكنها كانت تُقرأ من 3 شيتات (منها
+// شيت الرحلات كاملاً) مع كل إعادة بناء لبيانات ملفات الوزارة — أي بعد كل حفظ ملف. صارت مخزَّنة مؤقتاً
+// بمفتاح مستقل لا يُمسح مع حفظ ملف مراجعة، ويُمسح فقط مع أي تعديل للرحلات/الشركات/العملاء (clearAllCache
+// التي تستدعيها كل عمليات حفظ الرحلات والشركات وحذف العملاء، + إضافة/تعديل عميل صراحةً).
+var MF_REF_CACHE_KEY = 'mf_ref_lists_cache';
 function _mfBuildRefLists_() {
+  var cached = getCachedData(MF_REF_CACHE_KEY);
+  if (cached && cached.trips) return cached;
+  var fresh = _mfBuildRefListsRaw_();
+  try { setCachedData(MF_REF_CACHE_KEY, fresh); } catch (e) {}
+  return fresh;
+}
+function _mfBuildRefListsRaw_() {
   // الشركات مع رقم الترخيص والوكيل الافتراضي
   var companies = [];
   try {
