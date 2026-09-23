@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.190 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.191 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.190)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.191)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.190</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.191</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7052,6 +7052,39 @@ function tripListSplit_(s) {
   var parts = s.split(/\s*[،,]\s*|\s+-\s+/).map(function (t) { return t.trim(); }).filter(Boolean);
   return (parts.length > 1 && parts.every(function (p) { return known[p]; })) ? parts : [s];
 }
+/* ⚡ (V4.191) توحيد استدعاءات getTripsList: كانت 16 نقطة بالواجهة تطلب قائمة الرحلات كلٌّ على حدة، فيُرسَل
+   عند الدخول 6+ طلبات متزامنة لنفس البيانات (كل طلب ≥2 ث بالخادم). الآن أي طلبات تصل بينما طلب قائم بالفعل
+   تنتظره وتأخذ نفس نتيجته (نسخة مستقلة لكل مستدعٍ) — طلب واحد فقط للخادم. لا تخزين بعد انتهاء الطلب،
+   فأي تحميل لاحق (بعد حفظ رحلة مثلاً) يجلب بيانات حديثة دائماً. نفس واجهة google.script.run للمستدعي. */
+var _TL_Q_ = null;
+function _tripsListRun_() {
+  var ok = null, fail = null;
+  var b = {
+    withSuccessHandler: function (f) { ok = f; return b; },
+    withFailureHandler: function (f) { fail = f; return b; },
+    getTripsList: function () {
+      var first = !_TL_Q_;
+      if (first) _TL_Q_ = [];
+      _TL_Q_.push([ok, fail]);
+      if (!first) return;
+      google.script.run
+        .withSuccessHandler(function (res) {
+          var q = _TL_Q_; _TL_Q_ = null;
+          var json = null; try { json = JSON.stringify(res); } catch (e) {}
+          q.forEach(function (c) {
+            if (!c[0]) return;
+            try { c[0](json != null ? JSON.parse(json) : res); } catch (e) { console.error('getTripsList handler', e); }
+          });
+        })
+        .withFailureHandler(function (err) {
+          var q = _TL_Q_; _TL_Q_ = null;
+          q.forEach(function (c) { if (c[1]) { try { c[1](err); } catch (e) { console.error(e); } } });
+        })
+        .getTripsList(window.authToken);
+    }
+  };
+  return b;
+}
 function pilgrimVisaNote_(p) {
   var n = String((p && p.notes) || '').trim();
   if (!n) return '';
@@ -7060,7 +7093,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.190";
+var CLIENT_APP_VERSION = "4.191";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -9704,7 +9737,7 @@ function _startRoomsMigration_() {
   };
   if ((window.tripsCache || []).length) { run(window.tripsCache); }
   else {
-    google.script.run.withSuccessHandler(function(trips) { window.tripsCache = trips || []; run(window.tripsCache); })
+    _tripsListRun_().withSuccessHandler(function(trips) { window.tripsCache = trips || []; run(window.tripsCache); })
       .withFailureHandler(function(err) { _showPopup('تعذّر جلب الرحلات: ' + (err.message || err), 'error'); })
       .getTripsList(window.authToken);
   }
@@ -10597,7 +10630,7 @@ function _openTripPickerModal(title, excludeTrip, cb) {
     modal.show();
   };
   if ((window.tripsCache || []).length) doOpen();
-  else google.script.run.withSuccessHandler(function(trips) { window.tripsCache = trips || []; doOpen(); })
+  else _tripsListRun_().withSuccessHandler(function(trips) { window.tripsCache = trips || []; doOpen(); })
     .withFailureHandler(function(e) { alert('❌ تعذر تحميل الرحلات: ' + (e.message || e)); })
     .getTripsList(window.authToken);
 }
@@ -11533,7 +11566,7 @@ function loadTripsList() {
     _tripsListInFlight_ = false;
     if (_tripsListAgain_) { _tripsListAgain_ = false; loadTripsList(); }
   };
-  google.script.run
+  _tripsListRun_()
     .withSuccessHandler(function (list) { done(); _tripsRenderList_(list); })
     .withFailureHandler(function (err) {
       _tripsListInFlight_ = false; _tripsListAgain_ = false;
@@ -12090,7 +12123,7 @@ function openRule70Screen() {
   var pending = 2;
   var done = function() { if (--pending === 0) _renderRule70_(); };
   if ((window.tripsCache || []).length) done();
-  else google.script.run.withSuccessHandler(function(trips) { window.tripsCache = trips || []; done(); })
+  else _tripsListRun_().withSuccessHandler(function(trips) { window.tripsCache = trips || []; done(); })
     .withFailureHandler(function(err) { if (_handleSessErr_(err)) return; window.tripsCache = window.tripsCache || []; done(); })
     .getTripsList(window.authToken);
   google.script.run.withSuccessHandler(function(bks) { window._r70Bookings = bks || []; done(); })
@@ -12824,7 +12857,7 @@ function openTripsPeriodReport(presetClient) {
     _runTripsPeriod_();
   };
   if ((window.tripsCache || []).length) show();
-  else google.script.run.withSuccessHandler(function(trips) { window.tripsCache = trips || []; show(); })
+  else _tripsListRun_().withSuccessHandler(function(trips) { window.tripsCache = trips || []; show(); })
     .withFailureHandler(function(err) { if (_handleSessErr_(err)) return; alert('❌ ' + (err.message || err)); })
     .getTripsList(window.authToken);
 }
@@ -14054,7 +14087,7 @@ function _ensureTripNamesDatalist_() {
     dl.innerHTML = names.map(function(n) { return '<option value="' + escapeHtml_(n) + '">'; }).join('');
   };
   if (window.tripsCache && window.tripsCache.length) { fill(window.tripsCache); return; }
-  google.script.run
+  _tripsListRun_()
     .withSuccessHandler(function(trips) { window.tripsCache = trips || []; fill(window.tripsCache); })
     .withFailureHandler(function() { window._tripNamesDLReady = false; })
     .getTripsList(window.authToken);
@@ -17928,7 +17961,7 @@ function openMultiTripSummary() {
 
   var render = function() { _renderMtpTripsList(); new bootstrap.Modal(document.getElementById('multiTripPickerModal')).show(); };
   if ((window.tripsCache || []).length) render();
-  else google.script.run.withSuccessHandler(function(trips) { window.tripsCache = trips || []; render(); }).getTripsList(window.authToken);
+  else _tripsListRun_().withSuccessHandler(function(trips) { window.tripsCache = trips || []; render(); }).getTripsList(window.authToken);
 }
 
 function _renderMtpTripsList() {
@@ -19905,7 +19938,7 @@ function openMergeHousingPicker() {
   window._mhPickChecked = {};
   var render = function() { _mhPickRerender_(); new bootstrap.Modal(document.getElementById('mhPickModal')).show(); };
   if ((window.tripsCache || []).length) render();
-  else google.script.run.withSuccessHandler(function(trips) { window.tripsCache = trips || []; render(); })
+  else _tripsListRun_().withSuccessHandler(function(trips) { window.tripsCache = trips || []; render(); })
     .withFailureHandler(function(err) { if (_handleSessErr_(err)) return; showToast('❌ ' + (err.message || err), true); })
     .getTripsList(window.authToken);
 }
@@ -20106,7 +20139,7 @@ function _mhTripStayMap_() {
   // الكاش فارغ (فُتحت الشاشة من مسار آخر) — نجلب الرحلات مرة واحدة ثم نُعيد الرسم
   if (!window._mhTripDatesLoading) {
     window._mhTripDatesLoading = true;
-    google.script.run
+    _tripsListRun_()
       .withSuccessHandler(function (list) {
         window._mhTripDatesLoading = false;
         window.tripsCache = (window.tripsCache && window.tripsCache.length) ? window.tripsCache : (list || []);
@@ -21625,7 +21658,7 @@ function _ensureAuditEntityList() {
     .withFailureHandler(function() { fill([]); })
     .getGlobalPilgrimsRegistry(window.authToken);
   if (!(window.tripsCache || []).length) {
-    google.script.run.withSuccessHandler(function(trips) {
+    _tripsListRun_().withSuccessHandler(function(trips) {
       (trips || []).forEach(function(t) { if (t && t.name) { var o = document.createElement('option'); o.value = t.name; dl.appendChild(o); } });
     }).withFailureHandler(function() {}).getTripsList(window.authToken);
   }
@@ -25042,7 +25075,7 @@ function _tripAcctSummaryOpen_() {
   window._tasCache = null;
   new bootstrap.Modal(document.getElementById('tripAcctSummaryModal')).show();
   if (!(window.tripsCache || []).length) {
-    google.script.run.withSuccessHandler(function(trips) { window.tripsCache = trips || []; })
+    _tripsListRun_().withSuccessHandler(function(trips) { window.tripsCache = trips || []; })
       .withFailureHandler(function() {}).getTripsList(window.authToken);
   }
 }
@@ -25250,7 +25283,7 @@ function _ccInit_() {
   }
   // اربط قائمة الرحلات
   if (!(window.tripsCache || []).length) {
-    google.script.run.withSuccessHandler(function(t) { window.tripsCache = t || []; })
+    _tripsListRun_().withSuccessHandler(function(t) { window.tripsCache = t || []; })
       .withFailureHandler(function() {}).getTripsList(window.authToken);
   }
   // 🔒 (V4.65) ربط صريح لأزرار الفلاتر عبر addEventListener — أضمن مسار على الإطلاق (بدون CSP-onclick)
@@ -27830,7 +27863,7 @@ function openGlobalSearch() {
       .withFailureHandler(function() {}).getAllBookingsAuth(window.authToken);
   }
   if (!(window.tripsCache || []).length) {
-    google.script.run.withSuccessHandler(function(t) { window.tripsCache = t || []; _runGlobalSearch(); })
+    _tripsListRun_().withSuccessHandler(function(t) { window.tripsCache = t || []; _runGlobalSearch(); })
       .withFailureHandler(function() {}).getTripsList(window.authToken);
   }
   if (!(window._registryCache || []).length) {
@@ -28968,7 +29001,7 @@ function selectBookingRow(id, evt) {
   function _ensureTripsCacheForHover_() {
     if ((window.tripsCache || []).length || window._tripsCacheLoading) return;
     window._tripsCacheLoading = true;
-    google.script.run.withSuccessHandler(function(trips) {
+    _tripsListRun_().withSuccessHandler(function(trips) {
       window.tripsCache = trips || []; window._tripsCacheLoading = false;
     }).withFailureHandler(function() { window._tripsCacheLoading = false; }).getTripsList(window.authToken);
   }
@@ -29658,7 +29691,7 @@ function _tbCompareAdopt_(tripName, group) {
         _tbCompareOpen_(); // إعادة بناء المقارنة بعد الاعتماد
         // 🔄 بيانات الرحلة بالكاش أصبحت قديمة بعد الاعتماد — نجلبها من جديد ثم نعيد بناء ملخص الرحلة بالمودال
         if (window.currentTripName === tripName) {
-          google.script.run.withSuccessHandler(function(trips) {
+          _tripsListRun_().withSuccessHandler(function(trips) {
             window.tripsCache = trips || [];
             if (window.currentTripName === tripName && typeof openTripPilgrims === 'function') openTripPilgrims(tripName);
           }).withFailureHandler(function() {}).getTripsList(window.authToken);
@@ -34349,7 +34382,7 @@ window.__step('4️⃣.13 مقطع الجافاسكربت 13/14 ✅');
 <script>
 function _refreshUrgentTripsCard() {
   if (!(hasPermission('admin') || hasPermission('TRIPS') || hasPermission('REGISTRY'))) return;
-  google.script.run
+  _tripsListRun_()
     .withSuccessHandler(function(trips) {
       trips = trips || [];
       window.tripsCache = trips;
