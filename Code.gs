@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.183";
+var APP_VERSION = "4.184";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6387,8 +6387,66 @@ function logoutUserSession(token) {
       logChange_(session.username, "تسجيل خروج", "-", "خروج من النظام", "-", "-");
     }
     CacheService.getScriptCache().remove('session_' + token);
+    _onlineRemove_(token);
   }
   return { success: true };
+}
+
+/* ============================================================
+   🟢 (V4.184) «المتصلون الآن» — أيقونة بجوار اسم المستخدم أعلى الشاشة تعرض عدد وأسماء من
+   فتحوا البرنامج حالياً. لا يوجد أي سجل لهذا بالسيرفر من قبل، فأنشأنا فهرساً خفيفاً بذاكرة
+   الكاش المؤقتة (CacheService) — بلا أي قراءة/كتابة على الشيت إطلاقاً، فلا يؤثر على أداء أي
+   شاشة. لا يُحدَّث مع كل نداء عادي (كان سيسبب تزاحماً وبطئاً)، بل فقط من نبضة (heartbeat) خفيفة
+   يرسلها المتصفح كل دقيقة تقريباً — نداء واحد صغير لكل مستخدم كل دقيقة، بلا أي تأثير محسوس.
+   ============================================================ */
+var ONLINE_REGISTRY_KEY_ = 'active_users_registry_v1';
+var ONLINE_STALE_MS_ = 130000; // 130 ثانية — أكبر قليلاً من فاصل النبضة (كل ~60 ثانية) لتحمّل تأخر عرضي
+function _onlineRead_() {
+  try {
+    var raw = CacheService.getScriptCache().get(ONLINE_REGISTRY_KEY_);
+    return raw ? (JSON.parse(raw) || {}) : {};
+  } catch (e) { return {}; }
+}
+function _onlineWrite_(map) {
+  try { CacheService.getScriptCache().put(ONLINE_REGISTRY_KEY_, JSON.stringify(map), 21600); } catch (e) {}
+}
+// يُنقّي المدخلات المنتهية (تجاوزت مهلة النبضة — أي أن المستخدم غالباً أغلق الصفحة/فقد الاتصال)
+// ويعيد الخريطة النظيفة + يكتبها فوراً حتى لا يتراكم الفهرس بمدخلات ميتة
+function _onlinePrune_() {
+  var map = _onlineRead_(), now = Date.now(), changed = false, out = {};
+  Object.keys(map).forEach(function(tok) {
+    var e = map[tok];
+    if (e && (now - (e.ts || 0)) <= ONLINE_STALE_MS_) out[tok] = e; else changed = true;
+  });
+  if (changed) _onlineWrite_(out);
+  return out;
+}
+function _onlineRemove_(token) {
+  var map = _onlineRead_();
+  if (map[token]) { delete map[token]; _onlineWrite_(map); }
+}
+// نبضة خفيفة يرسلها المتصفح دورياً (كل دقيقة تقريباً) — تُحدِّث "آخر ظهور" لهذا التوكن فقط،
+// وتعيد العدد الحالي (بلا أسماء) كي يتحدَّث الرقم بجوار الأيقونة بلا نداء إضافي منفصل
+function heartbeatOnline(authToken) {
+  var session = requireAuth_(authToken);
+  var map = _onlinePrune_();
+  map[authToken] = { username: session.username, fullName: session.fullName || session.username, ts: Date.now() };
+  _onlineWrite_(map);
+  var uniq = {}; Object.keys(map).forEach(function(t) { uniq[map[t].username] = 1; });
+  return { success: true, count: Object.keys(uniq).length };
+}
+// القائمة الكاملة (أسماء) — تُستدعى فقط عند فتح القائمة المنسدلة، وليس دورياً
+function getOnlineUsersNow(authToken) {
+  requireAuth_(authToken);
+  var map = _onlinePrune_();
+  var byUser = {};
+  Object.keys(map).forEach(function(t) {
+    var e = map[t];
+    if (!byUser[e.username] || byUser[e.username].ts < e.ts) byUser[e.username] = e;
+  });
+  var users = Object.keys(byUser).map(function(u) { return { username: u, fullName: byUser[u].fullName, lastSeen: byUser[u].ts }; })
+    .sort(function(a, b) { return a.fullName.localeCompare(b.fullName, 'ar'); });
+  return { success: true, count: users.length, users: users };
 }
 
 
@@ -20554,7 +20612,10 @@ var MF_HEADERS = [
   'فندق المدينة','دخول المدينة','خروج المدينة','فندق مكة','دخول مكة','خروج مكة',
   'شركة النقل','ملاحظات','المعتمرون المختارون (JSON)',
   'أنشئ بواسطة','أنشئ في','عُدّل بواسطة','عُدّل في',
-  'نوع الملف'
+  'نوع الملف',
+  // 🧳 (V4.184) رحلات إضافية مرتبطة بنفس ملف المراجعة — عمود أُضيف بالنهاية (لا يزحزح فهارس
+  // الأعمدة القديمة)، نفس فكرة extraTrips بمجموعات التأشيرات
+  'رحلات إضافية مرتبطة'
 ];
 
 var MF_SUP_SHEET = 'MinistrySupervisors';
@@ -20580,7 +20641,7 @@ var MF_FIELD_LABELS_ = {
   madinahHotel:'فندق المدينة', madinahIn:'دخول المدينة', madinahOut:'خروج المدينة',
   makkahHotel:'فندق مكة', makkahIn:'دخول مكة', makkahOut:'خروج مكة',
   transport:'شركة النقل', notes:'ملاحظات', breakdown:'بنود العميل', sups:'المشرفون',
-  selected:'المعتمرون المختارون', fileType:'نوع الملف'
+  selected:'المعتمرون المختارون', fileType:'نوع الملف', extraTrips:'رحلات إضافية مرتبطة'
 };
 
 /* ---------- صلاحية الشاشة ---------- */
@@ -20875,7 +20936,9 @@ function _mfRowToObj_(r) {
     updatedBy: _mfStr_(r[37]), updatedAt: _mfDateTime_(r[38]),
     // 🎯 نوع الملف: «فردي»/«مجموعات» — عمود أُضيف لاحقاً، الفراغ بالصفوف القديمة يعني «غير مصنَّف»
     // ولا يُحتسب ضمن حصة الأفراد (فقط القيمة الحرفية «فردي» تُحتسب)
-    fileType: _mfStr_(r[39]) || ''
+    fileType: _mfStr_(r[39]) || '',
+    // 🧳 (V4.184) رحلات إضافية مرتبطة — نفس فكرة extraTrips بمجموعات التأشيرات
+    extraTrips: _mfStr_(r[40])
   };
 }
 function _mfObjToRow_(f) {
@@ -20888,8 +20951,21 @@ function _mfObjToRow_(f) {
     f.madinahHotel, f.madinahIn, f.madinahOut, f.makkahHotel, f.makkahIn, f.makkahOut,
     f.transport, f.notes, JSON.stringify(f.selected || []),
     f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
-    f.fileType
+    f.fileType, f.extraTrips
   ];
+}
+// 🧳 (V4.184) كل رحلات ملف المراجعة: الأساسية + الإضافية (نفس منطق _vzTripSplit_/_vzTripsOf_)
+function _mfTripSplit_(s) {
+  s = _mfStr_(s); if (!s) return [];
+  var norm = s.replace(/\s+-\s*|\s*-\s+/g, '،');
+  return norm.split(/[،,]/).map(function(t) { return _mfStr_(t); }).filter(String);
+}
+function _mfTripsOf_(f) {
+  var out = [], seen = {};
+  _mfTripSplit_(f && f.tripName).concat(_mfTripSplit_(f && f.extraTrips)).forEach(function(t) {
+    if (!t || seen[t]) return; seen[t] = 1; out.push(t);
+  });
+  return out;
 }
 function _mfNextSeq_() {
   var lock = LockService.getScriptLock();
@@ -21504,6 +21580,8 @@ function saveMinistryFile(authToken, data) {
       travelMode: _mfStr_(data.travelMode) || 'طيران',
       clientLabel: _mfStr_(data.clientLabel) || bd.map(function(b) { return b.name; }).join(' + '),
       breakdown: bd, tripName: _mfStr_(data.tripName),
+      // 🧳 (V4.184) رحلات إضافية مرتبطة بنفس الملف — نفس فكرة extraTrips بمجموعات التأشيرات
+      extraTrips: _mfStr_(data.extraTrips),
       goDate: _mfDate_(data.goDate), retDate: _mfDate_(data.retDate),
       pilgrims: pilg, supCount: 0,   // 🧑‍✈️ (V4.113) يُحتسب أدناه بعد تطبيق قاعدة الوكيل ⇒ استقبال (مرافق فقط يُحتسب)
       sups: sups,
@@ -21951,17 +22029,20 @@ function getMinistryTripLinks(authToken) {
   var links = {}, alerts = [];
   var todayMs = _mfMs_(_mfToday_());
   files.forEach(function(f) {
-    var t = _mfStr_(f.tripName);
-    if (!t) return;
-    if (!links[t]) links[t] = [];
-    links[t].push({ id: f.id, fileNo: f.fileNo, seq: f.seq, reviewDate: f.reviewDate,
+    // 🧳 (V4.184) الملف يُفهرَس تحت كل رحلاته (الأساسية + الإضافية) وليس فقط الأساسية —
+    // كي تظهر الملفات المرتبطة بأكثر من رحلة ضمن روابط كل رحلة من رحلاته
+    var entry = { id: f.id, fileNo: f.fileNo, seq: f.seq, reviewDate: f.reviewDate,
       reviewed: !!_mfStr_(f.reviewDate), approved: f.approved, pilgrims: f.pilgrims,
       // 🔎 (V4.111) clientLabel + selected يتيحان للبحث العام والسجل العام عرض ملفات
       // المراجعة الخاصة بكل معتمر (وليس الرحلات فقط)
       clientLabel: f.clientLabel, company: f.company, ref: f.ref,
       // 🗓️ (V4.124) تاريخ إنشاء الملف — لعرضه ضمن خط سير الرحلة (إنشاء الملف ثم تاريخ مراجعته)
       createdAt: f.createdAt,
-      selected: Array.isArray(f.selected) ? f.selected : [] });
+      selected: Array.isArray(f.selected) ? f.selected : [] };
+    _mfTripsOf_(f).forEach(function(t) {
+      if (!links[t]) links[t] = [];
+      links[t].push(entry);
+    });
   });
   // 🔕 (V4.125) تنبيه الملفات العاجلة يُعطَّل كلياً من قسم التنبيهات بشاشة الإعدادات
   if (_notifEnabled_('mf_urgent')) {

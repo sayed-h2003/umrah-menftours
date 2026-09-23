@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.183 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.184 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.183)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.184)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.183</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.184</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1552,6 +1552,20 @@ input[type="date"]:not(:focus):not(:valid) {
     <button id="globalSearchBtn" class="btn btn-sm btn-outline-light flex-shrink-0" type="button" onclick="openGlobalSearch()" title="بحث شامل (اسم / رقم جواز / رقم إشعار)" style="padding: 4px 10px;">
       <i class="fas fa-search"></i>
     </button>
+
+    <!-- 🟢 (V4.184) المتصلون الآن — عدد وأسماء من فتحوا البرنامج حالياً، تحديث كل دقيقة تقريباً
+         بنبضة خفيفة جداً (بلا أي قراءة/كتابة على الشيت) بلا أي تأثير على أداء الشاشات -->
+    <div id="onlineUsersWrap" class="dropdown flex-shrink-0 d-none">
+      <button id="onlineUsersBtn" type="button" class="btn btn-sm btn-outline-light d-flex align-items-center gap-1" data-bs-toggle="dropdown" aria-expanded="false"
+              onclick="_onlineOpenList_()" title="المتصلون الآن" style="padding:4px 9px;font-size:11.5px;">
+        <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 5px #22c55e;display:inline-block;"></span>
+        <span id="onlineUsersCount">…</span> متصل
+      </button>
+      <div class="dropdown-menu dropdown-menu-end p-0" style="min-width:220px;max-height:60vh;overflow:auto;" dir="rtl">
+        <div class="p-2 border-bottom small fw-bold" style="background:#f8fafc;">🟢 المتصلون الآن</div>
+        <div id="onlineUsersList" class="p-2"><div class="text-muted small text-center py-2">⏳ جاري التحميل…</div></div>
+      </div>
+    </div>
 
     <div id="userProfileBox" class="user-profile-box d-none align-items-center flex-shrink-0 gap-1 dropdown" style="font-size: 13px;">
       <button type="button" class="btn d-flex align-items-center gap-2 p-1" data-bs-toggle="dropdown" aria-expanded="false" style="background:transparent; border:none;">
@@ -6207,6 +6221,45 @@ var UIP = {
   }
 };
 
+/* ============================================================
+   🟢 (V4.184) المتصلون الآن — أيقونة بجوار اسم المستخدم أعلى الشاشة. نبضة خفيفة جداً كل دقيقة
+   تقريباً (نداء صغير واحد فقط) تُحدِّث العدد؛ قائمة الأسماء الكاملة لا تُجلب إلا عند فتح القائمة
+   المنسدلة فعلياً — فلا يوجد أي استقصاء متكرر ثقيل يؤثر على أداء البرنامج.
+   ============================================================ */
+var _onlineTimer_ = null;
+function _onlineStart_() {
+  if (_onlineTimer_) return; // لا نبدأ أكثر من نبضة واحدة
+  var wrap = document.getElementById('onlineUsersWrap'); if (wrap) wrap.classList.remove('d-none');
+  _onlineTick_();
+  _onlineTimer_ = setInterval(_onlineTick_, 60000);
+}
+function _onlineTick_() {
+  if (!window.authToken) return;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      var el = document.getElementById('onlineUsersCount');
+      if (el && res && res.success) el.textContent = res.count;
+    })
+    .withFailureHandler(function () {}) // فشل صامت — لا نزعج المستخدم بنبضة خلفية
+    .heartbeatOnline(window.authToken);
+}
+function _onlineOpenList_() {
+  var box = document.getElementById('onlineUsersList'); if (!box) return;
+  box.innerHTML = '<div class="text-muted small text-center py-2">⏳ جاري التحميل…</div>';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { box.innerHTML = '<div class="text-muted small text-center py-2">تعذّر التحميل</div>'; return; }
+      if (!res.users.length) { box.innerHTML = '<div class="text-muted small text-center py-2">لا يوجد أحد متصل الآن</div>'; return; }
+      box.innerHTML = res.users.map(function (u) {
+        return '<div class="d-flex align-items-center gap-2 py-1" style="font-size:12.5px;">' +
+          '<span style="width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;"></span>' +
+          '<span>' + escapeHtml_(u.fullName || u.username) + '</span></div>';
+      }).join('');
+    })
+    .withFailureHandler(function (e) { box.innerHTML = '<div class="text-danger small text-center py-2">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>'; })
+    .getOnlineUsersNow(window.authToken);
+}
+
 /* ===============================
    نظام إدارة الجلسة والصلاحيات (مطور وآمن)
 ================================ */
@@ -6273,6 +6326,8 @@ function checkAuthOnLoad() {
   if (!window._uipLoadedOnce) {
     window._uipLoadedOnce = true;
     try { if (typeof UIP === 'object') UIP.load(); } catch (e) {}
+    // 🟢 (V4.184) المتصلون الآن — تبدأ نبضتها هنا أيضاً عند استعادة جلسة بإعادة فتح الصفحة
+    try { if (typeof _onlineStart_ === 'function') _onlineStart_(); } catch (e) {}
   }
 
   var navUser =
@@ -6559,6 +6614,8 @@ try { localStorage.setItem('smartManagerUser', JSON.stringify(res)); } catch(e) 
 try { if (typeof loadNotifSettings === 'function') loadNotifSettings(); } catch(e) {}
 // ⚙️ (V4.182) تفضيلات الأعمدة/الفرز المحفوظة لهذا المستخدم — تُحمَّل مرة واحدة هنا
 try { if (typeof UIP === 'object') UIP.load(); } catch(e) {}
+// 🟢 (V4.184) المتصلون الآن — تبدأ نبضتها فور تسجيل الدخول
+try { if (typeof _onlineStart_ === 'function') _onlineStart_(); } catch(e) {}
 
         var navUser =
   document.getElementById(
@@ -6955,7 +7012,7 @@ function _normalizeArabic_(s) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.183";
+var CLIENT_APP_VERSION = "4.184";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7030,6 +7087,9 @@ function logoutUser() {
   try { sessionStorage.removeItem("authToken"); } catch(e){}
   window.currentUser = null;
   window.authToken = null;
+  // 🟢 (V4.184) إيقاف نبضة "المتصلون الآن" فور الخروج — لا داعي لنبضها بلا جلسة
+  try { if (_onlineTimer_) { clearInterval(_onlineTimer_); _onlineTimer_ = null; } } catch(e) {}
+  try { var ow = document.getElementById('onlineUsersWrap'); if (ow) ow.classList.add('d-none'); } catch(e) {}
   var loginForm = document.getElementById("loginForm");
   if(loginForm) loginForm.reset();
   resetToDefaultScreen();
@@ -35810,7 +35870,7 @@ function mfPayload(f) {
     id: f.id, fileNo: f.fileNo, approved: f.approved, eInvoice: f.eInvoice, ref: f.ref,
     company: f.company, agent: f.agent, reviewDate: f.reviewDate, reviewType: f.reviewType,
     vipReason: f.vipReason, travelMode: f.travelMode, clientLabel: f.clientLabel,
-    breakdown: f.breakdown, tripName: f.tripName, goDate: f.goDate, retDate: f.retDate,
+    breakdown: f.breakdown, tripName: f.tripName, extraTrips: f.extraTrips, goDate: f.goDate, retDate: f.retDate,
     pilgrims: f.pilgrims, supCount: f.supCount, sups: f.sups,
     progPrice: f.progPrice, ticket: f.ticket, roomFee: f.roomFee, adminFee: f.adminFee,
     pct: f.pct, fxRate: f.fxRate,
@@ -35871,8 +35931,12 @@ function mfQuickLinkTrip(id) {
   var f = mfGet(id); if (!f) return;
   if (!MF.can.edit) { _showPopup('لا تملك صلاحية التعديل', 'error'); return; }
   var h = '<div class="mf-note info"><span>🔗</span><div>اختر الرحلة بالبحث التنبؤي — يكفي حرفان. الربط لا يغيّر بيانات الملف الأخرى.</div></div>' +
-    '<div class="mf-fld"><label>الرحلة</label><input id="mfQlTrip" class="form-control form-control-sm" autocomplete="off"' +
-    ' value="' + mfEsc(f.tripName || '') + '" placeholder="اكتب جزءاً من اسم الرحلة..."></div>' +
+    '<div class="mf-fld"><label>الرحلة</label><div class="d-flex gap-1">' +
+    '<input id="mfQlTrip" class="form-control form-control-sm" autocomplete="off"' +
+    ' value="' + mfEsc(f.tripName || '') + '" placeholder="اكتب جزءاً من اسم الرحلة...">' +
+    // 🔍 (V4.184) لا تعرف اسم الرحلة؟ ابحث عن أي معتمر بالاسم/الجواز واختر رحلته من نتائجه
+    '<button type="button" class="mf-btn sm" title="بحث عن معتمر لمعرفة رحلته" onclick="openPilgrimTripPicker_(function(tn){document.getElementById(\'mfQlTrip\').value=tn;mfQuickLinkInfo();})">🔍</button>' +
+    '</div></div>' +
     '<div id="mfQlInfo" style="font-size:11px;color:#5c6b83;margin-top:7px;"></div>';
   mfModal('🔗 ربط الملف برحلة', h,
     '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
@@ -36801,6 +36865,84 @@ function mfModal(title, body, foot, wide) {
 function mfCloseModal() { var o = document.getElementById('mfModalOv'); if (o && o.parentNode) o.parentNode.removeChild(o); }
 
 /* ============================================================
+   🔍 (V4.184) نافذة "بحث عن معتمر ← اختيار رحلته" — مشتركة بين ملفات الوزارة ومجموعات
+   التأشيرات (وأي شاشة أخرى تحتاجها لاحقاً): يبحث المستخدم باسم المعتمر أو رقم جوازه حين لا يعرف
+   اسم رحلته، فتُعرض كل رحلات كل معتمر مطابق ليختار منها. نافذة مستقلة بأعلى من mfModal (كي تُفتح
+   فوق نموذج تسجيل/تعديل مفتوح بالفعل بدل إغلاقه)، وتقرأ سجل المعتمرين العام مرة واحدة وتُخبّئه
+   بالذاكرة لبقية الجلسة (بلا إعادة تحميله مع كل بحث).
+   ============================================================ */
+var _prPickCache_ = null, _prPickLoading_ = false;
+function _prPickLoad_(cb) {
+  if (_prPickCache_) { cb(_prPickCache_); return; }
+  if (_prPickLoading_) { setTimeout(function () { _prPickLoad_(cb); }, 200); return; }
+  _prPickLoading_ = true;
+  google.script.run
+    .withSuccessHandler(function (res) {
+      _prPickLoading_ = false;
+      _prPickCache_ = (res && res.pilgrims) || [];
+      cb(_prPickCache_);
+    })
+    .withFailureHandler(function (e) { _prPickLoading_ = false; _showPopup(e && e.message ? e.message : e, 'error'); cb([]); })
+    .getGlobalPilgrimsRegistry(window.authToken);
+}
+function openPilgrimTripPicker_(onPick) {
+  var ov = document.createElement('div');
+  ov.id = 'prPickOv';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,14,24,.55);backdrop-filter:blur(3px);' +
+    '-webkit-backdrop-filter:blur(3px);z-index:2147483200;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;width:min(620px,100%);max-height:82vh;' +
+    'display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.4);direction:rtl;font-size:13px;">' +
+    '<div style="padding:11px 16px;background:linear-gradient(135deg,#1e3d59,#152c42);color:#fff;display:flex;align-items:center;gap:8px;">' +
+    '<div style="flex:1;font-size:13.5px;font-weight:800;">🔍 البحث عن معتمر لمعرفة رحلته</div>' +
+    '<button type="button" onclick="_prPickClose_()" title="إغلاق" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:13px;">✕</button></div>' +
+    '<div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;">' +
+    '<input id="prPickInp" class="form-control form-control-sm" autocomplete="off" placeholder="اكتب اسم المعتمر أو رقم جوازه… (حرفان فأكثر)">' +
+    '</div><div id="prPickBox" style="padding:10px 16px;overflow:auto;flex:1;background:#f8fafc;">' +
+    '<div class="text-muted small text-center p-3">⏳ جاري تحميل سجل المعتمرين…</div></div></div>';
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) _prPickClose_(); });
+  document.body.appendChild(ov);
+  window._prPickOnPick_ = onPick;
+  var inp = document.getElementById('prPickInp');
+  var deb = null;
+  inp.addEventListener('input', function () { clearTimeout(deb); deb = setTimeout(_prPickRun_, 180); });
+  setTimeout(function () { inp.focus(); }, 30);
+  _prPickLoad_(function () { _prPickRun_(); });
+}
+function _prPickClose_() { var o = document.getElementById('prPickOv'); if (o && o.parentNode) o.parentNode.removeChild(o); }
+function _prPickRun_() {
+  var box = document.getElementById('prPickBox'); if (!box) return;
+  var inp = document.getElementById('prPickInp');
+  var q = mfStr(inp ? inp.value : '');
+  if (!_prPickCache_) { box.innerHTML = '<div class="text-muted small text-center p-3">⏳ جاري تحميل سجل المعتمرين…</div>'; return; }
+  if (q.length < 2) { box.innerHTML = '<div class="text-muted small text-center p-3">اكتب حرفين فأكثر من اسم المعتمر أو رقم جوازه…</div>'; return; }
+  var qn = (typeof _normalizeArabic_ === 'function') ? _normalizeArabic_(q.toLowerCase()) : q.toLowerCase();
+  var matches = _prPickCache_.filter(function (p) {
+    var nm = (typeof _normalizeArabic_ === 'function') ? _normalizeArabic_(String(p.name || '').toLowerCase()) : String(p.name || '').toLowerCase();
+    var pp = String(p.passport || '').toLowerCase();
+    return nm.indexOf(qn) >= 0 || pp.indexOf(qn) >= 0;
+  }).slice(0, 40);
+  if (!matches.length) { box.innerHTML = '<div class="text-muted small text-center p-3">🔍 لا يوجد معتمر مطابق</div>'; return; }
+  box.innerHTML = matches.map(function (p) {
+    var trips = Array.isArray(p.trips) ? p.trips : [];
+    var tripsHtml = trips.length
+      ? trips.map(function (t) {
+          return '<button type="button" class="mf-btn sm" style="margin:2px;" onclick="_prPickChoose_(\'' + mfEsc(t.name).replace(/'/g, "\\'") + '\')">🧳 ' +
+            mfEsc(t.name) + (t.depart ? (' — ' + mfEsc(t.depart)) : '') + '</button>';
+        }).join('')
+      : '<span class="text-muted small">بلا رحلة مسجَّلة</span>';
+    return '<div style="border:1px solid #e2e8f0;border-radius:10px;padding:8px 10px;margin-bottom:8px;background:#fff;">' +
+      '<div style="font-weight:800;">' + mfEsc(p.name || '—') + '<span style="font-weight:400;color:#64748b;font-size:11px;"> — جواز ' + mfEsc(p.passport || '—') +
+      (p.client ? (' · ' + mfEsc(p.client)) : '') + '</span></div>' +
+      '<div style="margin-top:5px;">' + tripsHtml + '</div></div>';
+  }).join('');
+}
+function _prPickChoose_(tripName) {
+  var cb = window._prPickOnPick_;
+  _prPickClose_();
+  if (typeof cb === 'function') cb(tripName);
+}
+
+/* ============================================================
    🪟 (V4.114) تصغير النوافذ لشريط أسفل الشاشة — مثل نوافذ ويندوز
    النافذة المصغَّرة تبقى في الـDOM كما هي تماماً (نُخفيها بالعرض فقط ونُغيّر مُعرِّفها حتى لا
    تمسحها نافذة جديدة)، فلا يضيع أي حقل مكتوب ولا تتغيّر أي حالة عند العودة إليها.
@@ -37078,9 +37220,16 @@ function mfFormRender() {
     '<div class="mf-hint">يُملأ تلقائياً من الشركة · المشرف المطابق له يصبح «استقبال»</div>', 3);
   // 🔎 بحث تنبؤي للرحلة بدل القائمة المنسدلة
   h += mfFld('الرحلة المرتبطة (بحث تنبؤي)',
-    '<input class="form-control form-control-sm" id="mfd_trip" autocomplete="off" value="' + mfEsc(d.tripName) + '" placeholder="اكتب حرفين من اسم الرحلة...">' +
+    '<div class="d-flex gap-1"><input class="form-control form-control-sm" id="mfd_trip" autocomplete="off" value="' + mfEsc(d.tripName) + '" placeholder="اكتب حرفين من اسم الرحلة...">' +
+    // 🔍 (V4.184) لا تعرف اسم الرحلة؟ ابحث عن أي معتمر بالاسم/الجواز واختر رحلته من نتائجه
+    '<button type="button" class="mf-btn sm" title="بحث عن معتمر لمعرفة رحلته" onclick="openPilgrimTripPicker_(function(tn){document.getElementById(\'mfd_trip\').value=tn;mfDraftTrip(tn);})">🔍</button></div>' +
     '<div class="mf-hint' + (mfStr(d.tripName) ? ' auto' : '') + '" id="mfd_tripHint">' +
     (mfStr(d.tripName) ? '✅ مرتبط — تُجلب بيانات الرحلة استرشادياً' : 'اتركه فارغاً لملف غير مرتبط برحلة') + '</div>', 4);
+  // 🧳 (V4.184) رحلات إضافية مرتبطة بنفس الملف (اختياري) — نفس فكرة extraTrips بمجموعات
+  // التأشيرات: الملف قد يجمع معتمرين من أكثر من رحلة، فتُجلب أسماء معتمري كل الرحلات المرتبطة معاً
+  h += mfFld('رحلات إضافية مرتبطة (اختياري — افصل بـ"-" أو فاصلة)',
+    '<input class="form-control form-control-sm" id="mfd_extraTrips" autocomplete="off" value="' + mfEsc(d.extraTrips || '') +
+    '" placeholder="مثال: رحلة ٢٠ رمضان - رحلة ٢٥ رمضان" oninput="mfDraftSet(\'extraTrips\',this.value)">', 8);
   h += mfFld('العميل (العنوان الظاهر)', '<input class="form-control form-control-sm" value="' + mfEsc(d.clientLabel) + '" oninput="mfDraftSet(\'clientLabel\',this.value)" placeholder="يُملأ تلقائياً من بنود العميل">', 4);
   h += mfFld('تاريخ المراجعة', mfDateFld('mfd_reviewDate', d.reviewDate, 'mfDraftReviewDate') +
     '<div class="mf-hint">' + (mfDowName(d.reviewDate) ? ('يوم ' + mfDowName(d.reviewDate) + ' — ') : '') + 'الجمعة/السبت ⇒ VIP تلقائياً</div>', 2);
@@ -37745,26 +37894,52 @@ function mfDeleteFile(id) {
 }
 
 /* ---------- اختيار المعتمرين (حسب العميل + فردي معاً) ---------- */
+// 🧳 (V4.184) كل رحلات الملف: الأساسية + الإضافية (نفس منطق vzTripsOfDraft_ بمجموعات التأشيرات)
+function mfTripSplit_(s) {
+  s = mfStr(s); if (!s) return [];
+  var norm = s.replace(/\s+-\s*|\s*-\s+/g, '،');
+  return norm.split(/[،,]/).map(function (t) { return mfStr(t); }).filter(Boolean);
+}
+function mfTripsOf_(f) {
+  var out = [], seen = {};
+  mfTripSplit_(f && f.tripName).concat(mfTripSplit_(f && f.extraTrips)).forEach(function (t) {
+    if (!t || seen[t]) return; seen[t] = 1; out.push(t);
+  });
+  return out;
+}
 function mfPickPilgrims(id) {
   var f = mfGet(id); if (!f) return;
-  if (!mfStr(f.tripName)) { _showPopup('اربط الملف برحلة أولاً حتى تظهر قائمة معتمريها', 'error'); return; }
+  var trips = mfTripsOf_(f);
+  if (!trips.length) { _showPopup('اربط الملف برحلة أولاً حتى تظهر قائمة معتمريها', 'error'); return; }
   mfModal('👥 اختيار معتمري الملف — ' + mfEsc(f.clientLabel || f.tripName),
-    '<div id="mfPickBox"><div class="p-3 text-center text-muted small">⏳ جاري تحميل معتمري الرحلة…</div></div>',
+    '<div id="mfPickBox"><div class="p-3 text-center text-muted small">⏳ جاري تحميل معتمري ' + (trips.length > 1 ? (trips.length + ' رحلات') : 'الرحلة') + '…</div></div>',
     '<span id="mfPickCnt" style="font-size:11.5px;font-weight:700;"></span><div style="flex:1;"></div>' +
     '<button class="mf-btn" onclick="mfPickAll(true)">تحديد الكل</button>' +
     '<button class="mf-btn" onclick="mfPickAll(false)">إفراغ</button>' +
     '<button class="mf-btn pri" onclick="mfPickSave(\'' + id + '\')">تأكيد الاختيار</button>', 820);
-  google.script.run
-    .withSuccessHandler(function (res) {
-      var list = (res && res.pilgrims) ? res.pilgrims : (Array.isArray(res) ? res : []);
-      MF._pick = { file: f, list: list, sel: {} };
-      (f.selected || []).forEach(function (k) { MF._pick.sel[k] = true; });
-      mfPickRender();
-    })
-    .withFailureHandler(function (e) {
-      document.getElementById('mfPickBox').innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>';
-    })
-    .getTripPilgrims(window.authToken, f.tripName);
+  // 🧳 (V4.184) الجلب من كل رحلات الملف ودمجها في قائمة واحدة، مع وسم كل معتمر برحلته —
+  // نفس أسلوب vzPullPilgrims بمجموعات التأشيرات
+  var merged = [], done = 0, failed = null;
+  trips.forEach(function (tn) {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        var list = (res && res.pilgrims) ? res.pilgrims : (Array.isArray(res) ? res : []);
+        list.forEach(function (p) { p._trip = tn; merged.push(p); });
+        if (++done === trips.length) finish();
+      })
+      .withFailureHandler(function (e) { failed = e; if (++done === trips.length) finish(); })
+      .getTripPilgrims(window.authToken, tn);
+  });
+  function finish() {
+    var box = document.getElementById('mfPickBox');
+    if (!merged.length && failed) {
+      if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(failed && failed.message ? failed.message : failed) + '</div>';
+      return;
+    }
+    MF._pick = { file: f, list: merged, sel: {} };
+    (f.selected || []).forEach(function (k) { MF._pick.sel[k] = true; });
+    mfPickRender();
+  }
 }
 function mfPickKey(p, i) { return mfStr(p.passportNo || p.passport || '') || ('idx:' + i); }
 function mfPickRender() {
@@ -40148,8 +40323,12 @@ function vzQuickLinkTrip(id) {
   var f = vzGet(id); if (!f) return;
   if (!VZ.can.edit) { _showPopup('لا تملك صلاحية التعديل', 'error'); return; }
   var h = '<div class="mf-note info"><span>🔗</span><div>اختر الرحلة بالبحث التنبؤي — يكفي حرفان. الربط لا يغيّر بيانات المجموعة الأخرى.</div></div>' +
-    '<div class="mf-fld"><label>الرحلة</label><input id="vzQlTrip" class="form-control form-control-sm" autocomplete="off"' +
-    ' value="' + vzEsc(f.tripName || '') + '" placeholder="اكتب جزءاً من اسم الرحلة..."></div>';
+    '<div class="mf-fld"><label>الرحلة</label><div class="d-flex gap-1">' +
+    '<input id="vzQlTrip" class="form-control form-control-sm" autocomplete="off"' +
+    ' value="' + vzEsc(f.tripName || '') + '" placeholder="اكتب جزءاً من اسم الرحلة...">' +
+    // 🔍 (V4.184) لا تعرف اسم الرحلة؟ ابحث عن أي معتمر بالاسم/الجواز واختر رحلته من نتائجه
+    '<button type="button" class="mf-btn sm" title="بحث عن معتمر لمعرفة رحلته" onclick="openPilgrimTripPicker_(function(tn){document.getElementById(\'vzQlTrip\').value=tn;})">🔍</button>' +
+    '</div></div>';
   mfModal('🔗 ربط المجموعة برحلة', h,
     '<div style="flex:1;"></div><button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
     '<button class="mf-btn pri" onclick="vzQuickLinkSave(\'' + id + '\')">💾 اعتماد الربط</button>', 560);
