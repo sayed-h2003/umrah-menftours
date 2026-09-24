@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.196 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.197 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.196)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.197)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.196</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.197</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7093,7 +7093,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.196";
+var CLIENT_APP_VERSION = "4.197";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -19034,6 +19034,10 @@ function exportReportAsImage(getFullHtmlFn, fileNameBase, btn) {
 function exportReportAsImageFHD(getFullHtmlFn, fileNameBase, btn) {
   var fullHtml = typeof getFullHtmlFn === 'function' ? getFullHtmlFn() : getFullHtmlFn;
   if (!fullHtml) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
+  // 🔍 (V4.197) رفع جودة إضافي: خط الجداول أكبر قليلاً بالصورة وحده (لا يمس الطباعة/PDF) + رسم نص دقيق
+  var boost = '<style>#rptRoot{-webkit-font-smoothing:antialiased;text-rendering:geometricPrecision;}' +
+    '#rptRoot table{font-size:13px !important;} #rptRoot th,#rptRoot td{padding:6px 7px !important;line-height:1.55 !important;}</style>';
+  fullHtml = /<\/head>/i.test(fullHtml) ? fullHtml.replace(/<\/head>/i, boost + '</head>') : (boost + fullHtml);
   var orig = btn ? btn.innerHTML : null;
   if (btn) { btn.disabled = true; btn.innerHTML = '⏳...'; }
   var settled = false;
@@ -19049,15 +19053,29 @@ function exportReportAsImageFHD(getFullHtmlFn, fileNameBase, btn) {
     if (btn) { btn.disabled = false; btn.innerHTML = orig; }
     if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
     _imageActionSheet_(files);
-  }, { cssWidth: 960, fixedScale: 2 });
+  }, { cssWidth: 960, fixedScale: 3 });   // (V4.197) 3× ⇒ عرض ≈2880 بكسل (أعلى من Full HD)
 }
 // نافذة خيارات الصورة الجاهزة — كل إجراء بضغطة مستقلة (تفعيل مستخدم جديد)، فيعمل النسخ للحافظة والمشاركة
 // بثبات بعكس النسخ التلقائي بعد انتهاء التوليد الذي كانت المتصفحات ترفضه أحياناً
 function _imageActionSheet_(files) {
   var prev = document.getElementById('_imgActOv'); if (prev) prev.remove();
   window.__imgActFiles = files;
-  var canCopy = !!(navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined');
-  var canShare = false; try { canShare = !!(navigator.canShare && navigator.canShare({ files: files })); } catch (e) {}
+  // 🐛 (V4.197) التطبيق يعمل داخل إطار (iframe) جوجل Apps Script، والإطار لا يملك صلاحية الحافظة ولا
+  // المشاركة (يرفضهما المتصفح) — لذلك داخل الإطار يفتح الزران نافذة مستقلة للصورة خارج الإطار حيث تعملان
+  var inFrame = false; try { inFrame = window.top !== window.self; } catch (e) { inFrame = true; }
+  window.__imgActInFrame = inFrame;
+  var canCopy = inFrame || !!(navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined');
+  var canShare = inFrame; if (!inFrame) { try { canShare = !!(navigator.canShare && navigator.canShare({ files: files })); } catch (e) {} }
+  // تجهيز الصور مسبقاً كنص (data URL) كي تُكتب في النافذة المستقلة فوراً لحظة الضغط
+  window.__imgActData = null;
+  (function () {
+    var out = [], left = files.length;
+    files.forEach(function (f, i) {
+      var r = new FileReader();
+      r.onload = function () { out[i] = { name: f.name, url: r.result }; if (--left === 0) window.__imgActData = { files: out, full: (files.length > 1 && cv && cv.toDataURL) ? cv.toDataURL('image/png') : '' }; };
+      r.readAsDataURL(f);
+    });
+  })();
   var cv = window.__lastCaptureCanvas;
   var dims = (cv && cv.width) ? (cv.width + '×' + cv.height + ' بكسل') : '';
   var url = URL.createObjectURL(files[0]);
@@ -19067,11 +19085,12 @@ function _imageActionSheet_(files) {
   var btnSt = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;border-radius:10px;border:none;font-weight:800;font-size:14px;cursor:pointer;';
   ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(440px,100%);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">' +
     '<div style="padding:12px 16px;background:linear-gradient(135deg,#0f4c4c,#0b3a3a);color:#fff;display:flex;align-items:center;gap:8px;border-radius:16px 16px 0 0;">' +
-      '<b style="flex:1;">📸 الصورة جاهزة (Full HD)</b><button type="button" onclick="_imgActClose_()" style="background:rgba(255,255,255,.18);border:none;color:#fff;width:28px;height:28px;border-radius:8px;cursor:pointer;">✕</button></div>' +
+      '<b style="flex:1;">📸 الصورة جاهزة (دقة عالية)</b><button type="button" onclick="_imgActClose_()" style="background:rgba(255,255,255,.18);border:none;color:#fff;width:28px;height:28px;border-radius:8px;cursor:pointer;">✕</button></div>' +
     '<div style="padding:14px 16px;">' +
       '<div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;max-height:260px;background:#f8fafc;"><img src="' + url + '" style="width:100%;display:block;"></div>' +
       '<div style="font-size:11px;color:#64748b;margin:6px 0 12px;text-align:center;">' + (dims ? dims + ' · ' : '') +
         (files.length > 1 ? ('الكشف طويل فقُسِّم إلى ' + files.length + ' صور') : 'صورة واحدة') + '</div>' +
+      (inFrame ? '<div style="font-size:10.5px;color:#8a5a06;background:#fffbeb;border-radius:8px;padding:6px 8px;margin-bottom:10px;text-align:center;">النسخ والمشاركة يفتحان الصورة في نافذة مستقلة (قيود أمان جوجل تمنعهما داخل البرنامج نفسه) — اضغط الزر المطلوب هناك</div>' : '') +
       (canCopy ? '<button type="button" style="' + btnSt + 'background:#1e3d59;color:#fff;margin-bottom:8px;" onclick="_imgActCopy_(this)">📋 نسخ إلى الحافظة' + (files.length > 1 ? ' (الكشف كاملاً)' : '') + '</button>' : '') +
       '<button type="button" style="' + btnSt + 'background:#0f766e;color:#fff;margin-bottom:8px;" onclick="_imgActSave_()">💾 حفظ ' + (files.length > 1 ? 'الصور' : 'الصورة') + '</button>' +
       (canShare ? '<button type="button" style="' + btnSt + 'background:#25D366;color:#fff;" onclick="_imgActShare_()">📤 مشاركة كصورة</button>'
@@ -19085,7 +19104,59 @@ function _imgActClose_() {
   var ov = document.getElementById('_imgActOv');
   if (ov) { try { URL.revokeObjectURL(ov._url); } catch (e) {} ov.remove(); }
 }
+// 🪟 (V4.197) نافذة مستقلة (خارج إطار Apps Script) بها الصورة وأزرار النسخ/المشاركة/الحفظ — تُفتح
+// متزامنة مع الضغطة نفسها (وإلا يحجبها مانع النوافذ المنبثقة)، ثم تُملأ بالصورة فور جاهزيتها
+function _imgActOpenWindow_(focus) {
+  var w = window.open('', '_blank');
+  if (!w) { showToast('⚠️ اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة', true); return; }
+  w.document.open();
+  w.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>الصورة</title></head>' +
+    '<body style="font-family:Tahoma,Arial,sans-serif;margin:0;background:#f1f5f9;"><div id="st" style="padding:30px;text-align:center;color:#64748b;">⏳ جاري تجهيز الصورة…</div></body></html>');
+  w.document.close();
+  var tries = 0;
+  (function fill() {
+    var D = window.__imgActData;
+    if (!D) { if (++tries > 100) { w.document.getElementById('st').textContent = 'تعذّر تجهيز الصورة'; return; } setTimeout(fill, 100); return; }
+    var multi = D.files.length > 1;
+    var bs = 'display:block;width:100%;padding:13px;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:8px;color:#fff;';
+    var html = '<div style="max-width:720px;margin:0 auto;padding:14px;">' +
+      '<div style="position:sticky;top:0;background:#f1f5f9;padding-bottom:8px;z-index:2;">' +
+      '<button id="bCopy" style="' + bs + 'background:#1e3d59;">📋 نسخ الصورة إلى الحافظة' + (multi ? ' (الكشف كاملاً)' : '') + '</button>' +
+      '<button id="bShare" style="' + bs + 'background:#25D366;">📤 مشاركة كصورة</button>' +
+      '<button id="bSave" style="' + bs + 'background:#0f766e;">💾 حفظ ' + (multi ? 'الصور' : 'الصورة') + '</button>' +
+      '<div id="msg" style="text-align:center;font-size:13px;font-weight:700;min-height:18px;"></div></div>' +
+      D.files.map(function (f) { return '<img src="' + f.url + '" style="width:100%;display:block;margin-bottom:10px;border:1px solid #cbd5e1;background:#fff;">'; }).join('') +
+      '</div>';
+    var doc = w.document;
+    doc.body.innerHTML = html;
+    var msg = function (t, bad) { var m = doc.getElementById('msg'); m.textContent = t; m.style.color = bad ? '#b91c1c' : '#166534'; };
+    var toBlob = function (u) { return w.fetch(u).then(function (r) { return r.blob(); }); };
+    var mkFiles = function () {
+      return Promise.all(D.files.map(function (f) { return toBlob(f.url).then(function (b) { return new w.File([b], f.name, { type: 'image/png' }); }); }));
+    };
+    doc.getElementById('bCopy').onclick = function () {
+      try {
+        var blobP = toBlob(D.full || D.files[0].url);
+        w.navigator.clipboard.write([new w.ClipboardItem({ 'image/png': blobP })])
+          .then(function () { msg('✅ نُسخت الصورة — الصقها في واتساب أو أي برنامج (Ctrl+V)'); })
+          .catch(function () { msg('⚠️ المتصفح رفض النسخ — اضغط مطوّلاً (أو زر الفأرة الأيمن) على الصورة واختر «نسخ الصورة»', true); });
+      } catch (e) { msg('⚠️ النسخ غير مدعوم هنا — اضغط مطوّلاً على الصورة واختر «نسخ الصورة»', true); }
+    };
+    doc.getElementById('bShare').onclick = function () {
+      mkFiles().then(function (fs) {
+        if (!(w.navigator.canShare && w.navigator.canShare({ files: fs }))) { msg('⚠️ المشاركة المباشرة غير مدعومة بهذا المتصفح/الجهاز — احفظ الصورة ثم شاركها', true); return; }
+        return w.navigator.share({ files: fs, title: 'مشاركة' }).then(function () { msg('✅ تمت المشاركة'); });
+      }).catch(function (e) { if (!(e && e.name === 'AbortError')) msg('⚠️ تعذّرت المشاركة — احفظ الصورة ثم شاركها', true); });
+    };
+    doc.getElementById('bSave').onclick = function () {
+      D.files.forEach(function (f) { var a = doc.createElement('a'); a.href = f.url; a.download = f.name; doc.body.appendChild(a); a.click(); a.remove(); });
+      msg('✅ تم الحفظ');
+    };
+    if (focus && doc.getElementById(focus)) doc.getElementById(focus).style.outline = '3px solid #facc15';
+  })();
+}
 function _imgActCopy_(btn) {
+  if (window.__imgActInFrame) { _imgActOpenWindow_('bCopy'); return; }
   var files = window.__imgActFiles || []; if (!files.length) return;
   var cv = window.__lastCaptureCanvas;
   // النداء يتم فوراً داخل الضغطة (شرط المتصفح)؛ لو الكشف مقسَّم لعدة صور ننسخ اللوحة الكاملة قبل التقسيم
@@ -19101,6 +19172,7 @@ function _imgActCopy_(btn) {
 }
 function _imgActSave_() { _saveImageFilesLocally_(window.__imgActFiles || []); showToast('💾 تم حفظ ' + ((window.__imgActFiles || []).length > 1 ? 'الصور' : 'الصورة')); }
 function _imgActShare_() {
+  if (window.__imgActInFrame) { _imgActOpenWindow_('bShare'); return; }
   var files = window.__imgActFiles || [];
   navigator.share({ files: files, title: 'مشاركة' }).catch(function (err) {
     if (err && err.name === 'AbortError') return;
