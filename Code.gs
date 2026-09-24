@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.202";
+var APP_VERSION = "4.203";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -13419,6 +13419,8 @@ var ACC_CLIENT_PRICES_HEADERS = ['العميل','الأسعار (JSON)','عُد�
 // البنود الأساسية لنمط «بنود» (مفاتيح المطابقة الثابتة بين التوليد والمزامنة والتسعير)
 var ACC_BOND_BASE_ = [
   { key: 'رسوم غرفة',        cur: 'EGP' }, { key: 'رسوم غرفة المشرف', cur: 'EGP' },
+  // 🏛️ (V4.203) رسوم غرفة VIP وتجديد الباركود — تُجلب من ملفات الوزارة وتُسعَّر للعميل كبقية البنود
+  { key: 'رسوم غرفة VIP',    cur: 'EGP' }, { key: 'تجديد باركود',     cur: 'EGP' },
   { key: 'إشراف',            cur: 'EGP' }, { key: 'تذاكر',            cur: 'EGP' },
   { key: 'تذاكر الأطفال',    cur: 'EGP' }, { key: 'تذاكر الرضع',      cur: 'EGP' },
   { key: 'تأشيرات',          cur: 'SAR' }, { key: 'نقل سعودي',        cur: 'SAR' },
@@ -14280,9 +14282,9 @@ function saveAccItem(authToken, item) {
                        _accNum_(_r[15]) !== nights;
         if (String(_r[17]) === 'نعم' && _changed) sh.getRange(i + 2, 18).setValue('معدّل');
         // 🔁 حافظ على علامة ربط ترحيل الرصيد ⟦cf:...⟧ إن وُجدت بالبيان الأصلي حتى لو عُدِّل البيان الظاهر
-        var _oldD = String(_r[3] || ''); var _cfM = _oldD.match(/⟦cf:[a-z0-9]+⟧/i);
+        var _oldD = String(_r[3] || ''); var _cfM = _oldD.match(/⟦(?:cf|src):[^⟧]+⟧/i);
         var _newD = String(item.desc || '');
-        if (_cfM && _newD.indexOf('⟦cf:') === -1) _newD += ' ' + _cfM[0];
+        if (_cfM && _newD.indexOf('⟦') === -1) _newD += ' ' + _cfM[0];
         sh.getRange(i + 2, 4, 1, 8).setValues([[_newD, item.cat || '', currency, count, price, value, isDisc ? 'نعم' : 'لا', item.notes || '']]);
         sh.getRange(i + 2, 14, 1, 4).setValues([[session.username, now, nights || '', item.company || '']]);
         sh.getRange(i + 2, 20).setValue(isDirect ? 'نعم' : 'لا');
@@ -14290,7 +14292,7 @@ function saveAccItem(authToken, item) {
         // 🧹 (V4.92) بلا علامة ربط ترحيل الرصيد الداخلية ⟦cf:...⟧ — تبقى محفوظة بالبيان الفعلي أعلاه فقط
         var _oldCur = String(_r[5] || 'EGP') === 'SAR' ? 'ريال' : 'جنيه';
         logChange_(session.username, 'تعديل بند حساب', client, trip,
-          _oldD.replace(/\s*⟦cf:[a-z0-9]+⟧\s*$/i, '') + ' = ' + (_accNum_(_r[8]) || 0) + ' ' + _oldCur,
+          _oldD.replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '') + ' = ' + (_accNum_(_r[8]) || 0) + ' ' + _oldCur,
           item.desc + ' = ' + value + ' ' + currency);
         return { success: true, id: item.id, value: value };
       }
@@ -14451,7 +14453,7 @@ function deleteAccItem(authToken, id) {
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) {
       logChange_(session.username, 'حذف بند حساب', String(vals[i][1]), String(vals[i][2]),
-        String(vals[i][3]).replace(/\s*⟦cf:[a-z0-9]+⟧\s*$/i, '') + ' = ' + vals[i][8] + ' ' + vals[i][5], '-');
+        String(vals[i][3]).replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '') + ' = ' + vals[i][8] + ' ' + vals[i][5], '-');
       // 🔁 بند ترحيل رصيد: يُحذف طرفه المقابل معه تلقائيًا فيعود الرصيد لرحلته الأصلية
       var marker = _accCfMarkerOf_(vals[i][3]);
       sh.deleteRow(i + 2);
@@ -14913,25 +14915,190 @@ function _accClientPriceAt_(pricing, key, dateStr) {
 
 /* 🛂 (V4.134) مجموعات التأشيرات المسجَّلة لهذا العميل في هذه الرحلة — عددُ أفراده فيها
    وبيانٌ يذكر أرقام المجموعات ووكلاءها. تُستخدَم لبند «تأشيرات» بنمط «بنود». */
-function _accVisaGroupsFor_(client, trip) {
-  client = String(client || '').trim(); trip = String(trip || '').trim();
-  var out = { count: 0, desc: '', refs: [], agents: [] };
+// 🔗 (V4.203) مطابقة اسم عميل ببند من بنود ملف (وزارة/تأشيرات) — تراعي الهمزات/التشكيل/الفراغات،
+// وبنود «العميل - مستوى التسكين» (ملف مقسَّم بمستويات) تُنسب للعميل نفسه
+function _accNameMatch_(bName, client) {
+  var a = _normalizeArabicName_(bName).toLowerCase(), c = _normalizeArabicName_(client).toLowerCase();
+  if (!a || !c) return false;
+  return a === c || a.indexOf(c + ' - ') === 0;
+}
+var _ACC_TRIPNAMES_MEMO_ = null;
+function _accTripNameSet_() {
+  if (_ACC_TRIPNAMES_MEMO_) return _ACC_TRIPNAMES_MEMO_;
+  var set = {};
+  try {
+    var sh = _getTripsSheet_();
+    if (sh && sh.getLastRow() >= 2) {
+      var C = _robustColMap_(sh, TRIPS_HEADERS_), col = C[TRIPS_COL_.name];
+      sh.getRange(2, (col || 0) + 1, sh.getLastRow() - 1, 1).getValues().forEach(function (r) {
+        var n = _normalizeArabicName_(r[0]).toLowerCase(); if (n) set[n] = 1;
+      });
+    }
+  } catch (e) {}
+  return (_ACC_TRIPNAMES_MEMO_ = set);
+}
+// 🛂 مجموعات التأشيرات «تم إصدار الموفا» لعميل: trip = اسم رحلة (أساسية أو إضافية بالمجموعة)،
+// أو '' = كل المجموعات، أو null = المجموعات غير المرتبطة بأي رحلة فقط. يُعيد تفصيل كل مجموعة.
+function _accVzGroupsList_(client, trip) {
+  client = String(client || '').trim();
+  var out = [];
   if (!client) return out;
   var files = [];
   try { files = _vzReadAll_(); } catch (e) { return out; }
   files.forEach(function (f) {
-    if (trip && String(f.tripName || '').trim() !== trip) return;
+    if (String(f.status || '').trim() !== 'تم إصدار الموفا') return;   // (V4.203) بطلب صريح: الموفا الصادرة فقط
+    var trips = _vzTripsOf_(f);
+    if (trip === null) { if (trips.length) return; }
+    else if (trip) { if (trips.indexOf(String(trip).trim()) < 0) return; }
     var n = 0;
-    (f.breakdown || []).forEach(function (b) { if (String(b.name || '').trim() === client) n += _mfNum_(b.count); });
+    (f.breakdown || []).forEach(function (b) { if (_accNameMatch_(b.name, client)) n += _mfNum_(b.count); });
     if (!n) return;
-    out.count += n;
-    if (f.ref && out.refs.indexOf(f.ref) < 0) out.refs.push(f.ref);
-    if (f.agent && out.agents.indexOf(f.agent) < 0) out.agents.push(f.agent);
+    out.push({ id: f.id, ref: f.ref || '', agent: f.agent || '', date: f.date || '', count: n, cost: _mfNum_(f.price) });
+  });
+  return out;
+}
+function _accVisaGroupsFor_(client, trip) {
+  var out = { count: 0, desc: '', refs: [], agents: [] };
+  _accVzGroupsList_(client, String(trip || '').trim()).forEach(function (g) {
+    out.count += g.count;
+    if (g.ref && out.refs.indexOf(g.ref) < 0) out.refs.push(g.ref);
+    if (g.agent && out.agents.indexOf(g.agent) < 0) out.agents.push(g.agent);
   });
   if (!out.count) return out;
   out.desc = 'تأشيرات' + (out.refs.length ? ' — مجموعة ' + out.refs.join('، ') : '') +
     (out.agents.length ? ' (الوكيل: ' + out.agents.join('، ') + ')' : '');
   return out;
+}
+// 🏛️ (V4.203) رسوم الغرفة من ملفات الوزارة لعميل — الملفات التي لها تاريخ مراجعة فقط (بطلب صريح).
+// العميل يُحدَّد من «بنود العملاء» بالملف؛ البند الذي اسمه اسم رحلة = مصروف على الرحلة لا على العميل (يُستبعد).
+// trip كما في _accVzGroupsList_. يُعيد لكل ملف أسطر رسومه: رسوم غرفة / VIP / المشرف / تجديد باركود.
+function _accMfFeesList_(client, trip) {
+  client = String(client || '').trim();
+  var out = [];
+  if (!client) return out;
+  var files = [];
+  try { files = _mfReadAll_(); } catch (e) { return out; }
+  var cfg = _accPricing_(), tripNames = _accTripNameSet_();
+  files.forEach(function (f) {
+    if (!_mfStr_(f.reviewDate)) return;
+    var trips = _mfTripsOf_(f);
+    if (trip === null) { if (trips.length) return; }
+    else if (trip) { if (trips.indexOf(String(trip).trim()) < 0) return; }
+    var n = 0, sups = 0;
+    (f.breakdown || []).forEach(function (b) {
+      if (tripNames[_normalizeArabicName_(b.name).toLowerCase()]) return;   // بند رحلة = مصروف رحلة
+      if (!_accNameMatch_(b.name, client)) return;
+      n += _mfNum_(b.count); sups += _mfNum_(b.sups);
+    });
+    if (!n && !sups) return;
+    var c = _mfCompute_(f, cfg);
+    var lines = [];
+    if (f.reviewType === 'تجديد باركود') {
+      if (n) lines.push({ key: 'تجديد باركود', count: n, cost: _mfBarcodeFeeAt_(f.reviewDate) });
+    } else if (f.reviewType === 'VIP' || c.vipByCount) {
+      if (n) lines.push({ key: 'رسوم غرفة VIP', count: n, cost: c.roomFeeEffective, note: f.reviewType === 'VIP' ? 'مراجعة VIP' : 'VIP لأن الملف أقل من 4 معتمرين' });
+    } else if (n) lines.push({ key: 'رسوم غرفة', count: n, cost: c.roomFeeEffective });
+    // المشرف المرافق وحده له رسوم غرفة — بعدد مشرفي هذا العميل في الملف (بحد أقصى عدد المرافقين)
+    if (sups && c.murafiq) lines.push({ key: 'رسوم غرفة المشرف', count: Math.min(sups, c.murafiq), cost: c.supRoomFee });
+    if (lines.length) out.push({ id: f.id, fileNo: f.fileNo || '', date: f.reviewDate, reviewType: f.reviewType || '', lines: lines });
+  });
+  return out;
+}
+// تجميع رسوم الوزارة لعميل×رحلة لكل مفتاح: {key: {count, cost, refs[]}} — لبنود «بنود»
+function _accMfFeesAgg_(client, trip) {
+  var agg = {}, any = false;
+  _accMfFeesList_(client, trip).forEach(function (f) {
+    any = true;
+    f.lines.forEach(function (l) {
+      var a = (agg[l.key] = agg[l.key] || { count: 0, cost: l.cost, refs: [] });
+      a.count += l.count;
+      if (f.fileNo && a.refs.indexOf(f.fileNo) < 0) a.refs.push(f.fileNo);
+    });
+  });
+  return { any: any, agg: agg };
+}
+function _accMfDesc_(key, a) { return key + (a && a.refs.length ? ' — ملف ' + a.refs.join('، ') : ''); }
+
+/* ============================================================
+   🧾 (V4.203) بنود الوزارة والتأشيرات غير المرتبطة برحلات — لوحة داخل حساب العميل (مثل كشف حساب
+   الوكيل، بجزء للجنيه ثم جزء للريال): ملفات الوزارة المراجَعة ومجموعات الموفا الصادرة لهذا العميل
+   التي ليست على أي رحلة (حتى لو له رحلات أخرى). سعر كل بند = تسعير العميل بتاريخه، وإلا سعر التكلفة.
+   كل بند يُدرَج بعلامة مصدر مخفية ⟦src:…⟧ في بيانه فلا يُعرض للإدراج مرتين.
+   ============================================================ */
+function _accSrcMarker_(k) { return '⟦src:' + String(k).replace(/[^A-Za-z0-9._-]/g, '') + '⟧'; }
+var ACC_MF_KEY_CODE_ = { 'رسوم غرفة': 'room', 'رسوم غرفة VIP': 'vip', 'رسوم غرفة المشرف': 'sup', 'تجديد باركود': 'bar' };
+function getClientUnlinkedFees(authToken, client) {
+  _accPerm_(authToken, 'view');
+  client = String(client || '').trim();
+  if (!client) return { success: false, error: 'اسم العميل مطلوب' };
+  var cp = _accClientPricing_(client);
+  // علامات المصادر المُدرجة مسبقاً بحساب هذا العميل
+  var used = {};
+  var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
+  if (iSh.getLastRow() >= 2) {
+    iSh.getRange(2, 1, iSh.getLastRow() - 1, 4).getValues().forEach(function (r) {
+      if (String(r[1] || '').trim() !== client) return;
+      var m = String(r[3] || '').match(/⟦src:([^⟧]+)⟧/); if (m) used[m[1]] = 1;
+    });
+  }
+  var rows = [];
+  var priceOf = function (key, date, cost) {
+    var p = _accClientPriceAt_(cp, key, date);
+    return { price: p !== null ? p : cost, priced: p !== null };
+  };
+  _accMfFeesList_(client, null).forEach(function (f) {
+    f.lines.forEach(function (l) {
+      var src = 'MF.' + f.id + '.' + (ACC_MF_KEY_CODE_[l.key] || 'x');
+      var pp = priceOf(l.key, f.date, l.cost);
+      rows.push({ src: src, kind: 'mf', date: f.date, ref: f.fileNo, key: l.key, currency: 'EGP',
+        desc: l.key + (f.fileNo ? ' — ملف ' + f.fileNo : '') + (l.note ? ' (' + l.note + ')' : ''),
+        count: l.count, cost: l.cost, price: pp.price, priced: pp.priced, inserted: !!used[_accSrcMarker_(src).slice(5, -1)] });
+    });
+  });
+  _accVzGroupsList_(client, null).forEach(function (g) {
+    var src = 'VZ.' + g.id;
+    var pp = priceOf('تأشيرات', g.date, g.cost);
+    rows.push({ src: src, kind: 'vz', date: g.date, ref: g.ref, key: 'تأشيرات', currency: 'SAR',
+      desc: 'تأشيرات' + (g.ref ? ' — مجموعة ' + g.ref : '') + (g.agent ? ' (الوكيل: ' + g.agent + ')' : ''),
+      count: g.count, cost: g.cost, price: pp.price, priced: pp.priced, inserted: !!used[_accSrcMarker_(src).slice(5, -1)] });
+  });
+  var ms = function (d) { var m = String(d || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : 0; };
+  rows.sort(function (a, b) { return ms(a.date) - ms(b.date) || String(a.ref).localeCompare(String(b.ref)); });
+  return { success: true, rows: rows };
+}
+// إدراج البنود المختارة في القسم «عام» بحساب العميل — list: [{src, desc, key, currency, count, price}]
+function insertClientUnlinkedFees(authToken, client, list) {
+  var session = _accPerm_(authToken, 'add');
+  client = String(client || '').trim();
+  if (!client || !Array.isArray(list) || !list.length) return { success: false, error: 'لا توجد بنود محددة' };
+  var sh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
+  // منع الإدراج المكرر لنفس المصدر (حتى لو ضُغط الزر مرتين أو من جهازين)
+  var used = {};
+  if (sh.getLastRow() >= 2) {
+    sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().forEach(function (r) {
+      if (String(r[1] || '').trim() !== client) return;
+      var m = String(r[3] || '').match(/⟦src:([^⟧]+)⟧/); if (m) used[m[1]] = 1;
+    });
+  }
+  var now = new Date(), rows = [], created = [], skipped = 0;
+  list.forEach(function (it) {
+    var mk = _accSrcMarker_(it.src), code = mk.slice(5, -1);
+    if (!code || used[code]) { skipped++; return; }
+    used[code] = 1;
+    var count = _accNum_(it.count), price = _accNum_(it.price);
+    var value = Math.round(count * price * 100) / 100;
+    var currency = it.currency === 'SAR' ? 'SAR' : 'EGP';
+    var cat = it.key === 'رسوم غرفة المشرف' ? 'مشرف' : 'كبير';
+    var desc = String(it.desc || it.key || '').trim();
+    var id = _accId_('I');
+    rows.push([id, client, 'عام', desc + ' ' + mk, cat, currency, count, price, value, 'لا', '', session.username, now, '', '', '', '', '', '', 'لا']);
+    created.push({ id: id, trip: 'عام', desc: desc, cat: cat, currency: currency, count: count, price: price, value: value,
+      isDiscount: false, notes: '', nights: 0, company: '', auto: '', order: 0, isDirect: false });
+  });
+  if (!rows.length) return { success: false, error: 'كل البنود المحددة مُدرجة مسبقاً' };
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, ACC_ITEMS_HEADERS.length).setValues(rows);
+  logChange_(session.username, 'إدراج بنود الوزارة والتأشيرات', client, 'عام', '-', rows.length + ' بند');
+  return { success: true, count: rows.length, skipped: skipped, created: created };
 }
 
 // مفتاح المطابقة الموحّد لبند «بنود»: البيانات الديناميكية (تذاكر بخط السير، سكن بالفندق) تُرجَع لمفتاحها الثابت
@@ -14939,6 +15106,11 @@ function _accBondKey_(desc) {
   desc = String(desc || '').trim();
   for (var i = 0; i < ACC_BOND_BASE_.length; i++) if (desc === ACC_BOND_BASE_[i].key) return desc;
   if (desc.indexOf('تأشيرات') === 0) return 'تأشيرات';   // 🛂 (V4.134) «تأشيرات — مجموعة … (الوكيل …)»
+  // 🏛️ (V4.203) «رسوم غرفة — ملف 22756» وأخواتها (الأطول أولاً)
+  if (desc.indexOf('رسوم غرفة المشرف') === 0) return 'رسوم غرفة المشرف';
+  if (desc.indexOf('رسوم غرفة VIP') === 0) return 'رسوم غرفة VIP';
+  if (desc.indexOf('رسوم غرفة') === 0) return 'رسوم غرفة';
+  if (desc.indexOf('تجديد باركود') === 0) return 'تجديد باركود';
   if (desc.indexOf('تذاكر الأطفال') === 0) return 'تذاكر الأطفال';
   if (desc.indexOf('تذاكر الرضع') === 0) return 'تذاكر الرضع';
   if (desc.indexOf('تذاكر') === 0) return 'تذاكر';
@@ -14966,8 +15138,18 @@ function _accBondsDesired_(authToken, client, trip) {
       nights: nights || 0, company: company || '',
       price: (p !== null) ? p : null, fallback: fallback || 0 });
   };
-  push('رسوم غرفة', 'رسوم غرفة', 'كبير', 'EGP', row.adults + row.children, 0, row.company || '', roomFee || 0);
-  push('رسوم غرفة المشرف', 'رسوم غرفة المشرف', 'مشرف', 'EGP', 1, 0, row.company || '', cfg.supRoomFee || 200);
+  // 🏛️ (V4.203) رسوم الغرفة من ملفات الوزارة (المراجَعة فقط) لهذا العميل×الرحلة — عادية/VIP/مشرف/باركود.
+  // لو لا ملفات مراجَعة بعد: التقدير القديم من الكشف (يُستبدل تلقائياً بالمزامنة عند تسجيل المراجعة)
+  var mf = _accMfFeesAgg_(client, trip);
+  if (mf.any) {
+    ['رسوم غرفة', 'رسوم غرفة VIP', 'رسوم غرفة المشرف', 'تجديد باركود'].forEach(function (k) {
+      var a = mf.agg[k]; if (!a || !a.count) return;
+      push(k, _accMfDesc_(k, a), k === 'رسوم غرفة المشرف' ? 'مشرف' : 'كبير', 'EGP', a.count, 0, row.company || '', a.cost);
+    });
+  } else {
+    push('رسوم غرفة', 'رسوم غرفة', 'كبير', 'EGP', row.adults + row.children, 0, row.company || '', roomFee || 0);
+    push('رسوم غرفة المشرف', 'رسوم غرفة المشرف', 'مشرف', 'EGP', 1, 0, row.company || '', cfg.supRoomFee || 200);
+  }
   push('إشراف', 'إشراف', 'كبير', 'EGP', row.adults + row.children, 0, '', 0);
   var tkRoute = (hz.arrRoute || '') + (hz.depRoute ? ' - ' + hz.depRoute : '');
   var tkDesc = tkRoute ? ('تذاكر ' + (hz.airline ? hz.airline + ' ' : '') + tkRoute) : 'تذاكر طيران';
@@ -14977,8 +15159,9 @@ function _accBondsDesired_(authToken, client, trip) {
   // 🛂 (V4.134) لو العميل له أفراد في مجموعات تأشيرات مسجَّلة بهذه الرحلة، يظهر بند «تأشيرات»
   // بعدد أفراده في تلك المجموعات وبيانها يذكر رقم المجموعة والوكيل — أما سعر البيع فيبقى
   // من تسعير بنود العميل أو يدوياً من داخل حساب العميل (لا علاقة له بسعر الوكيل إطلاقاً).
+  // 🛂 (V4.203) بطلب صريح: عدد التأشيرات من المجموعات الفعلية (الموفا الصادرة) فقط — لا تقدير من الكشف
   var vz = _accVisaGroupsFor_(client, trip);
-  push('تأشيرات', vz.desc || 'تأشيرات', 'كبير', 'SAR', vz.count || row.total, 0, '', 0);
+  if (vz.count) push('تأشيرات', vz.desc, 'كبير', 'SAR', vz.count, 0, '', 0);
   push('نقل سعودي', 'نقل سعودي', 'أخرى', 'SAR', 1, 0, '', 0);
   // 🏨 (V4.39) فترة الإقامة (دخول/خروج) تُكتب جنب اسم الفندق بطلب صريح، مثال: «ديوان المدينة من 1-8 الى 4-8»
   var madSuffix = hz.madHotel ? (' - ' + hz.madHotel + _accStayRange_(hz.madCheckIn, hz.madCheckOut)) : '';
@@ -16189,7 +16372,7 @@ function getTripAccountsSummary(authToken, tripName) {
       get(itemsByClient, cl).push({
         // 🧹 (V4.92) تنظيف علامة ربط ترحيل الرصيد الداخلية ⟦cf:...⟧ من البيان — كانت تظهر كحروف
         // غير مفهومة ببيان الحساب هنا (نفس التنظيف المطبَّق بالفعل بكشف حساب العميل نفسه)
-        desc: String(r[3] || '').replace(/\s*⟦cf:[a-z0-9]+⟧\s*$/i, ''),
+        desc: String(r[3] || '').replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, ''),
         currency: String(r[5] || 'EGP'), count: r[6], price: r[7],
         value: _accNum_(r[8]), isDiscount: String(r[9]) === 'نعم', isDirect: String(r[19]) === 'نعم',
         nights: Number(r[15]) || 0, order: _accNum_(r[18])
@@ -16434,10 +16617,20 @@ function accGenerateDraft(authToken, client, trip, mode) {
       return (v !== null) ? v : (fb || 0);
     };
     // بنود الجنيه المصري
-    push('رسوم غرفة', 'كبير', 'EGP', row.adults + row.children, pr('رسوم غرفة', roomFee), 0, row.company || '');
-    // 🧑‍✈️ (V4.156) عدد المشرفين = العدد الفعلي بكشف الرحلة لو كانت الرحلة لهذا العميل وحده (المشرف يخصّه)
-    push('رسوم غرفة المشرف', 'مشرف', 'EGP', (_supOwn.exclusive ? _supOwn.sups : 1),
-      pr('رسوم غرفة المشرف', cfg.supRoomFee || 200), 0, row.company || '');
+    // 🏛️ (V4.203) رسوم الغرفة من ملفات الوزارة المراجَعة لهذا العميل×الرحلة (عادية/VIP/مشرف/باركود) — بيانها
+    // يذكر أرقام الملفات؛ وبلا ملفات مراجَعة بعد: التقدير القديم من الكشف
+    var _mf = _accMfFeesAgg_(client, trip);
+    if (_mf.any) {
+      ['رسوم غرفة', 'رسوم غرفة VIP', 'رسوم غرفة المشرف', 'تجديد باركود'].forEach(function (k) {
+        var a = _mf.agg[k]; if (!a || !a.count) return;
+        push(_accMfDesc_(k, a), k === 'رسوم غرفة المشرف' ? 'مشرف' : 'كبير', 'EGP', a.count, pr(k, a.cost), 0, row.company || '');
+      });
+    } else {
+      push('رسوم غرفة', 'كبير', 'EGP', row.adults + row.children, pr('رسوم غرفة', roomFee), 0, row.company || '');
+      // 🧑‍✈️ (V4.156) عدد المشرفين = العدد الفعلي بكشف الرحلة لو كانت الرحلة لهذا العميل وحده (المشرف يخصّه)
+      push('رسوم غرفة المشرف', 'مشرف', 'EGP', (_supOwn.exclusive ? _supOwn.sups : 1),
+        pr('رسوم غرفة المشرف', cfg.supRoomFee || 200), 0, row.company || '');
+    }
     push('إشراف', 'كبير', 'EGP', row.adults + row.children, pr('إشراف'), 0, '');
     // ✈️ بيان التذاكر من إشعار الرحلة إن وُجد: الخطوط + خط السير (مثل: تذاكر مصر للطيران القاهرة/المدينة - جدة/القاهرة)
     var tkRoute = (hz.arrRoute || '') + (hz.depRoute ? ' - ' + hz.depRoute : '');
@@ -16447,9 +16640,9 @@ function accGenerateDraft(authToken, client, trip, mode) {
     if (row.infants) push('تذاكر الرضع', 'رضيع', 'EGP', row.infants, pr('تذاكر الرضع'), 0, '');
     // بنود الريال السعودي
     // 🛂 (V4.39) المعتمرون بملاحظة تأشيرة خاصة يُفردون ببند مستقل بدل احتسابهم ضمن عدد «تأشيرات» العام
-    var _visaCount = visaPilgrims.length;
-    var _regVisaCount = row.total - _visaCount;
-    if (_regVisaCount > 0) push('تأشيرات', 'كبير', 'SAR', _regVisaCount, pr('تأشيرات'), 0, '');
+    // 🛂 (V4.203) بطلب صريح: عدد التأشيرات من مجموعات التأشيرات الفعلية (الموفا الصادرة) لهذا العميل×الرحلة
+    var _vzG = _accVisaGroupsFor_(client, trip);
+    if (_vzG.count > 0) push(_vzG.desc, 'كبير', 'SAR', _vzG.count, pr('تأشيرات'), 0, '');
     visaPilgrims.forEach(function(p) {
       push('تأشيرة ' + p.name + ' (' + p.notes + ')', 'كبير', 'SAR', 1, 0, 0, '');
     });
@@ -16530,9 +16723,9 @@ function updateAccItemsBulk(authToken, client, trip, itemsArr) {
       if (_changed) sh.getRange(rowIdx, 18).setValue('معدّل');
     }
     // 🔁 حافظ على علامة ربط ترحيل الرصيد ⟦cf:...⟧ إن وُجدت بالبيان الأصلي حتى لو عُدِّل البيان الظاهر
-    var _oldD2 = _r ? String(_r[3] || '') : ''; var _cfM2 = _oldD2.match(/⟦cf:[a-z0-9]+⟧/i);
+    var _oldD2 = _r ? String(_r[3] || '') : ''; var _cfM2 = _oldD2.match(/⟦(?:cf|src):[^⟧]+⟧/i);
     var _newD2 = String(item.desc || '');
-    if (_cfM2 && _newD2.indexOf('⟦cf:') === -1) _newD2 += ' ' + _cfM2[0];
+    if (_cfM2 && _newD2.indexOf('⟦') === -1) _newD2 += ' ' + _cfM2[0];
     sh.getRange(rowIdx, 4, 1, 8).setValues([[_newD2, item.cat || '', currency, count, price, value, isDisc ? 'نعم' : 'لا', item.notes || '']]);
     sh.getRange(rowIdx, 14, 1, 4).setValues([[session.username, now, nights || '', item.company || '']]);
     // 🔀 (V4.26) السحب والإفلات لترتيب البنود — يُحفظ ترتيبها الجديد هنا لو أُرسل مع التعديل الجماعي
@@ -21952,6 +22145,16 @@ function saveMinistryFile(authToken, data) {
     f.calc = _mfCompute_(f);
     f.flags = _mfRules_(f, allAfter, balances);
     var ret = { success: true, file: f, balances: balances };
+    // 🔄 (V4.203) مزامنة بنود «بنود» التلقائية لحسابات العملاء بالرحلات المتأثرة (رسوم الغرفة من الملف)
+    // — فقط لو تغيّر ما يؤثر على الرسوم، وبصمت: فشل المزامنة لا يُفشل حفظ الملف أبداً
+    try {
+      var _feeKeys = ['reviewDate', 'reviewType', 'breakdown', 'sups', 'pilgrims', 'roomFee', 'tripName', 'extraTrips'];
+      var _feeChanged = isNew ? !!_mfStr_(f.reviewDate) : _feeKeys.some(function (k) { return JSON.stringify(old[k] == null ? '' : old[k]) !== JSON.stringify(f[k] == null ? '' : f[k]); });
+      if (_feeChanged) {
+        var _ts = {}; (old ? _mfTripsOf_(old) : []).concat(_mfTripsOf_(f)).forEach(function (t) { _ts[t] = 1; });
+        Object.keys(_ts).forEach(function (t) { try { _syncTripAccounts_(authToken, t, session.username); } catch (eS) {} });
+      }
+    } catch (eSync) {}
     // 🎯 حصة الأفراد الشهرية: تنبيه غير مانع فقط — الحفظ ينجح دائماً — عند تجاوز 36 فرد/شهر لكل
     // شركة أو 9 أفراد للملف الواحد، مع اقتراح شركات بديلة بأكبر مساحة متبقية لنفس الشهر
     if (f.fileType === 'فردي' && _notifEnabled_('mf_quota_exceeded')) {
@@ -23836,6 +24039,15 @@ function saveVisaFile(authToken, data) {
       if (entries.length) logChangesBatch_(session.username, entries);
     }
     f.dueSAR = f.visaCount * f.price;
+    // 🔄 (V4.203) مزامنة بند «تأشيرات» التلقائي لحسابات العملاء بالرحلات المتأثرة — فقط لو تغيّر ما يؤثر عليه
+    try {
+      var _vzKeys = ['status', 'breakdown', 'tripName', 'extraTrips', 'visaCount'];
+      var _vzChanged = isNew ? f.status === 'تم إصدار الموفا' : _vzKeys.some(function (k) { return JSON.stringify(old[k] == null ? '' : old[k]) !== JSON.stringify(f[k] == null ? '' : f[k]); });
+      if (_vzChanged) {
+        var _vts = {}; (old ? _vzTripsOf_(old) : []).concat(_vzTripsOf_(f)).forEach(function (t) { _vts[t] = 1; });
+        Object.keys(_vts).forEach(function (t) { try { _syncTripAccounts_(authToken, t, session.username); } catch (eS) {} });
+      }
+    } catch (eSync) {}
     return { success: true, file: f };
   } finally { if (!_vzLockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
 }

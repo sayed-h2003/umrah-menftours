@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.202 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.203 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.202)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.203)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.202</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.203</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -3960,6 +3960,8 @@ input[type="date"]:not(:focus):not(:valid) {
       <button id="accRedoBtn" class="btn btn-outline-light btn-sm" onclick="_accRedo_()" disabled title="لا يوجد ما يُعاد">↪️ إعادة</button>
       <!-- 🕘 (V4.90) سجل تعديلات هذا الحساب: كل عملية تمت عليه (بند/دفعة/دمج/تسعير...) — من الإنشاء حتى الآن -->
       <button class="btn btn-outline-light btn-sm" onclick="_accHistoryOpen_()" title="سجل كل التعديلات التي تمت على حساب هذا العميل — الحقل والقيمة القديمة والجديدة والقائم بها وتاريخها">🕘 سجل تعديلات الحساب</button>
+      <!-- 🧾 (V4.203) بنود الوزارة والتأشيرات غير المرتبطة برحلات لهذا العميل — اختيار وتسعير وإدراج -->
+      <button class="btn btn-light btn-sm fw-bold" onclick="_accUnlinkedOpen_()" title="رسوم الغرفة (ملفات الوزارة المراجَعة) والتأشيرات (الموفا الصادرة) لهذا العميل غير المرتبطة بأي رحلة — اختر ما تريد وأدرجه في حسابه">🏛️ بنود الوزارة والتأشيرات</button>
       <button id="accQuickPayBtn" class="btn btn-warning btn-sm fw-bold d-none" onclick="_accQuickPayOpen_()" title="تسجيل دفعة عامة أو عدة دفعات لعملاء مختلفين مباشرة بدون فتح أي حساب أولاً">💠 تسجيل دفعات عامة</button>
       <button class="btn btn-outline-light btn-sm" onclick="_accGenLedgerOpen_()" title="عرض وفلترة كل الدفعات العامة عبر كل العملاء">📋 سجل الدفعات العامة</button>
       <button class="btn btn-outline-warning btn-sm" onclick="_accAlertsScanOpen_()" title="فحص كل العملاء عن رحلات تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ حساباتهم">⚠️ مراجعة التغيّرات</button>
@@ -7300,7 +7302,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.202";
+var CLIENT_APP_VERSION = "4.203";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -13711,7 +13713,7 @@ function _auditStr_(s) {
   s = s.replace(/\bSAR\b/g, 'ريال').replace(/\bEGP\b/g, 'جنيه');
   if (s === 'true') return 'نعم';
   if (s === 'false') return 'لا';
-  return s.replace(/\s*⟦cf:[a-z0-9]+⟧\s*/gi, ' ').replace(/\n+/g, '، ').trim();
+  return s.replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*/gi, ' ').replace(/\n+/g, '، ').trim();
 }
 function _auditScalar_(v) {
   if (v === true) return 'نعم'; if (v === false) return 'لا';
@@ -23834,10 +23836,135 @@ function _accComboPick_(name) {
   _accLoad_();
 }
 
+
+/* ============================================================
+   🧾 (V4.203) لوحة «بنود الوزارة والتأشيرات غير المرتبطة برحلات» لعميل — مثل كشف حساب الوكيل
+   بجزءين تحت بعض (الجنيه ثم الريال) كما في كشف حساب العميل الحالي: تحديد ما يُدرَج + سعر قابل
+   للتعديل (تسعير العميل بتاريخ البند، وإلا سعر التكلفة بلون مميز) ثم «إدراج المحدد» في القسم «عام».
+   ============================================================ */
+var _ACC_UL_ = { rows: [], f: 'pending' };
+function _accUnlinkedOpen_() {
+  if (!_accData || !_accData.client) { _showPopup('حمّل حساب عميل أولاً', 'warning'); return; }
+  var prev = document.getElementById('_accUlOv'); if (prev) prev.remove();
+  var ov = document.createElement('div'); ov.id = '_accUlOv'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147482000;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:12px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(1100px,98vw);max-height:94vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden;">' +
+    '<div style="background:linear-gradient(135deg,#0f4c4c,#14b8a6);color:#fff;padding:11px 16px;display:flex;align-items:center;gap:8px;">' +
+      '<b style="flex:1;">🧾 بنود الوزارة والتأشيرات غير المرتبطة برحلات — ' + escapeHtml_(_accData.client) + '</b>' +
+      '<button class="btn btn-light btn-sm" onclick="_accUnlinkedLoad_()">🔄</button>' +
+      '<button class="btn btn-light btn-sm" onclick="document.getElementById(\'_accUlOv\').remove()">✕</button></div>' +
+    '<div id="_accUlBody" style="padding:12px 14px;overflow:auto;"><div class="text-center text-muted py-4">⏳ جاري التحميل…</div></div>' +
+    '<div style="border-top:1px solid #e2e8f0;padding:10px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#f8fafc;">' +
+      '<span id="_accUlSum" style="font-size:12.5px;font-weight:800;color:#334155;flex:1;"></span>' +
+      (_accCan_('add') ? '<button id="_accUlIns" class="btn btn-success btn-sm fw-bold" onclick="_accUnlinkedInsert_(this)">➕ إدراج المحدد في الحساب</button>' : '') +
+    '</div></div>';
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  _accUnlinkedLoad_();
+}
+function _accUnlinkedLoad_() {
+  var body = document.getElementById('_accUlBody'); if (!body) return;
+  body.innerHTML = '<div class="text-center text-muted py-4">⏳ جاري التحميل…</div>';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      if (!res || !res.success) { body.innerHTML = '<div class="alert alert-danger">' + escapeHtml_((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
+      _ACC_UL_.rows = (res.rows || []).map(function (r) { r.sel = !r.inserted; return r; });
+      _accUnlinkedRender_();
+    })
+    .withFailureHandler(function (e) { body.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>'; })
+    .getClientUnlinkedFees(window.authToken, _accData.client);
+}
+function _accUlVisible_() {
+  var f = _ACC_UL_.f;
+  return _ACC_UL_.rows.map(function (r, i) { r._i = i; return r; }).filter(function (r) {
+    if (f === 'pending') return !r.inserted;
+    if (f === 'mf') return r.kind === 'mf';
+    if (f === 'vz') return r.kind === 'vz';
+    return true;
+  });
+}
+function _accUnlinkedRender_() {
+  var body = document.getElementById('_accUlBody'); if (!body) return;
+  var all = _ACC_UL_.rows, esc = escapeHtml_, fmt = function (n) { return (Math.round((Number(n) || 0) * 100) / 100).toLocaleString('en-US'); };
+  var cnt = { all: all.length, mf: 0, vz: 0, pending: 0 };
+  all.forEach(function (r) { cnt[r.kind]++; if (!r.inserted) cnt.pending++; });
+  var chip = function (k, lbl, n) {
+    return '<span onclick="_ACC_UL_.f=\'' + k + '\';_accUnlinkedRender_()" style="cursor:pointer;font-size:12px;font-weight:800;padding:4px 12px;border-radius:20px;border:1.5px solid ' +
+      (_ACC_UL_.f === k ? '#0f4c4c;background:#0f4c4c;color:#fff;' : '#cbd5e1;background:#fff;color:#334155;') + '">' + lbl + ' <b class="vz-latin">' + n + '</b></span>';
+  };
+  var h = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">' +
+    chip('pending', '⏳ لم تُدرَج بعد', cnt.pending) + chip('all', 'الكل', cnt.all) + chip('mf', '🏛️ الوزارة', cnt.mf) + chip('vz', '🛂 التأشيرات', cnt.vz) + '</div>';
+  if (!all.length) {
+    body.innerHTML = h + '<div class="text-muted text-center py-4">لا توجد ملفات وزارة مراجَعة ولا مجموعات تأشيرات (موفا صادرة) لهذا العميل خارج الرحلات.</div>';
+    _accUnlinkedSum_(); return;
+  }
+  var vis = _accUlVisible_();
+  var section = function (cur, title, color) {
+    var L = vis.filter(function (r) { return r.currency === cur; });
+    if (!L.length) return '';
+    var allSel = L.filter(function (r) { return !r.inserted; }).every(function (r) { return r.sel; });
+    var tot = L.reduce(function (s, r) { return s + (r.sel && !r.inserted ? r.count * r.price : 0); }, 0);
+    return '<div style="border:1.5px solid ' + color + ';border-radius:12px;overflow:hidden;margin-bottom:12px;">' +
+      '<div style="background:' + color + ';color:#fff;padding:7px 12px;font-weight:800;display:flex;align-items:center;gap:8px;">' + title +
+        '<span style="flex:1;"></span><span style="font-size:12px;">المحدد: <b class="vz-latin">' + fmt(tot) + '</b></span></div>' +
+      '<div class="table-responsive"><table class="table table-sm mb-0" style="font-size:12.5px;min-width:820px;"><thead><tr style="background:#f1f5f9;">' +
+        '<th class="text-center" style="width:36px;"><input type="checkbox" ' + (allSel ? 'checked' : '') + ' onchange="_accUlSelAll_(\'' + cur + '\', this.checked)"></th>' +
+        '<th class="text-center">التاريخ</th><th class="text-center">المصدر</th><th class="text-center">المرجع</th><th>البيان</th>' +
+        '<th class="text-center">العدد</th><th class="text-center">السعر</th><th class="text-center">القيمة</th><th class="text-center">الحالة</th></tr></thead><tbody>' +
+      L.map(function (r) {
+        var dis = r.inserted;
+        return '<tr' + (dis ? ' style="color:#94a3b8;"' : '') + '>' +
+          '<td class="text-center"><input type="checkbox" ' + (r.sel && !dis ? 'checked ' : '') + (dis ? 'disabled ' : '') + 'onchange="_ACC_UL_.rows[' + r._i + '].sel=this.checked;_accUnlinkedRender_()"></td>' +
+          '<td class="text-center vz-latin">' + esc(r.date || '—') + '</td>' +
+          '<td class="text-center"><span style="font-size:11px;font-weight:800;border-radius:20px;padding:1px 9px;' + (r.kind === 'mf' ? 'background:#e0e7ff;color:#3730a3;">🏛️ الوزارة' : 'background:#ccfbf1;color:#115e59;">🛂 التأشيرات') + '</span></td>' +
+          '<td class="text-center vz-latin"><b>' + esc(r.ref || '—') + '</b></td>' +
+          '<td>' + esc(r.desc) + '</td>' +
+          '<td class="text-center vz-latin">' + fmt(r.count) + '</td>' +
+          '<td class="text-center">' + (dis ? '<span class="vz-latin">' + fmt(r.price) + '</span>' :
+            '<input type="text" inputmode="decimal" dir="ltr" value="' + r.price + '" title="' + (r.priced ? 'سعر العميل المسجَّل بتاريخ البند' : 'لا يوجد سعر لهذا البند في تسعير العميل — هذا سعر التكلفة') + '" ' +
+            'style="width:90px;text-align:center;border-radius:6px;padding:2px 4px;border:1.5px solid ' + (r.priced ? '#cbd5e1' : '#f59e0b;background:#fffbeb') + ';" ' +
+            'onchange="_ACC_UL_.rows[' + r._i + '].price=parseFloat(_toLatinDigits_(this.value))||0;_accUnlinkedRender_()">') + '</td>' +
+          '<td class="text-center vz-latin"><b>' + fmt(r.count * r.price) + '</b></td>' +
+          '<td class="text-center">' + (dis ? '<span style="font-size:11px;font-weight:800;color:#166534;">✔ مُدرج</span>' : '<span style="font-size:11px;color:#64748b;">جديد</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  };
+  h += section('EGP', '🇪🇬 بنود الجنيه المصري', '#1e3d59') + section('SAR', '🇸🇦 بنود الريال السعودي', '#0f766e');
+  if (!vis.length) h += '<div class="text-muted text-center py-3">لا بنود بهذا الفلتر.</div>';
+  h += '<div style="font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 10px;">💡 السعر بإطار برتقالي = لا يوجد سعر لهذا البند في «تسعير بنود العميل» فاقتُرح سعر التكلفة — عدّله قبل الإدراج. البنود تُدرَج في القسم «عام» بحساب العميل.</div>';
+  body.innerHTML = h;
+  _accUnlinkedSum_();
+}
+function _accUlSelAll_(cur, on) { _ACC_UL_.rows.forEach(function (r) { if (r.currency === cur && !r.inserted) r.sel = on; }); _accUnlinkedRender_(); }
+function _accUnlinkedSum_() {
+  var el = document.getElementById('_accUlSum'); if (!el) return;
+  var e = 0, sr = 0, n = 0;
+  _ACC_UL_.rows.forEach(function (r) { if (!r.sel || r.inserted) return; n++; if (r.currency === 'SAR') sr += r.count * r.price; else e += r.count * r.price; });
+  el.innerHTML = 'المحدد: <b>' + n + '</b> بند — جنيه <b class="vz-latin">' + e.toLocaleString('en-US') + '</b> · ريال <b class="vz-latin">' + sr.toLocaleString('en-US') + '</b>';
+  var b = document.getElementById('_accUlIns'); if (b) b.disabled = !n;
+}
+function _accUnlinkedInsert_(btn) {
+  var list = _ACC_UL_.rows.filter(function (r) { return r.sel && !r.inserted; }).map(function (r) {
+    return { src: r.src, desc: r.desc, key: r.key, currency: r.currency, count: r.count, price: r.price };
+  });
+  if (!list.length) return;
+  btn.disabled = true; var orig = btn.innerHTML; btn.innerHTML = '⏳ جاري الإدراج…';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      btn.innerHTML = orig; btn.disabled = false;
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الإدراج', 'error'); return; }
+      _accApplyCreated_(res.created || [], []);
+      showToast('✅ أُدرج ' + res.count + ' بند في حساب العميل (القسم «عام»)' + (res.skipped ? ' — تُخطّي ' + res.skipped + ' مُدرج مسبقاً' : ''));
+      var done = {}; list.forEach(function (x) { done[x.src] = 1; });
+      _ACC_UL_.rows.forEach(function (r) { if (done[r.src]) { r.inserted = true; r.sel = false; } });
+      _accUnlinkedRender_();
+    })
+    .withFailureHandler(function (e) { btn.innerHTML = orig; btn.disabled = false; _showPopup(e && e.message ? e.message : e, 'error'); })
+    .insertClientUnlinkedFees(window.authToken, _accData.client, list);
+}
 // ⚡ (V4.199) إضافة بنود/دفعات أنشأها السيرفر إلى بيانات الحساب المحمَّلة ثم إعادة الرسم محلياً
 function _accApplyCreated_(items, pays) {
   if (!_accData) return;
-  var cfClean = function(s) { return String(s || '').replace(/\s*⟦cf:[a-z0-9]+⟧\s*$/i, ''); };
+  var cfClean = function(s) { return String(s || '').replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, ''); };
   (items || []).forEach(function(it) { it.desc = cfClean(it.desc); _accData.items.push(it); });
   (pays || []).forEach(function(p) { p.desc = cfClean(p.desc); _accData.payments.push(p); });
   _accRender_();
@@ -23858,7 +23985,7 @@ function _accLoad_() {
     .withSuccessHandler(function(res) {
       if (!res || !res.success) { body.innerHTML = '<div class="alert alert-danger small">تعذر تحميل الحساب</div>'; return; }
       // 🔁 (V4.18) تنظيف علامة ترحيل الرصيد المخفية ⟦cf:...⟧ من البيان قبل العرض (تبقى فقط لحظة الحذف المزدوج)
-      var cfClean = function(s) { return String(s || '').replace(/\s*⟦cf:[a-z0-9]+⟧\s*$/i, ''); };
+      var cfClean = function(s) { return String(s || '').replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, ''); };
       (res.items || []).forEach(function(it) { it.desc = cfClean(it.desc); });
       (res.payments || []).forEach(function(p) { p.desc = cfClean(p.desc); });
       // 🏷️ (V4.22) اسم عرض الرحلة داخل هذا الكشف تحديدًا: المخصَّص لهذا العميل إن وُجد، وإلا
