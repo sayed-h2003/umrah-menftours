@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.199 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.200 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.199)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.200)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.199</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.200</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6192,7 +6192,8 @@ document.addEventListener('click', function(ev) {
    للسيرفر بعد تهدئة قصيرة (debounce) حتى لا نُرسل نداءً مع كل حركة سحب صغيرة.
    ============================================================ */
 var UIP = {
-  data: {}, loaded: false, _timers: {},
+  data: {}, loaded: false, _timers: {}, _last: {},
+  _snap: function () { UIP._last = {}; try { Object.keys(UIP.data || {}).forEach(function (k) { UIP._last[k] = JSON.stringify(UIP.data[k]); }); } catch (e) {} },
   _lsKey: function () {
     var u = (window.currentUser && window.currentUser.username) ? window.currentUser.username : '__anon__';
     return 'uiPrefsCache_' + u;
@@ -6202,12 +6203,13 @@ var UIP = {
     // الأعمدة لوضعها الافتراضي للحظة ثم القفز للوضع المخصَّص بعد وصول الرد
     try {
       var raw = localStorage.getItem(UIP._lsKey());
-      if (raw) { var p = JSON.parse(raw); if (p && typeof p === 'object') UIP.data = p; }
+      if (raw) { var p = JSON.parse(raw); if (p && typeof p === 'object') { UIP.data = p; UIP._snap(); } }
     } catch (e) {}
-    google.script.run
+    _bootRunner_('uiPrefs')
       .withSuccessHandler(function (res) {
         if (res && res.success && res.prefs) {
           UIP.data = res.prefs;
+          UIP._snap();
           try { localStorage.setItem(UIP._lsKey(), JSON.stringify(UIP.data)); } catch (e) {}
         }
         UIP.loaded = true;
@@ -6218,6 +6220,12 @@ var UIP = {
   },
   get: function (screenKey) { return (UIP.data && UIP.data[screenKey]) || {}; },
   save: function (screenKey, obj) {
+    // ⚡ (V4.200) لا نداء للسيرفر لو القيمة لم تتغيّر (كان رسم شاشة الإشعارات عند الإقلاع يُعيد حفظ
+    // نفس التفضيلات التي قُرئت للتوّ = كتابة بالشيت مع كل دخول بلا أي فائدة)
+    // المقارنة بلقطة نصية (لا بالكائن نفسه) لأن بعض الشاشات تعدّل كائن التفضيلات في مكانه
+    var js = null; try { js = JSON.stringify(obj == null ? null : obj); } catch (e) {}
+    if (js !== null && UIP._last[screenKey] === js) return;
+    UIP._last[screenKey] = js;
     UIP.data[screenKey] = obj;
     try { localStorage.setItem(UIP._lsKey(), JSON.stringify(UIP.data)); } catch (e) {}
     clearTimeout(UIP._timers[screenKey]);
@@ -6247,7 +6255,7 @@ function _onlineTick_() {
   // ⚡ (V4.199) البرنامج بتبويب مخفي/مصغَّر: نبضة كل دقيقتين بدل كل دقيقة (نصف الاستدعاءات الخلفية)
   if (document.hidden && Date.now() - _onlineLastBeat_ < 100000) return;
   _onlineLastBeat_ = Date.now();
-  google.script.run
+  _bootRunner_('online')
     .withSuccessHandler(function (res) {
       var el = document.getElementById('onlineUsersCount');
       if (el && res && res.success) el.textContent = res.count;
@@ -6337,7 +6345,12 @@ function checkAuthOnLoad() {
   // الأعمدة/الفرز المحفوظة لهذا المستخدم مرة واحدة فقط لكل تحميل صفحة
   if (!window._uipLoadedOnce) {
     window._uipLoadedOnce = true;
+    // 🚀 (V4.200) نداء الإقلاع الموحّد أولاً — كل التحميلات التالية تأخذ بياناتها منه
+    try { if (typeof _bootStart_ === 'function') _bootStart_(); } catch (e) {}
     try { if (typeof UIP === 'object') UIP.load(); } catch (e) {}
+    // 🐛 (V4.200) عند استعادة الجلسة لم تكن تُحمَّل مفاتيح التنبيهات ولا يبدأ مؤقّت انتهاء الجلسة إطلاقاً
+    try { if (typeof loadNotifSettings === 'function') loadNotifSettings(); } catch (e) {}
+    try { if (typeof startSessionTimerFromServer === 'function') startSessionTimerFromServer(); } catch (e) {}
     // 🟢 (V4.184) المتصلون الآن — تبدأ نبضتها هنا أيضاً عند استعادة جلسة بإعادة فتح الصفحة
     try { if (typeof _onlineStart_ === 'function') _onlineStart_(); } catch (e) {}
   }
@@ -6625,6 +6638,8 @@ window.currentUser = res;
 window.authToken = res.token || null;
 try { sessionStorage.setItem('authToken', res.token || ''); } catch(e) {}
 try { localStorage.setItem('smartManagerUser', JSON.stringify(res)); } catch(e) {}
+// 🚀 (V4.200) نداء الإقلاع الموحّد — يُرسَل قبل أي تحميل آخر فتأخذ كل التحميلات الأولى بياناتها منه
+try { if (typeof _bootStart_ === 'function') _bootStart_(); } catch(e) {}
 // 🔔 (V4.125) مفاتيح تفعيل التنبيهات — تُحمَّل مبكراً فتحترمها التنبيهات المحسوبة بالواجهة
 try { if (typeof loadNotifSettings === 'function') loadNotifSettings(); } catch(e) {}
 // ⚙️ (V4.182) تفضيلات الأعمدة/الفرز المحفوظة لهذا المستخدم — تُحمَّل مرة واحدة هنا
@@ -6814,7 +6829,7 @@ var _sessionWarningEndAtMs = null; // الوقت اللي المفروض يحص�
 // يجلب مدة الجلسة المُعدَّة من السيرفر ثم يبدأ المؤقّت بها
 function startSessionTimerFromServer() {
   _initSessionActivityListeners();
-  google.script.run
+  _bootRunner_('sessionCfg')
     .withSuccessHandler(function(res) {
       var minutes = (res && res.minutes) ? res.minutes : 20;
       restartSessionTimer(minutes);
@@ -7020,6 +7035,69 @@ function _showPopup(message, type, title) {
   }
 }
 
+/* ============================================================
+   🪟 (V4.200) نافذتا تأكيد وإدخال أنيقتان بدل confirm()/prompt() الأصليتين للمتصفح (اللتين تظهران
+   بعنوان «script.google.com يقول…» وبشكل خام). غير مُعطِّلتين: تستدعيان الدالة المناسبة عند الاختيار.
+   askConfirm_(message, onYes, opts)  opts: {title, icon, yesLabel, noLabel, danger, onNo}
+   askPrompt_(message, defVal, onOk, opts)  opts: {title, icon, okLabel, placeholder, onCancel, inputType}
+   ============================================================ */
+function _askDlg_(cfg) {
+  var prev = document.getElementById('_askDlgOv'); if (prev) prev.remove();
+  var danger = !!cfg.danger;
+  var col = danger ? '#b91c1c' : '#1e3d59', bg = danger ? '#fef2f2' : '#eff6ff';
+  var ov = document.createElement('div');
+  ov.id = '_askDlgOv'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483200;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);' +
+    'display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;transition:opacity .18s ease;';
+  var esc = function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden;text-align:center;transform:scale(.94);transition:transform .18s ease;">' +
+    '<div style="background:' + bg + ';padding:18px 18px 8px;">' +
+      '<div style="font-size:40px;line-height:1;">' + esc(cfg.icon) + '</div>' +
+      '<div style="color:' + col + ';font-weight:800;font-size:17px;margin-top:8px;">' + esc(cfg.title) + '</div></div>' +
+    '<div style="padding:14px 20px 6px;color:#334155;font-size:14.5px;font-weight:600;white-space:pre-line;line-height:1.75;max-height:50vh;overflow:auto;">' + esc(cfg.message) + '</div>' +
+    (cfg.input ? '<div style="padding:4px 20px 0;"><input id="_askDlgIn" type="' + esc(cfg.inputType || 'text') + '" class="form-control" style="text-align:center;font-weight:700;" placeholder="' + esc(cfg.placeholder || '') + '" value="' + esc(cfg.defVal || '') + '"></div>' : '') +
+    '<div style="display:flex;gap:8px;padding:14px 20px 18px;">' +
+      '<button type="button" id="_askDlgYes" style="flex:1;background:' + col + ';color:#fff;border:none;border-radius:10px;padding:10px;font-weight:800;font-size:14.5px;cursor:pointer;">' + esc(cfg.yesLabel) + '</button>' +
+      '<button type="button" id="_askDlgNo" style="flex:1;background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;border-radius:10px;padding:10px;font-weight:800;font-size:14.5px;cursor:pointer;">' + esc(cfg.noLabel) + '</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  requestAnimationFrame(function () { ov.style.opacity = '1'; ov.firstChild.style.transform = 'scale(1)'; });
+  var done = false;
+  var close = function () { document.removeEventListener('keydown', onKey, true); ov.style.opacity = '0'; setTimeout(function () { ov.remove(); }, 180); };
+  var yes = function () {
+    if (done) return; done = true;
+    var v = cfg.input ? document.getElementById('_askDlgIn').value : true;
+    close(); if (cfg.onYes) cfg.onYes(v);
+  };
+  var no = function () { if (done) return; done = true; close(); if (cfg.onNo) cfg.onNo(); };
+  var onKey = function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); no(); }
+    else if (e.key === 'Enter' && (cfg.input || document.activeElement === document.getElementById('_askDlgYes'))) { e.preventDefault(); e.stopPropagation(); yes(); }
+  };
+  document.addEventListener('keydown', onKey, true);
+  document.getElementById('_askDlgYes').onclick = yes;
+  document.getElementById('_askDlgNo').onclick = no;
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) no(); });
+  try { if (cfg.input) { var inp = document.getElementById('_askDlgIn'); inp.focus(); inp.select(); } else document.getElementById(danger ? '_askDlgNo' : '_askDlgYes').focus(); } catch (e) {}
+}
+function askConfirm_(message, onYes, opts) {
+  opts = opts || {};
+  var m = String(message || '');
+  var danger = opts.danger !== undefined ? opts.danger : /حذف|إلغاء|فك |⛔/.test(m);
+  _askDlg_({ message: m.replace(/^\s*(⚠️|⛔|🔓|❓)\s*/, ''), danger: danger,
+    icon: opts.icon || (m.match(/^\s*(⚠️|⛔|🔓)/) || [])[1] || (danger ? '🗑️' : '❓'),
+    title: opts.title || (danger ? 'تأكيد' : 'تأكيد الإجراء'),
+    yesLabel: opts.yesLabel || (danger ? 'نعم، تأكيد' : 'نعم، متابعة'), noLabel: opts.noLabel || 'إلغاء',
+    onYes: function () { if (onYes) onYes(); }, onNo: opts.onNo });
+}
+function askPrompt_(message, defVal, onOk, opts) {
+  opts = opts || {};
+  _askDlg_({ message: message, input: true, defVal: defVal == null ? '' : defVal, inputType: opts.inputType, placeholder: opts.placeholder,
+    icon: opts.icon || '✏️', title: opts.title || 'إدخال', danger: !!opts.danger,
+    yesLabel: opts.okLabel || 'موافق', noLabel: 'إلغاء',
+    onYes: function (v) { if (onOk) onOk(v); }, onNo: function () { if (opts.onCancel) opts.onCancel(); } });
+}
+
 // 🔤 (V4.79) تسوية الحروف العربية المتشابهة للبحث — همزة/ألف، ي/ى، ه/ة
 function _normalizeArabic_(s) {
   return String(s || '').replace(/[ً-ْٰ]/g, '').replace(/[إأآٱا]/g, 'ا').replace(/[ىئ]/g, 'ي').replace(/ة/g, 'ه').toLowerCase();
@@ -7063,6 +7141,73 @@ function tripListSplit_(s) {
    تنتظره وتأخذ نفس نتيجته (نسخة مستقلة لكل مستدعٍ) — طلب واحد فقط للخادم. لا تخزين بعد انتهاء الطلب،
    فأي تحميل لاحق (بعد حفظ رحلة مثلاً) يجلب بيانات حديثة دائماً. نفس واجهة google.script.run للمستدعي. */
 var _TL_Q_ = null;
+/* ============================================================
+   🚀 (V4.200) نداء الإقلاع الموحّد: عند الدخول يُرسَل getAppBootstrap مرة واحدة، وكل دوال التحميل
+   الأولى (الإعدادات، التفضيلات، القوائم، الإشعارات، التحركات، الرحلات، الإصدار، المتصلون) تمرّ عبر
+   _bootRunner_(key) بدل google.script.run مباشرة: أثناء انتظار الرد تُصَفّ، وعند وصوله تأخذ جزءها منه؛
+   أي جزء غير موجود بالرد (لم يكن جاهزاً بالكاش، أو فشل، أو السيرفر قديم بلا هذه الدالة) يُطلب بنداءه
+   الأصلي تلقائياً — فلا يتغيّر أي سلوك، فقط عدد أقل بكثير من الاستدعاءات. بيانات الإقلاع صالحة
+   لثوانٍ قليلة ولعدد محدود من الاستخدامات، فأي تحميل لاحق (بعد حفظ مثلاً) يجلب بيانات جديدة دائماً.
+   ============================================================ */
+var _BOOT_ = { state: 'idle', parts: null, at: 0, q: [], uses: {} };
+var _BOOT_USES_ = { trips: 4, dropdowns: 2 };   // الباقي استخدام واحد
+var _BOOT_TTL_MS_ = 8000;
+function _bootStart_() {
+  if (_BOOT_.state !== 'idle' || !window.authToken) return;
+  _BOOT_.state = 'pending';
+  var t0 = Date.now();
+  var finish = function (parts, note) {
+    _BOOT_.state = parts ? 'done' : 'failed';
+    _BOOT_.parts = parts; _BOOT_.at = Date.now();
+    try { if (window.__step) window.__step('🚀 نداء الإقلاع الموحّد: ' + note + ' (' + (Date.now() - t0) + ' ms)'); } catch (e) {}
+    var q = _BOOT_.q; _BOOT_.q = [];
+    q.forEach(function (c) { _bootServe_(c); });
+    setTimeout(function () { _BOOT_.parts = null; }, _BOOT_TTL_MS_);
+  };
+  google.script.run
+    .withSuccessHandler(function (res) {
+      finish(res && res.success ? (res.parts || {}) : null,
+        res && res.success ? ('أجزاء: ' + Object.keys(res.parts || {}).join('، ') + ' | السيرفر ' + res.serverMs + ' ms') : 'بلا بيانات');
+    })
+    .withFailureHandler(function (e) { finish(null, 'تعذّر — الرجوع للنداءات المنفصلة: ' + ((e && e.message) || e)); })
+    .getAppBootstrap(window.authToken);
+}
+function _bootTake_(key) {
+  var P = _BOOT_.parts;
+  if (!P || !Object.prototype.hasOwnProperty.call(P, key)) return undefined;
+  if (Date.now() - _BOOT_.at > _BOOT_TTL_MS_) return undefined;
+  var used = _BOOT_.uses[key] || 0;
+  if (used >= (_BOOT_USES_[key] || 1)) return undefined;
+  _BOOT_.uses[key] = used + 1;
+  try { return JSON.parse(JSON.stringify(P[key])); } catch (e) { return P[key]; }
+}
+function _bootServe_(c) {
+  var v = _bootTake_(c.key);
+  if (v !== undefined) {
+    setTimeout(function () { if (c.ok) { try { c.ok(v); } catch (e) { console.error('boot handler ' + c.key, e); } } }, 0);
+    return;
+  }
+  var r = google.script.run;
+  if (c.ok) r = r.withSuccessHandler(c.ok);
+  if (c.fail) r = r.withFailureHandler(c.fail);
+  r[c.fn].apply(r, c.args);
+}
+function _bootRunner_(key) {
+  var c = { key: key, ok: null, fail: null };
+  var b = {
+    withSuccessHandler: function (f) { c.ok = f; return b; },
+    withFailureHandler: function (f) { c.fail = f; return b; }
+  };
+  ['getAllBookingsAuth', 'getAllMovementsAuth', 'getBookingsSortDefault', 'getSessionDurationConfig', 'getNotifSettings',
+   'getMyUiPrefs', 'loadDropdownsData', 'heartbeatOnline', 'getAppVersion', 'getTripsList'].forEach(function (fn) {
+    b[fn] = function () {
+      c.fn = fn; c.args = Array.prototype.slice.call(arguments);
+      if (_BOOT_.state === 'pending') _BOOT_.q.push(c);
+      else _bootServe_(c);
+    };
+  });
+  return b;
+}
 function _tripsListRun_() {
   var ok = null, fail = null;
   var b = {
@@ -7073,7 +7218,7 @@ function _tripsListRun_() {
       if (first) _TL_Q_ = [];
       _TL_Q_.push([ok, fail]);
       if (!first) return;
-      google.script.run
+      _bootRunner_('trips')
         .withSuccessHandler(function (res) {
           var q = _TL_Q_; _TL_Q_ = null;
           var json = null; try { json = JSON.stringify(res); } catch (e) {}
@@ -7099,7 +7244,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.199";
+var CLIENT_APP_VERSION = "4.200";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7167,6 +7312,8 @@ function _removeTransientOverlays() {
 
 function logoutUser() {
   _removeTransientOverlays();
+  // 🚀 (V4.200) الدخول التالي بنفس الصفحة يُرسل نداء إقلاع جديداً
+  try { _BOOT_ = { state: 'idle', parts: null, at: 0, q: [], uses: {} }; } catch (e) {}
   if (window.authToken) {
     google.script.run.logoutUserSession(window.authToken);
   }
@@ -7448,22 +7595,23 @@ function secureDeleteBooking(id) {
     return;
   }
 
-  if (!confirm('⚠️ هل أنت متأكد من حذف إشعار الوصول رقم "' + id + '" نهائياً؟\nسيتم حذف الإشعار وكل تحركاته المرتبطة به، ولا يمكن التراجع عن هذا الإجراء.')) return;
+  askConfirm_('⚠️ هل أنت متأكد من حذف إشعار الوصول رقم "' + id + '" نهائياً؟\nسيتم حذف الإشعار وكل تحركاته المرتبطة به، ولا يمكن التراجع عن هذا الإجراء.', function () {
 
-  google.script.run
-    .withSuccessHandler(function(res) {
-      if (res && res.success) {
-        alert('✅ تم حذف الإشعار رقم ' + id + ' بنجاح');
-        loadBookingsTable();
-        loadSmartDashboard();
-      } else {
-        alert('❌ فشل الحذف: ' + (res && res.error ? res.error : 'خطأ غير معروف'));
-      }
-    })
-    .withFailureHandler(function(err) {
-      alert('❌ خطأ: ' + (err.message || err));
-    })
-    .deleteBookingRecord(window.authToken, id);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          alert('✅ تم حذف الإشعار رقم ' + id + ' بنجاح');
+          loadBookingsTable();
+          loadSmartDashboard();
+        } else {
+          alert('❌ فشل الحذف: ' + (res && res.error ? res.error : 'خطأ غير معروف'));
+        }
+      })
+      .withFailureHandler(function(err) {
+        alert('❌ خطأ: ' + (err.message || err));
+      })
+      .deleteBookingRecord(window.authToken, id);
+  });
 }
 
 function secureEditBooking(id) {
@@ -7606,8 +7754,22 @@ function _noticeExportImage_(id, btn) {
   };
 
   // استبدال alert() الافتراضية بالكامل بنسخة غير مُعطِّلة — بدون الحاجة لتعديل أي استدعاء alert() موجود بالكود
+  // 🪟 (V4.200) الأخطاء والرسائل الطويلة (أكثر من سطرين أو 140 حرفاً) تظهر بالنافذة الأنيقة الواضحة
+  // (_showPopup) لأنها تحتاج قراءة متأنية ولا يجوز أن تختفي تلقائياً؛ الرسائل القصيرة تبقى إشعاراً عائماً
+  var _inAlertPopup = false;
   window.alert = function(message) {
-    showToast(message);
+    var m = String(message == null ? '' : message);
+    var type = detectToastType(m);
+    var long = m.length > 140 || (m.match(/\n/g) || []).length >= 2;
+    if ((type === 'error' || long) && typeof _showPopup === 'function' && !_inAlertPopup) {
+      _inAlertPopup = true;
+      try {
+        var clean = m.replace(/^\s*(❌|⛔|⚠️|✅|ℹ️)\s*/, '');
+        _showPopup(clean, type === 'success' ? 'success' : type, null);
+      } finally { _inAlertPopup = false; }
+      return;
+    }
+    showToast(m);
   };
 })();
 
@@ -7640,7 +7802,7 @@ var currentTicketTemporary = false;
 // شارة الإصدار بالأحمر ونطبع تحذيراً واضحاً بدل ما يفضل المستخدم يشك إن فيه مشكلة غامضة.
 function _checkAppVersionMismatch() {
   console.log('🏷️ CLIENT_APP_VERSION: ' + CLIENT_APP_VERSION);
-  google.script.run.withSuccessHandler(function(info) {
+  _bootRunner_('version').withSuccessHandler(function(info) {
     console.log('🏷️ APP_VERSION (خادم): ' + (info && info.version) + ' | وقت الخادم: ' + (info && info.serverTime));
     var badge = document.getElementById('appVersionBadge');
     if (info && info.version && info.version !== CLIENT_APP_VERSION) {
@@ -8078,52 +8240,42 @@ function deleteTicketFromRecord(
 
 ) {
 
-  if (
+  askConfirm_("هل تريد حذف التذكرة المرفقة؟", function () {
 
-    !confirm(
+    google.script.run
 
-      "هل تريد حذف التذكرة المرفقة؟"
+      .withSuccessHandler(function(res){
 
-    )
+        if (!res.success) {
 
-  ) {
+  alert(
 
-    return;
-  }
+    "فشل حذف التذكرة:\n" +
 
-  google.script.run
+    res.error
 
-    .withSuccessHandler(function(res){
+  );
+          return;
+        }
 
-      if (!res.success) {
+        alert(
+          "تم حذف التذكرة بنجاح"
+        );
 
-alert(
+        loadBookingsTable();
 
-  "فشل حذف التذكرة:\n" +
+      })
 
-  res.error
+      .deleteTicketFromBooking(
 
-);
-        return;
-      }
+        window.authToken,
 
-      alert(
-        "تم حذف التذكرة بنجاح"
+        fileId,
+
+        bookingId
+
       );
-
-      loadBookingsTable();
-
-    })
-
-    .deleteTicketFromBooking(
-
-      window.authToken,
-
-      fileId,
-
-      bookingId
-
-    );
+  });
 }
 
 
@@ -8199,26 +8351,27 @@ function renderUsersTable(users) {
 }
 
 function confirmDeleteUser(row, username) {
-  if (!confirm('⚠️ هل أنت متأكد من حذف المستخدم "' + username + '" نهائياً؟\nهذا الإجراء لا يمكن التراجع عنه.')) return;
-  var typed = prompt('للتأكيد، اكتب اسم المستخدم "' + username + '" بالضبط:');
-  if (typed !== username) {
-    if (typed !== null) alert('الاسم غير مطابق — تم إلغاء الحذف.');
-    return;
-  }
+  // (V4.200) تأكيد واحد أنيق: التحذير + كتابة اسم المستخدم للتأكيد بنفس النافذة
+  askPrompt_('هل أنت متأكد من حذف المستخدم "' + username + '" نهائياً؟ هذا الإجراء لا يمكن التراجع عنه.\n\nللتأكيد، اكتب اسم المستخدم بالضبط:', '', function (typed) {
+    if (String(typed || '').trim() !== username) {
+      _showPopup('الاسم غير مطابق — تم إلغاء الحذف.', 'warning');
+      return;
+    }
 
-  google.script.run
-    .withSuccessHandler(function(res) {
-      if (res && res.success) {
-        alert('✅ تم حذف المستخدم بنجاح');
-        loadUsersTable();
-      } else {
-        alert('❌ فشل الحذف: ' + (res && res.error ? res.error : 'خطأ غير معروف'));
-      }
-    })
-    .withFailureHandler(function(err) {
-      alert('❌ خطأ: ' + (err.message || err));
-    })
-    .deleteUserAccount(window.authToken, row, username);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          alert('✅ تم حذف المستخدم بنجاح');
+          loadUsersTable();
+        } else {
+          alert('❌ فشل الحذف: ' + (res && res.error ? res.error : 'خطأ غير معروف'));
+        }
+      })
+      .withFailureHandler(function(err) {
+        alert('❌ خطأ: ' + (err.message || err));
+      })
+      .deleteUserAccount(window.authToken, row, username);
+  }, { title: 'حذف مستخدم', icon: '🗑️', okLabel: 'حذف نهائياً', danger: true, placeholder: username });
 }
 
 function submitNewUser() {
@@ -8329,12 +8482,13 @@ function submitCompanyForm() {
 }
 
 function deleteCompanyRow(row, company) {
-  if (!confirm('هل تريد حذف شركة "' + company + '"؟')) return;
+  askConfirm_('هل تريد حذف شركة "' + company + '"؟', function () {
 
-  google.script.run
-    .withSuccessHandler(function () { loadCompaniesTable(); })
-    .withFailureHandler(function (err) { alert('تعذر الحذف: ' + (err.message || err)); })
-    .deleteCompanySetting(window.authToken, row, company);
+    google.script.run
+      .withSuccessHandler(function () { loadCompaniesTable(); })
+      .withFailureHandler(function (err) { alert('تعذر الحذف: ' + (err.message || err)); })
+      .deleteCompanySetting(window.authToken, row, company);
+  });
 }
 
 function loadCompaniesTable() {
@@ -8404,7 +8558,7 @@ function _notifOn_(key) {
   return window._notifCfg[key] === false ? false : true;
 }
 function loadNotifSettings(cb) {
-  google.script.run
+  _bootRunner_('notif')
     .withSuccessHandler(function (res) {
       if (res && res.success) {
         var map = {};
@@ -9480,34 +9634,34 @@ function saveAndActivateTelegram(btn) {
 // الدالة الرئيسية التي تستدعيها الأزرار — تتحقق من الحالات الخاصة قبل التنفيذ
 // يطلب كلمة مرور جديدة وينشئ بها أول حساب مدير (admin) عند إعداد نسخة جديدة من النظام فقط
 function setupAdminUserWithPassword(btn) {
-  var pwd = prompt('أدخل كلمة مرور حساب المدير الأول (admin):');
-  if (pwd === null) return; // إلغاء
-  pwd = pwd.trim();
-  if (!pwd) {
-    alert('⚠️ كلمة المرور لا يمكن أن تكون فارغة');
-    return;
-  }
+  askPrompt_('أدخل كلمة مرور حساب المدير الأول (admin):', '', function (pwd) {
+    pwd = pwd.trim();
+    if (!pwd) {
+      alert('⚠️ كلمة المرور لا يمكن أن تكون فارغة');
+      return;
+    }
 
-  var orig = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '⏳ جاري الإنشاء...';
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ جاري الإنشاء...';
 
-  google.script.run
-    .withSuccessHandler(function(res) {
-      btn.disabled = false;
-      btn.innerHTML = orig;
-      if (res && res.success) {
-        alert('✅ ' + (res.message || 'تم إنشاء حساب المدير بنجاح'));
-      } else {
-        alert('❌ ' + ((res && res.message) || 'فشل إنشاء حساب المدير (ربما موجود بالفعل)'));
-      }
-    })
-    .withFailureHandler(function(err) {
-      btn.disabled = false;
-      btn.innerHTML = orig;
-      alert('❌ خطأ: ' + (err.message || err));
-    })
-    .setupUsersSystemFromUI(window.authToken, pwd);
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+        if (res && res.success) {
+          alert('✅ ' + (res.message || 'تم إنشاء حساب المدير بنجاح'));
+        } else {
+          alert('❌ ' + ((res && res.message) || 'فشل إنشاء حساب المدير (ربما موجود بالفعل)'));
+        }
+      })
+      .withFailureHandler(function(err) {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+        alert('❌ خطأ: ' + (err.message || err));
+      })
+      .setupUsersSystemFromUI(window.authToken, pwd);
+  }, { title: 'إنشاء حساب المدير', icon: '🔐', inputType: 'password', okLabel: 'إنشاء' });
 }
 
 function runAdminAction(actionName, btn) {
@@ -9516,22 +9670,24 @@ function runAdminAction(actionName, btn) {
     var currentEmails = (document.getElementById('settingsNotificationEmails') || {}).value || '';
     currentEmails = currentEmails.trim();
     if (!currentEmails) {
-      var emails = prompt('أدخل البريد الإلكتروني لتفعيل التنبيه اليومي:', '');
-      if (!emails || !emails.trim()) {
-        showSvcResult('email', 'لا يمكن التفعيل بدون بريد إلكتروني', false);
-        return;
-      }
-      var emailInput = document.getElementById('settingsNotificationEmails');
-      if (emailInput) emailInput.value = emails.trim();
-      google.script.run
-        .withSuccessHandler(function() { executeAdminActionCall('setupDailyAlertTrigger', btn); })
-        .withFailureHandler(function(err) { showSvcResult('email', '❌ ' + (err.message || err), false); })
-        .saveSystemSettings(window.authToken, { notificationEmails: emails.trim() });
+      askPrompt_('أدخل البريد الإلكتروني لتفعيل التنبيه اليومي:', '', function (emails) {
+        if (!emails || !emails.trim()) {
+          showSvcResult('email', 'لا يمكن التفعيل بدون بريد إلكتروني', false);
+          return;
+        }
+        var emailInput = document.getElementById('settingsNotificationEmails');
+        if (emailInput) emailInput.value = emails.trim();
+        google.script.run
+          .withSuccessHandler(function() { executeAdminActionCall('setupDailyAlertTrigger', btn); })
+          .withFailureHandler(function(err) { showSvcResult('email', '❌ ' + (err.message || err), false); })
+          .saveSystemSettings(window.authToken, { notificationEmails: emails.trim() });
+      }, { title: 'تنبيه البريد اليومي', icon: '📧', inputType: 'email', placeholder: 'name@example.com', okLabel: 'حفظ وتفعيل' });
       return;
     }
   }
-  if (!confirm('هل تريد تنفيذ هذا الإجراء الآن؟')) return;
-  executeAdminActionCall(actionName, btn);
+  askConfirm_('هل تريد تنفيذ هذا الإجراء الآن؟', function () {
+    executeAdminActionCall(actionName, btn);
+  });
 }
 
 function executeAdminActionCall(actionName, btn) {
@@ -9580,28 +9736,29 @@ function executeAdminActionCall(actionName, btn) {
 
 // 🔄 مصالحة الرحلات والإشعارات المرتبطة (البند 10) — تُشغَّل مرة واحدة يدوياً من شاشة الإعدادات
 function runReconciliation(btn) {
-  if (!confirm('سيتم فحص كل الرحلات المرتبطة بإشعارات ومزامنة بيانات خط السير المتعارضة. هل تريد المتابعة؟')) return;
-  var originalText = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '⏳ جاري المصالحة...';
-  google.script.run
-    .withSuccessHandler(function (res) {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-      if (res && (res.tripsUpdated !== undefined)) {
-        var msg = '✅ تمت المصالحة: حُدِّثت ' + res.tripsUpdated + ' رحلة و ' + res.bookingsUpdated +
-                  ' إشعار (إجمالي التعارضات المعالَجة: ' + (res.conflicts ? res.conflicts.length : 0) + ').';
-        showSvcResult('setup', msg, true);
-      } else {
-        showSvcResult('setup', (res && res.error) || 'تعذّر إتمام المصالحة', false);
-      }
-    })
-    .withFailureHandler(function (err) {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-      showSvcResult('setup', '❌ خطأ: ' + (err.message || err), false);
-    })
-    .runOneTimeReconciliation(window.authToken);
+  askConfirm_('سيتم فحص كل الرحلات المرتبطة بإشعارات ومزامنة بيانات خط السير المتعارضة. هل تريد المتابعة؟', function () {
+    var originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ جاري المصالحة...';
+    google.script.run
+      .withSuccessHandler(function (res) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        if (res && (res.tripsUpdated !== undefined)) {
+          var msg = '✅ تمت المصالحة: حُدِّثت ' + res.tripsUpdated + ' رحلة و ' + res.bookingsUpdated +
+                    ' إشعار (إجمالي التعارضات المعالَجة: ' + (res.conflicts ? res.conflicts.length : 0) + ').';
+          showSvcResult('setup', msg, true);
+        } else {
+          showSvcResult('setup', (res && res.error) || 'تعذّر إتمام المصالحة', false);
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        showSvcResult('setup', '❌ خطأ: ' + (err.message || err), false);
+      })
+      .runOneTimeReconciliation(window.authToken);
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════════
@@ -10653,7 +10810,7 @@ function _regAssignToTrip(key) {
           if (res && res.success) { showToast('✅ خُصِّص "' + rec.name + '" لرحلة "' + tripName + '"'); loadGlobalRegistry(); return; }
           if (res && res.conflict) {
             // ⛔ تعارض تواريخ: رحلات المعتمر الأخرى تتقاطع مع الرحلة المستهدفة
-            if (confirm('⛔ تعارض تواريخ الرحلات:\n\n' + res.error + '\n\nهل تريد التخصيص رغم التعارض؟')) doAssign(true);
+            askConfirm_('⛔ تعارض تواريخ الرحلات:\n\n' + res.error + '\n\nهل تريد التخصيص رغم التعارض؟', function () { doAssign(true); }, { title: 'تعارض تواريخ', yesLabel: 'تخصيص رغم التعارض', danger: true });
             return;
           }
           alert((res && res.error) || 'تعذر التخصيص');
@@ -11035,7 +11192,7 @@ function _transferPilgrim(btn) {
           }
           if (res && res.conflict) {
             // ⛔ تعارض تواريخ: المعتمر (أو أحد توابعه) في رحلة ثالثة تتقاطع مع الرحلة الهدف
-            if (confirm('⛔ تعارض تواريخ الرحلات:\n\n' + res.error + '\n\nهل تريد النقل رغم التعارض؟')) doMove(true);
+            askConfirm_('⛔ تعارض تواريخ الرحلات:\n\n' + res.error + '\n\nهل تريد النقل رغم التعارض؟', function () { doMove(true); }, { title: 'تعارض تواريخ', yesLabel: 'نقل رغم التعارض', danger: true });
             return;
           }
           alert((res && res.error) || 'تعذر النقل');
@@ -13288,7 +13445,7 @@ function _tpBuildAndPrint_(d, isClient, includeHousing) {
 
 // تعبئة قوائم الشركة/الوكيل في نموذج الرحلة من نفس بيانات نموذج الإشعار
 function populateTripFormDropdowns() {
-  google.script.run.withSuccessHandler(function(res) {
+  _bootRunner_('dropdowns').withSuccessHandler(function(res) {
     var compSel = document.getElementById('tripFormCompany');
     compSel.innerHTML = '<option value="">-- اختر الشركة --</option>';
     (res.companies || []).forEach(function(c) { compSel.innerHTML += '<option value="' + escapeHtml_(c) + '">' + escapeHtml_(c) + '</option>'; });
@@ -16959,10 +17116,13 @@ window.__step('8️⃣.24 _extractionClose ✅');
 <script>
 function _extractionClose() {
   var pending = (window._extractedPending || []).filter(function(p){ return p && !p._added && p._status !== 'exists'; });
-  if (pending.length && !confirm('يوجد ' + pending.length + ' معتمر مستخلَص لم يُضَف للكشف بعد. هل تغلق النافذة وتتجاهلها؟')) return;
-  if (window._extractionMiniFlash) { clearInterval(window._extractionMiniFlash); window._extractionMiniFlash = null; }
-  document.getElementById('extractionWidget').classList.add('d-none');
-  document.getElementById('extractionMiniIcon').classList.add('d-none');
+  var doClose = function () {
+    if (window._extractionMiniFlash) { clearInterval(window._extractionMiniFlash); window._extractionMiniFlash = null; }
+    document.getElementById('extractionWidget').classList.add('d-none');
+    document.getElementById('extractionMiniIcon').classList.add('d-none');
+  };
+  if (pending.length) askConfirm_('يوجد ' + pending.length + ' معتمر مستخلَص لم يُضَف للكشف بعد. هل تغلق النافذة وتتجاهلها؟', doClose, { title: 'نتائج غير مضافة', icon: '⚠️', yesLabel: 'إغلاق وتجاهل', danger: true });
+  else doClose();
 }
 // إظهار النافذة بحجمها العادي عند بدء الاستخلاص
 // 🛡️ درع التركيز: مصيدة تركيز مودالات Bootstrap تستمع لـfocusin على مستوى الوثيقة وتسرق التركيز
@@ -22036,7 +22196,7 @@ function _onAuditScreenChange__silent() {
 }
 
 function promptChangePassword(row, username) {
-  var newPassword = prompt('كلمة المرور الجديدة للمستخدم "' + username + '":');
+  askPrompt_('كلمة المرور الجديدة للمستخدم "' + username + '":', '', function (newPassword) {
   if (!newPassword) return;
 
   google.script.run
@@ -22049,6 +22209,7 @@ function promptChangePassword(row, username) {
       alert('تعذر تغيير كلمة المرور: ' + (err.message || err));
     })
     .changeUserPassword(window.authToken, row, newPassword);
+  }, { title: 'تغيير كلمة المرور', icon: '🔑', inputType: 'password', okLabel: 'حفظ' });
 }
 
 function toggleUserActive(row, makeActive) {
@@ -22867,14 +23028,15 @@ function _clCreateLink() {
 }
 
 function _clRevokeLink(token) {
-  if (!confirm('إلغاء هذا الرابط؟ لن يعمل بعد الإلغاء، وبقية الروابط لن تتأثر.')) return;
-  google.script.run
-    .withSuccessHandler(function() {
-      if (typeof showToast === 'function') showToast('✅ أُلغي الرابط');
-      _clRefreshLinks();
-    })
-    .withFailureHandler(function(e) { alert('خطأ: ' + (e.message || e)); })
-    .revokeTripClientLink(window.authToken, token);
+  askConfirm_('إلغاء هذا الرابط؟ لن يعمل بعد الإلغاء، وبقية الروابط لن تتأثر.', function () {
+    google.script.run
+      .withSuccessHandler(function() {
+        if (typeof showToast === 'function') showToast('✅ أُلغي الرابط');
+        _clRefreshLinks();
+      })
+      .withFailureHandler(function(e) { alert('خطأ: ' + (e.message || e)); })
+      .revokeTripClientLink(window.authToken, token);
+  });
 }
 
 // 📋 نسخ فعلي للحافظة — Clipboard API قد يُرفض بصمت داخل إطار Apps Script (سياق غير آمن/بلا صلاحية)
@@ -22914,12 +23076,12 @@ function _clCopyUrl(url) {
   var done = function() { doFeedback(btn); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(url).then(done).catch(function() {
-      if (_clLegacyCopy_(url)) done(); else prompt('انسخ الرابط:', url);
+      if (_clLegacyCopy_(url)) done(); else askPrompt_('انسخ الرابط (محدَّد بالكامل — اضغط Ctrl+C):', url, null, { title: 'نسخ الرابط', icon: '🔗', okLabel: 'تم' });
     });
   } else if (_clLegacyCopy_(url)) {
     done();
   } else {
-    prompt('انسخ الرابط:', url);
+    askPrompt_('انسخ الرابط (محدَّد بالكامل — اضغط Ctrl+C):', url, null, { title: 'نسخ الرابط', icon: '🔗', okLabel: 'تم' });
   }
 }
 
@@ -24091,9 +24253,8 @@ function _accTripDisplay_(tripKey) {
 function _accRenameTrip_(tripKey) {
   if (!_accCan_('edit')) return;
   var cur = _accTripDisplay_(tripKey);
-  var v = prompt('اسم الرحلة كما سيظهر في كشف حساب هذا العميل فقط (لا يغيّر اسم الرحلة الفعلي):', cur);
-  if (v === null) return;
-  v = v.trim();
+  askPrompt_('اسم الرحلة كما سيظهر في كشف حساب هذا العميل فقط (لا يغيّر اسم الرحلة الفعلي):', cur, function (v) {
+  v = String(v || '').trim();
   google.script.run.withSuccessHandler(function(res) {
     if (res && res.success) {
       var row = (_accData.trips || []).find(function(r) { return r.trip === tripKey; });
@@ -24105,6 +24266,7 @@ function _accRenameTrip_(tripKey) {
     }
   }).withFailureHandler(function(e) { alert('خطأ: ' + e.message); })
   .setAccDisplayName(window.authToken, (_accData && _accData.client), tripKey, v);
+  }, { title: 'اسم الرحلة في الكشف', icon: '🏷️', okLabel: 'حفظ' });
 }
 
 function _accRender_() {
@@ -26655,12 +26817,12 @@ function _ccEditSave_(btn, no) {
     .saveCateringContracts(window.authToken, [vals]);
 }
 function _ccDeleteRow_(no) {
-  // 🗑️ (V4.69) استخدام confirm() الأصلي دائماً — لا اعتماد على أي مكتبة خارجية
+  // 🗑️ (V4.200) نافذة التأكيد الأنيقة الموحّدة askConfirm_ (بلا أي مكتبة خارجية)
   if (window._ccDbg_) window._ccDbg_('🗑️ _ccDeleteRow_ استُدعيت للحذف رقم: ' + no, 'ok');
-  var ok = window.confirm('هل تريد حذف الاتفاقية رقم "' + no + '" نهائياً؟');
-  if (window._ccDbg_) window._ccDbg_('   confirm() نتيجة: ' + ok, ok ? 'ok' : 'warn');
-  if (!ok) return;
-  _ccDeleteRowRun_(no);
+  askConfirm_('هل تريد حذف الاتفاقية رقم "' + no + '" نهائياً؟', function () {
+    if (window._ccDbg_) window._ccDbg_('   تأكيد الحذف: نعم', 'ok');
+    _ccDeleteRowRun_(no);
+  }, { title: 'حذف اتفاقية', icon: '🗑️', yesLabel: 'نعم، احذف', danger: true });
 }
 function _ccDeleteRowRun_(no) {
   if (window._ccDbg_) window._ccDbg_('📡 نداء السيرفر deleteCateringContract(' + no + ')', 'ok');
@@ -26733,23 +26895,24 @@ function _ccRenderDupPanel_(groups) {
   wrap.innerHTML = html;
 }
 function _ccMergeDup_(btn, contractNo) {
-  if (!confirm('دمج كل نسخ الاتفاقية رقم "' + contractNo + '" في اتفاقية واحدة (تُستكمل الحقول الناقصة من كل النسخ)، وحذف الباقي؟')) return;
-  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الدمج…';
-  google.script.run
-    .withSuccessHandler(function(res) {
-      btn.disabled = false; btn.innerHTML = orig;
-      if (res && res.success) {
-        (window.showToast || alert)('✅ دُمجت ' + res.mergedCount + ' نسخة في اتفاقية واحدة');
-        google.script.run.withSuccessHandler(function(res2) {
-          if (res2 && res2.success) _ccRenderDupPanel_(res2.groups || []);
-        }).findDuplicateCateringContracts(window.authToken);
-        _ccLoad_();
-      } else {
-        alert('❌ ' + ((res && res.error) || 'فشل الدمج'));
-      }
-    })
-    .withFailureHandler(function(err) { btn.disabled = false; btn.innerHTML = orig; alert('❌ ' + (err.message || err)); })
-    .mergeCateringDuplicates(window.authToken, contractNo);
+  askConfirm_('دمج كل نسخ الاتفاقية رقم "' + contractNo + '" في اتفاقية واحدة (تُستكمل الحقول الناقصة من كل النسخ)، وحذف الباقي؟', function () {
+    var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الدمج…';
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.disabled = false; btn.innerHTML = orig;
+        if (res && res.success) {
+          (window.showToast || alert)('✅ دُمجت ' + res.mergedCount + ' نسخة في اتفاقية واحدة');
+          google.script.run.withSuccessHandler(function(res2) {
+            if (res2 && res2.success) _ccRenderDupPanel_(res2.groups || []);
+          }).findDuplicateCateringContracts(window.authToken);
+          _ccLoad_();
+        } else {
+          alert('❌ ' + ((res && res.error) || 'فشل الدمج'));
+        }
+      })
+      .withFailureHandler(function(err) { btn.disabled = false; btn.innerHTML = orig; alert('❌ ' + (err.message || err)); })
+      .mergeCateringDuplicates(window.authToken, contractNo);
+  });
 }
 
 function _ccColsToggle_(btn) {
@@ -27474,14 +27637,15 @@ function _accMergeSidebarSave_() {
 }
 function _accUnmergeSidebar_() {
   if (!_accData || !(_accData && _accData.client)) return;
-  if (!confirm('🔓 فك دمج حسابات الرحلات؟ (المدفوعات ستعود لكل رحلة حسب تخصيصها الأصلي)')) return;
-  google.script.run
-    .withSuccessHandler(function(res) {
-      if (res && res.success) { showToast('🔓 تم فك الدمج'); _accData.mergeTrips = null; window._accMergeGroupCache = { trips: null }; _accRender_(); }
-      else alert('❌ ' + ((res && res.error) || 'فشل فك الدمج'));
-    })
-    .withFailureHandler(function(err) { alert('❌ ' + (err.message || err)); })
-    .clearClientMergeGroup(window.authToken, (_accData && _accData.client));
+  askConfirm_('🔓 فك دمج حسابات الرحلات؟ (المدفوعات ستعود لكل رحلة حسب تخصيصها الأصلي)', function () {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) { showToast('🔓 تم فك الدمج'); _accData.mergeTrips = null; window._accMergeGroupCache = { trips: null }; _accRender_(); }
+        else alert('❌ ' + ((res && res.error) || 'فشل فك الدمج'));
+      })
+      .withFailureHandler(function(err) { alert('❌ ' + (err.message || err)); })
+      .clearClientMergeGroup(window.authToken, (_accData && _accData.client));
+  });
 }
 
 // 🔓 (V4.31) فك الدمج الدائم المحفوظ لهذا العميل
@@ -28468,7 +28632,7 @@ window.__step('4️⃣.11 مقطع الجافاسكربت 11/14 ✅');
 </script>
 <script>
 function loadSetupData() {
-    google.script.run.withSuccessHandler(function(res) {
+    _bootRunner_('dropdowns').withSuccessHandler(function(res) {
       var agentSel = document.getElementById('agent');
       agentSel.innerHTML = '<option value="">-- اختر الوكيل السعودي --</option>';
       res.agents.forEach(a => { agentSel.innerHTML += `<option value="${a}">${a}</option>`; });
@@ -29197,7 +29361,7 @@ function selectBookingRow(id, evt) {
   // أي تبديل يدوي لاحق من المستخدم بالشريحة الصغيرة يبقى كما هو بلا إعادة استعلام
   function _ensureBookingsSortModeDefault_(cb) {
     if (window._bookingsSortMode !== undefined) { cb(); return; }
-    google.script.run.withSuccessHandler(function(res) {
+    _bootRunner_('sortMode').withSuccessHandler(function(res) {
       window._bookingsSortMode = (res && res.mode === 'id') ? 'id' : 'arrival';
       var arrBtn = document.getElementById('bkSortArrivalBtn'), idBtn = document.getElementById('bkSortIdBtn');
       if (arrBtn) arrBtn.classList.toggle('active', window._bookingsSortMode === 'arrival');
@@ -29466,7 +29630,7 @@ function selectBookingRow(id, evt) {
     _ensureTripsCacheForHover_();
 
     _ensureBookingsSortModeDefault_(function() {
-      google.script.run.withSuccessHandler(function(bookings) {
+      _bootRunner_('bookings').withSuccessHandler(function(bookings) {
         localBookingsCache = bookings;
         _dynSearchCache = null; // ⚡ (V4.170) بيانات الحجوزات تغيّرت — كاش شاشة البحث الديناميكي بات قديماً
         _bkRenderSections_();
@@ -34547,7 +34711,7 @@ function _dashToggleTransport_() {
 
 function loadSmartDashboard(){
 
-  google.script.run
+  _bootRunner_('movements')
     .withSuccessHandler(
       function(movements){
 
@@ -38062,10 +38226,10 @@ function mfDraftTrip(v) {
       mfSyncCounts();
       MF._step = 1;
       setTimeout(function () {
-        if (confirm('الرحلة «' + t.name + '» بها ' + cnt + ' معتمراً.\n\nهل تجلب كل الأسماء الآن؟\n' +
-          'الأسماء المسجَّلة في ملف آخر لنفس الرحلة ستظهر باهتة، ويمكنك إلغاء تحديد من تريد.')) {
+        askConfirm_('الرحلة «' + t.name + '» بها ' + cnt + ' معتمراً.\n\nهل تجلب كل الأسماء الآن؟\n' +
+          'الأسماء المسجَّلة في ملف آخر لنفس الرحلة ستظهر باهتة، ويمكنك إلغاء تحديد من تريد.', function () {
           mfPullTripPilgrims();
-        }
+        }, { title: 'جلب أسماء الرحلة', icon: '👥', yesLabel: 'نعم، اجلب الأسماء', noLabel: 'لاحقاً', danger: false });
       }, 120);
     }
     // 🏨 (V4.123) تنبيه بمستويات التسكين المتعددة (فندق × طبيعة تسكين، مع تجميع الرباعي فأكبر
@@ -38278,14 +38442,15 @@ function mfSaveDraftSplit(base, levels) {
 }
 function mfDeleteFile(id) {
   var f = mfGet(id); if (!f) return;
-  if (!confirm('حذف ملف المراجعة ' + (f.fileNo ? 'رقم ' + f.fileNo : '(بدون رقم)') + ' — ' + (f.clientLabel || '') + '؟')) return;
-  google.script.run
-    .withSuccessHandler(function (res) {
-      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
-      _showPopup('تم حذف الملف', 'success'); mfRemoveLocal(id);
-    })
-    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
-    .deleteMinistryFile(window.authToken, id);
+  askConfirm_('حذف ملف المراجعة ' + (f.fileNo ? 'رقم ' + f.fileNo : '(بدون رقم)') + ' — ' + (f.clientLabel || '') + '؟', function () {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
+        _showPopup('تم حذف الملف', 'success'); mfRemoveLocal(id);
+      })
+      .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+      .deleteMinistryFile(window.authToken, id);
+  });
 }
 
 /* ---------- اختيار المعتمرين (حسب العميل + فردي معاً) ---------- */
@@ -38782,17 +38947,18 @@ function mfSupRegSave(origName) {
 // الجدول المُحدَّثة محلياً بالفعل بنجاح الحفظ (mfSupRegSave)
 function mfSupEditClose_() { mfOpenSupReg(); }
 function mfSupRegDel(name) {
-  if (!confirm('حذف المشرف «' + name + '» من السجل؟')) return;
-  google.script.run
-    .withSuccessHandler(function (res) {
-      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
-      _showPopup('تم حذف المشرف', 'success');
-      MF.sups = (MF.sups || []).filter(function (s) { return mfStr(s.name) !== mfStr(name); });
-      mfSupRegRender();
-      mfSupRefreshLight_();
-    })
-    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
-    .deleteMinistrySupervisor(window.authToken, name);
+  askConfirm_('حذف المشرف «' + name + '» من السجل؟', function () {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
+        _showPopup('تم حذف المشرف', 'success');
+        MF.sups = (MF.sups || []).filter(function (s) { return mfStr(s.name) !== mfStr(name); });
+        mfSupRegRender();
+        mfSupRefreshLight_();
+      })
+      .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+      .deleteMinistrySupervisor(window.authToken, name);
+  });
 }
 
 /* ---------- اقتراح مشرف ---------- */
@@ -39041,17 +39207,18 @@ function mfQuotaTransferSave() {
     .saveMfQuotaTransfer(window.authToken, data);
 }
 function mfQuotaTransferDelete(id) {
-  if (!confirm('حذف سجل الترحيل هذا؟ سيعود توزيع الحصة إلى وضعه قبل الترحيل.')) return;
-  var res = window._mfQuotaStats;
-  var monthKey = (res && res.monthKey) || mfCurrentMonthKey_();
-  google.script.run
-    .withSuccessHandler(function (r) {
-      if (!r || !r.success) { _showPopup((r && r.error) || 'تعذّر الحذف', 'error'); return; }
-      _showPopup('تم حذف الترحيل', 'success');
-      mfLoadQuotaStats(monthKey);
-    })
-    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
-    .deleteMfQuotaTransfer(window.authToken, id);
+  askConfirm_('حذف سجل الترحيل هذا؟ سيعود توزيع الحصة إلى وضعه قبل الترحيل.', function () {
+    var res = window._mfQuotaStats;
+    var monthKey = (res && res.monthKey) || mfCurrentMonthKey_();
+    google.script.run
+      .withSuccessHandler(function (r) {
+        if (!r || !r.success) { _showPopup((r && r.error) || 'تعذّر الحذف', 'error'); return; }
+        _showPopup('تم حذف الترحيل', 'success');
+        mfLoadQuotaStats(monthKey);
+      })
+      .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+      .deleteMfQuotaTransfer(window.authToken, id);
+  });
 }
 function mfQuotaCardClick(i) {
   var res = window._mfQuotaStats; if (!res) return;
@@ -39256,14 +39423,15 @@ function mfRecSave(isEdit) {
     .saveRoomFeeReceipt(window.authToken, payload);
 }
 function mfRecDel(no) {
-  if (!confirm('حذف الإيصال رقم ' + no + '؟')) return;
-  google.script.run
-    .withSuccessHandler(function (res) {
-      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
-      _showPopup('تم حذف الإيصال', 'success'); mfLoad(true); setTimeout(mfOpenReceipts, 600);
-    })
-    .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
-    .deleteRoomFeeReceipt(window.authToken, no);
+  askConfirm_('حذف الإيصال رقم ' + no + '؟', function () {
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
+        _showPopup('تم حذف الإيصال', 'success'); mfLoad(true); setTimeout(mfOpenReceipts, 600);
+      })
+      .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+      .deleteRoomFeeReceipt(window.authToken, no);
+  });
 }
 function mfRecFromBank() {
   var h = '<div class="mf-note info"><span>🏦</span><div style="flex:1;">' +

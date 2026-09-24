@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.199";
+var APP_VERSION = "4.200";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -7046,6 +7046,31 @@ function getAllMovements() {
 function getAllMovementsAuth(authToken) {
   requireAuth_(authToken);
   return getAllMovements();
+}
+
+/* ============================================================
+   🚀 (V4.200) نداء إقلاع موحّد: كل استدعاء للسيرفر يكلّف ~2 ثانية ثابتة، وكان فتح البرنامج يُطلق
+   11-15 استدعاءً منفصلاً. هنا تُجمَع الأجزاء الخفيفة (الإعدادات، التفضيلات، القوائم المنسدلة، الإصدار،
+   نبضة المتصلين) دائماً، والأجزاء الثقيلة (الإشعارات/التحركات/الرحلات) فقط إن كانت جاهزة بالكاش —
+   فلو لم تكن جاهزة تطلبها الواجهة منفصلة بالتوازي كالمعتاد بدل أن تُبطئ هذا النداء. أي جزء يفشل
+   يُحذف بصمت فتستدعيه الواجهة بنداءه الأصلي (نفس الصلاحيات ونفس رسائل الخطأ).
+   ============================================================ */
+function getAppBootstrap(authToken) {
+  var t0 = Date.now();
+  requireAuth_(authToken);
+  var parts = {};
+  var put = function (k, fn) { try { var v = fn(); if (v !== undefined && v !== null) parts[k] = v; } catch (e) {} };
+  put('sortMode', function () { return getBookingsSortDefault(authToken); });
+  put('sessionCfg', function () { return getSessionDurationConfig(authToken); });
+  put('notif', function () { return getNotifSettings(authToken); });
+  put('uiPrefs', function () { return getMyUiPrefs(authToken); });
+  put('dropdowns', function () { return loadDropdownsData(authToken); });
+  put('online', function () { return heartbeatOnline(authToken); });
+  put('version', function () { return getAppVersion(); });
+  put('bookings', function () { return getCachedData('bookings_cache'); });
+  put('movements', function () { return getCachedData('movements_cache'); });
+  put('trips', function () { return getCachedData('trips_list_cache'); });
+  return { success: true, parts: parts, serverMs: Date.now() - t0 };
 }
 
 

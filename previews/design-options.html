@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>معاينة التصميمات</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --navy:#1e3d59; --teal:#0f4c4c; --ink:#0f172a; --mut:#64748b; --line:#e2e8f0; --bg:#f4f6f9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Tajawal",Tahoma,sans-serif; background:var(--bg); color:var(--ink); }
+  header.top { background:var(--navy); color:#fff; padding:14px 16px; position:sticky; top:0; z-index:5; box-shadow:0 2px 10px rgba(0,0,0,.2); }
+  header.top h1 { font-family:"Cairo"; font-size:18px; margin:0 0 8px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+  .tabs button { font-family:inherit; font-weight:800; font-size:13.5px; border:0; border-radius:10px; padding:8px 14px; cursor:pointer; background:rgba(255,255,255,.14); color:#fff; }
+  .tabs button.on { background:#fff; color:var(--navy); }
+  main { max-width:1180px; margin:0 auto; padding:16px; }
+  .page { display:none; } .page.on { display:block; }
+  .intro { background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:14px; line-height:1.8; margin-bottom:14px; }
+  .opt { background:#fff; border:1px solid var(--line); border-radius:14px; margin-bottom:18px; overflow:hidden; box-shadow:0 2px 8px rgba(15,23,42,.05); }
+  .opt-h { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); background:#fafbfc; flex-wrap:wrap; }
+  .opt-h .num { background:var(--navy); color:#fff; font-family:"Cairo"; font-weight:900; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+  .opt-h .num.cur { background:#94a3b8; }
+  .opt-h b { font-family:"Cairo"; font-size:15.5px; }
+  .opt-h span.d { color:var(--mut); font-size:12.5px; flex-basis:100%; padding-inline-start:40px; }
+  .opt-b { padding:14px; overflow-x:auto; }
+  .pros { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:12px; }
+  .pros span { background:#f1f5f9; border-radius:20px; padding:3px 10px; }
+  .pros span.p { background:#dcfce7; color:#166534; } .pros span.c { background:#fee2e2; color:#991b1b; }
+  .latin { direction:ltr; unicode-bidi:isolate; font-variant-numeric:tabular-nums; }
+
+  /* ---------- جداول المعاينة ---------- */
+  table.t { width:100%; border-collapse:collapse; font-size:12.5px; min-width:620px; }
+  table.t th, table.t td { padding:8px 9px; text-align:center; border-bottom:1px solid #edf1f5; }
+  table.t td.r { text-align:right; }
+  .st { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:800; }
+  .st.ok { background:#dcfce7; color:#166534; } .st.w { background:#fef3c7; color:#92400e; } .st.x { background:#fee2e2; color:#991b1b; }
+  .minis { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:10px; }
+  .mini-l { font-size:11.5px; font-weight:800; color:var(--mut); margin-bottom:4px; }
+  table.m { width:100%; border-collapse:collapse; font-size:11.5px; }
+  table.m th, table.m td { padding:6px; text-align:center; border-bottom:1px solid #edf1f5; }
+
+  /* 1: كحلي موحد */
+  .h1 thead th { background:#1e3d59; color:#fff; font-family:"Cairo"; font-weight:800; border-inline-start:1px solid rgba(255,255,255,.12); }
+  .h1 tbody tr:nth-child(even) td { background:#f6f8fb; }
+  /* 2: تيل الشركة بتدرج */
+  .h2 thead th { background:linear-gradient(180deg,#136363,#0b3d3d); color:#fff; font-family:"Cairo"; font-weight:800; border-inline-start:1px solid rgba(255,255,255,.12); }
+  .h2 tbody tr:nth-child(even) td { background:#f2f8f7; }
+  /* 3: فاتح هادئ */
+  .h3 thead th { background:#eef2f7; color:#1e3d59; font-family:"Cairo"; font-weight:800; border-bottom:2.5px solid #1e3d59; }
+  .h3 tbody tr:hover td { background:#f8fafc; }
+  /* 4: لون لكل قسم بنفس الشكل */
+  .h4 thead th { color:#fff; font-family:"Cairo"; font-weight:800; border-inline-start:1px solid rgba(255,255,255,.14); }
+  .h4.s-book thead th { background:#1e3d59; } .h4.s-acc thead th { background:#0f4c4c; }
+  .h4.s-vz thead th { background:#075c46; } .h4.s-mf thead th { background:#3730a3; }
+  .h4 tbody tr:nth-child(even) td { background:#f7f9fb; }
+  /* 5: أبيض مع شريط لوني علوي */
+  .h5 { border-top:4px solid #1e3d59; border-radius:6px; overflow:hidden; }
+  .h5 thead th { background:#fff; color:#334155; font-family:"Cairo"; font-weight:800; font-size:12px; border-bottom:1px solid #cbd5e1; letter-spacing:.2px; }
+  .h5 tbody tr:nth-child(even) td { background:#fafbfc; }
+  .cur-strip { display:flex; gap:6px; flex-wrap:wrap; }
+  .cur-strip div { flex:1; min-width:110px; color:#fff; font-size:11.5px; font-weight:800; padding:10px 8px; border-radius:8px; text-align:center; }
+
+  /* ---------- اتفاقيات السكن ---------- */
+  .chip { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:800; padding:2px 9px; border-radius:20px; white-space:nowrap; }
+  .c-act { background:#dcfce7; color:#166534; } .c-full { background:#fee2e2; color:#991b1b; } .c-exp { background:#e2e8f0; color:#475569; }
+  .city-mk { --cc:#9a6b00; --cbg:#fff7e0; } .city-md { --cc:#0f6b46; --cbg:#e7f7ef; }
+  .btn { font-family:inherit; font-weight:800; font-size:11.5px; border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:8px; padding:4px 9px; cursor:pointer; }
+  .btn.p { background:var(--teal); color:#fff; border-color:var(--teal); }
+  .bar { height:8px; background:#e5e7eb; border-radius:6px; overflow:hidden; }
+  .bar i { display:block; height:100%; border-radius:6px; }
+  .alloc { width:100%; border-collapse:collapse; font-size:11.5px; margin-top:8px; }
+  .alloc th { background:#f1f5f9; color:#334155; padding:6px; font-weight:800; }
+  .alloc td { padding:6px; border-bottom:1px solid #f1f5f9; text-align:center; }
+  .alloc td.r { text-align:right; }
+  .seg { display:flex; border-radius:8px; overflow:hidden; border:1px solid #e2e8f0; margin-top:8px; }
+  .seg div { padding:4px; text-align:center; font-size:10px; font-weight:700; border-inline-start:1px solid #fff; }
+  .seg b { display:block; font-size:13px; }
+
+  /* A: الحالي (تقريبي) */
+  .cur-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:8px 10px; border:1px solid #d7e5e0; border-inline-start:5px solid; border-radius:10px; margin-bottom:6px; background:#fff; font-size:12px; }
+  .cur-row small { display:block; font-size:9px; color:#94a3b8; font-weight:700; }
+
+  /* B1: بطاقات */
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .card { border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#fff; display:flex; flex-direction:column; }
+  .card.exp { opacity:.72; }
+  .card .ch { background:var(--cbg); border-bottom:3px solid var(--cc); padding:9px 12px; display:flex; align-items:center; gap:8px; }
+  .card .ch .ct { color:var(--cc); font-weight:900; font-family:"Cairo"; font-size:13px; }
+  .card .cb { padding:10px 12px; flex:1; }
+  .card .hotel { font-family:"Cairo"; font-weight:800; font-size:14.5px; margin-bottom:2px; }
+  .card .no { color:var(--mut); font-size:11.5px; }
+  .card .dates { display:flex; justify-content:space-between; font-size:12px; margin:8px 0; background:#f8fafc; border-radius:8px; padding:6px 8px; }
+  .card .nums { display:grid; grid-template-columns:repeat(3,1fr); text-align:center; gap:4px; margin-bottom:8px; }
+  .card .nums b { display:block; font-family:"Cairo"; font-size:17px; }
+  .card .nums small { color:var(--mut); font-size:10.5px; font-weight:700; }
+  .card .cf { border-top:1px solid var(--line); padding:7px 12px; display:flex; gap:6px; justify-content:flex-end; background:#fafbfc; }
+
+  /* B2: جدول مجمّع حسب المدينة */
+  .grp { margin-bottom:14px; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .grp-h { display:flex; align-items:center; gap:10px; padding:9px 12px; background:var(--cbg); border-bottom:2px solid var(--cc); }
+  .grp-h b { color:var(--cc); font-family:"Cairo"; font-size:14.5px; }
+  table.gt { width:100%; border-collapse:collapse; font-size:12.5px; min-width:760px; }
+  table.gt th { background:#f8fafc; color:#475569; font-weight:800; font-size:11.5px; padding:7px 8px; border-bottom:1px solid var(--line); text-align:center; }
+  table.gt td { padding:8px; border-bottom:1px solid #f1f5f9; text-align:center; }
+  table.gt td.r, table.gt th.r { text-align:right; }
+  table.gt tr.exp td { color:#94a3b8; }
+  table.gt tr.open td { background:#f0fdfa; }
+  table.gt tr.det td { background:#fbfefd; padding:6px 14px 12px; text-align:right; }
+
+  /* B3: قائمة + لوحة تفاصيل */
+  .md { display:grid; grid-template-columns:320px 1fr; gap:12px; min-height:420px; }
+  @media (max-width:760px) { .md { grid-template-columns:1fr; } }
+  .md-list { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+  .md-it { padding:10px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer; border-inline-start:4px solid transparent; }
+  .md-it.sel { background:#f0f7ff; border-inline-start-color:var(--navy); }
+  .md-it .l1 { display:flex; justify-content:space-between; align-items:center; gap:6px; }
+  .md-it .l1 b { font-family:"Cairo"; font-size:13.5px; }
+  .md-it .l2 { display:flex; justify-content:space-between; color:var(--mut); font-size:11.5px; margin-top:3px; }
+  .md-det { border:1px solid var(--line); border-radius:12px; background:#fff; padding:14px; }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:10px 0; }
+  @media (max-width:560px) { .kpis { grid-template-columns:repeat(2,1fr); } }
+  .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; }
+  .kpi b { display:block; font-family:"Cairo"; font-size:20px; }
+  .kpi small { color:var(--mut); font-weight:700; font-size:11px; }
+
+  /* B4: خط زمني */
+  .gantt { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; min-width:760px; }
+  .g-axis, .g-row { display:grid; grid-template-columns:230px 1fr; }
+  .g-axis { background:#f8fafc; border-bottom:1px solid var(--line); font-size:11px; font-weight:800; color:var(--mut); }
+  .g-axis .days { display:grid; grid-template-columns:repeat(6,1fr); }
+  .g-axis .days div { padding:6px; text-align:center; border-inline-start:1px solid var(--line); }
+  .g-row { border-bottom:1px solid #f1f5f9; }
+  .g-row .lab { padding:8px 10px; font-size:12px; border-inline-end:1px solid var(--line); }
+  .g-row .lab b { font-family:"Cairo"; font-size:13px; display:block; }
+  .g-row .trk { position:relative; background:repeating-linear-gradient(90deg,transparent 0 calc(100%/6 - 1px),#f1f5f9 calc(100%/6 - 1px) calc(100%/6)); }
+  .g-bar { position:absolute; top:9px; bottom:9px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; color:#fff; overflow:hidden; }
+  .g-bar .fill { position:absolute; inset:0 auto 0 0; background:rgba(0,0,0,.18); }
+  .g-bar span { position:relative; }
+  .today { position:absolute; top:0; bottom:0; width:2px; background:#dc2626; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; font-size:11.5px; color:var(--mut); margin-top:8px; }
+  .legend i { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:middle; margin-inline-end:4px; }
+
+  /* B5: سطر واحد */
+  .fbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:#f8fafc; border:1px solid var(--line); border-radius:12px; padding:8px 10px; margin-bottom:10px; }
+  .fbar input, .fbar select { font-family:inherit; font-size:12.5px; border:1px solid #cbd5e1; border-radius:8px; padding:6px 9px; background:#fff; }
+  .fbar input { flex:1; min-width:180px; }
+  .stat-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .stat-tabs span { cursor:pointer; font-size:12px; font-weight:800; padding:5px 12px; border-radius:20px; border:1.5px solid transparent; }
+  .stat-tabs span.on { border-color:currentColor; }
+  .one-h, .one { display:grid; grid-template-columns:22px 92px 1.1fr 1.6fr 150px 58px 58px 64px 90px 150px; align-items:center; gap:8px; min-width:980px; }
+  .one-h { font-size:10.5px; font-weight:800; color:#64748b; padding:4px 10px; }
+  .one { background:#fff; border:1px solid var(--line); border-inline-start:5px solid; border-radius:10px; padding:7px 10px; margin-bottom:5px; font-size:12.5px; cursor:pointer; }
+  .one:hover { background:#fbfdff; box-shadow:0 2px 8px rgba(15,23,42,.06); }
+  .one.exp { opacity:.65; }
+  .one .n { text-align:center; font-weight:800; }
+  .one .big { text-align:center; font-family:"Cairo"; font-weight:900; font-size:16px; }
+  .one .acts { display:flex; gap:4px; justify-content:flex-end; }
+  .one .acts .btn { padding:3px 7px; }
+  .one-det { margin:-4px 0 8px; border:1px solid var(--line); border-top:0; border-radius:0 0 10px 10px; background:#fbfefd; padding:6px 14px 12px; min-width:980px; }
+  .ccity { display:inline-flex; align-items:center; gap:4px; font-weight:800; color:var(--cc); background:var(--cbg); border-radius:6px; padding:1px 7px; font-size:11.5px; }
+
+  /* سجل التعديلات */
+  .au-old { color:#b91c1c; background:#fef2f2; text-decoration:line-through; text-decoration-color:rgba(185,28,28,.45); border-radius:6px; padding:1px 7px; }
+  .au-new { color:#166534; background:#f0fdf4; border-radius:6px; padding:1px 7px; font-weight:800; }
+  .au-arrow { color:#94a3b8; margin:0 6px; }
+  .au-cur table { width:100%; border-collapse:collapse; font-size:12px; min-width:620px; }
+  .au-cur th { background:#f1f5f9; padding:6px; font-size:11.5px; }
+  .au-cur td { padding:8px 6px; border-bottom:1px solid #eef2f6; vertical-align:top; }
+  .tl { position:relative; padding-inline-start:22px; }
+  .tl:before { content:""; position:absolute; top:4px; bottom:4px; right:7px; width:2px; background:#e2e8f0; }
+  .tl-day { font-family:"Cairo"; font-weight:800; font-size:12.5px; color:#475569; margin:10px 0 6px; }
+  .tl-ev { position:relative; background:#fff; border:1px solid var(--line); border-radius:12px; padding:9px 12px; margin-bottom:8px; }
+  .tl-ev:before { content:""; position:absolute; right:-20px; top:14px; width:12px; height:12px; border-radius:50%; background:var(--dot,#1e3d59); border:2px solid #fff; box-shadow:0 0 0 2px var(--dot,#1e3d59); }
+  .tl-h { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; }
+  .tl-h .act { font-weight:900; font-family:"Cairo"; font-size:13px; }
+  .tl-h .who { background:#eef2ff; color:#3730a3; border-radius:20px; padding:1px 9px; font-weight:800; font-size:11px; }
+  .tl-h .tm { color:#64748b; margin-inline-start:auto; }
+  .chg { display:grid; grid-template-columns:130px 1fr; gap:6px; align-items:start; font-size:12.5px; padding:5px 0; border-top:1px dashed #eef2f6; }
+  .chg:first-of-type { border-top:0; }
+  .chg .f { color:#475569; font-weight:800; }
+  .au-tbl { width:100%; border-collapse:collapse; font-size:12.5px; min-width:640px; }
+  .au-tbl th { background:#1e3d59; color:#fff; padding:7px; font-family:"Cairo"; }
+  .au-tbl td { padding:8px; border-bottom:1px solid #eef2f6; vertical-align:top; }
+  .au-tbl td.det div { padding:2px 0; }
+  .sup-card { display:inline-flex; gap:6px; align-items:center; border:1px solid #e2e8f0; border-radius:8px; padding:2px 8px; margin:2px; font-size:11.5px; background:#fff; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>🎨 معاينة التصميمات المقترحة — اختر رقم الاقتراح المناسب</h1>
+  <div class="tabs">
+    <button class="on" onclick="tab(0,this)">📋 ألوان رؤوس الجداول</button>
+    <button onclick="tab(1,this)">🏨 شاشة اتفاقيات السكن</button>
+    <button onclick="tab(2,this)">📜 سجل التعديلات</button>
+  </div>
+</header>
+<main>
+<!-- ======================= رؤوس الجداول ======================= -->
+<section class="page on" id="p0">
+  <div class="intro">البرنامج حالياً يستخدم <b>5 ألوان مختلفة</b> لرؤوس الجداول حسب الشاشة. هذه 5 اقتراحات لتوحيدها — كل اقتراح يُطبَّق على كل الجداول (الشاشات والطباعة والصور). أرسل لي رقم الاقتراح الذي يعجبك.</div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num cur">0</div><b>الوضع الحالي (للمقارنة)</b><span class="d">كل شاشة بلون مختلف.</span></div>
+    <div class="opt-b"><div class="cur-strip">
+      <div style="background:#1e3d59;">الإشعارات · كحلي</div><div style="background:#0f4c4c;">الحسابات · تيل</div>
+      <div style="background:#075c46;">الوكلاء · أخضر</div><div style="background:#217346;">تصدير إكسل · أخضر فاتح</div>
+      <div style="background:#212529;">المستخدمون · أسود</div><div style="background:#dcfce7;color:#14532d;">كشف العميل · أخضر باهت</div>
+    </div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">1</div><b>كحلي موحّد (لون الشعار والشريط العلوي)</b><span class="d">لون واحد لكل البرنامج، رسمي ومطابق لهوية الشركة، مع صفوف متبادلة فاتحة.</span></div>
+    <div class="opt-b"><table class="t h1" id="s1"></table>
+      <div class="pros"><span class="p">أقوى توحيد للهوية</span><span class="p">وضوح عالٍ</span><span class="c">داكن بالطباعة الأبيض والأسود</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">2</div><b>تيل الشركة بتدرج خفيف</b><span class="d">اللون المستخدم في الحسابات والكشوف، بتدرج بسيط يعطي عمقاً.</span></div>
+    <div class="opt-b"><table class="t h2" id="s2"></table>
+      <div class="pros"><span class="p">أنيق وهادئ</span><span class="p">مريح للعين مع الجداول الطويلة</span><span class="c">داكن بالطباعة</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">3</div><b>فاتح هادئ بخط سفلي كحلي</b><span class="d">رأس رمادي-أزرق فاتح ونص كحلي، مع خط سفلي عريض. أسلوب التطبيقات الحديثة.</span></div>
+    <div class="opt-b"><table class="t h3" id="s3"></table>
+      <div class="pros"><span class="p">الأفضل للطباعة الأبيض والأسود</span><span class="p">عصري وخفيف</span><span class="c">أقل بروزاً على الشاشة</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">4</div><b>نفس الشكل — ولون مميّز لكل قسم</b><span class="d">شكل ومقاسات وخط موحّدة، مع لون ثابت لكل قسم لتعرف مكانك فوراً: الإشعارات كحلي · الحسابات تيل · الوكلاء أخضر · الوزارة نيلي.</span></div>
+    <div class="opt-b"><div class="minis">
+      <div><div class="mini-l">الإشعارات</div><table class="m h4 s-book" id="m1"></table></div>
+      <div><div class="mini-l">حسابات العملاء</div><table class="m h4 s-acc" id="m2"></table></div>
+      <div><div class="mini-l">الوكلاء والتأشيرات</div><table class="m h4 s-vz" id="m3"></table></div>
+      <div><div class="mini-l">ملفات الوزارة</div><table class="m h4 s-mf" id="m4"></table></div>
+    </div>
+      <div class="pros"><span class="p">يساعد على التمييز بين الأقسام</span><span class="p">توحيد الشكل مع الإبقاء على الهوية لكل قسم</span><span class="c">4 ألوان بدل لون واحد</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">5</div><b>أبيض بشريط لوني علوي</b><span class="d">رأس أبيض بنص رمادي داكن، والجدول كله بإطار كحلي من أعلى. أبسط شكل وأقلّه ازدحاماً.</span></div>
+    <div class="opt-b"><table class="t h5" id="s5"></table>
+      <div class="pros"><span class="p">أقل تشتيت بصري</span><span class="p">ممتاز للطباعة</span><span class="c">الرأس أقل تمييزاً عن البيانات</span></div></div>
+  </div>
+</section>
+
+<!-- ======================= اتفاقيات السكن ======================= -->
+<section class="page" id="p1">
+  <div class="intro">في كل الاقتراحات: <b>لون المدينة</b> ثابت (🕋 مكة ذهبي — 🕌 المدينة أخضر)، و<b>الحالة</b> بلون واضح (نشطة أخضر · مكتملة أحمر · منتهية رمادي)، و<b>الأرقام المهمة</b> (المتاح) كبيرة. البيانات هنا تجريبية للعرض فقط. أرسل لي رقم الاقتراح المفضّل.</div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num cur">0</div><b>الوضع الحالي (تقريبي)</b><span class="d">سطر واحد لكل اتفاقية، والخانات بعرض متغيّر فتتشتت العين.</span></div>
+    <div class="opt-b" id="haCur"></div>
+  </div>
+
+  <div class="opt" style="border:2px solid #0f4c4c;">
+    <div class="opt-h"><div class="num" style="background:#0f4c4c;">5</div><b>⭐ سطر واحد لكل اتفاقية (اقتراحك مطوَّراً)</b><span class="d">كل اتفاقية سطر واحد فقط بأعمدة ثابتة المحاذاة، والأزرار بنفس السطر (➕ تخصيص · ✏️ · 💳 · 🗑️). الضغط على السطر يفتح الفترات والمجموعات تحته. الفلاتر صارت شريطاً واحداً مضغوطاً، والحالات أزرار تصفية سريعة. جرّب الضغط على الأسطر والحالات.</span></div>
+    <div class="opt-b">
+      <div class="fbar"><input placeholder="🔎 بحث: رقم الاتفاقية / الفندق / رقم مجموعة / عميل"><select><option>كل المدن</option><option>🕋 مكة</option><option>🕌 المدينة</option></select>
+        <select><option>سكن وإعاشة</option></select><button class="btn">📅 الفترة ▾</button><span style="flex:1"></span><button class="btn p">➕ اتفاقية جديدة</button><button class="btn">📄 رفع اتفاقية</button></div>
+      <div class="stat-tabs" id="oneTabs"></div>
+      <div style="overflow-x:auto;"><div class="one-h"><span></span><span>الحالة</span><span>رقم الاتفاقية</span><span>الفندق</span><span>الفترة</span><span style="text-align:center">السعة</span><span style="text-align:center">المخصَّص</span><span style="text-align:center">المتاح</span><span>الإشغال</span><span></span></div>
+      <div id="oneList"></div></div>
+      <div class="pros"><span class="p">سطر واحد نظيف لكل اتفاقية</span><span class="p">الأعمدة تحت بعضها فتسهل المقارنة</span><span class="p">أقرب للشاشة الحالية (تعلّم أقل)</span><span class="c">يحتاج تمرير أفقي على الجوال</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">1</div><b>بطاقات</b><span class="d">بطاقة لكل اتفاقية، رأسها بلون المدينة، والأرقام الثلاثة (السعة / المخصَّص / المتاح) كبيرة مع شريط إشغال. الضغط على «التفاصيل» يعرض المجموعات.</span></div>
+    <div class="opt-b"><div class="cards" id="haCards"></div>
+      <div class="pros"><span class="p">أوضح تمييز بين الاتفاقيات</span><span class="p">ممتاز للجوال</span><span class="c">عدد أقل في الشاشة الواحدة</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">2</div><b>جدول مجمّع حسب المدينة</b><span class="d">قسم لمكة وقسم للمدينة، وكل اتفاقية صف في جدول بأعمدة ثابتة ومحاذاة واحدة. الضغط على الصف يفتح المجموعات تحته.</span></div>
+    <div class="opt-b" id="haGrp"></div>
+    <div class="opt-b" style="padding-top:0;"><div class="pros"><span class="p">مقارنة سريعة بين الاتفاقيات</span><span class="p">عدد كبير في الشاشة</span><span class="c">أقل راحة على الجوال</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">3</div><b>قائمة جانبية + لوحة تفاصيل</b><span class="d">قائمة مختصرة للاتفاقيات يميناً، والاتفاقية المختارة تُعرض كاملة يساراً (مؤشرات + شريط الفترات + المجموعات). جرّب الضغط على القائمة.</span></div>
+    <div class="opt-b"><div class="md"><div class="md-list" id="mdList"></div><div class="md-det" id="mdDet"></div></div>
+      <div class="pros"><span class="p">صفر تشتيت: اتفاقية واحدة بالتفصيل</span><span class="p">تنقّل سريع</span><span class="c">لا تُرى تفاصيل اتفاقيتين معاً</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">4</div><b>خط زمني (جانت)</b><span class="d">كل اتفاقية شريط على محور التواريخ بطول فترتها، والجزء الداكن = المخصَّص. الخط الأحمر = اليوم. مناسب لرؤية التداخلات والفترات الفارغة.</span></div>
+    <div class="opt-b"><div class="gantt" id="gantt"></div>
+      <div class="legend"><span><i style="background:#c8940a"></i>مكة</span><span><i style="background:#0f8a5f"></i>المدينة</span><span><i style="background:#94a3b8"></i>منتهية</span><span><i style="background:#dc2626;width:3px"></i>اليوم</span><span>الجزء الأغمق من كل شريط = نسبة المخصَّص</span></div>
+      <div class="pros"><span class="p">رؤية زمنية كاملة</span><span class="p">يكشف الفترات بلا سكن</span><span class="c">يحتاج عرض شاشة كبير</span></div></div>
+  </div>
+</section>
+
+<!-- ======================= سجل التعديلات ======================= -->
+<section class="page" id="p2">
+  <div class="intro">في كل الاقتراحات تُترجَم القيم الخام إلى نص عربي مقروء: <b>بلا رموز JSON</b> مثل <span class="latin">{"name":…}</span>، وبلا مسميات إنجليزية مثل <span class="latin">type / directTo</span>. تُجمَّع كل تغييرات الحفظة الواحدة (نفس الوقت ونفس المستخدم) معاً، وتظهر القيمة القديمة بالأحمر مشطوبة والجديدة بالأخضر. التنسيق نفسه لكل الشاشات (الإشعارات، الرحلات، الحسابات، الوزارة، الوكلاء…). أرسل لي رقم الاقتراح.</div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num cur">0</div><b>الوضع الحالي (من صورتك)</b><span class="d">سطر لكل حقل، والقيم رموز خام، والأعمدة ضيقة فينكسر النص.</span></div>
+    <div class="opt-b au-cur"><table><thead><tr><th>التاريخ والساعة</th><th>المستخدم</th><th>العملية</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead><tbody>
+      <tr><td class="latin">22/09/2026 19:54:49</td><td>sayed</td><td>تعديل ملف مراجعة وزارة</td><td>نوع الملف</td><td style="color:#94a3b8">مجموعات</td><td><b>فردي</b></td></tr>
+      <tr><td class="latin">22/09/2026 19:51:08</td><td>sayed</td><td>تعديل ملف مراجعة وزارة</td><td>المشرفون</td><td style="color:#94a3b8;direction:ltr">[{"name":"الوكيل السعودي","type":"مرافق","directTo":""}]</td><td style="direction:ltr"><b>[{"name":"الوكيل السعودي","type":"بدون مشرف","directTo":""}]</b></td></tr>
+      <tr><td class="latin">22/09/2026 19:51:08</td><td>sayed</td><td>تعديل ملف مراجعة وزارة</td><td>عدد المشرفين</td><td style="color:#94a3b8">1</td><td><b>0</b></td></tr>
+    </tbody></table></div>
+  </div>
+
+  <div class="opt" style="border:2px solid #1e3d59;">
+    <div class="opt-h"><div class="num">1</div><b>⭐ خط زمني بالبطاقات</b><span class="d">كل حفظة بطاقة واحدة (الوقت + المستخدم + العملية)، وبداخلها كل الحقول التي تغيّرت: «الحقل: القديم ← الجديد». مقسّمة حسب اليوم.</span></div>
+    <div class="opt-b"><div class="tl" id="auTl"></div>
+      <div class="pros"><span class="p">الأوضح والأكثر تفصيلاً</span><span class="p">ممتاز للجوال</span><span class="c">يأخذ مساحة أطول قليلاً</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">2</div><b>جدول محسّن بعمود «التفاصيل»</b><span class="d">نفس فكرة الجدول الحالي، لكن كل حفظة صف واحد، وعمود «التفاصيل» يعرض كل التغييرات منسّقة.</span></div>
+    <div class="opt-b" style="overflow-x:auto;"><table class="au-tbl" id="auTbl"></table>
+      <div class="pros"><span class="p">مألوف (جدول)</span><span class="p">مضغوط</span><span class="c">أقل راحة على الجوال</span></div></div>
+  </div>
+
+  <div class="opt">
+    <div class="opt-h"><div class="num">3</div><b>جمل مقروءة</b><span class="d">كل تغيير جملة عربية كاملة، مثل: «sayed غيّر نوع الملف من مجموعات إلى فردي — الساعة 7:54 م».</span></div>
+    <div class="opt-b" id="auTxt"></div>
+    <div class="opt-b" style="padding-top:0"><div class="pros"><span class="p">أبسط قراءة لغير المتخصص</span><span class="c">أصعب في المقارنة السريعة بين القيم</span></div></div>
+  </div>
+</section>
+</main>
+
+<script>
+function tab(i, b) {
+  document.querySelectorAll('.page').forEach(function (p, k) { p.classList.toggle('on', k === i); });
+  document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+  window.scrollTo(0, 0);
+}
+/* ---------- بيانات جداول المعاينة ---------- */
+var rows = [
+  ['<span class="latin">4521</span>', 'شركة النور للسياحة', '<span class="latin">45</span>', '<span class="latin">02/10/2026</span>', '<span class="st ok">معتمد</span>'],
+  ['<span class="latin">4522</span>', 'مؤسسة الهدى', '<span class="latin">32</span>', '<span class="latin">05/10/2026</span>', '<span class="st w">قيد المراجعة</span>'],
+  ['<span class="latin">4523</span>', 'رحلات البشائر', '<span class="latin">18</span>', '<span class="latin">07/10/2026</span>', '<span class="st x">ناقص بيانات</span>'],
+  ['<span class="latin">4524</span>', 'الريان للحج والعمرة', '<span class="latin">60</span>', '<span class="latin">09/10/2026</span>', '<span class="st ok">معتمد</span>']
+];
+var hdr = ['رقم الإشعار', 'العميل', 'العدد', 'تاريخ الوصول', 'الحالة'];
+function tbl(id, n) {
+  var r = rows.slice(0, n || rows.length);
+  document.getElementById(id).innerHTML = '<thead><tr>' + hdr.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    r.map(function (x) { return '<tr>' + x.map(function (c, i) { return '<td' + (i === 1 ? ' class="r"' : '') + '>' + c + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody>';
+}
+['s1', 's2', 's3', 's5'].forEach(function (id) { tbl(id); });
+['m1', 'm2', 'm3', 'm4'].forEach(function (id) {
+  var e = document.getElementById(id);
+  e.innerHTML = '<thead><tr><th>البيان</th><th>العدد</th><th>الحالة</th></tr></thead><tbody>' +
+    '<tr><td>شركة النور</td><td class="latin">45</td><td><span class="st ok">معتمد</span></td></tr>' +
+    '<tr><td>مؤسسة الهدى</td><td class="latin">32</td><td><span class="st w">مراجعة</span></td></tr></tbody>';
+});
+
+/* ---------- بيانات الاتفاقيات ---------- */
+var A = [
+  { no: 'HA-2291', city: 'مكة', hotel: 'فندق سويس الإقامة', sup: 'مؤسسة الرحاب', from: '01/10', to: '15/10', d0: 0, d1: 14, cap: 120, used: 85, st: 'act',
+    segs: [[40, 5], [20, 6], [35, 3]], al: [['1402331', 40, '01/10', '08/10', 'شركة النور للسياحة', 'رحلة 1 أكتوبر'], ['1402345', 30, '03/10', '12/10', 'مؤسسة الهدى', 'رحلة 3 أكتوبر'], ['1402360', 15, '08/10', '15/10', 'رحلات البشائر', 'رحلة 8 أكتوبر']] },
+  { no: 'HA-2305', city: 'المدينة', hotel: 'فندق دار التقوى', sup: 'شركة طيبة', from: '05/10', to: '12/10', d0: 4, d1: 11, cap: 60, used: 60, st: 'full',
+    segs: [[0, 7]], al: [['1402370', 36, '05/10', '12/10', 'الريان للحج والعمرة', 'رحلة 5 أكتوبر'], ['1402371', 24, '05/10', '12/10', 'شركة النور للسياحة', 'رحلة 5 أكتوبر']] },
+  { no: 'HA-2310', city: 'المدينة', hotel: 'فندق المختارة الذهبي', sup: 'شركة طيبة', from: '16/10', to: '24/10', d0: 15, d1: 23, cap: 80, used: 20, st: 'act',
+    segs: [[60, 8]], al: [['1402390', 20, '16/10', '24/10', 'مؤسسة الهدى', 'رحلة 16 أكتوبر']] },
+  { no: 'HA-2188', city: 'مكة', hotel: 'فندق هيلتون سويتس', sup: 'مؤسسة الرحاب', from: '10/09', to: '20/09', d0: -20, d1: -10, cap: 90, used: 72, st: 'exp',
+    segs: [[18, 10]], al: [['1402201', 72, '10/09', '20/09', 'رحلات البشائر', 'رحلة 10 سبتمبر']] }
+];
+var ST = { act: ['c-act', '✅ نشطة'], full: ['c-full', '⛔ مكتملة'], exp: ['c-exp', '⌛ منتهية'] };
+function cityCls(a) { return a.city === 'مكة' ? 'city-mk' : 'city-md'; }
+function cityIco(a) { return a.city === 'مكة' ? '🕋' : '🕌'; }
+function chip(a) { return '<span class="chip ' + ST[a.st][0] + '">' + ST[a.st][1] + '</span>'; }
+function pct(a) { return Math.round(a.used / a.cap * 100); }
+function barCol(a) { return a.st === 'exp' ? '#94a3b8' : (a.used >= a.cap ? '#dc2626' : (pct(a) >= 70 ? '#d97706' : '#16a34a')); }
+function segs(a) {
+  var tot = a.segs.reduce(function (s, x) { return s + x[1]; }, 0);
+  return '<div class="seg">' + a.segs.map(function (x) {
+    var bg = x[0] <= 0 ? '#fde2e2' : (x[0] < a.cap * .3 ? '#fef3c7' : '#d6f5e6'), fg = x[0] <= 0 ? '#b91c1c' : (x[0] < a.cap * .3 ? '#92620a' : '#0f6b46');
+    return '<div style="flex:' + x[1] + ';background:' + bg + ';color:' + fg + ';"><b class="latin">' + x[0] + '</b>متاح</div>';
+  }).join('') + '</div>';
+}
+function allocTbl(a) {
+  return '<table class="alloc"><thead><tr><th>رقم المجموعة</th><th>العدد</th><th>من</th><th>إلى</th><th>العميل / الرحلة</th></tr></thead><tbody>' +
+    a.al.map(function (x) { return '<tr><td class="latin"><b>' + x[0] + '</b></td><td><b>' + x[1] + '</b></td><td class="latin">' + x[2] + '</td><td class="latin">' + x[3] + '</td><td class="r">' + x[4] + '<div style="color:#64748b;font-size:10.5px;">🧳 ' + x[5] + '</div></td></tr>'; }).join('') + '</tbody></table>';
+}
+
+/* 0: الحالي */
+document.getElementById('haCur').innerHTML = A.map(function (a) {
+  var bd = a.st === 'act' ? '#16a34a' : (a.st === 'full' ? '#dc2626' : '#94a3b8');
+  var c = function (l, v, w) { return '<span style="min-width:' + w + 'px"><small>' + l + '</small><b>' + v + '</b></span>'; };
+  return '<div class="cur-row" style="border-inline-start-color:' + bd + '"><span>▸</span>' + chip(a) + c('الاتفاقية', a.no, 80) + c('المدينة', cityIco(a) + ' ' + a.city, 70) +
+    c('الفندق', a.hotel, 150) + c('الدخول', a.from, 60) + c('الخروج', a.to, 60) + c('إجمالي العدد', a.cap, 60) + c('المخصَّص', a.used, 60) + c('المتاح', a.cap - a.used, 50) +
+    '<span style="flex:1"></span><button class="btn">➕ تخصيص لمجموعة</button><button class="btn">✏️</button><button class="btn">🗑️</button></div>';
+}).join('');
+
+/* 1: بطاقات */
+document.getElementById('haCards').innerHTML = A.map(function (a) {
+  return '<div class="card ' + cityCls(a) + (a.st === 'exp' ? ' exp' : '') + '">' +
+    '<div class="ch"><span class="ct">' + cityIco(a) + ' ' + a.city + '</span><span style="flex:1"></span>' + chip(a) + '</div>' +
+    '<div class="cb"><div class="hotel">' + a.hotel + '</div><div class="no">اتفاقية <span class="latin">' + a.no + '</span> · ' + a.sup + '</div>' +
+      '<div class="dates"><span>🛬 الدخول <b class="latin">' + a.from + '</b></span><span>🛫 الخروج <b class="latin">' + a.to + '</b></span></div>' +
+      '<div class="nums"><div><b class="latin">' + a.cap + '</b><small>السعة</small></div><div><b class="latin">' + a.used + '</b><small>المخصَّص</small></div>' +
+        '<div><b class="latin" style="color:' + (a.cap - a.used > 0 ? '#16a34a' : '#dc2626') + '">' + (a.cap - a.used) + '</b><small>المتاح</small></div></div>' +
+      '<div class="bar"><i style="width:' + pct(a) + '%;background:' + barCol(a) + '"></i></div>' +
+      '<div style="font-size:10.5px;color:#64748b;margin-top:3px;">إشغال <span class="latin">' + pct(a) + '%</span> · ' + a.al.length + ' مجموعة</div></div>' +
+    '<div class="cf"><button class="btn">📋 التفاصيل</button><button class="btn p">➕ تخصيص</button><button class="btn">✏️</button></div></div>';
+}).join('');
+
+/* 2: جدول مجمع */
+function grpHtml(openNo) {
+  return ['مكة', 'المدينة'].map(function (city) {
+    var L = A.filter(function (a) { return a.city === city; }); if (!L.length) return '';
+    var cls = city === 'مكة' ? 'city-mk' : 'city-md', free = L.reduce(function (s, a) { return s + (a.st === 'exp' ? 0 : a.cap - a.used); }, 0);
+    return '<div class="grp ' + cls + '"><div class="grp-h"><b>' + (city === 'مكة' ? '🕋' : '🕌') + ' ' + city + '</b><span class="chip" style="background:#fff;color:#334155;">' + L.length + ' اتفاقية</span>' +
+      '<span class="chip c-act">المتاح الآن: <span class="latin">' + free + '</span></span></div>' +
+      '<div style="overflow-x:auto;"><table class="gt"><thead><tr><th></th><th>الحالة</th><th class="r">الفندق</th><th>رقم الاتفاقية</th><th>الدخول</th><th>الخروج</th><th>السعة</th><th>المخصَّص</th><th>المتاح</th><th style="width:120px;">الإشغال</th><th></th></tr></thead><tbody>' +
+      L.map(function (a) {
+        var open = a.no === openNo;
+        return '<tr class="' + (a.st === 'exp' ? 'exp ' : '') + (open ? 'open' : '') + '" style="cursor:pointer" onclick="drawGrp(\'' + (open ? '' : a.no) + '\')"><td>' + (open ? '▾' : '▸') + '</td><td>' + chip(a) + '</td><td class="r"><b>' + a.hotel + '</b><div style="font-size:10.5px;color:#64748b">' + a.sup + '</div></td>' +
+          '<td class="latin">' + a.no + '</td><td class="latin">' + a.from + '</td><td class="latin">' + a.to + '</td><td class="latin">' + a.cap + '</td><td class="latin">' + a.used + '</td>' +
+          '<td class="latin"><b style="font-size:15px;color:' + (a.cap - a.used > 0 ? '#16a34a' : '#dc2626') + '">' + (a.cap - a.used) + '</b></td>' +
+          '<td><div class="bar"><i style="width:' + pct(a) + '%;background:' + barCol(a) + '"></i></div><div class="latin" style="font-size:10px;color:#64748b">' + pct(a) + '%</div></td>' +
+          '<td onclick="event.stopPropagation()"><button class="btn p">➕</button> <button class="btn">✏️</button></td></tr>' +
+          (open ? '<tr class="det"><td colspan="11">' + segs(a) + allocTbl(a) + '</td></tr>' : '');
+      }).join('') + '</tbody></table></div></div>';
+  }).join('');
+}
+function drawGrp(no) { document.getElementById('haGrp').innerHTML = grpHtml(no); }
+drawGrp('HA-2291');
+
+/* 3: قائمة + تفاصيل */
+function drawMd(i) {
+  document.getElementById('mdList').innerHTML = A.map(function (a, k) {
+    return '<div class="md-it ' + (k === i ? 'sel' : '') + '" onclick="drawMd(' + k + ')"><div class="l1"><b>' + cityIco(a) + ' ' + a.hotel + '</b>' + chip(a) + '</div>' +
+      '<div class="l2"><span class="latin">' + a.no + '</span><span><span class="latin">' + a.from + ' ← ' + a.to + '</span></span><span>متاح <b class="latin" style="color:' + (a.cap - a.used > 0 ? '#16a34a' : '#dc2626') + '">' + (a.cap - a.used) + '</b></span></div></div>';
+  }).join('');
+  var a = A[i];
+  document.getElementById('mdDet').innerHTML = '<div class="' + cityCls(a) + '" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-bottom:3px solid var(--cc);padding-bottom:8px;">' +
+    '<span style="font-size:26px">' + cityIco(a) + '</span><div><div style="font-family:Cairo;font-weight:900;font-size:17px;">' + a.hotel + '</div>' +
+    '<div style="color:#64748b;font-size:12px;">' + a.city + ' · اتفاقية <span class="latin">' + a.no + '</span> · المورد: ' + a.sup + '</div></div><span style="flex:1"></span>' + chip(a) +
+    '<button class="btn p">➕ تخصيص لمجموعة</button><button class="btn">✏️ تعديل</button><button class="btn">💳 ترحيل</button></div>' +
+    '<div class="kpis"><div class="kpi"><b class="latin">' + a.cap + '</b><small>السعة</small></div><div class="kpi"><b class="latin">' + a.used + '</b><small>المخصَّص</small></div>' +
+    '<div class="kpi"><b class="latin" style="color:' + (a.cap - a.used > 0 ? '#16a34a' : '#dc2626') + '">' + (a.cap - a.used) + '</b><small>المتاح</small></div><div class="kpi"><b class="latin">' + a.from + ' → ' + a.to + '</b><small>الفترة</small></div></div>' +
+    '<div style="font-size:12px;font-weight:800;color:#475569;">📊 المتاح على محور الزمن</div>' + segs(a) +
+    '<div style="font-size:12px;font-weight:800;color:#475569;margin-top:12px;">🛂 المجموعات المخصَّصة (' + a.al.length + ')</div>' + allocTbl(a);
+}
+drawMd(0);
+
+/* 5: سطر واحد */
+var ONE = { open: 'HA-2291', f: '' };
+function drawOne() {
+  var cnt = { act: 0, full: 0, exp: 0 }; A.forEach(function (a) { cnt[a.st]++; });
+  var tabs = [['', 'الكل ' + A.length, '#334155', '#f1f5f9'], ['act', '✅ نشطة ' + cnt.act, '#166534', '#dcfce7'], ['full', '⛔ مكتملة ' + cnt.full, '#991b1b', '#fee2e2'], ['exp', '⌛ منتهية ' + cnt.exp, '#475569', '#e2e8f0']];
+  document.getElementById('oneTabs').innerHTML = tabs.map(function (t) { return '<span class="' + (ONE.f === t[0] ? 'on' : '') + '" style="color:' + t[2] + ';background:' + t[3] + '" onclick="ONE.f=\'' + t[0] + '\';drawOne()">' + t[1] + '</span>'; }).join('');
+  document.getElementById('oneList').innerHTML = A.filter(function (a) { return !ONE.f || a.st === ONE.f; }).map(function (a) {
+    var bd = a.st === 'act' ? '#16a34a' : (a.st === 'full' ? '#dc2626' : '#94a3b8'), open = ONE.open === a.no, free = a.cap - a.used;
+    return '<div class="one ' + cityCls(a) + (a.st === 'exp' ? ' exp' : '') + '" style="border-inline-start-color:' + bd + ';' + (open ? 'border-radius:10px 10px 0 0;background:#f8fffc;' : '') + '" onclick="ONE.open=(ONE.open===\'' + a.no + '\'?\'\':\'' + a.no + '\');drawOne()">' +
+      '<span style="color:#64748b">' + (open ? '▾' : '▸') + '</span>' + chip(a) +
+      '<span class="latin" style="font-weight:800;text-align:right">' + a.no + '</span>' +
+      '<span><span class="ccity">' + cityIco(a) + ' ' + a.city + '</span> <b>' + a.hotel + '</b></span>' +
+      '<span class="latin" style="font-size:12px">' + a.from + ' ← ' + a.to + '</span>' +
+      '<span class="n latin">' + a.cap + '</span><span class="n latin">' + a.used + '</span>' +
+      '<span class="big latin" style="color:' + (free > 0 ? '#16a34a' : '#dc2626') + '">' + free + '</span>' +
+      '<span><div class="bar"><i style="width:' + pct(a) + '%;background:' + barCol(a) + '"></i></div><div class="latin" style="font-size:10px;color:#64748b;text-align:center">' + pct(a) + '%</div></span>' +
+      '<span class="acts" onclick="event.stopPropagation()"><button class="btn p" title="تخصيص لمجموعة">➕ تخصيص</button><button class="btn" title="تعديل">✏️</button><button class="btn" title="ترحيل لحساب الوكيل">💳</button><button class="btn" title="حذف" style="color:#dc2626">🗑️</button></span></div>' +
+      (open ? '<div class="one-det"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;font-size:11.5px;"><span class="chip c-exp">🏢 المورد: ' + a.sup + '</span><span class="chip c-exp">🛂 ' + a.al.length + ' مجموعة</span></div>' + segs(a) + allocTbl(a) + '</div>' : '');
+  }).join('');
+}
+drawOne();
+
+/* ---------- سجل التعديلات ---------- */
+var EV = [
+  { day: 'الثلاثاء 22/09/2026', t: '7:54:49 م', who: 'sayed', act: 'تعديل ملف مراجعة وزارة', dot: '#d97706', ch: [['نوع الملف', 'مجموعات', 'فردي']] },
+  { day: '', t: '7:51:08 م', who: 'sayed', act: 'تعديل ملف مراجعة وزارة', dot: '#d97706', ch: [['نوع الملف', 'فردي', 'مجموعات'],
+      ['المشرفون', '<span class="sup-card">👤 الوكيل السعودي · مرافق</span>', '<span class="sup-card">👤 الوكيل السعودي · بدون مشرف</span>'], ['عدد المشرفين', '1', '0']] },
+  { day: '', t: '5:40:58 م', who: 'sayed', act: 'تعديل جماعي لنوع الملف', dot: '#7c3aed', ch: [['نوع الملف', 'مجموعات', 'فردي']] },
+  { day: '', t: '5:30:12 م', who: 'sayed', act: 'إنشاء ملف مراجعة وزارة', dot: '#16a34a', ch: [['رقم الملف', '—', '22756'], ['العميل', '—', 'عاطف الوزارة عدد1 باسم عمر علاء الدين'], ['نوع الملف', '—', 'مجموعات']] }
+];
+function chg(c) { return (c[1] === '—' ? '' : '<span class="au-old">' + c[1] + '</span><span class="au-arrow">←</span>') + '<span class="au-new">' + c[2] + '</span>'; }
+document.getElementById('auTl').innerHTML = EV.map(function (e) {
+  return (e.day ? '<div class="tl-day">📅 ' + e.day + '</div>' : '') +
+    '<div class="tl-ev" style="--dot:' + e.dot + '"><div class="tl-h"><span class="act">' + e.act + '</span><span class="who">👤 ' + e.who + '</span><span class="tm">🕘 ' + e.t + '</span></div>' +
+    e.ch.map(function (c) { return '<div class="chg"><span class="f">' + c[0] + '</span><span>' + chg(c) + '</span></div>'; }).join('') + '</div>';
+}).join('');
+document.getElementById('auTbl').innerHTML = '<thead><tr><th style="width:140px">الوقت</th><th style="width:90px">المستخدم</th><th style="width:170px">العملية</th><th>التفاصيل</th></tr></thead><tbody>' +
+  EV.map(function (e) { return '<tr><td><b>22/09/2026</b><div style="color:#64748b">' + e.t + '</div></td><td>' + e.who + '</td><td><b>' + e.act + '</b></td><td class="det">' +
+    e.ch.map(function (c) { return '<div><b style="color:#475569">' + c[0] + ':</b> ' + chg(c) + '</div>'; }).join('') + '</td></tr>'; }).join('') + '</tbody>';
+document.getElementById('auTxt').innerHTML = EV.map(function (e) {
+  return '<div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:6px;font-size:13px;line-height:1.9;">' +
+    e.ch.map(function (c) { return '• <b>' + e.who + '</b> ' + (c[1] === '—' ? 'سجّل <b>' + c[0] + '</b>: <span class="au-new">' + c[2] + '</span>' : 'غيّر <b>' + c[0] + '</b> من <span class="au-old">' + c[1] + '</span> إلى <span class="au-new">' + c[2] + '</span>'); }).join('<br>') +
+    ' <span style="color:#64748b;font-size:11.5px;">— ' + e.act + ' · الساعة ' + e.t + '</span></div>';
+}).join('');
+
+/* 4: جانت — المحور من 01/10 إلى 30/10 تقريباً (6 أعمدة × 5 أيام)، المنتهية تُقص على البداية */
+(function () {
+  var span = 30, days = ['01/10', '06/10', '11/10', '16/10', '21/10', '26/10'];
+  var h = '<div class="g-axis"><div style="padding:6px 10px;">الاتفاقية</div><div class="days">' + days.map(function (d) { return '<div class="latin">' + d + '</div>'; }).join('') + '</div></div>';
+  h += A.map(function (a) {
+    var s = Math.max(0, a.d0), e = Math.max(0, a.d1), exp = a.st === 'exp';
+    var col = exp ? '#94a3b8' : (a.city === 'مكة' ? '#c8940a' : '#0f8a5f');
+    var bar = exp ? '<div style="position:absolute;top:12px;right:8px;font-size:11px;color:#94a3b8;">⌛ انتهت <span class="latin">' + a.to + '</span></div>'
+      : '<div class="g-bar" style="right:' + (s / span * 100) + '%;width:' + ((e - s) / span * 100) + '%;background:' + col + ';"><div class="fill" style="width:' + pct(a) + '%;left:auto;right:0;"></div><span>متاح <span class="latin">' + (a.cap - a.used) + '</span> / <span class="latin">' + a.cap + '</span></span></div>';
+    return '<div class="g-row"><div class="lab">' + chip(a) + '<b>' + cityIco(a) + ' ' + a.hotel + '</b><span class="latin" style="color:#64748b;font-size:11px;">' + a.no + '</span></div>' +
+      '<div class="trk">' + bar + '<div class="today" style="right:' + (3 / span * 100) + '%"></div></div></div>';
+  }).join('');
+  document.getElementById('gantt').innerHTML = h;
+})();
+</script>
+</body>
+</html>
