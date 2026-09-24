@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.200 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.201 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.200)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.201)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.200</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.201</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7244,7 +7244,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.200";
+var CLIENT_APP_VERSION = "4.201";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -14371,6 +14371,202 @@ function _findKnownClientNorm_(val) {
   return null;
 }
 
+
+/* ============================================================
+   🔎 (V4.201) البحث التنبئي لاسم العميل + كشف الأسماء المتشابهة
+   ------------------------------------------------------------
+   كانت خانة العميل تعتمد على قائمة اقتراحات المتصفح (datalist) التي لا تفهم الفروق العربية
+   (أ/ا/إ، ى/ي، ة/ه، «عبد الله»/«عبدالله»…) ولا تبحث داخل الاسم، فكان يسهل تسجيل نفس العميل
+   مرتين بحروف مختلفة. الآن: قائمة بحث ذكية تحت الخانة، وقبل تسجيل أي عميل جديد يُفحص تشابهه
+   مع العملاء المسجَّلين ويُنبَّه المستخدم ليختار الموجود بدل إنشاء تكرار.
+   ============================================================ */
+function _clientKey_(s) {
+  return _normArabicName_(s).replace(/[ؤ]/g, 'و').replace(/[ئ]/g, 'ي')
+    .replace(/[^ء-يa-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function _clientSkel_(s) {
+  // هيكل الاسم بلا مسافات — «عبد الله»=«عبدالله»
+  return _clientKey_(s).replace(/ /g, '');
+}
+function _clientSkelNoAl_(s) {
+  // بلا «ال» التعريف أول الكلمات (عدا ما بعد «عبد/ابو» مثل عبد الرحمن، وعدا لفظ الجلالة) — «شركة النور»≈«شركة نور»
+  var w = _clientKey_(s).split(' ');
+  return w.map(function (x, i) {
+    var prev = i ? w[i - 1] : '';
+    if (x === 'الله' || prev === 'عبد' || prev === 'ابو' || x.length <= 3) return x;
+    return x.replace(/^ال/, '');
+  }).join('');
+}
+function _levenshtein_(a, b) {
+  if (a === b) return 0;
+  var m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  var prev = new Array(n + 1), cur = new Array(n + 1), i, j;
+  for (j = 0; j <= n; j++) prev[j] = j;
+  for (i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+    var t = prev; prev = cur; cur = t;
+  }
+  return prev[n];
+}
+function _clientKnownNames_() {
+  var n = window._clientSelectNames;
+  if (n && n.length) return n;
+  var dl = document.getElementById('knownClientsList');
+  return dl ? Array.prototype.map.call(dl.options, function (o) { return o.value; }).filter(Boolean) : [];
+}
+// يُعيد العملاء المسجَّلين المشابهين لاسم مكتوب: [{name, score, why}] مرتبة من الأشبه (بحد أقصى max)
+function _clientSimilar_(name, max) {
+  var k = _clientKey_(name), sk = _clientSkel_(name);
+  if (!sk || sk.length < 3) return [];
+  var words = k.split(' ').filter(function (w) { return w.length > 1; }).sort().join(' ');
+  var out = [];
+  _clientKnownNames_().forEach(function (n) {
+    if (_clientValIsSupervisor_(n)) return;
+    var nk = _clientKey_(n), ns = _clientSkel_(n);
+    if (!ns) return;
+    var score = 0, why = '';
+    if (nk === k) { score = 1; why = 'نفس الاسم بفرق همزات/تشكيل'; }
+    else if (ns === sk) { score = 0.97; why = 'نفس الاسم بفرق مسافات'; }
+    else if (_clientSkelNoAl_(n) === _clientSkelNoAl_(name)) { score = 0.96; why = 'نفس الاسم بفرق «ال» التعريف'; }
+    else if (nk.split(' ').filter(function (w) { return w.length > 1; }).sort().join(' ') === words) { score = 0.95; why = 'نفس الكلمات بترتيب مختلف'; }
+    else {
+      var d = _levenshtein_(sk, ns), L = Math.max(sk.length, ns.length);
+      var sim = 1 - d / L;
+      if (sim >= 0.78 && L >= 4) { score = sim; why = d === 1 ? 'اختلاف حرف واحد' : ('اختلاف ' + d + ' حروف'); }
+      else {
+        var shortS = sk.length <= ns.length ? sk : ns, longS = sk.length <= ns.length ? ns : sk;
+        if (shortS.length >= 5 && longS.indexOf(shortS) >= 0) { score = 0.8; why = 'أحدهما جزء من الآخر'; }
+      }
+    }
+    if (score > 0) out.push({ name: n, score: score, why: why });
+  });
+  out.sort(function (a, b) { return b.score - a.score || a.name.length - b.name.length; });
+  return out.slice(0, max || 5);
+}
+// قبل تسجيل عميل جديد: لو توجد أسماء مشابهة نعرضها أولاً. onUse(name) = اختار عميلاً موجوداً،
+// onNew() = أكّد أنه عميل مختلف فعلاً، onCancel() = ألغى
+function _clientCheckSimilar_(val, onUse, onNew, onCancel) {
+  var sim = _clientSimilar_(val, 5);
+  if (!sim.length) { onNew(false); return; }
+  var esc = escapeHtml_;
+  showElegantConfirm({
+    icon: '⚠️', title: 'يوجد عميل مسجَّل باسم مشابه',
+    messageHtml: 'الاسم المكتوب: <b>«' + esc(val) + '»</b><br>قد يكون نفس عميل مسجَّل من قبل بحروف مختلفة — اختر العميل الصحيح لتجنّب تكرار العميل:' +
+      '<div style="margin-top:8px;text-align:right;font-size:12px;">' + sim.map(function (x) {
+        return '<div style="padding:3px 0;border-bottom:1px dashed #e2e8f0;">👤 <b>' + esc(x.name) + '</b> <span style="color:#94a3b8;">— ' + esc(x.why) + '</span></div>';
+      }).join('') + '</div>',
+    buttons: sim.map(function (x) {
+      return { label: '✅ استخدم: ' + x.name, class: 'btn-success', onClick: function () { onUse(x.name); } };
+    }).concat([
+      { label: '➕ لا، هذا عميل جديد مختلف', class: 'btn-outline-warning', onClick: function () { onNew(true); } },
+      { label: 'إلغاء', class: 'btn-outline-secondary', onClick: function () { if (onCancel) onCancel(); } }
+    ])
+  });
+}
+
+/* ---------- قائمة البحث التنبئي تحت خانة العميل (تعمل مع كل خانات العملاء في البرنامج) ---------- */
+var _CAC_ = { inp: null, box: null, list: [], idx: -1 };
+function _cacRank_(q) {
+  var names = _clientKnownNames_();
+  var k = _clientKey_(q), sk = _clientSkel_(q);
+  if (!k) return names.filter(function (n) { return !_clientValIsSupervisor_(n); }).slice(0, 12).map(function (n) { return { n: n, s: 0 }; });
+  var toks = k.split(' ');
+  var res = [];
+  names.forEach(function (n) {
+    var nk = _clientKey_(n), s = 0;
+    if (nk.indexOf(k) === 0) s = 4;
+    else if ((' ' + nk).indexOf(' ' + k) >= 0) s = 3;
+    else if (nk.indexOf(k) >= 0) s = 2;
+    else if (toks.every(function (t) { return nk.indexOf(t) >= 0; })) s = 1.5;
+    else if (sk.length >= 3 && _clientSkel_(n).indexOf(sk) >= 0) s = 1;
+    if (s) res.push({ n: n, s: s });
+  });
+  res.sort(function (a, b) { return b.s - a.s || a.n.length - b.n.length || a.n.localeCompare(b.n, 'ar'); });
+  return res.slice(0, 12);
+}
+function _cacHl_(name, q) {
+  var esc = escapeHtml_(name), k = _clientKey_(q);
+  if (!k) return esc;
+  // تمييز بسيط لو ظهر النص المكتوب حرفياً داخل الاسم
+  var i = name.indexOf(q.trim());
+  return i >= 0 && q.trim() ? escapeHtml_(name.slice(0, i)) + '<mark style="background:#fde68a;padding:0;">' + escapeHtml_(name.slice(i, i + q.trim().length)) + '</mark>' + escapeHtml_(name.slice(i + q.trim().length)) : esc;
+}
+function _cacBox_() {
+  if (_CAC_.box && document.body.contains(_CAC_.box)) return _CAC_.box;
+  var b = document.createElement('div');
+  b.id = '_cacBox'; b.dir = 'rtl';
+  b.style.cssText = 'position:fixed;z-index:2147483100;background:#fff;border:1px solid #cbd5e1;border-radius:10px;box-shadow:0 12px 32px rgba(15,23,42,.22);max-height:280px;overflow:auto;display:none;font-size:13px;min-width:220px;';
+  b.addEventListener('mousedown', function (e) {
+    e.preventDefault();   // لا يفقد الحقل التركيز قبل الاختيار
+    var it = e.target.closest('[data-cac-i]');
+    if (it) _cacPick_(+it.getAttribute('data-cac-i'));
+  });
+  document.body.appendChild(b);
+  _CAC_.box = b;
+  return b;
+}
+function _cacShow_(inp) {
+  _CAC_.inp = inp;
+  var q = inp.value || '';
+  var list = _cacRank_(q);
+  _CAC_.list = list; _CAC_.idx = list.length && q.trim() ? 0 : -1;
+  var b = _cacBox_();
+  var exact = q.trim() && _findKnownClientNorm_(q);
+  var html = list.map(function (x, i) {
+    return '<div data-cac-i="' + i + '" style="padding:7px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;' + (i === _CAC_.idx ? 'background:#e0f2fe;' : '') + '">👤 ' + _cacHl_(x.n, q) + '</div>';
+  }).join('');
+  if (q.trim() && !exact) {
+    html += '<div style="padding:7px 12px;color:#92400e;background:#fffbeb;font-size:11.5px;">' +
+      (list.length ? '💡 اختر من القائمة لو كان العميل مسجَّلاً — وإلا سيُطلب تسجيله كعميل جديد' : '➕ لا يوجد عميل بهذا الاسم — سيُطلب تسجيله كعميل جديد عند مغادرة الخانة') + '</div>';
+  }
+  if (!html) { b.style.display = 'none'; return; }
+  b.innerHTML = html;
+  var r = inp.getBoundingClientRect();
+  var w = Math.max(r.width, 240);
+  b.style.width = w + 'px';
+  b.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, r.right - w)) + 'px';
+  var below = window.innerHeight - r.bottom;
+  if (below < 200 && r.top > below) { b.style.top = ''; b.style.bottom = (window.innerHeight - r.top + 2) + 'px'; }
+  else { b.style.bottom = ''; b.style.top = (r.bottom + 2) + 'px'; }
+  b.style.display = 'block';
+}
+function _cacHide_() { if (_CAC_.box) _CAC_.box.style.display = 'none'; _CAC_.idx = -1; }
+function _cacPick_(i) {
+  var x = _CAC_.list[i], inp = _CAC_.inp;
+  if (!x || !inp) return;
+  inp.value = x.n;
+  _cacHide_();
+  try { inp.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+  try { inp.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+}
+function _cacIsTarget_(el) {
+  return el && el.tagName === 'INPUT' && (el.getAttribute('list') === 'knownClientsList' || el.dataset.cac === '1');
+}
+document.addEventListener('focusin', function (e) {
+  var el = e.target;
+  if (!_cacIsTarget_(el)) return;
+  if (el.getAttribute('list') === 'knownClientsList') { el.removeAttribute('list'); el.dataset.cac = '1'; }   // بدل قائمة المتصفح
+  _cacShow_(el);
+}, true);
+document.addEventListener('input', function (e) { if (_cacIsTarget_(e.target) && e.isTrusted) _cacShow_(e.target); }, true);
+document.addEventListener('focusout', function (e) { if (_cacIsTarget_(e.target)) setTimeout(function () { if (document.activeElement !== _CAC_.inp) _cacHide_(); }, 120); }, true);
+document.addEventListener('keydown', function (e) {
+  if (!_cacIsTarget_(e.target) || !_CAC_.box || _CAC_.box.style.display === 'none') return;
+  var n = _CAC_.list.length;
+  if (e.key === 'ArrowDown' && n) { e.preventDefault(); _CAC_.idx = (_CAC_.idx + 1) % n; }
+  else if (e.key === 'ArrowUp' && n) { e.preventDefault(); _CAC_.idx = (_CAC_.idx - 1 + n) % n; }
+  else if (e.key === 'Enter' && _CAC_.idx >= 0) { e.preventDefault(); _cacPick_(_CAC_.idx); return; }
+  else if (e.key === 'Escape') { _cacHide_(); return; }
+  else return;
+  Array.prototype.forEach.call(_CAC_.box.querySelectorAll('[data-cac-i]'), function (d, i) {
+    d.style.background = i === _CAC_.idx ? '#e0f2fe' : '';
+    if (i === _CAC_.idx) d.scrollIntoView({ block: 'nearest' });
+  });
+}, true);
+window.addEventListener('scroll', function (e) { if (_CAC_.box && e.target !== _CAC_.box && !_CAC_.box.contains(e.target)) _cacHide_(); }, true);
+window.addEventListener('resize', _cacHide_);
+
 // عند مغادرة الحقل: لو الاسم المكتوب مش موجود ضمن العملاء المعروفين، نعرض تسجيله كعميل جديد —
 // نفس فكرة "➕ إضافة عميل جديد..." القديمة، لكن مُفعَّلة بالكتابة الطبيعية بدل اختيار خيار خاص
 function _onClientInputBlur(inp) {
@@ -14398,27 +14594,34 @@ function _onClientInputBlur(inp) {
     return;
   }
   if (val) {
+    var _commit = function () {
+      inp.dataset.prevValue = inp.value;
+      _syncClientAcrossMahramGroup_(inp); // 👨‍👩‍👦 (V4.50) بطلب صريح
+      _markPilgrimsDirty(); updatePilgrimsCount(); _populateSelectByClientDropdown();
+    };
+    var _clear = function () {
+      inp.value = ''; inp.dataset.prevValue = '';
+      _markPilgrimsDirty(); updatePilgrimsCount(); _populateSelectByClientDropdown();
+      inp.focus();
+    };
+    // ⚠️ (V4.201) تنبيه الأسماء المشابهة أولاً — لو اختار عميلاً موجوداً لا حاجة لتسجيل جديد
+    _clientCheckSimilar_(val, function (existing) { inp.value = existing; _commit(); }, function (had) {
     // ✅ (V4.36) يجب أن يكون العميل مسجَّلًا دائمًا — لا خيار لإبقائه نصًا حرًا بلا تسجيل بعد اليوم
     showElegantConfirm({
       icon: '➕', title: 'عميل جديد',
-      message: '"' + escapeHtml_(val) + '" غير مسجَّل ضمن قائمة العملاء الحالية — لازم تسجيله كعميل جديد أو اختيار عميل موجود من القائمة.',
+      message: '"' + val + '" غير مسجَّل ضمن قائمة العملاء الحالية — لازم تسجيله كعميل جديد أو اختيار عميل موجود من القائمة.',
       buttons: [
         { label: '✅ سجّله كعميل جديد', class: 'btn-success', onClick: function() {
             _promptAddClientInline(function(newClient) {
               if (newClient) { inp.value = newClient.name; _refreshAllClientSelects_(); }
               else { inp.value = ''; }
-              inp.dataset.prevValue = inp.value;
-              _syncClientAcrossMahramGroup_(inp); // 👨‍👩‍👦 (V4.50) بطلب صريح
-              _markPilgrimsDirty(); updatePilgrimsCount(); _populateSelectByClientDropdown();
-            }, val); // 🔗 تمرير الاسم المكتوب كقيمة مبدئية لنموذج إضافة العميل بدل تفريغه
+              _commit();
+            }, val, had); // 🔗 تمرير الاسم المكتوب كقيمة مبدئية لنموذج إضافة العميل بدل تفريغه
         }},
-        { label: '❌ إلغاء (مسح الاسم)', class: 'btn-outline-secondary', onClick: function() {
-            inp.value = ''; inp.dataset.prevValue = '';
-            _markPilgrimsDirty(); updatePilgrimsCount(); _populateSelectByClientDropdown();
-            inp.focus();
-        }}
+        { label: '❌ إلغاء (مسح الاسم)', class: 'btn-outline-secondary', onClick: _clear }
       ]
     });
+    }, _clear);
     return;
   }
   inp.dataset.prevValue = val;
@@ -14444,23 +14647,23 @@ function _onRegClientInputBlur(inp) {
     return;
   }
   if (val) {
-    // ✅ (V4.36) يجب أن يكون العميل مسجَّلًا دائمًا — لا خيار لإبقائه نصًا حرًا بلا تسجيل بعد اليوم
+    var _clear2 = function () { inp.value = ''; inp.dataset.prevValue = ''; inp.focus(); };
+    _clientCheckSimilar_(val, function (existing) { inp.value = existing; inp.dataset.prevValue = existing; }, function (had) {
     showElegantConfirm({
       icon: '➕', title: 'عميل جديد',
-      message: '"' + escapeHtml_(val) + '" غير مسجَّل ضمن قائمة العملاء الحالية — لازم تسجيله كعميل جديد أو اختيار عميل موجود من القائمة.',
+      message: '"' + val + '" غير مسجَّل ضمن قائمة العملاء الحالية — لازم تسجيله كعميل جديد أو اختيار عميل موجود من القائمة.',
       buttons: [
         { label: '✅ سجّله كعميل جديد', class: 'btn-success', onClick: function() {
             _promptAddClientInline(function(newClient) {
               if (newClient) { inp.value = newClient.name; _refreshAllClientSelects_(); }
               else { inp.value = ''; }
               inp.dataset.prevValue = inp.value;
-            }, val);
+            }, val, had);
         }},
-        { label: '❌ إلغاء (مسح الاسم)', class: 'btn-outline-secondary', onClick: function() {
-            inp.value = ''; inp.dataset.prevValue = ''; inp.focus();
-        }}
+        { label: '❌ إلغاء (مسح الاسم)', class: 'btn-outline-secondary', onClick: _clear2 }
       ]
     });
+    }, _clear2);
     return;
   }
   inp.dataset.prevValue = val;
@@ -23091,7 +23294,7 @@ function _clCopyUrl(url) {
    ============================================================ */
 
 // نافذة صغيرة لإضافة عميل جديد أثناء تسجيل المعتمرين — cb(clientObj) أو cb(null) عند الإلغاء
-function _promptAddClientInline(cb, prefillName) {
+function _promptAddClientInline(cb, prefillName, similarChecked) {
   var prev = document.getElementById('_addClientOverlay');
   if (prev) prev.remove();
   var ov = document.createElement('div');
@@ -23127,20 +23330,15 @@ function _promptAddClientInline(cb, prefillName) {
     if (!name) { errEl.textContent = 'اسم العميل مطلوب'; errEl.style.display = 'block'; return; }
     // 🛡️ (V4.36) تحذير مسبق من التكرار (بمراعاة الهمزات/التشكيل/الفراغات) قبل حتى مطالبة الخادم —
     // يمنع إنشاء عميل مكرر بصيغة كتابة مختلفة لنفس الاسم
-    var dupMatch = _findKnownClientNorm_(name);
-    if (dupMatch) {
-      errEl.style.display = 'none';
-      showElegantConfirm({
-        icon: '⚠️', title: 'اسم مقارب لعميل مسجَّل',
-        message: '"' + escapeHtml_(name) + '" قريب جدًا من العميل المسجَّل بالفعل: <b>"' + escapeHtml_(dupMatch) + '"</b> (فرق بسيط بالهمزات/التشكيل/الفراغات فقط) — هل تريد استخدام العميل الموجود بدل إنشاء تكرار؟',
-        buttons: [
-          { label: '✅ استخدم العميل الموجود', class: 'btn-success', onClick: function() { close({ name: dupMatch, mobile: '', notes: '' }); } },
-          { label: '➕ لا، أنشئ عميلًا جديدًا فعلًا', class: 'btn-outline-warning', onClick: function() { _addClientDoSave_(name, mobile, notes, true, close, errEl); } }
-        ]
-      });
-      return;
-    }
-    _addClientDoSave_(name, mobile, notes, false, close, errEl);
+    // ⚠️ (V4.201) فحص تشابه أوسع (حرف مختلف، مسافات، «ال»، ترتيب الكلمات، جزء من الاسم) — يُتخطّى فقط
+    // لو فُحص نفس الاسم للتوّ وأكّد المستخدم أنه عميل جديد مختلف
+    if (similarChecked !== undefined && name === String(prefillName || '').trim()) { _addClientDoSave_(name, mobile, notes, !!similarChecked, close, errEl); return; }
+    errEl.style.display = 'none';
+    ov.style.display = 'none';
+    _clientCheckSimilar_(name,
+      function (existing) { close({ name: existing, mobile: '', notes: '' }); },
+      function (had) { ov.style.display = 'flex'; _addClientDoSave_(name, mobile, notes, had, close, errEl); },
+      function () { ov.style.display = 'flex'; });
   });
   setTimeout(function() { document.getElementById('_addClientName').focus(); }, 60);
 }
