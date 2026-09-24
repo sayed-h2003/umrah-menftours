@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.195 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.196 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.195)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.196)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.195</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.196</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7093,7 +7093,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.195";
+var CLIENT_APP_VERSION = "4.196";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -18703,7 +18703,7 @@ function _expandScrollablesForCapture_(rootEl) {
     saved.forEach(function (s) { s.el.style.overflowX = s.overflowX; s.el.style.width = s.width; s.el.style.maxWidth = s.maxWidth; });
   };
 }
-function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
+function _captureElementAsPngFiles_(rootEl, fileNameBase, cb, opts) {
   var H2C = window.__h2cStandalone || window.html2canvas || null;
   if (!rootEl) { _capOverlay_(false); cb(null, 'لا يوجد محتوى لالتقاطه'); return; }
   if (!H2C && !window.html2pdf) { _capOverlay_(false); cb(null, 'مكتبة الالتقاط غير محمَّلة'); return; }
@@ -18737,6 +18737,9 @@ function _captureElementAsPngFiles_(rootEl, fileNameBase, cb) {
   // لو لم يفرض سقف المساحة/الأبعاد تخفيضاً كبيراً، ارفع الدقة لحدّها الأقصى لهذا المحتوى تحديداً
   if (scale < _dpr && byArea >= _dpr && byDim >= _dpr) scale = _dpr;
   if (scale < 0.4) scale = 0.4;                   // تقرير ضخم جداً — دقة أقل خير من فشل كامل
+  // 🖥️ (V4.196) وضع FHD: مقياس ثابت محسوب ليخرج عرض الصورة 1920 بكسل بالضبط (لا 4 أضعاف عرض عريض)
+  // — ما لم يفرض سقف ذاكرة الجهاز تخفيضه لتقرير طويل جداً
+  if (opts && opts.fixedScale) scale = Math.max(0.4, Math.min(opts.fixedScale, byArea, byDim));
 
   _capOverlay_(true, 'جاري إنشاء الصورة…');
 
@@ -18832,7 +18835,8 @@ function _sliceCanvasToPngFiles_(full, fileNameBase, cb) {
 // الجذري: التقاط العنصر من DOM الصفحة الحقيقية مباشرة (بلا أي iframe) عبر نفس مسار
 // _captureElementAsPngFiles_ المُثبَت عمليًا بالفعل للوحة الإحصائيات ودمج التسكين — نبني عنصراً
 // مخفياً بنفس الصفحة الحالية، نضع فيه محتوى التقرير، ثم نلتقطه بنفس الدالة الموثوقة تماماً.
-function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb) {
+function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb, opts) {
+  var _cssW = (opts && opts.cssWidth) || 1600;
   // 🛡️ (V4.110) غلاف بارتفاع صفر و overflow:hidden عند إحداثيات طبيعية (0,0) — لا نُبعد العنصر
   // لآلاف البكسل خارج الشاشة (إحداثيات متطرفة قد تُربك حساب مواضع foreignObjectRendering في بعض
   // المتصفحات) ولا نُظهره ولو للحظة: الغلاف صفري الارتفاع فلا يشغل أي مساحة مرئية إطلاقاً، بينما
@@ -18842,11 +18846,11 @@ function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb) {
   // الغلاف بلا قصّ إطلاقاً ومخفيّ بالطبقة فقط (z-index سالب خلف حاوية التطبيق المعتمة)، فيبقى
   // المحتوى مُخطَّطاً بكامل ارتفاعه وغير مرئي للمستخدم ولا يزيح شيئاً في الصفحة.
   var wrap = document.createElement('div');
-  wrap.style.cssText = 'position:fixed; top:0; left:0; width:1600px; height:0; overflow:visible; ' +
+  wrap.style.cssText = 'position:fixed; top:0; left:0; width:' + _cssW + 'px; height:0; overflow:visible; ' +
     'z-index:-9999; pointer-events:none;';
   var host = document.createElement('div');
   host.id = 'rptRoot';
-  host.style.cssText = 'width:1600px; background:#ffffff; direction:rtl;';
+  host.style.cssText = 'width:' + _cssW + 'px; background:#ffffff; direction:rtl;';
   wrap.appendChild(host);
   document.body.appendChild(wrap);
   var cleanup = function() { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); };
@@ -18858,7 +18862,7 @@ function _exportFullHtmlAsImage_(fullHtml, fileNameBase, cb) {
 
   // انتظار اكتمال تحميل الخطوط (الخط العربي قد يتأخر قليلاً) قبل الالتقاط، مع سقف أمان قصير
   var capture = function() {
-    _captureElementAsPngFiles_(host, fileNameBase, function(files, err) { cleanup(); cb(files, err); });
+    _captureElementAsPngFiles_(host, fileNameBase, function(files, err) { cleanup(); cb(files, err); }, opts);
   };
   // 🛡️ (V4.113) بعض التقارير (كالإشعارات) تتضمّن شعار الشركة كصورة <img> — لو التُقطت الصفحة
   // قبل اكتمال تحميلها يخرج التصدير صورة بيضاء فارغة بلا أي خطأ (نفس عرَض foreignObjectRendering
@@ -19017,6 +19021,90 @@ function exportReportAsImage(getFullHtmlFn, fileNameBase, btn) {
     if (btn) { btn.disabled = false; btn.innerHTML = orig; }
     if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); _rejectPendingClipboard_(); return; }
     _shareOrSaveImageFiles_(files);
+  });
+}
+
+/* ============================================================
+   🖥️ (V4.196) صورة FHD لكشف حساب العميل + نافذة خيارات (نسخ للحافظة / حفظ / مشاركة)
+   السبب الجذري لسوء الدقة السابق: التقرير كان يُرسم على عرض 1600 بكسل (أعرض بكثير من تصميمه) فيصير
+   النص صغيراً جداً نسبةً لعرض الصورة، ثم يُكبَّر المقياس حتى 4× فتخرج صورة ضخمة العرض تُصغّرها
+   تطبيقات المشاركة (واتساب وغيره) بشدة فيضيع النص. الآن: يُرسم التقرير بعرض 960 بكسل ويُلتقط
+   بمقياس 2× ⇒ صورة بعرض 1920 بكسل (Full HD) بنص كبير وواضح. التقارير الطويلة تُقسَّم لعدة صور.
+   ============================================================ */
+function exportReportAsImageFHD(getFullHtmlFn, fileNameBase, btn) {
+  var fullHtml = typeof getFullHtmlFn === 'function' ? getFullHtmlFn() : getFullHtmlFn;
+  if (!fullHtml) { showToast('❌ لا يوجد محتوى لتصديره', true); return; }
+  var orig = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳...'; }
+  var settled = false;
+  var watchdog = setTimeout(function () {
+    if (settled) return; settled = true;
+    if (typeof _capOverlay_ === 'function') _capOverlay_(false);
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    showToast('⚠️ التصدير يستغرق وقتاً طويلاً — أعد المحاولة أو صغِّر نطاق الكشف.', true);
+  }, 60000);
+  _exportFullHtmlAsImage_(fullHtml, fileNameBase || 'تقرير', function (files, err) {
+    if (settled) return; settled = true;
+    clearTimeout(watchdog);
+    if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    if (!files) { showToast('❌ تعذّر إنشاء الصورة: ' + (err || ''), true); return; }
+    _imageActionSheet_(files);
+  }, { cssWidth: 960, fixedScale: 2 });
+}
+// نافذة خيارات الصورة الجاهزة — كل إجراء بضغطة مستقلة (تفعيل مستخدم جديد)، فيعمل النسخ للحافظة والمشاركة
+// بثبات بعكس النسخ التلقائي بعد انتهاء التوليد الذي كانت المتصفحات ترفضه أحياناً
+function _imageActionSheet_(files) {
+  var prev = document.getElementById('_imgActOv'); if (prev) prev.remove();
+  window.__imgActFiles = files;
+  var canCopy = !!(navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined');
+  var canShare = false; try { canShare = !!(navigator.canShare && navigator.canShare({ files: files })); } catch (e) {}
+  var cv = window.__lastCaptureCanvas;
+  var dims = (cv && cv.width) ? (cv.width + '×' + cv.height + ' بكسل') : '';
+  var url = URL.createObjectURL(files[0]);
+  var ov = document.createElement('div');
+  ov.id = '_imgActOv'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:rgba(10,14,24,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+  var btnSt = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;border-radius:10px;border:none;font-weight:800;font-size:14px;cursor:pointer;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(440px,100%);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">' +
+    '<div style="padding:12px 16px;background:linear-gradient(135deg,#0f4c4c,#0b3a3a);color:#fff;display:flex;align-items:center;gap:8px;border-radius:16px 16px 0 0;">' +
+      '<b style="flex:1;">📸 الصورة جاهزة (Full HD)</b><button type="button" onclick="_imgActClose_()" style="background:rgba(255,255,255,.18);border:none;color:#fff;width:28px;height:28px;border-radius:8px;cursor:pointer;">✕</button></div>' +
+    '<div style="padding:14px 16px;">' +
+      '<div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;max-height:260px;background:#f8fafc;"><img src="' + url + '" style="width:100%;display:block;"></div>' +
+      '<div style="font-size:11px;color:#64748b;margin:6px 0 12px;text-align:center;">' + (dims ? dims + ' · ' : '') +
+        (files.length > 1 ? ('الكشف طويل فقُسِّم إلى ' + files.length + ' صور') : 'صورة واحدة') + '</div>' +
+      (canCopy ? '<button type="button" style="' + btnSt + 'background:#1e3d59;color:#fff;margin-bottom:8px;" onclick="_imgActCopy_(this)">📋 نسخ إلى الحافظة' + (files.length > 1 ? ' (الكشف كاملاً)' : '') + '</button>' : '') +
+      '<button type="button" style="' + btnSt + 'background:#0f766e;color:#fff;margin-bottom:8px;" onclick="_imgActSave_()">💾 حفظ ' + (files.length > 1 ? 'الصور' : 'الصورة') + '</button>' +
+      (canShare ? '<button type="button" style="' + btnSt + 'background:#25D366;color:#fff;" onclick="_imgActShare_()">📤 مشاركة كصورة</button>'
+                : '<div style="font-size:11px;color:#94a3b8;text-align:center;">المشاركة المباشرة غير مدعومة بهذا المتصفح — احفظ الصورة ثم شاركها</div>') +
+    '</div></div>';
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) _imgActClose_(); });
+  document.body.appendChild(ov);
+  ov._url = url;
+}
+function _imgActClose_() {
+  var ov = document.getElementById('_imgActOv');
+  if (ov) { try { URL.revokeObjectURL(ov._url); } catch (e) {} ov.remove(); }
+}
+function _imgActCopy_(btn) {
+  var files = window.__imgActFiles || []; if (!files.length) return;
+  var cv = window.__lastCaptureCanvas;
+  // النداء يتم فوراً داخل الضغطة (شرط المتصفح)؛ لو الكشف مقسَّم لعدة صور ننسخ اللوحة الكاملة قبل التقسيم
+  var blobP = (files.length > 1 && cv && cv.toBlob)
+    ? new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/png'); })
+    : files[0];
+  navigator.clipboard.write([new ClipboardItem({ 'image/png': blobP })]).then(function () {
+    showToast('📋 نُسخت الصورة إلى الحافظة — الصقها في أي برنامج (Ctrl+V)');
+    if (btn) btn.innerHTML = '✅ تم النسخ';
+  }).catch(function (e) {
+    showToast('⚠️ تعذّر النسخ للحافظة بهذا المتصفح — استخدم الحفظ أو المشاركة', true);
+  });
+}
+function _imgActSave_() { _saveImageFilesLocally_(window.__imgActFiles || []); showToast('💾 تم حفظ ' + ((window.__imgActFiles || []).length > 1 ? 'الصور' : 'الصورة')); }
+function _imgActShare_() {
+  var files = window.__imgActFiles || [];
+  navigator.share({ files: files, title: 'مشاركة' }).catch(function (err) {
+    if (err && err.name === 'AbortError') return;
+    showToast('⚠️ تعذّرت المشاركة — استخدم الحفظ بدلاً منها', true);
   });
 }
 
@@ -27699,9 +27787,9 @@ function _accPrint_(scope, tripOnly, mode, tripFilter, merge, summaryOnly, showS
   // 🏷️ اسم الملف: كشف حساب - العميل - الرحلة (أو بدونها في الكشف الشامل) - تاريخ الطباعة
   var fileName = 'كشف حساب - ' + d.client + (scope === 'trip' ? ' - ' + tripOnlyDisp : '') + ' - ' + printDateStr;
 
-  // 📸 (V4.104) صورة HD — نفس مستند الطباعة/PDF (doc) الجاهز بالفعل، بلا أي استدعاء سيرفر
+  // 📸 (V4.196) صورة FHD (1920 بكسل) + نافذة خيارات: نسخ للحافظة / حفظ / مشاركة — نفس مستند الطباعة
   if (mode === 'image') {
-    exportReportAsImage(function() { return doc; }, fileName, btn || null);
+    exportReportAsImageFHD(function() { return doc; }, fileName, btn || null);
     return;
   }
 
