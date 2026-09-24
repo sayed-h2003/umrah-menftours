@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.201 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.202 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.201)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.202)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.201</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.202</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5211,6 +5211,64 @@ input[type="date"]:not(:focus):not(:valid) {
   .vz-badge.g{ background:#d6f5e6; color:#0f6b46; } .vz-badge.y{ background:#fef3c7; color:#92620a; }
   .vz-badge.r{ background:#fde2e2; color:#b91c1c; } .vz-badge.b{ background:#dbeafe; color:#1d4ed8; }
   #section-visas .vz-rowbtn{ border:none; background:transparent; cursor:pointer; font-size:15px; padding:1px 3px; }
+  /* 📜 (V4.202) جدول سجل التعديلات الموحّد */
+  .au-tbl{ width:100%; border-collapse:collapse; font-size:12.5px; background:#fff; }
+  .au-tbl thead th{ background:#1e3d59; color:#fff; font-weight:800; padding:8px; text-align:center !important; white-space:nowrap; position:sticky; top:0; z-index:2; }
+  .au-tbl tbody td{ padding:8px; border-bottom:1px solid #e8edf3; vertical-align:top; }
+  .au-tbl tbody tr:nth-child(even) td{ background:#fafbfd; }
+  .au-tbl tbody tr:hover td{ background:#f1f7ff; }
+  .au-ts{ white-space:nowrap; } .au-d{ font-weight:700; color:#1e3d59; font-size:12px; direction:ltr; unicode-bidi:isolate; }
+  .au-t{ color:#64748b; font-size:11px; direction:ltr; unicode-bidi:isolate; }
+  .au-user{ background:#e0f2fe; color:#0369a1; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .au-scr{ padding:2px 8px; border-radius:6px; font-size:10.5px; font-weight:700; white-space:nowrap; }
+  .au-act{ display:inline-block; padding:3px 9px; border-radius:7px; font-size:11.5px; font-weight:800; line-height:1.5; }
+  .au-rec{ background:#1e3d59; color:#fff; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; display:inline-block; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
+  .au-det{ min-width:280px; }
+  .au-chg{ display:flex; gap:6px; align-items:baseline; flex-wrap:wrap; padding:3px 0; border-bottom:1px dashed #edf1f5; line-height:1.7; }
+  .au-chg:last-of-type{ border-bottom:0; }
+  .au-f{ color:#475569; font-weight:800; white-space:nowrap; }
+  .au-v{ display:inline-flex; gap:5px; align-items:baseline; flex-wrap:wrap; }
+  .au-old{ color:#b91c1c; background:#fef2f2; text-decoration:line-through; text-decoration-color:rgba(185,28,28,.45); border-radius:6px; padding:0 7px; }
+  .au-new{ color:#166534; background:#f0fdf4; border-radius:6px; padding:0 7px; font-weight:800; }
+  .au-multi{ display:inline-flex; flex-direction:column; gap:1px; padding:2px 7px; }
+  .au-arr{ color:#94a3b8; font-weight:800; }
+  .au-del{ color:#b91c1c; font-size:11px; font-weight:700; }
+  .au-cnt{ color:#94a3b8; font-size:10.5px; margin-top:2px; }
+  /* 🏨 (V4.202) شاشة اتفاقيات السكن: سطر واحد لكل اتفاقية + تجميع بالمدينة */
+  .ha-fbar{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--vzSurf); border:1.5px solid var(--vzBorder); border-radius:12px; padding:8px 10px; }
+  .ha-fbar input, .ha-fbar select{ font-family:inherit; font-size:12.5px; border:1.5px solid var(--vzBorder); border-radius:9px; padding:6px 10px; background:#fff; height:34px; }
+  .ha-fbar input{ flex:1; min-width:220px; }
+  .ha-per{ gap:10px; flex-wrap:wrap; align-items:flex-end; background:#fff; border:1.5px dashed var(--vzBorder); border-radius:12px; padding:8px 10px; margin-top:8px; }
+  .ha-per .vz-fld{ min-width:190px; }
+  .ha-sttabs{ display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 8px; }
+  .ha-st{ cursor:pointer; font-size:12px; font-weight:800; padding:5px 13px; border-radius:20px; border:1.5px solid transparent; user-select:none; }
+  .ha-st.on{ border-color:currentColor; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+  .ha-grp{ border:1.5px solid var(--vzBorder); border-radius:12px; overflow:hidden; margin-bottom:12px; background:#fff; }
+  .ha-grp-h{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 12px; }
+  .ha-grp-h b{ font-size:14.5px; }
+  .ha-mk .ha-grp-h{ background:#fff7e0; border-bottom:3px solid #c8940a; } .ha-mk .ha-grp-h > b{ color:#8a5d00; }
+  .ha-md .ha-grp-h{ background:#e7f7ef; border-bottom:3px solid #0f8a5f; } .ha-md .ha-grp-h > b{ color:#0f6b46; }
+  .ha-ot .ha-grp-h{ background:#eef2f6; border-bottom:3px solid #64748b; }
+  .ha-pill{ background:#fff; color:#334155; border-radius:20px; padding:2px 10px; font-size:11.5px; font-weight:800; border:1px solid #e2e8f0; }
+  .ha-pill.g{ background:#dcfce7; color:#166534; border-color:#bbf7d0; }
+  .ha-row{ display:grid; grid-template-columns:96px 140px minmax(170px,1.6fr) 175px 64px 70px 70px 96px 190px; align-items:center; gap:8px;
+    min-width:1060px; padding:7px 10px; border-bottom:1px solid #eef2f6; border-inline-start:5px solid transparent; font-size:12.5px; cursor:pointer; }
+  .ha-row.on{ grid-template-columns:96px 140px minmax(170px,1.6fr) 175px 64px 70px 70px 96px 84px 190px; min-width:1150px; }
+  .ha-row:hover{ background:#f6fbf9; }
+  .ha-row.exp{ opacity:.7; }
+  .ha-row.ha-head{ cursor:default; background:#f8fafc; font-size:10.5px; font-weight:800; color:#64748b; padding-top:5px; padding-bottom:5px; }
+  .ha-row.ha-head:hover{ background:#f8fafc; }
+  .ha-row .c{ text-align:center; }
+  .ha-hotel b{ font-size:12.5px; } .ha-hotel small{ display:block; color:#6b8c82; font-size:10.5px; }
+  .ha-free{ font-size:16px; font-weight:900; }
+  .ha-bar{ height:7px; background:#e5e7eb; border-radius:6px; overflow:hidden; } .ha-bar i{ display:block; height:100%; border-radius:6px; }
+  .ha-row small.vz-latin{ font-size:10px; color:#64748b; }
+  .ha-acts{ display:flex; gap:4px; justify-content:flex-end; }
+  .ha-acts .vz-btn.sm{ padding:4px 8px; }
+  .ha-kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  @media (max-width:640px){ .ha-kpis{ grid-template-columns:repeat(2,1fr); } }
+  .ha-kpi{ background:var(--vzSurf); border:1.5px solid var(--vzBorder); border-radius:10px; padding:8px; text-align:center; }
+  .ha-kpi b{ display:block; font-size:18px; } .ha-kpi small{ color:#64748b; font-weight:700; font-size:11px; }
   .vz-dlg-ov{ position:fixed; inset:0; z-index:2147483000; background:rgba(6,32,26,.62); backdrop-filter:blur(5px);
     display:flex; align-items:center; justify-content:center; padding:14px; direction:rtl; }
   .vz-dlg{ background:#fff; border-radius:16px; width:min(1000px,97vw); max-height:93vh; overflow:auto; box-shadow:0 24px 70px rgba(0,0,0,.4); border-top:5px solid var(--vzGold); }
@@ -5370,21 +5428,19 @@ input[type="date"]:not(:focus):not(:valid) {
       <span class="text-muted small">📋 آخر 500 عملية مسجّلة — الأحدث أولاً</span>
     </div>
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0" id="auditMainTable" style="font-size:12.5px;">
-        <thead style="background:#1e3d59; color:white;">
+      <table class="au-tbl" id="auditMainTable" style="min-width:860px;">
+        <thead>
           <tr>
-            <th class="py-2 px-3" style="min-width:105px;">التاريخ</th>
-            <th class="py-2 px-2" style="min-width:75px;">المستخدم</th>
-            <th class="py-2 px-2" style="min-width:90px;">الشاشة</th>
-            <th class="py-2 px-2" style="min-width:130px;">العملية</th>
-            <th class="py-2 px-2 text-center" style="min-width:65px;">المرجع</th>
-            <th class="py-2 px-2" style="min-width:100px;">الحقل</th>
-            <th class="py-2 px-2" style="min-width:140px;">القيمة القديمة</th>
-            <th class="py-2 px-2" style="min-width:140px;">القيمة الجديدة</th>
+            <th style="width:92px;">الوقت</th>
+            <th style="width:90px;">المستخدم</th>
+            <th style="width:95px;">الشاشة</th>
+            <th style="width:160px;">العملية</th>
+            <th style="width:100px;">المرجع</th>
+            <th>التفاصيل</th>
           </tr>
         </thead>
         <tbody id="auditLogTableBody">
-          <tr><td colspan="8" class="text-center text-muted py-5">⏳ جاري تحميل السجلات...</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-5">⏳ جاري تحميل السجلات...</td></tr>
         </tbody>
       </table>
     </div>
@@ -7244,7 +7300,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.201";
+var CLIENT_APP_VERSION = "4.202";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -13593,26 +13649,211 @@ function _auditFmtRaw_(v) {
   }
   try { return Object.keys(o).map(function(k) { return k + ': ' + JSON.stringify(o[k]); }).join('، '); } catch (e2) { return s; }
 }
+
+/* ============================================================
+   📜 (V4.202) عرض موحّد لسجل التعديلات في كل الشاشات (بطلب صريح — المقترح 2):
+   جدول بأعمدة: الوقت | المستخدم | (الشاشة | المرجع بالسجل العام) | العملية | التفاصيل
+   • كل حفظة = صف واحد: التغييرات المتتالية لنفس المستخدم ونفس العملية ونفس السجل خلال 3 ثوانٍ تُجمَع معاً.
+   • عمود «التفاصيل» يعرض كل حقل تغيّر: «الحقل: القديم ← الجديد» (القديم أحمر مشطوب، الجديد أخضر).
+   • القيم الخام تُترجم لنص عربي مقروء: بلا رموز JSON ولا مسميات إنجليزية (المشرفون، بنود العملاء،
+     السكن، المعتمرون المختارون، العملات، نعم/لا، التواريخ الخام…).
+   ============================================================ */
+var AUDIT_KEY_AR_ = {
+  name: 'الاسم', type: 'النوع', directTo: 'موجَّه إلى', count: 'العدد', sups: 'المشرفون', note: 'ملاحظة', notes: 'ملاحظات',
+  isTrip: 'رحلة', city: 'المدينة', hotel: 'الفندق', 'in': 'دخول', out: 'خروج', hAgr: 'اتفاقية السكن', cAgr: 'اتفاقية الإعاشة',
+  supplier: 'المورد', agent: 'الوكيل', logoUrl: 'رابط الشعار', licence: 'الترخيص', company: 'الشركة', price: 'السعر',
+  currency: 'العملة', from: 'من', to: 'إلى', date: 'التاريخ', amount: 'المبلغ', desc: 'البيان', trip: 'الرحلة', client: 'العميل',
+  mode: 'نوع المحاسبة', periods: 'الفترات', items: 'البنود', value: 'القيمة', rate: 'سعر الصرف', time: 'الساعة', buses: 'الباصات',
+  roomFeePeriods: 'فترات رسوم الغرفة', supRoomFee: 'رسوم غرفة المشرف', barcodePeriods: 'فترات تجديد الباركود', vipRoomFee: 'رسوم غرفة VIP',
+  vipSurcharge: 'زيادة VIP', enabled: 'مفعّل', chatId: 'رقم المحادثة', token: 'الرمز', hour: 'الساعة', days: 'الأيام'
+};
+var AUDIT_FIELD_AR_ = {
+  TG_ALERT_CFG: 'إعدادات تنبيهات تيليجرام', TGCC_CFG: 'إعدادات تيليجرام (الإعاشة)', TGBN_CFG: 'إعدادات تيليجرام (الإشعارات)',
+  Password: 'كلمة المرور', ACC_PRICING: 'تسعير رسوم الغرفة', ClientAccounts_TripPrices: 'تسعير الرحلة',
+  ClientAccounts_ClientPrices: 'تسعير العميل', CateringContracts: 'اتفاقيات الإعاشة'
+};
+function _auditEmpty_(v) { var s = String(v == null ? '' : v).trim(); return !s || s === '-' || s === '—'; }
+function _auditTsMs_(ts) {
+  var m = String(ts || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return m ? new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).getTime() : NaN;
+}
+function _auditNormEntry_(e) {
+  return {
+    ts: e.timestamp != null ? e.timestamp : (e.when || ''), user: e.username != null ? e.username : (e.who || ''),
+    action: e.action || '', rec: e.recordId || '', field: e.field || '',
+    oldV: e.oldValue !== undefined ? e.oldValue : e.oldVal, newV: e.newValue !== undefined ? e.newValue : e.newVal,
+    screen: e.screen || '', screenLabel: e.screenLabel || ''
+  };
+}
+// تجميع التغييرات المتتالية لنفس الحفظة (القائمة مرتبة الأحدث أولاً)
+function _auditGroup_(entries) {
+  var groups = [];
+  (entries || []).map(_auditNormEntry_).forEach(function (e) {
+    var g = groups[groups.length - 1], ms = _auditTsMs_(e.ts);
+    if (g && g.user === e.user && g.action === e.action && g.rec === e.rec &&
+        ((isNaN(ms) && g.ts === e.ts) || (!isNaN(ms) && !isNaN(g.ms) && Math.abs(g.ms - ms) <= 3000))) {
+      g.changes.push(e); return;
+    }
+    groups.push({ ts: e.ts, ms: ms, user: e.user, action: e.action, rec: e.rec, screen: e.screen, screenLabel: e.screenLabel, changes: [e] });
+  });
+  return groups;
+}
+function _auditFieldAr_(f) { f = String(f || '').trim(); return AUDIT_FIELD_AR_[f] || f; }
+function _auditStr_(s) {
+  s = String(s == null ? '' : s);
+  // تاريخ خام بصيغة المتصفح (Sun Jun 21 2026 ... GMT+0300) → dd/mm/yyyy
+  s = s.replace(/\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s+GMT[+-]\d{4}(\s*\([^)]*\))?/gi, function (m) {
+    var d = new Date(m.replace(/\s*\([^)]*\)$/, ''));
+    return isNaN(d.getTime()) ? m : ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear();
+  });
+  // تاريخ ISO → dd/mm/yyyy
+  s = s.replace(/\b(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}(\.\d+)?Z?\b/g, function (m, y, mo, d) { return d + '/' + mo + '/' + y; });
+  s = s.replace(/\bSAR\b/g, 'ريال').replace(/\bEGP\b/g, 'جنيه');
+  if (s === 'true') return 'نعم';
+  if (s === 'false') return 'لا';
+  return s.replace(/\s*⟦cf:[a-z0-9]+⟧\s*/gi, ' ').replace(/\n+/g, '، ').trim();
+}
+function _auditScalar_(v) {
+  if (v === true) return 'نعم'; if (v === false) return 'لا';
+  if (v == null || v === '') return '—';
+  if (typeof v === 'number') return v.toLocaleString('en-US');
+  return _auditStr_(v);
+}
+// عنصر واحد من مصفوفة كائنات → نص عربي مقروء
+function _auditObjTxt_(o) {
+  if (!o || typeof o !== 'object') return _auditScalar_(o);
+  if (o.name !== undefined && (o.type !== undefined || o.directTo !== undefined)) {   // مشرف
+    return '👤 ' + _auditScalar_(o.name) + (o.type ? ' · ' + _auditScalar_(o.type) : '') + (o.directTo ? ' ← ' + _auditScalar_(o.directTo) : '');
+  }
+  if (o.hotel !== undefined || o.city !== undefined) {   // سكن مجموعة التأشيرات
+    return '🏨 ' + (o.city ? _auditScalar_(o.city) + ': ' : '') + _auditScalar_(o.hotel || '—') +
+      (o.count ? ' — ' + _auditScalar_(o.count) + ' فرد' : '') +
+      ((o['in'] || o.out) ? ' (' + _auditScalar_(o['in'] || '؟') + ' ← ' + _auditScalar_(o.out || '؟') + ')' : '') +
+      (o.hAgr ? ' · اتفاقية سكن ' + _auditScalar_(o.hAgr) : '') + (o.cAgr ? ' · إعاشة ' + _auditScalar_(o.cAgr) : '') +
+      (o.supplier ? ' · ' + _auditScalar_(o.supplier) : '');
+  }
+  if (o.name !== undefined && o.count !== undefined) {   // بنود العملاء
+    return '👥 ' + _auditScalar_(o.name) + ' (' + _auditScalar_(o.count) + ')' +
+      (o.sups ? ' + ' + _auditScalar_(o.sups) + ' مشرف' : '') + (o.note ? ' — ' + _auditScalar_(o.note) : '');
+  }
+  if (o.date !== undefined && (o.time !== undefined || o.buses !== undefined)) {   // تحرك
+    return '🚌 ' + [o.type, o.date, o.time].filter(Boolean).map(_auditScalar_).join(' · ') + (o.buses ? ' — ' + _auditScalar_(o.buses) + ' باص' : '');
+  }
+  if (o.price !== undefined && (o.from !== undefined || o.to !== undefined)) {   // فترة سعر
+    return _auditScalar_(o.price) + ' (من ' + _auditScalar_(o.from || '—') + (o.to ? ' إلى ' + _auditScalar_(o.to) : '') + ')';
+  }
+  return Object.keys(o).map(function (k) {
+    var v = o[k];
+    var vt = Array.isArray(v) ? v.map(_auditObjTxt_).join('، ') : (v && typeof v === 'object' ? _auditObjTxt_(v) : _auditScalar_(v));
+    return (AUDIT_KEY_AR_[k] || k) + ': ' + vt;
+  }).join(' · ');
+}
+// يحوّل القيمة الخام لقائمة أسطر نصية مقروءة (أو null لو لا شيء)
+function _auditValLines_(v, field) {
+  if (_auditEmpty_(v)) return null;
+  var s = String(v).trim();
+  var f = String(field || '');
+  if (s.charAt(0) === '{' || s.charAt(0) === '[') {
+    var o = null;
+    try { o = JSON.parse(s); } catch (e) { o = undefined; }
+    if (o === undefined) {
+      // قيمة JSON مقطوعة (سُجِّلت مختصرة) — نستخرج الأسماء منها إن وُجدت
+      var names = []; s.replace(/"name"\s*:\s*"([^"]*)"/g, function (m, n) { names.push(n); });
+      if (names.length) return names.map(function (n) { return '👤 ' + n; }).concat(['… (القيمة الأصلية طويلة وسُجِّلت مختصرة)']);
+      return ['(قيمة طويلة سُجِّلت مختصرة)'];
+    }
+    if (o && typeof o === 'object' && !Array.isArray(o) && ('a' in o || 'c' in o || 'i' in o) && typeof _auditFmtRaw_ === 'function') return [_auditFmtRaw_(s)];
+    if (Array.isArray(o)) {
+      if (!o.length) return ['(لا شيء)'];
+      if (o.every(function (x) { return x == null || typeof x !== 'object'; })) {
+        if (/المعتمرون المختارون|المختار/.test(f)) return [o.length + ' معتمر مختار'];
+        return [o.map(_auditScalar_).join('، ')];
+      }
+      return o.map(_auditObjTxt_);
+    }
+    if (o && typeof o === 'object') return Object.keys(o).map(function (k) { return (AUDIT_KEY_AR_[k] || k) + ': ' + _auditObjTxt_(o[k]); });
+    return [_auditScalar_(o)];
+  }
+  return [_auditStr_(s)];
+}
+function _auditLinesHtml_(lines, cls) {
+  if (!lines) return '';
+  var esc = escapeHtml_;
+  if (lines.length === 1) return '<span class="' + cls + '">' + esc(lines[0]) + '</span>';
+  return '<span class="' + cls + ' au-multi">' + lines.map(function (l) { return '<span>' + esc(l) + '</span>'; }).join('') + '</span>';
+}
+// سطر تغيير واحد داخل عمود التفاصيل
+function _auditChangeHtml_(c) {
+  var esc = escapeHtml_;
+  var field = _auditFieldAr_(c.field);
+  var hasF = !_auditEmpty_(field);
+  var o = _auditValLines_(c.oldV, c.field), n = _auditValLines_(c.newV, c.field);
+  // مصفوفتا مفاتيح (المعتمرون المختارون): ملخص الإضافة/الحذف بدل القائمتين كاملتين
+  try {
+    var po = JSON.parse(String(c.oldV)), pn = JSON.parse(String(c.newV));
+    if (Array.isArray(po) && Array.isArray(pn) && po.concat(pn).every(function (x) { return x == null || typeof x !== 'object'; }) && /المعتمرون المختارون|المختار/.test(String(c.field))) {
+      var so = {}, sn = {}, add = 0, del = 0;
+      po.forEach(function (x) { so[x] = 1; }); pn.forEach(function (x) { sn[x] = 1; if (!so[x]) add++; });
+      po.forEach(function (x) { if (!sn[x]) del++; });
+      o = [po.length + ' معتمر']; n = [pn.length + ' معتمر' + (add || del ? ' (أُضيف ' + add + '، أُزيل ' + del + ')' : '')];
+    }
+  } catch (e) {}
+  if (!o && !n) return hasF ? '<div class="au-chg"><span class="au-f">' + esc(field) + '</span></div>' : '';
+  var body;
+  if (o && n) body = _auditLinesHtml_(o, 'au-old') + '<span class="au-arr">←</span>' + _auditLinesHtml_(n, 'au-new');
+  else if (n) body = (hasF ? '' : '') + _auditLinesHtml_(n, 'au-new');
+  else body = _auditLinesHtml_(o, 'au-old') + ' <span class="au-del">(حُذف)</span>';
+  return '<div class="au-chg">' + (hasF ? '<span class="au-f">' + esc(field) + ':</span>' : '') + '<span class="au-v">' + body + '</span></div>';
+}
+var AUDIT_ACT_COLORS_ = [
+  [/حذف|إلغاء|فك /, '#fee2e2', '#991b1b'], [/إنشاء|إضافة|تسجيل|توليد|رفع/, '#dcfce7', '#166534'],
+  [/تعديل|تحديث|تغيير|نقل|ترحيل|دمج|ربط/, '#dbeafe', '#1e40af'], [/دخول|خروج/, '#e0f2fe', '#0369a1']
+];
+function _auditActBadge_(a) {
+  var c = ['#f1f5f9', '#334155'];
+  for (var i = 0; i < AUDIT_ACT_COLORS_.length; i++) if (AUDIT_ACT_COLORS_[i][0].test(a)) { c = [AUDIT_ACT_COLORS_[i][1], AUDIT_ACT_COLORS_[i][2]]; break; }
+  var ico = a === 'تسجيل دخول' ? '🔓 ' : (a === 'تسجيل خروج' ? '🔒 ' : '');
+  return '<span class="au-act" style="background:' + c[0] + ';color:' + c[1] + ';">' + ico + escapeHtml_(a || '—') + '</span>';
+}
+function _auditTsHtml_(ts) {
+  var p = String(ts || '').trim().split(/\s+/);
+  if (!p[0]) return '<span class="text-muted">—</span>';
+  return '<div class="au-d">' + escapeHtml_(p[0]) + '</div>' + (p[1] ? '<div class="au-t">' + escapeHtml_(p[1].slice(0, 5)) + '</div>' : '');
+}
+// صفوف الجدول فقط (لاستخدامها داخل tbody قائم) — opts.global يضيف عمودي الشاشة والمرجع
+function _auditRowsHtml_(entries, opts) {
+  opts = opts || {};
+  var esc = escapeHtml_;
+  var SC = { bookings: '#dbeafe', trips: '#dcfce7', pilgrims: '#fef9c3', users: '#fce7f3', settings: '#f3e8ff', other: '#f1f5f9',
+    accounts: '#ffedd5', catering: '#ecfccb', ministry: '#e0e7ff', visas: '#ccfbf1' };
+  return _auditGroup_(entries).map(function (g) {
+    var det = g.changes.map(_auditChangeHtml_).filter(Boolean).join('');
+    return '<tr>' +
+      '<td class="au-ts">' + _auditTsHtml_(g.ts) + '</td>' +
+      '<td><span class="au-user">' + esc(g.user || '—') + '</span></td>' +
+      (opts.global ? '<td><span class="au-scr" style="background:' + (SC[g.screen] || '#f1f5f9') + ';">' + esc(g.screenLabel || '—') + '</span></td>' : '') +
+      '<td>' + _auditActBadge_(g.action) + '</td>' +
+      (opts.global ? '<td class="text-center">' + (!_auditEmpty_(g.rec) ? '<span class="au-rec">' + esc(_auditStr_(g.rec)) + '</span>' : '<span class="text-muted">—</span>') + '</td>' : '') +
+      '<td class="au-det">' + (det || '<span class="text-muted">—</span>') +
+        (g.changes.length > 1 ? '<div class="au-cnt">' + g.changes.length + ' تغييرات بنفس الحفظة</div>' : '') + '</td>' +
+      '</tr>';
+  }).join('');
+}
+function _auditHeadHtml_(opts) {
+  opts = opts || {};
+  return '<tr><th style="width:92px;">الوقت</th><th style="width:90px;">المستخدم</th>' + (opts.global ? '<th style="width:95px;">الشاشة</th>' : '') +
+    '<th style="width:150px;">العملية</th>' + (opts.global ? '<th style="width:90px;">المرجع</th>' : '') + '<th>التفاصيل</th></tr>';
+}
+// الجدول كاملاً + سطر العدد — لنوافذ سجل الرحلة/الاتفاقية/الحساب/الملف/المجموعة/سطر الحساب
+function _auditTableHtml_(entries, opts) {
+  opts = opts || {};
+  if (!entries || !entries.length) return '<div class="text-muted text-center py-3">' + escapeHtml_(opts.emptyMsg || 'لا توجد تعديلات مسجَّلة بعد.') + '</div>';
+  var n = _auditGroup_(entries).length;
+  return '<div class="mb-2 text-muted small">' + n + ' عملية — الأحدث أولاً' + (opts.note ? ' ' + escapeHtml_(opts.note) : '') + '</div>' +
+    '<div class="table-responsive"><table class="au-tbl"><thead>' + _auditHeadHtml_(opts) + '</thead><tbody>' + _auditRowsHtml_(entries, opts) + '</tbody></table></div>';
+}
 function _renderTripChangeLog(rows) {
-  var body = document.getElementById('tripChangeLogBody');
-  if (!rows.length) { body.innerHTML = '<div class="text-muted text-center py-3">لا توجد تغييرات مسجّلة لهذه الرحلة بعد.</div>'; return; }
-  var actionColors = { 'إنشاء رحلة':'#dcfce7','تعديل رحلة':'#dbeafe','تسجيل معتمر':'#dcfce7','تحديث معتمر':'#fef9c3','حذف معتمر':'#fee2e2','حذف':'#fee2e2','ربط إشعار برحلة':'#e0f2fe' };
-  var cell = function(v){ v = (v==null||v==='-'||v==='')?'':_auditFmtRaw_(String(v)); return v ? escapeHtml_(v) : '<span class="text-muted">—</span>'; };
-  body.innerHTML =
-    '<div class="mb-2 text-muted small">' + rows.length + ' عملية — الأحدث أولاً</div>' +
-    '<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0" style="font-size:12px;">' +
-    '<thead class="table-light"><tr><th style="min-width:110px;">التاريخ</th><th>المستخدم</th><th>العملية</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead><tbody>' +
-    rows.map(function(r){
-      var bg = actionColors[r.action] || '#f1f5f9';
-      return '<tr>' +
-        '<td style="white-space:nowrap; font-size:11px;">' + cell(r.timestamp) + '</td>' +
-        '<td>' + cell(r.username) + '</td>' +
-        '<td><span style="background:' + bg + '; padding:2px 7px; border-radius:6px; white-space:nowrap;">' + cell(r.action) + '</span></td>' +
-        '<td>' + cell(r.field) + '</td>' +
-        '<td style="background:#fff5f5;">' + cell(r.oldValue) + '</td>' +
-        '<td style="background:#f0fff4;">' + cell(r.newValue) + '</td>' +
-        '</tr>';
-    }).join('') + '</tbody></table></div>';
+  document.getElementById('tripChangeLogBody').innerHTML = _auditTableHtml_(rows, { emptyMsg: 'لا توجد تغييرات مسجّلة لهذه الرحلة بعد.' });
 }
 
 // 🕘 (V4.86) سجل تعديلات اتفاقية إعاشة واحدة — من أول الإنشاء حتى آخر تعديل، بكل تفاصيله
@@ -13628,25 +13869,7 @@ function openCateringChangeLog(contractNo) {
     .getCateringContractHistory(window.authToken, contractNo);
 }
 function _renderCateringChangeLog(rows) {
-  var body = document.getElementById('ccChangeLogBody');
-  if (!rows.length) { body.innerHTML = '<div class="text-muted text-center py-3">لا توجد تعديلات مسجّلة لهذه الاتفاقية بعد.</div>'; return; }
-  var actionColors = { 'إنشاء اتفاقية إعاشة': '#dcfce7', 'تعديل اتفاقية إعاشة': '#dbeafe', 'حذف اتفاقية إعاشة': '#fee2e2' };
-  var cell = function(v){ v = (v==null||v==='-'||v==='')?'':_auditFmtRaw_(String(v)); return v ? escapeHtml_(v) : '<span class="text-muted">—</span>'; };
-  body.innerHTML =
-    '<div class="mb-2 text-muted small">' + rows.length + ' عملية — الأحدث أولاً (من أول الإنشاء حتى آخر تعديل)</div>' +
-    '<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0" style="font-size:12px;">' +
-    '<thead class="table-light"><tr><th style="min-width:110px;">التاريخ</th><th>المستخدم</th><th>العملية</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead><tbody>' +
-    rows.map(function(r){
-      var bg = actionColors[r.action] || '#f1f5f9';
-      return '<tr>' +
-        '<td style="white-space:nowrap; font-size:11px;">' + cell(r.timestamp) + '</td>' +
-        '<td>' + cell(r.username) + '</td>' +
-        '<td><span style="background:' + bg + '; padding:2px 7px; border-radius:6px; white-space:nowrap;">' + cell(r.action) + '</span></td>' +
-        '<td>' + cell(r.field) + '</td>' +
-        '<td style="background:#fff5f5;">' + cell(r.oldValue) + '</td>' +
-        '<td style="background:#f0fff4;">' + cell(r.newValue) + '</td>' +
-        '</tr>';
-    }).join('') + '</tbody></table></div>';
+  document.getElementById('ccChangeLogBody').innerHTML = _auditTableHtml_(rows, { emptyMsg: 'لا توجد تعديلات مسجّلة لهذه الاتفاقية بعد.', note: '(من أول الإنشاء حتى آخر تعديل)' });
 }
 
 // 🕘 (V4.90) سجل تعديلات كامل لحساب عميل — كل عملية بحساب هذا العميل (بند/دفعة/دمج/تسعير رحلة/تعليم
@@ -13663,28 +13886,7 @@ function _accHistoryOpen_() {
     .getClientAccountHistory(window.authToken, (_accData && _accData.client));
 }
 function _renderAccHistory_(rows) {
-  var body = document.getElementById('accHistoryBody');
-  if (!rows.length) { body.innerHTML = '<div class="text-muted text-center py-3">لا توجد تعديلات مسجّلة لهذا الحساب بعد.</div>'; return; }
-  var actionColors = {
-    'إضافة بند حساب': '#dcfce7', 'تعديل بند حساب': '#dbeafe', 'حذف بند حساب': '#fee2e2',
-    'تسجيل دفعة حساب': '#dcfce7', 'تعديل دفعة حساب': '#dbeafe', 'حذف دفعة حساب': '#fee2e2', 'تحويل عملة بحساب': '#fefce8'
-  };
-  var cell = function(v){ v = (v==null||v==='-'||v==='')?'':_auditFmtRaw_(String(v)); return v ? escapeHtml_(v) : '<span class="text-muted">—</span>'; };
-  body.innerHTML =
-    '<div class="mb-2 text-muted small">' + rows.length + ' عملية — الأحدث أولاً (من أول إنشاء الحساب حتى آخر تعديل)</div>' +
-    '<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0" style="font-size:12px;">' +
-    '<thead class="table-light"><tr><th style="min-width:110px;">التاريخ</th><th>المستخدم</th><th>العملية</th><th>الرحلة/الحقل</th><th>قبل</th><th>بعد</th></tr></thead><tbody>' +
-    rows.map(function(r){
-      var bg = actionColors[r.action] || '#f1f5f9';
-      return '<tr>' +
-        '<td style="white-space:nowrap; font-size:11px;">' + cell(r.timestamp) + '</td>' +
-        '<td>' + cell(r.username) + '</td>' +
-        '<td><span style="background:' + bg + '; padding:2px 7px; border-radius:6px; white-space:nowrap;">' + cell(r.action) + '</span></td>' +
-        '<td>' + cell(r.field) + '</td>' +
-        '<td style="background:#fff5f5;">' + cell(r.oldValue) + '</td>' +
-        '<td style="background:#f0fff4;">' + cell(r.newValue) + '</td>' +
-        '</tr>';
-    }).join('') + '</tbody></table></div>';
+  document.getElementById('accHistoryBody').innerHTML = _auditTableHtml_(rows, { emptyMsg: 'لا توجد تعديلات مسجّلة لهذا الحساب بعد.', note: '(من أول إنشاء الحساب حتى آخر تعديل)' });
 }
 
 function closeTripForm() {
@@ -22193,7 +22395,7 @@ function _ensureAuditEntityList() {
 
 function loadAuditLogTable() {
   var tbody = document.getElementById('auditLogTableBody');
-  tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">⏳ جاري التحميل...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">⏳ جاري التحميل...</td></tr>';
   _ensureAuditEntityList(); // تعبئة قائمة الاقتراح (معتمرون/جوازات/رحلات) مرة واحدة
 
   var _entityEl = document.getElementById('auditFilterEntity');
@@ -22214,98 +22416,15 @@ function loadAuditLogTable() {
   google.script.run
     .withSuccessHandler(function (rows) {
       if (!rows || !rows.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-5">لا توجد سجلات مطابقة</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">لا توجد سجلات مطابقة</td></tr>';
         return;
       }
 
-      // ألوان لكل نوع عملية
-      var actionColors = {
-        'تعديل إشعار':        '#dbeafe',  // أزرق فاتح
-        'إنشاء إشعار جديد':   '#dcfce7',  // أخضر فاتح
-        'حذف':                 '#fee2e2',  // أحمر فاتح
-        'تشغيل دالة إدارية':  '#fef9c3',  // أصفر فاتح
-        'تعديل إعدادات النظام':'#f3e8ff', // بنفسجي فاتح
-        'تغيير كلمة المرور':  '#fce7f3',  // وردي فاتح
-        'تسجيل دخول':          '#e0f2fe',  // سماوي فاتح
-        'تسجيل خروج':          '#f1f5f9'   // رمادي فاتح
-      };
-      var actionIcons = {
-        'تسجيل دخول': '🔓', 'تسجيل خروج': '🔒'
-      };
-
-      function formatTs(ts) {
-        if (!ts || ts === '-') return '<span class="text-muted">—</span>';
-        // نقسم التاريخ والوقت إذا كانا مفصولين بمسافة
-        var parts = String(ts).trim().split(' ');
-        var datePart = parts[0] || '';
-        var timePart = parts[1] || '';
-        // الوقت: hhmm فقط (بدون الثواني)
-        var shortTime = timePart ? timePart.substring(0, 5) : '';
-        return '<div style="font-size:12px;font-weight:600;color:#1e3d59;">' + datePart + '</div>' +
-               (shortTime ? '<div style="font-size:11px;color:#64748b;">' + shortTime + '</div>' : '');
-      }
-
-      function cleanVal(v) {
-        if (!v || v === '-') return '<span class="text-muted" style="font-size:10px;">—</span>';
-        // 🧹 (V4.93) نص JSON خام (كبصمة أعداد/تسكين رحلة قديمة) يُعرض بصيغة مقروءة بدل الأقواس والحروف الخام
-        var s = String(typeof _auditFmtRaw_ === 'function' ? _auditFmtRaw_(v) : v);
-        // حذف نمط التاريخ الخام Sun Jun... GMT+...
-        s = s.replace(/\b(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+\d{4}\s+\d{2}:\d{2}:\d{2}\s+GMT[+-]\d{4}[^)]*\)?/gi, function(m) {
-          // حوّله لصيغة dd/mm/yyyy
-          var d = new Date(m);
-          if (isNaN(d.getTime())) return m;
-          return String(d.getDate()).padStart(2,'0') + '/' +
-                 String(d.getMonth()+1).padStart(2,'0') + '/' +
-                 d.getFullYear();
-        });
-        // لو النص طويل، اختصره مع tooltip
-        if (s.length > 60) {
-          return '<span title="' + s.replace(/"/g,'&quot;') + '" style="cursor:help;font-size:11px;">' +
-            s.substring(0, 55) + '…</span>';
-        }
-        return '<span style="font-size:11.5px;">' + s + '</span>';
-      }
-
-      tbody.innerHTML = rows.map(function (r, idx) {
-        var rowBg = (idx % 2 === 0) ? '' : 'style="background:#f8fafc;"';
-        var actionBg = actionColors[r.action] || '#f1f5f9';
-        var actionIcon = actionIcons[r.action] || '';
-        var screenColors = { bookings:'#dbeafe', trips:'#dcfce7', pilgrims:'#fef9c3', users:'#fce7f3', settings:'#f3e8ff', other:'#f1f5f9',
-          accounts:'#ffedd5', catering:'#ecfccb', ministry:'#e0e7ff', visas:'#ccfbf1' };
-        var scBg = screenColors[r.screen] || '#f1f5f9';
-        return '<tr ' + rowBg + '>' +
-          '<td class="px-3 py-2" style="vertical-align:top;">' + formatTs(r.timestamp) + '</td>' +
-          '<td class="px-2 py-2" style="vertical-align:top;">' +
-            '<span style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;">' +
-              (r.username || '—') + '</span>' +
-          '</td>' +
-          '<td class="px-2 py-2" style="vertical-align:top;">' +
-            '<span style="background:' + scBg + ';padding:2px 8px;border-radius:6px;font-size:10.5px;font-weight:600;white-space:nowrap;">' +
-              (r.screenLabel || '—') + '</span>' +
-          '</td>' +
-          '<td class="px-2 py-2" style="vertical-align:top;">' +
-            '<span style="background:' + actionBg + ';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap;">' +
-              actionIcon + ' ' + (r.action || '—') + '</span>' +
-          '</td>' +
-          '<td class="px-2 py-2 text-center" style="vertical-align:top;">' +
-            (r.recordId && r.recordId !== '-'
-              ? '<span style="background:#1e3d59;color:white;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;">' + r.recordId + '</span>'
-              : '<span class="text-muted" style="font-size:10px;">—</span>') +
-          '</td>' +
-          '<td class="px-2 py-2" style="vertical-align:top;max-width:130px;overflow:hidden;">' +
-            '<span style="font-size:11.5px;color:#374151;">' + (r.field && r.field !== '-' ? r.field : '<span class="text-muted">—</span>') + '</span>' +
-          '</td>' +
-          '<td class="px-2 py-2" style="vertical-align:top;max-width:150px;overflow:hidden;background:#fff5f5;">' +
-            cleanVal(r.oldValue) +
-          '</td>' +
-          '<td class="px-2 py-2" style="vertical-align:top;max-width:150px;overflow:hidden;background:#f0fff4;">' +
-            cleanVal(r.newValue) +
-          '</td>' +
-          '</tr>';
-      }).join('');
+      // 📜 (V4.202) العرض الموحّد: كل حفظة صف واحد وعمود «التفاصيل» منسّق
+      tbody.innerHTML = _auditRowsHtml_(rows, { global: true });
     })
     .withFailureHandler(function (err) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-3">❌ تعذر التحميل: ' + (err.message || err) + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-3">❌ تعذر التحميل: ' + (err.message || err) + '</td></tr>';
     })
     .getAuditLog(window.authToken, filters);
 }
@@ -38771,7 +38890,7 @@ function mfPickSave(id) {
 function mfHistory(id) {
   var f = mfGet(id);
   mfModal('📜 سجل تعديلات الملف ' + (f && mfStr(f.fileNo) ? mfEsc(f.fileNo) : '(بدون رقم)') + (f ? ' — ' + mfEsc(f.clientLabel || '') : ''),
-    '<div id="mfHistBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 700);
+    '<div id="mfHistBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 900);
   google.script.run
     .withSuccessHandler(function (res) {
       var box = document.getElementById('mfHistBox'); if (!box) return;
@@ -38779,16 +38898,7 @@ function mfHistory(id) {
       if (f) h += '<div class="mf-dcard" style="margin-bottom:10px;"><div style="font-size:11.5px;line-height:1.9;">' +
         '<b>أنشئ بواسطة:</b> ' + mfEsc(f.createdBy || '—') + ' · ' + mfL(mfStamp(f.createdAt) || '—') +
         '<br><b>آخر تعديل:</b> ' + mfEsc(f.updatedBy || '—') + ' · ' + mfL(mfStamp(f.updatedAt) || '—') + '</div></div>';
-      var es = (res && res.entries) || [];
-      if (!es.length) h += '<div class="text-muted small">لا توجد تعديلات مسجَّلة.</div>';
-      else {
-        h += '<table class="mf-mini" style="background:#fff;"><thead><tr><th>التاريخ والساعة</th><th>المستخدم</th><th>العملية</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead><tbody>';
-        es.forEach(function (e) {
-          h += '<tr><td class="mf-latin">' + mfEsc(e.when) + '</td><td>' + mfEsc(e.who) + '</td><td>' + mfEsc(e.action) +
-            '</td><td>' + mfEsc(e.field) + '</td><td style="color:#94a3b8;">' + mfEsc(e.oldVal) + '</td><td style="font-weight:700;">' + mfEsc(e.newVal) + '</td></tr>';
-        });
-        h += '</tbody></table>';
-      }
+      h += _auditTableHtml_((res && res.entries) || [], { emptyMsg: 'لا توجد تعديلات مسجَّلة.' });   // 📜 (V4.202) العرض الموحّد
       box.innerHTML = h;
     })
     .withFailureHandler(function (e) {
@@ -41115,7 +41225,7 @@ function vzQuickLinkSave(id) {
 function vzHistory(id) {
   var f = vzGet(id);
   mfModal('📜 سجل تعديلات المجموعة ' + (f && f.ref ? vzEsc(f.ref) : ('#' + (f ? f.seq : ''))),
-    '<div id="vzHistBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 760);
+    '<div id="vzHistBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 900);
   google.script.run
     .withSuccessHandler(function (res) {
       var box = document.getElementById('vzHistBox'); if (!box) return;
@@ -41123,16 +41233,7 @@ function vzHistory(id) {
       if (f) h += '<div style="background:var(--vzSurf);border:1px solid var(--vzBorder);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;line-height:1.9;">' +
         '<b>أنشئ بواسطة:</b> ' + vzEsc(f.createdBy || '—') + ' · ' + vzL(f.createdAt || '—') +
         '<br><b>آخر تعديل:</b> ' + vzEsc(f.updatedBy || '—') + ' · ' + vzL(f.updatedAt || '—') + '</div>';
-      var es = (res && res.entries) || [];
-      if (!es.length) h += '<div class="text-muted small">لا توجد تعديلات مسجَّلة.</div>';
-      else {
-        h += '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>التاريخ والساعة</th><th>المستخدم</th><th>العملية</th><th>الحقل</th><th>قبل</th><th>بعد</th></tr></thead><tbody>';
-        es.forEach(function (e) {
-          h += '<tr><td class="vz-latin">' + vzEsc(e.when) + '</td><td>' + vzEsc(e.who) + '</td><td>' + vzEsc(e.action) +
-            '</td><td>' + vzEsc(e.field) + '</td><td style="color:#94a3b8;">' + vzEsc(e.oldVal) + '</td><td style="font-weight:700;">' + vzEsc(e.newVal) + '</td></tr>';
-        });
-        h += '</tbody></table></div>';
-      }
+      h += _auditTableHtml_((res && res.entries) || [], { emptyMsg: 'لا توجد تعديلات مسجَّلة.' });   // 📜 (V4.202) العرض الموحّد
       box.innerHTML = h;
     })
     .withFailureHandler(function (e) { var box = document.getElementById('vzHistBox'); if (box) box.innerHTML = '<div class="alert alert-danger small">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
@@ -42819,15 +42920,9 @@ function vzAccSaveTransport_(id) {
 function vzAccRowHistory(kind, id) {
   google.script.run
     .withSuccessHandler(function (res) {
-      var entries = (res && res.entries) || [];
-      var h = entries.length
-        ? '<div style="overflow:auto;"><table class="vz-tab"><thead><tr><th>التوقيت</th><th>القائم بها</th><th>الإجراء</th><th>الحقل</th><th>القيمة القديمة</th><th>القيمة الجديدة</th></tr></thead><tbody>' +
-          entries.map(function (e) {
-            return '<tr><td dir="ltr">' + vzEsc(e.when) + '</td><td>' + vzEsc(e.who) + '</td><td>' + vzEsc(e.action) + '</td>' +
-              '<td>' + vzEsc(e.field) + '</td><td>' + vzEsc(e.oldVal) + '</td><td>' + vzEsc(e.newVal) + '</td></tr>';
-          }).join('') + '</tbody></table></div>'
-        : '<div class="text-muted text-center py-3">لا سجل تعديلات لهذا السطر بعد.</div>';
-      mfModal('📜 سجل تعديلات السطر', h, '', true);
+      // 📜 (V4.202) العرض الموحّد (+ إصلاح عرض النافذة: كان يُمرَّر true بدل رقم فيفسد عرضها)
+      var h = _auditTableHtml_((res && res.entries) || [], { emptyMsg: 'لا سجل تعديلات لهذا السطر بعد.' });
+      mfModal('📜 سجل تعديلات السطر', h, '', 900);
     })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
     .getAgentAccRowHistory(window.authToken, kind, id);
@@ -43541,35 +43636,53 @@ function vzOpenAgrNo(agrNo, kind) {
   if (kEl && kind) kEl.value = kind;
   if (HA.loaded) vzHaRender();
 }
+/* ============================================================
+   🏨 (V4.202) شاشة اتفاقيات السكن — تصميم جديد بطلب صريح (دمج المقترحين 5 و1 + التجميع بالمدينة):
+   • كل اتفاقية سطر واحد بأعمدة ثابتة المحاذاة، وأزرار الإجراءات بنفس السطر.
+   • الاتفاقيات مجمّعة في قسم لكل مدينة (🕋 مكة ذهبي — 🕌 المدينة أخضر) مع إجمالي المتاح بالقسم.
+   • الضغط على السطر يفتح التفاصيل (الفترات + المجموعات المخصَّصة) في نافذة منبثقة.
+   • الفلاتر شريط واحد مضغوط، والحالات (نشطة/مكتملة/منتهية) أزرار تصفية سريعة بعدّاداتها.
+   ============================================================ */
 function vzHaOpen() {
+  HA._st = HA._st || '';
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzHaOv';
-  ov.innerHTML = '<div class="vz-dlg" style="width:min(1150px,98vw);"><div class="vz-hd"><b>🏨 اتفاقيات سكن مكة والمدينة</b>' +
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(1250px,98vw);"><div class="vz-hd"><b>🏨 اتفاقيات سكن مكة والمدينة</b>' +
     '<span class="d-flex gap-2"><button class="vz-btn sm" onclick="vzHaExport(this)">📸 صورة</button>' +
     '<button class="vz-btn sm" onclick="vzHaPrint()">🖨️ طباعة</button>' +
     '<button class="vz-btn sm" onclick="vzHaClose()">✕</button></span></div>' +
     '<div class="p-3">' +
-      '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">🔎 بحث وتصفية' +
-        (VZ.can.add ? '<button class="vz-btn sm pri" style="margin-inline-start:auto;" onclick="vzHaForm(null)">➕ اتفاقية جديدة</button>' +
-          '<button class="vz-btn sm" title="رفع صورة أو PDF اتفاقية سكن واستخلاص بياناتها تلقائياً" onclick="vzHaUpload(false)">📄 رفع اتفاقية (استخلاص)</button>' : '<span style="margin-inline-start:auto;"></span>') +
-        '<button class="vz-btn sm" onclick="vzHaLoad(true)">🔄 تحديث</button></div>' +
-        '<div class="row g-2">' +
-          '<div class="col-md-4 vz-fld"><label>بحث (رقم الاتفاقية / الفندق / رقم مجموعة)</label><input id="haF_q" oninput="vzHaRender()" autocomplete="off"></div>' +
-          '<div class="col-md-3 vz-fld"><label>المدينة</label><select id="haF_city" onchange="vzHaRender()"><option value="">الكل</option></select></div>' +
-          '<div class="col-md-2 vz-fld"><label>النوع</label><select id="haF_kind" onchange="vzHaRender()"><option value="">الكل</option><option>سكن</option><option>إعاشة</option></select></div>' +
-          '<div class="col-md-3 vz-fld"><label>العرض</label><select id="haF_avail" onchange="vzHaRender()">' +
-            '<option value="">الكل</option><option value="free">فيها متاح</option><option value="full">مكتملة</option></select></div>' +
-          '<div class="col-md-3 vz-fld"><label>الفترة من</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_from\')">📅</button><input id="haF_from" maxlength="10" placeholder="dd/mm/yyyy — مفتوحة"></div></div>' +
-          '<div class="col-md-3 vz-fld"><label>الفترة إلى</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_to\')">📅</button><input id="haF_to" maxlength="10" placeholder="dd/mm/yyyy — مفتوحة"></div></div>' +
-          '<div class="col-md-3 vz-fld"><label>👁️ من بالداخل بتاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_on\')">📅</button><input id="haF_on" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
-          '<div class="col-md-3 vz-fld"><label>&nbsp;</label><label class="vz-pkc" style="height:38px;"><input type="checkbox" id="haF_onlyOn" onchange="vzHaLoad(true)"> اعرض ما بداخله فقط</label></div>' +
-          '<div class="col-md-3 d-flex align-items-end gap-2"><button class="vz-btn pri" onclick="vzHaLoad(true)">تطبيق الفترة</button>' +
-          '<button class="vz-btn" onclick="vzHaClearFilters()">✖ إلغاء الكل</button></div>' +
-        '</div></div>' +
+      // شريط الفلاتر المضغوط
+      '<div class="ha-fbar">' +
+        '<input id="haF_q" oninput="vzHaRender()" autocomplete="off" placeholder="🔎 بحث: رقم الاتفاقية / الفندق / رقم مجموعة / عميل / رحلة">' +
+        '<select id="haF_city" onchange="vzHaRender()"><option value="">كل المدن</option></select>' +
+        '<select id="haF_kind" onchange="vzHaRender()"><option value="">سكن وإعاشة</option><option>سكن</option><option>إعاشة</option></select>' +
+        '<button type="button" class="vz-btn sm" id="haPerBtn" onclick="vzHaTogglePeriod()">📅 الفترة ▾</button>' +
+        '<span style="flex:1;"></span>' +
+        (VZ.can.add ? '<button class="vz-btn sm pri" onclick="vzHaForm(null)">➕ اتفاقية جديدة</button>' +
+          '<button class="vz-btn sm" title="رفع صورة أو PDF اتفاقية سكن واستخلاص بياناتها تلقائياً" onclick="vzHaUpload(false)">📄 رفع اتفاقية</button>' : '') +
+        '<button class="vz-btn sm" title="تحديث" onclick="vzHaLoad(true)">🔄</button>' +
+      '</div>' +
+      // لوحة الفترة (مخفية افتراضياً)
+      '<div id="haPerPanel" class="ha-per" style="display:none;">' +
+        '<div class="vz-fld"><label>الفترة من</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_from\')">📅</button><input id="haF_from" maxlength="10" placeholder="dd/mm/yyyy — مفتوحة"></div></div>' +
+        '<div class="vz-fld"><label>الفترة إلى</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_to\')">📅</button><input id="haF_to" maxlength="10" placeholder="dd/mm/yyyy — مفتوحة"></div></div>' +
+        '<div class="vz-fld"><label>👁️ من بالداخل بتاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" title="تقويم" onclick="vzHaFCal(\'haF_on\')">📅</button><input id="haF_on" maxlength="10" placeholder="dd/mm/yyyy"></div></div>' +
+        '<label class="vz-pkc" style="height:38px;align-self:flex-end;"><input type="checkbox" id="haF_onlyOn" onchange="vzHaLoad(true)"> اعرض ما بداخله فقط</label>' +
+        '<div class="d-flex gap-2" style="align-self:flex-end;"><button class="vz-btn pri sm" onclick="vzHaLoad(true)">تطبيق الفترة</button>' +
+        '<button class="vz-btn sm" onclick="vzHaClearFilters()">✖ إلغاء الكل</button></div>' +
+      '</div>' +
+      '<div id="haStTabs" class="ha-sttabs"></div>' +
       '<div id="haBody"><div class="text-muted text-center py-4">⏳ جاري التحميل…</div></div>' +
     '</div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzHaClose(); });
   vzHaLoad(!HA.loaded);
+}
+function vzHaTogglePeriod(force) {
+  var p = document.getElementById('haPerPanel'); if (!p) return;
+  var show = force !== undefined ? force : p.style.display === 'none';
+  p.style.display = show ? 'flex' : 'none';
+  var b = document.getElementById('haPerBtn'); if (b) b.innerHTML = '📅 الفترة ' + (show ? '▴' : '▾');
 }
 function vzHaClose() { var o = document.getElementById('vzHaOv'); if (o) o.remove(); }
 function vzHaLoad(force) {
@@ -43583,7 +43696,7 @@ function vzHaLoad(force) {
       HA.suppliers = res.suppliers || []; HA.onDate = res.onDate || ''; HA.today = res.today || '';
       HA.loaded = true;
       var cs = document.getElementById('haF_city');
-      if (cs && cs.options.length <= 1) cs.innerHTML = '<option value="">الكل</option>' + HA.cities.map(function (c) { return '<option>' + vzEsc(c) + '</option>'; }).join('');
+      if (cs && cs.options.length <= 1) cs.innerHTML = '<option value="">كل المدن</option>' + HA.cities.map(function (c) { return '<option>' + vzEsc(c) + '</option>'; }).join('');
       vzHaRender();
     })
     .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
@@ -43595,17 +43708,34 @@ function vzHaLoad(force) {
 }
 function vzHaFCal(id) { _vzCal_(id, function () { vzHaLoad(true); }); }
 function vzHaClearFilters() {
-  ['haF_q', 'haF_city', 'haF_kind', 'haF_avail', 'haF_from', 'haF_to', 'haF_on'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; });
+  ['haF_q', 'haF_city', 'haF_kind', 'haF_from', 'haF_to', 'haF_on'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; });
+  HA._st = '';
   var c = document.getElementById('haF_onlyOn'); if (c) c.checked = false;
   vzHaLoad(true);
 }
-function vzHaVisible() {
-  var q = mfStr(vzFV('haF_q')).toLowerCase(), city = vzFV('haF_city'), kd = vzFV('haF_kind'), av = vzFV('haF_avail');
+// حالة الاتفاقية: منتهية (الخروج اليوم أو قبله) / نشطة (بها متاح) / مكتملة
+function _haTodayMs_() {
+  var t = mfMs(mfDate(HA.today || ''));
+  if (isNaN(t)) { var d = new Date(); d.setHours(0, 0, 0, 0); t = d.getTime(); }
+  return t;
+}
+function _haStatus_(a, todayMs) {
+  var toMs = mfMs(mfDate(a.to || ''));
+  if (!isNaN(toMs) && toMs <= (todayMs === undefined ? _haTodayMs_() : todayMs)) return 'expired';
+  return mfNum(a.minRemaining) > 0 ? 'active' : 'full';
+}
+var HA_ST_ = {
+  active:  { lbl: '✅ نشطة',   bg: '#dcfce7', fg: '#166534', bd: '#16a34a' },
+  full:    { lbl: '⛔ مكتملة', bg: '#fee2e2', fg: '#991b1b', bd: '#dc2626' },
+  expired: { lbl: '⌛ منتهية', bg: '#eef2f6', fg: '#64748b', bd: '#94a3b8' }
+};
+function vzHaVisible(ignoreStatus) {
+  var q = mfStr(vzFV('haF_q')).toLowerCase(), city = vzFV('haF_city'), kd = vzFV('haF_kind');
+  var st = ignoreStatus ? '' : (HA._st || ''), today = _haTodayMs_();
   return HA.agreements.filter(function (a) {
     if (city && a.city !== city) return false;
     if (kd && (a.kind || 'سكن') !== kd) return false;
-    if (av === 'free' && !(a.minRemaining > 0)) return false;
-    if (av === 'full' && a.minRemaining > 0) return false;
+    if (st && _haStatus_(a, today) !== st) return false;
     if (q) {
       var hay = [a.agrNo, a.hotel, a.supplier, a.city, a.kind, a.notes]
         .concat((a.allocations || []).map(function (x) { return x.groupRef + ' ' + (x.clients || []).join(' ') + ' ' + (x.tripName || ''); }))
@@ -43615,6 +43745,7 @@ function vzHaVisible() {
     return true;
   });
 }
+function vzHaSetSt(st) { HA._st = st; vzHaRender(); }
 // شريط المتاح: كل مقطع بعرض نسبي ولون يعبّر عن نسبة الإشغال — واضح بلا تشتيت
 function _haBar(a) {
   var segs = a.segments || []; if (!segs.length) return '';
@@ -43652,121 +43783,149 @@ function _vzHaAllocRaw(k, x) {
 }
 function vzHaRender() {
   var box = document.getElementById('haBody'); if (!box) return;
-  var list = vzHaVisible();
-  if (!list.length) { box.innerHTML = '<div class="vz-sec"><div class="text-muted text-center py-3">لا توجد اتفاقيات مطابقة</div></div>'; return; }
-  // 📋 (V4.195) الوضع الافتراضي: كل اتفاقية مطويّة في سطر واحد (المدينة · الفندق · الدخول · الخروج · العدد ·
-  // المخصَّص · المتاح) مع حالتها بلون مميز — «منتهية» لو تاريخ الخروج اليوم أو قبله، «نشطة» لو بها متاح،
-  // «مكتملة» لو لا متاح. الضغط على السطر يوسّعه، وأزرار «توسعة الكل / طي الكل» أعلى القائمة.
-  HA._open = HA._open || {};
-  var todayMs = mfMs(mfDate(HA.today || '')); if (isNaN(todayMs)) { var _t = new Date(); _t.setHours(0, 0, 0, 0); todayMs = _t.getTime(); }
-  var stats = { expired: 0, active: 0, full: 0 };
-  var statusOf = function (a) {
-    var toMs = mfMs(mfDate(a.to || ''));
-    if (!isNaN(toMs) && toMs <= todayMs) return 'expired';
-    return mfNum(a.minRemaining) > 0 ? 'active' : 'full';
-  };
-  var ST = {
-    expired: { lbl: '⌛ منتهية', bg: '#f1f5f9', fg: '#64748b', bd: '#94a3b8' },
-    active:  { lbl: '✅ نشطة',   bg: '#dcfce7', fg: '#166534', bd: '#16a34a' },
-    full:    { lbl: '⛔ مكتملة', bg: '#fee2e2', fg: '#991b1b', bd: '#dc2626' }
-  };
-  list.forEach(function (a) { stats[statusOf(a)]++; });
-  var anyOpen = list.some(function (a) { return HA._open[a.id]; });
-  var toolbar = '<div class="d-flex align-items-center gap-2 flex-wrap mb-2" style="font-size:12px;">' +
-    '<b style="color:#0f4c4c;">' + list.length + ' اتفاقية</b>' +
-    '<span class="vz-badge" style="background:' + ST.active.bg + ';color:' + ST.active.fg + ';">' + ST.active.lbl + ': ' + stats.active + '</span>' +
-    '<span class="vz-badge" style="background:' + ST.full.bg + ';color:' + ST.full.fg + ';">' + ST.full.lbl + ': ' + stats.full + '</span>' +
-    '<span class="vz-badge" style="background:' + ST.expired.bg + ';color:' + ST.expired.fg + ';">' + ST.expired.lbl + ': ' + stats.expired + '</span>' +
-    '<span style="flex:1;"></span>' +
-    '<button class="vz-btn sm" onclick="vzHaToggleAll(true)">⬇️ توسعة الكل</button>' +
-    '<button class="vz-btn sm" onclick="vzHaToggleAll(false)"' + (anyOpen ? '' : ' disabled') + '>⬆️ طي الكل</button></div>';
-  box.innerHTML = toolbar + list.map(function (a) {
-    var st = statusOf(a), S = ST[st], isOpen = !!HA._open[a.id];
-    var full = a.minRemaining <= 0;
-    var isCat = (a.kind || 'سكن') === 'إعاشة';
-    var actions = '<span style="display:flex;gap:6px;" onclick="event.stopPropagation();">' +
-        (VZ.can.add ? '<button class="vz-btn sm" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',null)">➕ تخصيص لمجموعة</button>' : '') +
-        (vzFin() && mfStr(a.supplier) && (VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0
-          ? '<button class="vz-btn sm gold" title="ترحيل قيمة الاتفاقية دائناً لحساب الوكيل" onclick="vzHaPost(\'' + vzJs(a.id) + '\')">💳 ترحيل</button>' : '') +
-        (VZ.can.edit ? '<button class="vz-btn sm" title="تعديل بيانات الاتفاقية" onclick="vzHaForm(\'' + vzJs(a.id) + '\')">✏️</button>' : '') +
-        (VZ.can.del ? '<button class="vz-btn sm dgr" title="حذف الاتفاقية وكل تخصيصاتها" onclick="vzHaDel(\'' + vzJs(a.id) + '\')">🗑️</button>' : '') +
-      '</span>';
-    var cell = function (lbl, val, w) {
-      return '<span style="min-width:' + (w || 70) + 'px;"><span style="display:block;font-size:9px;color:#94a3b8;font-weight:700;">' + lbl + '</span><b style="font-size:12px;">' + val + '</b></span>';
+  var today = _haTodayMs_();
+  // أزرار الحالات بعدّاداتها (تُحسب على كل الفلاتر عدا الحالة نفسها)
+  var base = vzHaVisible(true), cnt = { active: 0, full: 0, expired: 0 };
+  base.forEach(function (a) { cnt[_haStatus_(a, today)]++; });
+  var tabs = document.getElementById('haStTabs');
+  if (tabs) {
+    var tb = function (k, lbl, bg, fg, n) {
+      return '<span class="ha-st' + ((HA._st || '') === k ? ' on' : '') + '" style="background:' + bg + ';color:' + fg + ';" onclick="vzHaSetSt(\'' + k + '\')">' + lbl + ' <b class="vz-latin">' + n + '</b></span>';
     };
-    var row = '<div onclick="vzHaToggle(\'' + vzJs(a.id) + '\')" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 10px;cursor:pointer;">' +
-      '<span style="font-size:13px;color:#64748b;width:12px;">' + (isOpen ? '▾' : '▸') + '</span>' +
-      '<span class="vz-badge" style="background:' + S.bg + ';color:' + S.fg + ';border:1px solid ' + S.bd + ';min-width:74px;text-align:center;">' + S.lbl + '</span>' +
-      cell('الاتفاقية', '<span class="vz-latin">' + vzEsc(a.agrNo) + '</span>' + (isCat ? ' 🍽️' : ''), 80) +
-      cell('المدينة', (a.city === 'مكة' ? '🕋 ' : '🕌 ') + vzEsc(a.city || '—'), 70) +
-      cell('الفندق', vzEsc(a.hotel || '—'), 150) +
-      cell('الدخول', vzL(a.from || '—'), 80) +
-      cell('الخروج', vzL(a.to || '—'), 80) +
-      cell('إجمالي العدد', vzFmt(a.capacity), 60) +
-      cell('المخصَّص', vzFmt(a.totalAllocated), 60) +
-      cell('المتاح', '<span style="color:' + (full ? '#dc2626' : '#16a34a') + ';">' + vzFmt(Math.max(0, mfNum(a.minRemaining))) + '</span>', 50) +
-      (HA.onDate ? cell('متاح بتاريخ ' + vzEsc(HA.onDate), vzFmt(a.onDateRemaining), 70) : '') +
-      '<span style="flex:1;"></span>' + actions + '</div>';
-    if (!isOpen) {
-      return '<div class="vz-sec" style="padding:0;margin-bottom:6px;border-inline-start:5px solid ' + S.bd + ';' + (st === 'expired' ? 'opacity:.8;' : '') + '">' + row + '</div>';
-    }
-    var allocTblId = 'vzHaAlloc_' + a.id;
-    _tblRefresh_(allocTblId, vzHaRender);
-    var allocList = _tblApply_(allocTblId, a.allocations || [], VZ_HA_ALLOC_COLS_, _vzHaAllocRaw);
-    var allocRows = allocList.map(function (x) {
-      var g = (HA.groups || []).filter(function (y) { return y.ref === x.groupRef; })[0];
-      return '<tr' + (x.onDate ? ' style="background:#e7f6f1;"' : '') + '><td><b class="vz-latin">' + vzEsc(x.groupRef) + '</b>' +
-          (x.onDate ? ' <span class="vz-badge g" style="font-size:8.5px;">بالداخل</span>' : '') +
-          (x.agent ? '<div style="font-size:9.5px;color:#6b8c82;">' + vzEsc(x.agent) + '</div>' : '') + '</td>' +
-        '<td><b>' + vzFmt(x.count) + '</b></td><td>' + vzL(x.from) + '</td><td>' + vzL(x.to) + '</td>' +
-        '<td style="text-align:right;font-size:10.5px;">' + vzEsc((x.clients || []).join('، ') || '—') +
-          (x.tripName ? '<div style="color:#6b8c82;font-size:9.5px;">🧳 ' + vzEsc(x.tripName) + '</div>' : '') + '</td>' +
-        '<td style="text-align:right;font-size:10.5px;color:#64748b;">' + vzEsc(x.notes || '') + '</td>' +
-        '<td>' + (VZ.can.edit ? '<button class="vz-rowbtn" title="تعديل التخصيص" onclick="vzHaAllocForm(\'' + vzJs(a.id) + '\',\'' + vzJs(x.id) + '\')">✏️</button>' : '') +
-        (VZ.can.del ? '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف التخصيص" onclick="vzHaAllocDel(\'' + vzJs(x.id) + '\')">🗑️</button>' : '') +
-        (!VZ.can.edit && !VZ.can.del ? '<span class="text-muted">—</span>' : '') + '</td></tr>';
-    }).join('') || '<tr><td colspan="7" class="text-muted" style="padding:10px;">لم تُخصَّص هذه الاتفاقية لأي مجموعة بعد</td></tr>';
-    // 👁️ لقطة تاريخ بعينه: من بالداخل الآن وكم المتاح
-    var onBox = '';
-    if (HA.onDate) {
-      var ins = a.onDateGroups || [];
-      onBox = '<div style="background:#eefaf5;border:1.5px dashed var(--vzBorder);border-radius:10px;padding:8px 10px;margin-bottom:8px;">' +
-        '<b style="font-size:12px;color:#075c46;">👁️ بتاريخ ' + vzEsc(HA.onDate) + ':</b> ' +
-        '<span class="vz-badge ' + (mfNum(a.onDateRemaining) > 0 ? 'g' : 'r') + '">متاح ' + vzFmt(a.onDateRemaining) + '</span> ' +
-        '<span class="vz-badge y">مشغول ' + vzFmt(a.onDateUsed) + '</span>' +
-        (ins.length
-          ? '<div style="font-size:11.5px;margin-top:5px;line-height:1.8;">' + ins.map(function (x) {
-              return '🛂 <b class="vz-latin">' + vzEsc(x.groupRef) + '</b> (' + vzFmt(x.count) + ')' +
-                ((x.clients || []).length ? ' — 👤 ' + vzEsc(x.clients.join('، ')) : '') +
-                (x.tripName ? ' — 🧳 ' + vzEsc(x.tripName) : '');
-            }).join('<br>') + '</div>'
-          : '<div style="font-size:11.5px;color:#6b8c82;margin-top:4px;">لا مجموعات بالداخل في هذا التاريخ.</div>') +
-        '</div>';
-    }
-    return '<div class="vz-sec" style="padding:0;margin-bottom:6px;border-inline-start:5px solid ' + S.bd + ';">' + row +
-      '<div style="padding:4px 12px 12px;border-top:1px dashed var(--vzBorder);">' +
-      '<div class="d-flex gap-2 flex-wrap mb-2 mt-2">' +
-        '<span class="vz-badge ' + (isCat ? 'y' : 'b') + '">' + (isCat ? '🍽️ إعاشة' : '🏨 سكن') + '</span>' +
-        '<span class="vz-badge b">🏨 ' + vzEsc(a.hotel || 'بلا فندق') + '</span>' +
-        '<span class="vz-badge ' + ((VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0 ? 'g' : 'b') + '">🏢 المورد: ' + vzEsc(a.supplier || '—') + '</span>' +
-        '<span class="vz-badge b">👥 السعة: ' + vzFmt(a.capacity) + '</span>' +
-        '<span class="vz-badge b">🗓️ ' + vzEsc(a.from || '؟') + ' → ' + vzEsc(a.to || '؟') + '</span>' +
-        '<span class="vz-badge ' + (full ? 'r' : 'g') + '">' + (full ? '⛔ مكتملة طوال الفترة' : '✅ متاح للفترة كاملة: ' + vzFmt(a.minRemaining)) + '</span>' +
-        '<span class="vz-badge y">📦 مخصَّص: ' + vzFmt(a.totalAllocated) + '</span>' +
-      '</div>' + onBox +
-      '<div style="font-size:11px;font-weight:800;color:var(--vzLbl);margin-bottom:4px;">📊 المتاح على محور الزمن (الرقم = المتاح في كل فترة)</div>' +
-      _haBar(a) +
-      '<div style="overflow:auto;margin-top:8px;"><table class="vz-tab"><thead><tr>' + _tblHead_(allocTblId, VZ_HA_ALLOC_COLS_, 'vz-thic') + '</tr></thead><tbody>' + allocRows + '</tbody></table></div>' +
-      (a.notes ? '<div style="font-size:11px;color:#64748b;margin-top:6px;">📝 ' + vzEsc(a.notes) + '</div>' : '') +
-    '</div></div>';
+    tabs.innerHTML = tb('', 'الكل', '#f1f5f9', '#334155', base.length) +
+      tb('active', HA_ST_.active.lbl, HA_ST_.active.bg, HA_ST_.active.fg, cnt.active) +
+      tb('full', HA_ST_.full.lbl, HA_ST_.full.bg, HA_ST_.full.fg, cnt.full) +
+      tb('expired', HA_ST_.expired.lbl, HA_ST_.expired.bg, HA_ST_.expired.fg, cnt.expired);
+  }
+  var list = vzHaVisible();
+  if (!list.length) { box.innerHTML = '<div class="vz-sec"><div class="text-muted text-center py-3">لا توجد اتفاقيات مطابقة</div></div>'; vzHaDetailsRefresh_(); return; }
+  var onCol = !!HA.onDate;
+  var head = '<div class="ha-row ha-head' + (onCol ? ' on' : '') + '"><span>الحالة</span><span>رقم الاتفاقية</span><span>الفندق</span><span>الفترة</span>' +
+    '<span class="c">السعة</span><span class="c">المخصَّص</span><span class="c">المتاح</span><span class="c">الإشغال</span>' +
+    (onCol ? '<span class="c">متاح ' + vzL(HA.onDate) + '</span>' : '') + '<span></span></div>';
+  // التجميع بالمدينة: مكة ثم المدينة ثم أي مدينة أخرى
+  var cities = [];
+  list.forEach(function (a) { var c = a.city || 'بدون مدينة'; if (cities.indexOf(c) < 0) cities.push(c); });
+  var ord = function (c) { return c === 'مكة' ? 0 : (c === 'المدينة' ? 1 : 2); };
+  cities.sort(function (x, y) { return ord(x) - ord(y) || x.localeCompare(y, 'ar'); });
+  box.innerHTML = cities.map(function (city) {
+    var L = list.filter(function (a) { return (a.city || 'بدون مدينة') === city; });
+    // النشطة أولاً ثم المكتملة ثم المنتهية، وداخل كل حالة بتاريخ الدخول
+    var so = { active: 0, full: 1, expired: 2 };
+    L.sort(function (x, y) { return so[_haStatus_(x, today)] - so[_haStatus_(y, today)] || (mfMs(mfDate(x.from)) || 0) - (mfMs(mfDate(y.from)) || 0); });
+    var free = L.reduce(function (s, a) { return s + (_haStatus_(a, today) === 'expired' ? 0 : Math.max(0, mfNum(a.minRemaining))); }, 0);
+    var cc = city === 'مكة' ? 'mk' : (city === 'المدينة' ? 'md' : 'ot');
+    var ico = city === 'مكة' ? '🕋' : (city === 'المدينة' ? '🕌' : '🏙️');
+    return '<div class="ha-grp ha-' + cc + '"><div class="ha-grp-h"><b>' + ico + ' ' + vzEsc(city) + '</b>' +
+        '<span class="ha-pill">' + L.length + ' اتفاقية</span><span class="ha-pill g">المتاح الآن: <b class="vz-latin">' + vzFmt(free) + '</b></span></div>' +
+      '<div style="overflow-x:auto;">' + head + L.map(function (a) { return _haRowHtml_(a, today, onCol); }).join('') + '</div></div>';
   }).join('');
+  vzHaDetailsRefresh_();
 }
-function vzHaToggle(id) { HA._open = HA._open || {}; HA._open[id] = !HA._open[id]; vzHaRender(); }
-function vzHaToggleAll(open) {
-  HA._open = {};
-  if (open) vzHaVisible().forEach(function (a) { HA._open[a.id] = true; });
-  vzHaRender();
+function _haRowHtml_(a, today, onCol) {
+  var st = _haStatus_(a, today), S = HA_ST_[st];
+  var isCat = (a.kind || 'سكن') === 'إعاشة';
+  var cap = mfNum(a.capacity), used = mfNum(a.totalAllocated), free = Math.max(0, mfNum(a.minRemaining));
+  var pct = cap ? Math.max(0, Math.min(100, Math.round(used / cap * 100))) : 0;
+  var barC = st === 'expired' ? '#94a3b8' : (free <= 0 ? '#dc2626' : (pct >= 70 ? '#d97706' : '#16a34a'));
+  var id = vzJs(a.id);
+  var acts = '<span class="ha-acts" onclick="event.stopPropagation();">' +
+    (VZ.can.add ? '<button class="vz-btn sm pri" title="تخصيص لمجموعة" onclick="vzHaAllocForm(\'' + id + '\',null)">➕ تخصيص</button>' : '') +
+    (VZ.can.edit ? '<button class="vz-btn sm" title="تعديل بيانات الاتفاقية" onclick="vzHaForm(\'' + id + '\')">✏️</button>' : '') +
+    (vzFin() && mfStr(a.supplier) && (VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0
+      ? '<button class="vz-btn sm gold" title="ترحيل قيمة الاتفاقية دائناً لحساب الوكيل" onclick="vzHaPost(\'' + id + '\')">💳</button>' : '') +
+    (VZ.can.del ? '<button class="vz-btn sm dgr" title="حذف الاتفاقية وكل تخصيصاتها" onclick="vzHaDel(\'' + id + '\')">🗑️</button>' : '') +
+    '</span>';
+  return '<div class="ha-row' + (onCol ? ' on' : '') + (st === 'expired' ? ' exp' : '') + '" style="border-inline-start-color:' + S.bd + ';" onclick="vzHaDetails(\'' + id + '\')" title="اضغط لعرض الفترات والمجموعات المخصَّصة">' +
+    '<span><span class="vz-badge" style="background:' + S.bg + ';color:' + S.fg + ';border:1px solid ' + S.bd + ';">' + S.lbl + '</span></span>' +
+    '<span class="vz-latin" style="font-weight:800;">' + vzEsc(a.agrNo || '—') + '</span>' +
+    '<span class="ha-hotel"><b>' + vzEsc(a.hotel || '—') + '</b>' + (isCat ? ' <span class="vz-badge y" style="font-size:9.5px;">🍽️ إعاشة</span>' : '') +
+      (a.supplier ? '<small>' + vzEsc(a.supplier) + '</small>' : '') + '</span>' +
+    '<span class="vz-latin" style="font-size:12px;">' + vzEsc(a.from || '؟') + ' ← ' + vzEsc(a.to || '؟') + '</span>' +
+    '<span class="c vz-latin">' + vzFmt(cap) + '</span>' +
+    '<span class="c vz-latin">' + vzFmt(used) + '</span>' +
+    '<span class="c vz-latin ha-free" style="color:' + (st === 'expired' ? '#94a3b8' : (free > 0 ? '#16a34a' : '#dc2626')) + ';">' + vzFmt(free) + '</span>' +
+    '<span class="c"><div class="ha-bar"><i style="width:' + pct + '%;background:' + barC + ';"></i></div><small class="vz-latin">' + pct + '%</small></span>' +
+    (onCol ? '<span class="c vz-latin" style="font-weight:800;">' + vzFmt(a.onDateRemaining) + '</span>' : '') +
+    acts + '</div>';
 }
+// 🔍 نافذة تفاصيل الاتفاقية: المؤشرات + لقطة التاريخ + المتاح على محور الزمن + جدول المجموعات المخصَّصة
+function vzHaDetails(id) {
+  HA._detId = id;
+  var ov = document.getElementById('vzHaDetOv');
+  if (!ov) {
+    ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzHaDetOv';
+    ov.innerHTML = '<div class="vz-dlg" style="width:min(1000px,97vw);"><div class="vz-hd"><b id="vzHaDetTitle">🏨 تفاصيل الاتفاقية</b>' +
+      '<button class="vz-btn sm" onclick="vzHaDetClose()">✕</button></div><div class="p-3" id="vzHaDetBody"></div></div>';
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzHaDetClose(); });
+    document.body.appendChild(ov);
+  }
+  vzHaDetailsRefresh_();
+}
+function vzHaDetClose() { HA._detId = null; var o = document.getElementById('vzHaDetOv'); if (o) o.remove(); }
+function vzHaDetailsRefresh_() {
+  var body = document.getElementById('vzHaDetBody'); if (!body || !HA._detId) return;
+  var a = (HA.agreements || []).filter(function (x) { return String(x.id) === String(HA._detId); })[0];
+  if (!a) { vzHaDetClose(); return; }
+  var st = _haStatus_(a), S = HA_ST_[st];
+  var isCat = (a.kind || 'سكن') === 'إعاشة';
+  var cap = mfNum(a.capacity), used = mfNum(a.totalAllocated), free = Math.max(0, mfNum(a.minRemaining));
+  var ico = a.city === 'مكة' ? '🕋' : (a.city === 'المدينة' ? '🕌' : '🏙️');
+  var t = document.getElementById('vzHaDetTitle');
+  if (t) t.innerHTML = ico + ' ' + vzEsc(a.hotel || 'بلا فندق') + ' — اتفاقية ' + vzL(a.agrNo || '—');
+  var id = vzJs(a.id);
+  var allocTblId = 'vzHaAlloc_' + a.id;
+  _tblRefresh_(allocTblId, vzHaDetailsRefresh_);
+  var allocList = _tblApply_(allocTblId, a.allocations || [], VZ_HA_ALLOC_COLS_, _vzHaAllocRaw);
+  var allocRows = allocList.map(function (x) {
+    return '<tr' + (x.onDate ? ' style="background:#e7f6f1;"' : '') + '><td><b class="vz-latin">' + vzEsc(x.groupRef) + '</b>' +
+        (x.onDate ? ' <span class="vz-badge g" style="font-size:8.5px;">بالداخل</span>' : '') +
+        (x.agent ? '<div style="font-size:9.5px;color:#6b8c82;">' + vzEsc(x.agent) + '</div>' : '') + '</td>' +
+      '<td><b>' + vzFmt(x.count) + '</b></td><td>' + vzL(x.from) + '</td><td>' + vzL(x.to) + '</td>' +
+      '<td style="text-align:right;font-size:10.5px;">' + vzEsc((x.clients || []).join('، ') || '—') +
+        (x.tripName ? '<div style="color:#6b8c82;font-size:9.5px;">🧳 ' + vzEsc(x.tripName) + '</div>' : '') + '</td>' +
+      '<td style="text-align:right;font-size:10.5px;color:#64748b;">' + vzEsc(x.notes || '') + '</td>' +
+      '<td>' + (VZ.can.edit ? '<button class="vz-rowbtn" title="تعديل التخصيص" onclick="vzHaAllocForm(\'' + id + '\',\'' + vzJs(x.id) + '\')">✏️</button>' : '') +
+      (VZ.can.del ? '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف التخصيص" onclick="vzHaAllocDel(\'' + vzJs(x.id) + '\')">🗑️</button>' : '') +
+      (!VZ.can.edit && !VZ.can.del ? '<span class="text-muted">—</span>' : '') + '</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="text-muted" style="padding:10px;">لم تُخصَّص هذه الاتفاقية لأي مجموعة بعد</td></tr>';
+  var onBox = '';
+  if (HA.onDate) {
+    var ins = a.onDateGroups || [];
+    onBox = '<div style="background:#eefaf5;border:1.5px dashed var(--vzBorder);border-radius:10px;padding:8px 10px;margin:8px 0;">' +
+      '<b style="font-size:12px;color:#075c46;">👁️ بتاريخ ' + vzEsc(HA.onDate) + ':</b> ' +
+      '<span class="vz-badge ' + (mfNum(a.onDateRemaining) > 0 ? 'g' : 'r') + '">متاح ' + vzFmt(a.onDateRemaining) + '</span> ' +
+      '<span class="vz-badge y">مشغول ' + vzFmt(a.onDateUsed) + '</span>' +
+      (ins.length
+        ? '<div style="font-size:11.5px;margin-top:5px;line-height:1.8;">' + ins.map(function (x) {
+            return '🛂 <b class="vz-latin">' + vzEsc(x.groupRef) + '</b> (' + vzFmt(x.count) + ')' +
+              ((x.clients || []).length ? ' — 👤 ' + vzEsc(x.clients.join('، ')) : '') + (x.tripName ? ' — 🧳 ' + vzEsc(x.tripName) : '');
+          }).join('<br>') + '</div>'
+        : '<div style="font-size:11.5px;color:#6b8c82;margin-top:4px;">لا مجموعات بالداخل في هذا التاريخ.</div>') + '</div>';
+  }
+  var kpi = function (lbl, val, col) { return '<div class="ha-kpi"><b class="vz-latin"' + (col ? ' style="color:' + col + ';"' : '') + '>' + val + '</b><small>' + lbl + '</small></div>'; };
+  body.innerHTML =
+    '<div class="d-flex align-items-center gap-2 flex-wrap mb-2">' +
+      '<span class="vz-badge" style="background:' + S.bg + ';color:' + S.fg + ';border:1px solid ' + S.bd + ';">' + S.lbl + '</span>' +
+      '<span class="vz-badge ' + (isCat ? 'y' : 'b') + '">' + (isCat ? '🍽️ إعاشة' : '🏨 سكن') + '</span>' +
+      '<span class="vz-badge b">' + ico + ' ' + vzEsc(a.city || '—') + '</span>' +
+      '<span class="vz-badge ' + ((VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0 ? 'g' : 'b') + '">🏢 المورد: ' + vzEsc(a.supplier || '—') + '</span>' +
+      '<span style="flex:1;"></span>' +
+      (VZ.can.add ? '<button class="vz-btn sm pri" onclick="vzHaAllocForm(\'' + id + '\',null)">➕ تخصيص لمجموعة</button>' : '') +
+      (VZ.can.edit ? '<button class="vz-btn sm" onclick="vzHaForm(\'' + id + '\')">✏️ تعديل</button>' : '') +
+      (vzFin() && mfStr(a.supplier) && (VZ.agents || []).indexOf(mfStr(a.supplier)) >= 0 ? '<button class="vz-btn sm gold" onclick="vzHaPost(\'' + id + '\')">💳 ترحيل</button>' : '') +
+    '</div>' +
+    '<div class="ha-kpis">' + kpi('السعة', vzFmt(cap)) + kpi('المخصَّص', vzFmt(used)) + kpi('المتاح للفترة كاملة', vzFmt(free), free > 0 ? '#16a34a' : '#dc2626') +
+      kpi('الفترة', vzEsc(a.from || '؟') + ' → ' + vzEsc(a.to || '؟')) + '</div>' +
+    onBox +
+    '<div style="font-size:11.5px;font-weight:800;color:var(--vzLbl);margin:8px 0 4px;">📊 المتاح على محور الزمن (الرقم = المتاح في كل فترة)</div>' + _haBar(a) +
+    '<div style="font-size:11.5px;font-weight:800;color:var(--vzLbl);margin:12px 0 4px;">🛂 المجموعات المخصَّصة (' + (a.allocations || []).length + ')</div>' +
+    '<div style="overflow:auto;"><table class="vz-tab"><thead><tr>' + _tblHead_(allocTblId, VZ_HA_ALLOC_COLS_, 'vz-thic') + '</tr></thead><tbody>' + allocRows + '</tbody></table></div>' +
+    (a.notes ? '<div style="font-size:11.5px;color:#64748b;margin-top:8px;">📝 ' + vzEsc(a.notes) + '</div>' : '');
+}
+// توافق مع أي استدعاء قديم (الطيّ/التوسعة أُلغيا — التفاصيل صارت نافذة منبثقة)
+function vzHaToggle(id) { vzHaDetails(id); }
+function vzHaToggleAll() { vzHaRender(); }
 /* ---- نموذج الاتفاقية ---- */
 function vzHaForm(id, seed) {
   if (id && !VZ.can.edit) { _showPopup('لا تملك صلاحية تعديل اتفاقيات السكن', 'error'); return; }
@@ -44036,10 +44195,11 @@ function vzHaPrint() {
       '<td>' + vzFmt(a.totalAllocated) + '</td><td><b>' + vzFmt(a.minRemaining) + '</b></td></tr>';
   }).join('');
   var haFlt = [];
-  [['haF_q', 'بحث'], ['haF_city', 'المدينة'], ['haF_kind', 'النوع'], ['haF_avail', 'العرض'],
+  [['haF_q', 'بحث'], ['haF_city', 'المدينة'], ['haF_kind', 'النوع'],
    ['haF_from', 'الفترة من'], ['haF_to', 'الفترة إلى'], ['haF_on', 'بتاريخ']].forEach(function (m) {
     var v = vzFV(m[0]); if (v) haFlt.push(m[1] + ': ' + v);
   });
+  if (HA._st && HA_ST_[HA._st]) haFlt.push('الحالة: ' + HA_ST_[HA._st].lbl);
   var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>اتفاقيات السكن - ' + vzEsc(meta.stamp) + '</title><style>' +
     '@page{size:A4 landscape;margin:10mm 8mm 14mm;}' +
     'body{font-family:"Cairo",Tahoma,sans-serif;margin:0;color:#1e293b;}' +

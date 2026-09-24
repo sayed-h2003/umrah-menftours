@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.201";
+var APP_VERSION = "4.202";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21928,8 +21928,8 @@ function saveMinistryFile(authToken, data) {
         if (k === 'approved') { a = a ? 'معتمد' : 'غير معتمد'; b = b ? 'معتمد' : 'غير معتمد'; }
         if (String(a == null ? '' : a) === String(b == null ? '' : b)) return;
         entries.push({ action: 'تعديل ملف مراجعة وزارة', recordId: recId, field: MF_FIELD_LABELS_[k],
-          oldVal: String(a == null || a === '' ? '-' : a).slice(0, 300),
-          newVal: String(b == null || b === '' ? '-' : b).slice(0, 300) });
+          oldVal: String(a == null || a === '' ? '-' : a).slice(0, 4000),
+          newVal: String(b == null || b === '' ? '-' : b).slice(0, 4000) });
       });
       // سحب رسوم الغرفة يتم عند تسجيل تاريخ المراجعة
       if (!_mfStr_(old.reviewDate) && _mfStr_(f.reviewDate)) {
@@ -23830,8 +23830,8 @@ function saveVisaFile(authToken, data) {
         if (k === 'breakdown' || k === 'selected' || k === 'housing') { a = JSON.stringify(a || []); b = JSON.stringify(b || []); }
         if (String(a == null ? '' : a) === String(b == null ? '' : b)) return;
         entries.push({ action: 'تعديل مجموعة تأشيرات', recordId: recId, field: VZ_FIELD_LABELS_[k],
-          oldVal: String(a == null || a === '' ? '-' : a).slice(0, 300),
-          newVal: String(b == null || b === '' ? '-' : b).slice(0, 300) });
+          oldVal: String(a == null || a === '' ? '-' : a).slice(0, 4000),
+          newVal: String(b == null || b === '' ? '-' : b).slice(0, 4000) });
       });
       if (entries.length) logChangesBatch_(session.username, entries);
     }
