@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.203 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.204 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.203)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.204)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.203</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.204</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7302,7 +7302,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.203";
+var CLIENT_APP_VERSION = "4.204";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -27981,8 +27981,13 @@ function _accEditSave_(btn) {
 // ---------- 🖨️ طباعة كشف الحساب / 📤 حفظه PDF ومشاركته واتساب ----------
 // mode: 'print' (افتراضي) يفتح نافذة الطباعة · 'pdf' يولّد PDF على السيرفر ويفتح مودال المشاركة/التنزيل
 // ✅ (V4.17) نافذة اختيار الرحلات التي ستظهر بالكشف الشامل — الافتراضي: كل رحلة لها حساب محدَّدة
+// 🐛 (V4.204) حساب بلا رحلات مرتبطة لكن به بنود/دفعات «عام» (مثل بنود الوزارة والتأشيرات) كان الكشف
+// لا يفتح إطلاقاً لأن الشرط يتحقق من الرحلات فقط — الآن يكفي وجود أي بيانات بالحساب
+function _accHasAny_() {
+  return !!(_accData && ((_accData.trips || []).length || (_accData.items || []).length || (_accData.payments || []).length));
+}
 function _accPrintAllPick_(mode) {
-  if (!_accData || !_accData.trips.length) { alert('⚠️ حمّل حساب عميل أولًا'); return; }
+  if (!_accHasAny_()) { alert('⚠️ حمّل حساب عميل أولًا (أو لا توجد بنود/دفعات بهذا الحساب بعد)'); return; }
   var d = _accData, esc = escapeHtml_;
   var prev = document.getElementById('_accPrintPickOverlay');
   if (prev) prev.remove();
@@ -28003,6 +28008,7 @@ function _accPrintAllPick_(mode) {
       '<div class="p-3">' +
         '<div class="d-flex gap-2 mb-2"><button class="btn btn-outline-secondary btn-sm" onclick="document.querySelectorAll(\'.acc-pp-chk\').forEach(function(c){c.checked=true;})">تحديد الكل</button>' +
         '<button class="btn btn-outline-secondary btn-sm" onclick="document.querySelectorAll(\'.acc-pp-chk\').forEach(function(c){c.checked=false;})">إلغاء الكل</button></div>' +
+        (rows.length ? '' : '<div class="alert alert-info small py-2 mb-2">لا توجد رحلات مرتبطة بهذا العميل — سيشمل الكشف البنود والدفعات العامة (📌 عام) فقط.</div>') +
         rows.map(function(r) {
           return '<div class="form-check py-1 border-bottom"><input class="form-check-input acc-pp-chk" type="checkbox" value="' + esc(r.trip) + '" id="_pp_' + esc(r.trip) + '"' + (r.hasData ? ' checked' : '') + '>' +
             '<label class="form-check-label d-flex justify-content-between" for="_pp_' + esc(r.trip) + '"><span>✈️ ' + esc(_accTripDisplay_(r.trip)) + '</span>' +
@@ -28119,7 +28125,9 @@ function _accPrintAllPickGo_(mode) {
   var settleChk = document.getElementById('_accPrintShowSettlementChk');
   var showSettlement = !!(settleChk && settleChk.checked);
   var ov = document.getElementById('_accPrintPickOverlay'); if (ov) ov.remove();
-  if (!sel.length) { alert('⚠️ اختر رحلة واحدة على الأقل'); return; }
+  // (V4.204) بلا رحلات محددة يكفي وجود بنود/دفعات «عام» (الكشف يعرضها وحدها)
+  var _hasGen = _accData && ((_accData.items || []).some(function (i) { return i.trip === 'عام'; }) || (_accData.payments || []).some(function (p) { return p.trip === 'عام'; }));
+  if (!sel.length && !_hasGen) { alert('⚠️ اختر رحلة واحدة على الأقل'); return; }
   if (merge && sel.length < 2) { alert('⚠️ الدمج يحتاج رحلتين على الأقل'); return; }
   // 🔗 (V4.31) الدمج يبقى محفوظًا دائمًا لهذا العميل حتى يُفكّ صراحةً — يُحفظ فور تفعيله هنا
   if (merge && _accData && (_accData && _accData.client)) {
@@ -28130,7 +28138,7 @@ function _accPrintAllPickGo_(mode) {
 }
 
 function _accPrint_(scope, tripOnly, mode, tripFilter, merge, summaryOnly, showSettlement, btn) {
-  if (!_accData || !_accData.trips.length) { alert('⚠️ حمّل حساب عميل أولًا'); return; }
+  if (!_accHasAny_()) { alert('⚠️ حمّل حساب عميل أولًا'); return; }
   var d = _accData, esc = escapeHtml_;
   var trips = scope === 'trip' ? d.trips.filter(function(r) { return r.trip === tripOnly; }) : d.trips;
   // ✅ (V4.17) اختيار الرحلات التي تظهر بالكشف الشامل — لو مُرِّرت قائمة، غيرها يُستبعد كليًا
@@ -28419,7 +28427,10 @@ function _accPrint_(scope, tripOnly, mode, tripFilter, merge, summaryOnly, showS
       rowsHtml += acctTotalRow_('إجمالي الدفعات', grandPaidE, grandPaidS);
       rowsHtml += acctBalRow_(runningE, runningS);
       var outerTitle;
-      if (!multi) {
+      if (!orderedTrips.length) {
+        // 🐛 (V4.204) حساب بلا رحلات (بنود/دفعات «عام» فقط) — كان يفشل هنا لغياب «أول رحلة»
+        outerTitle = '📌 البنود والدفعات العامة <span class="m">(غير مخصصة لرحلة)</span>';
+      } else if (!multi) {
         var r0 = orderedTrips[0], m0 = d.meta[r0.trip] || { mode: 'برنامج' };
         outerTitle = '✈️ ' + esc(_accTripDisplay_(r0.trip)) + ' <span class="m">' + esc(r0.departDate || '') +
           (r0.returnDate ? ' ← ' + esc(r0.returnDate) : '') + ' · 👨' + r0.adults + ' 🧒' + r0.children + ' 👶' + r0.infants +
