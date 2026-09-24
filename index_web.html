@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.197 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.198 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.197)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.198)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.197</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.198</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7093,7 +7093,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.197";
+var CLIENT_APP_VERSION = "4.198";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -19055,129 +19055,108 @@ function exportReportAsImageFHD(getFullHtmlFn, fileNameBase, btn) {
     _imageActionSheet_(files);
   }, { cssWidth: 960, fixedScale: 3 });   // (V4.197) 3× ⇒ عرض ≈2880 بكسل (أعلى من Full HD)
 }
-// نافذة خيارات الصورة الجاهزة — كل إجراء بضغطة مستقلة (تفعيل مستخدم جديد)، فيعمل النسخ للحافظة والمشاركة
-// بثبات بعكس النسخ التلقائي بعد انتهاء التوليد الذي كانت المتصفحات ترفضه أحياناً
+/* 🖼️ (V4.198) نافذة خيارات الصورة الجاهزة: نسخ للحافظة / حفظ / مشاركة — كل إجراء يُنفَّذ مباشرة ثم تُغلق
+   النافذة تلقائياً عند نجاحه، بلا فتح أي تبويب جديد.
+   البرنامج يعمل داخل إطار جوجل (iframe) الذي لا يملك صلاحية الحافظة ولا المشاركة، لذلك يُرسَل الإجراء
+   لصفحة البرنامج الرئيسية (index.html على GitHub Pages — «الجسر») التي تملك الصلاحيتين وتنفّذه فوراً
+   (ضغطة المستخدم داخل البرنامج تُحتسب لها أيضاً). لو فُتح البرنامج مباشرة بلا تلك الصفحة: النسخ/المشاركة
+   الأصليّان إن سمح المتصفح، وإلا إرشاد واضح (زر الفأرة الأيمن على الصورة ← نسخ الصورة). */
+var _IMG_BRIDGE_ = { ok: false, pending: {}, seq: 0 };
+window.addEventListener('message', function (ev) {
+  var d = ev.data;
+  if (!d || typeof d !== 'object' || d.type !== 'mf-img-action-result') return;
+  if (ev.source !== window.top) return;
+  var cb = _IMG_BRIDGE_.pending[d.id]; if (!cb) return;
+  delete _IMG_BRIDGE_.pending[d.id];
+  cb(d);
+});
+function _imgBridgeSend_(action, payload, cb, timeoutMs) {
+  var inFrame = false; try { inFrame = window.top !== window.self; } catch (e) { inFrame = true; }
+  if (!inFrame) { cb({ ok: false, err: 'noframe' }); return; }
+  var id = 'b' + (++_IMG_BRIDGE_.seq) + '_' + Date.now();
+  var done = false;
+  _IMG_BRIDGE_.pending[id] = function (res) { if (done) return; done = true; cb(res); };
+  setTimeout(function () { if (done) return; done = true; delete _IMG_BRIDGE_.pending[id]; cb({ ok: false, err: 'nobridge' }); }, timeoutMs || 1500);
+  var msg = { type: 'mf-img-action', id: id, action: action };
+  for (var k in payload) msg[k] = payload[k];
+  try { window.top.postMessage(msg, '*'); } catch (e) { done = true; delete _IMG_BRIDGE_.pending[id]; cb({ ok: false, err: 'nobridge' }); }
+}
 function _imageActionSheet_(files) {
   var prev = document.getElementById('_imgActOv'); if (prev) prev.remove();
   window.__imgActFiles = files;
-  // 🐛 (V4.197) التطبيق يعمل داخل إطار (iframe) جوجل Apps Script، والإطار لا يملك صلاحية الحافظة ولا
-  // المشاركة (يرفضهما المتصفح) — لذلك داخل الإطار يفتح الزران نافذة مستقلة للصورة خارج الإطار حيث تعملان
-  var inFrame = false; try { inFrame = window.top !== window.self; } catch (e) { inFrame = true; }
-  window.__imgActInFrame = inFrame;
-  var canCopy = inFrame || !!(navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined');
-  var canShare = inFrame; if (!inFrame) { try { canShare = !!(navigator.canShare && navigator.canShare({ files: files })); } catch (e) {} }
-  // تجهيز الصور مسبقاً كنص (data URL) كي تُكتب في النافذة المستقلة فوراً لحظة الضغط
-  window.__imgActData = null;
-  (function () {
-    var out = [], left = files.length;
-    files.forEach(function (f, i) {
-      var r = new FileReader();
-      r.onload = function () { out[i] = { name: f.name, url: r.result }; if (--left === 0) window.__imgActData = { files: out, full: (files.length > 1 && cv && cv.toDataURL) ? cv.toDataURL('image/png') : '' }; };
-      r.readAsDataURL(f);
-    });
-  })();
   var cv = window.__lastCaptureCanvas;
+  window.__imgActFullBlob = null;
+  if (files.length > 1 && cv && cv.toBlob) cv.toBlob(function (b) { window.__imgActFullBlob = b; }, 'image/png');
+  // فحص وجود الجسر مسبقاً (قبل أن يضغط المستخدم) كي يُنفَّذ الإجراء فوراً لحظة الضغط
+  _imgBridgeSend_('ping', {}, function (r) { _IMG_BRIDGE_.ok = !!(r && r.ok); }, 1200);
   var dims = (cv && cv.width) ? (cv.width + '×' + cv.height + ' بكسل') : '';
   var url = URL.createObjectURL(files[0]);
   var ov = document.createElement('div');
   ov.id = '_imgActOv'; ov.dir = 'rtl';
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483600;background:rgba(10,14,24,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
-  var btnSt = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;border-radius:10px;border:none;font-weight:800;font-size:14px;cursor:pointer;';
+  var btnSt = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;border-radius:10px;border:none;font-weight:800;font-size:14px;cursor:pointer;margin-bottom:8px;';
   ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(440px,100%);max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4);">' +
     '<div style="padding:12px 16px;background:linear-gradient(135deg,#0f4c4c,#0b3a3a);color:#fff;display:flex;align-items:center;gap:8px;border-radius:16px 16px 0 0;">' +
       '<b style="flex:1;">📸 الصورة جاهزة (دقة عالية)</b><button type="button" onclick="_imgActClose_()" style="background:rgba(255,255,255,.18);border:none;color:#fff;width:28px;height:28px;border-radius:8px;cursor:pointer;">✕</button></div>' +
     '<div style="padding:14px 16px;">' +
-      '<div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;max-height:260px;background:#f8fafc;"><img src="' + url + '" style="width:100%;display:block;"></div>' +
+      '<div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;max-height:260px;background:#f8fafc;"><img id="_imgActPrev" src="' + url + '" style="width:100%;display:block;"></div>' +
       '<div style="font-size:11px;color:#64748b;margin:6px 0 12px;text-align:center;">' + (dims ? dims + ' · ' : '') +
         (files.length > 1 ? ('الكشف طويل فقُسِّم إلى ' + files.length + ' صور') : 'صورة واحدة') + '</div>' +
-      (inFrame ? '<div style="font-size:10.5px;color:#8a5a06;background:#fffbeb;border-radius:8px;padding:6px 8px;margin-bottom:10px;text-align:center;">النسخ والمشاركة يفتحان الصورة في نافذة مستقلة (قيود أمان جوجل تمنعهما داخل البرنامج نفسه) — اضغط الزر المطلوب هناك</div>' : '') +
-      (canCopy ? '<button type="button" style="' + btnSt + 'background:#1e3d59;color:#fff;margin-bottom:8px;" onclick="_imgActCopy_(this)">📋 نسخ إلى الحافظة' + (files.length > 1 ? ' (الكشف كاملاً)' : '') + '</button>' : '') +
-      '<button type="button" style="' + btnSt + 'background:#0f766e;color:#fff;margin-bottom:8px;" onclick="_imgActSave_()">💾 حفظ ' + (files.length > 1 ? 'الصور' : 'الصورة') + '</button>' +
-      (canShare ? '<button type="button" style="' + btnSt + 'background:#25D366;color:#fff;" onclick="_imgActShare_()">📤 مشاركة كصورة</button>'
-                : '<div style="font-size:11px;color:#94a3b8;text-align:center;">المشاركة المباشرة غير مدعومة بهذا المتصفح — احفظ الصورة ثم شاركها</div>') +
+      '<button type="button" style="' + btnSt + 'background:#1e3d59;color:#fff;" onclick="_imgActCopy_(this)">📋 نسخ إلى الحافظة' + (files.length > 1 ? ' (الكشف كاملاً)' : '') + '</button>' +
+      '<button type="button" style="' + btnSt + 'background:#0f766e;color:#fff;" onclick="_imgActSave_()">💾 حفظ ' + (files.length > 1 ? 'الصور' : 'الصورة') + '</button>' +
+      '<button type="button" style="' + btnSt + 'background:#25D366;color:#fff;margin-bottom:0;" onclick="_imgActShare_(this)">📤 مشاركة كصورة</button>' +
+      '<div id="_imgActMsg" style="font-size:12px;font-weight:700;text-align:center;margin-top:8px;min-height:16px;"></div>' +
     '</div></div>';
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) _imgActClose_(); });
   document.body.appendChild(ov);
   ov._url = url;
 }
+function _imgActMsg_(t, bad) { var m = document.getElementById('_imgActMsg'); if (m) { m.textContent = t; m.style.color = bad ? '#b91c1c' : '#166534'; } }
 function _imgActClose_() {
   var ov = document.getElementById('_imgActOv');
   if (ov) { try { URL.revokeObjectURL(ov._url); } catch (e) {} ov.remove(); }
 }
-// 🪟 (V4.197) نافذة مستقلة (خارج إطار Apps Script) بها الصورة وأزرار النسخ/المشاركة/الحفظ — تُفتح
-// متزامنة مع الضغطة نفسها (وإلا يحجبها مانع النوافذ المنبثقة)، ثم تُملأ بالصورة فور جاهزيتها
-function _imgActOpenWindow_(focus) {
-  var w = window.open('', '_blank');
-  if (!w) { showToast('⚠️ اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة', true); return; }
-  w.document.open();
-  w.document.write('<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>الصورة</title></head>' +
-    '<body style="font-family:Tahoma,Arial,sans-serif;margin:0;background:#f1f5f9;"><div id="st" style="padding:30px;text-align:center;color:#64748b;">⏳ جاري تجهيز الصورة…</div></body></html>');
-  w.document.close();
-  var tries = 0;
-  (function fill() {
-    var D = window.__imgActData;
-    if (!D) { if (++tries > 100) { w.document.getElementById('st').textContent = 'تعذّر تجهيز الصورة'; return; } setTimeout(fill, 100); return; }
-    var multi = D.files.length > 1;
-    var bs = 'display:block;width:100%;padding:13px;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;margin-bottom:8px;color:#fff;';
-    var html = '<div style="max-width:720px;margin:0 auto;padding:14px;">' +
-      '<div style="position:sticky;top:0;background:#f1f5f9;padding-bottom:8px;z-index:2;">' +
-      '<button id="bCopy" style="' + bs + 'background:#1e3d59;">📋 نسخ الصورة إلى الحافظة' + (multi ? ' (الكشف كاملاً)' : '') + '</button>' +
-      '<button id="bShare" style="' + bs + 'background:#25D366;">📤 مشاركة كصورة</button>' +
-      '<button id="bSave" style="' + bs + 'background:#0f766e;">💾 حفظ ' + (multi ? 'الصور' : 'الصورة') + '</button>' +
-      '<div id="msg" style="text-align:center;font-size:13px;font-weight:700;min-height:18px;"></div></div>' +
-      D.files.map(function (f) { return '<img src="' + f.url + '" style="width:100%;display:block;margin-bottom:10px;border:1px solid #cbd5e1;background:#fff;">'; }).join('') +
-      '</div>';
-    var doc = w.document;
-    doc.body.innerHTML = html;
-    var msg = function (t, bad) { var m = doc.getElementById('msg'); m.textContent = t; m.style.color = bad ? '#b91c1c' : '#166534'; };
-    var toBlob = function (u) { return w.fetch(u).then(function (r) { return r.blob(); }); };
-    var mkFiles = function () {
-      return Promise.all(D.files.map(function (f) { return toBlob(f.url).then(function (b) { return new w.File([b], f.name, { type: 'image/png' }); }); }));
-    };
-    doc.getElementById('bCopy').onclick = function () {
-      try {
-        var blobP = toBlob(D.full || D.files[0].url);
-        w.navigator.clipboard.write([new w.ClipboardItem({ 'image/png': blobP })])
-          .then(function () { msg('✅ نُسخت الصورة — الصقها في واتساب أو أي برنامج (Ctrl+V)'); })
-          .catch(function () { msg('⚠️ المتصفح رفض النسخ — اضغط مطوّلاً (أو زر الفأرة الأيمن) على الصورة واختر «نسخ الصورة»', true); });
-      } catch (e) { msg('⚠️ النسخ غير مدعوم هنا — اضغط مطوّلاً على الصورة واختر «نسخ الصورة»', true); }
-    };
-    doc.getElementById('bShare').onclick = function () {
-      mkFiles().then(function (fs) {
-        if (!(w.navigator.canShare && w.navigator.canShare({ files: fs }))) { msg('⚠️ المشاركة المباشرة غير مدعومة بهذا المتصفح/الجهاز — احفظ الصورة ثم شاركها', true); return; }
-        return w.navigator.share({ files: fs, title: 'مشاركة' }).then(function () { msg('✅ تمت المشاركة'); });
-      }).catch(function (e) { if (!(e && e.name === 'AbortError')) msg('⚠️ تعذّرت المشاركة — احفظ الصورة ثم شاركها', true); });
-    };
-    doc.getElementById('bSave').onclick = function () {
-      D.files.forEach(function (f) { var a = doc.createElement('a'); a.href = f.url; a.download = f.name; doc.body.appendChild(a); a.click(); a.remove(); });
-      msg('✅ تم الحفظ');
-    };
-    if (focus && doc.getElementById(focus)) doc.getElementById(focus).style.outline = '3px solid #facc15';
-  })();
-}
 function _imgActCopy_(btn) {
-  if (window.__imgActInFrame) { _imgActOpenWindow_('bCopy'); return; }
   var files = window.__imgActFiles || []; if (!files.length) return;
-  var cv = window.__lastCaptureCanvas;
-  // النداء يتم فوراً داخل الضغطة (شرط المتصفح)؛ لو الكشف مقسَّم لعدة صور ننسخ اللوحة الكاملة قبل التقسيم
-  var blobP = (files.length > 1 && cv && cv.toBlob)
-    ? new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('blob')); }, 'image/png'); })
-    : files[0];
-  navigator.clipboard.write([new ClipboardItem({ 'image/png': blobP })]).then(function () {
-    showToast('📋 نُسخت الصورة إلى الحافظة — الصقها في أي برنامج (Ctrl+V)');
-    if (btn) btn.innerHTML = '✅ تم النسخ';
-  }).catch(function (e) {
-    showToast('⚠️ تعذّر النسخ للحافظة بهذا المتصفح — استخدم الحفظ أو المشاركة', true);
-  });
+  var blob = (files.length > 1 && window.__imgActFullBlob) ? window.__imgActFullBlob : files[0];
+  var ok = function () { _imgActClose_(); showToast('📋 نُسخت الصورة إلى الحافظة — الصقها في واتساب أو أي برنامج (Ctrl+V)'); };
+  var manual = function () {
+    _imgActMsg_('⚠️ المتصفح لم يسمح بالنسخ التلقائي — اضغط بزر الفأرة الأيمن على الصورة أعلاه (أو مطوّلاً بالجوال) واختر «نسخ الصورة»', true);
+  };
+  if (_IMG_BRIDGE_.ok) {
+    _imgBridgeSend_('copy', { blob: blob }, function (r) { if (r && r.ok) ok(); else manual(); }, 4000);
+    return;
+  }
+  // بلا جسر (البرنامج مفتوح مباشرة): محاولة النسخ الأصلي — ينجح لو لم يكن داخل إطار مقيَّد
+  try {
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(ok).catch(manual);
+  } catch (e) { manual(); }
 }
-function _imgActSave_() { _saveImageFilesLocally_(window.__imgActFiles || []); showToast('💾 تم حفظ ' + ((window.__imgActFiles || []).length > 1 ? 'الصور' : 'الصورة')); }
-function _imgActShare_() {
-  if (window.__imgActInFrame) { _imgActOpenWindow_('bShare'); return; }
-  var files = window.__imgActFiles || [];
-  navigator.share({ files: files, title: 'مشاركة' }).catch(function (err) {
-    if (err && err.name === 'AbortError') return;
-    showToast('⚠️ تعذّرت المشاركة — استخدم الحفظ بدلاً منها', true);
-  });
+function _imgActSave_() {
+  var files = window.__imgActFiles || []; if (!files.length) return;
+  _saveImageFilesLocally_(files);
+  _imgActClose_();
+  showToast('💾 تم حفظ ' + (files.length > 1 ? 'الصور (' + files.length + ')' : 'الصورة'));
+}
+function _imgActShare_(btn) {
+  var files = window.__imgActFiles || []; if (!files.length) return;
+  var ok = function () { _imgActClose_(); showToast('📤 تمت المشاركة'); };
+  var unsupported = function () { _imgActMsg_('⚠️ المشاركة المباشرة غير مدعومة بهذا المتصفح/الجهاز — اضغط «حفظ» ثم شارك الصورة', true); };
+  var handle = function (err) {
+    if (err === 'abort') return;                 // المستخدم أغلق قائمة المشاركة بنفسه
+    if (err === 'unsupported' || err === 'nobridge' || err === 'noframe') { unsupported(); return; }
+    _imgActMsg_('⚠️ تعذّرت المشاركة — اضغط «حفظ» ثم شارك الصورة', true);
+  };
+  if (_IMG_BRIDGE_.ok) {
+    _imgBridgeSend_('share', { files: files.map(function (f) { return { name: f.name, blob: f }; }) }, function (r) {
+      if (r && r.ok) ok(); else handle(r && r.err);
+    }, 120000);   // مهلة طويلة: قائمة المشاركة تبقى مفتوحة حتى يختار المستخدم
+    return;
+  }
+  try {
+    if (!(navigator.canShare && navigator.canShare({ files: files }))) { unsupported(); return; }
+    navigator.share({ files: files, title: 'مشاركة' }).then(ok).catch(function (e) { handle(e && e.name === 'AbortError' ? 'abort' : 'x'); });
+  } catch (e) { unsupported(); }
 }
 
 // 📤 مشاركة PDF واتساب — نفس نمط مشاركة تسكين الرحلة الفردية بالضبط (shareHousingPdf)

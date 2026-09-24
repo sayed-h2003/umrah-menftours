@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1e3d59">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.json">
@@ -15,7 +16,9 @@
 </head>
 <body>
 
-  <iframe src="https://script.google.com/macros/s/AKfycbzmZ7ubyNlqjum0SlNSDqmIAN1VqDNd9FU-eM6Ihqg17-MAb_QnV7cDKCGaVJ_6-2iA7g/exec"></iframe>
+  <button id="clipFocus" tabindex="-1" aria-hidden="true" style="position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;border:0;padding:0;pointer-events:none;"></button>
+  <iframe src="https://script.google.com/macros/s/AKfycbzmZ7ubyNlqjum0SlNSDqmIAN1VqDNd9FU-eM6Ihqg17-MAb_QnV7cDKCGaVJ_6-2iA7g/exec"
+          allow="clipboard-write; clipboard-read; web-share"></iframe>
 
   <script>
     if ('serviceWorker' in navigator) {
@@ -25,6 +28,43 @@
           .catch(err => console.log('Service Worker Failed', err));
       });
     }
+
+    /* 🖼️ جسر الصور: البرنامج يعمل داخل إطار جوجل (iframe) الذي لا يملك صلاحية الحافظة ولا المشاركة.
+       هذه الصفحة هي النافذة الرئيسية فتملكهما — يرسل البرنامج الصورة إلى هنا لتنسخها/تشاركها مباشرة
+       (ضغطة المستخدم داخل البرنامج تُحتسب لهذه الصفحة أيضاً)، ثم ترد بالنتيجة. تقبل الرسائل فقط من
+       نطاقات جوجل التي يعمل عليها البرنامج. */
+    window.addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || typeof d !== 'object' || d.type !== 'mf-img-action') return;
+      var host = '', nullOrigin = (ev.origin === 'null');
+      if (!nullOrigin) {
+        try { host = new URL(ev.origin).hostname; } catch (e) { return; }
+        if (!/(^|\.)googleusercontent\.com$/.test(host) && !/(^|\.)script\.google\.com$/.test(host)) return;
+      }
+      var reply = function (ok, err) {
+        try { ev.source.postMessage({ type: 'mf-img-action-result', id: d.id, ok: ok, err: err || '' }, nullOrigin ? '*' : ev.origin); } catch (e) {}
+      };
+      var fail = function (e) { reply(false, (e && e.name === 'AbortError') ? 'abort' : String((e && (e.name + ': ' + e.message)) || e)); };
+      try {
+        if (d.action === 'ping') { reply(true); return; }
+        if (d.action === 'copy') {
+          if (!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) { reply(false, 'unsupported'); return; }
+          // المتصفح يشترط أن تكون هذه الصفحة هي المُركَّز عليها لحظة النسخ — ننقل التركيز إليها لحظياً ثم نعيده للبرنامج
+          var fb = document.getElementById('clipFocus');
+          try { window.focus(); fb.focus(); } catch (e) {}
+          var back = function () { try { document.querySelector('iframe').focus(); } catch (e) {} };
+          navigator.clipboard.write([new ClipboardItem({ 'image/png': d.blob })])
+            .then(function () { back(); reply(true); }).catch(function (e) { back(); fail(e); });
+          return;
+        }
+        if (d.action === 'share') {
+          var files = (d.files || []).map(function (f) { return new File([f.blob], f.name, { type: 'image/png' }); });
+          if (!(navigator.canShare && navigator.canShare({ files: files }))) { reply(false, 'unsupported'); return; }
+          navigator.share({ files: files, title: 'مشاركة' }).then(function () { reply(true); }).catch(fail);
+          return;
+        }
+      } catch (e) { fail(e); }
+    });
   </script>
 </body>
 </html>
