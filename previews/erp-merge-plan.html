@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>خطة دمج الحسابات</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --navy:#1e3d59; --teal:#0f4c4c; --ink:#0f172a; --mut:#64748b; --line:#e2e8f0; --bg:#f4f6f9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Tajawal",Tahoma,sans-serif; background:var(--bg); color:var(--ink); line-height:1.75; }
+  header.top { background:var(--navy); color:#fff; padding:14px 16px; position:sticky; top:0; z-index:5; box-shadow:0 2px 10px rgba(0,0,0,.2); }
+  header.top h1 { font-family:"Cairo"; font-size:18px; margin:0 0 8px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+  .tabs button { font-family:inherit; font-weight:800; font-size:13px; border:0; border-radius:10px; padding:7px 12px; cursor:pointer; background:rgba(255,255,255,.14); color:#fff; }
+  .tabs button.on { background:#fff; color:var(--navy); }
+  main { max-width:1150px; margin:0 auto; padding:16px; }
+  .page { display:none; } .page.on { display:block; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:14px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
+  h2 { font-family:"Cairo"; font-size:17px; margin:0 0 8px; color:var(--navy); }
+  h3 { font-family:"Cairo"; font-size:14.5px; margin:12px 0 6px; color:#334155; }
+  p, li { font-size:14px; } ul { margin:4px 0; padding-inline-start:22px; }
+  .latin { direction:ltr; unicode-bidi:isolate; font-variant-numeric:tabular-nums; }
+  .note { border-radius:10px; padding:9px 12px; font-size:13.5px; margin:8px 0; }
+  .note.i { background:#eff6ff; border:1px solid #bfdbfe; } .note.w { background:#fffbeb; border:1px solid #fde68a; color:#78350f; }
+  .note.g { background:#f0fdf4; border:1px solid #bbf7d0; } .note.r { background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; }
+  table.t { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.t th { background:#f1f5f9; color:#334155; padding:7px 8px; font-weight:800; text-align:center; border-bottom:2px solid #cbd5e1; }
+  table.t td { padding:7px 8px; border-bottom:1px solid #eef2f6; text-align:center; vertical-align:top; }
+  table.t td.r, table.t th.r { text-align:right; }
+  .scroll { overflow-x:auto; }
+  .opts { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+  .opt { border:2px solid var(--line); border-radius:14px; padding:12px 14px; background:#fff; }
+  .opt.rec { border-color:#16a34a; box-shadow:0 0 0 3px #dcfce7; }
+  .opt h3 { margin-top:0; }
+  .tag { display:inline-block; font-size:11px; font-weight:800; border-radius:20px; padding:1px 9px; margin-inline-start:6px; }
+  .tag.g { background:#dcfce7; color:#166534; } .tag.r { background:#fee2e2; color:#991b1b; } .tag.y { background:#fef3c7; color:#92400e; } .tag.b { background:#dbeafe; color:#1e40af; }
+  .pl { color:#166534; } .mi { color:#991b1b; }
+  .phase { display:grid; grid-template-columns:48px 1fr; gap:10px; margin-bottom:10px; }
+  .phase .n { background:var(--navy); color:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; font-family:"Cairo"; font-weight:900; font-size:18px; }
+  .phase .c { background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px 12px; font-size:13.5px; }
+  .phase .c b { font-family:"Cairo"; }
+  .mock { border:2px solid #0f4c4c; border-radius:14px; overflow:hidden; background:#fff; margin:10px 0; }
+  .mock-h { background:linear-gradient(135deg,#136363,#0b3d3d); color:#fff; padding:9px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-weight:800; }
+  .mock-h small { font-weight:500; opacity:.85; }
+  .mock-b { padding:12px; }
+  .btn { font-family:inherit; font-weight:800; font-size:12px; border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:8px; padding:5px 10px; }
+  .btn.p { background:#0f4c4c; color:#fff; border-color:#0f4c4c; }
+  .steps { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .steps span { font-size:12px; font-weight:800; padding:4px 12px; border-radius:20px; background:#f1f5f9; color:#64748b; }
+  .steps span.on { background:#0f4c4c; color:#fff; } .steps span.ok { background:#dcfce7; color:#166534; }
+  tr.err td { background:#fef2f2; } tr.warn td { background:#fffbeb; } tr.grp td { background:#f8fafc; font-weight:800; }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+  @media (max-width:640px) { .kpis { grid-template-columns:repeat(2,1fr); } }
+  .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:7px; text-align:center; }
+  .kpi b { display:block; font-family:"Cairo"; font-size:17px; } .kpi small { color:var(--mut); font-size:11px; font-weight:700; }
+  .q { background:#fff7ed; border:1.5px solid #fed7aa; border-radius:12px; padding:10px 12px; margin:8px 0; font-size:13.5px; }
+  .q b.n { background:#ea580c; color:#fff; border-radius:50%; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; margin-inline-end:6px; }
+  .o { display:inline-block; background:#fff; border:1px solid #fdba74; border-radius:8px; padding:1px 8px; margin:3px 3px 0 0; font-size:12.5px; }
+  .o.rec { background:#dcfce7; border-color:#86efac; font-weight:800; }
+  textarea.paste { width:100%; height:92px; font-family:monospace; font-size:12px; border:1.5px dashed #94a3b8; border-radius:10px; padding:8px; direction:rtl; background:#f8fafc; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>🧩 دراسة برنامج الـ ERP المحاسبي وخطة الدمج — للنقاش قبل أي تنفيذ</h1>
+  <div class="tabs">
+    <button class="on" onclick="tab(0,this)">🔍 نتيجة الدراسة</button>
+    <button onclick="tab(1,this)">⚖️ خيارات الدمج والتوصية</button>
+    <button onclick="tab(2,this)">🏗️ البنية المقترحة</button>
+    <button onclick="tab(3,this)">📥 تسجيل القيود والأرصدة القديمة مجمّعة</button>
+    <button onclick="tab(4,this)">🪜 المراحل والأسئلة</button>
+  </div>
+</header>
+<main>
+
+<!-- ============ 0 ============ -->
+<section class="page on" id="p0">
+  <div class="card">
+    <h2>📋 ما يحتويه برنامج الـ ERP (ملخص)</h2>
+    <p>برنامج Google Apps Script مستقل (حوالي 9,700 سطر سيرفر و18,800 سطر واجهة)، مبني على شيت واحد مرتبط بالسكربت. الوحدات الموجودة فعلاً:</p>
+    <div class="scroll"><table class="t" style="min-width:760px;">
+      <thead><tr><th class="r">الوحدة</th><th class="r">ما يوجد فيها</th><th>قيد تلقائي؟</th><th>التقييم</th></tr></thead>
+      <tbody>
+        <tr><td class="r"><b>دليل الحسابات</b></td><td class="r">5 أنواع (أصول/خصوم/حقوق ملكية/إيرادات/مصروفات) ← 27 تصنيفاً (عملاء عمرة/حج/سكن/نقل/تذاكر، موردون، إيرادات لكل نشاط…) ← الحسابات. منع الأسماء المكررة بمطابقة عربية</td><td>—</td><td><span class="tag g">مفيد جداً</span></td></tr>
+        <tr><td class="r"><b>الخزائن</b></td><td class="r">خزائن متعددة العملات، كشف خزينة برصيد متحرك، <b>جرد نقدي</b>، سندات قبض وصرف مع طباعة</td><td>✅</td><td><span class="tag g">مفيد</span></td></tr>
+        <tr><td class="r"><b>البنوك</b></td><td class="r">حساب لكل بنك بعملة، حركات إيداع/سحب/رسوم <b>بأكثر من طرف مقابل</b>، كشف بنك، كشف تكرار الحركات</td><td>✅</td><td><span class="tag g">مفيد</span></td></tr>
+        <tr><td class="r"><b>العُهد</b></td><td class="r">عهدة لكل موظف، حركات صرف/تسوية، حركات «معلّقة» بلا طرف مقابل، صلاحيات لكل عهدة</td><td>✅</td><td><span class="tag g">مفيد</span></td></tr>
+        <tr><td class="r"><b>قيود اليومية</b></td><td class="r">قيد يدوي متعدد الأسطر، يجب أن يتوازن لكل عملة، <b>تحويل عملة</b> بحساب وسيط، سجل يومية موحّد</td><td>✅</td><td><span class="tag g">مفيد</span></td></tr>
+        <tr><td class="r"><b>الأرصدة الافتتاحية</b></td><td class="r">شاشة إدخال لكل حساب (مدين/دائن × جنيه/ريال/دولار) لسنة مالية، تولّد قيد افتتاح واحد</td><td>✅</td><td><span class="tag y">يحتاج تطوير</span></td></tr>
+        <tr><td class="r"><b>التقارير</b></td><td class="r">ميزان مراجعة، قائمة مركز مالي وقائمة دخل، كشف حساب عميل مع <b>رابط مشاركة</b> للعميل، لوحة مؤشرات</td><td>—</td><td><span class="tag g">مفيد</span></td></tr>
+        <tr><td class="r"><b>حجوزات فنادق مكة والمدينة</b></td><td class="r">حجز بغرف ثنائي/ثلاثي/رباعي، سعر تكلفة وبيع، مورد وعميل، اعتماد، تأكيد، استيراد من Excel ومن نص حر بالذكاء الاصطناعي، <b>قيد تلقائي عند التأكيد</b></td><td>✅</td><td><span class="tag b">أساس «حجوزات الفنادق الخارجية» التي ذكرتها</span></td></tr>
+        <tr><td class="r"><b>أخرى</b></td><td class="r">مرفقات للمستندات، سلة محذوفات مع استرجاع، رسائل داخلية، إشعارات، نسخ احتياطي أسبوعي، أدوار وصلاحيات لكل شاشة</td><td>—</td><td><span class="tag y">مكرر عندنا جزئياً</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <h2>⚠️ نقاط ضعف مهمة وجدتها (لن تُنقل كما هي)</h2>
+    <div class="note r">🔓 <b>أمان — خطير:</b> يمكن لأي متصفح مسح النظام بالكامل باستدعاء دالة «إعادة ضبط النظام» مباشرة. فحص صلاحية المدير يُتجاوَز بإرسال <b>اسم</b> المدير بدل رمز الدخول. كلمات المرور مخزنة كنص صريح، وحوالي 20 دالة تعمل بلا أي تحقق من الدخول.</div>
+    <ul>
+      <li><b>لا مراكز تكلفة:</b> لا يعرف القيد أي رحلة أو شركة منفذة أو عميل يخصه، فلا يمكن حساب ربحية الرحلة.</li>
+      <li><b>سعر الصرف لا يُحفظ على سطر القيد</b>، وكل عملة دفتر منفصل. التحويل بين العملات يمر بحساب وسيط فقط.</li>
+      <li><b>لا حالة للقيد</b> (مسودة/مرحَّل)، <b>ولا إقفال فترات</b>. التعديل يحذف أسطر القيد ويعيد كتابتها بلا أثر.</li>
+      <li><b>الأرصدة الافتتاحية تُحسب مرتين</b> إذا سُجّلت لأكثر من سنة.</li>
+      <li><b>الأداء:</b> كل تقرير يقرأ شيت القيود كاملاً، وكل سطر قيد يُكتب بعملية منفصلة. سيبطؤ بوضوح مع زيادة القيود.</li>
+      <li>أرقام بعض أسطر القيود عشوائية وقد تتكرر، ومعظم التقارير المهمة غير موجودة: الأستاذ العام بفترة، أعمار الديون، التدفق النقدي.</li>
+    </ul>
+    <div class="note g">✅ <b>الخلاصة:</b> تصميم الشاشات والفكرة المحاسبية جيدة ومناسبة لنشاطكم. لكن الكود يحتاج <b>إعادة بناء</b> لا نسخاً مباشراً، خصوصاً الأمان والأداء وربط القيود بالرحلات.</div>
+  </div>
+
+  <div class="card" id="uiCard">
+    <h2>🖥️ واجهة البرنامج (13 شاشة)</h2>
+    <div class="scroll"><table class="t" style="min-width:720px;">
+      <thead><tr><th class="r">الشاشة</th><th class="r">المحتوى</th><th>الحالة</th></tr></thead>
+      <tbody>
+        <tr><td class="r">الرئيسية</td><td class="r">مؤشرات الحجوزات، وأرصدة الخزائن والبنوك والعهد بالعملات الثلاث، وأرصدة العملاء والموردين، وآخر الحجوزات (بلا رسوم بيانية)</td><td><span class="tag g">مكتمل</span></td></tr>
+        <tr><td class="r">الخزينة</td><td class="r">حركة موحّدة بأعمدة وارد/منصرف/رصيد لكل عملة، سندات قبض وصرف، <b>جرد نقدي بالفئات</b>، عهد مؤقتة لكل خزينة</td><td><span class="tag g">مكتمل</span></td></tr>
+        <tr><td class="r">البنوك</td><td class="r">بطاقة لكل بنك، كشف بتبويبات العملات، إيداع/سحب/رسوم بعدة أطراف</td><td><span class="tag g">مكتمل</span></td></tr>
+        <tr><td class="r">كشف الحساب</td><td class="r">لأي حساب بالعملات الثلاث، اختيار الأعمدة، طباعة، رابط مشاركة للعميل</td><td><span class="tag g">مكتمل</span></td></tr>
+        <tr><td class="r">قيود اليومية</td><td class="r">سجل موحّد لكل المستندات، قيد جديد بأسطر، <b>منع الحفظ لو غير متوازن</b>، تحويل عملة، مرفقات</td><td><span class="tag y">طباعة القيد متعدد العملات بها خطأ</span></td></tr>
+        <tr><td class="r">العُهد</td><td class="r">بطاقات العهد، التفاصيل والرصيد، الحركات بعدة أطراف، كشف عهدة</td><td><span class="tag g">مكتمل</span></td></tr>
+        <tr><td class="r">دليل الحسابات</td><td class="r">4 تبويبات: الشجرة، الأرصدة الافتتاحية (جدول إدخال)، ميزان المراجعة، القوائم المالية</td><td><span class="tag g">مكتمل</span></td></tr>
+        <tr><td class="r">الحجوزات</td><td class="r">مكة/المدينة، أعمدة قابلة للتخصيص، تعديل داخل الجدول، اعتماد، قائمة الوصول، استيراد (Excel / Word / نص واتساب بالذكاء الاصطناعي)، طباعة التأكيد والفاوتشر</td><td><span class="tag g">مكتمل</span></td></tr>
+        <tr><td class="r">الصلاحيات، السجل، المحذوفات، الإعدادات، الإشعارات</td><td class="r">أدوار ومصفوفة صلاحيات، سجل عام، استرجاع المحذوف، إعدادات الشركة والنسخ الاحتياطي</td><td><span class="tag y">مكرر عندنا</span></td></tr>
+      </tbody>
+    </table></div>
+    <div class="note w">🧱 <b>تقنياً:</b> الواجهة مكتوبة بتنسيقات عامة تغيّر شكل أي صفحة تُدمج معها (خط موحّد إجباري، تنسيق كل الجداول والأزرار)، وأسماء دوال وعناصر مطابقة لأسماء عندنا (الدخول، الحجوزات، الإشعارات…). لذلك <b>الدمج بالنسخ المباشر غير ممكن</b>، والصحيح نقل كل شاشة وإعادة كتابتها داخل البرنامج بأسماء مستقلة.</div>
+    <div class="note i">📌 <b>غير موجود فيه أصلاً:</b> مراكز التكلفة، والفواتير، وشاشات مستقلة للعملاء والموردين، والتدفق النقدي، وأعمار الديون، وتصدير التقارير لـ Excel، والرسوم البيانية، <b>واستيراد الأرصدة أو القيود من Excel</b> (الاستيراد موجود للحجوزات فقط).</div>
+  </div>
+</section>
+
+<!-- ============ 1 ============ -->
+<section class="page" id="p1">
+  <div class="card">
+    <h2>⚖️ ثلاثة خيارات للدمج</h2>
+    <div class="opts">
+      <div class="opt rec">
+        <h3>أ) إدخال الحسابات داخل برنامج العمرة الحالي <span class="tag g">⭐ التوصية</span></h3>
+        <p>تُبنى «الحسابات العامة» كقسم جديد داخل البرنامج الحالي بنفس أسلوبه، مستفيدين من تصميم شاشات الـ ERP ودليل حساباته. تتولد القيود تلقائياً من الشاشات الموجودة.</p>
+        <ul>
+          <li class="pl">＋ دخول واحد، صلاحيات واحدة، سجل تعديلات واحد.</li>
+          <li class="pl">＋ القيد يعرف الرحلة والعميل والوكيل والشركة المنفذة، فتخرج ربحية الرحلة مباشرة.</li>
+          <li class="pl">＋ نحصل على ما بُني في البرنامج الحالي من سرعة وأمان ونداء إقلاع موحّد.</li>
+          <li class="mi">－ يحتاج إعادة كتابة شاشات الـ ERP، لا نسخها.</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>ب) إدخال برنامج العمرة داخل الـ ERP <span class="tag r">غير مستحسن</span></h3>
+        <ul>
+          <li class="mi">－ البرنامج الحالي أكبر وأنضج بكثير (أكثر من 40 ألف سطر، وتستخدمونه يومياً).</li>
+          <li class="mi">－ كنا سنرث نقاط ضعف الـ ERP في الأمان والأداء.</li>
+          <li class="mi">－ أسماء دوال وشيتات متطابقة بين البرنامجين (الدخول، الحجوزات، الصلاحيات…) تسبب تعارضات كثيرة.</li>
+        </ul>
+      </div>
+      <div class="opt">
+        <h3>ج) برنامجان منفصلان مرتبطان <span class="tag y">حل مؤقت فقط</span></h3>
+        <p>يبقى الـ ERP برنامجاً مستقلاً، ويرسل له برنامج العمرة القيود عبر شيت مشترك.</p>
+        <ul>
+          <li class="pl">＋ أسرع للبدء.</li>
+          <li class="mi">－ دخولان، وبيانات مكررة (عملاء، موردون، حجوزات)، ومزامنة معرّضة للأخطاء، ومشاكل الأمان تبقى كما هي.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="note i">💡 <b>ماذا نأخذ من الـ ERP في الخيار (أ):</b> دليل الحسابات وتصنيفاته، ومنطق شاشات الخزائن والبنوك والعهد والقيود والجرد النقدي، ونماذج السندات والطباعة، وشاشة الأرصدة الافتتاحية بعد تطويرها، وتقارير الميزان والقوائم المالية، ورابط مشاركة كشف الحساب، <b>ووحدة حجوزات الفنادق كاملة</b> كأساس للحجوزات الخارجية التي تريدها لاحقاً.</div>
+  </div>
+
+  <div class="card">
+    <h2>🔁 ما لدينا مكرراً في البرنامجين، وكيف نوحّده</h2>
+    <div class="scroll"><table class="t" style="min-width:720px;">
+      <thead><tr><th class="r">البند</th><th class="r">في الـ ERP</th><th class="r">في برنامج العمرة</th><th class="r">القرار</th></tr></thead>
+      <tbody>
+        <tr><td class="r">المستخدمون والصلاحيات</td><td class="r">مستخدمون + أدوار + صلاحية لكل شاشة</td><td class="r">مستخدمون + صلاحيات دقيقة</td><td class="r">نظام برنامج العمرة، مع إضافة صلاحيات الحسابات</td></tr>
+        <tr><td class="r">العملاء</td><td class="r">حساب لكل عميل بالدليل</td><td class="r">دليل عملاء + حسابات عملاء بالرحلات</td><td class="r">عميل واحد، وحسابه في الدليل يُنشأ تلقائياً ويرتبط به</td></tr>
+        <tr><td class="r">الموردون/الوكلاء</td><td class="r">موردون بتصنيفات</td><td class="r">وكلاء سعوديون + شركات نقل + فنادق</td><td class="r">حساب دائن لكل وكيل ومورد يُنشأ تلقائياً</td></tr>
+        <tr><td class="r">حجوزات الفنادق</td><td class="r">وحدة كاملة بقيود</td><td class="r">اتفاقيات سكن + تسكين الرحلات</td><td class="r">نقل وحدة الـ ERP لتكون «حجوزات الفنادق الخارجية»، مرتبطة بالاتفاقيات</td></tr>
+        <tr><td class="r">سجل التعديلات، الإشعارات، المرفقات، الرسائل</td><td class="r">موجود</td><td class="r">موجود (أكثر تطوراً)</td><td class="r">نظام برنامج العمرة</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="page" id="p2">
+  <div class="card">
+    <h2>🗃️ نموذج البيانات المقترح (دفتر أستاذ عام واحد)</h2>
+    <div class="scroll"><table class="t" style="min-width:760px;">
+      <thead><tr><th class="r">الشيت</th><th class="r">الأعمدة الأساسية</th><th class="r">تحسين عن الـ ERP</th></tr></thead>
+      <tbody>
+        <tr><td class="r"><b>دليل الحسابات</b></td><td class="r">كود هرمي (1101، 110101…)، الاسم، النوع، التصنيف، الحساب الأب، العملة، طبيعته، نشط، ربط (عميل/وكيل/خزينة/بنك/عهدة)</td><td class="r">شجرة حقيقية بأكواد، وربط مباشر بكيانات البرنامج</td></tr>
+        <tr><td class="r"><b>رؤوس القيود</b></td><td class="r">رقم القيد، التاريخ، النوع (يدوي/قبض/صرف/بنك/عهدة/تلقائي/افتتاحي)، البيان، الحالة (مسودة/مرحَّل/ملغى)، <b>مفتاح المصدر</b>، دفعة الاستيراد، المستخدم</td><td class="r">حالة القيد، ومفتاح مصدر يمنع التكرار، ورقم دفعة يسمح بإلغاء استيراد كامل</td></tr>
+        <tr><td class="r"><b>أسطر القيود</b></td><td class="r">رقم القيد، الحساب، مدين، دائن، العملة، <b>سعر الصرف</b>، المعادل بالجنيه، <b>الرحلة، الشركة المنفذة، العميل، الوكيل</b>، البيان</td><td class="r">مراكز تكلفة، وسعر صرف على كل سطر، وميزان موحّد بالجنيه</td></tr>
+        <tr><td class="r"><b>الفترات المالية</b></td><td class="r">السنة/الشهر، مفتوحة/مقفلة، من أقفلها ومتى</td><td class="r">جديد: إقفال فترات</td></tr>
+        <tr><td class="r"><b>أرصدة مخزّنة</b></td><td class="r">رصيد كل حساب × عملة × شهر (تُحدَّث مع كل ترحيل)</td><td class="r">تقارير سريعة بلا قراءة كل القيود</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note i">📁 <b>مكان البيانات:</b> أقترح أن تكون شيتات الحسابات في <b>ملف Google Sheets منفصل</b> خاص بالحسابات، يفتحه البرنامج نفسه. هكذا لا تُبطئ القيود الكثيرة شيتات الرحلات، ويسهل عمل نسخة احتياطية وأرشيف سنوي للحسابات وحدها.</div>
+  </div>
+
+  <div class="card">
+    <h2>🔗 مصادر القيود التلقائية داخل برنامج العمرة</h2>
+    <div class="scroll"><table class="t" style="min-width:760px;">
+      <thead><tr><th class="r">الحدث</th><th class="r">القيد</th><th class="r">مفتاح المصدر (يمنع التكرار)</th></tr></thead>
+      <tbody>
+        <tr><td class="r">🛂 إصدار موفا</td><td class="r">من حـ/ العميل (أو تكلفة الرحلة) إلى حـ/ الوكيل + الفرق إلى حـ/ إيرادات عمرة</td><td class="r latin">VZ:&lt;id&gt;</td></tr>
+        <tr><td class="r">🏛️ ملف وزارة مراجَع</td><td class="r">من حـ/ العميل (أو الرحلة) إلى حـ/ رسوم الوزارة المستحقة + الفرق</td><td class="r latin">MF:&lt;id&gt;</td></tr>
+        <tr><td class="r">🚌 دورة نقل</td><td class="r">من حـ/ العميل أو الرحلة إلى حـ/ شركة النقل + الفرق</td><td class="r latin">TR:&lt;id&gt;</td></tr>
+        <tr><td class="r">🏨 حجز فندق خارجي (من وحدة الـ ERP)</td><td class="r">من حـ/ العميل إلى حـ/ المورد + الفرق إلى حـ/ إيرادات السكن</td><td class="r latin">BK:&lt;id&gt;</td></tr>
+        <tr><td class="r">💵 دفعة عميل (حسابات العملاء)</td><td class="r">من حـ/ الخزينة أو البنك إلى حـ/ العميل</td><td class="r latin">CP:&lt;id&gt;</td></tr>
+        <tr><td class="r">💳 سداد لوكيل (كشف الوكيل)</td><td class="r">من حـ/ الوكيل إلى حـ/ البنك</td><td class="r latin">AP:&lt;id&gt;</td></tr>
+        <tr><td class="r">🧾 بنود حساب العميل (نوع «بنود»)</td><td class="r">من حـ/ العميل إلى حـ/ الإيراد المناسب لكل بند</td><td class="r latin">CI:&lt;id&gt;</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note w">⚙️ تعمل القيود التلقائية أولاً في <b>«وضع الظل»</b>: تُسجَّل بجانب الشاشات الحالية، مع تقرير مطابقة يقارن رصيد كل عميل ووكيل في الدفتر برصيده في الشاشة. بعد التطابق نعتمد الدفتر مصدراً رئيسياً.</div>
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="page" id="p3">
+  <div class="card">
+    <h2>📥 آلية تسجيل القيود والحسابات القديمة بشكل مجمّع</h2>
+    <p>ثلاث طرق تكمل بعضها، وكلها تمر بنفس الخطوات: <b>لصق أو رفع ← مطابقة الحسابات ← فحص ← معاينة ← ترحيل بضغطة واحدة</b>. كل عملية استيراد تحمل <b>رقم دفعة</b>، فيمكن إلغاؤها كاملة لو ظهر خطأ.</p>
+    <div class="opts">
+      <div class="opt"><h3>1) الأرصدة الافتتاحية من Excel</h3><p style="font-size:13px;">الصق عمودين أو ثلاثة من Excel: اسم الحساب، مدين، دائن، العملة. يطابق البرنامج الأسماء مع الدليل (حتى لو اختلفت الهمزات أو المسافات)، ويقترح إنشاء الحسابات الناقصة دفعة واحدة، ويرحّل الفرق إن وُجد لحساب «فروق أرصدة افتتاحية».</p></div>
+      <div class="opt"><h3>2) قيود تاريخية من Excel</h3><p style="font-size:13px;">نموذج جاهز: رقم القيد، التاريخ، الحساب، مدين، دائن، العملة، سعر الصرف، البيان، الرحلة، العميل. الأسطر بنفس رقم القيد تصبح قيداً واحداً، ويتحقق البرنامج من توازن كل قيد قبل الترحيل.</p></div>
+      <div class="opt"><h3>3) توليد تلقائي من بيانات البرنامج الحالية <span class="tag g">الأسهل</span></h3><p style="font-size:13px;">تختار <b>تاريخ بداية</b> الحسابات، فيحسب البرنامج أرصدة كل العملاء والوكلاء وشركات النقل ورسوم الوزارة في ذلك التاريخ من شاشاته الحالية، ويقترحها كأرصدة افتتاحية جاهزة للمراجعة. بعد ذلك التاريخ تُولَّد القيود تلقائياً.</p></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🖥️ معاينة — شاشة «الاستيراد المجمّع»</h2>
+    <div class="mock">
+      <div class="mock-h">📥 استيراد مجمّع <small>· نوع الاستيراد: أرصدة افتتاحية · السنة المالية 2026 · بتاريخ <span class="latin">01/01/2026</span></small></div>
+      <div class="mock-b">
+        <div class="steps"><span class="ok">① لصق / رفع ✔</span><span class="ok">② مطابقة الحسابات ✔</span><span class="on">③ الفحص والمعاينة</span><span>④ الترحيل</span></div>
+        <textarea class="paste" readonly>شركة النور للسياحة	125000		جنيه
+مؤسسه الهدي	48000		جنيه
+الوكيل مؤسسة الرحاب		36500	ريال
+خزينة رئيسية	92000		جنيه
+بنك مصر	310000		جنيه</textarea>
+        <div class="kpis" style="margin-top:10px;">
+          <div class="kpi"><b class="latin">42</b><small>سطر</small></div>
+          <div class="kpi"><b class="latin" style="color:#16a34a;">38</b><small>حساب مطابق</small></div>
+          <div class="kpi"><b class="latin" style="color:#d97706;">3</b><small>حساب جديد مقترح</small></div>
+          <div class="kpi"><b class="latin" style="color:#dc2626;">1</b><small>خطأ يمنع الترحيل</small></div>
+        </div>
+        <div class="scroll"><table class="t" style="min-width:820px;">
+          <thead><tr><th>#</th><th class="r">الاسم كما لُصق</th><th class="r">الحساب المطابَق</th><th>مدين</th><th>دائن</th><th>العملة</th><th class="r">الحالة</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td class="r">شركة النور للسياحة</td><td class="r">1201 · شركة النور للسياحة</td><td class="latin">125,000</td><td></td><td>جنيه</td><td class="r"><span class="tag g">✔ مطابق</span></td></tr>
+            <tr class="warn"><td>2</td><td class="r">مؤسسه الهدي</td><td class="r">1202 · مؤسسة الهدى <small style="color:#92400e;">(فرق همزات)</small></td><td class="latin">48,000</td><td></td><td>جنيه</td><td class="r"><span class="tag y">⚠ مطابقة تقريبية — راجِع</span></td></tr>
+            <tr><td>3</td><td class="r">الوكيل مؤسسة الرحاب</td><td class="r">2101 · مؤسسة الرحاب (وكيل)</td><td></td><td class="latin">36,500</td><td>ريال</td><td class="r"><span class="tag g">✔ مطابق</span></td></tr>
+            <tr class="warn"><td>7</td><td class="r">عهدة أ/ محمود</td><td class="r"><select style="font-family:inherit;font-size:12px;"><option>➕ إنشاء حساب عهدة جديد</option><option>اختيار حساب موجود…</option></select></td><td class="latin">5,000</td><td></td><td>جنيه</td><td class="r"><span class="tag y">حساب جديد</span></td></tr>
+            <tr class="err"><td>19</td><td class="r">بنك الأهلي</td><td class="r">1103 · البنك الأهلي (جنيه)</td><td class="latin">12,000</td><td></td><td>ريال</td><td class="r"><span class="tag r">✖ عملة الحساب جنيه — صحّح العملة</span></td></tr>
+            <tr class="grp"><td colspan="3" class="r">الإجمالي بالجنيه</td><td class="latin">1,284,300</td><td class="latin">1,198,000</td><td></td><td class="r"><span class="tag y">فرق 86,300 → «فروق أرصدة افتتاحية»</span></td></tr>
+          </tbody>
+        </table></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+          <button class="btn">⬇️ تنزيل نموذج Excel</button><button class="btn">💾 حفظ كمسودة</button><button class="btn p" disabled style="opacity:.6">✅ ترحيل (بعد تصحيح الأخطاء)</button>
+        </div>
+      </div>
+    </div>
+    <div class="note g">🛡️ <b>الأمان:</b> لا يُرحَّل شيء قبل المعاينة، والقيود المستوردة تحمل رقم دفعة، و«إلغاء الدفعة» يحذف قيودها كلها معاً. لو استوردت ملفاً مرتين يُنبّهك البرنامج قبل التكرار.</div>
+  </div>
+
+  <div class="card">
+    <h2>🖥️ معاينة — «توليد الأرصدة الافتتاحية من بيانات البرنامج»</h2>
+    <div class="mock">
+      <div class="mock-h">⚡ أرصدة افتتاحية تلقائية <small>· تاريخ بداية الحسابات: <span class="latin">01/01/2026</span></small></div>
+      <div class="mock-b scroll">
+        <table class="t" style="min-width:760px;">
+          <thead><tr><th class="r">المصدر في البرنامج</th><th>عدد الحسابات</th><th>مدين (جنيه)</th><th>دائن (جنيه)</th><th>مدين (ريال)</th><th>دائن (ريال)</th><th></th></tr></thead>
+          <tbody>
+            <tr><td class="r">👤 أرصدة العملاء (حسابات العملاء)</td><td class="latin">64</td><td class="latin">2,418,500</td><td class="latin">186,000</td><td class="latin">312,400</td><td class="latin">24,100</td><td><input type="checkbox" checked></td></tr>
+            <tr><td class="r">🛂 أرصدة الوكلاء (كشوف حساب الوكلاء)</td><td class="latin">11</td><td class="latin">—</td><td class="latin">—</td><td class="latin">18,000</td><td class="latin">742,900</td><td><input type="checkbox" checked></td></tr>
+            <tr><td class="r">🏛️ رصيد رسوم الغرفة لكل شركة (ملفات الوزارة)</td><td class="latin">4</td><td class="latin">96,000</td><td class="latin">—</td><td class="latin">—</td><td class="latin">—</td><td><input type="checkbox" checked></td></tr>
+            <tr><td class="r">🚌 شركات النقل</td><td class="latin">3</td><td class="latin">—</td><td class="latin">—</td><td class="latin">—</td><td class="latin">58,300</td><td><input type="checkbox" checked></td></tr>
+            <tr><td class="r">💵 الخزائن والبنوك (تُدخل يدوياً أو من Excel)</td><td class="latin">—</td><td colspan="4" style="color:#64748b;">غير موجودة في البرنامج الحالي — تُكمَل بالطريقة 1</td><td></td></tr>
+          </tbody>
+        </table>
+        <div style="text-align:left;margin-top:8px;"><button class="btn">👁️ عرض التفاصيل لكل حساب</button> <button class="btn p">➡️ إرسال للمعاينة والترحيل</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="page" id="p4">
+  <div class="card">
+    <h2>🪜 مراحل التنفيذ المقترحة</h2>
+    <div class="phase"><div class="n">0</div><div class="c"><b>التجهيز:</b> ملف شيت منفصل للحسابات، ونقل دليل الحسابات وتصنيفات الـ ERP إليه بأكواد هرمية، وربط العملاء والوكلاء تلقائياً بحساباتهم، وصلاحيات الحسابات.</div></div>
+    <div class="phase"><div class="n">1</div><div class="c"><b>النواة المحاسبية:</b> القيود اليدوية (مسودة ← ترحيل)، والخزائن وسندات القبض والصرف، والبنوك، والعهد، وتحويل العملة، والأستاذ العام، وميزان المراجعة، و<b>الاستيراد المجمّع</b> للأرصدة الافتتاحية والقيود القديمة.</div></div>
+    <div class="phase"><div class="n">2</div><div class="c"><b>القيود التلقائية في وضع الظل:</b> من التأشيرات والوزارة والنقل ودفعات العملاء والوكلاء وبنود الحسابات، مع تقرير المطابقة. هنا أيضاً <b>توليد الأرصدة الافتتاحية من بيانات البرنامج</b>.</div></div>
+    <div class="phase"><div class="n">3</div><div class="c"><b>التقارير المالية:</b> قائمة الدخل والمركز المالي، وربحية الرحلة والشركة والعميل، وأعمار الديون، والتدفق النقدي، وحركة الخزائن، وإقفال الفترات.</div></div>
+    <div class="phase"><div class="n">4</div><div class="c"><b>حجوزات الفنادق الخارجية:</b> نقل وحدة الـ ERP وتطويرها (عملاء، موردون، فنادق، تأكيد، قيد تلقائي)، وربطها باتفاقيات السكن. ثم نظام الحجوزات الذي ذكرته.</div></div>
+    <div class="note i">كل مرحلة تُسلَّم وتُجرَّب قبل التالية، والشاشات الحالية تبقى تعمل طوال الوقت بلا أي تغيير في طريقة عملكم.</div>
+  </div>
+
+  <div class="card">
+    <h2>❓ أسئلة للنقاش قبل البدء</h2>
+    <div class="q"><b class="n">1</b><b>هل برنامج الـ ERP مستخدم حالياً وبه بيانات حقيقية؟</b> (قيود، خزائن، حجوزات)<br>
+      <span class="o">نعم — نحتاج نقل بياناته</span><span class="o">لا — كان تجريبياً، نبدأ من الصفر</span></div>
+    <div class="q"><b class="n">2</b><b>طريقة الدمج:</b><br><span class="o rec">أ) الحسابات داخل برنامج العمرة ⭐</span><span class="o">ب) العمرة داخل الـ ERP</span><span class="o">ج) برنامجان مرتبطان</span></div>
+    <div class="q"><b class="n">3</b><b>مكان بيانات الحسابات:</b><br><span class="o rec">ملف شيت منفصل للحسابات ⭐</span><span class="o">نفس ملف برنامج العمرة</span></div>
+    <div class="q"><b class="n">4</b><b>تاريخ بداية الحسابات في النظام الجديد</b> (للأرصدة الافتتاحية)؟ مثلاً 01/01/2026 أو بداية الموسم.</div>
+    <div class="q"><b class="n">5</b><b>العملات:</b> جنيه وريال فقط، أم نضيف الدولار كما في الـ ERP؟ وما عملة الأساس للميزان؟<br><span class="o rec">جنيه + ريال + دولار، والأساس الجنيه ⭐</span><span class="o">جنيه + ريال فقط</span></div>
+    <div class="q"><b class="n">6</b><b>الشركات المنفذة:</b> هل لكل شركة منفذة حسابات مستقلة بالكامل (دفاتر منفصلة)، أم دفتر واحد وكل شركة وسم على القيد؟<br><span class="o rec">دفتر واحد + وسم الشركة ⭐</span><span class="o">دفاتر منفصلة لكل شركة</span></div>
+    <div class="q"><b class="n">7</b><b>البدء بأي مرحلة؟</b> أقترح المرحلتين 0 و1 معاً، لأنهما تعطيان خزائن وبنوك وعهد وقيود وميزان واستيراد مجمّع يعمل فوراً.</div>
+  </div>
+</section>
+</main>
+<script>
+function tab(i, b) {
+  document.querySelectorAll('.page').forEach(function (p, k) { p.classList.toggle('on', k === i); });
+  document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>
