@@ -1,17 +1,25 @@
 {
-  "short_name": "ادارة رحلات العمرة - شركة منف للسياحة",
+  "short_name": "رحلات العمرة - منف",
   "name": "ادارة رحلات العمرة - شركة منف للسياحة",
+  "lang": "ar",
+  "dir": "rtl",
   "icons": [
     {
-      "src": "https://flaticon.com",
+      "src": "%D9%84%D9%88%D8%AC%D9%88%20%D8%A7%D8%B4%D8%B9%D8%A7%D8%B1%D8%A7%D8%AA%20%D8%B1%D8%AD%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D8%B9%D9%85%D8%B1%D8%A9.png",
       "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any maskable"
+      "sizes": "627x649",
+      "purpose": "any"
+    },
+    {
+      "src": "favicon.ico",
+      "type": "image/png",
+      "sizes": "558x564"
     }
   ],
-  "start_url": ".",
+  "start_url": "./",
+  "scope": "./",
   "background_color": "#1e3d59",
-  "theme-color": "#1e3d59",
+  "theme_color": "#1e3d59",
   "display": "standalone",
-  "orientation": "portrait"
+  "orientation": "any"
 }

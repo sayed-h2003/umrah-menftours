@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.198";
+var APP_VERSION = "4.199";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6366,7 +6366,11 @@ function validateSession_(token) {
 }
 
 // دالة الحماية المستخدمة في بداية كل دالة حساسة - ترمي خطأ لو الجلسة غير صالحة
+// ⚡ (V4.199) ذاكرة داخل التنفيذ الواحد: الدوال المركّبة (مثل getClientAccount) كانت تتحقق من نفس الجلسة
+// 3 مرات (6 نداءات كاش) — التحقق الأول يكفي طوال نفس الطلب
+var _AUTH_MEMO_ = { t: null, s: null };
 function requireAuth_(token) {
+  if (token && _AUTH_MEMO_.t === token && _AUTH_MEMO_.s) return _AUTH_MEMO_.s;
   var session = validateSession_(token);
   if (!session) {
     throw new Error("جلسة غير صالحة أو منتهية - يرجى تسجيل الدخول مرة أخرى");
@@ -6374,6 +6378,7 @@ function requireAuth_(token) {
   // تجديد الجلسة تلقائياً طالما المستخدم نشط (Sliding Session)
   var cache = CacheService.getScriptCache();
   cache.put('session_' + token, JSON.stringify(session), SESSION_DURATION_SECONDS);
+  _AUTH_MEMO_ = { t: token, s: session };
   return session;
 }
 
@@ -6410,7 +6415,7 @@ function logoutUserSession(token) {
    يرسلها المتصفح كل دقيقة تقريباً — نداء واحد صغير لكل مستخدم كل دقيقة، بلا أي تأثير محسوس.
    ============================================================ */
 var ONLINE_REGISTRY_KEY_ = 'active_users_registry_v1';
-var ONLINE_STALE_MS_ = 130000; // 130 ثانية — أكبر قليلاً من فاصل النبضة (كل ~60 ثانية) لتحمّل تأخر عرضي
+var ONLINE_STALE_MS_ = 200000; // (V4.199) 200 ثانية — التبويب المخفي ينبض كل ~120 ثانية؛ هامش لتأخر عرضي
 function _onlineRead_() {
   try {
     var raw = CacheService.getScriptCache().get(ONLINE_REGISTRY_KEY_);
@@ -6810,6 +6815,7 @@ var ALL_CACHE_KEYS = [
   'mf_ref_lists_cache',       // ⚡ (V4.193) الشركات/الرحلات/العملاء لشاشتي الوزارة والوكلاء
   'notifications_rows_cache', // 🔔 (V4.177) صفوف التنبيهات الخام (تُبطَّل أيضاً مع كل كتابة تنبيه)
   'ministry_trip_links_cache', // 🔗 (V4.178) روابط الرحلة⇄ملف الوزارة (تُبطَّل مع حفظ ملف أو رحلة)
+  'acc_client_stats_idx', // ⚡ (V4.199) فهرس أعداد/فنادق كل عميل برحلاته (شاشة حسابات العملاء) — يُبطَّل مع أي تعديل كشف
   'visa_bootstrap_cache' // 🧑‍💼 (V4.142) بيانات شاشة متابعة التأشيرات والوكلاء — كانت مفقودة من هذه القائمة
                          // فيظل ربط الوكيل بالشركة (زر إعدادات الوكيل) قديماً في هذه الشاشة حتى تنتهي صلاحية الكاش تلقائياً
 ];
@@ -13282,48 +13288,16 @@ function getClientTripStats(authToken, clientName) {
   clientName = String(clientName || '').trim();
   if (!clientName) throw new Error('اسم العميل مطلوب');
 
-  var byTrip = {}, noTripCount = 0;
-  var pSheet = _getPilgrimsSheet_();
-  if (pSheet && pSheet.getLastRow() >= 2) {
-    var C = _robustColMap_(pSheet, PILGRIMS_HEADERS_);
-    var P = _cellReader_(C, PILGRIMS_COL_);
-    pSheet.getRange(2, 1, pSheet.getLastRow() - 1, pSheet.getLastColumn()).getValues().forEach(function(r) {
-      if (String(P(r, 'client') || '').trim() !== clientName) return;
-      if (!String(P(r, 'name') || '').trim()) return;
-      var tn = String(P(r, 'tripName') || '').trim();
-      if (!tn) { noTripCount++; return; }
-      var type = String(P(r, 'type') || '').trim();
-      var e = (byTrip[tn] = byTrip[tn] || { adults: 0, children: 0, infants: 0, total: 0, hotels: {}, accom: {} });
-      if (type === 'طفل') e.children++;
-      else if (type === 'رضيع') e.infants++;
-      else e.adults++;
-      e.total++;
-      // 🏨 (V4.30) بصمة التسكين/المستوى (فندق المدينة/مكة + طبيعة التسكين) — لرصد أي تغيير عنها لاحقًا بالحساب
-      var hm = String(P(r, 'hotelMadinah') || '').trim(), hk = String(P(r, 'hotelMakkah') || '').trim();
-      if (hm) e.hotels['M:' + hm] = (e.hotels['M:' + hm] || 0) + 1;
-      if (hk) e.hotels['K:' + hk] = (e.hotels['K:' + hk] || 0) + 1;
-      var acc = String(P(r, 'accommodation') || '').trim();
-      if (acc) e.accom[acc] = (e.accom[acc] || 0) + 1;
-    });
-  }
-
-  // بيانات الرحلات (الشركة/الوكيل/التواريخ) للرحلات التي ظهر فيها العميل فقط
-  var trips = {};
-  var tSheet = _getTripsSheet_();
-  if (tSheet && tSheet.getLastRow() >= 2) {
-    var tC = _robustColMap_(tSheet, TRIPS_HEADERS_);
-    var T = _cellReader_(tC, TRIPS_COL_);
-    tSheet.getRange(2, 1, tSheet.getLastRow() - 1, tSheet.getLastColumn()).getValues().forEach(function(r) {
-      var n = String(T(r, 'name') || '').trim();
-      if (!n || !byTrip[n]) return;
-      trips[n] = {
-        company: String(T(r, 'company') || ''),
-        agent: String(T(r, 'agent') || ''),
-        departDate: _tripFormatDate_(T(r, 'departDate')),
-        returnDate: _tripFormatDate_(T(r, 'returnDate'))
-      };
-    });
-  }
+  // ⚡ (V4.199) بدل قراءة كشف المعتمرين وشيت الرحلات كاملين (كل الأعمدة) مع كل فتح حساب/حفظ، يُبنى فهرس
+  // واحد لكل العملاء مرة واحدة ويُخزَّن مؤقتاً (يُبطَّل تلقائياً مع أي تعديل بالكشوف عبر clearAllCache)
+  var idx = _accClientStatsIdx_();
+  var src = idx.c[clientName] || {};
+  var byTrip = {}, noTripCount = idx.n[clientName] || 0;
+  Object.keys(src).forEach(function(tn) {
+    var e = src[tn];
+    byTrip[tn] = { adults: e.a, children: e.c, infants: e.i, total: e.t, hotels: e.h || {}, accom: e.m || {} };
+  });
+  var trips = idx.t;
 
   var rows = Object.keys(byTrip).map(function(tn) {
     var t = trips[tn] || {};
@@ -13341,6 +13315,64 @@ function getClientTripStats(authToken, clientName) {
   rows.sort(function(a, b) { return toMs(a.departDate) - toMs(b.departDate); });
   return { rows: rows, noTripCount: noTripCount };
 }
+
+// 🗂️ (V4.199) فهرس كل العملاء: { c: {عميل: {رحلة: {a,c,i,t,h,m}}}, n: {عميل: عدد بلا رحلة}, t: {رحلة: {company,agent,departDate,returnDate}} }
+// نفس قواعد العدّ السابقة حرفياً (صفوف بلا اسم تُتجاهل، بلا رحلة ⇒ noTripCount، النوع طفل/رضيع/غير ذلك كبير)
+function _accClientStatsIdx_() {
+  if (_accClientStatsIdx_._m) return _accClientStatsIdx_._m;
+  var cached = getCachedData('acc_client_stats_idx');
+  if (cached && cached.c && cached.t && cached.n) return (_accClientStatsIdx_._m = cached);
+  var byClient = {}, noTrip = {}, tripSeen = {};
+  var pSheet = _getPilgrimsSheet_();
+  if (pSheet && pSheet.getLastRow() >= 2) {
+    var C = _robustColMap_(pSheet, PILGRIMS_HEADERS_);
+    var P = _cellReader_(C, PILGRIMS_COL_);
+    pSheet.getRange(2, 1, pSheet.getLastRow() - 1, pSheet.getLastColumn()).getValues().forEach(function(r) {
+      var cl = String(P(r, 'client') || '').trim();
+      if (!cl) return;
+      if (!String(P(r, 'name') || '').trim()) return;
+      var tn = String(P(r, 'tripName') || '').trim();
+      if (!tn) { noTrip[cl] = (noTrip[cl] || 0) + 1; return; }
+      tripSeen[tn] = true;
+      var ct = (byClient[cl] = byClient[cl] || {});
+      var e = (ct[tn] = ct[tn] || { a: 0, c: 0, i: 0, t: 0, h: {}, m: {} });
+      var type = String(P(r, 'type') || '').trim();
+      if (type === 'طفل') e.c++;
+      else if (type === 'رضيع') e.i++;
+      else e.a++;
+      e.t++;
+      var hm = String(P(r, 'hotelMadinah') || '').trim(), hk = String(P(r, 'hotelMakkah') || '').trim();
+      if (hm) e.h['M:' + hm] = (e.h['M:' + hm] || 0) + 1;
+      if (hk) e.h['K:' + hk] = (e.h['K:' + hk] || 0) + 1;
+      var acc = String(P(r, 'accommodation') || '').trim();
+      if (acc) e.m[acc] = (e.m[acc] || 0) + 1;
+    });
+  }
+  var trips = {};
+  var tSheet = _getTripsSheet_();
+  if (tSheet && tSheet.getLastRow() >= 2) {
+    var tC = _robustColMap_(tSheet, TRIPS_HEADERS_);
+    var T = _cellReader_(tC, TRIPS_COL_);
+    tSheet.getRange(2, 1, tSheet.getLastRow() - 1, tSheet.getLastColumn()).getValues().forEach(function(r) {
+      var n = String(T(r, 'name') || '').trim();
+      if (!n || !tripSeen[n]) return;
+      trips[n] = {
+        company: String(T(r, 'company') || ''),
+        agent: String(T(r, 'agent') || ''),
+        departDate: _tripFormatDate_(T(r, 'departDate')),
+        returnDate: _tripFormatDate_(T(r, 'returnDate'))
+      };
+    });
+  }
+  var idx = { c: byClient, n: noTrip, t: trips };
+  try {
+    // حد أمان لحجم الكاش (30 جزءاً × 80KB) — لو تجاوزه يُستخدم الفهرس داخل هذا الطلب فقط بلا تخزين
+    if (JSON.stringify(idx).length < 2300000) setCachedData('acc_client_stats_idx', idx);
+  } catch (eC) {}
+  return (_accClientStatsIdx_._m = idx);
+}
+// يُستدعى بعد أي كتابة بكشف المعتمرين داخل نفس الطلب (نادراً) لإعادة بناء الفهرس
+function _accClientStatsIdxReset_() { _accClientStatsIdx_._m = null; clearCachedData('acc_client_stats_idx'); }
 
 /* ============================================================
    💰 حسابات العملاء (V4.00)
@@ -13409,6 +13441,9 @@ function _ccLogDiffEntries_(contractNo, oldRow, newRow) {
 
 function getClientMergeGroup(authToken, client) {
   _accPerm_(authToken, 'view');
+  return _accMergeGroupRead_(client);
+}
+function _accMergeGroupRead_(client) {
   client = String(client || '').trim();
   var sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS);
   if (sh.getLastRow() < 2) return { success: true, trips: null };
@@ -13708,6 +13743,22 @@ function _accNextPaySerial_() {
     var next = (parseInt(props.getProperty('ACC_PAY_SERIAL_CTR'), 10) || 0) + 1;
     props.setProperty('ACC_PAY_SERIAL_CTR', String(next));
     return next;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ⚡ (V4.199) حجز مجموعة أرقام متتالية بقفل واحد ونداءَي خصائص فقط — بدل قفل + نداءين لكل دفعة
+// (كان حفظ 10 دفعات معاً = 10 أقفال و20 نداء خصائص). يُعيد أول رقم بالمجموعة
+function _accNextPaySerials_(n) {
+  n = Math.max(1, n | 0);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var first = (parseInt(props.getProperty('ACC_PAY_SERIAL_CTR'), 10) || 0) + 1;
+    props.setProperty('ACC_PAY_SERIAL_CTR', String(first + n - 1));
+    return first;
   } finally {
     lock.releaseLock();
   }
@@ -14053,7 +14104,7 @@ function getClientAccount(authToken, client) {
   // ⚡ (V4.41) حالة الدمج المحفوظة تُدمَج بنفس استجابة تحميل الحساب — بلا أي طلب شبكة إضافي لاحقًا،
   // فتظهر شارة الدمج فورًا لحظة فتح شاشة الكشف الشامل بدل انتظار طلب منفصل (بطلب صريح)
   var mergeTrips = null;
-  try { mergeTrips = getClientMergeGroup(authToken, client).trips; } catch (eMg) { mergeTrips = null; }
+  try { mergeTrips = _accMergeGroupRead_(client).trips; } catch (eMg) { mergeTrips = null; }
 
   return { success: true, client: client, trips: stats.rows, noTripCount: stats.noTripCount,
            items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips };
@@ -14245,7 +14296,10 @@ function saveAccItemsBulk(authToken, client, trip, itemsArr, asAuto) {
     var newId = _accId_('I');
     rows.push([newId, client, trip, item.desc, item.cat || '', currency, count, price, value, isDisc ? 'نعم' : 'لا', item.notes || '', session.username, now, '', '', nights || '', item.company || '', (asAuto === true && !isDisc) ? 'نعم' : '', (item.order !== undefined && item.order !== null) ? item.order : '', item.isDirect === true ? 'نعم' : 'لا']);
     // 🚀 (V4.89) نُرجع id/value لكل بند جديد — يسمح للواجهة بتحديث محلي فوري بدل إعادة تحميل الحساب كاملاً
-    created.push({ id: newId, value: value, isDiscount: isDisc });
+    // ⚡ (V4.199) البند كاملاً بنفس شكل getClientAccount — كي يُضاف محلياً من أي مسار (توليد البنود أيضاً)
+    created.push({ id: newId, value: value, isDiscount: isDisc, trip: trip, desc: String(item.desc), cat: item.cat || '', currency: currency,
+      count: count, price: price, notes: item.notes || '', nights: nights, company: item.company || '',
+      auto: (asAuto === true && !isDisc) ? 'نعم' : '', order: _accNum_(item.order), isDirect: item.isDirect === true });
     n++;
   });
   if (!rows.length) return { success: false, error: 'لا توجد بنود صالحة' };
@@ -14283,16 +14337,20 @@ function deleteAccItemsBulk(authToken, ids) {
 function _accCfMarker_() { return 'cf' + new Date().getTime().toString(36) + Math.floor(Math.random() * 1e4).toString(36); }
 function _accCfMarkerOf_(desc) { var m = String(desc || '').match(/⟦cf:([a-z0-9]+)⟧/i); return m ? m[1] : null; }
 function _accCfFindAndDelete_(marker, exceptSheetName, exceptId) {
+  // ⚡ (V4.199) يُعيد معرّفات الأطراف المحذوفة كي تحذفها الواجهة محلياً بدل إعادة تحميل الحساب كاملاً
+  var deleted = [];
   [[ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS, 3], [ACC_PAY_SHEET, ACC_PAY_HEADERS, 8]].forEach(function(cfg) {
     var sh = _accSheet_(cfg[0], cfg[1]);
     if (sh.getLastRow() < 2) return;
-    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, cfg[1].length).getValues();
+    // عمودا المعرّف والبيان فقط بدل كل الأعمدة
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, cfg[2] + 1).getValues();
     for (var i = 0; i < vals.length; i++) {
       var id = String(vals[i][0]);
       if (cfg[0] === exceptSheetName && id === exceptId) continue;
-      if (_accCfMarkerOf_(vals[i][cfg[2]]) === marker) { sh.deleteRow(i + 2); break; }
+      if (_accCfMarkerOf_(vals[i][cfg[2]]) === marker) { sh.deleteRow(i + 2); deleted.push(id); break; }
     }
   });
+  return deleted;
 }
 
 function carryForwardTripBalance(authToken, client, fromTrip, toTrip) {
@@ -14324,31 +14382,47 @@ function carryForwardTripBalance(authToken, client, fromTrip, toTrip) {
 
   var now = new Date();
   var nowStr = Utilities.formatDate(now, _tz_(), 'dd/MM/yyyy');
+  // ⚡ (V4.199) كل الصفوف تُجمَع ثم تُكتب بنداء واحد لكل شيت (بدل حتى 4 نداءات appendRow منفصلة)،
+  // وتُعاد للواجهة لتُضاف محلياً بدل إعادة تحميل الحساب كاملاً
+  var newItems = [], newPays = [], outItems = [], outPays = [];
+  var addItem_ = function(trip, desc, cur, a) {
+    var id = _accId_('I');
+    newItems.push([id, client, trip, desc, 'أخرى', cur, 1, a, a, 'لا', '', session.username, now, '', '', '', '', '']);
+    outItems.push({ id: id, trip: trip, desc: desc, cat: 'أخرى', currency: cur, count: 1, price: a, value: a, isDiscount: false,
+      notes: '', nights: 0, company: '', auto: '', order: 0, isDirect: false });
+  };
+  var addPay_ = function(trip, desc, cur, a) {
+    var id = _accId_('P');
+    newPays.push([id, client, trip, 'دفعة', nowStr, a, cur, '', desc, session.username, now]);
+    outPays.push({ id: id, trip: trip, ptype: 'دفعة', date: nowStr, amount: a, currency: cur, rate: 0, desc: desc, serial: '' });
+  };
   [['EGP', netE], ['SAR', netS]].forEach(function(cc) {
     var cur = cc[0], amt = cc[1];
     if (!amt) return;
     var marker = _accCfMarker_();
     if (amt > 0) {
       // fromTrip مدين (مستحق عليه) → دفعة تُسدِّده بـfromTrip + بند يضيف نفس المبلغ دَينًا بـtoTrip
-      pSh.appendRow([_accId_('P'), client, fromTrip, 'دفعة', nowStr, amt, cur, '', 'رصيد مرحّل إلى رحلة ' + toTrip + ' ⟦cf:' + marker + '⟧', session.username, now]);
-      iSh.appendRow([_accId_('I'), client, toTrip, 'رصيد مرحّل من رحلة ' + fromTrip + ' ⟦cf:' + marker + '⟧', 'أخرى', cur, 1, amt, amt, 'لا', '', session.username, now, '', '', '', '', '']);
+      addPay_(fromTrip, 'رصيد مرحّل إلى رحلة ' + toTrip + ' ⟦cf:' + marker + '⟧', cur, amt);
+      addItem_(toTrip, 'رصيد مرحّل من رحلة ' + fromTrip + ' ⟦cf:' + marker + '⟧', cur, amt);
     } else {
       var a = -amt;
       // fromTrip دائن (فائض مدفوعات) → بند يمتص الفائض بـfromTrip + دفعة تُخفِّض مستحق toTrip بنفس المبلغ
-      iSh.appendRow([_accId_('I'), client, fromTrip, 'ترحيل رصيد إلى رحلة ' + toTrip + ' ⟦cf:' + marker + '⟧', 'أخرى', cur, 1, a, a, 'لا', '', session.username, now, '', '', '', '', '']);
-      pSh.appendRow([_accId_('P'), client, toTrip, 'دفعة', nowStr, a, cur, '', 'رصيد مرحّل من رحلة ' + fromTrip + ' ⟦cf:' + marker + '⟧', session.username, now]);
+      addItem_(fromTrip, 'ترحيل رصيد إلى رحلة ' + toTrip + ' ⟦cf:' + marker + '⟧', cur, a);
+      addPay_(toTrip, 'رصيد مرحّل من رحلة ' + fromTrip + ' ⟦cf:' + marker + '⟧', cur, a);
     }
   });
+  if (newItems.length) iSh.getRange(iSh.getLastRow() + 1, 1, newItems.length, newItems[0].length).setValues(newItems);
+  if (newPays.length) pSh.getRange(pSh.getLastRow() + 1, 1, newPays.length, newPays[0].length).setValues(newPays);
   _accEnsureMeta_(authToken, client, fromTrip, session.username);
   _accEnsureMeta_(authToken, client, toTrip, session.username);
   logChange_(session.username, 'ترحيل رصيد بين رحلتين', client, fromTrip + ' → ' + toTrip, '-', 'جنيه ' + netE + ' / ريال ' + netS);
-  return { success: true, netE: netE, netS: netS };
+  return { success: true, netE: netE, netS: netS, createdItems: outItems, createdPayments: outPays };
 }
 
 function deleteAccItem(authToken, id) {
   var session = _accPerm_(authToken, 'delete');
   var sh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, ACC_ITEMS_HEADERS.length).getValues();
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();   // ⚡ (V4.199) الأعمدة المطلوبة فقط
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) {
       logChange_(session.username, 'حذف بند حساب', String(vals[i][1]), String(vals[i][2]),
@@ -14356,8 +14430,8 @@ function deleteAccItem(authToken, id) {
       // 🔁 بند ترحيل رصيد: يُحذف طرفه المقابل معه تلقائيًا فيعود الرصيد لرحلته الأصلية
       var marker = _accCfMarkerOf_(vals[i][3]);
       sh.deleteRow(i + 2);
-      if (marker) _accCfFindAndDelete_(marker, ACC_ITEMS_SHEET, String(id));
-      return { success: true, cfLinked: !!marker };
+      var partners = marker ? _accCfFindAndDelete_(marker, ACC_ITEMS_SHEET, String(id)) : [];
+      return { success: true, cfLinked: !!marker, cfDeletedIds: partners };
     }
   }
   return { success: false, error: 'البند غير موجود' };
@@ -14424,9 +14498,10 @@ function updateAccPaymentsBulk(authToken, client, trip, list) {
   client = String(client || '').trim(); trip = String(trip || '').trim();
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
   if (sh.getLastRow() < 2) return { success: false, error: 'لا توجد دفعات' };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
-  var rowById = {};
-  vals.forEach(function(r, i) { rowById[String(r[0])] = i + 2; });
+  // ⚡ (V4.199) عمودا المعرّف والبيان يُقرآن مرة واحدة (بدل قراءة خلية البيان لكل دفعة على حدة)
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();
+  var rowById = {}, descById = {};
+  vals.forEach(function(r, i) { rowById[String(r[0])] = i + 2; descById[String(r[0])] = r[8]; });
   var n = 0;
   (list || []).forEach(function(p) {
     var rowIdx = rowById[String(p.id)];
@@ -14435,7 +14510,7 @@ function updateAccPaymentsBulk(authToken, client, trip, list) {
     if (amount <= 0) return;
     var currency = (p.currency === 'SAR') ? 'SAR' : 'EGP';
     // 🔁 حافظ على علامة ربط ترحيل الرصيد ⟦cf:...⟧ إن وُجدت بالبيان الأصلي حتى لو عُدِّل البيان الظاهر
-    var oldDesc2 = String(sh.getRange(rowIdx, 9).getValue() || '');
+    var oldDesc2 = String(descById[String(p.id)] || '');
     var cfM2 = oldDesc2.match(/⟦cf:[a-z0-9]+⟧/i);
     var newDesc2 = String(p.desc || '').trim();
     if (cfM2 && newDesc2.indexOf('⟦cf:') === -1) newDesc2 += ' ' + cfM2[0];
@@ -14453,20 +14528,29 @@ function saveAccPaymentsBulk(authToken, client, trip, list) {
   client = String(client || '').trim(); trip = String(trip || '').trim();
   if (!client || !trip || !Array.isArray(list) || !list.length) return { success: false, error: 'لا توجد دفعات' };
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
-  var now = new Date(), rows = [], total = { EGP: 0, SAR: 0 };
+  var now = new Date(), rows = [], total = { EGP: 0, SAR: 0 }, seen = {};
   list.forEach(function(p) {
     var amount = _accNum_(p.amount);
     if (amount <= 0) return;
     var currency = (p.currency === 'SAR') ? 'SAR' : 'EGP';
-    rows.push([_accId_('P'), client, trip, 'دفعة', String(p.date || ''), amount, currency, '', String(p.desc || '').trim(), session.username, now, _accNextPaySerial_()]);
+    var id = _accId_('P');
+    while (seen[id]) id = _accId_('P');   // معرّفات فريدة حتى لو وُلِّدت بنفس الملّي ثانية
+    seen[id] = true;
+    rows.push([id, client, trip, 'دفعة', String(p.date || ''), amount, currency, '', String(p.desc || '').trim(), session.username, now, '']);
     total[currency] += amount;
   });
   if (!rows.length) return { success: false, error: 'لا توجد دفعات صالحة (المبلغ مطلوب)' };
+  var firstSerial = _accNextPaySerials_(rows.length);
+  rows.forEach(function(r, i) { r[11] = firstSerial + i; });
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, ACC_PAY_HEADERS.length).setValues(rows);
   if (trip !== 'عام') _accEnsureMeta_(authToken, client, trip, session.username);
   logChange_(session.username, 'تسجيل دفعات متعددة', client, trip, '-',
     rows.length + ' دفعة (جنيه ' + total.EGP + ' / ريال ' + total.SAR + ')');
-  return { success: true, count: rows.length };
+  // ⚡ (V4.199) الدفعات المُنشأة تُعاد للواجهة لتُضاف محلياً — بدل إعادة تحميل الحساب كاملاً بعد الحفظ
+  var created = rows.map(function(r) {
+    return { id: r[0], trip: trip, ptype: 'دفعة', date: r[4], amount: r[5], currency: r[6], rate: 0, desc: r[8], serial: r[11] };
+  });
+  return { success: true, count: rows.length, created: created };
 }
 
 // 💠 (V4.24) تسجيل دفعات عامة متعددة لعملاء مختلفين دفعة واحدة — كل صف بعميله الخاص (بحث تنبئي بالواجهة)
@@ -14533,7 +14617,7 @@ function transferAccPayment(authToken, id, toTrip) {
   if (!toTrip) return { success: false, error: 'حدّد الرحلة الهدف' };
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
   if (sh.getLastRow() < 2) return { success: false, error: 'لا توجد دفعات' };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, ACC_PAY_HEADERS.length).getValues();
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues();   // ⚡ (V4.199) المعرّف/العميل/الرحلة فقط
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) {
       var client = String(vals[i][1] || ''), fromTrip = String(vals[i][2] || '');
@@ -14557,15 +14641,23 @@ function transferAccPaymentsBulk(authToken, ids, toTrip) {
   var idSet = {}; ids.forEach(function(x) { idSet[String(x)] = true; });
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
   if (sh.getLastRow() < 2) return { success: false, error: 'لا توجد دفعات' };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, ACC_PAY_HEADERS.length).getValues();
-  var n = 0, client = '';
+  // ⚡ (V4.199) 3 أعمدة فقط، والكتابة بنداء واحد لكل مجموعة صفوف متتالية بدل نداء لكل دفعة
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues();
+  var n = 0, client = '', hit = [];
   for (var i = 0; i < vals.length; i++) {
     if (!idSet[String(vals[i][0])]) continue;
     var fromTrip = String(vals[i][2] || '');
     if (fromTrip === toTrip) continue;
     client = String(vals[i][1] || client);
-    sh.getRange(i + 2, 3).setValue(toTrip);
+    hit.push(i);
     n++;
+  }
+  for (var h = 0; h < hit.length; ) {
+    var st = hit[h], en = st;
+    while (h + 1 < hit.length && hit[h + 1] === en + 1) { h++; en++; }
+    var block = []; for (var k = st; k <= en; k++) block.push([toTrip]);
+    sh.getRange(st + 2, 3, block.length, 1).setValues(block);
+    h++;
   }
   if (!n) return { success: false, error: 'لا توجد دفعات صالحة للنقل (ربما بالفعل بهذه الرحلة)' };
   if (toTrip !== 'عام') _accEnsureMeta_(authToken, client, toTrip, session.username);
@@ -14576,15 +14668,15 @@ function transferAccPaymentsBulk(authToken, ids, toTrip) {
 function deleteAccPayment(authToken, id) {
   var session = _accPerm_(authToken, 'delete');
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, ACC_PAY_HEADERS.length).getValues();
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();   // ⚡ (V4.199) الأعمدة المطلوبة فقط
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) {
       logChange_(session.username, 'حذف ' + (String(vals[i][3]) === 'تحويل' ? 'تحويل عملة' : 'دفعة حساب'), String(vals[i][1]), String(vals[i][2]), vals[i][5] + ' ' + vals[i][6], '-');
       // 🔁 دفعة ترحيل رصيد: يُحذف طرفها المقابل معها تلقائيًا فيعود الرصيد لرحلته الأصلية
       var marker = _accCfMarkerOf_(vals[i][8]);
       sh.deleteRow(i + 2);
-      if (marker) _accCfFindAndDelete_(marker, ACC_PAY_SHEET, String(id));
-      return { success: true, cfLinked: !!marker };
+      var partners = marker ? _accCfFindAndDelete_(marker, ACC_PAY_SHEET, String(id)) : [];
+      return { success: true, cfLinked: !!marker, cfDeletedIds: partners };
     }
   }
   return { success: false, error: 'السجل غير موجود' };

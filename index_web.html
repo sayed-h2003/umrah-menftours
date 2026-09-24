@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.198 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.199 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.198)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.199)', diag);
 }, 6000);
 </script>
 
@@ -1237,6 +1237,8 @@ table.trips-smart { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 /* 💰 (V4.08) النموذج A: القائمة الجانبية لرحلات العميل */
 /* 🧲 (V4.09) حاوية مخصصة تضمن القائمة بجانب التفاصيل دائمًا على الشاشات الواسعة */
 .acc-workspace { display: flex; gap: 10px; align-items: flex-start; }
+/* (V4.199) رؤوس أعمدة جداول حسابات العملاء كلها بمحاذاة الوسط */
+#section-accounts table th { text-align: center !important; vertical-align: middle !important; }
 .acc-workspace > .acc-main { flex: 1 1 0%; min-width: 0; }
 .acc-side {
   width: 235px; flex-shrink: 0; background: #0f2e2e; border-radius: 12px; padding: 10px;
@@ -1501,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.198</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.199</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6239,8 +6241,12 @@ function _onlineStart_() {
   _onlineTick_();
   _onlineTimer_ = setInterval(_onlineTick_, 60000);
 }
+var _onlineLastBeat_ = 0;
 function _onlineTick_() {
   if (!window.authToken) return;
+  // ⚡ (V4.199) البرنامج بتبويب مخفي/مصغَّر: نبضة كل دقيقتين بدل كل دقيقة (نصف الاستدعاءات الخلفية)
+  if (document.hidden && Date.now() - _onlineLastBeat_ < 100000) return;
+  _onlineLastBeat_ = Date.now();
   google.script.run
     .withSuccessHandler(function (res) {
       var el = document.getElementById('onlineUsersCount');
@@ -6945,7 +6951,7 @@ function logoutFromSessionWarning() {
 function showToast(msg, isError) {
   try {
     var t = document.createElement('div');
-    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:100000;' +
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:2147483647;' +
       'background:' + (isError ? '#b91c1c' : '#065f46') + ';color:#fff;padding:10px 22px;border-radius:30px;' +
       'font-weight:700;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.35);max-width:90vw;white-space:pre-line;' +
       'opacity:0;transition:opacity .25s ease;';
@@ -7093,7 +7099,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.198";
+var CLIENT_APP_VERSION = "4.199";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -18913,6 +18919,9 @@ function _saveImageFilesLocally_(files) {
    ============================================================ */
 window._pendingClipDeferred = null;
 function _tryClipboardImageCopy_() {
+  // (V4.199) أُوقف النسخ الصامت: داخل إطار جوجل يُرفض دائماً — كل أزرار «📸 صورة HD» تعرض الآن نافذة
+  // الخيارات الموحّدة (نسخ/حفظ/مشاركة) عبر _imageActionSheet_ والنسخ يتم بضغطة صريحة مع رد فعل واضح
+  return null;
   try {
     if (!(navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined')) return null;
     var resolveFn, rejectFn;
@@ -18965,7 +18974,9 @@ function _rejectPendingClipboard_() {
 function _shareOrSaveImageFiles_(files) {
   // 📋 (V4.129) يحلّ Promise الحافظة المُعلَّق منذ لحظة الضغطة (راجع _tryClipboardImageCopy_) —
   // فتُنسخ الصورة تلقائياً وبصمت هنا بلا أي زر يدوي، بنفس دقة اللوحة الكاملة قبل التقطيع
-  _resolvePendingClipboard_(files);
+  _rejectPendingClipboard_();
+  // (V4.199) نفس نافذة صورة HD الموحّدة لكل الشاشات (نسخ للحافظة / حفظ / مشاركة ثم إغلاق تلقائي)
+  if (files && files.length) { _imageActionSheet_(files); return; }
   try {
     if (navigator.canShare && navigator.canShare({ files: files })) {
       var settled = false, wasHidden = false;
@@ -19118,13 +19129,27 @@ function _imgActClose_() {
 }
 function _imgActCopy_(btn) {
   var files = window.__imgActFiles || []; if (!files.length) return;
+  if (btn && btn._busy) return;
   var blob = (files.length > 1 && window.__imgActFullBlob) ? window.__imgActFullBlob : files[0];
-  var ok = function () { _imgActClose_(); showToast('📋 نُسخت الصورة إلى الحافظة — الصقها في واتساب أو أي برنامج (Ctrl+V)'); };
+  // (V4.199) رد فعل مرئي فوري: الزر يتحول «⏳ جاري النسخ…» ثم «✅ تم النسخ» (أخضر) لحظة قبل الإغلاق
+  var orig = btn ? btn.innerHTML : '', origBg = btn ? btn.style.background : '';
+  var finished = false;
+  if (btn) { btn._busy = true; btn.innerHTML = '⏳ جاري النسخ…'; btn.style.opacity = '.85'; }
+  _imgActMsg_('');
+  var ok = function () {
+    if (finished) return; finished = true;
+    if (btn) { btn.innerHTML = '✅ تم النسخ إلى الحافظة'; btn.style.background = '#16a34a'; btn.style.opacity = '1'; }
+    _imgActMsg_('✅ نُسخت الصورة — الصقها في واتساب أو أي برنامج (Ctrl+V)');
+    setTimeout(function () { _imgActClose_(); showToast('📋 تم النسخ إلى الحافظة — الصق الصورة بـ Ctrl+V'); }, 1100);
+  };
   var manual = function () {
+    if (finished) return; finished = true;
+    if (btn) { btn._busy = false; btn.innerHTML = orig; btn.style.background = origBg; btn.style.opacity = '1'; }
     _imgActMsg_('⚠️ المتصفح لم يسمح بالنسخ التلقائي — اضغط بزر الفأرة الأيمن على الصورة أعلاه (أو مطوّلاً بالجوال) واختر «نسخ الصورة»', true);
   };
+  setTimeout(manual, 6000);   // لا يبقى الزر معلَّقاً أبداً لو لم يرد المتصفح
   if (_IMG_BRIDGE_.ok) {
-    _imgBridgeSend_('copy', { blob: blob }, function (r) { if (r && r.ok) ok(); else manual(); }, 4000);
+    _imgBridgeSend_('copy', { blob: blob }, function (r) { if (r && r.ok) ok(); else manual(); }, 5000);
     return;
   }
   // بلا جسر (البرنامج مفتوح مباشرة): محاولة النسخ الأصلي — ينجح لو لم يكن داخل إطار مقيَّد
@@ -23273,11 +23298,16 @@ function _accCur_(c) { return c === 'SAR' ? 'ريال' : 'جنيه'; }
 var _accClientsList = [];
 
 function _accInit_() {
-  google.script.run.withSuccessHandler(function(list) {
-    _accClientsList = (list || []).map(function(c) { return c.name; });
-    var dl = document.getElementById('accQuickPayClientList');
-    if (dl) dl.innerHTML = _accClientsList.map(function(n) { return '<option value="' + escapeHtml_(n) + '">'; }).join('');
-  }).getClientsDirectory(window.authToken);
+  // ⚡ (V4.199) دليل العملاء يُجلب مرة كل 3 دقائق على الأكثر — لا مع كل دخول للشاشة (كان ~3 ثوانٍ كل مرة)
+  var _now = Date.now();
+  if (!(_accClientsList && _accClientsList.length && window._accDirAt && _now - window._accDirAt < 180000)) {
+    window._accDirAt = _now;
+    google.script.run.withSuccessHandler(function(list) {
+      _accClientsList = (list || []).map(function(c) { return c.name; });
+      var dl = document.getElementById('accQuickPayClientList');
+      if (dl) dl.innerHTML = _accClientsList.map(function(n) { return '<option value="' + escapeHtml_(n) + '">'; }).join('');
+    }).withFailureHandler(function() { window._accDirAt = 0; }).getClientsDirectory(window.authToken);
+  }
   if (window.flatpickr) {
     var pd = document.getElementById('accPayDate');
     if (pd && !pd._fp) pd._fp = flatpickr(pd, { dateFormat: 'd/m/Y', allowInput: true, disableMobile: true });
@@ -23325,6 +23355,14 @@ function _accComboPick_(name) {
   _accLoad_();
 }
 
+// ⚡ (V4.199) إضافة بنود/دفعات أنشأها السيرفر إلى بيانات الحساب المحمَّلة ثم إعادة الرسم محلياً
+function _accApplyCreated_(items, pays) {
+  if (!_accData) return;
+  var cfClean = function(s) { return String(s || '').replace(/\s*⟦cf:[a-z0-9]+⟧\s*$/i, ''); };
+  (items || []).forEach(function(it) { it.desc = cfClean(it.desc); _accData.items.push(it); });
+  (pays || []).forEach(function(p) { p.desc = cfClean(p.desc); _accData.payments.push(p); });
+  _accRender_();
+}
 function _accLoad_() {
   var client = (document.getElementById('accClientInput').value || '').trim();
   var body = document.getElementById('accBody');
@@ -24395,8 +24433,18 @@ function _accRun_(fnName, args, okMsg, localPatch) {
   runner[fnName].apply(runner, [window.authToken].concat(args));
 }
 
-function _accSetMode_(trip, mode) { _accRun_('setAccMode', [(_accData && _accData.client), trip, mode]); }
-function _accAlertAction_(trip, action) { _accRun_('accResolveAlert', [(_accData && _accData.client), trip, action]); }
+// ⚡ (V4.199) تحديث محلي بدل إعادة تحميل الحساب كاملاً — النتيجة معروفة مسبقاً بالواجهة
+function _accSetMode_(trip, mode) {
+  _accRun_('setAccMode', [(_accData && _accData.client), trip, mode], null, function() {
+    if (!_accData.meta) _accData.meta = {};
+    _accData.meta[trip] = Object.assign({}, _accData.meta[trip] || {}, { mode: mode === 'بنود' ? 'بنود' : 'برنامج' });
+  });
+}
+function _accAlertAction_(trip, action) {
+  _accRun_('accResolveAlert', [(_accData && _accData.client), trip, action], null, function() {
+    if (_accData.alerts) delete _accData.alerts[trip];
+  });
+}
 // 🗑️ تأكيد حذف أنيق من داخل البرنامج (بدل نافذة المتصفح الخام)
 function _accConfirmDel_(msg, onYes) {
   showElegantConfirm({
@@ -24407,12 +24455,20 @@ function _accConfirmDel_(msg, onYes) {
     ]
   });
 }
+// ⚡ (V4.199) حذف طرفَي ترحيل الرصيد محلياً (السيرفر يُعيد معرّف الطرف المقابل) — بدل إعادة تحميل الحساب كاملاً
+function _accCfAfterDel_(res, id) {
+  if (!_accData || !Array.isArray(res && res.cfDeletedIds)) { _accLoad_(); return; }
+  var gone = {}; gone[id] = 1; res.cfDeletedIds.forEach(function(x) { gone[x] = 1; });
+  _accData.items = _accData.items.filter(function(x) { return !gone[x.id]; });
+  _accData.payments = _accData.payments.filter(function(x) { return !gone[x.id]; });
+  _accRender_();
+}
 function _accItemDel_(id) {
   _accConfirmDel_('هل تريد حذف هذا البند نهائيًا؟', function() {
     var before = _accData.items.find(function(x) { return x.id === id; });
     _accRun_('deleteAccItem', [id], null, function(res) {
       // 🔁 بند ترحيل رصيد: طرفه المقابل حُذف أيضًا بالخادم — التحديث المحلي لا يعرف مكانه، فنعيد التحميل كاملًا
-      if (res && res.cfLinked) { _accLoad_(); return; }
+      if (res && res.cfLinked) { _accCfAfterDel_(res, id); return; }
       _accData.items = _accData.items.filter(function(x) { return x.id !== id; });
       // ↩️ (V4.89) تعذّر التراجع عن بند ترحيل رصيد مرتبط (cfLinked) — تجاهله هنا فقط، تراجع عادي غير ذلك
       if (before) _accUndoPush_({ type: 'item', before: Object.assign({}, before), after: null, label: 'حذف بند: ' + before.desc });
@@ -24423,7 +24479,7 @@ function _accPayDel_(id) {
   _accConfirmDel_('هل تريد حذف هذا السجل نهائيًا؟', function() {
     var before = _accData.payments.find(function(x) { return x.id === id; });
     _accRun_('deleteAccPayment', [id], null, function(res) {
-      if (res && res.cfLinked) { _accLoad_(); return; }
+      if (res && res.cfLinked) { _accCfAfterDel_(res, id); return; }
       _accData.payments = _accData.payments.filter(function(x) { return x.id !== id; });
       if (before) _accUndoPush_({ type: 'payment', before: Object.assign({}, before), after: null, label: 'حذف دفعة: ' + (before.desc || before.amount) });
     });
@@ -24496,7 +24552,10 @@ function _accCfConfirm_(fromTrip) {
       var ov = document.getElementById('_accCfOverlay'); if (ov) ov.remove();
       if (res && res.success) {
         showToast('✅ رُحِّل الرصيد إلى ' + _accTripDisplay_(toTrip));
-        _accLoad_(); // ⚡ عمليتان مترابطتان بأكثر من سطر — إعادة تحميل كاملة أبسط وأضمن هنا
+        // ⚡ (V4.199) الصفوف المُنشأة تصل مع الرد فتُضاف محلياً فوراً — بلا إعادة تحميل الحساب كاملاً
+        if (_accData && Array.isArray(res.createdItems) && Array.isArray(res.createdPayments)) {
+          _accApplyCreated_(res.createdItems, res.createdPayments);
+        } else _accLoad_();
       } else if (errEl) errEl.textContent = '❌ ' + ((res && res.error) || 'فشل الترحيل');
     })
     .withFailureHandler(function(err) { if (errEl) errEl.textContent = '❌ ' + (err.message || err); })
@@ -24722,7 +24781,12 @@ function _accPaysBulkSave_(btn) {
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      if (res && res.success) { bootstrap.Modal.getInstance(document.getElementById('accPaysBulkModal')).hide(); _accLoad_(); }
+      if (res && res.success) {
+        bootstrap.Modal.getInstance(document.getElementById('accPaysBulkModal')).hide();
+        // ⚡ (V4.199) إضافة الدفعات محلياً من رد السيرفر بدل إعادة تحميل الحساب كاملاً (كانت ~12 ثانية)
+        if (_accData && Array.isArray(res.created)) { _accApplyCreated_([], res.created); showToast('✅ حُفظت ' + res.created.length + ' دفعة'); }
+        else _accLoad_();
+      }
       else _showBlockingError_('❌ فشل حفظ الدفعات', escapeHtml_((res && res.error) || '؟'));
     })
     .withFailureHandler(function(err) { btn.disabled = false; _showBlockingError_('❌ فشل حفظ الدفعات', escapeHtml_(err.message || String(err))); })
@@ -24824,7 +24888,7 @@ function _accItemModalDel_() {
   _accConfirmDel_('هل تريد حذف هذا البند نهائيًا؟', function() {
     var before = _accData.items.find(function(x) { return x.id === id; });
     _accRun_('deleteAccItem', [id], null, function(res) {
-      if (res && res.cfLinked) { _accLoad_(); }
+      if (res && res.cfLinked) { _accCfAfterDel_(res, id); }
       else {
         _accData.items = _accData.items.filter(function(x) { return x.id !== id; });
         if (before) _accUndoPush_({ type: 'item', before: Object.assign({}, before), after: null, label: 'حذف بند: ' + before.desc });
@@ -27120,7 +27184,12 @@ function _accGenInsert_(btn) {
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
-      if (res && res.success) { bootstrap.Modal.getInstance(document.getElementById('accGenModal')).hide(); _accLoad_(); }
+      if (res && res.success) {
+        bootstrap.Modal.getInstance(document.getElementById('accGenModal')).hide();
+        // ⚡ (V4.199) البنود المولَّدة تُضاف محلياً من رد السيرفر بدل إعادة تحميل الحساب كاملاً
+        if (_accData && Array.isArray(res.created) && res.created.length && res.created[0].desc !== undefined) _accApplyCreated_(res.created, []);
+        else _accLoad_();
+      }
       else alert('❌ ' + ((res && res.error) || 'فشل الإدراج'));
     })
     .withFailureHandler(function(err) { btn.disabled = false; alert('❌ ' + (err.message || err)); })
@@ -27172,7 +27241,7 @@ function _accEditRowDel_(btn) {
   if (!id) { tr.remove(); _accEditRecalc_(); return; }
   _accConfirmDel_('هل تريد حذف هذا البند نهائيًا؟', function() {
     _accRun_('deleteAccItem', [id], null, function(res) {
-      if (res && res.cfLinked) { _accLoad_(); }
+      if (res && res.cfLinked) { _accCfAfterDel_(res, id); }
       else { _accData.items = _accData.items.filter(function(x) { return x.id !== id; }); }
       tr.remove();
       _accEditRecalc_();
@@ -27396,7 +27465,8 @@ function _accMergeSidebarSave_() {
       if (res && res.success) {
         document.getElementById('_accMergeOverlay').remove();
         showToast('🔗 تم دمج ' + picks.length + ' رحلات');
-        _accLoad_(); // إعادة تحميل الحساب لتظهر الأرصدة FIFO
+        // ⚡ (V4.199) الأرصدة تُحسب بالواجهة من mergeTrips — تحديث محلي بدل إعادة تحميل الحساب كاملاً
+        _accData.mergeTrips = picks.slice(); window._accMergeGroupCache = { trips: picks.slice() }; _accRender_();
       } else alert('❌ ' + ((res && res.error) || 'فشل الدمج'));
     })
     .withFailureHandler(function(err) { alert('❌ ' + (err.message || err)); })
@@ -27407,7 +27477,7 @@ function _accUnmergeSidebar_() {
   if (!confirm('🔓 فك دمج حسابات الرحلات؟ (المدفوعات ستعود لكل رحلة حسب تخصيصها الأصلي)')) return;
   google.script.run
     .withSuccessHandler(function(res) {
-      if (res && res.success) { showToast('🔓 تم فك الدمج'); _accLoad_(); }
+      if (res && res.success) { showToast('🔓 تم فك الدمج'); _accData.mergeTrips = null; window._accMergeGroupCache = { trips: null }; _accRender_(); }
       else alert('❌ ' + ((res && res.error) || 'فشل فك الدمج'));
     })
     .withFailureHandler(function(err) { alert('❌ ' + (err.message || err)); })
@@ -27804,7 +27874,7 @@ function _accPrint_(scope, tripOnly, mode, tripFilter, merge, summaryOnly, showS
     '.trip-h{font-family:"Cairo",sans-serif;background-color:#dcfce7 !important;color:#14532d !important;padding:7px 12px;font-weight:800;font-size:13.5px;border-bottom:2px solid #217346;}.trip-h .m{font-family:"Tajawal",sans-serif;font-weight:400;font-size:10.5px;opacity:.85;}' +
     '.sec-t{font-weight:800;font-size:11.5px;color:#217346;padding:6px 10px 2px;}' +
     'table{width:100%;border-collapse:collapse;font-size:11px;margin:4px 0;}thead{display:table-header-group;}tr{page-break-inside:avoid;}' +
-    'th{font-family:"Cairo",sans-serif;background-color:#dcfce7 !important;color:#14532d !important;padding:5px 6px;border:1px solid #217346;font-weight:800;}' +
+    'th{font-family:"Cairo",sans-serif;background-color:#dcfce7 !important;color:#14532d !important;padding:5px 6px;border:1px solid #217346;font-weight:800;text-align:center !important;vertical-align:middle !important;direction:rtl;}' +
     'td{padding:4px 6px;border:1px solid #cbd5e1;text-align:center;direction:ltr;}td:first-child{direction:rtl;}' +
     // 🔴 (V4.39) صفوف الخصم بأحمر غامق واضح بالعرض والطباعة معًا — بطلب صريح
     'tr.disc td{background-color:#fff1f2 !important;color:#7f1d1d !important;font-weight:800;}' +
