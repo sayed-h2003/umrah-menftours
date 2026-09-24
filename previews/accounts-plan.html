@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مخطط الحسابات</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --navy:#1e3d59; --teal:#0f4c4c; --ink:#0f172a; --mut:#64748b; --line:#e2e8f0; --bg:#f4f6f9; --ok:#166534; --okb:#dcfce7; --w:#92400e; --wb:#fef3c7; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Tajawal",Tahoma,sans-serif; background:var(--bg); color:var(--ink); line-height:1.75; }
+  header.top { background:var(--navy); color:#fff; padding:14px 16px; position:sticky; top:0; z-index:5; box-shadow:0 2px 10px rgba(0,0,0,.2); }
+  header.top h1 { font-family:"Cairo"; font-size:18px; margin:0 0 8px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+  .tabs button { font-family:inherit; font-weight:800; font-size:13.5px; border:0; border-radius:10px; padding:8px 14px; cursor:pointer; background:rgba(255,255,255,.14); color:#fff; }
+  .tabs button.on { background:#fff; color:var(--navy); }
+  main { max-width:1150px; margin:0 auto; padding:16px; }
+  .page { display:none; } .page.on { display:block; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:14px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
+  h2 { font-family:"Cairo"; font-size:17px; margin:0 0 8px; color:var(--navy); }
+  h3 { font-family:"Cairo"; font-size:14.5px; margin:14px 0 6px; color:#334155; }
+  p, li { font-size:14px; }
+  ul { margin:4px 0; padding-inline-start:22px; }
+  .latin { direction:ltr; unicode-bidi:isolate; font-variant-numeric:tabular-nums; }
+  .note { border-radius:10px; padding:9px 12px; font-size:13.5px; margin:8px 0; }
+  .note.i { background:#eff6ff; border:1px solid #bfdbfe; } .note.w { background:var(--wb); border:1px solid #fde68a; color:#78350f; } .note.g { background:#f0fdf4; border:1px solid #bbf7d0; }
+  table.t { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.t th { background:#f1f5f9; color:#334155; padding:7px 8px; font-weight:800; text-align:center; border-bottom:2px solid #cbd5e1; }
+  table.t td { padding:7px 8px; border-bottom:1px solid #eef2f6; text-align:center; vertical-align:top; }
+  table.t td.r, table.t th.r { text-align:right; }
+  .scroll { overflow-x:auto; }
+  .src { display:inline-block; font-size:11px; font-weight:800; border-radius:20px; padding:1px 9px; white-space:nowrap; }
+  .s-mf { background:#e0e7ff; color:#3730a3; } .s-vz { background:#ccfbf1; color:#115e59; } .s-man { background:#f1f5f9; color:#475569; } .s-trip { background:#fef9c3; color:#854d0e; }
+  .flow { display:flex; align-items:stretch; gap:8px; flex-wrap:wrap; margin:8px 0; }
+  .flow .b { flex:1; min-width:150px; background:#f8fafc; border:1.5px solid var(--line); border-radius:12px; padding:9px 10px; font-size:12.5px; }
+  .flow .b b { display:block; font-family:"Cairo"; font-size:13px; margin-bottom:2px; }
+  .flow .ar { align-self:center; color:#94a3b8; font-weight:900; font-size:18px; }
+  .q { background:#fff7ed; border:1.5px solid #fed7aa; border-radius:12px; padding:10px 12px; margin:8px 0; font-size:13.5px; }
+  .q b.n { background:#ea580c; color:#fff; border-radius:50%; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; margin-inline-end:6px; }
+  .opt { display:inline-block; background:#fff; border:1px solid #fdba74; border-radius:8px; padding:1px 8px; margin:3px 3px 0 0; font-size:12.5px; }
+  .opt.rec { background:#dcfce7; border-color:#86efac; font-weight:800; }
+  /* mock */
+  .mock { border:2px solid #0f4c4c; border-radius:14px; overflow:hidden; background:#fff; margin:10px 0; }
+  .mock-h { background:linear-gradient(135deg,#136363,#0b3d3d); color:#fff; padding:9px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-weight:800; }
+  .mock-h small { font-weight:500; opacity:.8; }
+  .mock-b { padding:12px; }
+  .btn { font-family:inherit; font-weight:800; font-size:12px; border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:8px; padding:5px 10px; cursor:pointer; }
+  .btn.p { background:#0f4c4c; color:#fff; border-color:#0f4c4c; }
+  .chk { width:16px; height:16px; vertical-align:middle; }
+  input.pr { width:78px; text-align:center; border:1px solid #cbd5e1; border-radius:6px; padding:2px 4px; font-family:inherit; direction:ltr; }
+  tr.tot td { background:#f8fafc; font-weight:900; border-top:2px solid #cbd5e1; }
+  tr.done td { color:#94a3b8; }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+  @media (max-width:640px) { .kpis { grid-template-columns:repeat(2,1fr); } }
+  .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:7px; text-align:center; }
+  .kpi b { display:block; font-family:"Cairo"; font-size:17px; } .kpi small { color:var(--mut); font-size:11px; font-weight:700; }
+  /* GL */
+  .dr { color:#1e40af; font-weight:800; } .cr { color:#9a3412; font-weight:800; }
+  .coa { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+  .coa .g { border:1.5px solid var(--line); border-radius:12px; overflow:hidden; background:#fff; }
+  .coa .g .h { padding:6px 10px; font-family:"Cairo"; font-weight:800; font-size:13.5px; color:#fff; }
+  .coa .g ul { font-size:12.5px; padding:6px 10px 8px 10px; padding-inline-start:26px; }
+  .phase { display:grid; grid-template-columns:48px 1fr; gap:10px; margin-bottom:10px; }
+  .phase .n { background:var(--navy); color:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; font-family:"Cairo"; font-weight:900; font-size:18px; }
+  .phase .c { background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px 12px; font-size:13.5px; }
+  .phase .c b { font-family:"Cairo"; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>📐 مخططات للمراجعة قبل التنفيذ</h1>
+  <div class="tabs">
+    <button class="on" onclick="tab(0,this)">🔗 ربط التأشيرات ورسوم الغرفة بحسابات العملاء</button>
+    <button onclick="tab(1,this)">📒 مقترح نظام حسابات بالقيد المزدوج</button>
+  </div>
+</header>
+<main>
+<!-- ============================================================ -->
+<section class="page on" id="p0">
+  <div class="card">
+    <h2>🎯 الهدف</h2>
+    <p>تُجلَب بنود <b>رسوم الغرفة</b> من شاشة ملفات الوزارة و<b>التأشيرات</b> من شاشة متابعة الوكلاء تلقائياً إلى حساب العميل، بتسعير خاص لكل عميل، مع إمكانية اختيار ما يُدرَج. يتم ذلك في حالتين:</p>
+    <ul>
+      <li><b>عميل مرتبط برحلة</b> (نوع المحاسبة «بنود»): تظهر البنود داخل «توليد البنود» للرحلة وتُحدَّث تلقائياً.</li>
+      <li><b>عميل غير مرتبط برحلات</b>: جدول واحد مثل كشف حساب الوكيل، بالجنيه والريال، تختار منه ما تريد إدراجه.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>🧭 مسار البيانات</h2>
+    <div class="flow">
+      <div class="b"><b>🏛️ ملفات الوزارة</b>ملف المراجعة: العميل (من بنود الملف أو من عملاء المعتمرين المختارين) + الرحلة + نوع المراجعة + عدد المعتمرين والمشرفين</div>
+      <div class="ar">←</div>
+      <div class="b"><b>🧮 احتساب الرسوم</b>عادية × العدد · VIP × العدد · مشرف مرافق · تجديد باركود — لكل عميل على حدة</div>
+      <div class="ar">←</div>
+      <div class="b"><b>🏷️ تسعير العميل</b>سعر كل بند من «تسعير بنود العميل» (بفترات)، وإن لم يوجد يُقترح سعر التكلفة</div>
+      <div class="ar">←</div>
+      <div class="b"><b>👤 حساب العميل</b>بنود «بنود» للرحلة، أو جدول «بنود غير مرتبطة برحلات»</div>
+    </div>
+    <div class="flow">
+      <div class="b"><b>🛂 مجموعات التأشيرات</b>المجموعة: رقمها + الوكيل + الرحلة (الأساسية والإضافية) + عدد تأشيرات كل عميل + الحالة</div>
+      <div class="ar">←</div>
+      <div class="b"><b>🧮 تجميع لكل عميل × رحلة</b>عدد التأشيرات + أرقام المجموعات + الوكلاء</div>
+      <div class="ar">←</div>
+      <div class="b"><b>🏷️ تسعير العميل</b>سعر «تأشيرات» بالريال لهذا العميل وتاريخ المجموعة</div>
+      <div class="ar">←</div>
+      <div class="b"><b>👤 حساب العميل</b>بند «تأشيرات (41) — مجموعات: …» بالريال</div>
+    </div>
+    <div class="note i">🔄 <b>التحديث التلقائي:</b> البنود المُدرَجة تلقائياً تُعاد مزامنتها عند حفظ ملف وزارة أو مجموعة تأشيرات تخص هذا العميل/الرحلة. اليوم تحدث المزامنة فقط عند حفظ كشف المعتمرين. البند الذي تعدّله يدوياً يتوقف عن المزامنة كما هو الحال الآن («معدّل»).</div>
+  </div>
+
+  <div class="card">
+    <h2>🖥️ معاينة 1 — عميل مرتبط برحلة (نوع المحاسبة «بنود») داخل «توليد البنود»</h2>
+    <div class="mock">
+      <div class="mock-h">⚙️ توليد بنود — رحلة 1 أكتوبر <small>· العميل: شركة النور للسياحة · نوع المحاسبة: بنود</small></div>
+      <div class="mock-b scroll">
+        <table class="t" style="min-width:860px;">
+          <thead><tr><th>إدراج</th><th class="r">البيان</th><th>المصدر</th><th>العدد</th><th>السعر</th><th>العملة</th><th>القيمة</th><th class="r">تفاصيل الربط</th></tr></thead>
+          <tbody>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="r"><b>رسوم غرفة (عادية)</b></td><td><span class="src s-mf">🏛️ الوزارة</span></td><td class="latin">38</td><td><input class="pr" value="3,250"></td><td>جنيه</td><td class="latin"><b>123,500</b></td><td class="r" style="font-size:11.5px;color:#475569;">ملف <b class="latin">22756</b> · مراجعة عادية · 38 معتمر</td></tr>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="r"><b>رسوم غرفة VIP</b></td><td><span class="src s-mf">🏛️ الوزارة</span></td><td class="latin">3</td><td><input class="pr" value="3,400"></td><td>جنيه</td><td class="latin"><b>10,200</b></td><td class="r" style="font-size:11.5px;color:#475569;">ملف <b class="latin">22761</b> · VIP (أقل من 4 معتمرين)</td></tr>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="r"><b>رسوم غرفة المشرف</b></td><td><span class="src s-mf">🏛️ الوزارة</span></td><td class="latin">1</td><td><input class="pr" value="200"></td><td>جنيه</td><td class="latin"><b>200</b></td><td class="r" style="font-size:11.5px;color:#475569;">ملف <b class="latin">22756</b> · مشرف مرافق</td></tr>
+            <tr><td><input type="checkbox" class="chk"></td><td class="r"><b>تجديد باركود</b></td><td><span class="src s-mf">🏛️ الوزارة</span></td><td class="latin">0</td><td><input class="pr" value="—"></td><td>جنيه</td><td class="latin">—</td><td class="r" style="font-size:11.5px;color:#94a3b8;">لا ملفات تجديد لهذا العميل بالرحلة</td></tr>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="r"><b>تأشيرات</b></td><td><span class="src s-vz">🛂 التأشيرات</span></td><td class="latin">41</td><td><input class="pr" value="620"></td><td>ريال</td><td class="latin"><b>25,420</b></td><td class="r" style="font-size:11.5px;color:#475569;">مجموعات <b class="latin">1402331</b> (30) · <b class="latin">1402345</b> (11) — الوكيل: مؤسسة الرحاب · تم إصدار الموفا</td></tr>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="r">تذاكر · نقل سعودي · سكن …</td><td><span class="src s-trip">🧳 الرحلة</span></td><td colspan="5" style="color:#64748b;font-size:12px;">البنود الحالية كما هي بلا تغيير</td></tr>
+          </tbody>
+        </table>
+        <div class="note g" style="margin-top:10px;">كل بند من الوزارة أو التأشيرات يُحفَظ ومعه <b>مرجعه</b> (رقم الملف أو أرقام المجموعات)، فلا يُدرَج مرتين، ويُحدَّث تلقائياً لو تغيّر العدد في المصدر.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🖥️ معاينة 2 — عميل غير مرتبط برحلات: «بنود الوزارة والتأشيرات غير المرتبطة برحلات»</h2>
+    <p style="font-size:13px;color:#475569;">لوحة جديدة داخل حساب العميل، مرتبة بالتاريخ مثل كشف حساب الوكيل، وبها عمودا جنيه وريال. تحدد ما تريد وتعدّل السعر ثم تضغط «إدراج المحدد»، فتُضاف كبنود في القسم «عام» بالحساب.</p>
+    <div class="mock">
+      <div class="mock-h">🧾 بنود الوزارة والتأشيرات — العميل: مؤسسة الهدى <small>· بلا رحلات مرتبطة</small>
+        <span style="flex:1"></span><span style="font-weight:500;font-size:12px;">الفترة: <span class="latin">01/09/2026 → 30/09/2026</span></span></div>
+      <div class="mock-b">
+        <div class="kpis">
+          <div class="kpi"><b class="latin">4</b><small>ملفات وزارة</small></div>
+          <div class="kpi"><b class="latin">3</b><small>مجموعات تأشيرات</small></div>
+          <div class="kpi"><b class="latin" style="color:#1e40af;">87,000</b><small>المحدد بالجنيه</small></div>
+          <div class="kpi"><b class="latin" style="color:#0f766e;">14,880</b><small>المحدد بالريال</small></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          <span class="btn">الكل</span><span class="btn">🏛️ الوزارة فقط</span><span class="btn">🛂 التأشيرات فقط</span><span class="btn">⏳ لم تُدرَج بعد</span><span style="flex:1"></span>
+          <button class="btn">☑️ تحديد الكل</button><button class="btn p">➕ إدراج المحدد في الحساب</button>
+        </div>
+        <div class="scroll"><table class="t" style="min-width:920px;">
+          <thead><tr><th>✔</th><th>التاريخ</th><th>المصدر</th><th>المرجع</th><th class="r">البيان</th><th>العدد</th><th>السعر</th><th>جنيه</th><th>ريال</th><th>الحالة</th></tr></thead>
+          <tbody>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="latin">03/09/2026</td><td><span class="src s-mf">🏛️ الوزارة</span></td><td class="latin">22701</td><td class="r">رسوم غرفة (عادية) — مراجعة عادية</td><td class="latin">20</td><td><input class="pr" value="3,250"></td><td class="latin"><b>65,000</b></td><td></td><td><span class="src s-man">جديد</span></td></tr>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="latin">03/09/2026</td><td><span class="src s-mf">🏛️ الوزارة</span></td><td class="latin">22701</td><td class="r">رسوم غرفة المشرف</td><td class="latin">1</td><td><input class="pr" value="200"></td><td class="latin"><b>200</b></td><td></td><td><span class="src s-man">جديد</span></td></tr>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="latin">10/09/2026</td><td><span class="src s-mf">🏛️ الوزارة</span></td><td class="latin">22733</td><td class="r">رسوم غرفة VIP — 2 معتمر</td><td class="latin">2</td><td><input class="pr" value="3,400"></td><td class="latin"><b>6,800</b></td><td></td><td><span class="src s-man">جديد</span></td></tr>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="latin">11/09/2026</td><td><span class="src s-vz">🛂 التأشيرات</span></td><td class="latin">1402390</td><td class="r">تأشيرات — الوكيل: شركة طيبة · تم إصدار الموفا</td><td class="latin">24</td><td><input class="pr" value="620"></td><td></td><td class="latin"><b>14,880</b></td><td><span class="src s-man">جديد</span></td></tr>
+            <tr><td><input type="checkbox" class="chk" checked></td><td class="latin">18/09/2026</td><td><span class="src s-mf">🏛️ الوزارة</span></td><td class="latin">22750</td><td class="r">تجديد باركود</td><td class="latin">6</td><td><input class="pr" value="2,500"></td><td class="latin"><b>15,000</b></td><td></td><td><span class="src s-man">جديد</span></td></tr>
+            <tr class="done"><td><input type="checkbox" class="chk" disabled></td><td class="latin">01/09/2026</td><td><span class="src s-vz">🛂 التأشيرات</span></td><td class="latin">1402301</td><td class="r">تأشيرات — الوكيل: مؤسسة الرحاب</td><td class="latin">10</td><td class="latin">600</td><td></td><td class="latin">6,000</td><td><span class="src s-trip">✔ مُدرج</span></td></tr>
+            <tr class="tot"><td colspan="7" class="r">إجمالي المحدد</td><td class="latin">87,000</td><td class="latin">14,880</td><td></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🏷️ إضافات على «تسعير بنود العميل»</h2>
+    <ul>
+      <li>بنود جديدة في قائمة التسعير: <b>رسوم غرفة VIP</b> و<b>تجديد باركود</b> (بالجنيه)، بجانب الموجود: رسوم غرفة، رسوم غرفة المشرف، تأشيرات (ريال).</li>
+      <li>السعر يُختار حسب تاريخ المراجعة (للوزارة) أو تاريخ المجموعة (للتأشيرات)، بنفس نظام الفترات الحالي.</li>
+      <li>إن لم يوجد سعر للعميل يُقترح <b>سعر التكلفة</b> (سعر الوزارة أو سعر الوكيل)، ويظهر السعر بلون مميز لتنتبه أنه غير مسعَّر.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>❓ قرارات أحتاج تأكيدها منك قبل التنفيذ</h2>
+    <div class="q"><b class="n">1</b><b>أي ملفات وزارة تُحتسب؟</b><br>
+      <span class="opt rec">كل الملفات (المعتمدة وغير المعتمدة) مع علامة للحالة ⭐ مقترح</span><span class="opt">المعتمدة فقط</span><span class="opt">التي لها تاريخ مراجعة فقط</span></div>
+    <div class="q"><b class="n">2</b><b>أي مجموعات تأشيرات تُحتسب؟</b><br>
+      <span class="opt rec">«تم إصدار الموفا» فقط ⭐ مقترح</span><span class="opt">كل المجموعات بأي حالة</span></div>
+    <div class="q"><b class="n">3</b><b>كيف يُحدَّد العميل في ملف الوزارة؟</b> (الملف ليس فيه رقم عميل، فقط أسماء)<br>
+      <span class="opt rec">من عملاء المعتمرين المختارين بالملف، وإلا من «بنود العميل» بالاسم ⭐ مقترح</span><span class="opt">من «بنود العميل» بالاسم فقط</span></div>
+    <div class="q"><b class="n">4</b><b>عميل مرتبط برحلات لكن له ملفات أو مجموعات بلا رحلة:</b><br>
+      <span class="opt rec">تظهر في لوحة «غير المرتبطة برحلات» أيضاً ⭐ مقترح</span><span class="opt">تُتجاهل</span></div>
+    <div class="q"><b class="n">5</b><b>التأشيرات في وضع «بنود»:</b> اليوم يُحسب العدد من كشف المعتمرين (العدد ناقص من لديه تأشيرة بالملاحظات).<br>
+      <span class="opt rec">من مجموعات التأشيرات الفعلية، وإن لم توجد يُستخدم الحساب القديم ⭐ مقترح</span><span class="opt">من المجموعات فقط</span></div>
+    <div class="note w">⚠️ <b>ملاحظة وجدتها أثناء الدراسة:</b> عند حساب التأشيرات لعميل ورحلة، الكود الحالي لا يحتسب المجموعات المرتبطة بالرحلة كـ«رحلة إضافية». سأصلحها ضمن التنفيذ.</div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section class="page" id="p1">
+  <div class="card">
+    <h2>💡 الفكرة باختصار</h2>
+    <p>تتحول كل عملية مالية في البرنامج تلقائياً إلى <b>قيد يومية مزدوج</b> (مدين = دائن)، في دفتر أستاذ عام واحد بدليل حسابات شجري، <b>بجانب</b> الشاشات الحالية لا بدلاً منها. الأحداث: إصدار موفا، دورة نقل، رسوم غرفة، دفعة عميل، سداد وكيل، عهدة، مصروف، تحويل عملة.</p>
+    <p>بعدها تصبح التقارير المحاسبية الكاملة ممكنة: ميزان المراجعة، الأستاذ العام، قائمة الدخل (أرباح وخسائر)، ربحية كل رحلة وكل شركة منفذة، وحركة الخزائن والبنوك والعهد.</p>
+    <div class="note i">🧭 <b>مبدأ أساسي أقترحه:</b> <b>الرحلة «مركز تكلفة» وليست حساباً.</b> كل سطر قيد يحمل وسوماً: الرحلة، والشركة المنفذة، والعميل، والوكيل. فتخرج ربحية أي رحلة أو شركة بالفلترة، بدل إنشاء آلاف الحسابات، ويبقى دليل الحسابات صغيراً ونظيفاً.</div>
+  </div>
+
+  <div class="card">
+    <h2>🌳 دليل الحسابات المقترح (مختصر)</h2>
+    <div class="coa">
+      <div class="g"><div class="h" style="background:#1e40af;">1 — الأصول</div><ul>
+        <li>11 الخزائن (خزينة رئيسية جنيه · خزينة ريال)</li><li>12 البنوك (حساب لكل بنك/عملة)</li>
+        <li>13 العُهد (عهدة لكل موظف/مشرف)</li><li>14 العملاء (حساب فرعي لكل عميل)</li>
+        <li>15 مدفوعات مقدمة للوكلاء والفنادق</li></ul></div>
+      <div class="g"><div class="h" style="background:#9a3412;">2 — الخصوم</div><ul>
+        <li>21 الوكلاء السعوديون (فرعي لكل وكيل)</li><li>22 شركات النقل</li><li>23 الفنادق والموردون</li>
+        <li>24 رسوم الوزارة المستحقة</li><li>25 أمانات ودفعات عملاء مقدمة</li></ul></div>
+      <div class="g"><div class="h" style="background:#166534;">4 — الإيرادات</div><ul>
+        <li>41 إيرادات عمرة (فرعي لكل شركة منفذة)</li><li>42 فروق أسعار التأشيرات</li><li>43 فروق النقل والسكن</li>
+        <li>44 أرباح فروق العملة</li></ul></div>
+      <div class="g"><div class="h" style="background:#7c2d12;">5 — التكاليف والمصروفات</div><ul>
+        <li>51 تكلفة التأشيرات</li><li>52 تكلفة النقل</li><li>53 تكلفة السكن والإعاشة</li><li>54 رسوم غرفة الوزارة</li>
+        <li>55 مصروفات إدارية وعمومية</li><li>56 خسائر فروق العملة</li></ul></div>
+      <div class="g"><div class="h" style="background:#475569;">3 — حقوق الملكية</div><ul>
+        <li>31 رأس المال</li><li>32 جاري الشركاء</li><li>33 الأرباح المرحّلة</li></ul></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ القيود التلقائية من أحداث البرنامج (أمثلة)</h2>
+    <div class="scroll"><table class="t" style="min-width:880px;">
+      <thead><tr><th class="r">الحدث في البرنامج</th><th class="r">المدين</th><th class="r">الدائن</th><th class="r">الوسوم (مركز التكلفة)</th></tr></thead>
+      <tbody>
+        <tr><td class="r"><b>🛂 إصدار موفا لمجموعة</b><br><small>41 تأشيرة · سعر الوكيل 560 · سعر العميل 620 ريال</small></td>
+          <td class="r"><span class="dr">حـ/ العميل (شركة النور)</span> <span class="latin">25,420</span> ريال<br><small style="color:#64748b">لو لا عميل محاسَب: حـ/ تكلفة الرحلة</small></td>
+          <td class="r"><span class="cr">حـ/ الوكيل (مؤسسة الرحاب)</span> <span class="latin">22,960</span><br><span class="cr">حـ/ إيرادات عمرة — الشركة المنفذة</span> <span class="latin">2,460</span> (الفرق)</td>
+          <td class="r">الرحلة · المجموعة 1402331 · الشركة المنفذة</td></tr>
+        <tr><td class="r"><b>🚌 دورة نقل</b></td><td class="r"><span class="dr">حـ/ العميل أو تكلفة الرحلة</span> بسعر العميل</td>
+          <td class="r"><span class="cr">حـ/ شركة النقل</span> بسعر التكلفة + <span class="cr">إيرادات فروق النقل</span></td><td class="r">الرحلة · رقم التشغيلة</td></tr>
+        <tr><td class="r"><b>🏛️ رسوم غرفة (ملف وزارة)</b></td><td class="r"><span class="dr">حـ/ العميل</span> بسعر العميل</td>
+          <td class="r"><span class="cr">حـ/ رسوم الوزارة المستحقة</span> بالتكلفة + <span class="cr">إيرادات عمرة</span> (الفرق)</td><td class="r">الرحلة · رقم الملف</td></tr>
+        <tr><td class="r"><b>🏛️ سداد رسوم الوزارة (إيصال)</b></td><td class="r"><span class="dr">حـ/ رسوم الوزارة المستحقة</span></td><td class="r"><span class="cr">حـ/ البنك أو الخزينة</span></td><td class="r">رقم الإيصال</td></tr>
+        <tr><td class="r"><b>💵 دفعة من عميل</b></td><td class="r"><span class="dr">حـ/ الخزينة أو البنك</span></td><td class="r"><span class="cr">حـ/ العميل</span></td><td class="r">الرحلة (إن خُصّصت)</td></tr>
+        <tr><td class="r"><b>💳 سداد لوكيل</b></td><td class="r"><span class="dr">حـ/ الوكيل</span></td><td class="r"><span class="cr">حـ/ البنك (ريال)</span></td><td class="r">—</td></tr>
+        <tr><td class="r"><b>👜 صرف عهدة لمشرف</b></td><td class="r"><span class="dr">حـ/ عهدة المشرف</span></td><td class="r"><span class="cr">حـ/ الخزينة</span></td><td class="r">الرحلة</td></tr>
+        <tr><td class="r"><b>🧾 تسوية العهدة بمصروفات</b></td><td class="r"><span class="dr">حـ/ مصروفات الرحلة</span> (إعاشة، نقل داخلي…)</td><td class="r"><span class="cr">حـ/ عهدة المشرف</span></td><td class="r">الرحلة</td></tr>
+        <tr><td class="r"><b>💱 تحويل عملة</b></td><td class="r"><span class="dr">حـ/ خزينة ريال</span></td><td class="r"><span class="cr">حـ/ خزينة جنيه</span> + فرق العملة (ربح أو خسارة)</td><td class="r">سعر الصرف</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note i">💱 <b>العملات:</b> كل سطر قيد يُحفَظ بعملته (جنيه أو ريال) وسعر الصرف وقتها، ويُحسب معادله بعملة الأساس (الجنيه). ميزان المراجعة يكون بعملة الأساس، وكشوف الحسابات بالعملتين كما هي الآن.</div>
+  </div>
+
+  <div class="card">
+    <h2>📊 التقارير التي ستصبح متاحة</h2>
+    <ul>
+      <li><b>ميزان المراجعة</b> و<b>الأستاذ العام</b> لأي حساب بفترة.</li>
+      <li><b>قائمة الدخل (أرباح وخسائر)</b>: للشركة ككل، أو لكل <b>رحلة</b>، أو لكل <b>شركة منفذة</b>، أو لكل <b>عميل</b>.</li>
+      <li><b>حركة الخزائن والبنوك</b> يومياً مع الرصيد، و<b>كشف العُهد</b> لكل موظف (المصروف والمسوّى والمتبقي).</li>
+      <li><b>أعمار الديون</b> للعملاء والوكلاء (30/60/90 يوماً).</li>
+      <li><b>ربحية الرحلة</b>: إيراداتها من العملاء مقابل تكاليفها (تأشيرات، نقل، سكن، رسوم، عهد)، مع هامش الربح.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>🏗️ طريقة البناء داخل البرنامج (تقنياً)</h2>
+    <ul>
+      <li>أربعة شيتات جديدة: <b>دليل الحسابات</b>، <b>رؤوس القيود</b> (رقم، تاريخ، بيان، مصدر، حالة)، <b>أسطر القيود</b> (حساب، مدين، دائن، عملة، سعر صرف، وسوم)، <b>مراكز التكلفة</b>.</li>
+      <li>دالة ترحيل موحّدة: كل شاشة حالية تستدعيها بعد الحفظ، ومعها «مفتاح المصدر» (مثل رقم المجموعة)، فلا يتكرر القيد أبداً.</li>
+      <li><b>القيد لا يُعدَّل ولا يُحذف:</b> أي تعديل في المصدر يولّد قيداً عكسياً ثم قيداً جديداً، فيبقى أثر كامل للمراجعة.</li>
+      <li><b>إقفال الفترات:</b> بعد إقفال شهر لا تُقبل قيود بتاريخه إلا بصلاحية خاصة.</li>
+      <li>صلاحيات جديدة: عرض الحسابات، قيود يدوية، إقفال الفترات، التقارير المالية.</li>
+    </ul>
+    <div class="note w">⚠️ <b>مخاطر يجب الاستعداد لها:</b> الشيتات تبطؤ مع مئات آلاف الأسطر. الحل: أرشيف سنوي للقيود، وأرصدة افتتاحية مرحّلة، وملخصات مخزّنة مؤقتاً. بعض البيانات القديمة (أسعار ناقصة أو أسماء غير موحدة) قد تحتاج تنظيفاً قبل الترحيل الأول.</div>
+  </div>
+
+  <div class="card">
+    <h2>🪜 مراحل التنفيذ المقترحة (تدريجي وآمن)</h2>
+    <div class="phase"><div class="n">1</div><div class="c"><b>الأساس:</b> دليل الحسابات، والقيود اليدوية، والخزائن والبنوك والعهد، وميزان المراجعة والأستاذ. هذه المرحلة مفيدة من أول يوم ولا تمس أي شاشة حالية.</div></div>
+    <div class="phase"><div class="n">2</div><div class="c"><b>الترحيل التلقائي في «وضع الظل»:</b> التأشيرات والنقل ورسوم الوزارة ودفعات العملاء والوكلاء تولّد قيوداً تلقائياً بجانب الشاشات الحالية، مع تقرير <b>مطابقة</b> يقارن رصيد كل عميل ووكيل في الدفتر برصيده في الشاشة الحالية.</div></div>
+    <div class="phase"><div class="n">3</div><div class="c"><b>التقارير الختامية:</b> قائمة الدخل، وربحية الرحلة والشركة والعميل، وأعمار الديون، ولوحة مؤشرات مالية.</div></div>
+    <div class="phase"><div class="n">4</div><div class="c"><b>الاعتماد الكامل:</b> بعد تطابق الأرصدة لفترة كافية، تُبنى كشوف حساب العملاء والوكلاء من الدفتر مباشرة، وتُقفل الفترات شهرياً.</div></div>
+  </div>
+
+  <div class="card">
+    <h2>📎 برنامج الـ ERP الخاص بك</h2>
+    <p>نعم، أرفقه وسأدرسه قبل البدء. المفيد منه تحديداً:</p>
+    <ul>
+      <li><b>دليل الحسابات</b> الذي صممته (لنعتمده بدل المقترح أعلاه إن كان أنسب لعملك).</li>
+      <li><b>شكل القيد والمستندات</b> (سند قبض، سند صرف، قيد تسوية) والترقيم.</li>
+      <li><b>التقارير والشاشات</b> التي تحتاجها، لأبني نفس المنطق داخل البرنامج بنفس أسلوب الشاشات الحالية.</li>
+    </ul>
+    <p>أي صيغة تناسب: ملفات كود، أو ملف Excel، أو صور الشاشات، أو شرح. بعدها أرسل لك مخطط المرحلة الأولى بالتفصيل للموافقة.</p>
+  </div>
+</section>
+</main>
+<script>
+function tab(i, b) {
+  document.querySelectorAll('.page').forEach(function (p, k) { p.classList.toggle('on', k === i); });
+  document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>
