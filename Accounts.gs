@@ -1,5 +1,5 @@
 /* ============================================================================
-   📒 الحسابات العامة (الدفتر العام بالقيد المزدوج) — V4.205 (المرحلتان 0 و1)
+   📒 الحسابات العامة (الدفتر العام بالقيد المزدوج) — V4.206 (المرحلتان 0 و1 + نقل بيانات الـ ERP)
    ----------------------------------------------------------------------------
    • البيانات في ملف Google Sheets منفصل خاص بالحسابات (معرّفه في خاصية السكربت GL_SPREADSHEET_ID)
      فلا تُبطئ القيود الكثيرة شيتات الرحلات، ويسهل نسخها احتياطياً وأرشفتها وحدها.
@@ -804,5 +804,271 @@ function glUndoBatch(authToken, batchId) {
     for (var i = 0; i < bRows.length; i++) if (_glStr_(bRows[i][0]) === batchId) _glSheet_('batches').getRange(i + 2, 5).setValue('ملغاة');
     logChange_(session.username, 'إلغاء دفعة استيراد', 'GL:' + batchId, 'الحالة', 'فعّالة', 'ملغاة — ' + ids.length + ' قيد');
     return { success: true, count: ids.length };
+  } finally { lock.releaseLock(); }
+}
+
+/* ============================================================================
+   📦 (V4.206) نقل بيانات برنامج الـ ERP القديم إلى الحسابات العامة
+   ----------------------------------------------------------------------------
+   يقرأ شيت الـ ERP مباشرة برابطه (بصلاحية حساب جوجل الحالي) — أعمدته تُقرأ بأسماء العناوين:
+     Chart_Of_Accounts: Account_ID, Account_Name, Account_Type, Category_ID, Sub_Type, Currency, Is_Active
+     Account_Categories: Category_ID, Category_Name, Account_Type
+     Journal_Entries:   Entry_ID, Voucher_ID, Date, Account_Type, Account_ID, Debit, Credit, Currency, Statement
+     Journal_Vouchers / Vouchers / Bank_Transactions: لبيان كل مستند
+   • الحسابات: كل حساب يُربط بمكانه بالدليل الجديد حسب تصنيفه/نوعه الفرعي؛ لو يوجد حساب بنفس الاسم تحت
+     نفس المجموعة (مثل العملاء والوكلاء المربوطين من البرنامج) يُعاد استخدامه بدل إنشاء تكرار. يُحفظ
+     معرّف الـ ERP في عمود «المعرف القديم».
+   • الأرصدة حتى تاريخ القطع (30/06/2026): آخر سنة أرصدة افتتاحية بالـ ERP (JV-OPENING-سنة) ≤ سنة القطع
+     + كل القيود من أول تلك السنة حتى تاريخ القطع (القيود الأقدم تلخّصها تلك الأرصدة — تفادياً لتكرار
+     الحساب الموجود بميزان الـ ERP نفسه). تُرحَّل كقيد افتتاحي بتاريخ اليوم التالي، بأسعار صرف يحددها
+     المستخدم ليوم القطع، والفرق (إن وُجد) لحساب «فروق أرصدة افتتاحية».
+   • القيود بعد تاريخ القطع تُنقل كقيود مستوردة بتاريخها (اختياري).
+   • كل ذلك دفعة واحدة قابلة للإلغاء، ولا تُنفَّذ إلا بعد معاينة كاملة.
+   ============================================================================ */
+var GL_ERP_CAT_MAP_ = {
+  'CAT-AR-UMR': '1201', 'CAT-AR-HAJ': '1202', 'CAT-AR-SKN': '1203', 'CAT-AR-TRS': '1204', 'CAT-AR-TKT': '1205',
+  'CAT-CASH': '1101', 'CAT-CUSTODY': '13', 'CAT-ADVANCE': '14', 'CAT-ASSET-O': '15',
+  'CAT-AP-UMR': '2101', 'CAT-AP-HAJ': '2105', 'CAT-AP-SKN': '2103', 'CAT-AP-TRS': '2102', 'CAT-AP-TKT': '2104', 'CAT-LIAB-O': '24',
+  'CAT-CAPITAL': '31', 'CAT-RETAIN': '33', 'CAT-EQUITY-O': '32',
+  'CAT-REV-UMR': '41', 'CAT-REV-HAJ': '42', 'CAT-REV-SKN': '43', 'CAT-REV-TRS': '44', 'CAT-REV-TKT': '45', 'CAT-REV-O': '49',
+  'CAT-EXP-DIR': '51', 'CAT-EXP-GEN': '52', 'CAT-EXP-O': '52'
+};
+var GL_ERP_TYPE_DEF_ = { ASSET: '15', LIABILITY: '24', LIAB: '24', EQUITY: '32', REVENUE: '49', REV: '49', EXPENSE: '52', EXP: '52' };
+function _glErpSheetObjs_(ss, name) {
+  var sh = ss.getSheetByName(name);
+  if (!sh || sh.getLastRow() < 2) return [];
+  var vals = sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).getValues();
+  var head = vals[0].map(function (h) { return _glStr_(h); });
+  return vals.slice(1).map(function (r) { var o = {}; head.forEach(function (h, i) { if (h) o[h] = r[i]; }); return o; });
+}
+function _glErpOpen_(url) {
+  var id = _glStr_(url).replace(/^.*\/d\/([^\/?#]+).*$/, '$1');
+  if (!id) throw new Error('أدخل رابط شيت الـ ERP');
+  try { return SpreadsheetApp.openById(id); }
+  catch (e) { throw new Error('تعذّر فتح شيت الـ ERP — تأكد أن حسابك يملك صلاحية الوصول إليه (' + e.message + ')'); }
+}
+// الخطة الكاملة (بلا أي كتابة): الحسابات وربطها + الأرصدة حتى القطع + قيود ما بعد القطع
+function _glErpPlan_(url, opts) {
+  opts = opts || {};
+  var ss = _glErpOpen_(url);
+  var cutoff = _glDate_(opts.cutoff) || '30/06/2026', cutK = _glDKey_(cutoff);
+  var rates = { EGP: 1, SAR: _glNum_(opts.rates && opts.rates.SAR), USD: _glNum_(opts.rates && opts.rates.USD) };
+  var coa = _glErpSheetObjs_(ss, 'Chart_Of_Accounts');
+  var cats = {}; _glErpSheetObjs_(ss, 'Account_Categories').forEach(function (c) { cats[_glStr_(c.Category_ID)] = _glStr_(c.Category_Name); });
+  var je = _glErpSheetObjs_(ss, 'Journal_Entries');
+  if (!je.length && !coa.length) throw new Error('لم يُعثر على شيتات Chart_Of_Accounts / Journal_Entries في هذا الملف — تأكد أنه شيت برنامج الـ ERP');
+  // بيان كل مستند
+  var docDesc = {};
+  [['Journal_Vouchers', 'JV_ID'], ['Vouchers', 'Voucher_ID'], ['Bank_Transactions', 'Transaction_ID']].forEach(function (p) {
+    _glErpSheetObjs_(ss, p[0]).forEach(function (r) { var k = _glStr_(r[p[1]]); if (k) docDesc[k] = _glStr_(r.Statement); });
+  });
+  // 1) الحسابات
+  var erpAcc = {};
+  coa.forEach(function (a) {
+    var id = _glStr_(a.Account_ID); if (!id) return;
+    erpAcc[id] = { id: id, name: _glStr_(a.Account_Name) || id, type: _glStr_(a.Account_Type).toUpperCase(), cat: _glStr_(a.Category_ID),
+      sub: _glStr_(a.Sub_Type), currency: _glStr_(a.Currency).toUpperCase(), active: _glStr_(a.Is_Active) !== 'FALSE' && _glStr_(a.Is_Active) !== 'لا' };
+  });
+  // حسابات مستخدمة بالقيود وغير موجودة بالدليل (دليل قديم) — تُستنتج من بادئة المعرّف
+  je.forEach(function (l) {
+    var id = _glStr_(l.Account_ID); if (!id || erpAcc[id]) return;
+    erpAcc[id] = { id: id, name: 'حساب قديم ' + id, type: '', cat: '', sub: _glStr_(l.Account_Type), currency: '', active: true, orphan: true };
+  });
+  var target = function (a) {
+    var id = a.id, sub = (a.sub || '').toLowerCase();
+    if (/^(FX)?BRIDGE/i.test(id)) return { code: '1501', direct: true };
+    if (sub === 'safe' || /^SAFE-/i.test(id)) return { code: '1101' };
+    if (sub === 'bank' || /^BANK-/i.test(id)) return { code: '1102' };
+    if (sub === 'custody' || /^CST-/i.test(id)) return { code: '13' };
+    if (GL_ERP_CAT_MAP_[a.cat]) return { code: GL_ERP_CAT_MAP_[a.cat] };
+    if (/^CAT-AR/.test(a.cat) || /^CUST-/i.test(id)) return { code: '1201' };
+    if (/^CAT-AP/.test(a.cat) || /^SUP-/i.test(id)) return { code: '2105' };
+    return { code: GL_ERP_TYPE_DEF_[a.type] || '15' };
+  };
+  var accs = _glAccounts_();
+  var usedName = {};
+  var plan = {};
+  Object.keys(erpAcc).forEach(function (id) {
+    var a = erpAcc[id], t = target(a), p = { erpId: id, name: a.name, cat: a.cat, catName: cats[a.cat] || '', sub: a.sub, orphan: !!a.orphan,
+      parent: t.code, currency: (a.sub.toLowerCase() === 'bank' && GL_CURRENCIES_.indexOf(a.currency) >= 0) ? a.currency : '' };
+    if (t.direct) { p.action = 'map'; p.code = t.code; plan[id] = p; return; }
+    // إعادة استخدام: حساب مرتبط بنفس المعرف القديم، أو بنفس الاسم تحت نفس المجموعة (أو عميل/وكيل بنفس الاسم)
+    var n = _glNorm_(a.name);
+    var ex = accs.list.filter(function (x) { return x.legacyId === id; })[0] ||
+      accs.list.filter(function (x) { return !x.isGroup && x.code.indexOf(t.code) === 0 && _glNorm_(x.name) === n; })[0] ||
+      ((/^12/.test(t.code) || /^21/.test(t.code)) ? accs.list.filter(function (x) { return !x.isGroup && (x.kind === 'client' || x.kind === 'agent') && x.code.indexOf(t.code.slice(0, 2)) === 0 && (_glNorm_(x.name) === n || _glNorm_(x.link) === n); })[0] : null);
+    if (ex) { p.action = 'reuse'; p.code = ex.code; p.codeName = ex.name; }
+    else {
+      p.action = 'new';
+      var key = t.code + '|' + n;
+      if (usedName[key]) p.name = a.name + ' (' + id + ')';   // اسمان متطابقان بالـ ERP تحت نفس المجموعة
+      usedName[key] = 1;
+    }
+    plan[id] = p;
+  });
+  // 2) الأرصدة حتى القطع
+  var openYears = {};
+  je.forEach(function (l) { var m = _glStr_(l.Voucher_ID).match(/^JV-OPENING-(\d{4})/); if (m) openYears[m[1]] = (openYears[m[1]] || 0) + 1; });
+  var cutY = parseInt(cutoff.slice(6), 10);
+  var yrs = Object.keys(openYears).map(Number).filter(function (y) { return y <= cutY; }).sort();
+  // 'all' = مثل ميزان مراجعة الـ ERP نفسه (كل قيود الافتتاح بكل السنوات + كل الحركات حتى القطع)
+  var allMode = opts.openingYear === 'all';
+  var openYear = allMode ? 0 : (opts.openingYear && opts.openingYear !== 'auto' ? parseInt(opts.openingYear, 10) : (yrs.length ? yrs[yrs.length - 1] : 0));
+  var fromK = openYear ? (openYear + '0101') : '';
+  var bal = {}, stats = { linesUsed: 0, linesExcludedOld: 0, linesOtherOpening: 0, linesAfter: 0, linesBadDate: 0 };
+  var after = {};
+  je.forEach(function (l) {
+    var vid = _glStr_(l.Voucher_ID), id = _glStr_(l.Account_ID);
+    var d = _glNum_(l.Debit), c = _glNum_(l.Credit); if (!id || (!d && !c)) return;
+    var cur = _glCur_(l.Currency), op = vid.match(/^JV-OPENING-(\d{4})/);
+    if (op) {
+      if (!allMode && parseInt(op[1], 10) !== openYear) { stats.linesOtherOpening++; return; }
+    } else {
+      var date = _glDate_(l.Date), k = _glDKey_(date);
+      if (!k) { stats.linesBadDate++; return; }
+      if (k > cutK) { stats.linesAfter++; (after[vid] = after[vid] || { vid: vid, date: date, lines: [] }).lines.push({ id: id, d: d, c: c, cur: cur, desc: _glStr_(l.Statement) }); return; }
+      if (fromK && k < fromK) { stats.linesExcludedOld++; return; }
+    }
+    stats.linesUsed++;
+    var b = (bal[id] = bal[id] || { EGP: 0, SAR: 0, USD: 0 });
+    b[cur] = _glR2_(b[cur] + d - c);
+  });
+  var accountsOut = Object.keys(plan).map(function (id) {
+    var p = plan[id], b = bal[id] || { EGP: 0, SAR: 0, USD: 0 };
+    p.bal = b; p.base = _glR2_(b.EGP + b.SAR * rates.SAR + b.USD * rates.USD);
+    return p;
+  }).sort(function (a, b) { return a.parent < b.parent ? -1 : (a.parent > b.parent ? 1 : a.name.localeCompare(b.name, 'ar')); });
+  var tot = { EGP: 0, SAR: 0, USD: 0, base: 0 };
+  accountsOut.forEach(function (p) { ['EGP', 'SAR', 'USD'].forEach(function (c) { tot[c] = _glR2_(tot[c] + p.bal[c]); }); tot.base = _glR2_(tot.base + p.base); });
+  var afterList = Object.keys(after).map(function (k) {
+    var v = after[k], byC = {};
+    v.lines.forEach(function (l) { var o = (byC[l.cur] = byC[l.cur] || { d: 0, c: 0 }); o.d += l.d; o.c += l.c; });
+    v.balanced = Object.keys(byC).every(function (c) { return Math.abs(byC[c].d - byC[c].c) < 0.01; });
+    v.amt = Object.keys(byC).map(function (c) { return _glR2_(byC[c].d) + ' ' + c; }).join(' + ');
+    v.desc = docDesc[k] || (v.lines[0] && v.lines[0].desc) || '';
+    return v;
+  }).sort(function (a, b) { return _glDKey_(a.date) < _glDKey_(b.date) ? -1 : 1; });
+  return { ss: ss, cutoff: cutoff, rates: rates, openYear: allMode ? 'all' : openYear, openYears: openYears, stats: stats, accounts: accountsOut, totals: tot,
+    after: afterList, catsCount: Object.keys(cats).length, erpName: ss.getName() };
+}
+function glErpPreview(authToken, url, opts) {
+  _glPerm_(authToken, 'add');
+  var p = _glErpPlan_(url, opts);
+  var byParent = {};
+  p.accounts.forEach(function (a) { var k = a.parent; var o = (byParent[k] = byParent[k] || { parent: k, name: (_glAccounts_().map[k] || {}).name || k, n: 0, newN: 0, reuse: 0 }); o.n++; if (a.action === 'new') o.newN++; if (a.action === 'reuse') o.reuse++; });
+  var done = _glRows_('batches').filter(function (r) { return _glStr_(r[1]) === 'نقل بيانات الـ ERP' && _glStr_(r[4]) === 'فعّالة'; }).map(function (r) { return _glStr_(r[0]); });
+  return { success: true, erpName: p.erpName, cutoff: p.cutoff, rates: p.rates, openYear: p.openYear, openYears: p.openYears, stats: p.stats,
+    accounts: p.accounts, totals: p.totals, groups: Object.keys(byParent).map(function (k) { return byParent[k]; }),
+    after: p.after.map(function (v) { return { vid: v.vid, date: v.date, desc: v.desc, n: v.lines.length, balanced: v.balanced, amt: v.amt }; }),
+    alreadyMigrated: done };
+}
+// التحقق من أن مجموعة الوجهة تجميعية — حساب ورقي أساسي بلا قيود يتحوّل لمجموعة (مثل 42 إيرادات الحج)
+function _glEnsureGroup_(code) {
+  var a = _glAccounts_().map[code];
+  if (!a) throw new Error('المجموعة غير موجودة: ' + code);
+  if (a.isGroup) return code;
+  var used = _glRows_('lines').some(function (r) { return _glStr_(r[4]) === code; });
+  if (used) return a.parent || code.slice(0, 1);
+  _glSheet_('accounts').getRange(a._row, 5).setValue('نعم');
+  _GL_ACC_MEMO_ = null;
+  return code;
+}
+function glErpCommit(authToken, url, opts) {
+  var session = _glPerm_(authToken, 'add');
+  if (!_glIsAdmin_(session)) throw new Error('تنفيذ نقل بيانات الـ ERP متاح للمدير فقط (المعاينة متاحة)');
+  opts = opts || {};
+  if (!(_glNum_(opts.rates && opts.rates.SAR) > 0) || !(_glNum_(opts.rates && opts.rates.USD) > 0)) throw new Error('أدخل سعري الريال والدولار ليوم القطع');
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
+    var active = _glRows_('batches').filter(function (r) { return _glStr_(r[1]) === 'نقل بيانات الـ ERP' && _glStr_(r[4]) === 'فعّالة'; });
+    if (active.length && !opts.force) throw new Error('يوجد نقل سابق فعّال (' + _glStr_(active[0][0]) + ') — ألغِ دفعته أولاً من «دفعات الاستيراد» قبل إعادة النقل');
+    var p = _glErpPlan_(url, opts);
+    var rates = p.rates;
+    // 1) الحسابات الجديدة (مجمّعة لكل مجموعة، بأكواد متتالية) + تحديث المعرف القديم للمعاد استخدامها
+    var codeOf = {}, accSh = _glSheet_('accounts'), newRows = [];
+    var nextOf = {};
+    var nextCode = function (parent) {
+      if (nextOf[parent] === undefined) {
+        var width = parent.length === 1 ? 1 : (parent.length === 2 ? 2 : 3), max = 0;
+        _glAccounts_().list.forEach(function (a) { if (a.parent === parent && a.code.length === parent.length + width) { var n = parseInt(a.code.slice(parent.length), 10); if (n > max) max = n; } });
+        nextOf[parent] = { max: max, width: width };
+      }
+      var o = nextOf[parent]; o.max++;
+      var s = String(o.max); if (s.length > o.width) throw new Error('امتلأت أكواد الحسابات تحت ' + parent + ' — راجع الدليل');
+      while (s.length < o.width) s = '0' + s;
+      return parent + s;
+    };
+    var groupOf = {};
+    p.accounts.forEach(function (a) {
+      if (a.action === 'map' || a.action === 'reuse') { codeOf[a.erpId] = a.code; return; }
+      var parent = groupOf[a.parent] || (groupOf[a.parent] = _glEnsureGroup_(a.parent));
+      var par = _glAccounts_().map[parent];
+      var code = nextCode(parent);
+      var kind = par.kind || ({ '1101': 'safe', '1102': 'bank', '13': 'custody' }[parent] || '');
+      if (/^12/.test(parent)) kind = 'client';
+      if (parent === '2101') kind = 'agent';
+      newRows.push(_glAccRow_({ code: code, name: a.name, type: par.type, parent: parent, kind: kind, currency: a.currency,
+        link: (kind === 'client' || kind === 'agent') ? a.name : '', notes: 'منقول من الـ ERP' + (a.catName ? ' — ' + a.catName : ''), legacyId: a.erpId }, session.username));
+      codeOf[a.erpId] = code;
+    });
+    if (newRows.length) accSh.getRange(accSh.getLastRow() + 1, 1, newRows.length, GL_SHEETS_.accounts.headers.length).setValues(newRows);
+    _GL_ACC_MEMO_ = null;
+    var accMap = _glAccounts_().map;
+    p.accounts.forEach(function (a) {   // المعرف القديم على الحسابات المعاد استخدامها
+      if (a.action !== 'reuse') return;
+      var x = accMap[a.code]; if (x && !x.legacyId) accSh.getRange(x._row, 13).setValue(a.erpId);
+    });
+    // 2) القيد الافتتاحي
+    var set = _glSettings_(), entries = [];
+    var dt = new Date(+p.cutoff.slice(6), +p.cutoff.slice(3, 5) - 1, +p.cutoff.slice(0, 2) + 1);
+    var openDate = ('0' + dt.getDate()).slice(-2) + '/' + ('0' + (dt.getMonth() + 1)).slice(-2) + '/' + dt.getFullYear();
+    var oLines = [], dB = 0, cB = 0;
+    p.accounts.forEach(function (a) {
+      ['EGP', 'SAR', 'USD'].forEach(function (cur) {
+        var v = a.bal[cur]; if (Math.abs(v) < 0.005) return;
+        var code = codeOf[a.erpId];
+        var acc = accMap[code];
+        // حساب بعملة محددة ورصيده بعملة أخرى (نادر): يُسجَّل على الحساب بلا تقييد العملة غير ممكن — يُحوَّل لمعادل الجنيه بعملة الحساب
+        oLines.push({ account: code, debit: v > 0 ? v : 0, credit: v < 0 ? -v : 0, currency: cur, rate: rates[cur], desc: 'رصيد منقول من الـ ERP (' + a.erpId + ')', _acc: acc });
+        dB += (v > 0 ? v : 0) * rates[cur]; cB += (v < 0 ? -v : 0) * rates[cur];
+      });
+    });
+    var diff = _glR2_(dB - cB);
+    if (Math.abs(diff) > 0.05) oLines.push({ account: GL_ACC_OPEN_DIFF_, debit: diff < 0 ? -diff : 0, credit: diff > 0 ? diff : 0, currency: 'EGP', rate: 1, desc: 'فروق تقييم العملات عند النقل من الـ ERP' });
+    // أعمدة عملة الحسابات المقيّدة: لو الحساب بعملة واحدة ورصيده بعملة أخرى نفك التقييد عن سطره بجعل عملة الحساب فارغة لاحقاً — هنا نتحقق فقط
+    oLines.forEach(function (l) { if (l._acc && l._acc.currency && l._acc.currency !== l.currency) { accSh.getRange(l._acc._row, 6).setValue(''); } delete l._acc; });
+    _GL_ACC_MEMO_ = null;
+    if (oLines.length) entries.push({ date: openDate, type: 'قيد افتتاحي', desc: 'أرصدة افتتاحية منقولة من برنامج الـ ERP حتى ' + p.cutoff, ref: 'ERP-OPENING', lines: oLines });
+    // 3) قيود ما بعد القطع
+    var skipped = [];
+    if (opts.includeAfter !== false) {
+      p.after.forEach(function (v) {
+        if (!v.balanced) { skipped.push(v.vid); return; }   // مستند غير متوازن بالـ ERP نفسه — يُتخطّى ويُبلَّغ عنه
+        entries.push({ date: v.date, type: 'قيد مستورد', desc: v.desc || ('مستند الـ ERP ' + v.vid), ref: v.vid,
+          lines: v.lines.map(function (l) { return { account: codeOf[l.id], debit: l.d, credit: l.c, currency: l.cur, rate: rates[l.cur], desc: l.desc }; }) });
+      });
+    }
+    if (!entries.length) throw new Error('لا توجد أرصدة أو قيود للنقل');
+    var validated = entries.map(function (e) {
+      try { return _glValidate_(e, { allowBeforeStart: true }); }
+      catch (err) { throw new Error((e.ref || '') + ': ' + err.message); }
+    });
+    var batchId = 'ERP-' + Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'yyyyMMdd-HHmmss');
+    var firstSeq = _glNextEntrySeq_(validated.length), eRows = [], lRows = [];
+    validated.forEach(function (v, i) {
+      var id = _glEntryId_(firstSeq + i);
+      var w = _glWriteEntry_(v, { id: id, seq: firstSeq + i, status: GL_ST_POSTED_, sourceKey: 'ERP:' + entries[i].ref, batchId: batchId, desc: entries[i].desc, ref: entries[i].ref }, session.username);
+      eRows.push(w.eRow); lRows = lRows.concat(w.lRows);
+    });
+    var eSh = _glSheet_('entries'), lSh = _glSheet_('lines');
+    eSh.getRange(eSh.getLastRow() + 1, 1, eRows.length, eRows[0].length).setValues(eRows);
+    lSh.getRange(lSh.getLastRow() + 1, 1, lRows.length, lRows[0].length).setValues(lRows);
+    _glSheet_('batches').appendRow([batchId, 'نقل بيانات الـ ERP', 'من ' + p.erpName + ' — القطع ' + p.cutoff + ' — ريال ' + rates.SAR + ' / دولار ' + rates.USD, validated.length, 'فعّالة', session.username, _glNow_()]);
+    _glSetSetting_('erp_rate_SAR_' + p.cutoff.replace(/\//g, ''), rates.SAR);
+    _glSetSetting_('erp_rate_USD_' + p.cutoff.replace(/\//g, ''), rates.USD);
+    logChange_(session.username, 'نقل بيانات الـ ERP إلى الحسابات العامة', 'GL:' + batchId, 'النقل', '-',
+      newRows.length + ' حساب جديد، ' + validated.length + ' قيد، ' + lRows.length + ' سطر' + (skipped.length ? '، تُخطّي ' + skipped.length + ' مستند غير متوازن' : ''));
+    return { success: true, batchId: batchId, newAccounts: newRows.length, entries: validated.length, lines: lRows.length, diff: diff, skipped: skipped };
   } finally { lock.releaseLock(); }
 }
