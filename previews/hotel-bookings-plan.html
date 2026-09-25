@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>حجوزات الفنادق الخارجية</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --navy:#1e3d59; --teal:#0f4c4c; --ink:#0f172a; --mut:#64748b; --line:#e2e8f0; --bg:#f4f6f9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Tajawal",Tahoma,sans-serif; background:var(--bg); color:var(--ink); line-height:1.75; }
+  header.top { background:var(--navy); color:#fff; padding:14px 16px; position:sticky; top:0; z-index:5; box-shadow:0 2px 10px rgba(0,0,0,.2); }
+  header.top h1 { font-family:"Cairo"; font-size:18px; margin:0 0 8px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+  .tabs button { font-family:inherit; font-weight:800; font-size:13px; border:0; border-radius:10px; padding:7px 12px; cursor:pointer; background:rgba(255,255,255,.14); color:#fff; }
+  .tabs button.on { background:#fff; color:var(--navy); }
+  main { max-width:1150px; margin:0 auto; padding:16px; }
+  .page { display:none; } .page.on { display:block; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:14px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
+  h2 { font-family:"Cairo"; font-size:17px; margin:0 0 8px; color:var(--navy); }
+  h3 { font-family:"Cairo"; font-size:14.5px; margin:12px 0 6px; color:#334155; }
+  p, li { font-size:14px; } ul { margin:4px 0; padding-inline-start:22px; }
+  .latin { direction:ltr; unicode-bidi:isolate; font-variant-numeric:tabular-nums; }
+  .note { border-radius:10px; padding:9px 12px; font-size:13.5px; margin:8px 0; }
+  .note.i { background:#eff6ff; border:1px solid #bfdbfe; } .note.w { background:#fffbeb; border:1px solid #fde68a; color:#78350f; }
+  .note.g { background:#f0fdf4; border:1px solid #bbf7d0; } .note.r { background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; }
+  table.t { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.t th { background:#f1f5f9; color:#334155; padding:7px 8px; font-weight:800; text-align:center; border-bottom:2px solid #cbd5e1; }
+  table.t td { padding:7px 8px; border-bottom:1px solid #eef2f6; text-align:center; vertical-align:top; }
+  table.t td.r, table.t th.r { text-align:right; }
+  .scroll { overflow-x:auto; }
+  .opts { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+  .opt { border:2px solid var(--line); border-radius:14px; padding:12px 14px; background:#fff; }
+  .opt.rec { border-color:#16a34a; box-shadow:0 0 0 3px #dcfce7; }
+  .opt h3 { margin-top:0; }
+  .tag { display:inline-block; font-size:11px; font-weight:800; border-radius:20px; padding:1px 9px; margin-inline-start:6px; }
+  .tag.g { background:#dcfce7; color:#166534; } .tag.r { background:#fee2e2; color:#991b1b; } .tag.y { background:#fef3c7; color:#92400e; } .tag.b { background:#dbeafe; color:#1e40af; }
+  .pl { color:#166534; } .mi { color:#991b1b; }
+  .phase { display:grid; grid-template-columns:48px 1fr; gap:10px; margin-bottom:10px; }
+  .phase .n { background:var(--navy); color:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; font-family:"Cairo"; font-weight:900; font-size:18px; }
+  .phase .c { background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px 12px; font-size:13.5px; }
+  .phase .c b { font-family:"Cairo"; }
+  .mock { border:2px solid #0f4c4c; border-radius:14px; overflow:hidden; background:#fff; margin:10px 0; }
+  .mock-h { background:linear-gradient(135deg,#136363,#0b3d3d); color:#fff; padding:9px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-weight:800; }
+  .mock-h small { font-weight:500; opacity:.85; }
+  .mock-b { padding:12px; }
+  .btn { font-family:inherit; font-weight:800; font-size:12px; border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:8px; padding:5px 10px; }
+  .btn.p { background:#0f4c4c; color:#fff; border-color:#0f4c4c; }
+  .steps { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .steps span { font-size:12px; font-weight:800; padding:4px 12px; border-radius:20px; background:#f1f5f9; color:#64748b; }
+  .steps span.on { background:#0f4c4c; color:#fff; } .steps span.ok { background:#dcfce7; color:#166534; }
+  tr.err td { background:#fef2f2; } tr.warn td { background:#fffbeb; } tr.grp td { background:#f8fafc; font-weight:800; }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+  @media (max-width:640px) { .kpis { grid-template-columns:repeat(2,1fr); } }
+  .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:7px; text-align:center; }
+  .kpi b { display:block; font-family:"Cairo"; font-size:17px; } .kpi small { color:var(--mut); font-size:11px; font-weight:700; }
+  .q { background:#fff7ed; border:1.5px solid #fed7aa; border-radius:12px; padding:10px 12px; margin:8px 0; font-size:13.5px; }
+  .q b.n { background:#ea580c; color:#fff; border-radius:50%; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; margin-inline-end:6px; }
+  .o { display:inline-block; background:#fff; border:1px solid #fdba74; border-radius:8px; padding:1px 8px; margin:3px 3px 0 0; font-size:12.5px; }
+  .o.rec { background:#dcfce7; border-color:#86efac; font-weight:800; }
+  textarea.paste { width:100%; height:92px; font-family:monospace; font-size:12px; border:1.5px dashed #94a3b8; border-radius:10px; padding:8px; direction:rtl; background:#f8fafc; }
+</style>
+<style>
+  .bk-tabs { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
+  .bk-tabs span { font-size:12px; font-weight:800; padding:4px 12px; border-radius:20px; border:1.5px solid #cbd5e1; background:#fff; }
+  .bk-tabs span.on { background:#0f4c4c; color:#fff; border-color:#0f4c4c; }
+  .st { display:inline-block; font-size:11px; font-weight:800; border-radius:20px; padding:1px 8px; }
+  .st.p { background:#fef3c7; color:#92400e; } .st.c { background:#dcfce7; color:#166534; } .st.x { background:#fee2e2; color:#991b1b; } .st.a { background:#dbeafe; color:#1e40af; }
+  .form { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  @media (max-width:760px) { .form { grid-template-columns:repeat(2,1fr); } }
+  .fld { font-size:12px; } .fld label { display:block; font-weight:800; color:#475569; font-size:11.5px; }
+  .fld div { border:1px solid #cbd5e1; border-radius:8px; padding:4px 8px; background:#fff; min-height:28px; }
+  .sum { background:#f0fdfa; border:1.5px solid #99f6e4; border-radius:10px; padding:8px 12px; display:flex; gap:18px; flex-wrap:wrap; font-size:13px; margin-top:8px; }
+  .paper { border:1px solid #cbd5e1; border-radius:10px; padding:14px 18px; background:#fff; font-size:13px; max-width:620px; margin:auto; }
+  .paper h4 { font-family:"Cairo"; text-align:center; margin:0 0 6px; color:#0f4c4c; }
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>🏨 المرحلة 4 — حجوزات الفنادق الخارجية: دراسة ومعاينة للنقاش قبل التنفيذ</h1>
+  <div class="tabs">
+    <button class="on" onclick="go(0,this)">🔍 الوحدة في الـ ERP</button>
+    <button onclick="go(1,this)">🏗️ التصميم المقترح</button>
+    <button onclick="go(2,this)">🖥️ معاينة الشاشات</button>
+    <button onclick="go(3,this)">🧾 المحاسبة</button>
+    <button onclick="go(4,this)">🪜 المراحل والأسئلة</button>
+  </div>
+</header>
+<main>
+
+<!-- ========== 0 ========== -->
+<section class="page on">
+  <div class="card">
+    <h2>📋 ما تفعله وحدة الحجوزات في برنامج الـ ERP الآن</h2>
+    <div class="scroll"><table class="t">
+      <tr><th class="r">الجزء</th><th class="r">المحتوى</th><th>التقييم</th></tr>
+      <tr><td class="r">بيانات الحجز</td><td class="r">المدينة (مكة/المدينة)، الفندق، العميل، المورد، الدخول والخروج والليالي، غرف ثنائي/ثلاثي/رباعي/خماسي، الوجبة، رقم تأكيد الفندق، تاريخ الأوبشن، مسؤول المبيعات، الحالة، ملاحظات</td><td>✅ ننقلها كلها</td></tr>
+      <tr><td class="r">التسعير</td><td class="r">سعر تكلفة وسعر بيع لكل نوع غرفة لليلة (أو سعر موحّد لكل الأنواع)، خصم، والإجمالي = السعر × الغرف × الليالي، والربح</td><td>✅</td></tr>
+      <tr><td class="r">الاعتماد والقيد</td><td class="r">«اعتماد» يدوي من المالية يولّد قيداً بالريال: من حـ/ العميل (البيع) إلى حـ/ المورد (التكلفة) + حـ/ الإيراد (الربح). إلغاء الاعتماد يحذف القيد</td><td>🔧 نطوّره</td></tr>
+      <tr><td class="r">الطباعة</td><td class="r">تأكيد الحجز للعميل، وفاوتشر للفندق، وكشف الوصول بالتاريخ</td><td>✅</td></tr>
+      <tr><td class="r">الاستيراد</td><td class="r">من Excel بنموذج، ومن Word، ومن نص واتساب حر (بالذكاء الاصطناعي Gemini أو بقواعد استخراج)</td><td>✅</td></tr>
+      <tr><td class="r">المتابعة</td><td class="r">تنبيهات الأوبشن القريب، حجوزات ناقصة البيانات، مراجعة محاسبية للحجوزات المعدّلة بعد الاعتماد، سجل تعديلات لكل حجز، صلاحيات لكل مدينة</td><td>✅</td></tr>
+      <tr><td class="r">الأعمدة</td><td class="r">جدول بأعمدة قابلة للاختيار والترتيب، وتعديل مباشر داخل الجدول، وتصدير Excel</td><td>✅</td></tr>
+    </table></div>
+    <div class="note r"><b>⚠️ نقاط ضعف لن تُنقل كما هي:</b>
+      <ul>
+        <li>القيد «صافٍ»: الإيراد يُسجَّل بالربح فقط، فلا تظهر مبيعات السكن ولا تكلفته الحقيقية في قائمة الدخل.</li>
+        <li>الحجز لا يرتبط بأي رحلة أو اتفاقية سكن، فلا تدخل ربحيته في ربحية الرحلة.</li>
+        <li>إلغاء الاعتماد يحذف القيد نهائياً بلا أثر، وتعديل حجز معتمد يعيد كتابة قيده في مكانه.</li>
+        <li>العملة ثابتة بالريال، والعدد التقديري للأفراد محسوب من سعة الغرف فقط.</li>
+      </ul></div>
+  </div>
+</section>
+
+<!-- ========== 1 ========== -->
+<section class="page">
+  <div class="card">
+    <h2>🏗️ الوحدة المقترحة داخل برنامج العمرة</h2>
+    <p>شاشة جديدة <b>«🏨 حجوزات الفنادق»</b> بنفس أسلوب البرنامج، تستخدم نفس العملاء (البحث التنبؤي وتنبيه الأسماء المتشابهة) ونفس الصلاحيات وسجل التعديلات، وتولّد قيودها في الحسابات العامة تلقائياً مثل باقي الشاشات.</p>
+    <h3>🗃️ البيانات (شيت جديد HotelBookings في ملف البرنامج)</h3>
+    <div class="scroll"><table class="t">
+      <tr><th class="r">المجموعة</th><th class="r">الحقول</th></tr>
+      <tr><td class="r">التعريف</td><td class="r">رقم الحجز (MK-001 / MD-001)، المدينة، الفندق (من قائمة الفنادق)، الحالة: <span class="st p">مبدئي</span> <span class="st a">مؤكد من الفندق</span> <span class="st c">مُسلَّم للعميل</span> <span class="st x">ملغى</span></td></tr>
+      <tr><td class="r">الأطراف</td><td class="r">العميل (من دليل العملاء)، المورد (فندق مباشر أو شركة وسيطة)، مسؤول المبيعات، الشركة المنفذة</td></tr>
+      <tr><td class="r">الإقامة</td><td class="r">الدخول والخروج والليالي، غرف ثنائي/ثلاثي/رباعي/خماسي، الوجبة (بدون/إفطار/نصف إقامة/إقامة كاملة)، عدد الأفراد الفعلي (يُحسب تلقائياً ويمكن تعديله)</td></tr>
+      <tr><td class="r">الأسعار</td><td class="r">العملة (ريال افتراضياً)، تكلفة وبيع لكل نوع غرفة لليلة أو سعر موحّد، خصم، الإجماليات والربح تُحسب فورياً</td></tr>
+      <tr><td class="r">المتابعة</td><td class="r">رقم تأكيد الفندق، أوبشن المورد، أوبشن العميل، نوع التأكيد، ملاحظات، مرفقات (صورة التأكيد)</td></tr>
+      <tr><td class="r">الربط</td><td class="r"><b>الرحلة</b> (اختياري — فتدخل ربحيتها في ربحية الرحلة)، <b>اتفاقية السكن</b> (اختياري — يُخصم عدد الغرف من رصيد الاتفاقية)</td></tr>
+    </table></div>
+    <h3>🔗 علاقتها بالموجود</h3>
+    <ul>
+      <li><b>الفنادق:</b> قائمة موحّدة مع اتفاقيات السكن (نفس أسماء الفنادق بالمدينتين) — بلا تكرار.</li>
+      <li><b>العملاء:</b> نفس العميل في حسابات العملاء وفي الحجوزات، وحسابه في الدليل واحد؛ الإيراد يُفصل بحساب «إيرادات السكن».</li>
+      <li><b>الموردون:</b> حساب لكل مورد تحت «2103 الفنادق» يُنشأ تلقائياً (فندق أو شركة حجز).</li>
+      <li><b>كشف حساب المورد:</b> يُقرأ من دفتر الأستاذ مباشرة (الحجوزات + الدفعات بسندات الصرف).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== 2 ========== -->
+<section class="page">
+  <div class="card">
+    <h2>🖥️ الشاشة الرئيسية — قائمة الحجوزات</h2>
+    <div class="mock"><div class="mock-h">🏨 حجوزات الفنادق <small>· 148 حجز</small><span style="margin-inline-start:auto;display:flex;gap:6px;"><span class="btn p">➕ حجز جديد</span><span class="btn">📥 استيراد</span><span class="btn">📄 كشف الوصول</span><span class="btn">⚙️ الأعمدة</span></span></div>
+    <div class="mock-b">
+      <div class="bk-tabs"><span class="on">🕋 مكة (92)</span><span>🕌 المدينة (56)</span><span>الكل</span></div>
+      <div class="kpis"><div class="kpi"><b class="latin">1,284</b><small>غرفة × ليلة هذا الشهر</small></div><div class="kpi"><b class="latin">612,400</b><small>مبيعات (ريال)</small></div><div class="kpi"><b class="latin" style="color:#166534;">58,900</b><small>ربح (ريال)</small></div><div class="kpi"><b class="latin" style="color:#b45309;">7</b><small>أوبشن ينتهي خلال يومين</small></div></div>
+      <div class="scroll"><table class="t">
+        <tr><th>الحجز</th><th class="r">الفندق</th><th class="r">العميل</th><th>الدخول</th><th>الخروج</th><th>ليالي</th><th>الغرف</th><th>البيع</th><th>الربح</th><th>الأوبشن</th><th>الحالة</th><th></th></tr>
+        <tr><td class="latin">MK-091</td><td class="r">سويس أوتيل المقام</td><td class="r">شركة النور للسياحة</td><td class="latin">12/11</td><td class="latin">17/11</td><td>5</td><td>6 ث · 4 ر</td><td class="latin">48,500</td><td class="latin pl">5,200</td><td class="latin">—</td><td><span class="st c">مُسلَّم</span></td><td>🖨️ ✏️</td></tr>
+        <tr class="warn"><td class="latin">MK-092</td><td class="r">فندق دار الإيمان</td><td class="r">مؤسسة الهدى</td><td class="latin">20/11</td><td class="latin">24/11</td><td>4</td><td>10 ر</td><td class="latin">36,000</td><td class="latin pl">3,600</td><td class="latin" style="color:#b45309;font-weight:800;">27/09 ⏰</td><td><span class="st p">مبدئي</span></td><td>🖨️ ✏️</td></tr>
+        <tr><td class="latin">MK-093</td><td class="r">هيلتون سويتس</td><td class="r">رحلة المكتب 8-10</td><td class="latin">08/10</td><td class="latin">13/10</td><td>5</td><td>15 ث</td><td class="latin">—</td><td class="latin">—</td><td class="latin">—</td><td><span class="st a">مؤكد</span> 🧳</td><td>🖨️ ✏️</td></tr>
+      </table></div>
+      <div class="note i" style="margin-bottom:0;">🧳 = مرتبط برحلة (تكلفته تذهب لتكلفة الرحلة) · الصف الأصفر = أوبشن قريب · اضغط أي خلية لتعديلها مباشرة كما في شاشة المجموعات.</div>
+    </div></div>
+  </div>
+  <div class="card">
+    <h2>✏️ نموذج الحجز (الإجماليات تُحسب لحظياً)</h2>
+    <div class="mock"><div class="mock-h">🏨 حجز جديد — مكة</div><div class="mock-b">
+      <div class="form">
+        <div class="fld"><label>الفندق</label><div>سويس أوتيل المقام 🔎</div></div>
+        <div class="fld"><label>العميل</label><div>شركة النور للسياحة 🔎</div></div>
+        <div class="fld"><label>المورد</label><div>شركة الماسة للحجوزات 🔎</div></div>
+        <div class="fld"><label>الحالة</label><div>مؤكد من الفندق</div></div>
+        <div class="fld"><label>الدخول</label><div class="latin">12/11/2026</div></div>
+        <div class="fld"><label>الخروج</label><div class="latin">17/11/2026 · 5 ليالي</div></div>
+        <div class="fld"><label>الوجبة</label><div>إفطار</div></div>
+        <div class="fld"><label>ربط برحلة (اختياري)</label><div>—</div></div>
+      </div>
+      <div class="scroll" style="margin-top:8px;"><table class="t">
+        <tr><th>نوع الغرفة</th><th>العدد</th><th>تكلفة الليلة</th><th>بيع الليلة</th><th>إجمالي التكلفة</th><th>إجمالي البيع</th></tr>
+        <tr><td>ثنائي</td><td>6</td><td class="latin">750</td><td class="latin">850</td><td class="latin">22,500</td><td class="latin">25,500</td></tr>
+        <tr><td>رباعي</td><td>4</td><td class="latin">1,000</td><td class="latin">1,150</td><td class="latin">20,000</td><td class="latin">23,000</td></tr>
+      </table></div>
+      <div class="sum"><span>الغرف: <b>10</b></span><span>الأفراد: <b>28</b></span><span>التكلفة: <b class="latin">42,500 ر</b></span><span>البيع: <b class="latin">48,500 ر</b></span><span>الربح: <b class="latin pl">6,000 ر (12.4%)</b></span></div>
+    </div></div>
+  </div>
+  <div class="card">
+    <h2>🖨️ الطباعة: تأكيد للعميل · فاوتشر للفندق · كشف الوصول</h2>
+    <div class="paper"><h4>تأكيد حجز فندقي — Booking Confirmation</h4>
+      <div class="scroll"><table class="t"><tr><td class="r">رقم الحجز</td><td class="latin">MK-091</td><td class="r">رقم تأكيد الفندق</td><td class="latin">SW-448120</td></tr>
+      <tr><td class="r">الفندق</td><td class="r" colspan="3">سويس أوتيل المقام — مكة المكرمة</td></tr>
+      <tr><td class="r">الإقامة</td><td class="r" colspan="3">من 12/11/2026 إلى 17/11/2026 (5 ليالي) — إفطار</td></tr>
+      <tr><td class="r">الغرف</td><td class="r" colspan="3">6 ثنائي + 4 رباعي</td></tr></table></div>
+      <div style="font-size:11.5px;color:#64748b;margin-top:6px;">بشعار الشركة المنفذة، وبنسختين: بالأسعار (للعميل) وبدون أسعار (فاوتشر للفندق).</div></div>
+  </div>
+</section>
+
+<!-- ========== 3 ========== -->
+<section class="page">
+  <div class="card">
+    <h2>🧾 القيد المحاسبي للحجز</h2>
+    <div class="opts">
+      <div class="opt rec"><h3>أ) قيد إجمالي <span class="tag g">⭐ التوصية</span></h3>
+        <table class="t"><tr><th class="r">الحساب</th><th>مدين</th><th>دائن</th></tr>
+        <tr><td class="r">شركة النور (عميل)</td><td class="latin">48,500</td><td></td></tr>
+        <tr><td class="r">43 إيرادات السكن</td><td></td><td class="latin">48,500</td></tr>
+        <tr><td class="r">5103 تكلفة السكن</td><td class="latin">42,500</td><td></td></tr>
+        <tr><td class="r">شركة الماسة (مورد)</td><td></td><td class="latin">42,500</td></tr></table>
+        <p class="pl">＋ قائمة الدخل تُظهر مبيعات السكن وتكلفته الحقيقية، والربحية لكل فندق/مورد/رحلة.</p></div>
+      <div class="opt"><h3>ب) قيد صافٍ (كما في الـ ERP)</h3>
+        <table class="t"><tr><th class="r">الحساب</th><th>مدين</th><th>دائن</th></tr>
+        <tr><td class="r">شركة النور (عميل)</td><td class="latin">48,500</td><td></td></tr>
+        <tr><td class="r">شركة الماسة (مورد)</td><td></td><td class="latin">42,500</td></tr>
+        <tr><td class="r">43 إيرادات السكن (الربح)</td><td></td><td class="latin">6,000</td></tr></table>
+        <p class="mi">－ لا تظهر المبيعات ولا التكلفة في القوائم، فقط الربح.</p></div>
+    </div>
+    <h3>⏱️ متى يُسجَّل القيد؟</h3>
+    <ul>
+      <li><b>المقترح:</b> تلقائياً عند تحويل الحالة إلى «مؤكد من الفندق» (مثل باقي القيود التلقائية بمفتاح <span class="latin">AUTO:BK:MK-091</span>)، ويتعدّل تلقائياً مع أي تعديل، ويُلغى (بأثر مسجَّل) عند إلغاء الحجز.</li>
+      <li><b>بديل:</b> اعتماد يدوي من صاحب صلاحية المالية كما في الـ ERP.</li>
+      <li>حجز مرتبط <b>برحلة</b> لنا (ليس لعميل خارجي): تكلفته فقط تُسجَّل على الرحلة (مدين 5103 موسوم بالرحلة / دائن المورد)، بلا إيراد منفصل.</li>
+      <li>دفعات الموردين والعملاء: بسندات الصرف والقبض الموجودة، وتظهر في كشف كل طرف وفي أعمار الديون.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ========== 4 ========== -->
+<section class="page">
+  <div class="card">
+    <h2>🪜 مراحل التنفيذ المقترحة</h2>
+    <div class="phase"><div class="n">4أ</div><div class="c"><b>النواة:</b> قائمة الحجوزات بتبويبات المدن والفلاتر والتعديل المباشر، نموذج الحجز بالحساب اللحظي، قائمة الفنادق الموحّدة، الموردون، الربط بالرحلة، القيد التلقائي، سجل التعديلات، الصلاحيات (مع صلاحية لكل مدينة لو أردت).</div></div>
+    <div class="phase"><div class="n">4ب</div><div class="c"><b>المتابعة والطباعة:</b> تأكيد العميل وفاوتشر الفندق وكشف الوصول، تنبيهات الأوبشن القريب والحجوزات الناقصة، تصدير Excel، الربط باتفاقيات السكن (خصم الغرف من رصيد الاتفاقية).</div></div>
+    <div class="phase"><div class="n">4ج</div><div class="c"><b>الاستيراد والنقل:</b> استيراد من Excel ومن نص واتساب، ونقل حجوزات الـ ERP الحالية (مع نقل بياناته المحاسبية لاحقاً).</div></div>
+    <div class="phase"><div class="n">4د</div><div class="c"><b>«نظام الحجوزات»</b> الذي ذكرته — بعد أن توضّح المقصود منه (السؤال 8).</div></div>
+  </div>
+  <div class="card">
+    <h2>❓ أسئلة قبل البدء</h2>
+    <div class="q"><b class="n">1</b>قيد الحجز: <span class="o rec">أ) إجمالي (إيراد + تكلفة) ⭐</span><span class="o">ب) صافٍ بالربح كما في الـ ERP</span></div>
+    <div class="q"><b class="n">2</b>متى يُسجَّل القيد: <span class="o rec">تلقائياً عند «مؤكد من الفندق» ⭐</span><span class="o">عند اعتماد يدوي من المالية</span></div>
+    <div class="q"><b class="n">3</b>عملة الحجوزات: <span class="o rec">ريال افتراضياً مع إمكانية جنيه/دولار لكل حجز ⭐</span><span class="o">ريال فقط</span></div>
+    <div class="q"><b class="n">4</b>عملاء الحجوزات: <span class="o rec">نفس دليل العملاء الحالي (عميل واحد بكل الشاشات) ⭐</span><span class="o">قائمة عملاء سكن منفصلة</span></div>
+    <div class="q"><b class="n">5</b>الربط باتفاقيات السكن (خصم الغرف من رصيد الاتفاقية): <span class="o rec">نعم، اختياري لكل حجز</span><span class="o">لا</span></div>
+    <div class="q"><b class="n">6</b>صلاحيات لكل مدينة (موظف يرى حجوزات مكة فقط مثلاً): <span class="o">نعم</span><span class="o">لا، صلاحية واحدة للشاشة</span></div>
+    <div class="q"><b class="n">7</b>نقل حجوزات الـ ERP الحالية: <span class="o rec">نعم مع نقل الـ ERP</span><span class="o">لا، نبدأ من جديد</span></div>
+    <div class="q"><b class="n">8</b>ما المقصود بـ«نظام الحجوزات»؟ مثلاً: حجز مقاعد الرحلات للعملاء، أم طلبات حجز يرسلها العملاء بأنفسهم (بوابة/رابط)، أم شيء آخر؟ اشرحه بجملتين.</div>
+    <div class="q"><b class="n">9</b>الاستيراد من نص واتساب بالذكاء الاصطناعي: <span class="o">نعم (يحتاج مفتاح Gemini كما في الـ ERP)</span><span class="o rec">بقواعد استخراج بلا ذكاء اصطناعي أولاً</span></div>
+  </div>
+</section>
+</main>
+<script>
+function go(i, b) {
+  document.querySelectorAll('.page').forEach(function (p, j) { p.classList.toggle('on', i === j); });
+  document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+  window.scrollTo(0, 0);
+}
+</script>
+</body>
+</html>
