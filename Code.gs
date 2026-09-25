@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.204";
+var APP_VERSION = "4.205";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6031,7 +6031,7 @@ function checkPasswordMatch_(plainPassword, storedValue) {
 /* 🔐 نموذج الصلاحيات الذكية (سيرفر): يفهم رموز "screen.cap" مع التتالي + الرموز القديمة
    - أي صلاحية شاشة تعني العرض؛ الحذف يعني التعديل والعرض
    - الرمز القديم "delete" يمنح الحذف في كل الشاشات (حفاظاً على السلوك السابق) */
-var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas'];
+var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl'];
 var _PERM_LEGACY_MAP_ = {
   'add':'bookings.add','edit':'bookings.edit','delete':'bookings.delete',
   'print':'bookings.print','approve':'bookings.approve',
@@ -12062,6 +12062,7 @@ function _auditScreen_(action, field, recordId) {
   // (MF:/VZ:/AI:/AP:) ثم بنص العملية؛ كانت عملياتهما تتبعثر بين «أخرى» و«الإعدادات» و«الرحلات»
   // و«حسابات العملاء» حسب اسم الحقل المعدَّل، ولا يوجد اختيار لهما بفلتر الشاشة إطلاقاً
   var rid = String(recordId || '');
+  if (/^GL:/.test(rid)) return 'gl';   // 📒 (V4.205) الحسابات العامة
   if (/^MF:/.test(rid)) return 'ministry';
   if (/^(VZ|AI|AP|HA|HL):/.test(rid)) return 'visas';
   var act = String(action || '');
@@ -12081,7 +12082,7 @@ function _auditScreen_(action, field, recordId) {
 var AUDIT_SCREEN_LABELS_ = {
   bookings: 'الإشعارات', trips: 'الرحلات', pilgrims: 'المعتمرون / الكشف', accounts: 'حسابات العملاء',
   users: 'إدارة المستخدمين', settings: 'الإعدادات', catering: 'اتفاقيات الإعاشة',
-  ministry: 'ملفات الوزارة', visas: 'متابعة الوكلاء', other: 'أخرى'
+  ministry: 'ملفات الوزارة', visas: 'متابعة الوكلاء', gl: 'الحسابات العامة', other: 'أخرى'
 };
 
 function getAuditLog(authToken, filters) {
