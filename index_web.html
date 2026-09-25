@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.206 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.207 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.206)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.207)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.206</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.207</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5343,6 +5343,8 @@ input[type="date"]:not(:focus):not(:valid) {
     <span class="gl-tab" data-t="entries" onclick="glTab('entries')">🧾 القيود</span>
     <span class="gl-tab" data-t="ledger" onclick="glTab('ledger')">📖 دفتر الأستاذ</span>
     <span class="gl-tab" data-t="trial" onclick="glTab('trial')">⚖️ ميزان المراجعة</span>
+    <span class="gl-tab" data-t="reports" onclick="glTab('reports')">📊 التقارير</span>
+    <span class="gl-tab" data-t="auto" onclick="glTab('auto')">🤖 القيود التلقائية</span>
     <span class="gl-tab" data-t="coa" onclick="glTab('coa')">🌳 دليل الحسابات</span>
     <span class="gl-tab" data-t="import" onclick="glTab('import')">📥 الاستيراد المجمّع</span>
     <span class="gl-tab" data-t="settings" onclick="glTab('settings')">⚙️ الإعدادات</span>
@@ -7376,7 +7378,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.206";
+var CLIENT_APP_VERSION = "4.207";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -44526,7 +44528,7 @@ function glTab(t) {
   GL.tab = t;
   document.querySelectorAll('#glTabs .gl-tab').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); });
   if (!GL.ready) return;
-  ({ home: glRenderHome, entries: glRenderEntries, ledger: glRenderLedger, trial: glRenderTrial, coa: glRenderCoa, import: glRenderImport, settings: glRenderSettings }[t] || glRenderHome)();
+  ({ home: glRenderHome, entries: glRenderEntries, ledger: glRenderLedger, trial: glRenderTrial, reports: glRenderReports, auto: glRenderAuto, coa: glRenderCoa, import: glRenderImport, settings: glRenderSettings }[t] || glRenderHome)();
 }
 function glRenderSetup() {
   var box = document.getElementById('glBody');
@@ -44691,7 +44693,8 @@ function glShowEntry(id) {
     }).join('');
     var h = '<div class="d-flex flex-wrap gap-2 mb-2" style="font-size:12.5px;">' +
       '<span class="gl-pill">📅 <b class="gl-latin">' + glEsc(e.date) + '</b></span><span class="gl-pill">' + glEsc(e.type) + '</span><span class="gl-pill">الحالة: <b>' + glEsc(e.status) + '</b></span>' +
-      (e.ref ? '<span class="gl-pill">المرجع: ' + glEsc(e.ref) + '</span>' : '') + (e.batchId ? '<span class="gl-pill">دفعة: <span class="gl-latin">' + glEsc(e.batchId) + '</span></span>' : '') + '</div>' +
+      (e.ref && !/^h:/.test(e.ref) ? '<span class="gl-pill">المرجع: ' + glEsc(e.ref) + '</span>' : '') +
+      (/^AUTO:/.test(e.sourceKey || '') ? '<span class="gl-pill" style="background:#ecfeff;">🤖 تلقائي من شاشات البرنامج</span>' : '') + (e.batchId ? '<span class="gl-pill">دفعة: <span class="gl-latin">' + glEsc(e.batchId) + '</span></span>' : '') + '</div>' +
       '<div style="font-weight:700;margin-bottom:6px;">' + glEsc(e.desc) + '</div>' +
       '<div class="table-responsive"><table class="gl-tbl"><thead><tr><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th><th>العملة</th><th>مدين معادل</th><th>دائن معادل</th></tr></thead><tbody>' + rows +
       '<tr class="gl-tot"><td colspan="5" style="text-align:right;">الإجمالي بالجنيه</td><td class="gl-latin">' + glFmt(d) + '</td><td class="gl-latin">' + glFmt(c) + '</td></tr></tbody></table></div>' +
@@ -44701,7 +44704,7 @@ function glShowEntry(id) {
       '<div class="d-flex gap-2 mt-3 flex-wrap">' +
         '<button class="btn btn-outline-dark btn-sm" onclick="glPrintEntry(\'' + glJs(e.id) + '\')">🖨️ طباعة</button>' +
         (e.status === 'مسودة' && GL.can.edit ? '<button class="btn btn-primary btn-sm" onclick="glDlgClose();glEditEntry(\'' + glJs(e.id) + '\')">✏️ تعديل</button><button class="btn btn-success btn-sm" onclick="glDlgClose();glPost(\'' + glJs(e.id) + '\')">✅ ترحيل</button>' : '') +
-        (e.status !== 'ملغى' && GL.can.del ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glVoid(\'' + glJs(e.id) + '\',\'' + glJs(e.status) + '\')">' + (e.status === 'مسودة' ? '🗑️ حذف المسودة' : '⛔ إلغاء القيد') + '</button>' : '') +
+        (e.status !== 'ملغى' && GL.can.del && !/^AUTO:/.test(e.sourceKey || '') && e.type !== 'قيد إقفال' ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glVoid(\'' + glJs(e.id) + '\',\'' + glJs(e.status) + '\')">' + (e.status === 'مسودة' ? '🗑️ حذف المسودة' : '⛔ إلغاء القيد') + '</button>' : '') +
         (GL.can.add ? '<button class="btn btn-outline-secondary btn-sm" onclick="glDlgClose();glCopyEntry(\'' + glJs(e.id) + '\')">📄 نسخ كقيد جديد</button>' : '') +
       '</div>';
     GL._lastEntry = e;
@@ -45224,6 +45227,7 @@ function glErpDraw() {
   var baseDiff = Math.round(R.totals.base * 100) / 100;
   var warn = [];
   if (R.alreadyMigrated && R.alreadyMigrated.length) warn.push('⛔ يوجد نقل سابق فعّال (' + R.alreadyMigrated.join('، ') + ') — ألغِ دفعته أولاً من «دفعات الاستيراد السابقة» قبل إعادة النقل.');
+  if (R.appOpening) warn.push('⚠️ يوجد قيد «أرصدة افتتاحية من شاشات البرنامج» (القيود التلقائية) للعملاء والوكلاء — حسابات العملاء/الوكلاء المعاد استخدامها ستأخذ رصيد الـ ERP فوق رصيدها من البرنامج. إن كانت نفس الأرصدة فأوقف «أرصدة افتتاحية من بيانات ما قبل البداية» من تبويب القيود التلقائية وزامن قبل النقل.');
   if (yrs.length > 1) warn.push('⚠️ الـ ERP فيه أرصدة افتتاحية لأكثر من سنة (' + yrs.join('، ') + '). ميزان الـ ERP يجمعها كلها؛ لو كانت سنة لاحقة «ترحيلاً» للسابقة فاختر «آخر سنة افتتاحية» (' + (R.openYear === 'all' ? 'المختار الآن: كل القيود' : 'المختار الآن: ' + (R.openYear || '—')) + ') — قارن الأرقام بميزان الـ ERP قبل التنفيذ.');
   if (!yrs.length) warn.push('ℹ️ لا توجد قيود أرصدة افتتاحية JV-OPENING — الأرصدة = كل الحركات حتى تاريخ القطع.');
   if (Math.abs(R.totals.EGP) >= 0.01 || Math.abs(R.totals.SAR) >= 0.01 || Math.abs(R.totals.USD) >= 0.01) warn.push('⚠️ مجموع الأرصدة في الـ ERP نفسه غير صفري (جنيه ' + glFmt(R.totals.EGP) + ' · ريال ' + glFmt(R.totals.SAR) + ' · دولار ' + glFmt(R.totals.USD) + ') — الفرق سيُرحَّل لحساب «34 فروق أرصدة افتتاحية».');
@@ -45434,8 +45438,268 @@ function glRenderSettings() {
     '</div>' +
     '<div class="gl-note mt-2">عملة الأساس: <b>الجنيه المصري</b> · العملات: جنيه / ريال / دولار · الشركة المنفذة وسم على القيد (دفتر واحد) · القيود العادية لا تُسجَّل بتاريخ قبل تاريخ البداية (البيانات الأقدم عبر الأرصدة الافتتاحية أو الاستيراد).</div>' +
     (GL.isAdmin ? '<div class="text-end"><button class="btn btn-success btn-sm fw-bold" onclick="glSaveSettingsUI(this)">💾 حفظ الإعدادات</button></div>' : '<div class="small text-muted">تعديل الإعدادات للمدير فقط.</div>') +
-    (GL.url ? '<div class="mt-3 small">📁 ملف الحسابات: <a href="' + glEsc(GL.url) + '" target="_blank">فتح الشيت</a></div>' : '') + '</div>';
+    (GL.url ? '<div class="mt-3 small">📁 ملف الحسابات: <a href="' + glEsc(GL.url) + '" target="_blank">فتح الشيت</a></div>' : '') + '</div>' +
+    '<div class="gl-card mt-2" style="max-width:720px;"><b>🔒 إقفال الفترات</b>' +
+      '<div class="gl-note mt-1">أي قيد بتاريخ حتى «تاريخ الإقفال» لا يمكن تسجيله أو تعديله أو إلغاؤه — يدوياً أو من الاستيراد أو القيود التلقائية (تظهر تغييرات الشاشات في تلك الفترة كـ«محجوزة» بتبويب القيود التلقائية).' +
+        (GL.settings.lockDate ? '<br>الفترات مقفلة حالياً حتى <b class="gl-latin">' + glEsc(GL.settings.lockDate) + '</b>' : '<br>لا توجد فترات مقفلة حالياً.') + '</div>' +
+      (GL.isAdmin ? '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">تاريخ الإقفال</label><div style="width:140px;">' + glDateInput('glSLock', GL.settings.lockDate || '') + '</div></div>' +
+        '<button class="btn btn-warning btn-sm fw-bold" onclick="glSetLockUI(this)">🔒 حفظ تاريخ الإقفال</button>' +
+        (GL.settings.lockDate ? '<button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById(\'glSLock\').value=\'\';glSetLockUI(this)">🔓 فتح كل الفترات</button>' : '') + '</div>' +
+        '<hr><b>📕 قيد إقفال السنة المالية</b><div class="gl-note mt-1">ينقل صافي الإيرادات والمصروفات للسنة إلى «33 الأرباح المرحّلة» بقيد بتاريخ 31/12. قائمة الدخل تتجاهله، والمركز المالي يعكسه.</div>' +
+        '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">السنة</label><input id="glSYear" class="form-control form-control-sm gl-latin" style="width:90px;" value="' + (new Date().getFullYear() - (new Date().getMonth() < 6 ? 1 : 0)) + '"></div>' +
+        '<label class="small d-flex align-items-center gap-1"><input type="checkbox" id="glSYearLock" checked> وأقفل الفترة حتى 31/12</label>' +
+        '<button class="btn btn-danger btn-sm fw-bold" onclick="glCloseYearUI(this)">📕 إقفال السنة</button><button class="btn btn-outline-danger btn-sm" onclick="glReopenYearUI(this)">↩️ إعادة فتح السنة</button></div>'
+        : '<div class="small text-muted">الإقفال للمدير فقط.</div>') + '</div>';
 }
+function glSetLockUI(btn) {
+  var d = (document.getElementById('glSLock') || {}).value || '';
+  askConfirm_(d ? 'إقفال كل الفترات حتى ' + d + '؟\nلن يُسمح بأي قيد أو تعديل بتاريخ حتى هذا اليوم.' : 'فتح كل الفترات المقفلة؟', function () {
+    btn.disabled = true;
+    glRun('glSetLockDate', [d], function (res) { GL.settings.lockDate = res.lockDate; showToast(res.lockDate ? '🔒 أُقفلت الفترات حتى ' + res.lockDate : '🔓 فُتحت كل الفترات'); glRenderSettings(); },
+      function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+  }, { title: 'إقفال الفترات', icon: '🔒', danger: !d });
+}
+function glCloseYearUI(btn) {
+  var y = (document.getElementById('glSYear') || {}).value, lk = (document.getElementById('glSYearLock') || {}).checked;
+  askConfirm_('إقفال السنة المالية ' + y + '؟\nيُنشأ قيد إقفال بتاريخ 31/12/' + y + ' ينقل صافي الإيرادات والمصروفات للأرباح المرحّلة' + (lk ? '، وتُقفل الفترة حتى هذا التاريخ.' : '.'), function () {
+    btn.disabled = true;
+    glRun('glCloseYear', [y, lk], function (res) {
+      _showPopup('✅ أُقفلت السنة ' + y + ' بالقيد ' + res.id + '\nصافي ' + (res.net >= 0 ? 'الربح ' : 'الخسارة ') + glFmt(Math.abs(res.net)) + ' ج' + (res.lockDate ? '\nالفترات مقفلة حتى ' + res.lockDate : ''), 'success', 'إقفال السنة');
+      glRefreshData(function () { glRenderSettings(); });
+    }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+  }, { title: 'إقفال السنة المالية', icon: '📕', danger: true, yesLabel: 'إقفال' });
+}
+function glReopenYearUI(btn) {
+  var y = (document.getElementById('glSYear') || {}).value;
+  askConfirm_('إعادة فتح السنة ' + y + ' (إلغاء قيد إقفالها)؟ يجب أن تكون الفترة مفتوحة أولاً.', function () {
+    glRun('glReopenYear', [y], function () { showToast('↩️ أُعيد فتح السنة ' + y); glRefreshData(function () { glRenderSettings(); }); });
+  }, { title: 'إعادة فتح سنة', danger: true });
+}
+/* ---------------------------- 🤖 القيود التلقائية (وضع الظل) ---------------------------- */
+var GL_SRC_LBL_ = { client: '👤 حسابات العملاء', agent: '🛂 الوكلاء والنقل', room: '🏛️ رسوم الغرفة', open: '🏁 أرصدة افتتاحية' };
+function glRenderAuto() {
+  var box = document.getElementById('glBody');
+  var s = GL.settings || {}, last = null; try { last = JSON.parse(s.auto_last || 'null'); } catch (e) {}
+  box.innerHTML = '<div class="gl-card">' +
+    '<div class="d-flex align-items-center gap-2 flex-wrap"><b style="font-size:15px;">🤖 القيود التلقائية من شاشات البرنامج</b><span class="gl-st" style="background:#ecfeff;color:#0e7490;">وضع الظل</span>' +
+      '<div class="ms-auto d-flex gap-2 flex-wrap"><button class="btn btn-outline-primary btn-sm" onclick="glAutoPreviewUI(this)">👁️ معاينة التغييرات</button>' +
+      (GL.can.add ? '<button class="btn btn-success btn-sm fw-bold" onclick="glAutoSyncUI(this)">🔄 مزامنة الآن</button>' : '') +
+      '<button class="btn btn-outline-dark btn-sm" onclick="glAutoRecUI(this)">⚖️ تقرير المطابقة</button></div></div>' +
+    '<div class="gl-note mt-2">الشاشات الحالية تبقى هي المصدر: كل بند ودفعة بحسابات العملاء، وكل مجموعة تأشيرات ودورة نقل وبند ودفعة بحسابات الوكلاء، وكل إيصال رسوم غرفة وملف مراجَع — يتحول لقيد مرحّل في الدفتر تلقائياً. أي تعديل أو حذف بالشاشة يعدّل قيده أو يلغيه في المزامنة التالية، والقيود التلقائية لا تُعدَّل يدوياً.<br>' +
+      '💵 دفعات الشاشات لا تحدد خزينة أو بنكاً، فتسجَّل في حساب <b>«نقدية تحت التسوية»</b> — انقلها للخزينة أو البنك بسند <b>«🔁 تحويل نقدية»</b>، ولا تسجّل سند قبض لنفس الدفعة على حساب العميل حتى لا تتكرر.</div>' +
+    '<div class="d-flex gap-3 flex-wrap align-items-center small">' +
+      '<span>🕘 آخر مزامنة: ' + (last ? '<b class="gl-latin">' + glEsc(last.at) + '</b> (' + glEsc(last.by) + ') — جديد ' + last.created + '، معدّل ' + last.updated + '، ملغى ' + last.voided + (last.blocked ? '، <b style="color:#b45309;">محجوز ' + last.blocked + '</b>' : '') + (last.errors ? '، <b style="color:#b91c1c;">أخطاء ' + last.errors + '</b>' : '') : 'لم تتم بعد') + '</span>' +
+      (s.auto_last_error ? '<span style="color:#b91c1c;">⚠️ ' + glEsc(s.auto_last_error) + '</span>' : '') +
+      (GL.isAdmin ? '<label class="d-flex align-items-center gap-1 ms-auto"><input type="checkbox" ' + (s.auto_cron === 'نعم' ? 'checked' : '') + ' onchange="glAutoSetUI({cron:this.checked})"> مزامنة تلقائية كل ساعة</label>' +
+        '<label class="d-flex align-items-center gap-1"><input type="checkbox" ' + (s.auto_open !== 'لا' ? 'checked' : '') + ' onchange="glAutoSetUI({autoOpen:this.checked})"> أرصدة افتتاحية من بيانات ما قبل ' + glEsc(s.startDate || '') + '</label>' : '') +
+    '</div></div><div id="glAutoRes" class="mt-2"></div>';
+  if (GL._autoRes) glAutoDraw(GL._autoRes, GL._autoResDry);
+}
+function glAutoSetUI(o) {
+  glRun('glAutoSettings', [o], function () {
+    if (o.cron !== undefined) GL.settings.auto_cron = o.cron ? 'نعم' : 'لا';
+    if (o.autoOpen !== undefined) GL.settings.auto_open = o.autoOpen ? 'نعم' : 'لا';
+    showToast('✅ حُفظ'); glRenderAuto();
+  });
+}
+function glAutoPreviewUI(btn) {
+  btn.disabled = true; var t = btn.innerHTML; btn.innerHTML = '⏳ جاري قراءة الشاشات…';
+  glRun('glAutoPreview', [], function (res) { btn.disabled = false; btn.innerHTML = t; GL._autoRes = res; GL._autoResDry = true; glAutoDraw(res, true); },
+    function (e) { btn.disabled = false; btn.innerHTML = t; _showPopup(e.message || e, 'error'); });
+}
+function glAutoSyncUI(btn) {
+  askConfirm_('مزامنة القيود التلقائية الآن؟\nتُنشأ قيود الأحداث الجديدة وتُحدَّث قيود ما تغيّر وتُلغى قيود ما حُذف من الشاشات.', function () {
+    btn.disabled = true; btn.innerHTML = '⏳ جاري المزامنة…';
+    glRun('glAutoSync', [], function (res) {
+      btn.disabled = false; btn.innerHTML = '🔄 مزامنة الآن';
+      GL._autoRes = res; GL._autoResDry = false;
+      showToast('✅ جديد ' + res.created + ' · معدّل ' + res.updated + ' · ملغى ' + res.voided);
+      glRefreshData(function () { GL.settings.auto_last = JSON.stringify(res.last || {}); glRenderAuto(); });
+    }, function (e) { btn.disabled = false; btn.innerHTML = '🔄 مزامنة الآن'; _showPopup(e.message || e, 'error'); });
+  }, { title: 'مزامنة القيود التلقائية', icon: '🔄', yesLabel: 'مزامنة', danger: false });
+}
+function glAutoDraw(r, dry) {
+  var box = document.getElementById('glAutoRes'); if (!box) return;
+  var k = function (v, l, c) { return '<div><b class="gl-latin"' + (c ? ' style="color:' + c + ';"' : '') + '>' + v + '</b><small>' + l + '</small></div>'; };
+  var tbl = function (title, list, cols) {
+    if (!list || !list.length) return '';
+    return '<details class="mt-2"' + (list === r.errors || list === r.blocked ? ' open' : '') + '><summary class="small fw-bold" style="cursor:pointer;">' + title + ' (' + list.length + ')</summary>' +
+      '<div class="table-responsive" style="max-height:300px;"><table class="gl-tbl mt-1"><thead><tr>' + cols.map(function (c) { return '<th>' + c[0] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      list.map(function (x) { return '<tr>' + cols.map(function (c) { var v = x[c[1]]; return '<td' + (c[2] ? ' class="gl-latin"' : ' style="text-align:right;"') + '>' + (typeof v === 'number' ? glFmt(v) : glEsc(v == null ? '' : v)) + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '</tbody></table></div></details>';
+  };
+  var src = Object.keys(r.bySrc || {}).map(function (s) { return '<span class="gl-pill">' + (GL_SRC_LBL_[s] || s) + ': <b class="gl-latin">' + r.bySrc[s] + '</b></span>'; }).join(' ');
+  box.innerHTML = '<div class="gl-card">' +
+    '<div class="small fw-bold mb-1">' + (dry ? '👁️ معاينة — لم يُكتب شيء بعد' : '✅ نتيجة المزامنة') + ' · إجمالي القيود المطلوبة من الشاشات: <span class="gl-latin">' + (r.total || 0) + '</span>' + (r.preCount ? ' · منها ' + r.preCount + ' حدث قبل تاريخ البداية جُمّعت في قيد الأرصدة الافتتاحية' : '') + '</div>' +
+    '<div class="gl-kpis" style="grid-template-columns:repeat(6,1fr);">' + k(r.created, dry ? 'قيد سيُنشأ' : 'قيد أُنشئ', '#166534') + k(r.updated, dry ? 'سيُعدَّل' : 'عُدّل', '#1d4ed8') + k(r.voided, dry ? 'سيُلغى' : 'أُلغي', '#b91c1c') +
+      k(r.same, 'بلا تغيير') + k((r.blocked || []).length, 'محجوز (فترة مقفلة)', '#b45309') + k((r.errors || []).length, 'خطأ', '#b91c1c') + '</div>' +
+    '<div class="d-flex gap-1 flex-wrap mb-1">' + src + '</div>' +
+    (r.newAccounts ? '<details><summary class="small fw-bold" style="cursor:pointer;">➕ ' + (dry ? 'حسابات ستُنشأ' : 'حسابات أُنشئت') + ' بالدليل (' + r.newAccounts + ')</summary><div class="small mt-1" style="columns:2;">' + (r.newAccountNames || []).map(function (n) { return '<div>' + glEsc(n) + '</div>'; }).join('') + '</div></details>' : '') +
+    ((r.warnings || []).length ? '<div class="gl-note mt-2" style="background:#fff7ed;">' + r.warnings.map(glEsc).join('<br>') + '</div>' : '') +
+    tbl('⛔ أخطاء (لم تُسجَّل)', r.errors, [['التاريخ', 'date', 1], ['البيان', 'desc'], ['السبب', 'msg']]) +
+    tbl('🔒 تغييرات محجوزة بفترة مقفلة', r.blocked, [['التاريخ', 'date', 1], ['البيان', 'desc'], ['السبب', 'why']]) +
+    tbl('➕ ' + (dry ? 'قيود ستُنشأ' : 'قيود أُنشئت') + ' (أول 30)', (r.samples || {}).created, [['التاريخ', 'date', 1], ['البيان', 'desc'], ['المعادل', 'base', 1]]) +
+    tbl('✏️ ' + (dry ? 'قيود ستُعدَّل' : 'قيود عُدّلت') + ' (أول 30)', (r.samples || {}).updated, [['القيد', 'id', 1], ['التاريخ', 'date', 1], ['البيان', 'desc'], ['قبل', 'oldBase', 1], ['بعد', 'base', 1]]) +
+    tbl('⛔ ' + (dry ? 'قيود ستُلغى' : 'قيود أُلغيت') + ' (أول 30)', (r.samples || {}).voided, [['القيد', 'id', 1], ['التاريخ', 'date', 1], ['البيان', 'desc'], ['المعادل', 'base', 1]]) +
+    '</div>';
+}
+function glAutoRecUI(btn) {
+  btn.disabled = true;
+  glRun('glAutoReconcile', [], function (res) { btn.disabled = false; GL._rec = res; GL._recOnlyDiff = GL._recOnlyDiff !== false; glAutoRecDraw(); },
+    function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+}
+function glAutoRecDraw() {
+  var box = document.getElementById('glAutoRes'), R = GL._rec; if (!box || !R) return;
+  var only = GL._recOnlyDiff, rows = R.rows.filter(function (x) { return !only || !x.ok; });
+  var nBad = R.rows.filter(function (x) { return !x.ok; }).length;
+  var c = function (v) { return Math.abs(v) < 0.005 ? '<span style="color:#cbd5e1;">—</span>' : glFmt(v); };
+  var KL = { client: '👤', agent: '🛂', supplier: '🚌', roomfee: '🏛️' };
+  box.innerHTML = '<div class="gl-card"><div class="d-flex align-items-center gap-2 flex-wrap mb-1"><b>⚖️ مطابقة أرصدة الشاشات مع الدفتر</b>' +
+      '<span class="gl-pill">' + R.rows.length + ' طرف</span>' + (nBad ? '<span class="gl-pill" style="background:#fef2f2;color:#b91c1c;">غير متطابق: ' + nBad + '</span>' : '<span class="gl-pill" style="background:#dcfce7;color:#166534;">✅ كل الأرصدة متطابقة</span>') +
+      '<label class="small ms-auto d-flex align-items-center gap-1"><input type="checkbox" ' + (only ? 'checked' : '') + ' onchange="GL._recOnlyDiff=this.checked;glAutoRecDraw()"> غير المتطابق فقط</label>' +
+      '<button class="btn btn-outline-dark btn-sm" onclick="glPrintBox(\'glRecBox\',\'مطابقة الأرصدة\')">🖨️</button></div>' +
+    '<div class="gl-note">الشاشة = الرصيد كما تحسبه شاشات البرنامج (العميل: المستحق عليه · الوكيل/المورد: المستحق له · رسوم الغرفة: الرصيد المتبقي) — الدفتر = رصيد حسابه بعد المزامنة. أي فرق يعني حدثاً لم يُزامَن بعد، أو محجوزاً بفترة مقفلة، أو قيداً يدوياً على نفس الحساب.</div>' +
+    '<div id="glRecBox" class="table-responsive" style="max-height:520px;"><table class="gl-tbl"><thead><tr><th rowspan="2">الطرف</th><th rowspan="2">الحساب</th><th colspan="2">الشاشة</th><th colspan="2">الدفتر</th><th colspan="2">الفرق</th><th rowspan="2"></th></tr>' +
+      '<tr><th>جنيه</th><th>ريال</th><th>جنيه</th><th>ريال</th><th>جنيه</th><th>ريال</th></tr></thead><tbody>' +
+      (rows.map(function (x) {
+        return '<tr' + (x.ok ? '' : ' style="background:#fef2f2;"') + '><td style="text-align:right;">' + (KL[x.kind] || '') + ' ' + glEsc(x.name) + ' <small class="text-muted">' + glEsc(x.label) + '</small></td>' +
+          '<td class="gl-latin">' + (x.code ? '<a href="#" onclick="glOpenLedger(\'' + glJs(x.code) + '\');return false;">' + glEsc(x.code) + '</a>' : '<span style="color:#b91c1c;">لا يوجد</span>') + '</td>' +
+          '<td class="gl-latin">' + c(x.appE) + '</td><td class="gl-latin">' + c(x.appS) + '</td><td class="gl-latin">' + c(x.glE) + '</td><td class="gl-latin">' + c(x.glS) + '</td>' +
+          '<td class="gl-latin fw-bold" style="color:#b91c1c;">' + c(x.dE) + '</td><td class="gl-latin fw-bold" style="color:#b91c1c;">' + c(x.dS) + '</td><td>' + (x.ok ? '✅' : '⚠️') + '</td></tr>';
+      }).join('') || '<tr><td colspan="9" class="text-muted">' + (only ? '✅ لا توجد فروق' : 'لا توجد أرصدة') + '</td></tr>') + '</tbody></table></div></div>';
+}
+
+/* ---------------------------- 📊 التقارير المالية ---------------------------- */
+var GL_REP_ = [['is', '📈 قائمة الدخل'], ['bs', '🏦 المركز المالي'], ['pr', '🧳 الربحية'], ['ag', '⏳ أعمار الديون'], ['cf', '💵 التدفق النقدي والخزائن']];
+function glRenderReports() {
+  var box = document.getElementById('glBody'), r = GL._rep || 'is';
+  var y = new Date().getFullYear();
+  var from = GL._rFrom || GL.settings.startDate || ('01/01/' + y), to = GL._rTo || '';
+  box.innerHTML = '<div class="d-flex gap-1 flex-wrap mb-2">' + GL_REP_.map(function (x) { return '<button class="btn btn-sm ' + (r === x[0] ? 'btn-dark' : 'btn-outline-secondary') + '" onclick="GL._rep=\'' + x[0] + '\';glRenderReports()">' + x[1] + '</button>'; }).join('') + '</div>' +
+    '<div class="gl-fbar">' +
+      (r === 'bs' || r === 'ag' ? '<span class="gl-lbl" style="margin:0;">في تاريخ</span><div style="width:130px;">' + glDateInput('glRTo', to || glToday()) + '</div>'
+        : '<span class="gl-lbl" style="margin:0;">من</span><div style="width:130px;">' + glDateInput('glRFrom', from) + '</div><span class="gl-lbl" style="margin:0;">إلى</span><div style="width:130px;">' + glDateInput('glRTo', to) + '</div>') +
+      (r === 'is' ? '<select id="glRTrip" class="form-select form-select-sm" style="width:190px;"><option value="">كل الرحلات</option>' + (GL._isTrips || []).map(function (t) { return '<option' + (GL._rTrip === t ? ' selected' : '') + '>' + glEsc(t) + '</option>'; }).join('') + '</select>' +
+        '<select id="glRComp" class="form-select form-select-sm" style="width:170px;"><option value="">كل الشركات</option>' + (GL._isComps || []).map(function (t) { return '<option' + (GL._rComp === t ? ' selected' : '') + '>' + glEsc(t) + '</option>'; }).join('') + '</select>' : '') +
+      (r === 'pr' ? '<select id="glRBy" class="form-select form-select-sm" style="width:150px;">' + [['trip', 'حسب الرحلة'], ['company', 'حسب الشركة المنفذة'], ['client', 'حسب العميل']].map(function (o) { return '<option value="' + o[0] + '"' + ((GL._rBy || 'trip') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' : '') +
+      (r === 'ag' ? '<select id="glRKind" class="form-select form-select-sm" style="width:170px;"><option value="client">العملاء (مستحق لنا)</option><option value="agent"' + (GL._rKind === 'agent' ? ' selected' : '') + '>الوكلاء والموردون (مستحق علينا)</option></select>' : '') +
+      '<button class="btn btn-primary btn-sm" onclick="glLoadReport()">عرض</button><button class="btn btn-outline-dark btn-sm" onclick="glPrintBox(\'glRepBox\',document.querySelector(\'#glBody .btn-dark\').textContent)">🖨️</button></div>' +
+    '<div id="glRepBox"><div class="text-center text-muted py-4">⏳</div></div>';
+  glLoadReport();
+}
+// صفوف شجرية: كل حساب (تجميعي أو فرعي) تحت البادئة = مجموع قيم الحسابات الفرعية التي يبدأ كودها بكوده
+function glTreeRows(vals, prefixes, maxDepth) {
+  var codes = Object.keys(vals);
+  return GL.accounts.filter(function (a) {
+    return prefixes.some(function (p) { return a.code.indexOf(p) === 0; }) && (!maxDepth || a.code.length <= maxDepth || !a.isGroup);
+  }).map(function (a) {
+    var v = 0; codes.forEach(function (c) { if (c.indexOf(a.code) === 0) v += vals[c]; });
+    return { a: a, v: Math.round(v * 100) / 100, ind: a.code.length <= 1 ? 0 : a.code.length <= 2 ? 1 : a.code.length <= 4 ? 2 : 3 };
+  }).filter(function (x) { return Math.abs(x.v) >= 0.005; });
+}
+function glTreeHtml(rows, cols) {
+  return rows.map(function (x) {
+    var a = x.a, bg = a.isGroup ? ['#e2e8f0', '#eef2f6', '#f8fafc', '#fff'][x.ind] : '';
+    return '<tr style="' + (bg ? 'background:' + bg + ';font-weight:' + (x.ind < 2 ? 800 : 700) + ';' : 'cursor:pointer;') + '"' + (a.isGroup ? '' : ' onclick="glOpenLedger(\'' + glJs(a.code) + '\')"') + '>' +
+      '<td class="gl-latin" style="text-align:right;">' + glEsc(a.code) + '</td><td style="text-align:right;padding-right:' + (8 + x.ind * 16) + 'px;">' + glEsc(a.name) + '</td>' + cols(x) + '</tr>';
+  }).join('');
+}
+function glLoadReport() {
+  var r = GL._rep || 'is', g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+  GL._rFrom = g('glRFrom') || GL._rFrom; GL._rTo = g('glRTo');
+  var box = document.getElementById('glRepBox'); box.innerHTML = '<div class="text-center text-muted py-4">⏳</div>';
+  var fail = function (e) { box.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc(e.message || e) + '</div>'; };
+  var period = (r === 'bs' || r === 'ag') ? 'في ' + (GL._rTo || glToday()) : ((GL._rFrom ? 'من ' + GL._rFrom : 'من البداية') + (GL._rTo ? ' إلى ' + GL._rTo : ' حتى الآن'));
+  var head = '<div class="small text-muted mb-1">' + glEsc(period) + ' · المبالغ بالجنيه المعادل (عملة الأساس)</div>';
+  if (r === 'is') {
+    GL._rTrip = g('glRTrip'); GL._rComp = g('glRComp');
+    glRun('glIncomeStatement', [GL._rFrom, GL._rTo, { trip: GL._rTrip, company: GL._rComp }], function (res) {
+      GL._isTrips = res.trips; GL._isComps = res.companies;
+      var vals = {}; Object.keys(res.accounts).forEach(function (c) { vals[c] = res.accounts[c].base; });
+      var cur = function (x) { if (x.a.isGroup) return ''; var o = res.accounts[x.a.code]; if (!o) return ''; return ['SAR', 'USD'].filter(function (k) { return Math.abs(o.cur[k]) >= 0.005; }).map(function (k) { return glFmt(o.cur[k]) + ' ' + GL_CUR_LBL_[k]; }).join(' · '); };
+      var col = function (x) { return '<td class="gl-latin">' + glFmt(x.v) + '</td><td class="gl-latin small text-muted">' + cur(x) + '</td>'; };
+      var th = '<thead><tr><th>الكود</th><th>الحساب</th><th>المبلغ</th><th>بالعملة الأصلية</th></tr></thead>';
+      box.innerHTML = head + (GL._rTrip || GL._rComp ? '<div class="gl-note">فلتر: ' + glEsc([GL._rTrip && '🧳 ' + GL._rTrip, GL._rComp && '🏢 ' + GL._rComp].filter(Boolean).join(' · ')) + '</div>' : '') +
+        '<div class="table-responsive"><table class="gl-tbl">' + th + '<tbody>' + (glTreeHtml(glTreeRows(vals, ['4']), col) || '<tr><td colspan="4" class="text-muted">لا إيرادات</td></tr>') +
+        '<tr class="gl-tot"><td colspan="2" style="text-align:right;">إجمالي الإيرادات</td><td class="gl-latin">' + glFmt(res.revenue) + '</td><td></td></tr>' +
+        (glTreeHtml(glTreeRows(vals, ['5']), col) || '') +
+        '<tr class="gl-tot"><td colspan="2" style="text-align:right;">إجمالي المصروفات</td><td class="gl-latin">' + glFmt(res.expenses) + '</td><td></td></tr>' +
+        '<tr class="gl-tot"><td colspan="2" style="text-align:right;font-size:14px;">' + (res.net >= 0 ? '✅ صافي الربح' : '🔻 صافي الخسارة') + '</td><td class="gl-latin" style="font-size:15px;color:' + (res.net >= 0 ? '#166534' : '#b91c1c') + ';">' + glFmt(Math.abs(res.net)) + '</td><td></td></tr>' +
+        '</tbody></table></div>';
+      // تعبئة قائمتي الرحلات والشركات من الموجود فعلاً بالقيود (مع إبقاء الاختيار الحالي)
+      [['glRTrip', res.trips, 'كل الرحلات', GL._rTrip], ['glRComp', res.companies, 'كل الشركات', GL._rComp]].forEach(function (q) {
+        var el = document.getElementById(q[0]); if (!el) return;
+        el.innerHTML = '<option value="">' + q[2] + '</option>' + q[1].map(function (t) { return '<option' + (q[3] === t ? ' selected' : '') + '>' + glEsc(t) + '</option>'; }).join('');
+      });
+    }, fail);
+  } else if (r === 'bs') {
+    glRun('glBalanceSheet', [GL._rTo], function (res) {
+      var vals = {}; Object.keys(res.accounts).forEach(function (c) { vals[c] = res.accounts[c].base; });
+      var neg = {}; Object.keys(vals).forEach(function (c) { neg[c] = -vals[c]; });
+      var col = function (x) { return '<td class="gl-latin">' + glFmt(x.v) + '</td>'; };
+      var th = '<thead><tr><th>الكود</th><th>الحساب</th><th>الرصيد</th></tr></thead>';
+      box.innerHTML = head + '<div class="row g-2"><div class="col-lg-6"><div class="table-responsive"><table class="gl-tbl">' + th + '<tbody>' + (glTreeHtml(glTreeRows(vals, ['1']), col) || '') +
+        '<tr class="gl-tot"><td colspan="2" style="text-align:right;">إجمالي الأصول</td><td class="gl-latin">' + glFmt(res.assets) + '</td></tr></tbody></table></div></div>' +
+        '<div class="col-lg-6"><div class="table-responsive"><table class="gl-tbl">' + th + '<tbody>' + (glTreeHtml(glTreeRows(neg, ['2']), col) || '') +
+        '<tr class="gl-tot"><td colspan="2" style="text-align:right;">إجمالي الخصوم</td><td class="gl-latin">' + glFmt(res.liabs) + '</td></tr>' + (glTreeHtml(glTreeRows(neg, ['3']), col) || '') +
+        '<tr><td></td><td style="text-align:right;font-weight:700;">' + (res.profit >= 0 ? 'أرباح' : 'خسائر') + ' لم تُقفل بعد</td><td class="gl-latin fw-bold" style="color:' + (res.profit >= 0 ? '#166534' : '#b91c1c') + ';">' + glFmt(res.profit) + '</td></tr>' +
+        '<tr class="gl-tot"><td colspan="2" style="text-align:right;">إجمالي حقوق الملكية</td><td class="gl-latin">' + glFmt(res.equity) + '</td></tr>' +
+        '<tr class="gl-tot"><td colspan="2" style="text-align:right;">الخصوم + حقوق الملكية</td><td class="gl-latin">' + glFmt(res.liabs + res.equity) + '</td></tr></tbody></table></div></div></div>' +
+        '<div class="gl-note mt-2">' + (res.balanced ? '✅ <b style="color:#166534;">المركز المالي متوازن</b>' : '⚠️ <b style="color:#b91c1c;">غير متوازن — راجع القيود</b>') + '</div>';
+    }, fail);
+  } else if (r === 'pr') {
+    GL._rBy = g('glRBy') || 'trip';
+    glRun('glProfitability', [GL._rFrom, GL._rTo, GL._rBy], function (res) {
+      var t = { rev: 0, disc: 0, netRev: 0, direct: 0, gross: 0, other: 0, net: 0 };
+      var lbl = { trip: 'الرحلة', company: 'الشركة المنفذة', client: 'العميل' }[res.by];
+      var rows = res.rows.map(function (x) {
+        Object.keys(t).forEach(function (k) { t[k] += x[k]; });
+        return '<tr><td style="text-align:right;">' + (x.key ? glEsc(x.key) : '<span class="text-muted">(غير موسوم — مصروفات عامة)</span>') + '</td>' +
+          ['netRev', 'direct', 'gross', 'other', 'net'].map(function (k) { return '<td class="gl-latin"' + ((k === 'gross' || k === 'net') && x[k] < 0 ? ' style="color:#b91c1c;"' : '') + '>' + (Math.abs(x[k]) >= 0.005 ? glFmt(x[k]) : '') + '</td>'; }).join('') +
+          '<td class="gl-latin">' + (x.netRev ? x.margin + '%' : '') + '</td></tr>';
+      }).join('');
+      box.innerHTML = head + '<div class="table-responsive"><table class="gl-tbl"><thead><tr><th>' + lbl + '</th><th>صافي الإيرادات</th><th>التكاليف المباشرة</th><th>مجمل الربح</th><th>مصروفات أخرى</th><th>صافي الربح</th><th>هامش مجمل</th></tr></thead><tbody>' +
+        (rows || '<tr><td colspan="7" class="text-muted">لا توجد بيانات</td></tr>') +
+        '<tr class="gl-tot"><td style="text-align:right;">الإجمالي</td>' + ['netRev', 'direct', 'gross', 'other', 'net'].map(function (k) { return '<td class="gl-latin">' + glFmt(t[k]) + '</td>'; }).join('') +
+        '<td class="gl-latin">' + (t.netRev ? Math.round(t.gross / t.netRev * 1000) / 10 + '%' : '') + '</td></tr></tbody></table></div>' +
+        '<div class="gl-note mt-2">صافي الإيرادات = الإيرادات − الخصومات المسموح بها · التكاليف المباشرة = مجموعة 51 (تأشيرات، نقل، سكن، رسوم غرفة…) · المصروفات الأخرى = العمومية وفروق العملة الموسومة بنفس ' + lbl + '.' +
+        (res.by === 'client' ? ' التكاليف لا تُوسَم بالعميل عادةً (تُسجَّل على الوكيل والرحلة)، فربحية العميل تُقرأ من الإيرادات؛ ولربحية كاملة استخدم «حسب الرحلة».' : '') + '</div>';
+    }, fail);
+  } else if (r === 'ag') {
+    GL._rKind = g('glRKind') || 'client';
+    glRun('glAging', [GL._rTo || glToday(), GL._rKind], function (res) {
+      var tot = {};
+      var rows = res.rows.map(function (x) {
+        var o = (tot[x.currency] = tot[x.currency] || { b: [0, 0, 0, 0, 0], adv: 0, total: 0 });
+        x.buckets.forEach(function (v, i) { o.b[i] += v; }); o.adv += x.advance; o.total += x.total;
+        return '<tr style="cursor:pointer;" onclick="glOpenLedger(\'' + glJs(x.account) + '\')"><td style="text-align:right;">' + glEsc(x.name) + '</td><td>' + GL_CUR_LBL_[x.currency] + '</td>' +
+          x.buckets.map(function (v, i) { return '<td class="gl-latin"' + (i >= 3 && v > 0 ? ' style="color:#b91c1c;font-weight:800;"' : '') + '>' + (v ? glFmt(v) : '') + '</td>'; }).join('') +
+          '<td class="gl-latin" style="color:#0369a1;">' + (x.advance ? glFmt(x.advance) : '') + '</td><td class="gl-latin fw-bold">' + glFmt(x.total) + '</td><td class="gl-latin small">' + glEsc(x.oldest) + '</td></tr>';
+      }).join('');
+      var totRows = Object.keys(tot).map(function (c) { var o = tot[c]; return '<tr class="gl-tot"><td style="text-align:right;">الإجمالي</td><td>' + GL_CUR_LBL_[c] + '</td>' + o.b.map(function (v) { return '<td class="gl-latin">' + glFmt(v) + '</td>'; }).join('') + '<td class="gl-latin">' + glFmt(o.adv) + '</td><td class="gl-latin">' + glFmt(o.total) + '</td><td></td></tr>'; }).join('');
+      box.innerHTML = '<div class="small text-muted mb-1">في ' + glEsc(res.asOf) + ' · ' + (res.kind === 'client' ? 'أرصدة العملاء المستحقة لنا' : 'أرصدة الوكلاء والموردين المستحقة علينا') + ' بعملاتها الأصلية · الدفعات تُخصم من الأقدم أولاً</div>' +
+        '<div class="table-responsive"><table class="gl-tbl"><thead><tr><th>' + (res.kind === 'client' ? 'العميل' : 'الوكيل/المورد') + '</th><th>العملة</th>' + res.labels.map(function (l) { return '<th>' + l + '</th>'; }).join('') + '<th>دفعات مقدمة</th><th>الرصيد</th><th>أقدم استحقاق</th></tr></thead><tbody>' +
+        (rows || '<tr><td colspan="10" class="text-muted">لا توجد أرصدة</td></tr>') + totRows + '</tbody></table></div>';
+    }, fail);
+  } else if (r === 'cf') {
+    glRun('glCashFlow', [GL._rFrom, GL._rTo], function (res) {
+      var KL = { safe: '💵', bank: '🏦', custody: '👜' };
+      var bRows = res.boxes.map(function (b) {
+        return '<tr style="cursor:pointer;" onclick="glOpenLedger(\'' + glJs(b.account) + '\')"><td style="text-align:right;">' + (KL[b.kind] || '') + ' ' + glEsc(b.name) + '</td><td>' + GL_CUR_LBL_[b.currency] + '</td>' +
+          [b.open, b.inn, b.out, b.close].map(function (v, i) { return '<td class="gl-latin"' + (i === 3 ? ' style="font-weight:800;"' : '') + '>' + glFmt(v) + '</td>'; }).join('') + '</tr>';
+      }).join('');
+      var ti = 0, to = 0;
+      var cRows = res.cats.map(function (c) { ti += c.inn; to += c.out; return '<tr><td style="text-align:right;">' + glEsc(c.cat) + '</td><td class="gl-latin" style="color:#166534;">' + (c.inn ? glFmt(c.inn) : '') + '</td><td class="gl-latin" style="color:#b91c1c;">' + (c.out ? glFmt(c.out) : '') + '</td><td class="gl-latin fw-bold">' + glFmt(c.net) + '</td></tr>'; }).join('');
+      box.innerHTML = head + '<b>🏦 حركة الخزائن والبنوك والعُهد (بعملة كل حساب)</b><div class="table-responsive mt-1"><table class="gl-tbl"><thead><tr><th>الحساب</th><th>العملة</th><th>أول الفترة</th><th>وارد</th><th>منصرف</th><th>آخر الفترة</th></tr></thead><tbody>' +
+        (bRows || '<tr><td colspan="6" class="text-muted">لا توجد حسابات نقدية بحركة</td></tr>') + '</tbody></table></div>' +
+        '<b class="d-block mt-3">💵 التدفق النقدي حسب المصدر (بالمعادل)</b><div class="table-responsive mt-1"><table class="gl-tbl"><thead><tr><th>البند</th><th>متحصلات</th><th>مدفوعات</th><th>الصافي</th></tr></thead><tbody>' +
+        (cRows || '<tr><td colspan="4" class="text-muted">لا توجد حركة نقدية</td></tr>') +
+        '<tr class="gl-tot"><td style="text-align:right;">صافي التغير في النقدية</td><td class="gl-latin">' + glFmt(ti) + '</td><td class="gl-latin">' + glFmt(to) + '</td><td class="gl-latin">' + glFmt(ti - to) + '</td></tr></tbody></table></div>' +
+        '<div class="gl-note mt-2">التحويلات بين الخزائن والبنوك لا تظهر كتدفق · دفعات الشاشات تظهر هنا فقط بعد نقلها من «نقدية تحت التسوية» للخزينة/البنك.</div>';
+    }, fail);
+  }
+}
+
 function glSaveSettingsUI(btn) {
   btn.disabled = true;
   glRun('glSaveSettings', [{ startDate: document.getElementById('glSStart').value, rate_SAR: document.getElementById('glSSar').value, rate_USD: document.getElementById('glSUsd').value }], function (res) {
