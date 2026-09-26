@@ -3,7 +3,7 @@
 // إصدار البرنامج - يُحدَّث يدوياً (رقم النسخة فقط) بعد كل تعديل
 // لتتبع آخر نسخة مرفوعة، ويظهر تلقائياً في الشريط الجانبي وصفحة كشف الحساب
 // ==========================================================
-var APP_VERSION = "7.15.0";
+var APP_VERSION = "7.16.0";
 
 // سقف عدد صفوف نتائج شاشة "كل الحجوزات" المُرسلة للمتصفح في الطلب الواحد
 var BOOKINGS_RESULT_CAP_ = 1500;
@@ -150,6 +150,26 @@ function redactBookingFinance_(rows, user) {
     }
   });
   return rows;
+}
+
+// أعمدة أسعار الغرف في شيت المصدر (1-based): V..Y تكلفة، Z..AC بيع — نفس الأعمدة التي
+// يكتب فيها نموذج تعديل الحجز (beCostDouble.. / beSaleDouble..)
+var BOOKING_COST_COLS_1BASED_ = { 22: true, 23: true, 24: true, 25: true };
+var BOOKING_SALE_COLS_1BASED_ = { 26: true, 27: true, 28: true, 29: true };
+// حارس الكتابة المقابل لـredactBookingFinance_/getBookingDetails على القراءة: يرمي استثناء
+// لو حاول المستخدم كتابة عمود سعر تكلفة/بيع بلا مستوى صلاحية الجانب المالي (financeLevel)
+// الكافي — كانت ثغرة قراءة فعلية (نموذج التعديل يعرض كل الأسعار لأي مستخدم يملك صلاحية
+// "تعديل" شاشة الحجوزات فقط، بصرف النظر عن مستواه المالي)، وهذا إغلاقها من ناحية الكتابة
+// أيضًا كدفاع في العمق: بلا هذا الفحص، طلب مُصاغ يدويًا (تجاوزًا للواجهة، لا عبرها فالواجهة
+// لا تعرض هذه الحقول أصلًا لمن لا يملك مستواها) كان يستطيع فعليًا تغيير أسعار لا يراها كاتبها
+function assertFinanceColsAllowed_(user, cols) {
+  var needCost = false, needSale = false;
+  (cols || []).forEach(function (c) {
+    if (BOOKING_COST_COLS_1BASED_[c]) needCost = true;
+    if (BOOKING_SALE_COLS_1BASED_[c]) needSale = true;
+  });
+  if (needCost && !hasFinanceLevel_(user, 'cost')) throw new Error('لا تملك صلاحية تعديل أسعار التكلفة لهذا الحجز');
+  if (needSale && !hasFinanceLevel_(user, 'sale')) throw new Error('لا تملك صلاحية تعديل أسعار البيع لهذا الحجز');
 }
 
 // ---- تقييد العرض على حسابات محددة (ضمن كشف الحساب فقط) ----
@@ -1314,6 +1334,21 @@ function getBookingDetails(bookingKey, token) {
     saleDouble: raw[25], saleTriple: raw[26], saleQuad: raw[27], saleQuint: raw[28],
     cost: costCalc.hasPrice ? costCalc.value : null, sale: saleCalc.hasPrice ? saleCalc.value : null
   };
+  // ثغرة كانت موجودة هنا فعليًا: صلاحية الجانب المالي المتدرجة (financeLevel) تُطبَّق على
+  // نتائج البحث (searchBookings عبر redactBookingFinance_) لكن نموذج تعديل الحجز يقرأ هذه
+  // الدالة مباشرة، فيصل مستخدم يملك "تكلفة" فقط (أو حتى "بدون" أصلاً) إلى كامل أسعار
+  // البيع أيضًا (والعكس) بمجرد فتح "تعديل" على أي حجز — نفس فئة الحماية المطبَّقة على
+  // البحث، هنا تحديدًا حيث كانت غائبة كليًا
+  var showCost = hasFinanceLevel_(user, 'cost');
+  var showSale = hasFinanceLevel_(user, 'sale');
+  if (!showCost) {
+    result.cost = null;
+    result.costDouble = null; result.costTriple = null; result.costQuad = null; result.costQuint = null;
+  }
+  if (!showSale) {
+    result.sale = null;
+    result.saleDouble = null; result.saleTriple = null; result.saleQuad = null; result.saleQuint = null;
+  }
   return safeReturn_(result);
 }
 
@@ -1376,6 +1411,10 @@ function editBookingFields(bookingKey, fieldsMap, token) {
     var city = (bookingKey || '').split('|')[0];
     if (!city) throw new Error('مفتاح حجز غير صالح');
     if (!bookingCityAllowed_(actingUser, city)) throw new Error('لا تملك صلاحية الوصول لحجوزات مدينة "' + city + '"');
+    // دفاع في العمق: مطابق لثغرة القراءة في getBookingDetails، هنا من ناحية الكتابة — بلا
+    // هذا الفحص كان بإمكان مستخدم لا يرى أسعار التكلفة/البيع أصلاً (financeLevel) تغييرها
+    // فعليًا لو استُدعيت هذه الدالة بأعمدتها مباشرة (تجاوزًا للواجهة التي لا تعرضها له الآن)
+    assertFinanceColsAllowed_(actingUser, Object.keys(fieldsMap || {}).map(function (c) { return parseInt(c, 10); }));
     var src = findSourceRowIndex_(city, bookingKey);
     if (!src) throw new Error('لم يتم العثور على الحجز في شيت المصدر (' + city + ')');
 
@@ -1441,6 +1480,7 @@ function editBookingField(bookingKey, colIndex1based, newValue, token) {
     var city = (bookingKey || '').split('|')[0];
     if (!city) throw new Error('مفتاح حجز غير صالح');
     if (!bookingCityAllowed_(actingUser, city)) throw new Error('لا تملك صلاحية الوصول لحجوزات مدينة "' + city + '"');
+    assertFinanceColsAllowed_(actingUser, [colIndex1based]);
 
     var src = findSourceRowIndex_(city, bookingKey);
     if (!src) throw new Error('لم يتم العثور على الحجز في شيت المصدر (' + city + ')');
@@ -11131,6 +11171,7 @@ function editBookingFieldsAsUser_(actingUser, bookingKey, fieldsMap) {
     var city = (bookingKey || '').split('|')[0];
     if (!city) throw new Error('مفتاح حجز غير صالح');
     if (!bookingCityAllowed_(actingUser, city)) throw new Error('لا تملك صلاحية الوصول لحجوزات مدينة "' + city + '"');
+    assertFinanceColsAllowed_(actingUser, Object.keys(fieldsMap || {}).map(function (c) { return parseInt(c, 10); }));
     var src = findSourceRowIndex_(city, bookingKey);
     if (!src) throw new Error('لم يتم العثور على الحجز في شيت المصدر (' + city + ')');
     var rowVals = src.sheet.getRange(src.rowInSheet, 1, 1, SOURCE_LAST_COL).getValues()[0];

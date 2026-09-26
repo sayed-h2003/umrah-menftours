@@ -252,6 +252,11 @@
   #page-statement table.stmt-table { table-layout:fixed; width:auto; min-width:0; border-collapse:collapse; }
   #page-statement td, #page-statement th { word-wrap:break-word; font-size:11.5px; padding:6px 3px !important; text-align:center; }
   #page-statement .stmt-table thead th { position:relative; box-sizing:border-box; overflow:visible; }
+  /* سحب وإفلات لإعادة ترتيب أعمدة كشف الحساب — نفس ثلاث حالات السحب المستخدَمة في شاشة
+     كل الحجوزات (table.gtbl)، هنا مكرَّرة بنطاق .stmt-table لأنه جدول منفصل بتنسيقه الخاص */
+  #page-statement table.stmt-table thead th.col-draggable { cursor:grab; user-select:none; }
+  #page-statement table.stmt-table thead th.col-drag-over { box-shadow:inset 3px 0 0 var(--brand-soft), inset -3px 0 0 var(--brand-soft); }
+  #page-statement table.stmt-table thead th.col-dragging { opacity:.4; }
   #page-statement td.desc { text-align:right; }
   #page-statement .role-chip { font-size:10px; font-weight:bold; padding:2px 7px; border-radius:999px; white-space:nowrap; }
   #page-statement .role-chip.client { background:#e1f3e8; color:#1c7a4b; }
@@ -2724,39 +2729,40 @@
       <div class="be-section-title">عدد الغرف والأسعار</div>
       <div class="be-rooms-grid">
         <div class="be-rooms-head">
-          <div>نوع الغرفة</div><div>العدد</div><div>سعر تكلفة الغرفة</div><div>سعر بيع الغرفة</div>
+          <div>نوع الغرفة</div><div>العدد</div><div data-fin="cost">سعر تكلفة الغرفة</div><div data-fin="sale">سعر بيع الغرفة</div>
         </div>
         <div class="be-rooms-row">
           <div class="be-room-lbl">دابل</div>
           <div><input type="text" id="beDoubles" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
-          <div><input type="text" id="beCostDouble" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
-          <div><input type="text" id="beSaleDouble" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
+          <div data-fin="cost"><input type="text" id="beCostDouble" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
+          <div data-fin="sale"><input type="text" id="beSaleDouble" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
         </div>
         <div class="be-rooms-row">
           <div class="be-room-lbl">ثلاثي</div>
           <div><input type="text" id="beTriples" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
-          <div><input type="text" id="beCostTriple" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
-          <div><input type="text" id="beSaleTriple" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
+          <div data-fin="cost"><input type="text" id="beCostTriple" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
+          <div data-fin="sale"><input type="text" id="beSaleTriple" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
         </div>
         <div class="be-rooms-row">
           <div class="be-room-lbl">رباعي</div>
           <div><input type="text" id="beQuads" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
-          <div><input type="text" id="beCostQuad" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
-          <div><input type="text" id="beSaleQuad" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
+          <div data-fin="cost"><input type="text" id="beCostQuad" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
+          <div data-fin="sale"><input type="text" id="beSaleQuad" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
         </div>
         <div class="be-rooms-row">
           <div class="be-room-lbl">خماسي</div>
           <div><input type="text" id="beQuints" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
-          <div><input type="text" id="beCostQuint" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
-          <div><input type="text" id="beSaleQuint" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
+          <div data-fin="cost"><input type="text" id="beCostQuint" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
+          <div data-fin="sale"><input type="text" id="beSaleQuint" class="form-control form-control-sm be-num" dir="ltr" oninput="beComputeTotals()"></div>
         </div>
         <div class="be-totals-row">
           <div>الإجماليات (معاينة فقط — لا تُكتب)</div>
           <div></div>
-          <div class="be-total-cost">تكلفة: <b id="beTotalCost">0</b></div>
-          <div class="be-total-sale">بيع: <b id="beTotalSale">0</b></div>
+          <div class="be-total-cost" data-fin="cost">تكلفة: <b id="beTotalCost">0</b></div>
+          <div class="be-total-sale" data-fin="sale">بيع: <b id="beTotalSale">0</b></div>
         </div>
       </div>
+      <p class="small text-muted mb-0" id="beFinHiddenNote" style="display:none;"></p>
 
       <p class="small text-muted mt-2 mb-0">
         التعديلات تُكتب مباشرة في ملف الحجوزات المصدر ثم تُزامَن مع الشيت المركزي فورًا.<br>
@@ -3686,6 +3692,23 @@ function hasFinanceLevel_(minLevel) {
   if (currentUser.role === 'admin') return true;
   return financeLevelRank_(currentUser.financeLevel) >= financeLevelRank_(minLevel);
 }
+// يُطبَّق عند كل فتح لنموذج تعديل الحجز — نظير الواجهة لحماية الخادم في getBookingDetails/
+// editBookingFields (financeLevel): كانت هذه الحقول تُعرض دائمًا في النموذج بصرف النظر عن
+// مستوى المستخدم المالي (ثغرة قراءة فعلية: مستخدم يملك "تكلفة" فقط كان يرى أسعار البيع
+// أيضًا، والعكس) — الخادم الآن لا يُرسل أصلاً القيم التي لا يملك المستخدم صلاحيتها (تصل
+// null فتبقى الحقول فارغة)، وهذا يُخفي الأعمدة نفسها (الرأس + كل صف + سطر الإجمالي) بدل
+// تركها ظاهرة وفارغة بلا تفسير
+function applyBookingEditFinanceVisibility_() {
+  var showCost = hasFinanceLevel_('cost'), showSale = hasFinanceLevel_('sale');
+  document.querySelectorAll('#bookingEditModal [data-fin="cost"]').forEach(function (el) { el.style.display = showCost ? '' : 'none'; });
+  document.querySelectorAll('#bookingEditModal [data-fin="sale"]').forEach(function (el) { el.style.display = showSale ? '' : 'none'; });
+  var note = document.getElementById('beFinHiddenNote');
+  if (!note) return;
+  if (!showCost && !showSale) { note.style.display = ''; note.textContent = '🔒 أسعار التكلفة والبيع مخفية عنك — لا تملك صلاحية الجانب المالي في الحجوزات.'; }
+  else if (!showCost) { note.style.display = ''; note.textContent = '🔒 أسعار التكلفة مخفية عنك — تملك صلاحية أسعار البيع فقط.'; }
+  else if (!showSale) { note.style.display = ''; note.textContent = '🔒 أسعار البيع مخفية عنك — تملك صلاحية أسعار التكلفة فقط.'; }
+  else note.style.display = 'none';
+}
 // ==========================================================
 // شريط التبويبات السفلي (هيئة تطبيق على الموبايل)
 // ==========================================================
@@ -4178,6 +4201,18 @@ var STMT_COLS = ['qaid','ref','date','checkIn','checkOut','note','debit','credit
 // الترتيب لهما جاهز — يظهر فور تفعيلهما من الترس)
 var STMT_COLS_HIDDEN_BY_DEFAULT_ = { checkIn: 1, checkOut: 1 };
 var stmtColVisible = {}; STMT_COLS.forEach(function(c){ stmtColVisible[c] = !STMT_COLS_HIDDEN_BY_DEFAULT_[c]; });
+// ترتيب الأعمدة الفعلي (قابل للتعديل بالسحب) — يبدأ بترتيب STMT_COLS الافتراضي، ثم يُستبدَل
+// بالترتيب المحفوظ للمستخدم (إن وُجد) في loadStmtColWidth_. كل بنّاء صف (openingRow/بيانات/
+// totalRow) يبني خلاياه بهذا الترتيب عبر stmtRowHtml_ بدل ترتيب ثابت، فيبقى الجدول متوافقًا
+// مع أي ترتيب يختاره المستخدم تلقائيًا مهما كان نوع الصف
+var stmtColOrder = STMT_COLS.slice();
+// يبني وسم <tr> لصف واحد من خريطة {مفتاح العمود: HTML الخلية الكاملة} بترتيب stmtColOrder
+// الحالي — نقطة واحدة موحَّدة يستخدمها كل صف (بيانات/رصيد أول المدة/إجماليات) بدل تكرار
+// نفس منطق الترتيب أربع مرات، فيستحيل أن يختلف ترتيب صف عن آخر
+function stmtRowHtml_(cls, cellsMap) {
+  return '<tr' + (cls ? (' class="' + cls + '"') : '') + '>' +
+    stmtColOrder.map(function (key) { return cellsMap[key] || ''; }).join('') + '</tr>';
+}
 
 function initStatementPage() {
   // اختيار العميل = نداء واحد فقط (loadData). أُزيل autoSyncQuiet من هنا لأنه كان يمسح الكاش
@@ -4286,7 +4321,15 @@ function buildColPopover() {
     cb.addEventListener('change', function () {
       stmtColVisible[cb.dataset.col] = cb.checked;
       applyColVisibility();
+      saveStmtColWidth_(); // يُحفَظ بحساب المستخدم — كان إظهار/إخفاء الأعمدة هنا يُعاد للافتراضي في كل جلسة جديدة
     });
+  });
+}
+// يُطابق شيك بوكسات نافذة "⚙ الأعمدة" مع stmtColVisible الحالية — تلزم بعد استعادة تفضيلات
+// محفوظة (loadStmtColWidth_) لأن buildColPopover بُنيَت بالفعل قبلها بالقيم الافتراضية
+function refreshColPopoverChecks_() {
+  document.querySelectorAll('#colPopover input[type=checkbox]').forEach(function (cb) {
+    cb.checked = !!stmtColVisible[cb.dataset.col];
   });
 }
 function applyColVisibility() {
@@ -4663,6 +4706,7 @@ function wireStmtColFilters_() {
     cfOpen_(b, b.dataset.cfKey, STMT_CF_CTX_);
   });
   wireStmtColumnResize_();
+  wireStmtColumnDrag_();
   loadStmtColWidth_();
   stmtApplyTableWidth_();
 }
@@ -4680,24 +4724,88 @@ function stmtColWidthOf_(key) {
 }
 // يُحفَظ بحساب المستخدم عبر آلية مزامنة uiPrefs العامة (انظر uprefInterceptLocalStorage_)
 // لا بالمتصفح وحده — نفس مفتاح localStorage السابق تمامًا (لا ترحيل مطلوب). الشكل الآن
-// {widths, sort} بدل كائن عروض مباشر (الصيغة القديمة) — loadStmtColWidth_ تقرأ كلا الشكلين
+// {widths, sort, order, visible} — أُضيفا order/visible (ترتيب الأعمدة بالسحب + إظهارها)
+// لنفس المفتاح بدل مفتاح منفصل، فتُحفَظ كل تخصيصات الأعمدة معًا بنداء مزامنة واحد
 function saveStmtColWidth_() {
   var widths = {};
   STMT_COLS.forEach(function (c) { var w = stmtColWidthOf_(c); if (w) widths[c] = w; });
-  try { localStorage.setItem(STMT_COL_STORAGE_KEY_, JSON.stringify({ widths: widths, sort: stmtSort })); } catch (e) {}
+  try { localStorage.setItem(STMT_COL_STORAGE_KEY_, JSON.stringify({
+    widths: widths, sort: stmtSort, order: stmtColOrder, visible: stmtColVisible
+  })); } catch (e) {}
 }
 function loadStmtColWidth_() {
   var saved = null;
   try { saved = JSON.parse(localStorage.getItem(STMT_COL_STORAGE_KEY_) || 'null'); } catch (e) {}
   if (!saved) return;
-  // توافق خلفي: الصيغة القديمة كانت كائن العروض مباشرة بلا غلاف {widths,sort}
+  // توافق خلفي: الصيغة القديمة كانت كائن العروض مباشرة بلا غلاف {widths,sort,...}
   var widths = saved.widths || saved;
   if (saved.sort && typeof saved.sort === 'object') {
     stmtSort.key = saved.sort.key || ''; stmtSort.dir = saved.sort.dir || 0;
   }
+  // ترتيب محفوظ: يُقبَل فقط لو حمل بالضبط نفس مجموعة الأعمدة الحالية (STMT_COLS) — أي
+  // اختلاف (عمود أُضيف/حُذف في إصدار لاحق) يُسقِط الترتيب المحفوظ ويُبقي الافتراضي بدل
+  // عمود يختفي بصمت أو يتكرر
+  if (saved.order && Array.isArray(saved.order) && saved.order.length === STMT_COLS.length) {
+    var validSet = {}; STMT_COLS.forEach(function (k) { validSet[k] = true; });
+    var savedSet = {}; saved.order.forEach(function (k) { savedSet[k] = true; });
+    var sameSet = STMT_COLS.every(function (k) { return savedSet[k]; }) &&
+      saved.order.every(function (k) { return validSet[k]; });
+    if (sameSet) { stmtColOrder = saved.order.slice(); stmtReorderTheadDom_(); }
+  }
+  if (saved.visible && typeof saved.visible === 'object') {
+    STMT_COLS.forEach(function (k) { if (saved.visible[k] !== undefined) stmtColVisible[k] = !!saved.visible[k]; });
+    refreshColPopoverChecks_();
+    applyColVisibility();
+  }
   Object.keys(widths).forEach(function (k) {
     var th = document.querySelector('#page-statement .stmt-table thead th[data-col="' + k + '"]');
     if (th && widths[k] > 0) th.style.width = widths[k] + 'px';
+  });
+}
+// ينقل عناصر <th> فعليًا داخل صف الرأس لتطابق stmtColOrder — الجسم لا يحتاج نقلًا مماثلاً
+// لأن stmtRowHtml_ يبني كل صف بهذا الترتيب مباشرة من مصدره (lastStatementRes_) عند أي
+// عرض/إعادة عرض، فيتبع تلقائيًا
+function stmtReorderTheadDom_() {
+  var theadRow = document.querySelector('#page-statement .stmt-table thead tr');
+  if (!theadRow) return;
+  stmtColOrder.forEach(function (key) {
+    var th = theadRow.querySelector('th[data-col="' + key + '"]');
+    if (th) theadRow.appendChild(th); // appendChild على عنصر موجود بالفعل = نقل لا تكرار
+  });
+}
+// ==========================================================
+// سحب وإفلات لإعادة ترتيب أعمدة كشف الحساب — نفس فكرة wireColumnDrag_ في شاشة كل الحجوزات،
+// لكن بلا إعادة بناء الجدول بالكامل: الرأس يُعاد ترتيبه بنقل عناصر <th> (DOM)، والجسم
+// يُعاد رسمه من lastStatementRes_ المحفوظة أصلًا (بلا أي نداء خادم جديد)
+// ==========================================================
+var stmtColDragWired_ = false;
+function wireStmtColumnDrag_() {
+  if (stmtColDragWired_) return;
+  stmtColDragWired_ = true;
+  // نفس استثناء اللمس المطبَّق على تغيير الحجم أعلاه — سحب-وإفلات HTML5 الأصلي غير موثوق
+  // على اللمس أصلًا، وأي محاولة سحب إعادة ترتيب بالإصبع تتعارض مع التمرير الأفقي للجدول
+  if (isCoarsePointerDevice_()) return;
+  var dragKey = null;
+  document.querySelectorAll('#page-statement .stmt-table thead th[data-col]').forEach(function (th) {
+    th.classList.add('col-draggable');
+    th.draggable = true;
+    th.addEventListener('dragstart', function () { dragKey = th.dataset.col; th.classList.add('col-dragging'); });
+    th.addEventListener('dragend', function () { th.classList.remove('col-dragging'); });
+    th.addEventListener('dragover', function (e) { e.preventDefault(); th.classList.add('col-drag-over'); });
+    th.addEventListener('dragleave', function () { th.classList.remove('col-drag-over'); });
+    th.addEventListener('drop', function (e) {
+      e.preventDefault();
+      th.classList.remove('col-drag-over');
+      var targetKey = th.dataset.col;
+      if (!dragKey || dragKey === targetKey) return;
+      var from = stmtColOrder.indexOf(dragKey), to = stmtColOrder.indexOf(targetKey);
+      if (from === -1 || to === -1) return;
+      stmtColOrder.splice(from, 1);
+      stmtColOrder.splice(to, 0, dragKey);
+      stmtReorderTheadDom_();
+      saveStmtColWidth_();
+      if (lastStatementRes_) renderTable(lastStatementRes_);
+    });
   });
 }
 // عرض الجدول = مجموع عروض أعمدته الظاهرة بالبكسل — بدون هذا يتجاهل المتصفح عروض th المضبوطة
@@ -4737,6 +4845,10 @@ function wireStmtColumnResize_() {
       var startWidth = th.getBoundingClientRect().width || parseInt(th.style.width, 10) || 60;
       handle.classList.add('resizing');
       document.body.style.cursor = 'col-resize';
+      // احتياط إضافي (نفس أسلوب شاشة كل الحجوزات): تعطيل سحب-إعادة-الترتيب على كل الرؤوس
+      // طوال مدة تغيير الحجم، فلا يمكن لبدء سحب المقياس أن يُفهَم خطأً كسحب إعادة ترتيب
+      var allThForDrag = Array.prototype.slice.call(document.querySelectorAll('#page-statement .stmt-table thead th.col-draggable'));
+      allThForDrag.forEach(function (t) { t.draggable = false; });
       return {
         move: function (curX) {
           // نفس منطق الحجوزات: الصفحة RTL والمقبض على الحافة اليسرى للعمود — السحب يمينًا
@@ -4748,6 +4860,7 @@ function wireStmtColumnResize_() {
         end: function () {
           handle.classList.remove('resizing');
           document.body.style.cursor = '';
+          allThForDrag.forEach(function (t) { t.draggable = true; });
           saveStmtColWidth_();
         }
       };
@@ -4801,9 +4914,14 @@ function renderTable(res) {
   var barBox = document.getElementById('stmtCfBar');
   if (barBox) barBox.innerHTML = cfBarHtml_(stmtColSearch, STMT_CF_CTX_.label, rows.length, allRows.length,
     'stmtClearAllColFilters_', 'stmtClearOneColFilter_');
-  var openingRow = '<tr><td data-col="qaid" colspan="3"></td><td data-col="checkIn"></td><td data-col="checkOut"></td>' +
-    '<td data-col="note" class="desc">رصيد أول المدة</td><td data-col="debit">0</td><td data-col="credit">0</td>' +
-    '<td data-col="balance">' + res.opening + '</td><td data-col="counterparty"></td><td data-col="hist"></td><td data-col="actions"></td></tr>';
+  var openingRow = stmtRowHtml_('', {
+    qaid: '<td data-col="qaid"></td>', ref: '<td data-col="ref"></td>', date: '<td data-col="date"></td>',
+    checkIn: '<td data-col="checkIn"></td>', checkOut: '<td data-col="checkOut"></td>',
+    note: '<td data-col="note" class="desc">رصيد أول المدة</td>',
+    debit: '<td data-col="debit">0</td>', credit: '<td data-col="credit">0</td>',
+    balance: '<td data-col="balance">' + res.opening + '</td>',
+    counterparty: '<td data-col="counterparty"></td>', hist: '<td data-col="hist"></td>', actions: '<td data-col="actions"></td>'
+  });
   var lastTodayIdx = -1;
   rows.forEach(function (r, i) { if (r.dateIso === todayIso) lastTodayIdx = i; });
 
@@ -4817,20 +4935,20 @@ function renderTable(res) {
       actionBtns = hasLevel_('bookings', 'edit') ? '<button type="button" class="btn-sm-icon edit" onclick="openBookingEditModal(\'' + r.bookingKey + '\')" title="تعديل بيانات الحجز">✎</button>' : '';
     } else { actionBtns = ''; }
     var qaidAttrs = r.bookingKey ? ' class="qaid-dbl" data-key="' + r.bookingKey + '" ondblclick="inlineEditQaid(this)" title="ضغطتين لتعديل القيد"' : '';
-    return '<tr class="' + cls + '">' +
-      '<td data-col="qaid"' + qaidAttrs + '>' + escapeHtml(r.qaid) + '</td>' +
-      '<td data-col="ref">' + escapeHtml(r.ref) + '</td>' +
-      '<td data-col="date">' + r.dateDisp + '</td>' +
-      '<td data-col="checkIn">' + escapeHtml(r.checkIn || '') + '</td>' +
-      '<td data-col="checkOut">' + escapeHtml(r.checkOut || '') + '</td>' +
-      '<td data-col="note" class="desc">' + r.note + (r.legacyImported ? ' <span class="legacy-badge" title="مستورد من الشيت القديم">📥</span>' : '') + '</td>' +
-      '<td data-col="debit">' + (r.debit == null ? '' : r.debit) + '</td>' +
-      '<td data-col="credit">' + (r.credit == null ? '' : r.credit) + '</td>' +
-      '<td data-col="balance" class="' + (r.balance && r.balance.indexOf('دائن') !== -1 ? 'text-credit-cell' : (r.balance ? 'text-debit-cell' : '')) + '">' + (r.balance == null ? '' : r.balance) + '</td>' +
-      '<td data-col="counterparty">' + escapeHtml(r.counterparty) + '</td>' +
-      '<td data-col="hist">' + rowHistBtn_(r.paymentId ? ('PAY:' + r.paymentId) : (r.innerRef ? ('BK:' + r.innerRef) : '')) + '</td>' +
-      '<td data-col="actions">' + actionBtns + '</td>' +
-    '</tr>';
+    return stmtRowHtml_(cls, {
+      qaid: '<td data-col="qaid"' + qaidAttrs + '>' + escapeHtml(r.qaid) + '</td>',
+      ref: '<td data-col="ref">' + escapeHtml(r.ref) + '</td>',
+      date: '<td data-col="date">' + r.dateDisp + '</td>',
+      checkIn: '<td data-col="checkIn">' + escapeHtml(r.checkIn || '') + '</td>',
+      checkOut: '<td data-col="checkOut">' + escapeHtml(r.checkOut || '') + '</td>',
+      note: '<td data-col="note" class="desc">' + r.note + (r.legacyImported ? ' <span class="legacy-badge" title="مستورد من الشيت القديم">📥</span>' : '') + '</td>',
+      debit: '<td data-col="debit">' + (r.debit == null ? '' : r.debit) + '</td>',
+      credit: '<td data-col="credit">' + (r.credit == null ? '' : r.credit) + '</td>',
+      balance: '<td data-col="balance" class="' + (r.balance && r.balance.indexOf('دائن') !== -1 ? 'text-credit-cell' : (r.balance ? 'text-debit-cell' : '')) + '">' + (r.balance == null ? '' : r.balance) + '</td>',
+      counterparty: '<td data-col="counterparty">' + escapeHtml(r.counterparty) + '</td>',
+      hist: '<td data-col="hist">' + rowHistBtn_(r.paymentId ? ('PAY:' + r.paymentId) : (r.innerRef ? ('BK:' + r.innerRef) : '')) + '</td>',
+      actions: '<td data-col="actions">' + actionBtns + '</td>'
+    });
   }).join('');
 
   // مع فلترة أعمدة نشطة يصبح إجمالي الفترة مضلِّلًا (لا يطابق الصفوف الظاهرة) — فنعرض
@@ -4843,13 +4961,23 @@ function renderTable(res) {
       sumC += parseFloat(String(r.credit == null ? '' : r.credit).replace(/,/g, '')) || 0;
     });
     var f = function (n) { return Math.round(n).toLocaleString('en-US'); };
-    totalRow = '<tr class="total-row"><td data-col="qaid" colspan="3"></td><td data-col="checkIn"></td><td data-col="checkOut"></td>' +
-      '<td data-col="note" class="text-center">إجمالي الصفوف الظاهرة (فلترة أعمدة)</td><td data-col="debit">' + f(sumD) + '</td><td data-col="credit">' + f(sumC) + '</td>' +
-      '<td data-col="balance">—</td><td data-col="counterparty"></td><td data-col="hist"></td><td data-col="actions"></td></tr>';
+    totalRow = stmtRowHtml_('total-row', {
+      qaid: '<td data-col="qaid"></td>', ref: '<td data-col="ref"></td>', date: '<td data-col="date"></td>',
+      checkIn: '<td data-col="checkIn"></td>', checkOut: '<td data-col="checkOut"></td>',
+      note: '<td data-col="note" class="text-center">إجمالي الصفوف الظاهرة (فلترة أعمدة)</td>',
+      debit: '<td data-col="debit">' + f(sumD) + '</td>', credit: '<td data-col="credit">' + f(sumC) + '</td>',
+      balance: '<td data-col="balance">—</td>',
+      counterparty: '<td data-col="counterparty"></td>', hist: '<td data-col="hist"></td>', actions: '<td data-col="actions"></td>'
+    });
   } else {
-    totalRow = '<tr class="total-row"><td data-col="qaid" colspan="3"></td><td data-col="checkIn"></td><td data-col="checkOut"></td>' +
-      '<td data-col="note" class="text-center">الإجماليات</td><td data-col="debit">' + res.totals.debit + '</td><td data-col="credit">' + res.totals.credit + '</td>' +
-      '<td data-col="balance">' + escapeHtml(stmtFinalBalanceLabel_(res.totals.balance, res.roles)) + '</td><td data-col="counterparty"></td><td data-col="hist"></td><td data-col="actions"></td></tr>';
+    totalRow = stmtRowHtml_('total-row', {
+      qaid: '<td data-col="qaid"></td>', ref: '<td data-col="ref"></td>', date: '<td data-col="date"></td>',
+      checkIn: '<td data-col="checkIn"></td>', checkOut: '<td data-col="checkOut"></td>',
+      note: '<td data-col="note" class="text-center">الإجماليات</td>',
+      debit: '<td data-col="debit">' + res.totals.debit + '</td>', credit: '<td data-col="credit">' + res.totals.credit + '</td>',
+      balance: '<td data-col="balance">' + escapeHtml(stmtFinalBalanceLabel_(res.totals.balance, res.roles)) + '</td>',
+      counterparty: '<td data-col="counterparty"></td>', hist: '<td data-col="hist"></td>', actions: '<td data-col="actions"></td>'
+    });
   }
   var emptyRow = rows.length ? '' : '<tr><td colspan="12" class="text-center text-muted py-3">لا توجد صفوف مطابقة لفلاتر الأعمدة</td></tr>';
   document.getElementById('tableBody').innerHTML = openingRow + bodyRows + emptyRow + totalRow;
@@ -5503,6 +5631,7 @@ function openNewPartyFromEdit_(role) {
 function openBookingEditModal(key) {
   loadSalesAgentsListOnce_();
   ensureBookingEditAutocomplete_();
+  applyBookingEditFinanceVisibility_();
   google.script.run.withSuccessHandler(function(b) {
     if (!b) return alert('تعذّر العثور على بيانات الحجز');
     beOriginal = b;
