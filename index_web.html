@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.210 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.211 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.210)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.211)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.210</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.211</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1643,6 +1643,11 @@ input[type="date"]:not(:focus):not(:valid) {
     <!-- 📒 (V4.205) الحسابات العامة (الدفتر العام) -->
     <a id="link-gl-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('gl'); closeAppSidebarOnMobile();">
       <i class="fas fa-book me-2 text-warning"></i> الحسابات العامة
+    </a>
+
+    <!-- 🏨 (V4.211-H4) برنامج حجوزات الفنادق — نفس البرنامج، يفتح بتبويب جديد بدخول موحّد -->
+    <a id="link-hotels-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="openHotelsApp_(); closeAppSidebarOnMobile();">
+      <i class="fas fa-hotel me-2 text-warning"></i> حجوزات الفنادق <i class="fas fa-external-link-alt ms-1" style="font-size:10px;opacity:.6;"></i>
     </a>
 
     <!-- 🛂 (V4.131) متابعة التأشيرات والوكلاء -->
@@ -6619,6 +6624,13 @@ function toggleAdminOnlyLinks_() {
     if (hasPermission("admin") || hasPermission("gl.view")) el.classList.remove("d-none");
     else el.classList.add("d-none");
   });
+  // 🏨 (V4.211-H4) برنامج حجوزات الفنادق — صلاحية hotels.view (والصلاحيات داخله من مستخدمي برنامج الحجوزات)
+  ['link-hotels-side'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (hasPermission("admin") || hasPermission("hotels.view")) el.classList.remove("d-none");
+    else el.classList.add("d-none");
+  });
 
   // رابط الرحلات: admin أو TRIPS
   ['link-trips', 'link-trips-side'].forEach(function (id) {
@@ -7498,6 +7510,7 @@ var PERM_SCREENS = [
   { key: 'ministry',  label: 'مراجعة ملفات الوزارة' },
   { key: 'visas',     label: 'متابعة التأشيرات والوكلاء' },
   { key: 'gl',        label: 'الحسابات العامة (الدفتر العام)' },
+  { key: 'hotels',    label: 'برنامج حجوزات الفنادق (الدخول الموحّد)' },
   { key: 'pricing',   label: 'تسعير الرحلات' },
   { key: 'audit',     label: 'سجل التدقيق' },
   { key: 'stats',     label: 'لوحة الإحصائيات' },
@@ -44490,6 +44503,14 @@ function glToday() { var d = new Date(); return ('0' + d.getDate()).slice(-2) + 
 function glNum(v) { return parseFloat(_toLatinDigits_(String(v == null ? '' : v)).replace(/[,٬\s]/g, '')) || 0; }
 function glDKey(d) { var m = String(d || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return m ? m[3] + ('0' + m[2]).slice(-2) + ('0' + m[1]).slice(-2) : ''; }
 function glNorm(s) { return (typeof _clientKey_ === 'function' ? _clientKey_(s) : String(s || '').toLowerCase()); }
+// 🏨 (V4.211-H4) فتح برنامج الحجوزات بدخول موحّد: النافذة تُفتح فوراً عند الضغط (حتى لا يحجبها المتصفح)
+// ثم يُوجَّه لرابط برمز دخول لمرة واحدة
+function openHotelsApp_() {
+  var w = null; try { w = window.open('', '_blank'); if (w) w.document.write('<p style="font-family:Tahoma;direction:rtl;padding:30px;">⏳ جاري فتح برنامج حجوزات الفنادق…</p>'); } catch (e) {}
+  google.script.run.withSuccessHandler(function (r) {
+    if (w && !w.closed) w.location.href = r.url; else window.open(r.url, '_top');
+  }).withFailureHandler(function (e) { try { if (w) w.close(); } catch (x) {} _showPopup((e && e.message) || String(e), 'error'); }).hbHandoff(window.authToken);
+}
 function glRun(fn, args, ok, fail) {
   var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
     if (fail) fail(e); else _showPopup((e && e.message) || String(e), 'error');

@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.210";
+var APP_VERSION = "4.211";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -78,6 +78,11 @@ function doGet(e) {
   // 🔗 صفحة العميل (قراءة فقط): ?view=trip&t=<رمز المشاركة> — بلا تسجيل دخول وبلا أي تعديل
   if (e && e.parameter && e.parameter.view === 'trip') {
     return _renderClientTripView_(e.parameter.t || '');
+  }
+
+  // 🏨 (V4.211-H4) برنامج حجوزات الفنادق داخل نفس المشروع: البرنامج (?page=hotels) وبوابة العملاء (?page=portal)
+  if (e && e.parameter && (e.parameter.page === 'hotels' || e.parameter.page === 'portal')) {
+    return hbDoGet_(e);
   }
 
   var page =
@@ -6031,7 +6036,7 @@ function checkPasswordMatch_(plainPassword, storedValue) {
 /* 🔐 نموذج الصلاحيات الذكية (سيرفر): يفهم رموز "screen.cap" مع التتالي + الرموز القديمة
    - أي صلاحية شاشة تعني العرض؛ الحذف يعني التعديل والعرض
    - الرمز القديم "delete" يمنح الحذف في كل الشاشات (حفاظاً على السلوك السابق) */
-var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl'];
+var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl','hotels'];
 var _PERM_LEGACY_MAP_ = {
   'add':'bookings.add','edit':'bookings.edit','delete':'bookings.delete',
   'print':'bookings.print','approve':'bookings.approve',
@@ -7738,6 +7743,8 @@ function setupTelegramDailyTrigger() {
 
 function doPost(e) {
   var chatId = null; // مُعرَّف مبكرًا حتى يكون متاحًا في catch مهما كان موضع الخطأ
+  // 🏨 (V4.211-H4) بوت برنامج الحجوزات: رابط الويب هوك الخاص به يحمل سرّه في ?tghook= — يُعالَج هناك كما هو
+  if (e && e.parameter && e.parameter.tghook) return hbDoPost_(e);
   try {
     var update = JSON.parse(e.postData.contents);
     var token = TELEGRAM_CONFIG.token;

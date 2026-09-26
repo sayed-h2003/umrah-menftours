@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html dir="ltr">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 22px 28px; color: #1a1a1a; background: #fff; font-size: 12.5px; }
+  .arabic { font-family: 'Tajawal', Arial, sans-serif; }
+
+  /* لون حدود موحّد يُستخدَم في كل مكان بالمستند (الخطوط الفاصلة، الجدول، الصناديق) —
+     "الالتزام الصارم" بحدود رفيعة رمادية فاتحة متسقة بدل خلط ألوان/سماكات مختلفة */
+  :root { --cf-border: #ccc; }
+
+  .cf-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .cf-brand { display: inline-block; text-align: center; }
+  .cf-brand .name { font-size: 19px; font-weight: 800; color: #16332a; letter-spacing: .2px; white-space: nowrap; }
+  .cf-brand .name-ar { font-size: 11px; color: #555; margin-top: 2px; }
+  .cf-badge { background: #16332a; color: #fff; padding: 9px 18px; text-align: center; border-radius: 2px; min-width: 210px; }
+  .cf-badge .t1 { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 14.5px; letter-spacing: 1.5px; }
+  .cf-badge .t2 { font-size: 8.5px; letter-spacing: 2.5px; margin-top: 3px; opacity: .85; }
+
+  hr.cf-rule { border: none; border-top: 1px solid var(--cf-border); margin: 8px 0; }
+
+  .cf-info-row { display: flex; gap: 5px; margin: 3px 0; }
+  .cf-info-row .lbl { font-weight: 700; width: 52px; flex: none; }
+  /* text-align:left ضروري هنا رغم dir=auto على القيمة: dir=auto يضبط اتجاه *قراءة* النص
+     العربي داخل صندوقه فقط، لكن صندوق flex:1 نفسه يمتد لعرض السطر كاملاً، فبدون left صريح
+     يُحاذى المتصفح القيمة تلقائيًا مع اتجاهها الداخلي (يمين) فتظهر بعيدة عن التسمية بفراغ كبير */
+  .cf-info-row .val { flex: 1; text-align: left; }
+
+  .cf-thanks { margin: 12px 0; }
+
+  .cf-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 24px; margin-bottom: 10px; }
+  .cf-two-col .lbl { font-weight: 700; display: inline-block; min-width: 100px; }
+
+  table.cf-tbl { width: 100%; border-collapse: collapse; margin: 10px 0; }
+  table.cf-tbl th { background: #16332a; color: #fff; font-size: 11px; padding: 7px; font-weight: 700; }
+  table.cf-tbl td { border: 1px solid var(--cf-border); padding: 7px; text-align: center; }
+
+  .cf-total { font-weight: 700; margin: 10px 0; }
+  .cf-total .amt { color: #16332a; font-size: 14.5px; }
+
+  /* صندوقان بنفس الحدود والتنسيق تمامًا (Option Date وRemarks) — .strong فقط تجعل القيمة
+     بخط عريض للأول دون أي فرق آخر في الحدود أو الألوان بينهما */
+  .cf-box { border: 1px solid var(--cf-border); display: flex; margin: 8px 0; }
+  /* width:auto (بدل ثابت 100px قديم) كان يمنع انكسار "Option Date :" لسطرين، لكنه أنتج
+     عرضًا مختلفًا عن صندوق Remarks (تسمية أقصر) فبدا الصندوقان غير متسقين بصريًا. الحل:
+     عرض ثابت واحد (118px يتّسع لأطول تسمية "Option Date :" بلا التفاف) لكلا الصندوقين معًا،
+     مع white-space:nowrap لمنع الالتفاف نهائيًا حتى مع هذا العرض المحدود */
+  .cf-box .lbl { background: #f5f5f5; font-weight: 700; padding: 8px 12px; flex: none; width: 118px; white-space: nowrap; border-inline-end: 1px solid var(--cf-border); }
+  .cf-box .val { padding: 8px 12px; flex: 1; text-align: left; }
+  .cf-box.strong .val { font-weight: 700; }
+
+  .cf-terms { font-size: 9.5px; color: #333; line-height: 1.7; }
+  .cf-terms p { margin: 2px 0; }
+
+  .cf-sign { text-align: center; margin-top: 26px; }
+  .cf-sign .thanks { font-size: 11px; color: #555; }
+  .cf-sign .mgr { font-weight: 800; font-size: 13px; margin-top: 6px; }
+  .cf-sign .role { font-size: 10px; color: #7d8fa8; }
+
+  /* غير مقيَّدة بـ @media print عمدًا: html2canvas (عند إنشاء PDF/المشاركة) يلتقط الصفحة في
+     سياق "شاشة" وليس "طباعة"، فأي قاعدة مقيَّدة داخل @media print فقط لن تُطبَّق أثناء ذلك
+     الالتقاط — وهذا بالضبط ما كان يُسبِّب انقسام صف الجدول بشكل قبيح بين صفحتين سابقًا */
+  tr, .cf-box, .cf-sign { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    @page { size: A4; margin: 14mm 12mm; }
+  }
+</style>
+</head>
+<body>
+  <!-- يُستخدم فقط عند إنشاء PDF/مشاركة واتساب (وليس عند الطباعة العادية) — نفس آلية
+       PrintTemplate.html: التقاط الصفحة كصورة بألوانها الحقيقية وتحويلها PDF فعلي، مع
+       foreignObjectRendering لضمان ظهور النصوص العربية (اسم العميل/الضيف) بشكل صحيح -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <div id="cfRoot">
+  <div class="cf-header">
+    <div class="cf-brand">
+      <div class="name">Menf International Tours</div>
+      <div class="name-ar arabic">شركة منف للسياحة الدولية</div>
+    </div>
+    <div class="cf-badge" id="cfBadge">
+      <div class="t1" id="cfBadgeT1">DEFINITE CONFIRMATION</div>
+      <div class="t2">R e s e r v a t i o n&nbsp; C o n f i r m e d</div>
+    </div>
+  </div>
+  <hr class="cf-rule">
+
+  <div class="cf-info-row"><span class="lbl">Date</span><span>:</span><span class="val" id="cfDate"></span></div>
+  <div class="cf-info-row"><span class="lbl">To</span><span>:</span><span class="val arabic" id="cfTo" dir="auto"></span></div>
+  <div class="cf-info-row"><span class="lbl">Attn.</span><span>:</span><span class="val arabic" id="cfAttn" dir="auto"></span></div>
+  <div class="cf-info-row"><span class="lbl">From</span><span>:</span><span class="val">Menf International Tours</span></div>
+
+  <div class="cf-thanks">Thank you for your interest on Menf International Tours</div>
+  <hr class="cf-rule">
+
+  <div class="cf-two-col">
+    <div><span class="lbl">Res. NO</span>: <span id="cfResNo"></span></div>
+    <div><span class="lbl">Hotel Name</span>: <span id="cfHotel"></span></div>
+    <div><span class="lbl">Arrival date</span>: <span id="cfArrival"></span></div>
+    <div><span class="lbl">Departure date</span>: <span id="cfDeparture"></span></div>
+    <div><span class="lbl">Guest Name</span>: <span class="arabic" id="cfGuest" dir="auto"></span></div>
+  </div>
+
+  <table class="cf-tbl">
+    <thead><tr><th>QTY</th><th>Room Type</th><th>Room Rate</th><th>Meal</th></tr></thead>
+    <tbody id="cfRoomsBody"></tbody>
+  </table>
+
+  <div class="cf-total">Total Net Value : <span class="amt" id="cfTotal"></span></div>
+
+  <div class="cf-box strong"><div class="lbl">Option Date :</div><div class="val" id="cfOption"></div></div>
+  <div class="cf-box"><div class="lbl">Remarks</div><div class="val arabic" id="cfRemarks" dir="auto"></div></div>
+
+  <div class="cf-terms">
+    <p>* We hope that we have covered all your request waiting for your reply by the option date otherwise the reservation will be released automatically without prior notice.</p>
+    <p>* Above rates are net and non-commissionable quoted in Saudi Riyals</p>
+    <p>- Check in after 16:00 hour and check out at 12:00 hour</p>
+    <p>- Check in or check out amendment for individuals should be done 48 hours prior to guest check in</p>
+    <p>- Check in or check out amendment for Group should be done 7 days prior to guest check in</p>
+    <p>- For definite group, 10% of the total number of rooms can be reduced without any charge</p>
+    <p>- In case of no-show for Group full amount will be charged</p>
+    <p>- Triple or Quad occupancy will be through extra bed if standard room is not available</p>
+    <p>- This reservation should be guaranteed by cash or voucher</p>
+  </div>
+
+  <div class="cf-sign">
+    <div class="thanks">Thanks and Best Regards</div>
+    <div class="mgr" id="cfManagerName">Eman Mohamed</div>
+    <div class="role">Reservation Manager</div>
+  </div>
+  </div>
+
+  <script>
+    var ROOM_TYPE_LABELS = { doubles: 'DBL', triples: 'TPL', quads: 'Quad', quints: 'C.Quad' };
+
+    // data = { confirmType:'definite'|'tentative', dateStamp, to, attn, resNo, hotel, arrival,
+    //   departure, guestName, rooms:[{type,qty,rate}], totalNet, optionDate, remarks, meal, manager }
+    var CF_READY_ = Promise.resolve();
+
+    function setup(data, skipAutoPrint) {
+      // نفس تنسيق اسم ملف المشاركة بالضبط (نوع التأكيد + رقم الحجز + تاريخ ووقت) — المتصفح
+      // يقترح عنوان الصفحة هذا كاسم افتراضي عند اختيار "حفظ كملف PDF" من نافذة الطباعة
+      var typeLabel = data.confirmType === 'tentative' ? 'Tentative Confirmation' : 'Definite Confirmation';
+      document.title = typeLabel + ' - ' + (data.resNo || '') + ' - ' + (data.filenameStamp || '');
+      document.getElementById('cfBadgeT1').textContent = data.confirmType === 'tentative' ? 'TENTATIVE CONFIRMATION' : 'DEFINITE CONFIRMATION';
+      document.getElementById('cfDate').textContent = data.dateStamp;
+      document.getElementById('cfTo').textContent = data.to || '';
+      document.getElementById('cfAttn').textContent = data.attn || '';
+      document.getElementById('cfResNo').textContent = data.resNo || '';
+      document.getElementById('cfHotel').textContent = data.hotel || '-';
+      document.getElementById('cfArrival').textContent = data.arrival || '';
+      document.getElementById('cfDeparture').textContent = data.departure || '';
+      document.getElementById('cfGuest').textContent = data.guestName || '';
+      document.getElementById('cfTotal').textContent = 'SAR ' + data.totalNet;
+      document.getElementById('cfOption').textContent = data.optionDate ? ('Please Send Payment by ' + data.optionDate) : '';
+      document.getElementById('cfRemarks').textContent = data.remarks || '';
+      document.getElementById('cfManagerName').textContent = data.manager || 'Eman Mohamed';
+
+      var rowsHtml = (data.rooms || []).map(function (r) {
+        return '<tr><td>' + r.qty + '</td><td>' + (ROOM_TYPE_LABELS[r.type] || r.type) + '</td><td>' + r.rate + '</td><td>' + (data.meal || '') + '</td></tr>';
+      }).join('');
+      document.getElementById('cfRoomsBody').innerHTML = rowsHtml || '<tr><td colspan="4">-</td></tr>';
+
+      CF_READY_ = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+      if (!skipAutoPrint) CF_READY_.then(function () { setTimeout(function () { window.print(); }, 300); });
+    }
+
+    // نفس مستند الطباعة حرفيًا كـHTML مستقل يُحوَّل PDF على الخادم — فيخرج بنص متجه لا
+    // يتبكسل عند أي تكبير (البديل القديم كان يلتقط الصفحة صورة ثم يحشرها داخل PDF، فكانت
+    // تتبكسل)، وبنفس هوامش @page المعرَّفة أعلاه فيطابق معاينة الطباعة تمامًا
+    function exportPrintHtml(cb) {
+      CF_READY_.then(function () {
+        var bodyHtml = document.getElementById('cfRoot').outerHTML;
+        var css = '';
+        for (var i = 0; i < document.styleSheets.length; i++) {
+          try {
+            var rules = document.styleSheets[i].cssRules || [];
+            for (var j = 0; j < rules.length; j++) css += rules[j].cssText + '\n';
+          } catch (e) { /* ورقة أنماط خارجية */ }
+        }
+        var html = '<!DOCTYPE html><html dir="ltr" lang="en"><head><meta charset="UTF-8">' +
+          '<title>' + String(document.title).replace(/[&<>]/g, '') + '</title><style>' + css +
+          '@page { size: A4 portrait; margin: 14mm 12mm; }' +
+          // لا نلمس padding الـbody هنا عمدًا: قاعدته الأصلية (22px 28px) مُضمَّنة في css
+          // أعلاه، وهي جزء من هوامش الطباعة الفعلية — تصفيرها يجعل الملف أوسع من المطبوع
+          'html { margin: 0; padding: 0; background: #fff; }' +
+          '* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }' +
+          '</style></head><body>' + bodyHtml + '</body></html>';
+        cb(html);
+      }).catch(function (err) { cb(null, err); });
+    }
+
+    // مشاركة كصورة: صورة واحدة بأقصى وضوح متاح، تُقسَّم فقط عند تجاوز حدود اللوحة
+    function exportImageBlob(cb) {
+      CF_READY_.then(function () {
+        var root = document.getElementById('cfRoot');
+        var cssW = root.scrollWidth || root.offsetWidth || 703;
+        var cssH = root.scrollHeight || root.offsetHeight || 1000;
+// دقة المشاركة: العامل الحاسم هو مقياس الرسم (scale)، وهو محكوم بسقف مساحة اللوحة.
+// السقف 16 مليون بكسل قيدٌ حقيقي على iOS فقط؛ وفرضه على كل الأجهزة كان يهبط بالمقياس إلى
+// ~1.3x-1.8x في التقارير الطويلة (كشف حساب من عدة صفحات) فتخرج الصورة باهتة — وهو العطل
+// المُبلَّغ عنه. الآن: iOS يبقى على سقفه الآمن، وبقية الأجهزة على سقف أوسع يسمح بالمقياس
+// الكامل. رُفع مجددًا (80 مليون ≈ 320 ميجابايت ذاكرة) — ضمن حدود المتصفحات الحديثة على
+// أجهزة سطح المكتب/الأندرويد، ومقياس الرسم الأقصى رُفع من 5x إلى 10x معه — النظام يختار
+// تلقائيًا أعلى دقة ممكنة فعليًا حسب حجم كل تقرير بلا أي تدخل يدوي
+        var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        var MAX_AREA = IS_IOS_ ? 16000000 : 80000000, MAX_DIM = IS_IOS_ ? 8000 : 16000;
+        var scale = Math.min(10, Math.sqrt(MAX_AREA / (cssW * cssH)));
+        if (!(scale > 0) || scale < 1) scale = 1;
+        // تقييد المقياس ببُعد اللوحة الأقصى: بدونه تُقسَّم اللوحة إلى عدة صور، والحافظة لا
+        // تقبل إلا أول جزء فتُنسَخ صورة مقصوصة. بهذا القيد صورة واحدة كاملة بأعلى دقة ممكنة
+        var fitScale = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
+        if (fitScale > 0 && fitScale < scale) scale = Math.max(1, fitScale);
+        html2pdf().set({
+          // foreignObjectRendering: true إلزامي للعربية — بدونه يرسم html2canvas النص بنفسه
+          // حرفًا حرفًا بلا تشكيل عربي (bidi/ligatures)، فتظهر الحروف منفصلة ومعكوسة
+          html2canvas: { scale: scale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true, logging: false }
+        }).from(root).toCanvas().get('canvas').then(function (full) {
+          var pieces = [], total = full.height;
+          var sliceH = Math.min(MAX_DIM, total);
+          if (sliceH < 1) sliceH = total;
+          for (var y = 0; y < total; y += sliceH) {
+            var hh = Math.min(sliceH, total - y);
+            var c = document.createElement('canvas');
+            c.width = full.width; c.height = hh;
+            var ctx = c.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+            ctx.drawImage(full, 0, y, full.width, hh, 0, 0, full.width, hh);
+            pieces.push(c);
+          }
+          var blobs = [], done = 0, failed = false;
+          pieces.forEach(function (c, idx) {
+            c.toBlob(function (b) {
+              if (failed) return;
+              if (!b) { failed = true; cb(null, new Error('تعذّر إنشاء الصورة')); return; }
+              blobs[idx] = b;
+              if (++done === pieces.length) cb(blobs);
+            }, 'image/png'); // PNG بلا فقد = أوضح نص/خطوط (بلا أي ضغط JPEG) — جودة فائقة
+          });
+        }).catch(function (err) { cb(null, err); });
+      }).catch(function (err) { cb(null, err); });
+    }
+  </script>
+</body>
+</html>
