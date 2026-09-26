@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
+
+        /* ترقيم بالقياس الفعلي (نفس آلية ArrivalsReportTemplate): كل صفحة عنصر .rpt-page
+           بحجم A4 حقيقي تُملأ صفًا صفًا بقياس الارتفاع الفعلي، ورأس الجدول يتكرر داخل كل
+           صفحة، وتذييلها يحمل توقيت الطباعة و"صفحة X من Y" حقيقيَّين. المكسب: نفس الملف
+           بالضبط في الطباعة وفي PDF المُنشأ على الخادم — بنص متجه لا يتبكسل عند التكبير،
+           وبدون الاعتماد على counter(page) الذي لا يعمل إلا في طباعة المتصفح. */
+        * { box-sizing: border-box; }
+        body { font-family: 'Tajawal', Arial, sans-serif; margin: 0; padding: 0; color: #333; background: #fff; }
+
+        /* 288mm بدل 297: يترك ~9mm أسفل الصفحة يكفي تمامًا لسطر التذييل فقط بلا هامش زائد */
+        .rpt-page { position: relative; width: 210mm; height: 288mm; padding: 7mm 6mm 9mm; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+        .rpt-page.brk { page-break-before: always; }
+
+        .header-info { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; border-bottom: 2px solid #7d5a2c; padding-bottom: 5px; margin-bottom: 8px; font-weight: bold; flex: none; }
+        .header-info span { font-size: 12px; }
+        .header-info .val { color: #7d5a2c; }
+
+        table { width: 100%; border-collapse: collapse; table-layout: auto; flex: none; }
+        th, td {
+            border: 1px solid #ddd; padding: 4px 6px; text-align: center; font-size: 10px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        th { background-color: #7d5a2c; color: white; font-size: 11px; white-space: nowrap; }
+
+        td.col-note {
+            text-align: right; padding-right: 6px; white-space: normal; word-wrap: break-word;
+            min-width: 55%;
+            display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+
+        .opening-row td { background-color: #faf8f3; font-weight: bold; }
+        .excluded-row td { background-color: #faf0da !important; color: #92620a !important; }
+        /* تمييز "اليوم" مقصود على الشاشة فقط (App.html) — لا تعريف لـ .today-row هنا عمدًا */
+        .total-row { background-color: #34495e !important; color: white; font-weight: bold; }
+        .total-row td { color: white !important; font-size: 12px; }
+
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+
+        /* margin-top:auto يدفع التذييل لأسفل الصفحة دائمًا مهما قصُر الجدول */
+        /* مطلق أسفل الصفحة + padding-bottom يحجز مكانه: المحتوى لا يمكنه دفعه للخارج
+           أبدًا. (margin-top:auto السابق كان يفشل في الصفحات الممتلئة تمامًا فيُقصّ التذييل
+           بـ overflow:hidden — وهذا سبب اختفاء الترقيم/التوقيت من الصفحة الأولى بالذات) */
+        .rpt-footer { position: absolute; left: 6mm; right: 6mm; bottom: 3mm; display: flex;
+            justify-content: space-between; font-size: 8px; color: #756c5b;
+            border-top: 1px solid #eee; padding-top: 3px; }
+
+        @media print {
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            /* هامش صفر: الهوامش الحقيقية داخل .rpt-page نفسها، فلا يتضاعف الهامش السفلي */
+            @page { size: A4 portrait; margin: 0; }
+            th { background-color: #7d5a2c !important; color: white !important; }
+            .total-row td { background-color: #34495e !important; color: white !important; }
+        }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <div id="rptRoot"></div>
+
+    <script>
+        var PRINT_COLS = ['qaid','ref','date','note','debit','credit','balance'];
+        var PRINT_COL_LABELS = { qaid:'القيد', ref:'المرجع', date:'التاريخ', note:'تفاصيل البيان', debit:'مدين', credit:'دائن', balance:'الرصيد' };
+        var RPT_READY_ = Promise.resolve(), RPT_DATA_ = null;
+
+        function escHtml_(s) {
+            return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+        // نفس stmtFinalBalanceLabel_ في App.html حرفيًا: الرصيد النهائي بمسمى عملي حسب دور الحساب
+        // (عميل: دائن⟵"رصيد له"، مدين⟵"مستحق عليه" · مورد حصريًا: دائن⟵"مستحق له"، مدين⟵"رصيد لنا")
+        function finalBalanceLabel_(balanceStr, roles) {
+            var s = String(balanceStr || '');
+            var isSupplierOnly = (roles || []).length === 1 && roles[0] === 'supplier';
+            var isCredit = s.indexOf('دائن') !== -1, isDebit = s.indexOf('مدين') !== -1;
+            if (!isCredit && !isDebit) return s;
+            var word = isSupplierOnly ? (isCredit ? 'مستحق له' : 'رصيد لنا') : (isCredit ? 'رصيد له' : 'مستحق عليه');
+            return s.replace(/\s*(مدين|دائن)\s*$/, ' ' + word);
+        }
+        function cellsFor(cols, rowMap) {
+            return cols.map(function (c) {
+                return '<td' + (c === 'note' ? ' class="col-note"' : '') + '>' + (rowMap[c] === undefined ? '' : rowMap[c]) + '</td>';
+            }).join('');
+        }
+
+        // يبني الصفحات بالقياس الفعلي: يضيف صفًا ثم يقيس، فإن تجاوز ارتفاع الصفحة نقله
+        // لصفحة جديدة تحمل نفس الترويسة ورأس الجدول — فتُملأ كل صفحة لسعتها القصوى الحقيقية
+        function buildPagesMeasured_(data, colVisibility) {
+            var root = document.getElementById('rptRoot');
+            root.innerHTML = '';
+            var vis = colVisibility || {};
+            var cols = PRINT_COLS.filter(function (c) { return vis[c] !== false; });
+
+            var headerHtml = '<div class="header-info">' +
+                '<span>اسم الحساب: <span class="val">' + escHtml_(data.party || data.customer || '') + '</span></span>' +
+                '<span>الفترة من: <span class="val">' + escHtml_(data.start || '---') + '</span></span>' +
+                '<span>إلى: <span class="val">' + escHtml_(data.end || '---') + '</span></span></div>';
+            var theadHtml = '<thead><tr>' + cols.map(function (c) { return '<th>' + PRINT_COL_LABELS[c] + '</th>'; }).join('') + '</tr></thead>';
+            var footPlaceholder = '<span>&nbsp;</span><span>&nbsp;</span>';
+            var pages = [], cur = null, curTbody = null;
+
+            function makePage(isFirst) {
+                var pg = document.createElement('div');
+                pg.className = 'rpt-page' + (isFirst ? '' : ' brk');
+                pg.innerHTML = headerHtml + '<table>' + theadHtml + '<tbody></tbody></table>' +
+                    '<div class="rpt-footer">' + footPlaceholder + '</div>';
+                root.appendChild(pg);
+                pages.push(pg); cur = pg; curTbody = pg.querySelector('tbody');
+            }
+            function overflow() { return cur.scrollHeight > cur.clientHeight + 1; }
+            function appendTr(html) {
+                var tr = document.createElement('tr');
+                tr.innerHTML = html.replace(/^<tr[^>]*>/, '').replace(/<\/tr>$/, '');
+                var m = html.match(/^<tr class="([^"]*)"/);
+                if (m && m[1]) tr.className = m[1];
+                curTbody.appendChild(tr);
+                if (overflow() && curTbody.children.length > 1) {
+                    curTbody.removeChild(tr);
+                    makePage(false);
+                    curTbody.appendChild(tr);
+                }
+            }
+
+            makePage(true);
+            if (!data.totals) {
+                appendTr('<tr><td colspan="' + cols.length + '">لا توجد حركات لهذا الطرف خلال الفترة المحددة</td></tr>');
+            } else {
+                appendTr('<tr class="opening-row">' + cellsFor(cols, { note: 'رصيد أول المدة', debit: '0', credit: '0', balance: data.opening }) + '</tr>');
+                data.rows.forEach(function (r) {
+                    var cls = r.excluded ? 'excluded-row' : '';
+                    var rowMap = { qaid: r.qaid || '', ref: r.ref || '', date: r.dateDisp, note: r.note,
+                        debit: r.debit == null ? '' : r.debit, credit: r.credit == null ? '' : r.credit,
+                        balance: r.balance == null ? '' : r.balance };
+                    appendTr('<tr class="' + cls + '">' + cellsFor(cols, rowMap) + '</tr>');
+                });
+                appendTr('<tr class="total-row">' + cellsFor(cols, { note: 'الإجماليات', debit: data.totals.debit, credit: data.totals.credit, balance: finalBalanceLabel_(data.totals.balance, data.roles) }) + '</tr>');
+            }
+
+            // ترقيم حقيقي بعد اكتمال التقسيم: توقيت الطباعة يمينًا و"صفحة X من Y" يسارًا
+            var N = pages.length;
+            var stamp = data.today ? ('تاريخ الطباعة: ' + data.today) : '';
+            pages.forEach(function (pg, i) {
+                pg.querySelector('.rpt-footer').innerHTML =
+                    '<span>' + escHtml_(stamp) + '</span><span>صفحة ' + (i + 1) + ' من ' + N + '</span>';
+            });
+        }
+
+        function setup(data, colVisibility, skipAutoPrint) {
+            RPT_DATA_ = data;
+            document.title = (data.party || data.customer) + ' - كشف حساب - ' + data.today;
+            var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+            RPT_READY_ = ready.then(function () { buildPagesMeasured_(data, colVisibility); });
+            if (!skipAutoPrint) RPT_READY_.then(function () { setTimeout(function () { window.print(); }, 300); });
+        }
+
+        // نفس مستند الطباعة حرفيًا كـHTML مستقل — يُحوَّل PDF على الخادم فيخرج نصًا متجهًا
+        // مطابقًا لمعاينة الطباعة صفحةً بصفحة (بترقيمه الحقيقي ورؤوس أعمدته المتكررة)
+        function exportPrintHtml(cb) {
+            RPT_READY_.then(function () {
+                var pagesHtml = document.getElementById('rptRoot').innerHTML;
+                var css = '';
+                for (var i = 0; i < document.styleSheets.length; i++) {
+                    try {
+                        var rules = document.styleSheets[i].cssRules || [];
+                        for (var j = 0; j < rules.length; j++) css += rules[j].cssText + '\n';
+                    } catch (e) { /* ورقة أنماط خارجية */ }
+                }
+                var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">' +
+                    '<title>' + escHtml_(document.title) + '</title><style>' + css +
+                    '@page { size: A4 portrait; margin: 0; }' +
+                    'html, body { margin: 0; padding: 0; background: #fff; }' +
+                    '* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }' +
+                    '.rpt-page { page-break-after: always; }' +
+                    '.rpt-page:last-child { page-break-after: auto; }' +
+                    '</style></head><body>' + pagesHtml + '</body></html>';
+                cb(html);
+            }).catch(function (err) { cb(null, err); });
+        }
+
+        // مشاركة كصورة: صورة واحدة طويلة بأقصى وضوح، تُقسَّم فقط عند تجاوز حدود اللوحة
+        function exportImageBlob(cb) {
+            RPT_READY_.then(function () {
+                var root = document.getElementById('rptRoot');
+                var cssW = root.scrollWidth || root.offsetWidth || 794;
+                var cssH = root.scrollHeight || root.offsetHeight || 1000;
+                // دقة المشاركة: العامل الحاسم هو مقياس الرسم (scale)، وهو محكوم بسقف مساحة اللوحة.
+                // السقف 16 مليون بكسل قيدٌ حقيقي على iOS فقط؛ وفرضه على كل الأجهزة كان يهبط بالمقياس إلى
+                // ~1.3x-1.8x في التقارير الطويلة (كشف حساب من عدة صفحات) فتخرج الصورة باهتة — وهو العطل
+                // المُبلَّغ عنه. الآن: iOS يبقى على سقفه الآمن، وبقية الأجهزة على سقف أوسع يسمح بالمقياس
+                // الكامل. رُفع مجددًا (80 مليون ≈ 320 ميجابايت ذاكرة) — ضمن حدود المتصفحات الحديثة
+                // على أجهزة سطح المكتب/الأندرويد، ومقياس الرسم الأقصى رُفع من 5x إلى 10x معه؛
+                // النتيجة: النظام يختار تلقائيًا أعلى دقة ممكنة فعليًا حسب حجم كل تقرير (كبير
+                // يُخفَّض المقياس له بقدر ما يلزم فقط، وصغير يصل لـ10x كاملة) — بلا أي تغيير يدوي
+                var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                var MAX_AREA = IS_IOS_ ? 16000000 : 80000000, MAX_DIM = IS_IOS_ ? 8000 : 16000;
+                var scale = Math.min(10, Math.sqrt(MAX_AREA / (cssW * cssH)));
+                if (!(scale > 0) || scale < 1) scale = 1;
+                // تقييد المقياس ببُعد اللوحة الأقصى أيضًا. بدونه تخرج اللوحة أطول من السقف
+                // فتُقسَّم إلى عدة صور — والحافظة لا تقبل إلا أول جزء، فكانت تُنسَخ صورة
+                // مقصوصة (وهو ما بدا "جودة ضعيفة" عند اللصق). بهذا القيد تخرج الصورة دائمًا
+                // قطعة واحدة كاملة بأعلى دقة ممكنة ضمن حدود اللوحة في المتصفح
+                var fitScale = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
+                if (fitScale > 0 && fitScale < scale) scale = Math.max(1, fitScale);
+                html2pdf().set({
+                    // foreignObjectRendering: true إلزامي للعربية — بدونه يرسم html2canvas النص بنفسه
+          // حرفًا حرفًا بلا تشكيل عربي (bidi/ligatures)، فتظهر الحروف منفصلة ومعكوسة
+          html2canvas: { scale: scale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true, logging: false }
+                }).from(root).toCanvas().get('canvas').then(function (full) {
+                    var pieces = [], total = full.height;
+                    var sliceH = Math.min(MAX_DIM, total);
+                    if (sliceH < 1) sliceH = total;
+                    for (var y = 0; y < total; y += sliceH) {
+                        var hh = Math.min(sliceH, total - y);
+                        var c = document.createElement('canvas');
+                        c.width = full.width; c.height = hh;
+                        var ctx = c.getContext('2d');
+                        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+                        ctx.drawImage(full, 0, y, full.width, hh, 0, 0, full.width, hh);
+                        pieces.push(c);
+                    }
+                    var blobs = [], done = 0, failed = false;
+                    pieces.forEach(function (c, idx) {
+                        c.toBlob(function (b) {
+                            if (failed) return;
+                            if (!b) { failed = true; cb(null, new Error('تعذّر إنشاء الصورة')); return; }
+                            blobs[idx] = b;
+                            if (++done === pieces.length) cb(blobs);
+                        }, 'image/png'); // PNG بلا فقد = أوضح نص/خطوط (بلا أي ضغط JPEG) — جودة فائقة
+                    });
+                }).catch(function (err) { cb(null, err); });
+            }).catch(function (err) { cb(null, err); });
+        }
+    </script>
+</body>
+</html>

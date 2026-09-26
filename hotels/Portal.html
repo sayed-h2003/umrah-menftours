@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>بوابة العملاء — شركة منف للسياحة الدولية</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap');
+  :root {
+    --brand:#7d5a2c; --brand-dark:#5d4220; --brand-soft:#f2e6cf; --ink:#2a2721; --ink-dim:#756c5b;
+    --surface:#faf7f1; --card:#fff; --line:#e6ddcf; --ok:#1c7a4b; --ok-soft:#dcf5e6; --bad:#a02323; --bad-soft:#fbdcdc;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:'Tajawal',Arial,sans-serif; background:var(--surface); color:var(--ink); font-size:14px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:0 12px 60px; }
+
+  /* ===== شاشة الدخول ===== */
+  .login-shell { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .login-card { background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:0 8px 30px rgba(93,66,32,.08); width:100%; max-width:380px; padding:28px 24px; }
+  .brand-line { text-align:center; margin-bottom:20px; }
+  .brand-line .en { font-size:20px; font-weight:900; color:var(--brand); letter-spacing:.3px; }
+  .brand-line .ar { font-size:13px; color:var(--ink-dim); margin-top:3px; }
+  .brand-line .sub { font-size:12px; color:var(--ink-dim); margin-top:10px; font-weight:700; }
+  .fld { margin-bottom:14px; }
+  .fld label { display:block; font-size:12.5px; font-weight:700; color:var(--ink-dim); margin-bottom:5px; }
+  .fld input { width:100%; font-family:inherit; font-size:16px; padding:11px 12px; border:1px solid var(--line); border-radius:9px; background:#fdfbf7; }
+  .fld input:focus { outline:none; border-color:var(--brand); }
+  .pw-wrap { position:relative; }
+  .pw-wrap .eye { position:absolute; inset-inline-end:10px; top:50%; transform:translateY(-50%); cursor:pointer; opacity:.55; user-select:none; display:inline-flex; color:var(--ink-dim); }
+  .pw-wrap .eye:hover { opacity:1; }
+  .pw-wrap .eye svg { width:19px; height:19px; }
+  .btn { width:100%; border:none; border-radius:9px; padding:12px; font-family:inherit; font-size:15px; font-weight:700; cursor:pointer; background:var(--brand); color:#fff; }
+  .btn:hover { background:var(--brand-dark); }
+  .btn:disabled { opacity:.6; cursor:default; }
+  .btn.ghost { background:var(--brand-soft); color:var(--brand-dark); }
+  .msg { font-size:12.5px; margin-top:12px; padding:9px 11px; border-radius:8px; display:none; }
+  .msg.err { background:var(--bad-soft); color:var(--bad); display:block; }
+  .msg.ok { background:var(--ok-soft); color:var(--ok); display:block; }
+
+  /* ===== رأس البوابة ===== */
+  .topbar { background:var(--brand); color:#fff; padding:12px 0; box-shadow:0 2px 10px rgba(93,66,32,.15); }
+  .topbar .wrap { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .topbar .who { font-weight:900; font-size:15px; }
+  .topbar .who small { display:block; font-weight:500; font-size:11px; opacity:.85; }
+  .topbar .acts { display:flex; gap:8px; align-items:center; }
+  .tb-btn { background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:8px; padding:7px 12px; font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .tb-btn:hover { background:rgba(255,255,255,.28); }
+  .bell-btn { position:relative; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:8px; width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; padding:0; }
+  .bell-btn:hover { background:rgba(255,255,255,.28); }
+  .bell-btn svg { width:17px; height:17px; }
+  .bell-btn .bell-dot { position:absolute; top:-5px; inset-inline-start:-5px; background:var(--bad); color:#fff; font-size:10px; font-weight:900; min-width:17px; height:17px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; border:2px solid var(--brand); }
+
+  .page-title { font-size:17px; font-weight:900; color:var(--brand-dark); margin:22px 0 4px; }
+  .page-sub { font-size:12.5px; color:var(--ink-dim); margin-bottom:14px; }
+
+  /* overflow-y:visible صريح: overflow-x:auto وحده يجعل overflow-y auto ضمنيًا (قاعدة CSS)
+     فيتحوّل الغلاف لحاوية تمرير رأسي خاصة به بلا أي طفح رأسي فعلي، فتلتقط لمسة السحب
+     العمودي بدل تمريرها لتمرير الصفحة الطبيعي على الموبايل */
+  .tbl-wrap { overflow-x:auto; overflow-y:visible; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+  table { width:100%; border-collapse:collapse; font-size:13px; min-width:640px; }
+  th, td { border-bottom:1px solid var(--line); padding:10px 10px; text-align:center; white-space:nowrap; }
+  th { background:var(--brand); color:#fff; font-size:12px; font-weight:700; position:sticky; top:0; }
+  td.hotel { text-align:right; white-space:normal; min-width:150px; font-weight:700; }
+  td.rooms { text-align:right; white-space:normal; min-width:130px; color:var(--ink-dim); font-size:12px; }
+  tbody tr:nth-child(even) { background:#fbf8f2; }
+  .badge { display:inline-block; font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; background:var(--brand-soft); color:var(--brand-dark); }
+  /* ===== قائمة تنبيهات الجرس ===== */
+  .bell-menu { position:fixed; top:44px; inset-inline-end:8px; z-index:1600; width:min(390px, calc(100vw - 20px));
+    background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.20); overflow:hidden; text-align:start; }
+  .bell-menu .bell-hd { display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 12px; background:var(--brand); color:#fff; font-size:12.5px; font-weight:700; }
+  .bell-menu .bell-all { background:rgba(255,255,255,.18); color:#fff; border:none; border-radius:6px;
+    padding:3px 9px; font-family:inherit; font-size:11px; font-weight:700; cursor:pointer; }
+  .bell-list { max-height:min(60vh,420px); overflow-y:auto; }
+  .bell-item { display:block; width:100%; text-align:start; border:none; background:#fff; cursor:pointer;
+    padding:9px 12px; border-bottom:1px solid var(--line); font-family:inherit; }
+  .bell-item:hover { background:var(--brand-soft); }
+  .bell-item .bi-t { font-size:12px; font-weight:800; color:var(--brand-dark); display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .bell-item .bi-badge { font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:999px; background:var(--brand-soft); color:var(--brand-dark); }
+  .bell-item .bi-s { font-size:11.5px; color:var(--ink-dim); margin-top:3px; line-height:1.55; }
+  .bell-item .bi-msg { font-size:11.5px; color:#1e40af; margin-top:3px; }
+  .bell-item .bi-time { font-size:10.5px; color:var(--ink-dim); margin-top:3px; }
+  .bell-empty { padding:20px 12px; text-align:center; font-size:12px; color:var(--ink-dim); }
+  .req-card.req-flash { animation: ptFlash 1.1s ease-in-out 2; box-shadow:0 0 0 2px var(--brand); }
+  @keyframes ptFlash { 0%,100%{ background:#fff; } 50%{ background:#fff6dd; } }
+
+  .badge.city-mk, .badge.city-md { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+  .badge.city-mk { background:var(--ok-soft, #e3f3ea); color:var(--ok, #1c7a4b); }
+  .badge.city-md { background:var(--warn-soft, #fdf1dc); color:var(--warn, #a9750c); }
+  .badge .ci { font-size:13px; line-height:1; }
+  /* تفصيل سعر الليلة أسفل الإجمالي — أصغر وأخف حتى يبقى الإجمالي هو البارز */
+  .rate-det { font-size:10px; color:var(--ink-dim); font-weight:400; line-height:1.6; margin-top:3px; white-space:nowrap; }
+  .empty { padding:40px; text-align:center; color:var(--ink-dim); }
+  .price { direction:ltr; font-weight:700; color:var(--brand-dark); }
+
+  /* ===== نافذة تغيير كلمة المرور ===== */
+  .modal-back { position:fixed; inset:0; background:rgba(42,39,33,.5); display:none; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .modal-back.show { display:flex; }
+  .modal { background:var(--card); border-radius:14px; width:100%; max-width:360px; padding:22px; }
+  .modal h3 { margin:0 0 14px; font-size:15px; color:var(--brand-dark); }
+  .modal .row { display:flex; gap:8px; margin-top:8px; }
+  .modal .row .btn { flex:1; }
+
+  /* ===== تبويبات + جرس ===== */
+  .tabs { display:flex; gap:8px; margin:20px 0 6px; flex-wrap:wrap; align-items:center; }
+  .tab { border:1px solid var(--line); background:var(--card); color:var(--ink-dim); border-radius:999px; padding:8px 16px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; position:relative; }
+  .tab.active { background:var(--brand); color:#fff; border-color:var(--brand); }
+  .tab .bell-badge { position:absolute; top:-6px; inset-inline-start:-6px; background:var(--bad); color:#fff; font-size:10px; font-weight:900; min-width:18px; height:18px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; padding:0 4px; }
+  .tabs .spacer { flex:1; }
+  .req-new-btn { background:var(--ok); color:#fff; border:none; border-radius:9px; padding:9px 15px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .req-new-btn.ghost2 { background:var(--brand-soft); color:var(--brand-dark); margin-inline-end:6px; }
+  .req-new-btn.ghost2:hover { background:#e8d9bd; }
+
+  .cell-act { border:1px solid var(--brand); background:var(--brand-soft); color:var(--brand-dark); border-radius:7px; padding:5px 10px; font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  /* زر الإلغاء أيقونة سلة صغيرة فقط (بلا نص) — يوفّر عرض عمود الإجراءات ويقلّل الضغط بالخطأ */
+  .cell-act.cancel { border-color:var(--bad); background:var(--bad-soft); color:var(--bad); margin-inline-start:5px;
+    padding:5px 7px; line-height:1; display:inline-flex; align-items:center; justify-content:center; }
+  .cell-act.cancel svg { display:block; }
+  .act-cell { display:flex; gap:5px; justify-content:center; flex-wrap:wrap; }
+  th.sortable { cursor:pointer; user-select:none; white-space:nowrap; }
+  th.sortable .arrows { display:inline-flex; flex-direction:column; margin-inline-start:4px; vertical-align:middle; line-height:1; }
+  th.sortable .arrows span { font-size:8px; opacity:.45; }
+  th.sortable .arrows span.on { opacity:1; }
+  /* حجز منتهٍ (خرج قبل اليوم) — للعرض فقط بلا تعديل */
+  tr.past-row td { color:#9a927f; background:#f4f0e8 !important; }
+  tr.past-row td.hotel { font-weight:600; }
+  .past-lbl { font-size:11px; font-weight:700; color:#9a927f; white-space:nowrap; }
+
+  /* ===== بطاقات الطلبات + المحادثة ===== */
+  .req-card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+  .req-card.unread { border-color:var(--brand); box-shadow:0 0 0 2px var(--brand-soft); }
+  .req-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+  .req-head .rt { font-weight:900; color:var(--brand-dark); }
+  .st-badge { font-size:11px; font-weight:800; padding:3px 11px; border-radius:999px; }
+  .st-new { background:#e0edff; color:#1e40af; } .st-approved { background:var(--ok-soft); color:var(--ok); }
+  .st-rejected { background:var(--bad-soft); color:var(--bad); } .st-hold { background:#fdecc8; color:#92620a; }
+  .st-registered { background:#e0f2f1; color:#00695c; }
+  .st-withdrawn { background:#e8e8ea; color:#5a5a63; }
+  .req-data { font-size:12.5px; color:var(--ink); background:#faf7f1; border-radius:8px; padding:8px 10px; line-height:1.9; }
+  /* شريط فلاتر حجوزات العميل + سطر الفلاتر المطبَّقة */
+  .flt-bar { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .flt { display:flex; flex-direction:column; gap:4px; min-width:120px; flex:1 1 120px; }
+  .flt label { font-size:11.5px; font-weight:700; color:var(--ink-dim); }
+  .flt input, .flt select { font-family:inherit; font-size:14px; padding:8px 9px; border:1px solid var(--line); border-radius:8px; background:#fdfbf7; width:100%; }
+  .flt input:focus, .flt select:focus { outline:none; border-color:var(--brand); }
+  .flt-acts { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .flt-btn { border:none; border-radius:8px; padding:9px 14px; font-family:inherit; font-size:12.5px; font-weight:700; cursor:pointer; background:var(--brand); color:#fff; white-space:nowrap; }
+  .flt-btn:hover { background:var(--brand-dark); }
+  .flt-btn.ghost { background:var(--brand-soft); color:var(--brand-dark); }
+  .flt-btn.print { background:var(--ok); }
+  .flt-btn.shareimg { background:var(--brand-soft); color:var(--brand-dark); }
+  /* حالة "الملف/الصورة جاهزة" — لون مميز ونبض خفيف لتنبيه العميل أن الضغطة التالية تشارك */
+  .flt-btn.share-ready, .btn.share-ready { background:var(--ok) !important; color:#fff !important; animation:ptPulse 1.1s ease-in-out infinite; }
+  @keyframes ptPulse { 0%,100%{ box-shadow:0 0 0 0 rgba(28,122,75,.45); } 50%{ box-shadow:0 0 0 6px rgba(28,122,75,0); } }
+  .applied { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  .applied:empty { margin:0; }
+  .chip { display:inline-flex; align-items:center; gap:5px; background:var(--brand-soft); color:var(--brand-dark); border-radius:999px; padding:4px 10px; font-size:11.5px; font-weight:700; }
+  .chip button { border:none; background:transparent; color:var(--brand-dark); cursor:pointer; font-size:13px; line-height:1; padding:0; font-weight:900; }
+  .chip button:hover { color:var(--bad); }
+  .req-toggle { cursor:pointer; user-select:none; }
+  .req-toggle:hover .rt { color:var(--brand); }
+  .req-toggle .caret { display:inline-block; width:12px; font-size:11px; color:var(--brand); }
+  .req-brief { font-size:12.5px; color:var(--ink); background:#faf7f1; border-radius:8px; padding:7px 10px; line-height:1.8; margin-bottom:8px; }
+  /* الشريط المطوي: كل بيانات الطلب في سطر واحد لا يلتف */
+  .req-head { display:flex; align-items:center; gap:10px; }
+  .rt.one-line { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1 1 auto; min-width:0; }
+  .tail-meta { flex:none; font-size:11px; color:var(--ink-dim); white-space:nowrap; }
+  .st-badge { flex:none; }
+  @media (max-width:700px){ .tail-meta { display:none; } }
+  /* أحداث الطلب (إرسال/إجراء) داخل الشريط الزمني */
+  .ev { font-size:11.5px; color:var(--ink-dim); padding:4px 2px; display:flex; align-items:center; gap:6px; }
+  .ev.done { color:var(--brand-dark); font-weight:700; }
+  .ev-dot { width:7px; height:7px; border-radius:50%; background:var(--brand); flex:none; }
+  .ev.done .ev-dot { background:var(--ok); }
+  .ev-t { font-size:10.5px; opacity:.75; }
+  .req-data b { color:var(--brand-dark); }
+  .req-meta { font-size:11px; color:var(--ink-dim); margin-top:6px; }
+  .thread { margin-top:10px; border-top:1px dashed var(--line); padding-top:8px; display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; }
+  .msg-b { max-width:82%; padding:7px 11px; border-radius:12px; font-size:12.5px; line-height:1.6; }
+  .msg-b.client { align-self:flex-start; background:var(--brand-soft); color:var(--brand-dark); border-bottom-right-radius:3px; }
+  .msg-b.staff { align-self:flex-end; background:#eef2f7; color:#2a2721; border-bottom-left-radius:3px; }
+  .msg-b .mn { font-size:10px; font-weight:800; opacity:.7; display:block; margin-bottom:2px; }
+  .reply-row { display:flex; gap:6px; margin-top:8px; }
+  .reply-row input { flex:1; font-family:inherit; font-size:13px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; }
+  .reply-row button { border:none; background:var(--brand); color:#fff; border-radius:8px; padding:0 14px; font-weight:700; cursor:pointer; }
+  .withdraw-row { margin-top:8px; }
+  .withdraw-row button { border:1px solid var(--bad); background:transparent; color:var(--bad); border-radius:8px; padding:7px 14px; font-weight:700; font-size:12.5px; cursor:pointer; }
+  .withdraw-row button:hover { background:var(--bad-soft); }
+
+  .modal.wide { max-width:440px; }
+  /* شاشة معاينة الرفع المجمّع: تستغل عرض الشاشة كاملًا وتسمح بالتعديل المباشر قبل الاستيراد */
+  .modal.full { max-width:min(1250px, 97vw); width:97vw; }
+  .modal.full .modal-body { max-height:76vh; overflow:auto; }
+  .bulk-tbl { max-height:58vh; overflow:auto; }
+  .bulk-tbl th, .bulk-tbl td { padding:5px 6px; }
+  .be { width:100%; font-family:inherit; font-size:12.5px; padding:5px 6px; border:1px solid var(--line); border-radius:6px; background:#fff; }
+  .be:focus { outline:none; border-color:var(--brand); }
+  .be.nm, .be.dt { text-align:center; }
+  tr.bad-row td { background:var(--bad-soft) !important; }
+  tr.bad-row .be { border-color:var(--bad); }
+  .errcell { font-size:11.5px; white-space:normal; }
+  .frm-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .frm-grid .full { grid-column:1 / -1; }
+  .frm-grid label { display:block; font-size:12px; font-weight:700; color:var(--ink-dim); margin-bottom:4px; }
+  .frm-grid input, .frm-grid select { width:100%; font-family:inherit; font-size:15px; padding:9px 10px; border:1px solid var(--line); border-radius:8px; }
+  .modal.wide .modal-body { max-height:70vh; overflow-y:auto; }
+
+  [hidden] { display:none !important; }
+
+  /* شريط حقوق الملكية/التواصل — نفس المعتمد في البرنامج (Smart Software Solutions + واتساب) */
+  .brand-footer { position:fixed; left:0; right:0; bottom:0; z-index:40; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; background:#0f172a; color:#cbd5e1; font-size:11px; padding:7px 12px; direction:rtl; }
+  .brand-footer .bf-logo { width:18px; height:18px; border-radius:5px; background:#1e293b; color:#f2e6cf; font-weight:900; font-size:7px; display:inline-flex; align-items:center; justify-content:center; }
+  .brand-footer .bf-company { color:#fff; font-weight:700; }
+  .brand-footer .bf-sep { color:#475569; }
+  .brand-footer .bf-wa { display:inline-flex; align-items:center; gap:4px; color:#cbd5e1; text-decoration:none; }
+  .brand-footer .bf-wa:hover { color:#25d366; }
+  .brand-footer .bf-wa-icon { color:#25d366; }
+  #appView { padding-bottom:46px; }
+  @media (max-width:600px){ .brand-footer { font-size:9px; gap:4px; } .brand-footer .bf-logo { width:14px; height:14px; font-size:6px; } }
+
+  /* ===== تحسينات الموبايل الشاملة لبوابة العميل ===== */
+  @media (max-width: 720px) {
+    /* iOS يُكبِّر الصفحة تلقائيًا عند التركيز في أي حقل خطه أصغر من 16px */
+    input[type=text], input[type=password], input[type=number], input[type=date], select, textarea { font-size: 16px !important; }
+
+    body { font-size: 14px; }
+    .wrap { padding-inline: 8px; padding-bottom: 76px; } /* مساحة للفوتر الثابت */
+
+    /* الشريط العلوي: أزرار أصغر تلتف بانتظام بدل تجاوز عرض الشاشة */
+    .topbar { padding: 9px 0; }
+    .topbar .wrap { gap: 6px; padding-bottom: 0; }
+    .tb-btn { padding: 7px 10px; font-size: 11.5px; }
+    .who { font-size: 12px; }
+
+    /* التبويبات بعرض متساوٍ وارتفاع مريح للمس */
+    .tabs { display: flex; }
+    .tabs button { flex: 1; min-height: 42px; font-size: 13px; }
+
+    /* الفلاتر: عمود واحد كامل العرض بأزرار كبيرة */
+    .flt { flex: 1 1 100%; min-width: 0; }
+    .flt input, .flt select { width: 100%; }
+    .flt-acts { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; }
+    .flt-btn { flex: 1 1 45%; min-height: 42px; }
+
+    /* الجدول: تمرير أفقي واضح + رأس ملتصق أثناء التمرير حتى لا تضيع دلالة الأعمدة —
+       overflow-y:visible هنا أيضًا (هذه القاعدة داخل @media كانت تُعيد overflow-x:auto
+       بلا overflow-y فتُبطل الإصلاح أعلاه تحديدًا على عرض الموبايل) */
+    .tbl-wrap { overflow-x: auto; overflow-y: visible; -webkit-overflow-scrolling: touch; }
+    table { font-size: 11.5px; }
+    th, td { padding: 6px 5px; white-space: nowrap; }
+    thead th { position: sticky; top: 0; z-index: 3; }
+    td.hotel { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+    .cell-act { min-height: 34px; padding: 6px 9px; }
+    .cell-act.cancel { min-width: 34px; }
+
+    /* كروت الطلبات: السطر المطوي بسطرين بدل قصّه، والمحادثة بعرض كامل */
+    .req-head { padding: 10px; flex-wrap: wrap; gap: 5px; }
+    .req-head .rt.one-line { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .req-body { padding: 10px; }
+
+    /* النوافذ المنبثقة: بعرض الشاشة وبارتفاع لا تغطيه لوحة المفاتيح */
+    .modal { width: calc(100vw - 20px) !important; max-width: none !important;
+      max-height: calc(100vh - 24px); overflow-y: auto; padding: 14px; }
+    .modal .btn { min-height: 44px; font-size: 14px; }
+    .fld input, .fld select, .fld textarea { width: 100%; }
+
+    /* قائمة الجرس بعرض الشاشة تقريبًا */
+    .bell-menu { width: calc(100vw - 16px) !important; left: 8px !important; }
+    .bell-item { padding: 12px; }
+  }
+
+  @media (max-width: 380px) {
+    .tb-btn { padding: 6px 8px; font-size: 11px; }
+    .flt-btn { flex: 1 1 100%; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ===== شاشة الدخول ===== -->
+  <div id="loginView" class="login-shell">
+    <div class="login-card">
+      <div class="brand-line">
+        <div class="en">Menf International Tours</div>
+        <div class="ar">شركة منف للسياحة الدولية</div>
+        <div class="sub">بوابة العملاء — تابع حجوزاتك</div>
+      </div>
+      <form id="loginForm" onsubmit="return false;">
+        <div class="fld">
+          <label for="lgCode">كود العميل</label>
+          <input type="text" id="lgCode" autocomplete="off" inputmode="text" placeholder="مثال: A1B2C3">
+        </div>
+        <div class="fld">
+          <label for="lgPass">كلمة المرور</label>
+          <div class="pw-wrap">
+            <input type="password" id="lgPass" autocomplete="current-password">
+            <span class="eye" id="lgPassEye" onclick="togglePw('lgPass', this)"></span>
+          </div>
+        </div>
+        <button type="submit" class="btn" id="lgBtn" onclick="doLogin()">دخول</button>
+        <div class="msg" id="lgMsg"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== البوابة بعد الدخول ===== -->
+  <div id="appView" hidden>
+    <div class="topbar">
+      <div class="wrap">
+        <div class="who"><span id="whoName">—</span><small>بوابة العملاء · شركة منف للسياحة الدولية</small></div>
+        <div class="acts">
+          <button class="bell-btn" id="topBellBtn" onclick="toggleBellMenu_(event)" title="طلباتي">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            <span class="bell-dot" id="topBellBadge" hidden>0</span>
+          </button>
+          <div class="bell-menu" id="ptBellMenu" hidden>
+            <div class="bell-hd"><span>تنبيهات طلباتي</span><button type="button" class="bell-all" onclick="closeBellMenu_();switchTab('requests');">عرض كل الطلبات ↗</button></div>
+            <div class="bell-list" id="ptBellList"></div>
+          </div>
+          <button class="tb-btn" onclick="openChangePw()">🔑 كلمة المرور</button>
+          <button class="tb-btn" onclick="doLogout()">خروج</button>
+        </div>
+      </div>
+    </div>
+    <div class="wrap">
+      <div class="tabs">
+        <button class="tab active" id="tabBookings" onclick="switchTab('bookings')">حجوزاتي</button>
+        <button class="tab" id="tabRequests" onclick="switchTab('requests')">طلباتي<span class="bell-badge" id="reqBadge" hidden>0</span></button>
+        <span class="spacer"></span>
+        <button class="req-new-btn ghost2" onclick="openBulk()" title="رفع شيت حجوزات مجمّع">⬆ رفع شيت حجوزات</button>
+        <button class="req-new-btn" onclick="openNewReq()">+ طلب حجز جديد</button>
+      </div>
+
+      <div id="viewBookings">
+        <!-- فلاتر حجوزات العميل: فترة دخول (مفتوحة الطرفين أو أحدهما) + فندق + مدينة + رقم داخلي -->
+        <div class="flt-bar">
+          <div class="flt"><label>الدخول من</label><input type="text" id="fDateFrom" dir="ltr" inputmode="numeric" placeholder="DD/MM/YYYY"></div>
+          <div class="flt"><label>الدخول إلى</label><input type="text" id="fDateTo" dir="ltr" inputmode="numeric" placeholder="مفتوح"></div>
+          <div class="flt"><label>الفندق</label><input type="text" id="fHotel" placeholder="جزء من الاسم..."></div>
+          <div class="flt"><label>المدينة</label><select id="fCity"><option value="">الكل</option><option value="مكة">مكة</option><option value="المدينة">المدينة</option></select></div>
+          <div class="flt"><label>رقم الحجز</label><input type="text" id="fRef" dir="ltr" placeholder="الرقم الداخلي"></div>
+          <div class="flt-acts">
+            <button class="flt-btn" onclick="applyBkFilters_()">تطبيق</button>
+            <button class="flt-btn ghost" onclick="resetBkFilters_()">✕ إلغاء الكل</button>
+            <button class="flt-btn print" onclick="printMyBookings_()">📄 PDF / مشاركة</button>
+            <button class="flt-btn shareimg" onclick="shareMyBookingsImage_()">🖼 صورة</button>
+          </div>
+        </div>
+        <div class="applied" id="bkApplied"></div>
+        <div class="page-sub" id="bkSub">—</div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr id="bkHead"></tr></thead>
+            <tbody id="bkBody"><tr><td class="empty">جارِ التحميل...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="viewRequests" hidden>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="page-sub" style="margin:0;">طلبات التعديل والحجوزات الجديدة وردود الشركة عليها.</div>
+          <button class="flt-btn ghost" id="reqExpandBtn" onclick="toggleAllReqs_()">توسيع الكل</button>
+        </div>
+        <div id="reqList" style="margin-top:10px;"><div class="empty">جارِ التحميل...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- شريط حقوق الملكية/التواصل المعتمد -->
+  <div class="brand-footer">
+    <span id="pt-ver" class="bf-sep" style="direction:ltr; color:#94a3b8; font-size:10px; padding:1px 6px; border:1px solid #334155; border-radius:4px;">v…</span>
+    <span>© جميع الحقوق محفوظة</span>
+    <span class="bf-sep">—</span>
+    <span style="display:inline-flex;align-items:center;gap:6px;direction:ltr;">
+      <span class="bf-logo">S.H</span>
+      <span class="bf-company">Smart Software Solutions</span>
+    </span>
+    <span class="bf-sep">•</span>
+    <span>للتواصل:</span>
+    <a class="bf-wa" href="https://wa.me/201002864926" target="_blank" rel="noopener">
+      <span class="bf-wa-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm5.79 14.13c-.24.68-1.4 1.33-1.93 1.4-.5.07-1.09.1-1.76-.11-.4-.13-.92-.3-1.58-.59-2.78-1.2-4.6-4-4.74-4.19-.14-.19-1.13-1.5-1.13-2.86 0-1.36.71-2.02.97-2.3.25-.27.55-.34.73-.34.19 0 .37 0 .53.01.17.01.4-.06.62.48.24.58.81 2 .88 2.14.07.14.12.31.02.5-.09.19-.14.31-.28.48-.14.17-.29.37-.42.5-.14.13-.28.28-.12.55.16.27.71 1.17 1.52 1.9 1.05.94 1.93 1.23 2.2 1.37.28.14.44.12.6-.07.17-.19.71-.83.9-1.11.18-.28.37-.24.62-.14.25.09 1.6.75 1.87.89.28.14.46.2.53.32.07.11.07.65-.16 1.33z"/></svg></span>
+      01002864926
+    </a>
+  </div>
+
+  <!-- نافذة تغيير كلمة المرور -->
+  <div class="modal-back" id="pwModal">
+    <div class="modal">
+      <h3>تغيير كلمة المرور</h3>
+      <div class="fld"><label>كلمة المرور الحالية</label><input type="password" id="cpOld"></div>
+      <div class="fld"><label>كلمة المرور الجديدة (4 أحرف على الأقل)</label><input type="password" id="cpNew"></div>
+      <div class="msg" id="cpMsg"></div>
+      <div class="row">
+        <button class="btn ghost" onclick="closeChangePw()">إلغاء</button>
+        <button class="btn" id="cpBtn" onclick="doChangePw()">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة طلب تعديل / طلب حجز جديد (نفس النموذج، عنوانه يتغيّر) -->
+  <div class="modal-back" id="reqModal">
+    <div class="modal wide">
+      <h3 id="reqModalTitle">طلب تعديل بيانات الحجز</h3>
+      <div class="modal-body">
+        <div class="frm-grid">
+          <div class="full" id="reqCityWrap">
+            <label>المدينة</label>
+            <select id="rqCity"><option value="مكة">مكة</option><option value="المدينة">المدينة</option></select>
+          </div>
+          <div class="full"><label>الفندق</label><input type="text" id="rqHotel"></div>
+          <div><label>تاريخ الدخول</label><input type="text" id="rqCheckIn" dir="ltr" inputmode="numeric" placeholder="DD/MM/YYYY"></div>
+          <div><label>تاريخ الخروج</label><input type="text" id="rqCheckOut" dir="ltr" inputmode="numeric" placeholder="DD/MM/YYYY"></div>
+          <div><label>غرف ثنائية</label><input type="text" id="rqDoubles" dir="ltr" inputmode="numeric" class="numfld"></div>
+          <div><label>غرف ثلاثية</label><input type="text" id="rqTriples" dir="ltr" inputmode="numeric" class="numfld"></div>
+          <div><label>غرف رباعية</label><input type="text" id="rqQuads" dir="ltr" inputmode="numeric" class="numfld"></div>
+          <div><label>غرف خماسية</label><input type="text" id="rqQuints" dir="ltr" inputmode="numeric" class="numfld"></div>
+          <div class="full"><label>ملاحظات</label><input type="text" id="rqNotes" placeholder="أي تفاصيل إضافية..."></div>
+        </div>
+        <div class="msg" id="rqMsg"></div>
+      </div>
+      <div class="row">
+        <button class="btn ghost" onclick="closeReq()">إلغاء</button>
+        <button class="btn ghost" id="rqBtnNew" onclick="submitReq(true)">حفظ + جديد</button>
+        <button class="btn" id="rqBtn" onclick="submitReq(false)">حفظ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة الرفع المجمّع: تنزيل قالب ← تعبئته ← رفعه ← معاينة واختيار ← استيراد -->
+  <div class="modal-back" id="bulkModal">
+    <div class="modal wide full">
+      <h3>⬆ رفع شيت حجوزات مجمّع</h3>
+      <div class="modal-body">
+        <ol style="font-size:12.5px;color:var(--ink-dim);line-height:2;padding-inline-start:18px;margin:0 0 10px;">
+          <li>نزّل القالب واملأه في Excel أو Google Sheets.</li>
+          <li>احفظه بصيغة <b>CSV</b> ثم ارفعه هنا.</li>
+          <li>راجع المعاينة واختر الحجوزات المطلوبة ثم اضغط استيراد.</li>
+        </ol>
+        <div style="font-size:11.5px;color:var(--ink-dim);background:#faf7f1;border-radius:8px;padding:8px 10px;margin-bottom:10px;">
+          ملاحظة: <b>عدد الليالي غير موجود في القالب</b> لأنه يُحسب تلقائيًا من تاريخي الدخول والخروج.
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn ghost" onclick="downloadBulkTemplate_()">⬇ تنزيل القالب (CSV)</button>
+          <button class="btn ghost" onclick="document.getElementById('bulkFile').click()">📂 اختيار الملف</button>
+        </div>
+        <input type="file" id="bulkFile" accept=".csv,text/csv" hidden onchange="handleBulkFile_(this)">
+        <div class="msg" id="bulkMsg"></div>
+        <div id="bulkPreviewWrap" hidden>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0 6px;">
+            <span style="font-size:12.5px;font-weight:700;" id="bulkCount"></span>
+            <span>
+              <button class="flt-btn ghost" style="padding:5px 10px;font-size:11.5px;" onclick="bulkSelectAll_(true)">تحديد الكل</button>
+              <button class="flt-btn ghost" style="padding:5px 10px;font-size:11.5px;" onclick="bulkSelectAll_(false)">إلغاء التحديد</button>
+            </span>
+          </div>
+          <div class="tbl-wrap bulk-tbl">
+            <table style="min-width:900px;">
+              <thead><tr>
+                <th style="width:34px;">✓</th><th style="width:90px;">المدينة</th><th style="min-width:170px;">الفندق</th>
+                <th style="width:110px;">الدخول</th><th style="width:110px;">الخروج</th>
+                <th style="width:62px;">ثنائي</th><th style="width:62px;">ثلاثي</th><th style="width:62px;">رباعي</th><th style="width:62px;">خماسي</th>
+                <th style="min-width:150px;">ملاحظات</th><th style="width:130px;">الحالة</th>
+              </tr></thead>
+              <tbody id="bulkBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn ghost" onclick="closeBulk()">إلغاء</button>
+        <button class="btn" id="bulkImportBtn" onclick="importBulk_()" disabled>استيراد المحدد</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة مشاركة تقرير الحجوزات (ملف مؤقت يُحذف تلقائيًا) -->
+  <div class="modal-back" id="shareModal">
+    <div class="modal">
+      <h3>📤 مشاركة تقرير الحجوزات</h3>
+      <div style="text-align:center;">
+        <div id="psName" style="font-weight:700;font-size:13px;margin-bottom:6px;word-break:break-all;"></div>
+        <div class="page-sub" id="psHint" style="margin-bottom:0;">جارِ التجهيز...</div>
+      </div>
+      <div class="row"><button class="btn" onclick="ptShareFile_()">📤 مشاركة الملف</button></div>
+      <div class="row"><button class="btn ghost" onclick="ptDownloadFile_()">⬇ تحميل على الجهاز</button></div>
+      <div class="row"><button class="btn ghost" onclick="ptOpenFile_('')">↗ فتح في نافذة جديدة</button></div>
+      <div class="row"><button class="btn ghost" onclick="ptCloseShare_()">إغلاق</button></div>
+      <div style="font-size:10.5px;color:var(--ink-dim);text-align:center;margin-top:8px;">يُحذف الملف المؤقت تلقائيًا بعد دقائق قليلة.</div>
+    </div>
+  </div>
+
+  <!-- نافذة طلب إلغاء حجز -->
+  <div class="modal-back" id="cancelModal">
+    <div class="modal">
+      <h3>طلب إلغاء الحجز</h3>
+      <div class="fld"><label id="cancelBkLbl" style="font-weight:700;color:var(--ink);"></label></div>
+      <div class="fld"><label>سبب الإلغاء (اختياري)</label><input type="text" id="cnReason" placeholder="أي تفاصيل إضافية..."></div>
+      <div class="msg" id="cnMsg"></div>
+      <div class="row">
+        <button class="btn ghost" onclick="closeCancelReq()">تراجع</button>
+        <button class="btn" id="cnBtn" style="background:var(--bad);" onclick="submitCancelReq()">تأكيد طلب الإلغاء</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+  var PT = null;        // رمز جلسة البوابة الموقَّع
+  // إصدار البرنامج في التذييل — للتأكد من أن العميل يفتح آخر نسخة (يُحدَّث بعد تحميل الصفحة)
+  google.script.run.withSuccessHandler(function(v){
+    var el = document.getElementById('pt-ver');
+    if (el && v && v.version) el.textContent = 'v' + v.version;
+  }).withFailureHandler(function(){}).getAppVersion();
+  var SHOW_PRICES = false;
+  var CLIENT_NAME_ = ''; // اسم العميل (يظهر في ترويسة تقرير الحجوزات)
+
+  function readStore(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } }
+  function writeStore(k,v){ try { if(v===null) sessionStorage.removeItem(k); else sessionStorage.setItem(k,v); } catch(e){} }
+
+  // أيقونة عين (كلمة المرور مخفية) / عين بشرطة (ظاهرة) — بدل رمز القرد
+  var EYE_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYEOFF_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  function togglePw(id, el){ var i=document.getElementById(id); if(i.type==='password'){ i.type='text'; el.innerHTML=EYEOFF_SVG; } else { i.type='password'; el.innerHTML=EYE_SVG; } }
+  (function(){ var e=document.getElementById('lgPassEye'); if(e) e.innerHTML=EYE_SVG; })();
+  function showMsg(id, text, kind){ var m=document.getElementById(id); m.textContent=text; m.className='msg '+kind; }
+  function clearMsg(id){ var m=document.getElementById(id); m.textContent=''; m.className='msg'; }
+
+  function doLogin(){
+    var code=document.getElementById('lgCode').value.trim();
+    var pass=document.getElementById('lgPass').value;
+    if(!code||!pass){ showMsg('lgMsg','أدخل الكود وكلمة المرور','err'); return; }
+    var btn=document.getElementById('lgBtn'); btn.disabled=true; clearMsg('lgMsg');
+    google.script.run.withSuccessHandler(function(res){
+      btn.disabled=false;
+      if(!res||!res.ok){ showMsg('lgMsg',(res&&res.error)||'تعذّر الدخول','err'); return; }
+      PT=res.token; writeStore('pt',PT); enterApp(res.clientName, res.showPrices);
+      if(AUTO_LOGIN_){
+        AUTO_LOGIN_=false;
+        // كلمة المرور ظهرت داخل الرابط — ننبّه العميل لتغييرها من زر "كلمة المرور"
+        setTimeout(function(){
+          alert('أهلًا بك '+(res.clientName||'')+'\n\nتم تسجيل دخولك تلقائيًا.\nكودك: '+code+
+                '\nكلمة المرور: '+pass+'\n\nاحتفظ بهذه البيانات — وننصح بتغيير كلمة المرور من زر "كلمة المرور" أعلى الشاشة.');
+        }, 700);
+      }
+    }).withFailureHandler(function(e){ btn.disabled=false; showMsg('lgMsg',e.message,'err'); }).portalLogin(code, pass);
+  }
+
+  function enterApp(name, showPrices){
+    SHOW_PRICES=!!showPrices;
+    CLIENT_NAME_=name||'';
+    document.getElementById('whoName').textContent=name||'';
+    document.getElementById('loginView').hidden=true;
+    document.getElementById('appView').hidden=false;
+    switchTab('bookings');
+    initBkFilters_(); // الافتراضي: من دخول اليوم بنهاية مفتوحة
+    loadBookings();
+    refreshBadge();
+    // كان الجرس يُحدَّث مرة واحدة فقط عند الدخول — فلا يعلم العميل بأي رد إلا لو أعاد فتح
+    // البوابة. الآن يُفحص دوريًا فيظهر التنبيه فور رد الموظف والعميل ما زال فاتحًا الصفحة
+    // 45 ثانية كانت مكلفة (كل نداء 3 ثوانٍ تنفيذ على الخادم) — 3 دقائق كافية للتنبيه
+    if (!window.__ptBellTimer) window.__ptBellTimer = setInterval(refreshBadge, 180000);
+  }
+
+  function doLogout(){
+    PT=null; writeStore('pt',null);
+    document.getElementById('appView').hidden=true;
+    document.getElementById('loginView').hidden=false;
+    document.getElementById('lgPass').value='';
+    clearMsg('lgMsg');
+  }
+
+  var bkRows_=[];
+  var bkSortField_='checkIn', bkSortDir_='asc'; // الترتيب الافتراضي: تصاعديًا حسب تاريخ الدخول
+  var bkCols_=[['#','idx'],['رقم الحجز','innerRef'],['المدينة','city'],['الفندق','hotel'],['الدخول','checkIn'],['الخروج','checkOut'],['الليالي','nights'],['الغرف','rooms'],['الحالة','status']];
+  function bkSortKey_(r, field){
+    if(field==='checkIn') return r.checkInIso||'';
+    if(field==='city') return r.city||'';
+    return '';
+  }
+  function bkSortedRows_(){
+    var rows=bkRows_.slice();
+    var f=bkSortField_, d=bkSortDir_==='asc'?1:-1;
+    rows.sort(function(a,b){
+      var av=bkSortKey_(a,f), bv=bkSortKey_(b,f);
+      if(av<bv) return -1*d; if(av>bv) return 1*d; return 0;
+    });
+    return rows;
+  }
+  function bkSetSort_(field){
+    if(bkSortField_===field){ bkSortDir_=bkSortDir_==='asc'?'desc':'asc'; } else { bkSortField_=field; bkSortDir_='asc'; }
+    renderBookings_();
+  }
+  function bkArrowsHtml_(field){
+    var active=bkSortField_===field;
+    var up=active&&bkSortDir_==='asc', down=active&&bkSortDir_==='desc';
+    return '<span class="arrows"><span class="'+(up?'on':'')+'">▲</span><span class="'+(down?'on':'')+'">▼</span></span>';
+  }
+  function loadBookings(){
+    var body=document.getElementById('bkBody');
+    body.innerHTML='<tr><td class="empty">جارِ التحميل...</td></tr>';
+    google.script.run.withSuccessHandler(function(res){
+      if(!res||!res.ok){
+        if(res&&res.error&&/جلسة|بوابة/.test(res.error)){ doLogout(); showMsg('lgMsg',res.error,'err'); return; }
+        body.innerHTML='<tr><td class="empty">تعذّر تحميل الحجوزات: '+((res&&res.error)||'')+'</td></tr>'; return;
+      }
+      SHOW_PRICES=!!res.showPrices; bkRows_=res.rows||[];
+      renderBookings_();
+    }).withFailureHandler(function(e){ body.innerHTML='<tr><td class="empty">خطأ: '+e.message+'</td></tr>'; }).portalGetBookings(PT);
+  }
+  // ---- الفلاتر: الافتراضي "من دخول اليوم" بنهاية مفتوحة ----
+  var bkFilters_={ from:'', to:'', hotel:'', city:'', ref:'' };
+  function todayDisp_(){
+    var d=new Date();
+    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+  }
+  function initBkFilters_(){
+    bkFilters_={ from:todayDisp_(), to:'', hotel:'', city:'', ref:'' };
+    syncFilterInputs_();
+    wireFilterFields_();
+  }
+  function syncFilterInputs_(){
+    document.getElementById('fDateFrom').value=bkFilters_.from;
+    document.getElementById('fDateTo').value=bkFilters_.to;
+    document.getElementById('fHotel').value=bkFilters_.hotel;
+    document.getElementById('fCity').value=bkFilters_.city;
+    document.getElementById('fRef').value=bkFilters_.ref;
+  }
+  function wireFilterFields_(){
+    ['fDateFrom','fDateTo'].forEach(function(id){
+      var el=document.getElementById(id); if(!el||el.__wired) return; el.__wired=true;
+      el.addEventListener('input', function(){ this.value=toLatinDigits(this.value).replace(/[^0-9\/]/g,''); });
+      el.addEventListener('blur', function(){ this.value=autoYear_(this.value); });
+    });
+    var ref=document.getElementById('fRef');
+    if(ref&&!ref.__wired){ ref.__wired=true; ref.addEventListener('input', function(){ this.value=toLatinDigits(this.value); }); }
+    ['fDateFrom','fDateTo','fHotel','fRef'].forEach(function(id){
+      var el=document.getElementById(id); if(!el||el.__enter) return; el.__enter=true;
+      el.addEventListener('keydown', function(e){ if(e.key==='Enter') applyBkFilters_(); });
+    });
+    var city=document.getElementById('fCity');
+    if(city&&!city.__ch){ city.__ch=true; city.addEventListener('change', applyBkFilters_); }
+  }
+  function applyBkFilters_(){
+    bkFilters_={
+      from: autoYear_(document.getElementById('fDateFrom').value),
+      to: autoYear_(document.getElementById('fDateTo').value),
+      hotel: document.getElementById('fHotel').value.trim(),
+      city: document.getElementById('fCity').value,
+      ref: toLatinDigits(document.getElementById('fRef').value).trim()
+    };
+    syncFilterInputs_();
+    renderBookings_();
+  }
+  function resetBkFilters_(){
+    bkFilters_={ from:'', to:'', hotel:'', city:'', ref:'' };
+    syncFilterInputs_(); renderBookings_();
+  }
+  function clearOneFilter_(k){ bkFilters_[k]=''; syncFilterInputs_(); renderBookings_(); }
+  function dispToTs_(v){ // DD/MM/YYYY → طابع زمني لبداية اليوم
+    v=autoYear_(v); if(!v) return null;
+    var p=v.split('/'); if(p.length!==3) return null;
+    var d=new Date(+p[2], +p[1]-1, +p[0]); d.setHours(0,0,0,0);
+    return isNaN(d.getTime())?null:d.getTime();
+  }
+  function rowTs_(r){
+    if(!r.checkInIso) return null;
+    var p=r.checkInIso.split('-'); if(p.length!==3) return null;
+    var d=new Date(+p[0], +p[1]-1, +p[2]); d.setHours(0,0,0,0);
+    return d.getTime();
+  }
+  function bkFilteredRows_(){
+    var fromTs=dispToTs_(bkFilters_.from), toTs=dispToTs_(bkFilters_.to);
+    var h=(bkFilters_.hotel||'').toLowerCase(), rf=(bkFilters_.ref||'').toLowerCase();
+    return bkSortedRows_().filter(function(r){
+      var ts=rowTs_(r);
+      if(fromTs!==null && (ts===null || ts<fromTs)) return false;
+      if(toTs!==null && (ts===null || ts>toTs)) return false;
+      if(bkFilters_.city && r.city!==bkFilters_.city) return false;
+      if(h && (r.hotel||'').toLowerCase().indexOf(h)===-1) return false;
+      if(rf && (r.innerRef||'').toString().toLowerCase().indexOf(rf)===-1) return false;
+      return true;
+    });
+  }
+  // سطر الفلاتر المطبَّقة (شرائح مع زر X لكل فلتر) — ويُستخدَم نصّه نفسه في الطباعة
+  function appliedFilterParts_(){
+    var p=[];
+    if(bkFilters_.from) p.push({k:'from', t:'الدخول من: '+bkFilters_.from});
+    if(bkFilters_.to) p.push({k:'to', t:'الدخول إلى: '+bkFilters_.to});
+    if(!bkFilters_.to && bkFilters_.from) p.push({k:null, t:'(نهاية مفتوحة)'});
+    if(bkFilters_.city) p.push({k:'city', t:'المدينة: '+bkFilters_.city});
+    if(bkFilters_.hotel) p.push({k:'hotel', t:'الفندق: '+bkFilters_.hotel});
+    if(bkFilters_.ref) p.push({k:'ref', t:'رقم الحجز: '+bkFilters_.ref});
+    return p;
+  }
+  function renderApplied_(){
+    var box=document.getElementById('bkApplied');
+    var parts=appliedFilterParts_();
+    if(!parts.length){ box.innerHTML=''; return; }
+    box.innerHTML=parts.map(function(p){
+      return '<span class="chip">'+esc(p.t)+(p.k?'<button title="إلغاء هذا الفلتر" onclick="clearOneFilter_(\''+p.k+'\')">✕</button>':'')+'</span>';
+    }).join('')+'<span class="chip" style="background:#eee;color:#555;"><button onclick="resetBkFilters_()" style="color:#555;">✕ إلغاء الكل</button></span>';
+  }
+
+  function renderBookings_(){
+    var head=document.getElementById('bkHead'), body=document.getElementById('bkBody');
+    var cols=bkCols_.slice();
+    if(SHOW_PRICES) cols.push(['قيمة الحجز','sale']);
+    cols.push(['','act']);
+    head.innerHTML=cols.map(function(c){
+      var k=c[1];
+      if(k==='city'||k==='checkIn') return '<th class="sortable" onclick="bkSetSort_(\''+k+'\')">'+c[0]+bkArrowsHtml_(k)+'</th>';
+      return '<th>'+c[0]+'</th>';
+    }).join('');
+    renderApplied_();
+    var sorted=bkFilteredRows_();
+    document.getElementById('bkSub').textContent='معروض ' + sorted.length + ' من ' + bkRows_.length + ' حجز — يمكنك طلب تعديل أو إلغاء أي حجز';
+    if(!sorted.length){
+      body.innerHTML='<tr><td class="empty" colspan="'+cols.length+'">'+(bkRows_.length?'لا توجد حجوزات مطابقة للفلاتر':'لا توجد حجوزات مسجّلة')+'</td></tr>';
+      return;
+    }
+    body.innerHTML=sorted.map(function(r){
+      var i=bkRows_.indexOf(r);
+      return '<tr'+(r.isPast?' class="past-row"':'')+'>'+cols.map(function(c){
+        var k=c[1];
+        if(k==='idx') return '<td>'+(i+1)+'</td>';
+        if(k==='act') return '<td>'+(r.isPast
+          ? '<span class="past-lbl">منتهٍ — للعرض</span>'
+          : '<div class="act-cell"><button class="cell-act" onclick="openEditReq('+i+')">✎ طلب تعديل</button><button class="cell-act cancel" title="طلب إلغاء الحجز" aria-label="طلب إلغاء الحجز" onclick="openCancelReq('+i+')">'+TRASH_SVG_+'</button></div>')+'</td>';
+        if(k==='hotel') return '<td class="hotel">'+esc(r.hotel)+'</td>';
+        if(k==='rooms') return '<td class="rooms">'+esc(r.rooms)+'</td>';
+        if(k==='city') return '<td>'+cityTag_(r.city)+'</td>';
+        if(k==='status') return '<td><span class="badge">'+esc(r.status)+'</span></td>';
+        if(k==='sale') return '<td class="price">'+priceCell_(r)+'</td>';
+        return '<td>'+esc(r[k]==null?'':r[k])+'</td>';
+      }).join('')+'</tr>';
+    }).join('');
+  }
+
+  /* ===== الرفع المجمّع: قالب CSV ← معاينة ← اختيار ← استيراد كطلب لكل حجز ===== */
+  var BULK_COLS_=['المدينة','الفندق','تاريخ الدخول (DD/MM/YYYY)','تاريخ الخروج (DD/MM/YYYY)','غرف ثنائية','غرف ثلاثية','غرف رباعية','غرف خماسية','ملاحظات'];
+  var bulkRows_=[];
+  function openBulk(){
+    bulkRows_=[];
+    document.getElementById('bulkPreviewWrap').hidden=true;
+    document.getElementById('bulkImportBtn').disabled=true;
+    document.getElementById('bulkFile').value='';
+    clearMsg('bulkMsg');
+    document.getElementById('bulkModal').classList.add('show');
+  }
+  function closeBulk(){ document.getElementById('bulkModal').classList.remove('show'); }
+  function downloadBulkTemplate_(){
+    // مثال صف واحد ليتضح التنسيق المطلوب — يمكن حذفه أو الكتابة فوقه
+    var sample=['مكة','فندق المثال', todayDisp_(), todayDisp_(),'2','1','','','ملاحظة اختيارية'];
+    var csv=BULK_COLS_.join(',')+'\r\n'+sample.map(csvCell_).join(',')+'\r\n';
+    // BOM حتى يفتح Excel العربية بترميز صحيح بلا رموز مشوّهة
+    var blob=new Blob(['﻿'+csv], { type:'text/csv;charset=utf-8;' });
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='قالب حجوزات - '+CLIENT_NAME_+'.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); document.body.removeChild(a); }, 500);
+  }
+  function csvCell_(v){
+    v=(v==null?'':String(v));
+    return /[",\r\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v;
+  }
+  // محلّل CSV بسيط يدعم الاقتباس والفواصل داخل النص وأسطر CRLF
+  function parseCsv_(text){
+    text=text.replace(/^﻿/,'');
+    var rows=[], row=[], cur='', inQ=false;
+    for(var i=0;i<text.length;i++){
+      var c=text[i];
+      if(inQ){
+        if(c==='"'){ if(text[i+1]==='"'){ cur+='"'; i++; } else inQ=false; }
+        else cur+=c;
+      } else {
+        if(c==='"') inQ=true;
+        else if(c===','){ row.push(cur); cur=''; }
+        else if(c==='\n'){ row.push(cur); rows.push(row); row=[]; cur=''; }
+        else if(c!=='\r') cur+=c;
+      }
+    }
+    if(cur!==''||row.length){ row.push(cur); rows.push(row); }
+    return rows.filter(function(r){ return r.some(function(x){ return (x||'').trim()!==''; }); });
+  }
+  function handleBulkFile_(input){
+    var file=input.files&&input.files[0];
+    if(!file) return;
+    clearMsg('bulkMsg');
+    var reader=new FileReader();
+    reader.onload=function(){
+      try{
+        var rows=parseCsv_(String(reader.result));
+        if(rows.length<2){ showMsg('bulkMsg','الملف فارغ أو لا يحتوي على صفوف بيانات','err'); return; }
+        rows.shift(); // سطر العناوين
+        bulkRows_=rows.map(function(r){
+          return {
+            city:(r[0]||'').trim()==='المدينة'?'المدينة':'مكة',
+            hotel:(r[1]||'').trim(),
+            // normalizeAnyDate_ يفهم "05-سبتمبر" و"2026-09-05" والرقم التسلسلي وغيرها
+            checkIn:normalizeAnyDate_(r[2]),
+            checkOut:normalizeAnyDate_(r[3]),
+            doubles:parseInt(toLatinDigits((r[4]||'').trim()),10)||0,
+            triples:parseInt(toLatinDigits((r[5]||'').trim()),10)||0,
+            quads:parseInt(toLatinDigits((r[6]||'').trim()),10)||0,
+            quints:parseInt(toLatinDigits((r[7]||'').trim()),10)||0,
+            notes:(r[8]||'').trim()
+          };
+        });
+        validateBulk_();
+        renderBulkPreview_();
+      }catch(e){ showMsg('bulkMsg','تعذّر قراءة الملف: '+e.message,'err'); }
+    };
+    reader.onerror=function(){ showMsg('bulkMsg','تعذّر قراءة الملف','err'); };
+    reader.readAsText(file,'UTF-8');
+  }
+  // تحقق يُعاد تشغيله بعد كل تعديل يدوي في المعاينة
+  function validateBulk_(){
+    bulkRows_.forEach(function(b){
+      b.ok=true; b.err='';
+      if(!b.hotel && !b.checkIn){ b.ok=false; b.err='بلا فندق ولا تاريخ دخول'; return; }
+      if(b.checkIn && dispToTs_(b.checkIn)===null){ b.ok=false; b.err='تاريخ دخول غير مفهوم'; return; }
+      if(b.checkOut && dispToTs_(b.checkOut)===null){ b.ok=false; b.err='تاريخ خروج غير مفهوم'; return; }
+      var a=dispToTs_(b.checkIn), z=dispToTs_(b.checkOut);
+      if(a!==null&&z!==null&&z<=a){ b.ok=false; b.err='تاريخ الخروج ليس بعد الدخول'; return; }
+      if(!b.doubles&&!b.triples&&!b.quads&&!b.quints){ b.ok=false; b.err='لم تُحدَّد أي غرف'; }
+    });
+  }
+  // كل خلية قابلة للتعديل مباشرةً قبل الاستيراد (المدينة قائمة، والباقي حقول نصية)
+  function bulkEdit_(i, field, el){
+    var b=bulkRows_[i]; if(!b) return;
+    var v=el.value;
+    if(field==='checkIn'||field==='checkOut') v=normalizeAnyDate_(v);
+    else if(['doubles','triples','quads','quints'].indexOf(field)!==-1) v=parseInt(toLatinDigits(v),10)||0;
+    else v=String(v).trim();
+    b[field]=v;
+    validateBulk_();
+    renderBulkPreview_();
+  }
+  function renderBulkPreview_(){
+    var body=document.getElementById('bulkBody');
+    var valid=bulkRows_.filter(function(b){ return b.ok; }).length;
+    document.getElementById('bulkCount').textContent='قُرئ '+bulkRows_.length+' صف — صالح للاستيراد: '+valid+
+      (valid<bulkRows_.length?' (صحّح الصفوف الحمراء بالتعديل المباشر)':'');
+    var nums=['doubles','triples','quads','quints'];
+    body.innerHTML=bulkRows_.map(function(b,i){
+      var cityOpts=['مكة','المدينة'].map(function(c){
+        return '<option value="'+c+'"'+(b.city===c?' selected':'')+'>'+c+'</option>';
+      }).join('');
+      return '<tr'+(b.ok?'':' class="bad-row"')+'>'+
+        '<td><input type="checkbox" class="bulkChk" data-i="'+i+'"'+(b.ok?' checked':' disabled')+'></td>'+
+        '<td><select class="be" onchange="bulkEdit_('+i+',\'city\',this)">'+cityOpts+'</select></td>'+
+        '<td><input class="be wide" value="'+esc(b.hotel)+'" onchange="bulkEdit_('+i+',\'hotel\',this)"></td>'+
+        '<td><input class="be dt" dir="ltr" value="'+esc(b.checkIn)+'" onchange="bulkEdit_('+i+',\'checkIn\',this)"></td>'+
+        '<td><input class="be dt" dir="ltr" value="'+esc(b.checkOut)+'" onchange="bulkEdit_('+i+',\'checkOut\',this)"></td>'+
+        nums.map(function(k){
+          return '<td><input class="be nm" dir="ltr" value="'+(b[k]||'')+'" onchange="bulkEdit_('+i+',\''+k+'\',this)"></td>';
+        }).join('')+
+        '<td><input class="be wide" value="'+esc(b.notes)+'" onchange="bulkEdit_('+i+',\'notes\',this)"></td>'+
+        '<td class="errcell">'+(b.ok?'<span style="color:var(--ok);font-weight:700;">✓</span>':'<span style="color:var(--bad);font-weight:700;">'+esc(b.err)+'</span>')+'</td>'+
+      '</tr>';
+    }).join('');
+    document.getElementById('bulkPreviewWrap').hidden=false;
+    document.getElementById('bulkImportBtn').disabled=valid===0;
+  }
+  function bulkSelectAll_(on){
+    document.querySelectorAll('.bulkChk:not(:disabled)').forEach(function(c){ c.checked=on; });
+  }
+  function importBulk_(){
+    var picked=[];
+    document.querySelectorAll('.bulkChk:checked').forEach(function(c){
+      var b=bulkRows_[parseInt(c.dataset.i,10)];
+      if(b&&b.ok) picked.push({
+        city:b.city, hotel:b.hotel,
+        checkIn:dispToIso_(b.checkIn), checkOut:dispToIso_(b.checkOut),
+        doubles:b.doubles, triples:b.triples, quads:b.quads, quints:b.quints, notes:b.notes
+      });
+    });
+    if(!picked.length){ showMsg('bulkMsg','اختر حجزًا واحدًا على الأقل','err'); return; }
+    var btn=document.getElementById('bulkImportBtn'), lbl=btn.textContent;
+    btn.disabled=true; btn.textContent='⏳ جارِ الاستيراد...'; clearMsg('bulkMsg');
+    google.script.run.withSuccessHandler(function(res){
+      btn.disabled=false; btn.textContent=lbl;
+      if(!res||!res.ok){ showMsg('bulkMsg',(res&&res.error)||'تعذّر الاستيراد','err'); return; }
+      showMsg('bulkMsg','✅ تم إرسال '+res.count+' طلب حجز — كل حجز كطلب مستقل','ok');
+      refreshBadge();
+      setTimeout(function(){ closeBulk(); switchTab('requests'); },1200);
+    }).withFailureHandler(function(e){
+      btn.disabled=false; btn.textContent=lbl; showMsg('bulkMsg',e.message,'err');
+    }).portalSubmitBulkRequests(PT, picked);
+  }
+
+  // وسم المدينة بأيقونة معبّرة (🕋 مكة / 🕌 المدينة) — للشاشة فقط، لا يدخل ملفات PDF
+  // خلية السعر: الإجمالي بارزًا وتحته تفصيل سعر الليلة لكل نوع غرفة — العميل يرى على أي
+  // أساس حُسب المبلغ بدل رقم مجمَّع بلا تفسير
+  function priceCell_(r){
+    if(r.sale==null && !(r.rates&&r.rates.length)) return '—';
+    var head = r.sale==null ? '—' : ('<b>'+fmt(r.sale)+'</b>');
+    if(!r.rates || !r.rates.length) return head;
+    var det = r.rates.map(function(x){
+      return esc(x.label)+' ×'+x.qty+' @ '+fmt(x.rate);
+    }).join('<br>');
+    return head + '<div class="rate-det">'+det+'</div>';
+  }
+
+  function cityTag_(city){
+    if(!city) return '';
+    var mk=String(city).indexOf('مكة')>=0;
+    return '<span class="badge city-'+(mk?'mk':'md')+'"><span class="ci">'+(mk?'🕋':'🕌')+'</span>'+esc(city)+'</span>';
+  }
+
+  var TRASH_SVG_='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>';
+
+  /* ===== تقرير حجوزاتي: PDF بنص متجه أو صورة — كلاهما من نفس قالب الطباعة ===== */
+  // البيانات بنفس بنية قالب التقارير في البرنامج ← يخرج الملف بتنسيق الطباعة حرفيًا
+  function bkReportData_(rows){
+    var cols=[{key:'idx',label:'#',numeric:true,widthPct:5},{key:'innerRef',label:'رقم الحجز',widthPct:11},
+      {key:'city',label:'المدينة',widthPct:9},{key:'hotel',label:'الفندق',widthPct:20},
+      {key:'checkIn',label:'الدخول',widthPct:11},{key:'checkOut',label:'الخروج',widthPct:11},
+      {key:'nights',label:'الليالي',numeric:true,widthPct:7},{key:'rooms',label:'الغرف',widthPct:14},
+      {key:'status',label:'الحالة',widthPct:12}];
+    if(SHOW_PRICES) cols.push({key:'sale',label:'قيمة الحجز',numeric:true,widthPct:11});
+    var parts=appliedFilterParts_().map(function(p){ return p.t; });
+    var now=new Date();
+    var stamp=String(now.getDate()).padStart(2,'0')+'/'+String(now.getMonth()+1).padStart(2,'0')+'/'+now.getFullYear()+
+      ' '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+    return {
+      title:'تقرير حجوزات — '+CLIENT_NAME_,
+      subtitle:(parts.length?('الفلاتر المطبَّقة: '+parts.join(' · ')):'كل الحجوزات')+' · عدد النتائج: '+rows.length,
+      cols:cols,
+      rows:rows.map(function(r,i){
+        return { cellsHtml: cols.map(function(c){
+          var k=c.key;
+          if(k==='idx') return String(i+1);
+          if(k==='sale'){
+            if(r.sale==null && !(r.rates&&r.rates.length)) return '—';
+            var head=r.sale==null?'—':fmt(r.sale);
+            if(!r.rates||!r.rates.length) return head;
+            return head+'<div style="font-size:8px;color:#756c5b;">'+
+              r.rates.map(function(x){ return esc(x.label)+' ×'+x.qty+' @ '+fmt(x.rate); }).join('<br>')+'</div>';
+          }
+          return esc(r[k]==null?'':r[k]);
+        }) };
+      }),
+      showTotals:false, companyName:'شركة منف للسياحة الدولية', dateStamp:stamp
+    };
+  }
+
+  // يحمّل قالب التقارير داخل إطار مخفي بعرض A4 الحقيقي (794px) ليطابق قياس الطباعة، ثم
+  // يسلّم نافذة الإطار لدالة المتابعة مع دالة تنظيف
+  function bkWithReportFrame_(data, onReady, onFail){
+    google.script.run.withSuccessHandler(function(tplHtml){
+      var fr=document.createElement('iframe');
+      fr.style.cssText='position:fixed;left:-10000px;top:0;width:794px;height:1200px;border:0;';
+      document.body.appendChild(fr);
+      var cleanup=function(){ try{ document.body.removeChild(fr); }catch(e){} };
+      var d=fr.contentDocument||fr.contentWindow.document;
+      d.open(); d.write(tplHtml); d.close();
+      var go=function(){
+        try{
+          fr.contentWindow.setup(data, true);
+          setTimeout(function(){ onReady(fr.contentWindow, cleanup); }, 450);
+        }catch(e){ cleanup(); onFail(e); }
+      };
+      if(fr.contentWindow.setup) go(); else fr.onload=go;
+    }).withFailureHandler(onFail).portalGetReportTemplate(PT);
+  }
+
+  function bkReportName_(){ return 'تقرير حجوزات - '+CLIENT_NAME_; }
+
+  function printMyBookings_(){
+    var rows=bkFilteredRows_();
+    if(!rows.length){ alert('لا توجد حجوزات مطابقة للطباعة'); return; }
+    if(BUSY_.printRep) return;
+    BUSY_.printRep=true;
+    var btn=document.querySelector('.flt-btn.print'); var lbl=btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='⏳ جارِ التجهيز...'; }
+    var restore=function(){ delete BUSY_.printRep; if(btn){ btn.disabled=false; btn.textContent=lbl; } };
+    var fail=function(e){ restore(); alert('خطأ: '+((e&&e.message)||e||'')); };
+
+    bkWithReportFrame_(bkReportData_(rows), function(win, cleanup){
+      win.exportPrintHtml(function(pagesHtml, err){
+        cleanup();
+        if(!pagesHtml){ restore(); alert('تعذّر تجهيز المستند: '+((err&&err.message)||'')); return; }
+        google.script.run.withSuccessHandler(function(res){
+          restore();
+          if(!res||!res.ok){ alert('تعذّر إنشاء الملف: '+((res&&res.error)||'')); return; }
+          ptShowShare_(res); // مشاركة أو تحميل أو فتح — بدل فتح الملف مباشرة بلا خيارات
+        }).withFailureHandler(fail).portalGenerateReportPdf(PT, pagesHtml, bkReportName_());
+      });
+    }, fail);
+  }
+
+  // نسخ الصورة تلقائيًا إلى حافظة النظام عند كل تصدير كصورة — نفس آلية البرنامج الرئيسي:
+  // Promise غير محلول يُمرَّر لـClipboardItem فورًا عند الضغط (يحافظ على "تفعيل المستخدم"
+  // المطلوب من المتصفح، خاصة Safari) ثم يُحلّ لاحقًا بالصورة الحقيقية متى جهزت
+  function tryClipboardImageCopy_(){
+    if(!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) return null;
+    var resolveFn, rejectFn;
+    var p=new Promise(function(res,rej){ resolveFn=res; rejectFn=rej; });
+    try{ navigator.clipboard.write([new ClipboardItem({'image/png':p})]).catch(function(){}); }
+    catch(e){ return null; }
+    return { resolve:resolveFn, reject:rejectFn };
+  }
+  // مشاركة نفس التقرير كصورة عالية الوضوح (تُقسَّم تلقائيًا فقط عند تجاوز حدود اللوحة)
+  var BK_IMG_PENDING_=null;
+  function shareMyBookingsImage_(){
+    var btn=document.querySelector('.flt-btn.shareimg');
+    if(BK_IMG_PENDING_){ bkDoShareImages_(btn); return; }
+    var rows=bkFilteredRows_();
+    if(!rows.length){ alert('لا توجد حجوزات مطابقة للمشاركة'); return; }
+    if(BUSY_.imgRep) return;
+    BUSY_.imgRep=true;
+    var lbl=btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='⏳ جارِ التجهيز...'; }
+    var restore=function(){ delete BUSY_.imgRep; if(btn){ btn.disabled=false; btn.textContent=lbl; } };
+    var fail=function(e){ restore(); alert('خطأ: '+((e&&e.message)||e||'')); };
+    var base=bkReportName_();
+    var clipDeferred=tryClipboardImageCopy_();
+
+    bkWithReportFrame_(bkReportData_(rows), function(win, cleanup){
+      win.exportImageBlob(function(blobs, err){
+        cleanup(); restore();
+        if(!blobs||!blobs.length){
+          if(clipDeferred) clipDeferred.reject(new Error('export failed'));
+          alert('تعذّر إنشاء الصورة: '+((err&&err.message)||'')); return;
+        }
+        // الحافظة تقبل صورة واحدة فقط — أول جزء (الحالة الشائعة: جزء واحد فقط)
+        if(clipDeferred) clipDeferred.resolve(blobs[0]);
+        var clipNote=clipDeferred?' (ونُسخت إلى الحافظة أيضًا)':'';
+        var files=null;
+        try{
+          files=blobs.map(function(b,i){
+            return new File([b], base+(blobs.length>1?' - '+(i+1):'')+'.png', { type:'image/png' });
+          });
+        }catch(ex){ files=null; }
+        var can=false;
+        try{ can=!!(files && navigator.canShare && navigator.canShare({ files:files })); }catch(e2){}
+        if(can){
+          BK_IMG_PENDING_=files;
+          if(btn){ btn.textContent='📤 اضغط للمشاركة'; btn.classList.add('share-ready'); }
+          alert((blobs.length>1?('الصور جاهزة ('+blobs.length+') — اضغط الزر مرة أخرى للمشاركة'):'الصورة جاهزة — اضغط الزر مرة أخرى للمشاركة')+clipNote);
+        } else {
+          blobs.forEach(function(b,i){ ptDownloadBlob_(b, base+(blobs.length>1?' - '+(i+1):'')+'.png'); });
+        }
+      });
+    }, fail);
+  }
+  function bkDoShareImages_(btn){
+    var files=BK_IMG_PENDING_; BK_IMG_PENDING_=null;
+    if(btn){ btn.textContent='🖼 صورة'; btn.classList.remove('share-ready'); }
+    if(files && navigator.canShare && navigator.canShare({ files:files })){
+      navigator.share({ files:files, title:bkReportName_() }).catch(function(){});
+    } else if(files){
+      files.forEach(function(f){ ptDownloadBlob_(f, f.name); });
+    }
+  }
+
+  // نافذة مشاركة الملف في بوابة العميل (نفس منطق البرنامج: مشاركة مباشرة ثم بديل مضمون)
+  var PS_={ fileId:null, base64:null, name:'', url:'', keep:false };
+  function ptShowShare_(res){
+    PS_={ fileId:res.fileId, base64:res.pdfBase64, name:res.fileName, url:res.downloadUrl, keep:false };
+    var b=document.querySelector('.flt-btn.print'); if(b) b.classList.add('share-ready');
+    document.getElementById('psName').textContent=res.fileName;
+    document.getElementById('psHint').textContent='الملف جاهز — اضغط "مشاركة" أو "فتح".';
+    document.getElementById('shareModal').classList.add('show');
+  }
+  // الحذف مضمون في كل الحالات (تمت المشاركة أم لا) — لا يوجد keep يمنعه بعد الآن
+  function ptCloseShare_(){
+    document.getElementById('shareModal').classList.remove('show');
+    var b=document.querySelector('.flt-btn.print'); if(b) b.classList.remove('share-ready');
+    if(PS_.fileId){
+      google.script.run.withFailureHandler(function(){}).portalDeleteSharedFile(PT, PS_.fileId);
+    }
+    PS_={ fileId:null, base64:null, name:'', url:'', keep:false };
+  }
+  // أي إجراء يُنهي مهمة النافذة: تُغلق تلقائيًا ويُحذف الملف المؤقت. المهلة تمنح المتصفح
+  // وقتًا لإتمام الفتح/التنزيل قبل حذف الملف من Drive
+  function ptFinishShare_(delayMs){ setTimeout(ptCloseShare_, delayMs||900); }
+  function ptOpenFile_(reason){
+    window.open(PS_.url,'_blank');
+    document.getElementById('psHint').textContent='✅ فُتح الملف في نافذة جديدة — استخدم زر المشاركة/الحفظ بجهازك.'+(reason?' ('+reason+')':'');
+    ptFinishShare_(20000);
+  }
+  function ptDownloadBlob_(blob, filename){
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); },4000);
+  }
+  function ptDownloadFile_(){
+    if(!PS_.base64){ ptOpenFile_(''); return; }
+    try{
+      var bin=atob(PS_.base64), bytes=new Uint8Array(bin.length);
+      for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+      ptDownloadBlob_(new Blob([bytes],{type:'application/pdf'}), PS_.name);
+      document.getElementById('psHint').textContent='✅ تم تحميل الملف على جهازك.';
+      ptFinishShare_(1200);
+    }catch(e){ ptOpenFile_('تعذّر التحميل المباشر'); }
+  }
+  function ptShareFile_(){
+    try{
+      if(navigator.share && PS_.base64){
+        var bin=atob(PS_.base64), bytes=new Uint8Array(bin.length);
+        for(var i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+        var file=new File([bytes], PS_.name, { type:'application/pdf' });
+        if(navigator.canShare && navigator.canShare({ files:[file] })){
+          var settled=false;
+          navigator.share({ files:[file], title:PS_.name })
+            .then(function(){ settled=true; ptFinishShare_(300); })
+            .catch(function(err){ if(err&&err.name==='AbortError'){ settled=true; return; } ptOpenFile_('تعذّرت المشاركة المباشرة'); });
+          setTimeout(function(){ if(!settled&&!document.hidden) ptOpenFile_('لوحة المشاركة لم تُفتح داخل الإطار'); }, 2500);
+          return;
+        }
+      }
+    }catch(e){}
+    ptOpenFile_('');
+  }
+
+  /* ===== الطلبات + المحادثة + الجرس ===== */
+  var reqEditingKey_=null; // مفتاح الحجز عند طلب تعديل، أو null عند طلب حجز جديد
+  function switchTab(tab){
+    var b=tab==='bookings';
+    document.getElementById('tabBookings').classList.toggle('active',b);
+    document.getElementById('tabRequests').classList.toggle('active',!b);
+    document.getElementById('viewBookings').hidden=!b;
+    document.getElementById('viewRequests').hidden=b;
+    if(!b){ loadRequests(); markRequestsRead(); }
+  }
+  function refreshBadge(){
+    google.script.run.withSuccessHandler(function(res){
+      var el=document.getElementById('reqBadge'), bell=document.getElementById('topBellBadge');
+      if(res&&res.ok&&res.count>0){
+        el.textContent=res.count; el.hidden=false;
+        bell.textContent=res.count; bell.hidden=false;
+      } else { el.hidden=true; bell.hidden=true; }
+    }).portalUnreadCount(PT);
+  }
+  function markRequestsRead(){ google.script.run.withSuccessHandler(function(){ document.getElementById('reqBadge').hidden=true; }).portalMarkRequestsRead(PT); }
+
+  function stClass(s){
+    if(s==='مؤكد'||s==='مقبول'||s==='تم التنفيذ') return 'st-approved';
+    if(s==='لا يوجد إمكانية للتعديل'||s==='مرفوض'||s==='تم إلغاء الحجز') return 'st-rejected';
+    if(s==='ألغاه العميل') return 'st-withdrawn';
+    if(s==='جاري بحث الإمكانية') return 'st-hold';
+    if(s==='تم تسجيل الطلب وجاري تأكيده') return 'st-registered';
+    return 'st-new';
+  }
+  // "قديم ← جديد" بنفس منطق شاشة الموظف: لو توفّرت لقطة الحجز الأصلية (original) واختلفت
+  // القيمة المطلوبة عنها، تُعرض القديمة مشطوبة تليها الجديدة
+  function diffChanged_(o,n){ return String(o==null?'':o)!==String(n==null?'':n); }
+  function diffPart_(label,oldV,newV,hasOrig){
+    if(hasOrig && diffChanged_(oldV,newV)){
+      return label+': <s style="opacity:.55;">'+esc(oldV===''||oldV==null?'—':oldV)+'</s> ← <b style="color:var(--ok);">'+esc(newV)+'</b>';
+    }
+    return label+': <b>'+esc(newV)+'</b>';
+  }
+  function dataSummary(d, original, isCancel){
+    d=d||{};
+    var o=original||null, hasOrig=!!o;
+    if(isCancel){
+      var cp=[];
+      if(o){
+        if(o.hotel) cp.push('الفندق: <b>'+esc(o.hotel)+'</b>');
+        if(o.checkIn) cp.push('الدخول: <b>'+esc(o.checkIn)+'</b>');
+        if(o.checkOut) cp.push('الخروج: <b>'+esc(o.checkOut)+'</b>');
+      }
+      if(d.notes) cp.push('سبب الإلغاء: <b>'+esc(d.notes)+'</b>');
+      return cp.join(' &nbsp;·&nbsp; ')||'—';
+    }
+    var p=[];
+    if(d.hotel) p.push(diffPart_('الفندق', o&&o.hotel, d.hotel, hasOrig));
+    if(d.checkIn) p.push(diffPart_('الدخول', o&&o.checkIn, d.checkIn, hasOrig));
+    if(d.checkOut) p.push(diffPart_('الخروج', o&&o.checkOut, d.checkOut, hasOrig));
+    var keys=['doubles','triples','quads','quints'], lbl={doubles:'ثنائي',triples:'ثلاثي',quads:'رباعي',quints:'خماسي'};
+    var rn=[], ro=[], changed=false;
+    keys.forEach(function(k){
+      var nv=d[k]||0, ov=o?(o[k]||0):0;
+      if(nv) rn.push(lbl[k]+'×'+nv);
+      if(hasOrig&&ov) ro.push(lbl[k]+'×'+ov);
+      if(hasOrig&&nv!==ov) changed=true;
+    });
+    if(rn.length||ro.length){
+      p.push(changed
+        ? 'الغرف: <s style="opacity:.55;">'+esc(ro.join('، ')||'—')+'</s> ← <b style="color:var(--ok);">'+esc(rn.join('، ')||'—')+'</b>'
+        : 'الغرف: <b>'+esc(rn.join('، '))+'</b>');
+    }
+    if(d.notes) p.push('ملاحظات: <b>'+esc(d.notes)+'</b>');
+    return p.join(' &nbsp;·&nbsp; ')||'—';
+  }
+  // سطر تعريف الحجز عند العميل: المدينة + رقم الحجز الداخلي + الفندق + التواريخ (بلا مورد)
+  function identityLine_(r){
+    var o=r.original||{}, p=[];
+    if(o.innerRef) p.push('<b>'+esc(o.innerRef)+'</b>');
+    if(r.city||o.city) p.push(esc(r.city||o.city));
+    if(o.hotel) p.push(esc(o.hotel));
+    if(o.checkIn||o.checkOut) p.push(esc((o.checkIn||'؟')+' → '+(o.checkOut||'؟')));
+    return p.join(' · ');
+  }
+  function fmtTs_(ts){
+    if(!ts) return '';
+    var d=new Date(ts);
+    if(isNaN(d.getTime())) return '';
+    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+
+      ' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  }
+  // كل ما جرى على الطلب متسلسلًا: الإرسال ثم الرسائل والردود بترتيبها الزمني ثم آخر إجراء
+  function historyHtml(r){
+    var items=[];
+    items.push({ ts:0, html:'<div class="ev"><span class="ev-dot"></span><span class="ev-t">'+esc(r.createdDisp)+'</span> أرسلتَ الطلب</div>' });
+    (r.thread||[]).forEach(function(m){
+      var who=(m.from==='client'?'أنت':(m.name||'الشركة'));
+      items.push({ ts:m.ts||0, html:
+        '<div class="msg-b '+(m.from==='client'?'client':'staff')+'">'+
+          '<span class="mn">'+esc(who)+(m.ts?(' · '+fmtTs_(m.ts)):'')+'</span>'+esc(m.text)+'</div>' });
+    });
+    if(r.respondedBy){
+      items.push({ ts:Number.MAX_SAFE_INTEGER, html:
+        '<div class="ev done"><span class="ev-dot"></span><span class="ev-t">'+esc(r.updatedDisp)+'</span> '+
+        esc(r.status)+' — بواسطة <b>'+esc(r.respondedBy)+'</b>'+
+        (r.resultRef?(' · رقم الحجز: <b>'+esc(r.resultRef)+'</b>'):'')+'</div>' });
+    }
+    items.sort(function(a,b){ return a.ts-b.ts; });
+    return '<div class="thread">'+items.map(function(i){ return i.html; }).join('')+'</div>';
+  }
+  function replyRowHtml_(reqId){
+    return '<div class="reply-row"><input type="text" id="rmsg_'+reqId+'" placeholder="اكتب رسالة للشركة..."><button id="rbtn_'+reqId+'" onclick="sendReqMsg(\''+reqId+'\')">إرسال</button></div>';
+  }
+  function loadRequests(){
+    var list=document.getElementById('reqList');
+    list.innerHTML='<div class="empty">جارِ التحميل...</div>';
+    google.script.run.withSuccessHandler(function(res){
+      if(!res||!res.ok){ list.innerHTML='<div class="empty">تعذّر التحميل: '+((res&&res.error)||'')+'</div>'; return; }
+      if(!res.requests.length){ list.innerHTML='<div class="empty">لا توجد طلبات — استخدم "طلب تعديل" بجوار أي حجز أو "طلب حجز جديد".</div>'; return; }
+      // الطلبات مطوية افتراضيًا: يظهر السطر الأساسي (نوع الطلب + ملخص الحجز) وحالته وآخر
+      // إجراء فقط، وتُفتح التفاصيل والمحادثة بالضغط على السطر
+      // مطوي = سطر واحد فقط (نوع الطلب + تعريف الحجز + الحالة)؛ وعند التوسعة تظهر كل
+      // الإجراءات والرسائل مرتّبة زمنيًا من الأقدم للأحدث
+      list.innerHTML=res.requests.map(function(r){
+        var typeLbl=(r.type==='حجز جديد'?'طلب حجز جديد':r.type==='إلغاء'?'طلب إلغاء حجز':'طلب تعديل');
+        var ident=identityLine_(r);
+        var summary=dataSummary(r.data, r.original, r.type==='إلغاء');
+        // سطر واحد: نوع الطلب | المدينة/الحجز · ملخص البيانات ... ثم وقت الإرسال في الطرف
+        var oneLine=typeLbl+' '+(ident||esc(r.city||''))+' &nbsp;·&nbsp; '+summary;
+        var tail=r.respondedBy?(esc(r.status)+' · '+esc(r.updatedDisp)):('أُرسل: '+esc(r.createdDisp));
+        return '<div class="req-card'+(r.unread?' unread':'')+'">'+
+          '<div class="req-head req-toggle" onclick="toggleReq(\''+r.id+'\')">'+
+            '<span class="rt one-line"><span class="caret" id="cr_'+r.id+'">▸</span> '+oneLine+'</span>'+
+            '<span class="tail-meta">'+tail+'</span>'+
+            '<span class="st-badge '+stClass(r.status)+'">'+esc(r.status)+'</span></div>'+
+          '<div class="req-body" id="rb_'+r.id+'" hidden>'+
+            '<div class="req-brief">'+summary+'</div>'+
+            historyHtml(r)+
+            (!r.respondedBy ? '<div class="withdraw-row"><button onclick="withdrawReq(\''+r.id+'\')">✗ سحب الطلب</button></div>' : '')+
+            replyRowHtml_(r.id)+
+          '</div>'+
+        '</div>';
+      }).join('');
+      if(reopenReqId_){
+        var rid=reopenReqId_; reopenReqId_=null;
+        var rb=document.getElementById('rb_'+rid);
+        if(rb){
+          if(rb.hidden) toggleReq(rid);
+          var card=rb.closest('.req-card');
+          if(card) setTimeout(function(){
+            card.scrollIntoView({behavior:'smooth',block:'center'});
+            card.classList.add('req-flash');
+            setTimeout(function(){ card.classList.remove('req-flash'); },2200);
+          },90);
+        }
+      }
+    }).withFailureHandler(function(e){ list.innerHTML='<div class="empty">خطأ: '+e.message+'</div>'; }).portalGetRequests(PT);
+  }
+  var reopenReqId_=null; // طلب يُعاد فتحه تلقائيًا بعد إعادة تحميل القائمة (بعد إرسال رسالة)
+
+  /* ===== قائمة تنبيهات الجرس: تفاصيل كل تنبيه + فتح كرت الطلب المحدَّد بضغطة ===== */
+  var BELL_ITEMS_=[];
+  function closeBellMenu_(){ var m=document.getElementById('ptBellMenu'); if(m) m.hidden=true; }
+  function toggleBellMenu_(e){
+    if(e) e.stopPropagation();
+    var m=document.getElementById('ptBellMenu');
+    if(!m.hidden){ m.hidden=true; return; }
+    m.hidden=false;
+    placeBellMenu_(m, document.getElementById('topBellBtn'));
+    document.getElementById('ptBellList').innerHTML='<div class="bell-empty">جارِ التحميل...</div>';
+    google.script.run.withSuccessHandler(function(res){
+      BELL_ITEMS_=(res&&res.items)||[];
+      renderBellList_();
+      var bell=document.getElementById('topBellBadge');
+      if(res&&res.count>0){ bell.textContent=res.count; bell.hidden=false; } else { bell.hidden=true; }
+    }).withFailureHandler(function(){
+      document.getElementById('ptBellList').innerHTML='<div class="bell-empty">تعذّر تحميل التنبيهات</div>';
+    }).portalBellItems(PT);
+  }
+  // تموضع بالإحداثيات الفعلية للزر مع تقييده داخل حدود الشاشة
+  function placeBellMenu_(menu, btn){
+    if(!btn) return;
+    var r=btn.getBoundingClientRect();
+    var w=menu.offsetWidth||Math.min(390, window.innerWidth-20);
+    var left=Math.min(Math.max(8, r.left+r.width/2-w/2), window.innerWidth-w-8);
+    menu.style.top=(r.bottom+8)+'px';
+    menu.style.left=left+'px';
+    menu.style.insetInlineEnd='auto';
+  }
+  function bellAgo_(ts){
+    if(!ts) return '';
+    var m=Math.max(0,Math.round((Date.now()-ts)/60000));
+    if(m<1) return 'الآن';
+    if(m<60) return 'منذ '+m+' دقيقة';
+    var h=Math.round(m/60);
+    if(h<24) return 'منذ '+h+' ساعة';
+    var d=Math.round(h/24);
+    return d===1?'أمس':('منذ '+d+' يومًا');
+  }
+  function renderBellList_(){
+    var box=document.getElementById('ptBellList');
+    if(!BELL_ITEMS_.length){ box.innerHTML='<div class="bell-empty">لا توجد تنبيهات جديدة ✅</div>'; return; }
+    box.innerHTML=BELL_ITEMS_.map(function(it){
+      var typeLbl=it.type==='حجز جديد'?'طلب حجز جديد':it.type==='إلغاء'?'طلب إلغاء حجز':'طلب تعديل حجز';
+      var bits=[];
+      if(it.hotel) bits.push('🏨 '+esc(it.hotel));
+      if(it.city) bits.push((String(it.city).indexOf('مكة')>=0?'🕋':'🕌')+' '+esc(it.city));
+      if(it.checkIn||it.checkOut) bits.push('📅 '+esc(it.checkIn||'؟')+' ← '+esc(it.checkOut||'؟'));
+      if(it.ref) bits.push('🔖 '+esc(it.ref));
+      var msg=it.lastText
+        ? '<div class="bi-msg">💬 '+(it.lastFrom==='staff'?esc(it.lastName||'الموظف')+': ':'أنت: ')+esc(it.lastText)+'</div>'
+        : '';
+      return '<button type="button" class="bell-item" onclick="openFromBell_(\''+String(it.id).replace(/'/g,"\\'")+'\')">'+
+        '<div class="bi-t">'+typeLbl+'<span class="bi-badge">'+esc(it.status||'')+'</span></div>'+
+        (bits.length?'<div class="bi-s">'+bits.join(' · ')+'</div>':'')+
+        msg+'<div class="bi-time">'+bellAgo_(it.ts)+'</div></button>';
+    }).join('');
+  }
+  // فتح كرت الطلب المحدَّد وتعليمه مقروءًا فورًا فينقص العدّاد بلا انتظار
+  function openFromBell_(id){
+    BELL_ITEMS_=BELL_ITEMS_.filter(function(x){ return x.id!==id; });
+    var bell=document.getElementById('topBellBadge');
+    if(BELL_ITEMS_.length){ bell.textContent=BELL_ITEMS_.length; bell.hidden=false; } else { bell.hidden=true; }
+    google.script.run.withFailureHandler(function(){}).portalMarkOneRead(PT, id);
+    closeBellMenu_();
+    reopenReqId_=id;
+    switchTab('requests');
+  }
+  document.addEventListener('click', function(e){
+    var m=document.getElementById('ptBellMenu');
+    if(!m||m.hidden) return;
+    if(m.contains(e.target)||(e.target.closest&&e.target.closest('#topBellBtn'))) return;
+    m.hidden=true;
+  });
+  // توسيع/طيّ كل الطلبات دفعة واحدة
+  function toggleAllReqs_(){
+    var bodies=document.querySelectorAll('#reqList .req-body');
+    var anyClosed=false;
+    bodies.forEach(function(b){ if(b.hidden) anyClosed=true; });
+    bodies.forEach(function(b){
+      b.hidden=!anyClosed;
+      var c=document.getElementById('cr_'+b.id.replace(/^rb_/,''));
+      if(c) c.textContent=b.hidden?'▸':'▾';
+    });
+    document.getElementById('reqExpandBtn').textContent=anyClosed?'طيّ الكل':'توسيع الكل';
+  }
+  function toggleReq(id){
+    var b=document.getElementById('rb_'+id), c=document.getElementById('cr_'+id);
+    if(!b) return;
+    b.hidden=!b.hidden;
+    if(c) c.textContent=b.hidden?'▸':'▾';
+  }
+  // حارس الضغط المزدوج: لا تُرسل الرسالة مرتين لو ضغط العميل سريعًا قبل رد الخادم
+  var BUSY_={};
+  function sendReqMsg(reqId){
+    var inp=document.getElementById('rmsg_'+reqId); var t=inp.value.trim(); if(!t) return;
+    if(BUSY_['m'+reqId]) return;
+    BUSY_['m'+reqId]=true;
+    var btn=document.getElementById('rbtn_'+reqId), lbl=btn?btn.textContent:'';
+    inp.disabled=true;
+    if(btn){ btn.disabled=true; btn.textContent='⏳ جارِ الإرسال...'; }
+    var restore=function(){
+      delete BUSY_['m'+reqId];
+      inp.disabled=false;
+      if(btn){ btn.disabled=false; btn.textContent=lbl; }
+    };
+    google.script.run.withSuccessHandler(function(res){
+      restore();
+      if(!res||!res.ok){ alert((res&&res.error)||'تعذّر الإرسال'); return; }
+      inp.value='';
+      reopenReqId_=reqId; // أعِد فتح نفس الطلب بعد إعادة التحميل بدل طيّه من جديد
+      loadRequests();
+    }).withFailureHandler(function(e){ restore(); alert(e.message); }).portalAddMessage(PT, reqId, t);
+  }
+  // سحب الطلب بنفسك طالما لم يردّ عليه أحد بعد — بعد الرد يختفي هذا الزر تلقائيًا (الخادم
+  // يرفض السحب بعده أيضًا احتياطًا، حتى لو نقر العميل قبل تحديث الشاشة)
+  function withdrawReq(reqId){
+    if(!confirm('سحب هذا الطلب؟ لن يُنفَّذ، ولن تتمكن من التراجع عن السحب.')) return;
+    if(BUSY_['w'+reqId]) return;
+    BUSY_['w'+reqId]=true;
+    google.script.run.withSuccessHandler(function(res){
+      delete BUSY_['w'+reqId];
+      if(!res||!res.ok){ alert((res&&res.error)||'تعذّر سحب الطلب'); return; }
+      reopenReqId_=reqId;
+      loadRequests();
+    }).withFailureHandler(function(e){ delete BUSY_['w'+reqId]; alert(e.message); }).portalWithdrawRequest(PT, reqId);
+  }
+
+  // ---- أرقام لاتينية فقط + إكمال السنة تلقائيًا في حقول التاريخ ----
+  // الحقول أصبحت نصية (بلا سهمَي الزيادة/النقصان) وتقبل الأرقام الإنجليزية فقط؛ أي رقم عربي
+  // يُحوَّل فورًا أثناء الكتابة. التاريخ بصيغة DD/MM/YYYY وتُكمَّل سنته تلقائيًا عند مغادرة الحقل.
+  function toLatinDigits(s){
+    return (s||'').toString()
+      .replace(/[٠-٩]/g, function(d){ return String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)); })
+      .replace(/[۰-۹]/g, function(d){ return String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)); });
+  }
+  function wireNumFields_(){
+    ['rqDoubles','rqTriples','rqQuads','rqQuints'].forEach(function(id){
+      var el=document.getElementById(id); if(!el||el.__wired) return; el.__wired=true;
+      el.addEventListener('input', function(){ this.value=toLatinDigits(this.value).replace(/[^0-9]/g,''); });
+    });
+    ['rqCheckIn','rqCheckOut'].forEach(function(id){
+      var el=document.getElementById(id); if(!el||el.__wired) return; el.__wired=true;
+      el.addEventListener('input', function(){ this.value=toLatinDigits(this.value).replace(/[^0-9\/]/g,''); });
+      el.addEventListener('blur', function(){ this.value=autoYear_(this.value); });
+    });
+  }
+  // أسماء الشهور العربية كما يكتبها Excel/Sheets عند تنسيق التاريخ ("05-سبتمبر")
+  var AR_MONTHS_=['يناير','فبراير','مارس','ابريل','أبريل','مايو','يونيو','يوليو','اغسطس','أغسطس','سبتمبر','اكتوبر','أكتوبر','نوفمبر','ديسمبر'];
+  var AR_MONTH_NO_={ 'يناير':1,'فبراير':2,'مارس':3,'ابريل':4,'أبريل':4,'مايو':5,'يونيو':6,'يوليو':7,
+                     'اغسطس':8,'أغسطس':8,'سبتمبر':9,'اكتوبر':10,'أكتوبر':10,'نوفمبر':11,'ديسمبر':12 };
+  // يحوّل أي صيغة تاريخ واردة من ملف Excel/CSV إلى DD/MM/YYYY:
+  // "05-سبتمبر" / "5 سبتمبر 2026" / "2026-09-05" / "5-9-2026" / رقم تسلسلي من جوجل (46144)
+  function normalizeAnyDate_(v){
+    v=toLatinDigits(String(v==null?'':v)).trim();
+    if(!v) return '';
+    // 1) اسم شهر عربي بأي فاصل
+    for(var i=0;i<AR_MONTHS_.length;i++){
+      var m=AR_MONTHS_[i];
+      if(v.indexOf(m)!==-1){
+        var nums=v.replace(m,' ').match(/\d+/g)||[];
+        var day=parseInt(nums[0],10);
+        var yr=nums.length>1?parseInt(nums[1],10):new Date().getFullYear();
+        if(yr<100) yr=2000+yr;
+        if(day>=1&&day<=31) return String(day).padStart(2,'0')+'/'+String(AR_MONTH_NO_[m]).padStart(2,'0')+'/'+yr;
+      }
+    }
+    // 2) رقم تسلسلي من جوجل/إكسل (أيام منذ 30/12/1899)
+    if(/^\d+(\.\d+)?$/.test(v)){
+      var n=parseFloat(v);
+      if(n>20000&&n<100000){
+        var d0=new Date(Math.round((n-25569)*86400*1000));
+        if(!isNaN(d0.getTime())) return String(d0.getUTCDate()).padStart(2,'0')+'/'+String(d0.getUTCMonth()+1).padStart(2,'0')+'/'+d0.getUTCFullYear();
+      }
+    }
+    // 3) YYYY-MM-DD أو YYYY/MM/DD
+    var iso=v.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    if(iso) return String(+iso[3]).padStart(2,'0')+'/'+String(+iso[2]).padStart(2,'0')+'/'+iso[1];
+    // 4) DD-MM-YYYY (نوحّد الفاصل ثم نمرّرها لإكمال السنة)
+    return autoYear_(v.replace(/[-.]/g,'/'));
+  }
+  // "5/3" أو "5/3/26" → "05/03/2026" (سنة اليوم افتراضيًا، والسنتان تُكمَّلان لـ20xx)
+  function autoYear_(v){
+    v=toLatinDigits(v).trim(); if(!v) return '';
+    var p=v.split('/').filter(function(x){ return x!==''; });
+    if(p.length<2) return v;
+    var d=parseInt(p[0],10), m=parseInt(p[1],10);
+    if(isNaN(d)||isNaN(m)) return v;
+    var y=p.length>=3?parseInt(p[2],10):NaN;
+    if(isNaN(y)) y=new Date().getFullYear();
+    else if(y<100) y=2000+y;
+    return String(d).padStart(2,'0')+'/'+String(m).padStart(2,'0')+'/'+y;
+  }
+  function dispToIso_(v){ // DD/MM/YYYY → YYYY-MM-DD (الصيغة التي يفهمها الخادم)
+    v=autoYear_(v); if(!v) return '';
+    var p=v.split('/'); if(p.length!==3) return '';
+    return p[2]+'-'+p[1]+'-'+p[0];
+  }
+  function isoToDisp_(v){ // YYYY-MM-DD → DD/MM/YYYY
+    if(!v) return '';
+    var p=v.split('-'); if(p.length!==3) return v;
+    return p[2]+'/'+p[1]+'/'+p[0];
+  }
+
+  function openEditReq(i){
+    var r=bkRows_[i]; if(!r) return;
+    reqEditingKey_=r.bookingKey;
+    document.getElementById('reqModalTitle').textContent='طلب تعديل بيانات الحجز';
+    document.getElementById('reqCityWrap').style.display='none';
+    document.getElementById('rqHotel').value=r.hotel||'';
+    document.getElementById('rqCheckIn').value=isoToDisp_(r.checkInIso);
+    document.getElementById('rqCheckOut').value=isoToDisp_(r.checkOutIso);
+    document.getElementById('rqDoubles').value=r.doubles||'';
+    document.getElementById('rqTriples').value=r.triples||'';
+    document.getElementById('rqQuads').value=r.quads||'';
+    document.getElementById('rqQuints').value=r.quints||'';
+    document.getElementById('rqNotes').value='';
+    document.getElementById('rqBtnNew').hidden=true; // "حفظ + جديد" للحجوزات الجديدة فقط
+    clearMsg('rqMsg'); wireNumFields_();
+    document.getElementById('reqModal').classList.add('show');
+  }
+  function openNewReq(){
+    reqEditingKey_=null;
+    document.getElementById('reqModalTitle').textContent='طلب حجز جديد';
+    document.getElementById('reqCityWrap').style.display='';
+    clearNewReqForm_();
+    document.getElementById('rqBtnNew').hidden=false;
+    clearMsg('rqMsg'); wireNumFields_();
+    document.getElementById('reqModal').classList.add('show');
+  }
+  // كل الحقول تبدأ فارغة (بلا أصفار افتراضية) كما هو مطلوب
+  function clearNewReqForm_(){
+    ['rqHotel','rqCheckIn','rqCheckOut','rqNotes','rqDoubles','rqTriples','rqQuads','rqQuints']
+      .forEach(function(id){ document.getElementById(id).value=''; });
+  }
+  function closeReq(){ document.getElementById('reqModal').classList.remove('show'); }
+
+  var cancelingKey_=null;
+  function openCancelReq(i){
+    var r=bkRows_[i]; if(!r) return;
+    cancelingKey_=r.bookingKey;
+    document.getElementById('cancelBkLbl').textContent=(r.hotel||'')+' — '+(r.checkIn||'')+' → '+(r.checkOut||'');
+    document.getElementById('cnReason').value='';
+    clearMsg('cnMsg');
+    document.getElementById('cancelModal').classList.add('show');
+  }
+  function closeCancelReq(){ document.getElementById('cancelModal').classList.remove('show'); }
+  function submitCancelReq(){
+    if(!cancelingKey_) return;
+    if(BUSY_.cancelReq) return;
+    BUSY_.cancelReq=true;
+    var reason=document.getElementById('cnReason').value.trim();
+    var btn=document.getElementById('cnBtn'), cnLbl=btn.textContent;
+    btn.disabled=true; btn.textContent='⏳ جارِ الإرسال...'; clearMsg('cnMsg');
+    var undo=function(){ delete BUSY_.cancelReq; btn.disabled=false; btn.textContent=cnLbl; };
+    google.script.run.withSuccessHandler(function(res){
+      undo();
+      if(!res||!res.ok){ showMsg('cnMsg',(res&&res.error)||'تعذّر إرسال الطلب','err'); return; }
+      showMsg('cnMsg','تم إرسال طلب الإلغاء — ستصلك النتيجة هنا','ok');
+      setTimeout(function(){ closeCancelReq(); switchTab('requests'); },900);
+    }).withFailureHandler(function(e){ undo(); showMsg('cnMsg',e.message,'err'); }).portalSubmitCancelRequest(PT, cancelingKey_, reason);
+  }
+  function collectReqData(){
+    return {
+      city: document.getElementById('rqCity').value,
+      hotel: document.getElementById('rqHotel').value.trim(),
+      checkIn: dispToIso_(document.getElementById('rqCheckIn').value),
+      checkOut: dispToIso_(document.getElementById('rqCheckOut').value),
+      doubles: document.getElementById('rqDoubles').value||0,
+      triples: document.getElementById('rqTriples').value||0,
+      quads: document.getElementById('rqQuads').value||0,
+      quints: document.getElementById('rqQuints').value||0,
+      notes: document.getElementById('rqNotes').value.trim()
+    };
+  }
+  // keepOpen=true ← زر "حفظ + جديد": يحفظ ثم يُفرغ النموذج لتسجيل حجز تالٍ بلا إغلاق
+  function submitReq(keepOpen){
+    var d=collectReqData();
+    if(reqEditingKey_===null && !d.hotel && !d.checkIn){ showMsg('rqMsg','أدخل بيانات الحجز المطلوب','err'); return; }
+    if(BUSY_.submitReq) return; // منع إرسال الطلب مرتين بضغطتين سريعتين
+    BUSY_.submitReq=true;
+    var btn=document.getElementById(keepOpen?'rqBtnNew':'rqBtn');
+    var other=document.getElementById(keepOpen?'rqBtn':'rqBtnNew');
+    var lbl=btn.textContent;
+    btn.disabled=true; if(other) other.disabled=true;
+    btn.textContent='⏳ جارِ الحفظ...'; clearMsg('rqMsg');
+    var restore=function(){ delete BUSY_.submitReq; btn.disabled=false; if(other) other.disabled=false; btn.textContent=lbl; };
+    var done=function(res){
+      restore();
+      if(!res||!res.ok){ showMsg('rqMsg',(res&&res.error)||'تعذّر الإرسال','err'); return; }
+      if(keepOpen){
+        clearNewReqForm_();
+        showMsg('rqMsg','✅ تم حفظ الطلب — أدخل الحجز التالي','ok');
+        document.getElementById('rqHotel').focus();
+        refreshBadge();
+      } else {
+        showMsg('rqMsg','تم إرسال طلبك — ستصلك النتيجة هنا','ok');
+        setTimeout(function(){ closeReq(); switchTab('requests'); },900);
+      }
+    };
+    var fail=function(e){ restore(); showMsg('rqMsg',e.message,'err'); };
+    if(reqEditingKey_===null){
+      google.script.run.withSuccessHandler(done).withFailureHandler(fail).portalSubmitNewRequest(PT, d);
+    } else {
+      google.script.run.withSuccessHandler(done).withFailureHandler(fail).portalSubmitEditRequest(PT, reqEditingKey_, d);
+    }
+  }
+
+  function openChangePw(){ clearMsg('cpMsg'); document.getElementById('cpOld').value=''; document.getElementById('cpNew').value=''; document.getElementById('pwModal').classList.add('show'); }
+  function closeChangePw(){ document.getElementById('pwModal').classList.remove('show'); }
+  function doChangePw(){
+    var oldp=document.getElementById('cpOld').value, newp=document.getElementById('cpNew').value;
+    if(!newp||newp.length<4){ showMsg('cpMsg','كلمة المرور الجديدة قصيرة جدًا','err'); return; }
+    var btn=document.getElementById('cpBtn'); btn.disabled=true; clearMsg('cpMsg');
+    google.script.run.withSuccessHandler(function(res){
+      btn.disabled=false;
+      if(!res||!res.ok){ showMsg('cpMsg',(res&&res.error)||'تعذّر التغيير','err'); return; }
+      showMsg('cpMsg','تم تغيير كلمة المرور بنجاح','ok');
+      setTimeout(closeChangePw, 1200);
+    }).withFailureHandler(function(e){ btn.disabled=false; showMsg('cpMsg',e.message,'err'); }).portalChangePassword(PT, oldp, newp);
+  }
+
+  function esc(s){ return (s===null||s===undefined)?'':String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+  function fmt(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+  // ===== الدخول التلقائي من رابط الدعوة (أول مرة) =====
+  // الموظف ينسخ للعميل رابطًا يحمل ?c=الكود&p=كلمة المرور. عند فتحه نملأ الحقلين أمام عينيه
+  // (حتى يرى بياناته ويعرف أين تُكتب لاحقًا) ثم ندخل تلقائيًا. الصفحة تعمل داخل إطار
+  // (sandbox) فلا يمكن قراءة location مباشرة — نستخدم google.script.url.getLocation
+  function tryAutoLoginFromUrl_(){
+    if(!(window.google && google.script && google.script.url)) return;
+    try{
+      google.script.url.getLocation(function(loc){
+        var q=(loc&&loc.parameter)||{};
+        var code=(q.c||'').trim(), pass=q.p||'';
+        if(!code||!pass) return;
+        document.getElementById('lgCode').value=code;
+        document.getElementById('lgPass').value=pass;
+        showMsg('lgMsg','هذه بيانات دخولك — احتفظ بها. جارِ تسجيل الدخول تلقائيًا...','ok');
+        AUTO_LOGIN_=true;
+        setTimeout(doLogin, 600); // مهلة قصيرة ليقرأ العميل بياناته قبل انتقال الشاشة
+      });
+    }catch(e){ /* خارج بيئة Apps Script — نتجاهل */ }
+  }
+  var AUTO_LOGIN_=false;
+
+  // استعادة الجلسة عند إعادة فتح/تحديث الصفحة (ضمن نفس التبويب)
+  (function(){
+    var saved=readStore('pt');
+    if(!saved){ tryAutoLoginFromUrl_(); return; }
+    PT=saved;
+    google.script.run.withSuccessHandler(function(res){
+      if(res&&res.ok){ enterApp(res.clientName, res.showPrices); }
+      else { PT=null; writeStore('pt',null); tryAutoLoginFromUrl_(); }
+    }).withFailureHandler(function(){ PT=null; writeStore('pt',null); tryAutoLoginFromUrl_(); }).portalCheckSession(saved);
+  })();
+</script>
+</body>
+</html>

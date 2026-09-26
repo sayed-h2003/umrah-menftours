@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
+  * { box-sizing: border-box; }
+  body { font-family: 'Tajawal', Arial, sans-serif; margin: 0; padding: 0; color: #2a2721; background: #fff; font-size: 10px; }
+
+  /* ترقيم بالقياس الفعلي — نفس آلية ArrivalsReportTemplate: صفحات A4 حقيقية تُملأ بالقياس،
+     رأس الجدول مكرَّر على كل صفحة (يُلتقَط ضمن صورة كل صفحة في المشاركة)، تذييل بترقيم حقيقي
+     + توقيت على كل صفحة. قسمان (عملاء/موردون) قد يتقاسمان الصفحة أو يمتدّان لعدة صفحات */
+  .rpt-page { position: relative; width: 210mm; height: 288mm; padding: 8mm 8mm 9mm; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+  .rpt-page.brk { page-break-before: always; }
+  /* وضع التدفّق للمشاركة فقط (exportPdfBlob) — التقاط واحد موثوق كطريقة كشف الحساب */
+  .rpt-flow { width: 100%; padding: 10mm 8mm; }
+  .rpt-flow table.rpt-tbl thead { display: table-header-group; }
+  .rpt-flow table.rpt-tbl tr, .rpt-flow .diff-box { page-break-inside: avoid; }
+
+  .rpt-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #7d5a2c; padding-bottom: 8px; margin-bottom: 12px; flex: none; }
+  .rpt-brand .name { font-size: 14px; font-weight: 900; color: #7d5a2c; white-space: nowrap; }
+  .rpt-brand .name-ar { font-size: 10px; color: #756c5b; margin-top: 2px; }
+  .rpt-title { text-align: left; }
+  .rpt-title .t1 { font-size: 16px; font-weight: 900; color: #2a2721; }
+
+  .sect-title { font-size: 13px; font-weight: 900; color: #7d5a2c; margin: 10px 0 6px; flex: none; }
+
+  table.rpt-tbl { width: 100%; border-collapse: collapse; flex: none; margin-bottom: 2px; }
+  table.rpt-tbl th, table.rpt-tbl td { border: 1px solid #ddd; padding: 5px 6px; text-align: center; }
+  table.rpt-tbl th { background: #7d5a2c; color: #fff; font-size: 9.5px; font-weight: 700; }
+  table.rpt-tbl td.name { text-align: right; }
+  table.rpt-tbl td.num { direction: ltr; }
+  /* حالة الرصيد: الموجب (مستحق) بالأخضر والسالب (رصيد للطرف الآخر) بالأحمر */
+  table.rpt-tbl td.state { font-size: 8px; font-weight: 700; color: #1c7a4b; white-space: nowrap; }
+  table.rpt-tbl td.state.neg { color: #a02323; }
+  table.rpt-tbl td.num.neg { color: #a02323; }
+  tr.total-row td { background: #34495e !important; color: #fff !important; font-weight: 700; }
+  td.checkin-today { background: #f2e6cf !important; color: #5d4220 !important; font-weight: 800; }
+
+  .diff-box { margin-top: 14px; background: #2f3f52; color: #fff; border-radius: 8px; padding: 12px 16px; display: flex; gap: 26px; flex-wrap: wrap; flex: none; }
+  .diff-box .dbi .k { font-size: 8.5px; color: #b9c6d4; font-weight: 700; }
+  .diff-box .dbi .v { font-size: 13px; font-weight: 800; margin-top: 2px; direction: ltr; display: inline-block; }
+
+  /* مطلق أسفل الصفحة + padding-bottom يحجز مكانه — لا يستطيع المحتوى دفعه خارج الصفحة */
+  .rpt-footer { position: absolute; left: 8mm; right: 8mm; bottom: 3mm; display: flex;
+      justify-content: space-between; font-size: 8px; color: #756c5b;
+      border-top: 1px solid #eee; padding-top: 4px; }
+
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    @page { size: A4 portrait; margin: 0; }
+  }
+</style>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <div id="rptRoot"></div>
+
+  <script>
+    function escHtml_(s) {
+      return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function rowHtml_(r) {
+      // حالة الرصيد بجوار القيمة: موجب = مستحق (عليه/له حسب طبيعة الحساب)، سالب = رصيد
+      var neg = Number(r.balanceNum) < 0;
+      return '<td class="num">' + r.serial + '</td>' +
+        '<td class="name">' + escHtml_(r.name) + '</td>' +
+        '<td class="num' + (neg ? ' neg' : '') + '">' + escHtml_(r.balance) + '</td>' +
+        '<td class="state' + (neg ? ' neg' : '') + '">' + escHtml_(r.state || '') + '</td>' +
+        '<td class="num' + (r.isOnCutoffDate ? ' checkin-today' : '') + '">' + escHtml_(r.lastCheckIn) + '</td>' +
+        '<td>' + escHtml_(r.note) + '</td>';
+    }
+
+    var RPT_READY_ = Promise.resolve(), RPT_DATA_ = null;
+
+    function buildBalancesMeasured_(data) {
+      var root = document.getElementById('rptRoot');
+      root.innerHTML = '';
+      var headerHtml = '<div class="rpt-header">' +
+        '<div class="rpt-brand"><div class="name">Menf International Tours</div><div class="name-ar">' + escHtml_(data.companyName || 'شركة منف للسياحة الدولية') + '</div></div>' +
+        '<div class="rpt-title"><div class="t1">' + escHtml_(data.title) + '</div></div>' +
+        '</div>';
+      var footPlaceholder = '<span>&nbsp;</span><span>&nbsp;</span>';
+      var pages = [], cur = null, curTbody = null, curSection = null;
+
+      function makePage(isFirst) {
+        var pg = document.createElement('div');
+        pg.className = 'rpt-page' + (isFirst ? '' : ' brk');
+        if (isFirst) pg.innerHTML = headerHtml;
+        var ft = document.createElement('div'); ft.className = 'rpt-footer'; ft.innerHTML = footPlaceholder;
+        pg.appendChild(ft);
+        root.appendChild(pg); pages.push(pg); cur = pg;
+        return pg;
+      }
+      function footer() { return cur.querySelector('.rpt-footer'); }
+      function addNode(node) { cur.insertBefore(node, footer()); }
+      function overflow() { return cur.scrollHeight > cur.clientHeight + 1; }
+
+      function addSectionTable(withTitle) {
+        if (withTitle) {
+          var t = document.createElement('div'); t.className = 'sect-title'; t.textContent = curSection.title; addNode(t);
+        }
+        var tbl = document.createElement('table'); tbl.className = 'rpt-tbl';
+        tbl.innerHTML = '<thead><tr><th style="width:32px;">م</th><th style="width:30%;">' + curSection.nameHead +
+          '</th><th style="width:14%;">الرصيد</th><th style="width:14%;">حالة الرصيد</th><th style="width:14%;">آخر تسكين</th><th>ملاحظات</th></tr></thead><tbody></tbody>';
+        addNode(tbl);
+        curTbody = tbl.querySelector('tbody');
+      }
+      function appendTr(html, cls) {
+        var tr = document.createElement('tr'); if (cls) tr.className = cls; tr.innerHTML = html;
+        curTbody.appendChild(tr);
+        if (overflow() && curTbody.children.length > 1) {
+          curTbody.removeChild(tr);
+          makePage(false); addSectionTable(false);
+          curTbody.appendChild(tr);
+        }
+      }
+      function doSection(sec) {
+        curSection = sec;
+        addSectionTable(true);
+        if (!sec.rows.length) {
+          appendTr('<td colspan="6">لا يوجد ' + (sec.emptyWord) + '</td>');
+        } else {
+          sec.rows.forEach(function (r) { appendTr(rowHtml_(r)); });
+        }
+        appendTr('<td colspan="2">' + escHtml_(sec.totalLabel || 'الإجمالي') + '</td><td class="num">' +
+          escHtml_(sec.total) + '</td><td colspan="3"></td>', 'total-row');
+      }
+
+      makePage(true);
+      doSection({ title: 'العملاء', nameHead: 'العميل', rows: data.clients || [], total: data.clientsTotal, totalLabel: data.clientsTotalLabel, emptyWord: 'عملاء محدَّدون' });
+      doSection({ title: 'الموردون', nameHead: 'المورد', rows: data.suppliers || [], total: data.suppliersTotal, totalLabel: data.suppliersTotalLabel, emptyWord: 'موردون محدَّدون' });
+
+      var diff = document.createElement('div'); diff.className = 'diff-box';
+      diff.innerHTML =
+        '<div class="dbi"><div class="k">' + escHtml_(data.clientsTotalLabel || 'إجمالي أرصدة العملاء') + '</div><div class="v">' + escHtml_(data.clientsTotal) + '</div></div>' +
+        '<div class="dbi"><div class="k">' + escHtml_(data.suppliersTotalLabel || 'إجمالي أرصدة الموردين') + '</div><div class="v">' + escHtml_(data.suppliersTotal) + '</div></div>' +
+        '<div class="dbi"><div class="k">' + escHtml_(data.diffLabel || 'الفرق') + '</div><div class="v">' + escHtml_(data.diff) + '</div></div>';
+      addNode(diff);
+      if (overflow()) { cur.removeChild(diff); makePage(false); addNode(diff); }
+
+      var N = pages.length;
+      pages.forEach(function (pg, i) {
+        pg.querySelector('.rpt-footer').innerHTML = '<span>تاريخ الطباعة: ' + escHtml_(data.dateStamp || '') + '</span><span>صفحة ' + (i + 1) + ' من ' + N + '</span>';
+      });
+    }
+
+    // data = { title, companyName, dateStamp, filenameStamp, clients:[...], clientsTotal,
+    //   suppliers:[...], suppliersTotal, diff }
+    function setup(data, skipAutoPrint) {
+      document.title = data.filenameStamp || 'Balances Report';
+      RPT_DATA_ = data;
+      var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+      RPT_READY_ = ready.then(function () { buildBalancesMeasured_(data); });
+      if (!skipAutoPrint) RPT_READY_.then(function () { setTimeout(function () { window.print(); }, 300); });
+    }
+
+    // المشاركة: تدفّق واحد موثوق (كطريقة كشف الحساب) + ختم الترقيم/التوقيت داخل jsPDF
+    function sectionFlowHtml_(sec) {
+      var h = '<div class="sect-title">' + sec.title + '</div>' +
+        '<table class="rpt-tbl"><thead><tr><th style="width:32px;">م</th><th style="width:30%;">' + sec.nameHead +
+        '</th><th style="width:14%;">الرصيد</th><th style="width:14%;">حالة الرصيد</th><th style="width:14%;">آخر تسكين</th><th>ملاحظات</th></tr></thead><tbody>';
+      if (!sec.rows.length) h += '<tr><td colspan="6">لا يوجد ' + sec.emptyWord + '</td></tr>';
+      else h += sec.rows.map(function (r) { return '<tr>' + rowHtml_(r) + '</tr>'; }).join('');
+      h += '<tr class="total-row"><td colspan="2">' + escHtml_(sec.totalLabel || 'الإجمالي') + '</td><td class="num">' +
+        escHtml_(sec.total) + '</td><td colspan="3"></td></tr>';
+      h += '</tbody></table>';
+      return h;
+    }
+    function buildFlowForCapture_() {
+      var data = RPT_DATA_ || {};
+      var html = '<div class="rpt-flow"><div class="rpt-header">' +
+        '<div class="rpt-brand"><div class="name">Menf International Tours</div><div class="name-ar">' + escHtml_(data.companyName || 'شركة منف للسياحة الدولية') + '</div></div>' +
+        '<div class="rpt-title"><div class="t1">' + escHtml_(data.title) + '</div></div></div>';
+      html += sectionFlowHtml_({ title: 'العملاء', nameHead: 'العميل', rows: data.clients || [], total: data.clientsTotal, totalLabel: data.clientsTotalLabel, emptyWord: 'عملاء محدَّدون' });
+      html += sectionFlowHtml_({ title: 'الموردون', nameHead: 'المورد', rows: data.suppliers || [], total: data.suppliersTotal, totalLabel: data.suppliersTotalLabel, emptyWord: 'موردون محدَّدون' });
+      html += '<div class="diff-box">' +
+        '<div class="dbi"><div class="k">' + escHtml_(data.clientsTotalLabel || 'إجمالي أرصدة العملاء') + '</div><div class="v">' + escHtml_(data.clientsTotal) + '</div></div>' +
+        '<div class="dbi"><div class="k">' + escHtml_(data.suppliersTotalLabel || 'إجمالي أرصدة الموردين') + '</div><div class="v">' + escHtml_(data.suppliersTotal) + '</div></div>' +
+        '<div class="dbi"><div class="k">' + escHtml_(data.diffLabel || 'الفرق') + '</div><div class="v">' + escHtml_(data.diff) + '</div></div></div>';
+      html += '</div>';
+      document.getElementById('rptRoot').innerHTML = html;
+    }
+    // نفس مستند الطباعة حرفيًا كـHTML مستقل (بترقيمه الحقيقي وتذييله) لتحويله PDF بالخادم
+    function exportPrintHtml(cb) {
+      RPT_READY_.then(function () {
+        var pagesHtml = document.getElementById('rptRoot').innerHTML;
+        var css = '';
+        for (var i = 0; i < document.styleSheets.length; i++) {
+          try {
+            var rules = document.styleSheets[i].cssRules || [];
+            for (var j = 0; j < rules.length; j++) css += rules[j].cssText + '\n';
+          } catch (e) {}
+        }
+        var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">' +
+          '<title>' + escHtml_((RPT_DATA_ && RPT_DATA_.title) || 'تقرير') + '</title><style>' +
+          css +
+          '@page { size: A4 portrait; margin: 0; }' +
+          'html, body { margin: 0; padding: 0; background: #fff; }' +
+          '* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }' +
+          '.rpt-page { page-break-after: always; }' +
+          '.rpt-page:last-child { page-break-after: auto; }' +
+          '</style></head><body' + (document.body.className ? ' class="' + document.body.className + '"' : '') + '>' +
+          pagesHtml + '</body></html>';
+        cb(html);
+      }).catch(function (err) { cb(null, err); });
+    }
+    function exportPdfBlob(cb) {
+      RPT_READY_.then(function () {
+        buildFlowForCapture_();
+        var root = document.querySelector('.rpt-flow') || document.getElementById('rptRoot');
+        var MAX_CANVAS_AREA = 16000000;
+        var cw = root.scrollWidth || root.offsetWidth || 800, ch = root.scrollHeight || root.offsetHeight || 1000;
+        var safeScale = Math.max(1, Math.min(2.2, Math.sqrt(MAX_CANVAS_AREA / (cw * ch))));
+        html2pdf().set({
+          margin: [10, 8, 14, 8],
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: safeScale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css'] }
+        }).from(root).toPdf().get('pdf').then(function (pdf) {
+          var n = pdf.internal.getNumberOfPages();
+          var stamp = (RPT_DATA_ && RPT_DATA_.dateStamp) || '';
+          for (var i = 1; i <= n; i++) {
+            // نص لاتيني فقط داخل jsPDF (خطوطه الافتراضية لا تشكّل العربية) — التوقيت بأرقام
+            // لاتينية والترقيم X / Y
+            pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(117, 108, 91);
+            if (stamp) pdf.text(String(stamp), 8, 292);
+            pdf.text(i + ' / ' + n, 202, 292, { align: 'right' });
+          }
+          cb(pdf.output('blob'));
+        }).catch(function (err) { cb(null, err); });
+      }).catch(function (err) { cb(null, err); });
+    }
+
+    // ==========================================================
+    // تصدير كصورة (JPEG) — نفس آلية ملخص متابعة الأرصدة: صورة واحدة طويلة بأقصى وضوح
+    // ممكن، وتُقسَّم تلقائيًا فقط عند تجاوز حدود اللوحة في متصفحات الموبايل
+    // ==========================================================
+    function exportImageBlob(cb) {
+      RPT_READY_.then(function () {
+        buildFlowForCapture_();
+        var root = document.querySelector('.rpt-flow') || document.getElementById('rptRoot');
+        var cssW = root.scrollWidth || root.offsetWidth || 800;
+        var cssH = root.scrollHeight || root.offsetHeight || 1000;
+// دقة المشاركة: العامل الحاسم هو مقياس الرسم (scale)، وهو محكوم بسقف مساحة اللوحة.
+// السقف 16 مليون بكسل قيدٌ حقيقي على iOS فقط؛ وفرضه على كل الأجهزة كان يهبط بالمقياس إلى
+// ~1.3x-1.8x في التقارير الطويلة (كشف حساب من عدة صفحات) فتخرج الصورة باهتة — وهو العطل
+// المُبلَّغ عنه. الآن: iOS يبقى على سقفه الآمن، وبقية الأجهزة على سقف أوسع يسمح بالمقياس
+// الكامل. رُفع مجددًا (80 مليون ≈ 320 ميجابايت ذاكرة) — ضمن حدود المتصفحات الحديثة على
+// أجهزة سطح المكتب/الأندرويد، ومقياس الرسم الأقصى رُفع من 5x إلى 10x معه — النظام يختار
+// تلقائيًا أعلى دقة ممكنة فعليًا حسب حجم كل تقرير بلا أي تدخل يدوي
+        var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        var MAX_AREA = IS_IOS_ ? 16000000 : 80000000, MAX_DIM = IS_IOS_ ? 8000 : 16000;
+        var scale = Math.min(10, Math.sqrt(MAX_AREA / (cssW * cssH)));
+        if (!(scale > 0) || scale < 1) scale = 1;
+        // تقييد المقياس ببُعد اللوحة الأقصى: بدونه تُقسَّم اللوحة إلى عدة صور، والحافظة لا
+        // تقبل إلا أول جزء فتُنسَخ صورة مقصوصة. بهذا القيد صورة واحدة كاملة بأعلى دقة ممكنة
+        var fitScale = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
+        if (fitScale > 0 && fitScale < scale) scale = Math.max(1, fitScale);
+        html2pdf().set({
+          // foreignObjectRendering: true إلزامي للعربية — بدونه يرسم html2canvas النص بنفسه
+          // حرفًا حرفًا بلا تشكيل عربي (bidi/ligatures)، فتظهر الحروف منفصلة ومعكوسة
+          html2canvas: { scale: scale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true, logging: false }
+        }).from(root).toCanvas().get('canvas').then(function (full) {
+          var stamp = (RPT_DATA_ && RPT_DATA_.dateStamp) || '';
+          var pieces = [], total = full.height;
+          var sliceH = Math.min(MAX_DIM, total);
+          if (sliceH < 1) sliceH = total;
+          for (var y = 0; y < total; y += sliceH) {
+            var hh = Math.min(sliceH, total - y);
+            var c = document.createElement('canvas');
+            c.width = full.width; c.height = hh;
+            var ctx = c.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+            ctx.drawImage(full, 0, y, full.width, hh, 0, 0, full.width, hh);
+            pieces.push(c);
+          }
+          if (stamp && pieces.length) {
+            var last = pieces[pieces.length - 1], lctx = last.getContext('2d');
+            var fs = Math.max(10, Math.round(9 * scale));
+            lctx.font = fs + 'px Arial, sans-serif';
+            lctx.textBaseline = 'bottom';
+            lctx.fillStyle = 'rgba(117,108,91,0.85)';
+            lctx.fillText(String(stamp), Math.round(6 * scale), last.height - Math.round(5 * scale));
+          }
+          var blobs = [], done = 0, failed = false;
+          pieces.forEach(function (c, idx) {
+            c.toBlob(function (b) {
+              if (failed) return;
+              if (!b) { failed = true; cb(null, new Error('تعذّر إنشاء الصورة')); return; }
+              blobs[idx] = b;
+              if (++done === pieces.length) cb(blobs);
+            }, 'image/png'); // PNG بلا فقد = أوضح نص/خطوط (بلا أي ضغط JPEG) — جودة فائقة
+          });
+        }).catch(function (err) { cb(null, err); });
+      }).catch(function (err) { cb(null, err); });
+    }
+  </script>
+</body>
+</html>

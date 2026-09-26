@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html dir="rtl">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap');
+  * { box-sizing: border-box; }
+  body { font-family: 'Tajawal', Arial, sans-serif; margin: 0; padding: 0; color: #2a2721; background: #fff; font-size: 9.5px; }
+
+  /* ===== ترقيم بالقياس الفعلي (المحاولة الخامسة، النهائية) =====
+     كل صفحة عنصر <div class="rpt-page"> بحجم A4 حقيقي، تُملأ بالصفوف صفًا صفًا مع قياس الارتفاع
+     الفعلي بعد كل صف (buildPagesMeasured_ أدناه) — فتُملأ كل صفحة لسعتها القصوى الحقيقية بلا
+     هدر (يصحّح عيب "التقسيم المتوازن" الذي كان يوزّع الصفوف بالتساوي فيترك نصف الصفحة فارغًا).
+     كل صفحة تحمل: رأس التقرير (الصفحة الأولى فقط) + رأس الجدول (thead) المكرَّر على كل صفحة +
+     تذييلها الخاص (توقيت الطباعة + "صفحة X من Y") — فيظهر رأس الجدول والتذييل على كل صفحة في
+     الطباعة والمشاركة معًا (المشاركة تلتقط كل صفحة كصورة مستقلة، فرأس الجدول مضمَّن فيها). */
+  /* ارتفاع الصفحة أقل من A4 الفعلي (288mm بدل 297) مع @page margin:0: يترك 9mm فراغًا أسفل
+     كل صفحة مطبوعة — أدنى هامش سفلي آمن: يكفي لظهور التذييل (توقيت + ترقيم) كاملًا دون أن
+     يُقتَص عند حافة الورقة، ويمنع تسرّب آخر ملّيمتر إلى صفحة فارغة زائدة عند الطباعة.
+     وpadding سفلي 3mm فقط (بدل 6) يلصق التذييل بأسفل منطقة المحتوى فيزيد ما يُطبَع بالصفحة */
+  .rpt-page { position: relative; width: 210mm; height: 288mm; padding: 6mm 6mm 9mm; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+  .rpt-page.landscape { width: 297mm; height: 201mm; }
+  .rpt-page.brk { page-break-before: always; }
+
+  /* وضع "التدفّق" المستخدَم في المشاركة فقط (exportPdfBlob): كتلة واحدة متّصلة يلتقطها html2pdf
+     دفعةً واحدة ويقسّمها تلقائيًا (نفس آلية كشف الحساب الموثوقة) — بدل التقاط كل صفحة على حدة
+     الذي يفشل داخل الإطار المخفي. الترقيم + التوقيت يُطبَعان على كل صفحة داخل jsPDF بعد الالتقاط */
+  .rpt-flow { width: 100%; padding: 6mm; }
+  .rpt-flow table.rpt-tbl thead { display: table-header-group; }
+  .rpt-flow table.rpt-tbl tr { page-break-inside: avoid; }
+
+  .rpt-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #7d5a2c; padding-bottom: 6px; margin-bottom: 8px; flex: none; }
+  .rpt-brand .name { font-size: 13px; font-weight: 900; color: #7d5a2c; white-space: nowrap; }
+  .rpt-brand .name-ar { font-size: 9px; color: #756c5b; margin-top: 2px; }
+  .rpt-title { text-align: left; }
+  .rpt-title .t1 { font-size: 14px; font-weight: 900; color: #2a2721; }
+  .rpt-title .t2 { font-size: 8.5px; color: #756c5b; margin-top: 3px; line-height: 1.5; max-height: 3em; overflow: hidden; }
+
+  table.rpt-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; flex: none; }
+  table.rpt-tbl th, table.rpt-tbl td { border: 1px solid #ddd; padding: 3px 4px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.rpt-tbl th { background: #7d5a2c; color: #fff; font-size: 8.5px; font-weight: 700; }
+  table.rpt-tbl td { font-size: 8.5px; }
+  table.rpt-tbl td.num { direction: ltr; }
+  /* عمود "wrap" (اسم/ملاحظات طويلة): يلتف نصه بدل قصّه بثلاث نقاط — يكبر ارتفاع الصف بدل
+     إخفاء جزء من المحتوى، تلبيةً لطلب إظهار البيانات كاملة دومًا */
+  table.rpt-tbl td.wrapcell { white-space: normal; word-break: break-word; overflow: visible; text-overflow: clip; }
+  body.dense-cols table.rpt-tbl th, body.dense-cols table.rpt-tbl td { font-size: 7px; padding: 2px 3px; }
+  tr.rpt-total-row td { background: #34495e !important; color: #fff !important; font-weight: 700; }
+  /* عنوان جانبي فاصل بين الأقسام — مستويان: "day" (رأس يوم كامل، أبرز ولونه يتغيّر دوريًا
+     ليختلف عن اليوم المجاور) و"sub" (نوع الطرف تحت اليوم نفسه، أخفّ وبلا تكرار للتاريخ) */
+  tr.rpt-section-row td { font-weight: 800; text-align: right !important; padding: 5px 8px !important; }
+  tr.rpt-section-row.lvl-sub td { background: #f0e6d2 !important; color: #5d4220 !important; font-size: 9.5px; border-top: 2px solid #7d5a2c !important; }
+  tr.rpt-section-row.lvl-day td { font-size: 11px; padding: 7px 8px !important; border-top: 3px solid #7d5a2c !important; }
+  tr.rpt-section-row.lvl-day.day-c0 td { background: #fdecc8 !important; color: #92620a !important; }
+  tr.rpt-section-row.lvl-day.day-c1 td { background: #dbeafe !important; color: #1e40af !important; }
+  tr.rpt-section-row.lvl-day.day-c2 td { background: #dcf5e6 !important; color: #1c7a4b !important; }
+  tr.rpt-section-row.lvl-day.day-c3 td { background: #f3e8ff !important; color: #6b21a8 !important; }
+  tr.rpt-section-row.lvl-day.day-c4 td { background: #ffe4e6 !important; color: #9f1239 !important; }
+  tr.rpt-section-row.lvl-day.day-c5 td { background: #e0f2f1 !important; color: #00695c !important; }
+
+  .city-tag { font-size: 7.5px; font-weight: 700; padding: 2px 6px; border-radius: 999px; display: inline-block; }
+  .city-tag.mecca { background: #dcf5e6; color: #1c7a4b; }
+  .city-tag.medina { background: #fcefd0; color: #92620a; }
+  .status-badge { display: inline-block; font-size: 7.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .status-badge.st-requested { background: #eee; color: #666; border: 1px solid #ccc; }
+  .status-badge.st-waiting { background: #fcefd0; color: #92620a; }
+  .status-badge.st-confirmed { background: #dcf5e6; color: #1c7a4b; }
+  .status-badge.st-confirmed-nusuk { background: #e6ddf7; color: #4a2e8c; }
+  .status-badge.st-cancelled { background: #fbdcdc; color: #a02323; }
+
+  /* margin-top:auto يدفع التذييل لأسفل الصفحة دائمًا مهما قصُر الجدول */
+  /* مطلق أسفل الصفحة + padding-bottom يحجز مكانه — لا يستطيع المحتوى دفعه خارج الصفحة */
+  .rpt-footer { position: absolute; left: 6mm; right: 6mm; bottom: 3mm; display: flex;
+      justify-content: space-between; font-size: 7.5px; color: #756c5b;
+      border-top: 1px solid #eee; padding-top: 4px; }
+  .rpt-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #999; font-size: 12px; }
+
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    @page { size: A4 portrait; margin: 0; }
+  }
+</style>
+</head>
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <div id="rptRoot"></div>
+
+  <script>
+    function escHtml_(s) {
+      return (s === null || s === undefined) ? '' : String(s).replace(/[&<>"']/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+      });
+    }
+    function buildColgroup_(cols) {
+      var explicitSum = 0, autoSum = 0;
+      var weights = cols.map(function (c) {
+        if (typeof c.widthPct === 'number') { explicitSum += c.widthPct; return null; }
+        var w = c.numeric ? 1 : 2; autoSum += w; return w;
+      });
+      var remaining = Math.max(0, 100 - explicitSum);
+      return '<colgroup>' + cols.map(function (c, i) {
+        var pct = (typeof c.widthPct === 'number') ? c.widthPct : (autoSum ? (remaining * weights[i] / autoSum) : (remaining / cols.length));
+        return '<col style="width:' + pct.toFixed(2) + '%">';
+      }).join('') + '</colgroup>';
+    }
+
+    var RPT_LANDSCAPE_ = false, RPT_READY_ = Promise.resolve(), RPT_DATA_ = null;
+
+    // بناء الصفحات بالقياس الفعلي: يملأ كل صفحة لأقصى سعة حقيقية قبل بدء صفحة جديدة
+    function buildPagesMeasured_(data) {
+      var root = document.getElementById('rptRoot');
+      root.innerHTML = '';
+      var cols = data.cols || [], rows = data.rows || [];
+      var colgroupHtml = buildColgroup_(cols);
+      var theadHtml = '<thead><tr>' + cols.map(function (c) { return '<th>' + escHtml_(c.label) + '</th>'; }).join('') + '</tr></thead>';
+      var headerHtml = '<div class="rpt-header">' +
+        '<div class="rpt-brand"><div class="name">Menf International Tours</div><div class="name-ar">' + escHtml_(data.companyName || 'شركة منف للسياحة الدولية') + '</div></div>' +
+        '<div class="rpt-title"><div class="t1">' + escHtml_(data.title) + '</div><div class="t2">' + escHtml_(data.subtitle || '') + '</div></div>' +
+        '</div>';
+      var footerPlaceholder = '<span>&nbsp;</span><span>&nbsp;</span>';
+
+      var pages = [];
+      function makePage(isFirst) {
+        var pg = document.createElement('div');
+        pg.className = 'rpt-page' + (RPT_LANDSCAPE_ ? ' landscape' : '') + (isFirst ? '' : ' brk');
+        var inner = (isFirst ? headerHtml : '') +
+          '<table class="rpt-tbl">' + colgroupHtml + theadHtml + '<tbody></tbody></table>' +
+          '<div class="rpt-footer">' + footerPlaceholder + '</div>';
+        pg.innerHTML = inner;
+        root.appendChild(pg);
+        pages.push(pg);
+        return { pg: pg, tbody: pg.querySelector('tbody'), footer: pg.querySelector('.rpt-footer') };
+      }
+
+      if (!rows.length) {
+        var pg = document.createElement('div');
+        pg.className = 'rpt-page' + (RPT_LANDSCAPE_ ? ' landscape' : '');
+        pg.innerHTML = headerHtml + '<div class="rpt-empty">لا توجد بيانات</div><div class="rpt-footer">' + footerPlaceholder + '</div>';
+        root.appendChild(pg); pages.push(pg);
+      } else {
+        var cur = makePage(true);
+        function overflow(p) { return p.pg.scrollHeight > p.pg.clientHeight + 1; }
+        rows.forEach(function (r) {
+          var tr = document.createElement('tr');
+          // صف عنوان فاصل (يوم/قسم) — يمتد على عرض الجدول كله بدل خلايا الأعمدة
+          if (r.sectionTitle) {
+            tr.className = 'rpt-section-row lvl-' + (r.sectionLevel === 'day' ? 'day' : 'sub') +
+              (r.sectionLevel === 'day' ? ' day-c' + ((r.colorIdx || 0) % 6) : '');
+            tr.innerHTML = '<td colspan="' + cols.length + '">' + r.sectionTitle + '</td>';
+          } else {
+            tr.innerHTML = r.cellsHtml.map(function (h, i) {
+              var cls = [];
+              if (cols[i] && cols[i].numeric) cls.push('num');
+              if (cols[i] && cols[i].wrap) cls.push('wrapcell');
+              return '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>' + h + '</td>';
+            }).join('');
+          }
+          cur.tbody.appendChild(tr);
+          if (overflow(cur) && cur.tbody.children.length > 1) {
+            cur.tbody.removeChild(tr);
+            cur = makePage(false);
+            cur.tbody.appendChild(tr);
+          }
+        });
+        if (data.showTotals) {
+          var tot = document.createElement('tr');
+          tot.className = 'rpt-total-row';
+          tot.innerHTML = cols.map(function (c) {
+            return '<td' + (c.numeric ? ' class="num"' : '') + '>' + (data.totalsRow && data.totalsRow[c.key] !== undefined ? data.totalsRow[c.key] : '') + '</td>';
+          }).join('');
+          cur.tbody.appendChild(tot);
+          if (overflow(cur) && cur.tbody.children.length > 1) {
+            cur.tbody.removeChild(tot);
+            cur = makePage(false);
+            cur.tbody.appendChild(tot);
+          }
+        }
+      }
+
+      // تعبئة التذييلات بترقيم الصفحات الحقيقي بعد اكتمال البناء ومعرفة العدد الكلي
+      var N = pages.length;
+      var footLeft = escHtml_(data.companyName || '') + ' — ' + escHtml_(data.dateStamp || '');
+      pages.forEach(function (pg, i) {
+        pg.querySelector('.rpt-footer').innerHTML = '<span>' + footLeft + '</span><span>صفحة ' + (i + 1) + ' من ' + N + '</span>';
+      });
+    }
+
+    // data = { title, subtitle, cols:[{key,label,numeric,widthPct?}], rows:[{cellsHtml:[...]}],
+    //   showTotals, totalsRow, companyName, dateStamp, filenameStamp, orientation }
+    function setup(data, skipAutoPrint) {
+      document.title = data.filenameStamp || 'Arrivals Report';
+      RPT_DATA_ = data;
+      RPT_LANDSCAPE_ = data.orientation === 'landscape';
+      document.body.classList.toggle('dense-cols', (data.cols || []).length > 12);
+      var st = document.createElement('style');
+      st.textContent = '@media print { @page { size: A4 ' + (RPT_LANDSCAPE_ ? 'landscape' : 'portrait') + '; margin: 0; } }';
+      document.head.appendChild(st);
+      // البناء بعد جاهزية الخطوط حتى يكون قياس ارتفاع الصفوف دقيقًا (الخط يغيّر ارتفاع الصف)
+      var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+      RPT_READY_ = ready.then(function () { buildPagesMeasured_(data); });
+      if (!skipAutoPrint) RPT_READY_.then(function () { setTimeout(function () { window.print(); }, 300); });
+    }
+
+    // المشاركة: تدفّق واحد (نفس آلية كشف الحساب التي أكّد المستخدم أنها تعمل جيدًا) — نستبدل
+    // محتوى الصفحة بكتلة .rpt-flow واحدة (رأس + جدول واحد بكل الصفوف)، ثم html2pdf().from(flow)
+    // يلتقطها ويقسّمها تلقائيًا على صفحات ممتلئة. بعد إنتاج الـ PDF نطبع على كل صفحة توقيت
+    // الطباعة (يسارًا) وترقيمها "X / Y" (يمينًا) داخل jsPDF مباشرةً (بأرقام لاتينية لأن خطوط
+    // jsPDF الافتراضية لا تشكّل العربية) — فيظهران على كل صفحة فعليًا.
+    function buildFlowForCapture_() {
+      var data = RPT_DATA_ || {};
+      var cols = data.cols || [], rows = data.rows || [];
+      var html = '<div class="rpt-flow">' +
+        '<div class="rpt-header">' +
+          '<div class="rpt-brand"><div class="name">Menf International Tours</div><div class="name-ar">' + escHtml_(data.companyName || 'شركة منف للسياحة الدولية') + '</div></div>' +
+          '<div class="rpt-title"><div class="t1">' + escHtml_(data.title) + '</div><div class="t2">' + escHtml_(data.subtitle || '') + '</div></div>' +
+        '</div>';
+      if (!rows.length) {
+        html += '<div style="padding:40px;text-align:center;color:#999;">لا توجد بيانات</div>';
+      } else {
+        html += '<table class="rpt-tbl">' + buildColgroup_(cols) +
+          '<thead><tr>' + cols.map(function (c) { return '<th>' + escHtml_(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
+        rows.forEach(function (r) {
+          if (r.sectionTitle) {
+            var secCls = 'rpt-section-row lvl-' + (r.sectionLevel === 'day' ? 'day' : 'sub') +
+              (r.sectionLevel === 'day' ? ' day-c' + ((r.colorIdx || 0) % 6) : '');
+            html += '<tr class="' + secCls + '"><td colspan="' + cols.length + '">' + r.sectionTitle + '</td></tr>';
+            return;
+          }
+          html += '<tr>' + r.cellsHtml.map(function (h, i) {
+            var cls = [];
+            if (cols[i] && cols[i].numeric) cls.push('num');
+            if (cols[i] && cols[i].wrap) cls.push('wrapcell');
+            return '<td' + (cls.length ? ' class="' + cls.join(' ') + '"' : '') + '>' + h + '</td>';
+          }).join('') + '</tr>';
+        });
+        if (data.showTotals) {
+          html += '<tr class="rpt-total-row">' + cols.map(function (c) {
+            return '<td' + (c.numeric ? ' class="num"' : '') + '>' + (data.totalsRow && data.totalsRow[c.key] !== undefined ? data.totalsRow[c.key] : '') + '</td>';
+          }).join('') + '</tr>';
+        }
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+      document.getElementById('rptRoot').innerHTML = html;
+    }
+    // ==========================================================
+    // نفس مستند الطباعة حرفيًا كـHTML مستقل — لتحويله PDF على الخادم
+    // ==========================================================
+    // لا التقاط صورة ولا إعادة تخطيط: نأخذ نفس صفحات buildPagesMeasured_ المبنية للطباعة
+    // (بترقيمها الحقيقي "صفحة X من Y" وتوقيتها وحدودها وخلفياتها) ونغلّفها بنفس CSS الصفحة.
+    // محوّل جوجل يحترم @page margin:0 وpage-break-before:always وارتفاع الصفحة الثابت،
+    // فيخرج الملف مطابقًا لمعاينة الطباعة صفحةً بصفحة — ونصًا متجهًا لا يتبكسل.
+    function exportPrintHtml(cb) {
+      RPT_READY_.then(function () {
+        var pagesHtml = document.getElementById('rptRoot').innerHTML;
+        var css = '';
+        // نجمع كل قواعد CSS الخاصة بالقالب كما هي (بلا إعادة كتابة) لضمان التطابق التام
+        for (var i = 0; i < document.styleSheets.length; i++) {
+          try {
+            var rules = document.styleSheets[i].cssRules || [];
+            for (var j = 0; j < rules.length; j++) css += rules[j].cssText + '\n';
+          } catch (e) { /* ورقة أنماط خارجية — نتجاوزها */ }
+        }
+        var size = RPT_LANDSCAPE_ ? 'A4 landscape' : 'A4 portrait';
+        var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">' +
+          '<title>' + escHtml_((RPT_DATA_ && RPT_DATA_.title) || 'تقرير') + '</title><style>' +
+          css +
+          '@page { size: ' + size + '; margin: 0; }' +
+          'html, body { margin: 0; padding: 0; background: #fff; }' +
+          '* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }' +
+          '.rpt-page { page-break-after: always; }' +
+          '.rpt-page:last-child { page-break-after: auto; }' +
+          '</style></head><body' + (document.body.className ? ' class="' + document.body.className + '"' : '') + '>' +
+          pagesHtml + '</body></html>';
+        cb(html);
+      }).catch(function (err) { cb(null, err); });
+    }
+    function exportPdfBlob(cb) {
+      RPT_READY_.then(function () {
+        buildFlowForCapture_();
+        var isLandscape = RPT_LANDSCAPE_;
+        var pageW = isLandscape ? 297 : 210, pageH = isLandscape ? 210 : 297;
+        var root = document.querySelector('.rpt-flow') || document.getElementById('rptRoot');
+        var MAX_CANVAS_AREA = 16000000;
+        var cw = root.scrollWidth || root.offsetWidth || 800, ch = root.scrollHeight || root.offsetHeight || 1000;
+        var safeScale = Math.max(1, Math.min(2.2, Math.sqrt(MAX_CANVAS_AREA / (cw * ch))));
+        html2pdf().set({
+          margin: [8, 6, 14, 6],
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: safeScale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: isLandscape ? 'landscape' : 'portrait' },
+          pagebreak: { mode: ['css'] }
+        }).from(root).toPdf().get('pdf').then(function (pdf) {
+          var n = pdf.internal.getNumberOfPages();
+          var stamp = (RPT_DATA_ && RPT_DATA_.dateStamp) || '';
+          for (var i = 1; i <= n; i++) {
+            pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(117, 108, 91);
+            if (stamp) pdf.text(String(stamp), 6, pageH - 5);
+            pdf.text(i + ' / ' + n, pageW - 6, pageH - 5, { align: 'right' });
+          }
+          cb(pdf.output('blob'));
+        }).catch(function (err) { cb(null, err); });
+      }).catch(function (err) { cb(null, err); });
+    }
+
+    // ==========================================================
+    // تصدير كصورة (JPEG) — صورة واحدة طويلة، وتُقسَّم تلقائيًا إلى عدة صور
+    // فقط عند تجاوز حدود اللوحة (canvas) في متصفحات الموبايل. يُعيد مصفوفة Blob.
+    // نلتقط المستند كله بلوحة واحدة (مضبوطة تحت حد المساحة لتُرسَم بنجاح على iOS)
+    // ثم نقصّها رأسيًا إلى شرائح لا يتجاوز ارتفاع كل منها الحد الآمن للأبعاد.
+    // ==========================================================
+    function exportImageBlob(cb) {
+      RPT_READY_.then(function () {
+        buildFlowForCapture_();
+        var root = document.querySelector('.rpt-flow') || document.getElementById('rptRoot');
+        var cssW = root.scrollWidth || root.offsetWidth || 800;
+        var cssH = root.scrollHeight || root.offsetHeight || 1000;
+// دقة المشاركة: العامل الحاسم هو مقياس الرسم (scale)، وهو محكوم بسقف مساحة اللوحة.
+// السقف 16 مليون بكسل قيدٌ حقيقي على iOS فقط؛ وفرضه على كل الأجهزة كان يهبط بالمقياس إلى
+// ~1.3x-1.8x في التقارير الطويلة (كشف حساب من عدة صفحات) فتخرج الصورة باهتة — وهو العطل
+// المُبلَّغ عنه. الآن: iOS يبقى على سقفه الآمن، وبقية الأجهزة على سقف أوسع يسمح بالمقياس
+// الكامل. رُفع مجددًا (80 مليون ≈ 320 ميجابايت ذاكرة) — ضمن حدود المتصفحات الحديثة على
+// أجهزة سطح المكتب/الأندرويد، ومقياس الرسم الأقصى رُفع من 5x إلى 10x معه — النظام يختار
+// تلقائيًا أعلى دقة ممكنة فعليًا حسب حجم كل تقرير بلا أي تدخل يدوي
+        var IS_IOS_ = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        var MAX_AREA = IS_IOS_ ? 16000000 : 80000000;
+        var MAX_DIM = IS_IOS_ ? 8000 : 16000;  // سقف بُعد الصورة الناتجة
+        // أقصى وضوح ممكن: نبدأ من 10x وننزل فقط بقدر ما يفرضه سقف مساحة اللوحة
+        var scale = Math.min(10, Math.sqrt(MAX_AREA / (cssW * cssH)));
+        if (!(scale > 0)) scale = 1;
+        if (scale < 1) scale = 1; // لا ننزل تحت 1x — التقسيم لاحقًا يعالج الطول الزائد
+        // تقييد المقياس ببُعد اللوحة الأقصى: بدونه تُقسَّم اللوحة إلى عدة صور، والحافظة لا
+        // تقبل إلا أول جزء فتُنسَخ صورة مقصوصة. بهذا القيد صورة واحدة كاملة بأعلى دقة ممكنة
+        var fitScale = Math.min(MAX_DIM / cssW, MAX_DIM / cssH);
+        if (fitScale > 0 && fitScale < scale) scale = Math.max(1, fitScale);
+        // نستخدم مسار html2pdf نفسه (toCanvas) للحصول على اللوحة مباشرةً بدل الاعتماد
+        // على وجود html2canvas كمتغيّر عام قد لا يُصدّره الحزمة المجمّعة.
+        html2pdf().set({
+          // foreignObjectRendering: true إلزامي للعربية — بدونه يرسم html2canvas النص بنفسه
+          // حرفًا حرفًا بلا تشكيل عربي (bidi/ligatures)، فتظهر الحروف منفصلة ومعكوسة
+          html2canvas: { scale: scale, useCORS: true, backgroundColor: '#ffffff', foreignObjectRendering: true, logging: false }
+        }).from(root).toCanvas().get('canvas').then(function (full) {
+          var stamp = (RPT_DATA_ && RPT_DATA_.dateStamp) || '';
+          var pieces = [];
+          var total = full.height;
+          var sliceH = Math.min(MAX_DIM, total);
+          if (sliceH < 1) sliceH = total;
+          for (var y = 0; y < total; y += sliceH) {
+            var hh = Math.min(sliceH, total - y);
+            var c = document.createElement('canvas');
+            c.width = full.width; c.height = hh;
+            var ctx = c.getContext('2d');
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+            ctx.drawImage(full, 0, y, full.width, hh, 0, 0, full.width, hh);
+            pieces.push(c);
+          }
+          // نطبع توقيت الإنشاء أسفل يسار آخر شريحة (أرقام لاتينية)
+          if (stamp && pieces.length) {
+            var last = pieces[pieces.length - 1];
+            var lctx = last.getContext('2d');
+            var fs = Math.max(10, Math.round(9 * scale));
+            lctx.font = fs + 'px Arial, sans-serif';
+            lctx.textBaseline = 'bottom';
+            lctx.fillStyle = 'rgba(117,108,91,0.85)';
+            lctx.fillText(String(stamp), Math.round(6 * scale), last.height - Math.round(5 * scale));
+          }
+          var blobs = [], done = 0, failed = false;
+          pieces.forEach(function (c, idx) {
+            c.toBlob(function (b) {
+              if (failed) return;
+              if (!b) { failed = true; cb(null, new Error('تعذّر إنشاء الصورة')); return; }
+              blobs[idx] = b;
+              if (++done === pieces.length) cb(blobs);
+            }, 'image/png'); // PNG بلا فقد = أوضح نص/خطوط عربية (بلا أي ضغط JPEG) — جودة فائقة
+          });
+        }).catch(function (err) { cb(null, err); });
+      }).catch(function (err) { cb(null, err); });
+    }
+  </script>
+</body>
+</html>
