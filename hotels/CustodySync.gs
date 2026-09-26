@@ -89,13 +89,16 @@ function custodySanitizeSheets_(list) {
 // الواجهة مباشرة بلا فتح محرر الأكواد، مع اختبار الاتصال وتفعيل/تعطيل كل شيت بضغطة. هذه
 // الدالة تبقى فقط لمن يفضّل الإعداد اليدوي من هنا مباشرة.
 function setupCustodySheet() {
-  saveCustodyConfig([{
+  requireScriptOwner_();   // (7.15.0) كانت عامة: أي زائر يستبدل إعداد العهد بقيمة وهمية
+  saveCustodyConfig_([{
     id: 'ضع-هنا-معرّف-شيت-العهد',
     sheet: 'ورقة1', startRow: 2, holder: 'مودي في المدينة'
   }]);
 }
 // يقبل عدة أوراق عهدة (صاحب عهدة لكل مدينة مثلاً) — يحافظ على إعداد notifyEnabled الحالي
-function saveCustodyConfig(list) {
+// (7.15.0) أصبحت داخلية (كانت عامة بلا أي صلاحية: أي زائر لرابط البرنامج يستطيع توجيه المزامنة لشيت
+// يملكه فتُحقن دفعات وهمية في كشوف الحسابات). الإعداد من الواجهة يمر بـ saveCustodySettings المحمية.
+function saveCustodyConfig_(list) {
   var clean = custodySanitizeSheets_(list);
   saveCustodyState_(clean, getCustodyState_().notifyEnabled);
   return { ok: true, count: clean.length };
@@ -121,7 +124,8 @@ function custodyKnownNames_() {
   var clients = tgPartyColumnNames_('client');
   var suppliers = tgPartyColumnNames_('supplier');
   if (clients === null && suppliers === null) return null;
-  return (clients || []).concat(suppliers || []);
+  var all = (clients || []).concat(suppliers || []);
+  return all.length ? all : null;   // (7.15.0) قائمة فارغة (قراءة فاشلة جزئيًا) كانت ترفض كل الصفوف فتُحذف دفعاتها
 }
 // تطابق تقريبي بنفس منطق tgNamesRelated_ المستخدَم في كل مطابقات الأسماء بالبرنامج (يتجاهل
 // فروق الهمزة/الياء/التاء المربوطة/المسافات الزائدة، ويقبل احتواء أحدهما داخل الآخر)
@@ -220,8 +224,10 @@ function syncCustodySheets() {
     var knownNames = custodyKnownNames_();
     var collected = collectCustodyRows_(active, knownNames);
     var wanted = collected.wanted, sheetsById = collected.sheetsById;
+    // (7.15.0) إصلاح حذف جماعي: الدفعات القائمة تُقارَن فقط بأوراق قُرئت فعلاً في هذه الدورة — ورقة تعذّر
+    // فتحها (انقطاع/صلاحية/اسم ورقة تغيّر) كانت تُعامَل كأنها فارغة فتُحذف كل دفعاتها من سجل الدفعات
     var activeIdSegments = {};
-    active.forEach(function (c) { activeIdSegments[c.id.slice(-10)] = true; });
+    active.forEach(function (c) { if (sheetsById[c.id]) activeIdSegments[c.id.slice(-10)] = true; });
 
     var sh = ensurePaymentsSheet_();
     var lastRow = sh.getLastRow();
@@ -243,7 +249,7 @@ function syncCustodySheets() {
       var w = wanted[id];
       var ex = existing[id];
       if (!ex) {
-        toAppend.push([w.date, w.partyName, w.direction, w.amount, w.note, w.qaid, now, id, false, '']);
+        toAppend.push([w.date, cellSafe_(w.partyName), w.direction, w.amount, cellSafe_(w.note), cellSafe_(w.qaid), now, id, false, '']);
         created++;
         custodyNotify_(w, 'تسجيل', notifyEnabled);
         return;
@@ -285,6 +291,17 @@ function syncCustodySheets() {
     Object.keys(existing).forEach(function (id) {
       if (!wanted[id]) orphanRows.push({ id: id, rowInSheet: existing[id].rowInSheet, vals: existing[id].vals });
     });
+    // (7.15.0) صمام أمان: لو كان المطلوب حذفه كثيرًا بشكل غير طبيعي (أكثر من 10 صفوف ونصف دفعات
+    // الورقة أو أكثر) نوقف الحذف ونسجّل تحذيرًا — غالبًا خلل مؤقت في قراءة الورقة لا حذف فعلي من المستخدم
+    var bySeg = {}, orphBySeg = {};
+    Object.keys(existing).forEach(function (id) { var sg = id.split(':')[1]; bySeg[sg] = (bySeg[sg] || 0) + 1; });
+    orphanRows.forEach(function (o) { var sg = o.id.split(':')[1]; orphBySeg[sg] = (orphBySeg[sg] || 0) + 1; });
+    var blockedSeg = {};
+    Object.keys(orphBySeg).forEach(function (sg) { if (orphBySeg[sg] > 10 && orphBySeg[sg] >= bySeg[sg] / 2) blockedSeg[sg] = true; });
+    if (Object.keys(blockedSeg).length) {
+      orphanRows = orphanRows.filter(function (o) { return !blockedSeg[o.id.split(':')[1]]; });
+      logChange_('مزامنة العهدة', 'دفعة', 'شيت العهد', '[مزامنة شيت العهد] ⚠️ أُوقف حذف جماعي مريب لدفعات ورقة عهدة — راجع الورقة يدويًا', '', '');
+    }
     orphanRows.sort(function (a, b) { return b.rowInSheet - a.rowInSheet; });
     orphanRows.forEach(function (o) {
       sh.deleteRow(o.rowInSheet);

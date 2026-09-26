@@ -2131,6 +2131,18 @@
     </div>
   </details>
 
+  <details class="acc-section" id="glLinkSection" style="display:none;">
+    <summary class="acc-summary">🔗 الربط بالحسابات العامة — برنامج العمرة (مدير فقط)</summary>
+    <div class="acc-body">
+      <p class="sub2">الصق رابط ملف «الحسابات العامة» (ملف Google Sheets الذي أنشأه برنامج العمرة للدفتر). بعد الربط يظهر في نموذج الدفعة اختيار الخزينة/البنك/العهدة/الوكيل والعملة الفعلية، ويظهر رقم القيد الآلي بجانب كل دفعة. كشف الحساب لا يتغيّر إطلاقًا.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input type="text" id="glLinkIdInp" class="form-control form-control-sm" style="max-width:520px;direction:ltr;" placeholder="https://docs.google.com/spreadsheets/d/...">
+        <button class="gbtn" type="button" onclick="glLinkSaveUI_()">💾 حفظ الربط</button>
+      </div>
+      <div id="glLinkStatus" style="margin-top:8px;"></div>
+    </div>
+  </details>
+
   <details class="acc-section" id="custodySection">
     <summary class="acc-summary">🗂 ربط شيتات العهدة الخارجية (مدير فقط)</summary>
     <div class="acc-body">
@@ -2418,7 +2430,7 @@
   <div class="gtbl-wrap">
     <table class="gtbl" id="paymentsTable">
       <thead><tr>
-        <th>رقم القيد</th><th>التاريخ</th><th>العميل / المورد</th><th>الاتجاه</th><th style="width:32%">البيان</th><th>المبلغ</th><th></th>
+        <th>رقم القيد</th><th>التاريخ</th><th>العميل / المورد</th><th>الاتجاه</th><th style="width:32%">البيان</th><th>المبلغ</th><th class="gll-col">الحساب / قيد آلي</th><th></th>
       </tr></thead>
       <tbody id="paymentsTbody"><tr><td colspan="8" class="empty-state">جارِ التحميل...</td></tr></tbody>
       <tfoot id="paymentsTfoot"></tfoot>
@@ -2447,6 +2459,16 @@
       <div class="mb-2"><label class="small fw-bold mb-1">المبلغ (ر.س)</label><input type="text" id="pAmount" class="form-control form-control-sm" style="direction:ltr;text-align:center;"></div>
       <div class="mb-2"><label class="small fw-bold mb-1">رقم القيد (اختياري)</label><input type="text" id="pQaid" class="form-control form-control-sm" style="direction:ltr;"></div>
       <div class="mb-1"><label class="small fw-bold mb-1">البيان</label><input type="text" id="pNote" class="form-control form-control-sm"></div>
+      <!-- (7.15.0) البيانات المحاسبية للدفعة — تظهر فقط بعد ربط البرنامج بالحسابات العامة -->
+      <div id="pGlBox" class="mt-2 p-2" style="display:none;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;">
+        <div class="small fw-bold mb-1">🏦 الحساب النقدي (للحسابات العامة) <span class="text-muted fw-normal">— اختياري</span></div>
+        <select id="pGlCash" class="form-select form-select-sm mb-1" onchange="glPayCashChanged_()"></select>
+        <div class="d-flex gap-1 align-items-center">
+          <select id="pGlCur" class="form-select form-select-sm" style="width:90px;" onchange="glPayCurChanged_()"><option value="SAR">ريال</option><option value="EGP">جنيه</option><option value="USD">دولار</option></select>
+          <input type="text" id="pGlAmount" class="form-control form-control-sm" placeholder="المبلغ بالعملة المدفوع بها" style="direction:ltr;text-align:center;">
+        </div>
+        <div class="small text-muted mt-1" id="pGlHint">المبلغ أعلاه بالريال يبقى كما هو في كشف الحساب — العملة الفعلية للحسابات العامة فقط (تُحوَّل تلقائيًا عبر وسيط العملات).</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">إلغاء</button>
@@ -3616,6 +3638,7 @@ function wireLoginForm_() {
 var appStarted_ = false;
 function onAuthSuccess_(token, user, sessionMinutes) {
   currentSessionToken = token; currentUser = user;
+  setTimeout(function () { glLinkLoad_(); }, 1500);   // (7.15.0) قائمة الحسابات النقدية من الحسابات العامة (لا تؤخر فتح البرنامج)
   // تُستدعى قبل أي شيء آخر: تكتب تفضيلات الواجهة المحفوظة بالحساب إلى localStorage حتى
   // تلتقطها كل شاشة (initBookingsPage/initStatementPage/...) بمجرد أول فتح لها كالمعتاد
   applyUserUiPrefs_(user.uiPrefs);
@@ -4950,6 +4973,7 @@ function openPaymentModal() {
   var d = document.getElementById('pDate'); d.value = todayDisp; formatDateExcel(d);
   document.getElementById('pSaveBtn').onclick = function () { savePayment(false); };
   document.getElementById('pSaveNewBtn').onclick = function () { savePayment(true); };
+  glPayFormFill_(null);
   showDirWarn_('pDirWarn', '');
   ensurePartyRoleMap_(applyPDirDefault_);
   paymentModalEl.show();
@@ -4996,6 +5020,7 @@ function savePayment(andNew) {
       qaid: document.getElementById('pQaid').value,
       note: document.getElementById('pNote').value
     };
+    Object.assign(payload, glPayFormVals_());
     if (!payload.partyName) { alert('اختر اسم الطرف'); done(); return; }
     google.script.run.withSuccessHandler(function(res) {
       done();
@@ -5031,6 +5056,9 @@ function openPaymentEditModal(p, onSaved) {
     partyName: p.party || p.partyName || '', direction: p.direction, date: iso,
     amount: p.amount, qaid: p.qaid || '', note: p.note || ''
   };
+  glPayFormFill_(null);
+  if (GLL.linked && p.id) google.script.run.withSuccessHandler(function (m) { if (m && m[p.id]) glPayFormFill_(m[p.id]); })
+    .glLinkPaymentsInfo(currentSessionToken, [p.id], [p.linkId || '']);
   // تعديل دفعة قائمة: نُظهر التنبيه فقط عند عدم التطابق بلا فرض أي اتجاه افتراضي جديد —
   // احترامًا للاتجاه المحفوظ فعليًا مسبقًا
   showDirWarn_('pDirWarn', '');
@@ -5045,6 +5073,7 @@ function openPaymentEditModal(p, onSaved) {
         qaid: document.getElementById('pQaid').value,
         note: document.getElementById('pNote').value
       };
+      Object.assign(afterFields, glPayFormVals_());
       google.script.run.withSuccessHandler(function(res) {
         done();
         if (!res.ok) return alert('فشل التعديل: ' + res.error);
@@ -5327,6 +5356,7 @@ function openPaymentModalFromPayments() {
   var d = document.getElementById('pDate'); d.value = todayDisp; formatDateExcel(d);
   document.getElementById('pSaveBtn').onclick = function () { savePaymentFromPayments(false); };
   document.getElementById('pSaveNewBtn').onclick = function () { savePaymentFromPayments(true); };
+  glPayFormFill_(null);
   showDirWarn_('pDirWarn', '');
   ensurePartyRoleMap_(applyPDirDefault_);
   paymentModalEl.show();
@@ -5343,6 +5373,7 @@ function savePaymentFromPayments(andNew) {
       qaid: document.getElementById('pQaid').value,
       note: document.getElementById('pNote').value
     };
+    Object.assign(payload, glPayFormVals_());
     if (!payload.partyName) { alert('اختر اسم الطرف'); done(); return; }
     google.script.run.withSuccessHandler(function(res) {
       done();
@@ -6822,7 +6853,7 @@ function statusBadgeHtml_(status) {
 // أعمدة "كل الحجوزات" الأساسية — def:true تعني ظاهرة افتراضيًا (حسب ترتيب/اختيار المستخدم
 // صراحةً)؛ بقية أعمدة شيت المصدر الـ 34 تُضاف اختياريًا من زر "الأعمدة" (مخفية افتراضيًا)
 var BOOKING_CORE_COLS = [
-  {key:'qaid', label:'رقم القيد', def:true}, {key:'exec', label:'التنفيذ', def:true},
+  {key:'qaid', label:'رقم القيد', def:true}, {key:'glJe', label:'القيد الآلي', def:false}, {key:'exec', label:'التنفيذ', def:true},
   {key:'city', label:'المدينة', def:true}, {key:'innerRef', label:'رقم الحجز الداخلي', def:true},
   {key:'client', label:'اسم العميل', def:true}, {key:'hotel', label:'الفندق', def:true},
   {key:'totalRooms', label:'اجمالي الغرف', def:true}, {key:'checkIn', label:'تاريخ الدخول', def:true},
@@ -7937,6 +7968,8 @@ function cellForBookingCol_(b, col) {
     case 'qaid':
       var qaidDisplay = b.qaid ? escapeHtml(b.qaid) : '<span class="qaid-missing">بدون قيد</span>';
       return '<td class="qaid-cell num qaid-clickable" data-key="' + b.key + '" data-cur="' + escapeHtml(b.qaid || '') + '" title="اضغط لتعديل رقم القيد">' + qaidDisplay + '</td>';
+    case 'glJe':   // (7.15.0) رقم القيد الآلي بالحسابات العامة — يُملأ بعد الرسم (glFillBookingJe_)
+      return '<td class="num gll-je" data-bk="' + escapeHtml((b.city || '') + '|' + (b.innerRef || '')) + '"></td>';
     case 'exec':
       return '<td><button type="button" class="exec-toggle' + (b.exec ? ' on' : '') + '" data-key="' + b.key + '" data-cur="' + (b.exec ? '1' : '0') + '" title="' +
         (b.exec ? 'منفَّذ — اضغط لإلغاء التنفيذ' : 'غير منفَّذ — اضغط لتفعيل التنفيذ') + '">' + (b.exec ? '✓' : '') + '</button></td>';
@@ -8141,6 +8174,7 @@ function renderBookingsTbody_() {
   // لا حاجة لإسناد مستمعات لخلايا القيد/أزرار التنفيذ بعد كل رسم: المستمع المفوَّض الواحد على
   // tbody (wireBookingRowSelection_) يخدمها جميعًا ويبقى صالحًا لأن tbody نفسه لا يُستبدَل
   renderBookingsTotals_(filtered);
+  glFillBookingJe_();
   bkSelectedCell = null; // الجدول القديم بأكمله استُبدل الآن — أي خلية كانت محدَّدة أصبحت عنصرًا منفصلاً في DOM
   bkAutoFitAllColsOnce_();
 }
@@ -8926,6 +8960,7 @@ function paymentRowHtml(p) {
     '<td>' + dirBadgeHtml(p.direction) + '</td>' +
     '<td class="desc">' + escapeHtml(p.note) + (p.legacyImported ? ' <span class="legacy-badge" title="مستورد من الشيت القديم">📥</span>' : '') + '</td>' +
     '<td class="num">' + fmtNum(p.amount) + '</td>' +
+    '<td class="gll-cell small" data-pid="' + escapeHtml(p.id) + '"></td>' +
     '<td><button type="button" class="gicon-btn edit" onclick="editPaymentFromList(\'' + p.id + '\')">✎</button>' +
       '<button type="button" class="gicon-btn del" onclick="deletePaymentFromList(\'' + p.id + '\')">🗑</button>' +
       rowHistBtn_('PAY:' + p.id) + '</td>' +
@@ -8956,7 +8991,8 @@ function searchAllPayments() {
     }
     tbody.innerHTML = lastPaymentsSearch.map(paymentRowHtml).join('');
     document.getElementById('paymentsTfoot').innerHTML =
-      '<tr><td colspan="5" style="text-align:left;">الإجمالي (' + res.totals.count + ' حركة)</td><td class="num">صافي: ' + fmtNum(res.totals.net) + '</td><td></td></tr>';
+      '<tr><td colspan="5" style="text-align:left;">الإجمالي (' + res.totals.count + ' حركة)</td><td class="num">صافي: ' + fmtNum(res.totals.net) + '</td><td></td><td></td></tr>';
+    glFillPaymentCells_(lastPaymentsSearch);
   }).withFailureHandler(function(e) {
     document.getElementById('paymentsTbody').innerHTML = '<tr><td colspan="7" class="empty-state">خطأ: ' + e.message + '</td></tr>';
   }).searchPayments(filters, currentSessionToken);
@@ -9639,6 +9675,81 @@ function custodyRunSyncNow_() {
   }).withFailureHandler(function (e) { btn.disabled = false; box.innerHTML = '<span style="color:var(--bad);">خطأ: ' + escapeHtml(e.message) + '</span>'; })
     .runCustodySyncNow(currentSessionToken);
 }
+/* ---------- 🔗 (7.15.0) الربط بالحسابات العامة ---------- */
+var GLL = { linked: false, accounts: [] };
+var GLL_KIND_ = { safe: '💰 خزائن', bank: '🏦 بنوك', custody: '👤 عُهد', agent: '🛂 وكلاء', role: '⏳ حسابات وسيطة' };
+function glLinkLoad_(cb) {
+  if (!currentSessionToken) return;
+  google.script.run.withSuccessHandler(function (res) { GLL = res || { linked: false, accounts: [] }; GLL.accounts = GLL.accounts || []; if (cb) cb(); })
+    .withFailureHandler(function () {}).glLinkConfig(currentSessionToken);
+}
+function glPayCashOptions_(sel) {
+  var html = '<option value="">— بلا تحديد (تحت التسوية بالحسابات) —</option>', grp = '';
+  GLL.accounts.forEach(function (a) {
+    if (a.kind !== grp) { if (grp) html += '</optgroup>'; grp = a.kind; html += '<optgroup label="' + (GLL_KIND_[a.kind] || a.kind) + '">'; }
+    html += '<option value="' + escapeHtml(a.code) + '" data-cur="' + escapeHtml(a.currency || '') + '"' + (a.code === sel ? ' selected' : '') + '>' + escapeHtml(a.name + (a.currency ? ' (' + a.currency + ')' : '')) + '</option>';
+  });
+  return html + (grp ? '</optgroup>' : '');
+}
+function glPayFormFill_(m) {
+  var box = document.getElementById('pGlBox'); if (!box) return;
+  box.style.display = GLL.linked && GLL.accounts.length ? '' : 'none';
+  if (!GLL.linked) return;
+  document.getElementById('pGlCash').innerHTML = glPayCashOptions_(m ? m.cash : '');
+  document.getElementById('pGlCur').value = (m && m.cur) || 'SAR';
+  document.getElementById('pGlAmount').value = m && m.amount ? m.amount : '';
+  glPayCurChanged_();
+}
+function glPayCashChanged_() {
+  var sel = document.getElementById('pGlCash'), o = sel.options[sel.selectedIndex], c = o && o.getAttribute('data-cur');
+  if (c) { document.getElementById('pGlCur').value = c; glPayCurChanged_(); }
+}
+function glPayCurChanged_() {
+  var sar = document.getElementById('pGlCur').value === 'SAR', a = document.getElementById('pGlAmount');
+  a.disabled = sar; if (sar) a.value = '';
+}
+function glPayFormVals_() {
+  if (!GLL.linked || document.getElementById('pGlBox').style.display === 'none') return {};
+  return { glCash: document.getElementById('pGlCash').value, glCur: document.getElementById('pGlCur').value, glAmount: document.getElementById('pGlAmount').value };
+}
+function glFillPaymentCells_(rows) {
+  var cells = document.querySelectorAll('#paymentsTbody .gll-cell');
+  document.querySelectorAll('#paymentsTable .gll-col').forEach(function (th) { th.style.display = GLL.linked ? '' : 'none'; });
+  cells.forEach(function (td) { td.style.display = GLL.linked ? '' : 'none'; });
+  if (!GLL.linked || !rows || !rows.length) return;
+  google.script.run.withSuccessHandler(function (info) {
+    cells.forEach(function (td) {
+      var m = (info || {})[td.getAttribute('data-pid')]; if (!m) return;
+      td.innerHTML = (m.cash ? '<div>' + escapeHtml(m.cashName || m.cash) + (m.cur && m.cur !== 'SAR' ? ' <b style="direction:ltr;display:inline-block;">' + fmtNum(m.amount) + ' ' + m.cur + '</b>' : '') + '</div>' : '') +
+        (m.je ? '<span class="dir-badge" style="background:#eef2ff;color:#3730a3;direction:ltr;" title="رقم القيد الآلي بالحسابات العامة">' + escapeHtml(m.je) + '</span>' : '');
+    });
+  }).glLinkPaymentsInfo(currentSessionToken, rows.map(function (r) { return r.id; }), rows.map(function (r) { return r.linkId || ''; }));
+}
+function glFillBookingJe_() {
+  var cells = document.querySelectorAll('#tbody .gll-je');
+  if (!cells.length || !GLL.linked) return;
+  var keys = []; cells.forEach(function (td) { keys.push(td.getAttribute('data-bk')); });
+  google.script.run.withSuccessHandler(function (m) {
+    cells.forEach(function (td) { var je = (m || {})[td.getAttribute('data-bk')]; td.innerHTML = je ? '<span style="direction:ltr;color:#3730a3;">' + escapeHtml(je) + '</span>' : '<span style="color:#cbd5e1;">—</span>'; });
+  }).glLinkBookingEntries(currentSessionToken, keys.slice(0, 2000));
+}
+function initGlLinkSettings_() {
+  var sec = document.getElementById('glLinkSection');
+  if (!currentUser || currentUser.role !== 'admin') { sec.style.display = 'none'; return; }
+  sec.style.display = '';
+  glLinkLoad_(function () {
+    document.getElementById('glLinkIdInp').value = GLL.glId || '';
+    glLinkStatus_(GLL.linked ? (GLL.error ? '⚠️ ' + GLL.error : '✅ مربوط — ' + GLL.accounts.length + ' حساب نقدي متاح للاختيار') : 'غير مربوط بعد', GLL.error ? 'err' : (GLL.linked ? 'ok' : ''));
+  });
+}
+function glLinkStatus_(t, k) { var el = document.getElementById('glLinkStatus'); if (el) el.innerHTML = '<span style="color:' + (k === 'err' ? 'var(--bad)' : (k === 'ok' ? 'var(--ok)' : 'var(--ink-dim)')) + ';">' + escapeHtml(t) + '</span>'; }
+function glLinkSaveUI_() {
+  var v = document.getElementById('glLinkIdInp').value.trim();
+  glLinkStatus_('⏳ جاري الاختبار…');
+  google.script.run.withSuccessHandler(function (res) {
+    glLinkLoad_(function () { glLinkStatus_(res.linked ? '✅ تم الربط بملف «' + (res.name || '') + '» — ' + GLL.accounts.length + ' حساب نقدي' : 'تم إلغاء الربط', 'ok'); });
+  }).withFailureHandler(function (e) { glLinkStatus_('⛔ ' + e.message, 'err'); }).glLinkSaveConfig(currentSessionToken, v);
+}
 function initCustodySettings_() {
   var sec = document.getElementById('custodySection');
   if (!currentUser || currentUser.role !== 'admin') { sec.style.display = 'none'; return; }
@@ -9656,6 +9767,7 @@ function initCustodySettings_() {
   document.getElementById('custodySyncNowBtn').addEventListener('click', custodyRunSyncNow_);
 }
 function initSettingsPage() {
+  initGlLinkSettings_();
   initTelegramSettings_();
   initTelegramBot_();
   initGeminiSettings_();

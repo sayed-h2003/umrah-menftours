@@ -1221,8 +1221,8 @@ function _glAutoRoles_(user, dry) {
 function _glPartyResolver_(roles, user) {
   var accs = _glAccounts_(), byLink = {}, pending = [], taken = {}, madeNames = [];
   accs.list.forEach(function (a) { if (a.link && !a.isGroup) byLink[a.kind + '|' + _glNorm_(a.link)] = a.code; });
-  var parentOf = { client: '1201', agent: '2101', supplier: '2102', roomfee: roles.roomGroup };
-  var typeOf = { client: 'ASSET', agent: 'LIAB', supplier: 'LIAB', roomfee: 'ASSET' };
+  var parentOf = { client: '1201', agent: '2101', supplier: '2102', roomfee: roles.roomGroup, hbrev: roles.hb_revgrp };
+  var typeOf = { client: 'ASSET', agent: 'LIAB', supplier: 'LIAB', roomfee: 'ASSET', hbrev: 'REV' };
   var get = function (kind, name) {
     name = _glStr_(name); if (!name) return '';
     var k = kind + '|' + _glNorm_(name);
@@ -1230,8 +1230,8 @@ function _glPartyResolver_(roles, user) {
     var parent = parentOf[kind];
     if (!accs.map[parent]) throw new Error('المجموعة ' + parent + ' غير موجودة بالدليل');
     var code = _glNextCodeIn_(parent, taken); taken[code] = 1;
-    var row = _glAccRow_({ code: code, name: kind === 'roomfee' ? 'رسوم الغرفة — ' + name : name, type: typeOf[kind], parent: parent, kind: kind, link: name,
-      notes: 'أُنشئ تلقائياً من شاشات البرنامج' }, user);
+    var row = _glAccRow_({ code: code, name: kind === 'roomfee' ? 'رسوم الغرفة — ' + name : (kind === 'hbrev' ? 'إيرادات حجوزات — ' + name : name), type: typeOf[kind], parent: parent, kind: kind, link: name,
+      notes: kind === 'hbrev' ? 'ربح حجوزات الفنادق من هذا المورد — يُرحَّل لإيرادات السكن نهاية الموسم' : 'أُنشئ تلقائياً من شاشات البرنامج' }, user);
     pending.push(row); _glMemoAddAcc_(row); madeNames.push(code + ' — ' + row[1]);
     byLink[k] = code;
     return code;
@@ -1440,7 +1440,7 @@ function _glAutoBuild_(user, write) {
   /* ---------- 3ب) (V4.208) برنامج حجوزات الفنادق ---------- */
   var hbOut = [];
   if (_glHbOn_()) {
-    try { hbOut = _glHbBuild_(roles, warn); }
+    try { hbOut = _glHbBuild_(roles, warn, party); }
     catch (e) { warn.push('تعذّرت قراءة برنامج حجوزات الفنادق: ' + e.message); }
   }
 
@@ -1934,6 +1934,7 @@ function glCashFlow(authToken, from, to) {
 var GL_HB_ROLES_ = {
   hb_cash:   ['11', 'نقدية تحت التسوية (حجوزات الفنادق)', 'ASSET', 0, '', '1104'],
   hb_rev:    ['4', 'إيرادات السكن', 'REV', 0, '', '43'],
+  hb_revgrp: ['4', 'أرباح حجوزات الفنادق (حساب لكل مورد)', 'REV', 1, 'hbrev', '47'],
   hb_link:   ['15', 'وسيط الدفعات المرتبطة (حجوزات الفنادق)', 'ASSET', 0, '', ''],
   hb_manual: ['15', 'تسويات يدوية (حجوزات الفنادق)', 'ASSET', 0, '', ''],
   hb_trip:   ['15', 'جاري رحلات الشركة (حجوزات الفنادق)', 'ASSET', 0, '', ''],
@@ -2003,6 +2004,13 @@ function _glHbRead_() {
     pays.push({ id: _glStr_(r[7]) || ('row' + (i + 2)), date: date, party: party, dir: _glStr_(r[2]), amount: parseFloat(r[3]) || 0,
       note: _glStr_(r[4]), qaid: _glStr_(r[5]), linkId: _glStr_(r[9]) });
   });
+  // (V4.208-H2) البيانات المحاسبية التي يسجّلها برنامج الحجوزات نفسه مع الدفعة (الحساب النقدي والعملة الفعلية)
+  var meta = {}, msh = ss.getSheetByName('البيانات المحاسبية للدفعات');
+  if (msh && msh.getLastRow() > 1) msh.getRange(2, 1, msh.getLastRow() - 1, 6).getValues().forEach(function (r) {
+    var id = _glStr_(r[0]), cash = _glStr_(r[1]); if (!id || !cash) return;
+    meta[id] = { cash: cash, cur: _glStr_(r[2]) ? _glCur_(r[2]) : 'SAR', amount: _glNum_(r[3]), by: _glStr_(r[4]), src: 'hotel' };
+  });
+  pays.forEach(function (p) { if (meta[p.id]) p.meta = meta[p.id]; });
   var prof = {}, fsh = ss.getSheetByName(c.prof);
   if (fsh && fsh.getLastRow() > 1) fsh.getRange(2, 1, fsh.getLastRow() - 1, 7).getValues().forEach(function (r) {
     var n = _glStr_(r[0]); if (!n || n === '-') return;
@@ -2153,7 +2161,7 @@ function _glHbCashCands_() {
   });
 }
 // بناء قيود الحجوزات والدفعات (يُستدعى من _glAutoBuild_ فيمر بنفس المقارنة والتطبيق)
-function _glHbBuild_(roles, warn) {
+function _glHbBuild_(roles, warn, party) {
   var H = _glHbRead_(), map = _glHbMap_(), rev = _glHbPayRev_(), ov = _glHbTripOv_(), ctx = _glHbTripCtx_();
   var accs = _glAccounts_().map, rates = _glRates_(), out = [], miss = {}, st = { unpriced: 0, skipped: 0 };
   var info = function (name) {
@@ -2174,20 +2182,29 @@ function _glHbBuild_(roles, warn) {
     var trip = _glHbTripOf_(b, cm, ov, ctx, accs), tc = trip && ctx.trips[trip] ? ctx.trips[trip].company : '';
     var ref = (b.inner || ('صف ' + b.row)) + (b.qaid ? ' — قيد يدوي ' + b.qaid : '');
     var what = b.hotel + ' ' + b.city + ' ' + b.ci + ' (' + b.nights + ' ليلة)';
+    // (V4.208-H2) آلية الـ ERP: من ح/ العميل (البيع) — إلى ح/ المورد (التكلفة) — إلى ح/ إيرادات حجوزات المورد (الفرق = هامش ربح الحجز).
+    // لكل مورد حساب إيراد خاص به يُرحَّل رصيده لـ«إيرادات السكن» نهاية الموسم. رحلات الشركة (بالتكلفة) وحجز عميل غير مسعَّر/غير مربوط:
+    // من ح/ تكلفة السكن (بوسم الرحلة) إلى ح/ المورد. وحجز مورد غير مسعَّر: البيع كله لإيراد المورد حتى تُسعَّر التكلفة.
     var lines = [];
-    if (cm && GL_HB_TYPES_[cm.type].sale) {
-      if (b.sale.hasPrice && b.sale.value) {
-        var v = Math.abs(b.sale.value), pos = b.sale.value > 0, t1 = Object.assign({ trip: trip, company: tc, desc: 'بيع حجز ' + ref + ' — ' + what }, ptag(cm, b.client));
-        var l1 = L(cm.code, v, pos, 'SAR', sar, t1); l1.hbParty = 1;
-        lines.push(l1, L(roles.hb_rev, v, !pos, 'SAR', sar, t1));
-      } else if (!b.sale.hasPrice && b.sale.rooms) st.unpriced++;
+    var hasSale = !!(cm && GL_HB_TYPES_[cm.type].sale && b.sale.hasPrice && b.sale.value);
+    var hasCost = !!(sm && sm.type !== 'رحلة' && b.cost.hasPrice && b.cost.value);
+    if (cm && GL_HB_TYPES_[cm.type].sale && !b.sale.hasPrice && b.sale.rooms) st.unpriced++;
+    if (sm && sm.type !== 'رحلة' && !b.cost.hasPrice && b.cost.rooms) st.unpriced++;
+    var base = { trip: trip, company: tc };
+    if (hasSale) {
+      var sv = b.sale.value, l1 = L(cm.code, Math.abs(sv), sv > 0, 'SAR', sar, Object.assign({ desc: 'بيع حجز ' + ref + ' — ' + what }, base, ptag(cm, b.client)));
+      l1.hbParty = 1; lines.push(l1);
     }
-    if (sm && sm.type !== 'رحلة') {
-      if (b.cost.hasPrice && b.cost.value) {
-        var c = Math.abs(b.cost.value), cp = b.cost.value > 0, t2 = { trip: trip, company: tc, desc: 'تكلفة حجز ' + ref + ' — ' + what + ' — ' + b.client };
-        var l2 = L(sm.code, c, !cp, 'SAR', sar, Object.assign({}, t2, ptag(sm, b.supplier))); l2.hbParty = 1;
-        lines.push(L(roles.cost_house, c, cp, 'SAR', sar, t2), l2);
-      } else if (!b.cost.hasPrice && b.cost.rooms) st.unpriced++;
+    if (hasCost) {
+      var cv = b.cost.value, l2 = L(sm.code, Math.abs(cv), cv < 0, 'SAR', sar, Object.assign({ desc: 'تكلفة حجز ' + ref + ' — ' + what + ' — ' + b.client }, base, ptag(sm, b.supplier)));
+      l2.hbParty = 1; lines.push(l2);
+      if (!hasSale) lines.push(L(roles.cost_house, Math.abs(cv), cv > 0, 'SAR', sar, Object.assign({ desc: 'تكلفة حجز ' + ref + ' — ' + what + ' — ' + b.client + (cm && cm.type === 'رحلة' ? '' : ' (بلا بيع مسجَّل)') }, base)));
+    }
+    if (hasSale) {
+      var mg = _glR2_(b.sale.value - (hasCost ? b.cost.value : 0));
+      var revAcc = (sm && sm.type !== 'رحلة') ? party('hbrev', sm.name || b.supplier) : roles.hb_rev;
+      if (Math.abs(mg) >= 0.005) lines.push(L(revAcc, Math.abs(mg), mg < 0, 'SAR', sar, Object.assign({ client: b.client, agent: b.supplier,
+        desc: (hasCost ? 'ربح حجز ' : 'بيع حجز (التكلفة غير مسعَّرة) ') + ref + ' — ' + what + ' — ' + b.client }, base)));
     }
     if (lines.length >= 2) out.push({ key: 'AUTO:HB:' + b.key, date: b.ci, desc: 'حجز فندقي ' + ref + ' — ' + b.client + ' ← ' + b.supplier + ' — ' + what,
       trip: trip, company: tc, lines: lines, src: 'hotel' });
@@ -2207,7 +2224,7 @@ function _glHbBuild_(roles, warn) {
   singles.forEach(function (p) {
     var m = info(p.party); if (!m) { st.skipped++; return; }
     var pl = partyLine(p, m); if (!pl) return;
-    var r = rev[p.id], sug = null;
+    var r = rev[p.id] || p.meta || null;   // مراجعة الحسابات أولاً، ثم ما سُجّل مع الدفعة ببرنامج الحجوزات
     var cash = r && r.cash && accs[r.cash] ? r.cash : '';
     if (!cash) cash = GL_HB_MANUAL_DIRS_[p.dir] ? roles.hb_manual : roles.hb_cash;
     var acc = accs[cash], cur = (r && r.cur) || (acc && acc.currency) || 'SAR', amt2 = pl.amt, rate = sar;
@@ -2302,7 +2319,7 @@ function glHbState(authToken) {
   res.pays = H.pays.map(function (p) {
     var e = ents['AUTO:HBP:' + p.id] || (p.linkId ? ents['AUTO:HBL:' + p.linkId] : null);
     return { id: p.id, date: p.date, party: p.party, dir: p.dir, amount: p.amount, note: p.note, qaid: p.qaid, linkId: p.linkId,
-      rev: rev[p.id] || null, sug: _glHbPaySuggest_(p, cands, roles), entry: e ? e.id : '' };
+      rev: rev[p.id] || p.meta || null, sug: _glHbPaySuggest_(p, cands, roles), entry: e ? e.id : '' };
   }).sort(function (a, b) { return _glDKey_(b.date).localeCompare(_glDKey_(a.date)); });
   // ربط الرحلات: حجوزات عملاء العمرة ورحلات الشركة، وأي حجز له تحديد يدوي
   res.tripRows = [];
@@ -2319,7 +2336,7 @@ function glHbState(authToken) {
       type: m ? m.type : '', auto: auto.trip, hits: auto.hits, cands: auto.cands, ov: ov[b.key] === undefined ? null : ov[b.key], sale: b.sale.value, cost: b.cost.value, entry: e ? e.id : '' });
   });
   res.stats = { bookings: H.bookings.length, active: H.bookings.filter(function (b) { return b.status !== 'لاغي'; }).length, pays: H.pays.length,
-    parties: res.parties.length, mapped: res.parties.filter(function (p) { return p.map; }).length, reviewed: Object.keys(rev).length,
+    parties: res.parties.length, mapped: res.parties.filter(function (p) { return p.map; }).length, reviewed: res.pays.filter(function (p) { return p.rev; }).length,
     entries: Object.keys(ents).filter(function (k) { return ents[k].st === GL_ST_POSTED_; }).length };
   _GL_ACC_MEMO_ = null;
   return res;
@@ -2427,4 +2444,45 @@ function glHbReconcile(authToken) {
     .sort(function (a, b) { return b.n - a.n; });
   _GL_ACC_MEMO_ = null;
   return { success: true, rows: rows, info: info, clearing: clear, cash: cash };
+}
+// 🏁 (V4.208-H2) ترحيل أرباح الموردين لإيرادات السكن نهاية الموسم: قيد يومية مرحّل (غير تلقائي) يُصفّي رصيد كل
+// حساب «إيرادات حجوزات — المورد» حتى التاريخ إلى «إيرادات السكن». يمكن تكراره (يرحّل ما استجد بعد آخر ترحيل فقط).
+function _glHbSeasonPlan_(date) {
+  var d = _glDate_(date); if (!d) throw new Error('تاريخ الترحيل غير صالح');
+  var roles = _glAutoRoles_('', true), accs = _glAccounts_(), grp = roles.hb_revgrp, bal = _glBalances_(d), rows = [], tot = 0;
+  accs.list.forEach(function (a) {
+    if (a.isGroup || a.code.indexOf(grp) !== 0 || a.code === grp) return;
+    var b = bal[a.code]; if (!b) return;
+    var net = _glR2_(b.SAR), base = _glR2_(b.base); if (Math.abs(net) < 0.005 && Math.abs(base) < 0.005) return;
+    rows.push({ code: a.code, name: a.name, SAR: -net, base: -base }); tot = _glR2_(tot - net);
+  });
+  rows.sort(function (x, y) { return y.SAR - x.SAR; });
+  return { date: d, rows: rows, total: tot, target: roles.hb_rev, targetName: (accs.map[roles.hb_rev] || {}).name || 'إيرادات السكن' };
+}
+function glHbSeasonPreview(authToken, date) { _glPerm_(authToken, 'view'); _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; var r = _glHbSeasonPlan_(date); r.success = true; return r; }
+function glHbSeasonClose(authToken, date) {
+  var session = _glPerm_(authToken, 'edit');
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
+    var P = _glHbSeasonPlan_(date);
+    if (!P.rows.length) throw new Error('لا توجد أرباح موردين غير مرحّلة حتى ' + P.date);
+    var lines = [], net = 0;
+    P.rows.forEach(function (r) {   // رصيد دائن (ربح) ⇐ يُجعل مديناً لتصفيته
+      var amt = Math.abs(r.SAR), rate = amt ? Math.round(Math.abs(r.base / r.SAR) * 1e6) / 1e6 : 1;
+      if (amt >= 0.005) lines.push({ account: r.code, debit: r.SAR > 0 ? amt : 0, credit: r.SAR < 0 ? amt : 0, currency: 'SAR', rate: rate, desc: 'ترحيل ربح حجوزات ' + r.name + ' لإيرادات السكن' });
+      net += r.base;
+    });
+    net = _glR2_(net);
+    var tot = _glR2_(P.total);
+    lines.push({ account: P.target, debit: tot < 0 ? -tot : 0, credit: tot > 0 ? tot : 0, currency: 'SAR', rate: tot ? Math.round(Math.abs(net / tot) * 1e6) / 1e6 : _glRates_().SAR, desc: 'أرباح حجوزات الفنادق حتى ' + P.date });
+    var v = _glValidate_({ date: P.date, type: 'قيد يومية', desc: 'ترحيل أرباح حجوزات الفنادق (حسابات الموردين) إلى إيرادات السكن حتى ' + P.date, lines: lines }, { allowBeforeStart: true, noBridge: true });
+    var seq = _glNextEntrySeq_(1), id = _glEntryId_(seq);
+    var w = _glWriteEntry_(v, { id: id, seq: seq, status: GL_ST_POSTED_, sourceKey: 'HBSEASON:' + P.date, desc: 'ترحيل أرباح حجوزات الفنادق (حسابات الموردين) إلى إيرادات السكن حتى ' + P.date }, session.username);
+    var eSh = _glSheet_('entries'), lSh = _glSheet_('lines');
+    eSh.getRange(eSh.getLastRow() + 1, 1, 1, w.eRow.length).setValues([w.eRow]);
+    lSh.getRange(lSh.getLastRow() + 1, 1, w.lRows.length, w.lRows[0].length).setValues(w.lRows);
+    logChange_(session.username, 'ترحيل أرباح حجوزات الفنادق لإيرادات السكن', 'GL:' + id, '-', '-', P.rows.length + ' مورد — ' + tot + ' ريال حتى ' + P.date);
+    return { success: true, id: id, total: tot, count: P.rows.length };
+  } finally { lock.releaseLock(); }
 }

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.208 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.209 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.208)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.209)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.208</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.209</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7379,7 +7379,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.208";
+var CLIENT_APP_VERSION = "4.209";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45583,7 +45583,7 @@ function glRenderHotels() {
   box.innerHTML = '<div class="gl-card"><div class="d-flex align-items-center gap-2 flex-wrap"><b style="font-size:15px;">🏨 ربط برنامج حجوزات الفنادق بالدفتر</b><span class="gl-st" style="background:#ecfeff;color:#0e7490;">المرحلة H1</span>' +
       '<div class="ms-auto d-flex gap-1 flex-wrap">' + GL_HB_SUB_.map(function (x) { return '<button class="btn btn-sm ' + (sub === x[0] ? 'btn-dark' : 'btn-outline-secondary') + '" onclick="GL._hbSub=\'' + x[0] + '\';glRenderHotels()">' + x[1] + '</button>'; }).join('') +
       '<button class="btn btn-outline-primary btn-sm" title="إعادة قراءة برنامج الحجوزات" onclick="glHbLoad(true)">↻</button></div></div>' +
-    '<div class="gl-note mt-2 mb-0">برنامج الحجوزات يبقى كما هو تماماً (كشف الحساب والتأكيدات وبيان الأرصدة وتليجرام والبوابة) — هنا فقط تُحوَّل حجوزاته ودفعاته لقيود مزدوجة بالدفتر: البيع من ح/ العميل إلى ح/ إيرادات السكن، والتكلفة من ح/ تكلفة السكن (بوسم الرحلة) إلى ح/ المورد أو الشارت، والدفعات على الخزينة أو البنك أو العهدة أو الوكيل بعملتها الفعلية. رقم القيد اليدوي يبقى كما هو ويُضاف بجانبه رقم القيد الآلي JE.</div></div>' +
+    '<div class="gl-note mt-2 mb-0">برنامج الحجوزات يبقى كما هو تماماً (كشف الحساب والتأكيدات وبيان الأرصدة وتليجرام والبوابة) — هنا فقط تُحوَّل حجوزاته ودفعاته لقيود مزدوجة بالدفتر بآلية الـ ERP: من ح/ العميل (البيع) — إلى ح/ المورد (التكلفة) — إلى ح/ «إيرادات حجوزات — المورد» (الفرق = هامش ربح الحجز)، ولكل مورد حساب إيراد يُرحَّل لإيرادات السكن نهاية الموسم. رحلات الشركة بالتكلفة: من ح/ تكلفة السكن (بوسم الرحلة) إلى ح/ المورد. والدفعات على الخزينة أو البنك أو العهدة أو الوكيل بعملتها الفعلية. رقم القيد اليدوي يبقى كما هو ويُضاف بجانبه رقم القيد الآلي JE.</div></div>' +
     '<div id="glHbBox" class="mt-2"></div>';
   if (!H) { document.getElementById('glHbBox').innerHTML = '<div class="gl-card text-muted">⏳ جاري قراءة برنامج الحجوزات…</div>'; return glHbLoad(false); }
   if (!H.on && sub !== 'setup') GL._hbSub = sub = 'setup';
@@ -45613,6 +45613,10 @@ function glHbSetupView() {
       '<div class="gl-note mt-1">🛂 الدفعة المحوَّلة عبر وكيل (مثل ريادة الرؤى) تُسجَّل: من ح/ «مقاصة دفعات الفنادق عبر الوكلاء» إلى ح/ العميل. وبند حساب الوكيل ببرنامج العمرة (على الوكيل) الذي يحتوي بيانه إحدى الكلمات أعلاه يُسجَّل: من ح/ الوكيل إلى ح/ نفس المقاصة — فيلتقيان ولا يتكرر المبلغ، ورصيد المقاصة يكشف أي تحويل ناقص من أحد الطرفين.</div>' +
       (GL.isAdmin ? '<div class="d-flex gap-2 justify-content-end"><button class="btn btn-success btn-sm fw-bold" onclick="glHbSetupUI(this)">💾 ربط واختبار</button>' +
         (H.on ? '<button class="btn btn-outline-danger btn-sm" onclick="glHbSetupUI(this,true)">فصل الربط</button>' : '') + '</div>' : '<div class="small text-muted">الربط للمدير فقط.</div>') + '</div>' +
+    (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>🏁 ترحيل أرباح الموردين إلى إيرادات السكن (نهاية الموسم)</b>' +
+      '<div class="gl-note mt-1">ربح كل حجز يُسجَّل في حساب «إيرادات حجوزات — المورد» (تحت 47) فترى ربح كل مورد على حدة. في نهاية الموسم يُصفّى رصيد كل هذه الحسابات حتى التاريخ المختار بقيد يومية واحد إلى «إيرادات السكن». يمكن تكراره لاحقاً فيرحّل ما استجد فقط.</div>' +
+      '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">حتى تاريخ</label><div style="width:140px;">' + glDateInput('glHbSeasonD', '') + '</div></div>' +
+      '<button class="btn btn-outline-primary btn-sm" onclick="glHbSeasonUI(this,false)">👁️ معاينة</button>' + (GL.can.edit ? '<button class="btn btn-warning btn-sm fw-bold" onclick="glHbSeasonUI(this,true)">🏁 ترحيل</button>' : '') + '</div><div id="glHbSeasonRes"></div></div>' : '') +
     (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>🧩 حسابات الأدوار</b><div class="small mt-1">' + Object.keys(H.roles || {}).map(function (r) { var x = H.roles[r]; return '<div><span class="gl-latin">' + glEsc(x.code) + '</span> — ' + glEsc(x.name) + (x.virtual ? ' <small class="text-muted">(يُنشأ عند أول حفظ/مزامنة)</small>' : ''); }).join('') + '</div></div>' : '');
 }
 function glHbSetupUI(btn, disc) {
@@ -45641,6 +45645,24 @@ function glHbSyncUI(btn) {
       glRefreshData(function () { glHbLoad(true); });
     }, function (e) { btn.disabled = false; btn.innerHTML = '🔄 مزامنة القيود الآن'; _showPopup(e.message || e, 'error'); });
   }, { title: 'المزامنة', icon: '🔄', yesLabel: 'مزامنة', danger: false });
+}
+function glHbSeasonUI(btn, go) {
+  var d = (document.getElementById('glHbSeasonD') || {}).value || '';
+  if (!d) return _showPopup('اختر التاريخ أولاً', 'warning');
+  btn.disabled = true;
+  glRun('glHbSeasonPreview', [d], function (P) {
+    btn.disabled = false;
+    var box = document.getElementById('glHbSeasonRes');
+    if (box) box.innerHTML = '<div class="table-responsive mt-2" style="max-height:300px;overflow:auto;"><table class="gl-tbl"><thead><tr><th>حساب إيرادات المورد</th><th>الربح (ريال)</th></tr></thead><tbody>' +
+      (P.rows.map(function (r) { return '<tr><td style="text-align:right;"><span class="gl-latin">' + glEsc(r.code) + '</span> ' + glEsc(r.name) + '</td><td class="gl-latin">' + glFmt(r.SAR) + '</td></tr>'; }).join('') || '<tr><td colspan="2" class="text-muted">لا أرباح غير مرحّلة حتى ' + glEsc(P.date) + '</td></tr>') +
+      '</tbody><tfoot><tr><th>الإجمالي ← ' + glEsc(P.target + ' ' + P.targetName) + '</th><th class="gl-latin">' + glFmt(P.total) + '</th></tr></tfoot></table></div>';
+    if (!go || !P.rows.length) return;
+    askConfirm_('ترحيل أرباح ' + P.rows.length + ' مورداً (' + glFmt(P.total) + ' ريال) إلى «' + P.targetName + '» بقيد بتاريخ ' + P.date + '؟', function () {
+      btn.disabled = true;
+      glRun('glHbSeasonClose', [d], function (res) { btn.disabled = false; _showPopup('✅ رُحّلت أرباح ' + res.count + ' مورداً بالقيد ' + res.id, 'success', 'ترحيل نهاية الموسم'); glRefreshData(function () { glHbLoad(true); }); },
+        function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+    }, { title: 'ترحيل نهاية الموسم', icon: '🏁', yesLabel: 'ترحيل', danger: false });
+  }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
 }
 /* ---- خريطة الحسابات ---- */
 function glHbTypeAccs(type) {
@@ -45684,7 +45706,7 @@ function glHbMapView() {
       '<label class="small d-flex align-items-center gap-1"><input type="checkbox" ' + (only ? 'checked' : '') + ' onchange="GL._hbOnlyNew=this.checked;glHbMapView()"> غير المربوط فقط</label>' +
       '<span id="glHbMapN" class="small" style="color:#b45309;"></span>' +
       (GL.can.add ? '<div class="ms-auto d-flex gap-1"><button class="btn btn-outline-success btn-sm" onclick="glHbMapSave(this,true)">✔️ اعتماد المقترح لكل غير المربوط</button><button class="btn btn-success btn-sm fw-bold" onclick="glHbMapSave(this)">💾 حفظ التعديلات</button></div>' : '') + '</div>' +
-    '<div class="gl-note">النوع يحدد القيد: <b>عميل سكن</b> (تحت 1203) و<b>عميل عمرة</b> (نفس حسابه ببرنامج العمرة تحت 1201 — مثل سامح والهتيمي) يُسجَّل عليهما البيع بسعر البيع · <b>مورد</b> و<b>شارت</b> تحت 2103 (الشارت لو ظهر كعميل يُسجَّل عليه البيع وفرقه إيراد) · <b>عهدة</b> حساب العهدة نفسه (باع حجزاً وحصّل قيمته) · <b>رحلة الشركة</b> بالتكلفة فقط موسومة برحلة العمرة المختارة · <b>تجاهل</b> لا يُسجَّل. الرصيد = رصيد كشف الحساب ببرنامج الحجوزات (موجب مدين).</div>' +
+    '<div class="gl-note">النوع يحدد القيد: <b>عميل سكن</b> (تحت 1203) و<b>عميل عمرة</b> (نفس حسابه ببرنامج العمرة تحت 1201 — مثل سامح والهتيمي) يُسجَّل عليهما البيع بسعر البيع · <b>مورد</b> و<b>شارت</b> تحت 2103، ويُنشأ لكل منهما تلقائياً حساب «إيرادات حجوزات — الاسم» تحت 47 يجمع ربح حجوزاته (الشارت لو ظهر كعميل يُسجَّل عليه البيع وفرقه ربح لمورد الحجز) · <b>عهدة</b> حساب العهدة نفسه (باع حجزاً وحصّل قيمته) · <b>رحلة الشركة</b> بالتكلفة فقط موسومة برحلة العمرة المختارة · <b>تجاهل</b> لا يُسجَّل. الرصيد = رصيد كشف الحساب ببرنامج الحجوزات (موجب مدين).</div>' +
     '<div class="table-responsive" style="max-height:560px;overflow:auto;"><table class="gl-tbl" id="glHbMapT"><thead><tr><th>الاسم ببرنامج الحجوزات</th><th>كعميل</th><th>كمورد</th><th>دفعات</th><th>الرصيد (ريال)</th><th>النوع</th><th>الحساب / الرحلة</th><th></th></tr></thead><tbody>' +
       (list.map(glHbMapRow).join('') || '<tr><td colspan="8" class="text-muted">' + (only ? '✅ كل الأسماء مربوطة' : 'لا نتائج') + '</td></tr>') + '</tbody></table></div></div>';
   glHbMapCount();
@@ -45724,7 +45746,7 @@ function glHbPayRow(p) {
     '<td class="small" style="text-align:right;max-width:260px;">' + glEsc(p.note) + '</td><td class="gl-latin small">' + glEsc(p.qaid || '') + '</td><td class="gl-latin small">' + (p.entry ? '<b>' + glEsc(p.entry) + '</b>' : '—') + '</td>' +
     (p.linkId ? '<td colspan="3" class="small text-muted">قيد واحد بين طرفي الدفعة المرتبطة</td>' :
     '<td style="min-width:210px;"><select class="form-select form-select-sm" onchange="glHbPaySet(\'' + glJs(p.id) + '\',\'cash\',this.value,this)">' + glHbCashOpts(v.cash) + '</select>' +
-      (!e ? '<div class="small text-muted">مقترح: ' + glEsc(p.sug.why) + '</div>' : '') + '</td>' +
+      (!e ? '<div class="small text-muted">مقترح: ' + glEsc(p.sug.why) + '</div>' : (p.rev && p.rev.src === 'hotel' && !GL._hbPEdit[p.id] ? '<div class="small" style="color:#0e7490;">🏨 من برنامج الحجوزات' + (p.rev.by ? ' (' + glEsc(p.rev.by) + ')' : '') + '</div>' : '')) + '</td>' +
     '<td><select class="form-select form-select-sm" style="width:72px;" onchange="glHbPaySet(\'' + glJs(p.id) + '\',\'cur\',this.value)">' + ['SAR', 'EGP', 'USD'].map(function (c) { return '<option' + (c === v.cur ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></td>' +
     '<td><input class="form-control form-control-sm gl-latin" style="width:100px;" value="' + glEsc(v.cur === 'SAR' ? '' : v.amount) + '" placeholder="' + (v.cur === 'SAR' ? '=' : 'المبلغ') + '"' + (v.cur === 'SAR' ? ' disabled' : '') + ' onchange="glHbPaySet(\'' + glJs(p.id) + '\',\'amount\',this.value)">' +
       (!e && p.sug.est ? '<div class="small" style="color:#b45309;">تقدير</div>' : '') + '</td>') + '</tr>';

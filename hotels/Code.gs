@@ -3,7 +3,7 @@
 // إصدار البرنامج - يُحدَّث يدوياً (رقم النسخة فقط) بعد كل تعديل
 // لتتبع آخر نسخة مرفوعة، ويظهر تلقائياً في الشريط الجانبي وصفحة كشف الحساب
 // ==========================================================
-var APP_VERSION = "7.14.0";
+var APP_VERSION = "7.15.0";
 
 // سقف عدد صفوف نتائج شاشة "كل الحجوزات" المُرسلة للمتصفح في الطلب الواحد
 var BOOKINGS_RESULT_CAP_ = 1500;
@@ -30,6 +30,26 @@ function normalizeName_(s) {
     .trim();
 }
 var APP_VERSION_DATE = "24/09/2026";
+
+// ==========================================================
+// 🔒 (7.15.0) حمايات عامة
+// ==========================================================
+// دوال الإعداد/الصيانة التي تُشغَّل يدويًا من محرر السكربت فقط: كانت عامة بلا أي فحص، فأي زائر
+// لرابط التطبيق (بما فيه بوابة العملاء العامة) يستطيع استدعاءها عبر google.script.run. الآن لا تعمل
+// إلا لصاحب السكربت نفسه (المحرر، أو هو شخصيًا من المتصفح).
+function requireScriptOwner_() {
+  var a = '', e = '';
+  try { a = Session.getActiveUser().getEmail() || ''; } catch (x) {}
+  try { e = Session.getEffectiveUser().getEmail() || ''; } catch (x) {}
+  if (!a || !e || a.toLowerCase() !== e.toLowerCase()) throw new Error('هذه الدالة تُشغَّل من محرر السكربت بواسطة صاحبه فقط');
+}
+// منع حقن المعادلات: نص يبدأ بـ = + - @ يُكتب في الشيت كمعادلة تُنفَّذ. نُسبقه بعلامة ' فيُحفظ نصًا
+// كما هو (لا تظهر العلامة في الخلية). الأرقام الحقيقية والتواريخ لا تُلمس.
+function cellSafe_(v) {
+  if (typeof v !== 'string') return v;
+  if (/^[=+\-@]/.test(v) && !/^[-+]?\d+([.,]\d+)?$/.test(v.trim())) return "'" + v;
+  return v;
+}
 
 // ==========================================================
 // تسجيل الدخول والصلاحيات
@@ -1213,6 +1233,7 @@ function deleteBookingsSyncTrigger() {
 // مباشرة). آمنة الاستدعاء أكثر من مرة — لن تفعل شيئًا في المرات التالية.
 // ==========================================================
 function cleanupOldSyncSetup() {
+  requireScriptOwner_();   // (7.15.0) كانت عامة — أي زائر يحذف شيت "الحجوزات"
   deleteBookingsSyncTrigger();
   var ss = getSS_();
   var old = ss.getSheetByName('الحجوزات');
@@ -1537,6 +1558,7 @@ function downloadBackup() {
   var file = DriveApp.createFile(blob);
 
   // إنشاء رابط لتنزيل النسخة الاحتياطية مع JavaScript لإغلاق الرسالة وحذف الملف
+  registerTempFile_(file.getId());
   var htmlOutput = HtmlService.createHtmlOutput('<html><body>' +
     '<a id="downloadLink" href="' + file.getDownloadUrl() + '" target="_blank">Download your backup</a>' +
     '<script>' +
@@ -1551,8 +1573,16 @@ function downloadBackup() {
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Download Backup');
 }
 
+// (7.15.0) كانت تنقل أي ملف بالدرايف للسلة لأي زائر يعرف معرّفه — الآن فقط ملفات النسخة
+// الاحتياطية/الـPDF المؤقتة التي أنشأها البرنامج نفسه خلال الساعة الأخيرة (مسجَّلة بالكاش)
+function registerTempFile_(fileId) {
+  try { CacheService.getScriptCache().put('tmpfile_' + fileId, '1', 3600); } catch (e) {}
+}
 function deleteTempFile(fileId) {
   try {
+    fileId = String(fileId || '');
+    if (!fileId || CacheService.getScriptCache().get('tmpfile_' + fileId) !== '1') throw new Error('ملف غير مسموح بحذفه');
+    CacheService.getScriptCache().remove('tmpfile_' + fileId);
     var file = DriveApp.getFileById(fileId);
     Logger.log('Found file: ' + file.getName());
     file.setTrashed(true);
@@ -1684,6 +1714,7 @@ function saveAsPDF() {
   var file = DriveApp.createFile(blob);
 
   // إنشاء رابط لتنزيل النسخة الاحتياطية مع JavaScript لإغلاق الرسالة وحذف الملف
+  registerTempFile_(file.getId());
   var htmlOutput = HtmlService.createHtmlOutput('<html><body>' +
     '<a id="downloadLink" href="' + file.getDownloadUrl() + '" target="_blank">Download your PDF</a>' +
     '<script>' +
@@ -1858,6 +1889,7 @@ function ensureTempShareFolder_() {
 // لكنها تُظهر شاشة الموافقة مباشرةً بدل ظهورها لاحقًا. (الدوال المنتهية بـ"_" لا تظهر في
 // قائمة التشغيل، ولهذا هذه بلا شرطة سفلية.)
 function setupDriveAccess() {
+  requireScriptOwner_();   // (7.15.0) دالة إعداد — من المحرر فقط
   var folder = ensureTempShareFolder_();
   purgeShareTempFolder();
   return 'تم التجهيز. مجلد الملفات المؤقتة: ' + folder.getName() + ' — معرّفه: ' + folder.getId();
@@ -2385,7 +2417,8 @@ function reqPublicView_(r, viewer) {
 // حقول أساسية مسموح للعميل طلبها (بلا أي أسعار) → أعمدة المصدر (1-based)
 function reqDataToSourceMap_(data) {
   var map = {};
-  if (data.hotel !== undefined) map[5] = (data.hotel || '').toString();
+  // (7.15.0) فراغ الفندق/الملاحظات في الطلب لا يمسح قيمة الحجز القائمة (قبول طلب تعديل كان يمسح ملاحظات الحجز)
+  if (data.hotel !== undefined && String(data.hotel || '').trim() !== '') map[5] = cellSafe_((data.hotel || '').toString());
   if (data.checkIn) { var a = String(data.checkIn).split('-'); if (a.length === 3) map[8] = new Date(+a[0], +a[1] - 1, +a[2]); }
   if (data.checkOut) { var b = String(data.checkOut).split('-'); if (b.length === 3) map[9] = new Date(+b[0], +b[1] - 1, +b[2]); }
   // خلية غرف بلا عدد تُترك فارغة لا صفرًا: الشيت المصدر يعرض 9 رباعي فقط ويترك الدابل
@@ -2411,7 +2444,7 @@ function reqDataToSourceMap_(data) {
     var v = parseFloat(data[k]);
     if (!isNaN(v) && v > 0) map[costCol[k]] = v;
   });
-  if (data.notes !== undefined) map[21] = (data.notes || '').toString();
+  if (data.notes !== undefined && String(data.notes || '').trim() !== '') map[21] = cellSafe_((data.notes || '').toString());
   return map;
 }
 
@@ -2499,7 +2532,7 @@ function setBookingFieldsRaw_(bookingKey, fieldsMap) {
   Object.keys(fieldsMap).forEach(function (colStr) {
     var col = parseInt(colStr, 10);
     if (SOURCE_FORMULA_COLS_[col]) return; // عمود معادلة — الكتابة فيه تمسحها نهائيًا
-    src.sheet.getRange(src.rowInSheet, col).setValue(fieldsMap[colStr]);
+    src.sheet.getRange(src.rowInSheet, col).setValue(cellSafe_(fieldsMap[colStr]));
   });
   invalidateSourceCache_();
 }
@@ -2580,7 +2613,7 @@ function appendBookingRaw_(city, data, clientName, salesAgent, status) {
     Object.keys(map).forEach(function (colStr) {
       var col = parseInt(colStr, 10);
       if (SOURCE_FORMULA_COLS_[col]) return; // لا نمسح معادلة أبدًا
-      sh.getRange(targetRow, col).setValue(map[colStr]);
+      sh.getRange(targetRow, col).setValue(cellSafe_(map[colStr]));
     });
     SpreadsheetApp.flush();
     invalidateSourceCache_();
@@ -4725,9 +4758,11 @@ function registerPayment(payment, token) {
     var d = payment.date ? new Date(payment.date) : new Date();
     var id = payment.id || Utilities.getUuid();
     sh.appendRow([
-      d, payment.partyName, resolveDirectionLabel_(payment.direction),
-      amount, payment.note || DEFAULT_PAYMENT_NOTE, payment.qaid || '', new Date(), id, !!payment.legacyImported
+      d, cellSafe_(payment.partyName), resolveDirectionLabel_(payment.direction),
+      amount, cellSafe_(payment.note || DEFAULT_PAYMENT_NOTE), cellSafe_(payment.qaid || ''), new Date(), id, !!payment.legacyImported
     ]);
+    // (7.15.0) البيانات المحاسبية للدفعة (الحساب النقدي والعملة الفعلية) — ملف GlLink.gs
+    try { if (payment.glCash) glLinkSavePayMeta_(id, payment, actingUser); } catch (eGl) { Logger.log('glLink meta: ' + eGl.message); }
     invalidatePaymentsMemo_();
     logChange_(actingUser, 'دفعة', payment.partyName, '[تسجيل دفعة] ' + resolveDirectionLabel_(payment.direction) +
       (payment.qaid ? (' — قيد ' + payment.qaid) : '') + (payment.note ? (' — ' + payment.note) : ''), '', amount,
@@ -4794,8 +4829,8 @@ function registerLinkedPayment(payload, token) {
     var id1 = Utilities.getUuid(), id2 = Utilities.getUuid();
     var noteFrom = linkedPaymentNote_(payload.note, toParty, 'to');
     var noteTo = linkedPaymentNote_(payload.note, fromParty, 'from');
-    sh.appendRow([d, fromParty, 'استلمنا منه', amount, noteFrom, payload.qaid || '', now, id1, false, linkId]);
-    sh.appendRow([d, toParty, 'دفعنا له', amount, noteTo, payload.qaid || '', now, id2, false, linkId]);
+    sh.appendRow([d, cellSafe_(fromParty), 'استلمنا منه', amount, cellSafe_(noteFrom), cellSafe_(payload.qaid || ''), now, id1, false, linkId]);
+    sh.appendRow([d, cellSafe_(toParty), 'دفعنا له', amount, cellSafe_(noteTo), cellSafe_(payload.qaid || ''), now, id2, false, linkId]);
     invalidatePaymentsMemo_();
     // كانت هذه الدالة الوحيدة من مسارات تسجيل الدفعات الأربعة التي لا تُسجَّل في سجل
     // التعديلات ولا تُرسل تنبيه تليجرام إطلاقًا — سطرا logChange_/tgEnqueue_ هما الإصلاح
@@ -4838,7 +4873,7 @@ function registerPaymentsBatch(direction, rows, token) {
       if (!amount || amount <= 0) { skipped++; return; }
       var d = r.date ? new Date(r.date) : now;
       var id = Utilities.getUuid();
-      out.push([d, r.partyName, dirLabel, amount, r.note || DEFAULT_PAYMENT_NOTE, r.qaid || '', now, id]);
+      out.push([d, cellSafe_(r.partyName), dirLabel, amount, cellSafe_(r.note || DEFAULT_PAYMENT_NOTE), cellSafe_(r.qaid || ''), now, id]);
       notifyRows.push({ partyName: r.partyName, amount: amount, note: r.note, id: id, date: d, qaid: r.qaid || '' });
     });
 
@@ -4988,7 +5023,8 @@ function updatePayment(id, fields, token) {
     var qaid = fields.qaid !== undefined ? fields.qaid : current[5];
     var next = [d, partyName, dirLabel, amount, note, qaid];
     var diffs = paymentFieldDiffs_(current, next);
-    sh.getRange(rowIdx, 1, 1, 6).setValues([next]);
+    sh.getRange(rowIdx, 1, 1, 6).setValues([next.map(cellSafe_)]);
+    try { if (fields.glCash !== undefined) glLinkSavePayMeta_(id, fields, actingUser); } catch (eGl) { Logger.log('glLink meta: ' + eGl.message); }
     invalidatePaymentsMemo_();
     if (diffs.length) {
       logChange_(actingUser, 'دفعة', partyName,
@@ -5311,6 +5347,7 @@ function saveAccountProfile(token, payload) {
 // لاحقًا بعد إضافة عملاء جدد يمنحهم أكوادًا جديدة فقط دون أي أثر على أكواد القدامى
 // ==========================================================
 function generateAccountCodes() {
+  requireScriptOwner_();   // (7.15.0) دالة إعداد — من المحرر فقط
   var names = getUnifiedPartyList_(); // كل الأسماء المعروفة من الحجوزات + الحسابات اليدوية
   var sh = ensureAccountProfilesSheet_();
   var data = sh.getDataRange().getValues();
@@ -7049,6 +7086,7 @@ function telegramDiagnose(token) {
 // تُشغَّل يدويًا مرة واحدة من محرّر Apps Script (قائمة "تشغيل") لمنح الصلاحيات اللازمة:
 // الاتصال بخدمة خارجية (تليجرام) وإنشاء مشغّل زمني — بعدها يعمل كل شيء تلقائيًا
 function setupTelegramNotifications() {
+  requireScriptOwner_();   // (7.15.0) دالة إعداد — من المحرر فقط
   ensureTgQueueSheet_();
   ensureTelegramTrigger_();
   Logger.log('تم تجهيز تنبيهات تليجرام: الورقة والمشغّلات الزمنية جاهزة.');
