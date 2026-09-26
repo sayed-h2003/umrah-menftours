@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>دمج برنامج الحجوزات</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --navy:#1e3d59; --teal:#0f4c4c; --ink:#0f172a; --mut:#64748b; --line:#e2e8f0; --bg:#f4f6f9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Tajawal",Tahoma,sans-serif; background:var(--bg); color:var(--ink); line-height:1.75; }
+  header.top { background:var(--navy); color:#fff; padding:14px 16px; position:sticky; top:0; z-index:5; box-shadow:0 2px 10px rgba(0,0,0,.2); }
+  header.top h1 { font-family:"Cairo"; font-size:18px; margin:0 0 8px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+  .tabs button { font-family:inherit; font-weight:800; font-size:13px; border:0; border-radius:10px; padding:7px 12px; cursor:pointer; background:rgba(255,255,255,.14); color:#fff; }
+  .tabs button.on { background:#fff; color:var(--navy); }
+  main { max-width:1150px; margin:0 auto; padding:16px; }
+  .page { display:none; } .page.on { display:block; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 16px; margin-bottom:14px; box-shadow:0 2px 8px rgba(15,23,42,.04); }
+  h2 { font-family:"Cairo"; font-size:17px; margin:0 0 8px; color:var(--navy); }
+  h3 { font-family:"Cairo"; font-size:14.5px; margin:12px 0 6px; color:#334155; }
+  p, li { font-size:14px; } ul { margin:4px 0; padding-inline-start:22px; }
+  .latin { direction:ltr; unicode-bidi:isolate; font-variant-numeric:tabular-nums; }
+  .note { border-radius:10px; padding:9px 12px; font-size:13.5px; margin:8px 0; }
+  .note.i { background:#eff6ff; border:1px solid #bfdbfe; } .note.w { background:#fffbeb; border:1px solid #fde68a; color:#78350f; }
+  .note.g { background:#f0fdf4; border:1px solid #bbf7d0; } .note.r { background:#fef2f2; border:1px solid #fecaca; color:#7f1d1d; }
+  table.t { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.t th { background:#f1f5f9; color:#334155; padding:7px 8px; font-weight:800; text-align:center; border-bottom:2px solid #cbd5e1; }
+  table.t td { padding:7px 8px; border-bottom:1px solid #eef2f6; text-align:center; vertical-align:top; }
+  table.t td.r, table.t th.r { text-align:right; }
+  .scroll { overflow-x:auto; }
+  .opts { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+  .opt { border:2px solid var(--line); border-radius:14px; padding:12px 14px; background:#fff; }
+  .opt.rec { border-color:#16a34a; box-shadow:0 0 0 3px #dcfce7; }
+  .opt h3 { margin-top:0; }
+  .tag { display:inline-block; font-size:11px; font-weight:800; border-radius:20px; padding:1px 9px; margin-inline-start:6px; }
+  .tag.g { background:#dcfce7; color:#166534; } .tag.r { background:#fee2e2; color:#991b1b; } .tag.y { background:#fef3c7; color:#92400e; } .tag.b { background:#dbeafe; color:#1e40af; }
+  .pl { color:#166534; } .mi { color:#991b1b; }
+  .phase { display:grid; grid-template-columns:48px 1fr; gap:10px; margin-bottom:10px; }
+  .phase .n { background:var(--navy); color:#fff; border-radius:12px; display:flex; align-items:center; justify-content:center; font-family:"Cairo"; font-weight:900; font-size:18px; }
+  .phase .c { background:#fff; border:1px solid var(--line); border-radius:12px; padding:8px 12px; font-size:13.5px; }
+  .phase .c b { font-family:"Cairo"; }
+  .mock { border:2px solid #0f4c4c; border-radius:14px; overflow:hidden; background:#fff; margin:10px 0; }
+  .mock-h { background:linear-gradient(135deg,#136363,#0b3d3d); color:#fff; padding:9px 14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-weight:800; }
+  .mock-h small { font-weight:500; opacity:.85; }
+  .mock-b { padding:12px; }
+  .btn { font-family:inherit; font-weight:800; font-size:12px; border:1px solid #cbd5e1; background:#fff; color:#334155; border-radius:8px; padding:5px 10px; }
+  .btn.p { background:#0f4c4c; color:#fff; border-color:#0f4c4c; }
+  .steps { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .steps span { font-size:12px; font-weight:800; padding:4px 12px; border-radius:20px; background:#f1f5f9; color:#64748b; }
+  .steps span.on { background:#0f4c4c; color:#fff; } .steps span.ok { background:#dcfce7; color:#166534; }
+  tr.err td { background:#fef2f2; } tr.warn td { background:#fffbeb; } tr.grp td { background:#f8fafc; font-weight:800; }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+  @media (max-width:640px) { .kpis { grid-template-columns:repeat(2,1fr); } }
+  .kpi { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:7px; text-align:center; }
+  .kpi b { display:block; font-family:"Cairo"; font-size:17px; } .kpi small { color:var(--mut); font-size:11px; font-weight:700; }
+  .q { background:#fff7ed; border:1.5px solid #fed7aa; border-radius:12px; padding:10px 12px; margin:8px 0; font-size:13.5px; }
+  .q b.n { background:#ea580c; color:#fff; border-radius:50%; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; font-size:12px; margin-inline-end:6px; }
+  .o { display:inline-block; background:#fff; border:1px solid #fdba74; border-radius:8px; padding:1px 8px; margin:3px 3px 0 0; font-size:12.5px; }
+  .o.rec { background:#dcfce7; border-color:#86efac; font-weight:800; }
+  textarea.paste { width:100%; height:92px; font-family:monospace; font-size:12px; border:1.5px dashed #94a3b8; border-radius:10px; padding:8px; direction:rtl; background:#f8fafc; }
+</style><style>.st{display:inline-block;font-size:11px;font-weight:800;border-radius:20px;padding:1px 8px}.st.p{background:#fef3c7;color:#92400e}.st.c{background:#dcfce7;color:#166534}.st.x{background:#fee2e2;color:#991b1b}.st.a{background:#dbeafe;color:#1e40af}</style>
+</head>
+<body>
+<header class="top">
+  <h1>🏨 دمج برنامج حجوزات الفنادق مع برنامج العمرة — دراسة وخطة للنقاش قبل التنفيذ</h1>
+  <div class="tabs">
+    <button class="on" onclick="go(0,this)">🔍 ما وجدته</button>
+    <button onclick="go(1,this)">⚖️ طريقة الدمج</button>
+    <button onclick="go(2,this)">🧾 المحاسبة</button>
+    <button onclick="go(3,this)">🔗 ربط الرحلات والحسابات</button>
+    <button onclick="go(4,this)">🖥️ معاينة</button>
+    <button onclick="go(5,this)">🪜 المراحل والأسئلة</button>
+  </div>
+</header>
+<main>
+
+<section class="page on">
+  <div class="card"><h2>📊 البيانات الفعلية (من الملف المرسل)</h2>
+    <div class="kpis"><div class="kpi"><b class="latin">636</b><small>حجز (400 مكة · 236 المدينة)</small></div><div class="kpi"><b class="latin">3.53M</b><small>مبيعات ريال · تكلفة 3.38M</small></div><div class="kpi"><b class="latin">392</b><small>دفعة (مارس–سبتمبر 2026)</small></div><div class="kpi"><b class="latin">62 / 38</b><small>عميل / مورد</small></div></div>
+    <ul>
+      <li>الموسم بدأ يوليو 2026 (أول دخول 07/07/2026) — <b>نفس تاريخ بداية الحسابات العامة 01/07/2026</b>، فلا يوجد تاريخ قديم كبير للنقل.</li>
+      <li>الحالات: مؤكد 443 · لاغي 117 · بلا حالة 56 · مؤكد نسك 20. رقم القيد مسجَّل في 406 حجز (أرقام من دفاتر المحاسب اليدوية).</li>
+      <li>العملة: كل الحجوزات والأرصدة بالريال. <b>الدفعات بالجنيه تُسجَّل بمعادلها بالريال</b> والمبلغ الحقيقي مكتوب في البيان فقط (مثل «نقدا 274200 جم»).</li>
+    </ul></div>
+  <div class="card"><h2>💵 أين تذهب الفلوس فعلاً (من بيانات الدفعات)</h2>
+    <table class="t"><tr><th class="r">القناة (مستنتجة من البيان)</th><th>عدد</th><th>ريال</th></tr>
+    <tr><td class="r">تحويلات (بنك / «تحويل الى الوكيل ريادة الرؤى» / تحويلات عملاء)</td><td>178</td><td class="latin">1,717,442</td></tr>
+    <tr><td class="r">تسليم باليد (مندوب / إيصال نقدي)</td><td>62</td><td class="latin">1,047,920</td></tr>
+    <tr><td class="r">عهدة مكة + كريم شافعي</td><td>65</td><td class="latin">623,550</td></tr>
+    <tr><td class="r">عهدة المدينة (مودي)</td><td>13</td><td class="latin">815,500</td></tr>
+    <tr><td class="r">نقدي (خزينة مكتب مصر)</td><td>46</td><td class="latin">415,145</td></tr>
+    <tr><td class="r">بنود يدوية (جمال عبد السلام …)</td><td>6</td><td class="latin">730,700</td></tr></table>
+    <div class="note w">⚠️ لا شيء من هذه الحركات يظهر اليوم في خزينة أو بنك أو عهدة، ولا يوجد له قيد — وهذا بالضبط ما سيحلّه الدمج.</div></div>
+  <div class="card"><h2>🧩 الحسابات من نوع «آخر» (32 حساباً) — هي نقاط الربط مع برنامج العمرة</h2>
+    <table class="t"><tr><th class="r">النوع</th><th class="r">أمثلة</th><th>الرصيد الحالي (ريال)</th></tr>
+    <tr><td class="r">🧳 رحلات الشركة</td><td class="r">رحلة الشركة 19-8 · 8-9 ق/ مدينة · رحلة نهله 10-8-2026 · رحلة العربي بورسعيد 12-8 (12 رحلة)</td><td class="latin">≈ 196,000</td></tr>
+    <tr><td class="r">👥 عملاء برنامج العمرة</td><td class="r">سامح · الهتيمي · فايز المنيا · احمد وحيد · محمود سويلم - طارق صلاح …</td><td class="latin">≈ 580,000</td></tr>
+    <tr><td class="r">👜 عُهد</td><td class="r">عهدة مكة · عهدة مودي · عهدة كريم شافعي - مكة</td><td class="latin">-86,800 / -27,030 / 10,970</td></tr>
+    <tr><td class="r">🏨 شارتات (حجز مجمَّع مع فندق)</td><td class="r">شارت رويال بارك · شارت بدر الماسة · شارت درة اسماء</td><td class="latin">-514,125 / -133,230 / -27,340</td></tr>
+    <tr><td class="r">💼 استثمار / شراكة</td><td class="r">جمال عبد السلام («خزينة الاستثمار») · بلومون (شريك 50% في بدر الماسة)</td><td class="latin">823,750</td></tr></table></div>
+  <div class="card"><h2>🖥️ البرنامج نفسه (دراسة الكود كاملاً)</h2>
+    <ul>
+      <li><b>12 شاشة</b>: كشف الحساب · كل الحجوزات · متابعة الأرصدة · بيان الأرصدة بتاريخ · الإحصائيات · الدفعات · بوابة العملاء · الإعدادات · سجل التعديلات · استيراد · المستخدمون. <b>107 دالة خادم</b> مستخدمة من الواجهة.</li>
+      <li><b>بوت تليجرام</b> متكامل: 12 نوع تنبيه + 20 أمراً + أوامر نصية (رصيد، كشف حساب، كشف وصول، أرصدة اليوم/بتاريخ) + تسجيل حجز من رسالة حرة + قراءة تأكيد الفندق PDF بالذكاء الاصطناعي + تأكيدات PDF/صورة.</li>
+      <li><b>بوابة العملاء</b>: حجوزات العميل + طلبات تعديل/إلغاء/حجز جديد بمحادثة.</li>
+      <li><b>شيتات العُهد الخارجية</b> تُسجِّل دفعات تلقائياً كل دقيقتين.</li>
+      <li>✅ نقاط قوة: كشف حساب ممتاز، ترصيد موحّد، صلاحيات دقيقة (شاشة/مدينة/مستوى مالي)، سجل تعديلات لكل حجز.</li>
+    </ul>
+    <div class="note r"><b>⚠️ ملاحظات مهمة يجب إصلاحها ضمن الدمج:</b>
+      <ul>
+        <li>دوال بلا أي تحقق دخول يمكن لأي من يملك الرابط استدعاؤها (منها حذف ملفات من الدرايف <span class="latin">deleteTempFile</span> وحذف شيت).</li>
+        <li>مزامنة شيت العهدة تحذف كل دفعاتها لو تعذّر فتح الشيت مرة واحدة.</li>
+        <li>بوابة العملاء: موافقة طلب تعديل تمسح ملاحظات الحجز الداخلية، وقد يرى العميل أسعاراً مخفية في بيانات الطلب.</li>
+        <li>رقم القيد يُكتب يدوياً، وأي تعديل بعده يحتاج مراجعة يدوية (شاشة «عُدِّلت بعد القيد»).</li>
+      </ul></div></div>
+</section>
+
+<section class="page">
+  <div class="card"><h2>⚖️ ثلاث طرق للدمج</h2>
+    <div class="opts">
+      <div class="opt rec"><h3>أ) على مراحل: ربط محاسبي أولاً ثم توحيد كامل <span class="tag g">⭐ التوصية</span></h3>
+        <p>برنامج الحجوزات يستمر يعمل يومياً كما هو، ويقرأ برنامج العمرة (الحسابات العامة) حجوزاته ودفعاته ويُنشئ لها قيوداً تلقائية فوراً. ثم تُضاف له حقول الخزينة/العملة، ثم يُنقل داخل برنامج واحد.</p>
+        <p class="pl">＋ الفائدة المحاسبية (خزينة موحّدة + قيود + ربط الرحلات) خلال المرحلة الأولى بلا أي توقف.</p>
+        <p class="pl">＋ لا يفقد الموظفون شيئاً اعتادوه، والبوت والبوابة وروابط العملاء كما هي.</p>
+        <p class="mi">－ لفترة: دخولان (برنامجان) حتى المرحلة الأخيرة.</p></div>
+      <div class="opt"><h3>ب) دمج كامل فوري في برنامج واحد</h3>
+        <p class="mi">－ نقل 24 ألف سطر مرة واحدة مع تغيير أسماء متعارضة (doGet، doPost، logChange_ …) — خطر كبير على عمل يومي.</p>
+        <p class="mi">－ تغيير رابط بوابة العملاء وإعادة ضبط البوت دفعة واحدة.</p></div>
+      <div class="opt"><h3>ج) برنامجان منفصلان مع ربط محاسبي دائم</h3>
+        <p class="pl">＋ الأقل جهداً.</p><p class="mi">－ يبقى دخولان وصلاحيات منفصلة ولا توحيد للشاشات أبداً.</p></div>
+    </div>
+    <div class="note i">💡 مهم: بعد بدء الدمج يجب أن يكون تطوير برنامج الحجوزات في مكان واحد (هنا) — التعديل عليه في المحادثة الأخرى بالتوازي سيسبب تعارضاً بين النسختين.</div></div>
+</section>
+
+<section class="page">
+  <div class="card"><h2>🧾 القيود التلقائية لبرنامج الحجوزات (بتاريخ الدخول، مثل كشف الحساب الحالي)</h2>
+    <table class="t"><tr><th class="r">الحدث</th><th class="r">القيد</th></tr>
+    <tr><td class="r">حجز لعميل سكن عادي (له سعر، غير لاغي)</td><td class="r">من حـ/ العميل ← إلى حـ/ إيرادات السكن (بسعر البيع) · ومن حـ/ تكلفة السكن ← إلى حـ/ المورد (بسعر التكلفة) — بالريال</td></tr>
+    <tr><td class="r">حجز لرحلة الشركة أو لعميل عمرة مرتبط</td><td class="r">التكلفة فقط: من حـ/ تكلفة السكن (موسوم بالرحلة والعميل) ← إلى حـ/ المورد. <b>بلا إيراد</b> لأن إيراد هذا العميل مسجَّل في حسابات العملاء ببرنامج العمرة (بند «سكن مكة/المدينة») — فلا يتكرر</td></tr>
+    <tr><td class="r">المورد «عهدة»</td><td class="r">من حـ/ تكلفة السكن ← إلى حـ/ العهدة (صاحب العهدة دفع للفندق مباشرة)</td></tr>
+    <tr><td class="r">حجز «لاغي» / بلا سعر</td><td class="r">لا قيد (والملغى بعد قيده يُلغى قيده بأثر مسجَّل)</td></tr>
+    <tr><td class="r">«استلمنا منه»</td><td class="r">من حـ/ الخزينة أو البنك أو العهدة (بالعملة الفعلية: جنيه أو ريال) ← إلى حـ/ العميل (بالريال)</td></tr>
+    <tr><td class="r">«دفعنا له»</td><td class="r">من حـ/ المورد ← إلى حـ/ الخزينة/البنك/العهدة — أو ← إلى حـ/ الوكيل السعودي لو التحويل عن طريقه (ريادة الرؤى)، فيظهر تلقائياً في حساب الوكيل</td></tr>
+    <tr><td class="r">دفعة مزدوجة (عميل دفع لمورد مباشرة)</td><td class="r">قيد واحد: من حـ/ المورد ← إلى حـ/ العميل (بلا خزينة)</td></tr>
+    <tr><td class="r">شيت العهدة الخارجي</td><td class="r">كل صاحب عهدة يُربط بحساب عهدته في الدليل ← قيوده تتحرك على العهدة تلقائياً</td></tr></table>
+    <div class="note i">💵 <b>الخزينة الموحّدة:</b> في المرحلة الأولى تدخل الدفعات حساب «نقدية تحت التسوية (حجوزات)» ويختار المحاسب الخزينة/البنك/العهدة لكل دفعة من شاشة مراجعة — مع اقتراح تلقائي من البيان (عهدة مكة/مودي/كريم، نقدا ← الخزينة، تحويل ← البنك). من المرحلة الثانية يُختار الحساب النقدي والعملة داخل نموذج الدفعة نفسه.</div>
+    <div class="note g">📑 <b>الدورة المستندية:</b> كل حجز ودفعة يأخذ رقم قيد تلقائياً (بدل كتابة رقم القيد يدوياً)، وأي تعديل على الحجز يُحدِّث قيده تلقائياً — فتختفي مشكلة «عُدِّل بعد القيد». الترتيب: طلب/حجز ← تأكيد (رقم مسلسل) ← قيد الاستحقاق ← سند قبض/صرف ← كشف الحساب.</div></div>
+</section>
+
+<section class="page">
+  <div class="card"><h2>🔗 آلية ربط الحسابات (شاشة «خريطة حسابات الحجوزات»)</h2>
+    <p>لكل اسم في برنامج الحجوزات يُحدَّد مرة واحدة ما يقابله، مع اقتراح تلقائي — ولا يُنشأ أي قيد لحساب لم يُراجَع:</p>
+    <table class="t"><tr><th class="r">الاسم في الحجوزات</th><th>النوع المقترح</th><th class="r">يُربط بـ</th></tr>
+    <tr><td class="r">ترافيل بنك</td><td><span class="st c">عميل سكن</span></td><td class="r">حساب عميل (1203 عملاء السكن، أو حسابه الموجود لو هو عميل عمرة أيضاً)</td></tr>
+    <tr><td class="r">ابراهيم قافلة</td><td><span class="st c">مورد</span></td><td class="r">2103 الفنادق (أو حسابه كوكيل لو هو وكيل في برنامج العمرة)</td></tr>
+    <tr><td class="r">رحلة الشركة 8-9 ق/ مدينة</td><td><span class="st a">رحلة</span></td><td class="r">رحلة من شاشة الرحلات (اقتراح بالتاريخ 8-9 + الفندق + المدينة)</td></tr>
+    <tr><td class="r">سامح</td><td><span class="st a">عميل عمرة</span></td><td class="r">العميل «سامح» — وكل حجز يُربط تلقائياً برحلته التي يقع دخول الفندق ضمن فترة سكنها</td></tr>
+    <tr><td class="r">عهدة مودي</td><td><span class="st p">عهدة</span></td><td class="r">حساب عهدة المدينة في الدليل</td></tr>
+    <tr><td class="r">شارت رويال بارك</td><td><span class="st p">شارت</span></td><td class="r">مورد + (اختياري) ربط باتفاقية سكن</td></tr>
+    <tr><td class="r">جمال عبد السلام</td><td><span class="st x">؟ سؤال</span></td><td class="r">جاري شريك / مستثمر / خزينة استثمار — ينتظر توضيحك</td></tr></table></div>
+  <div class="card"><h2>🧳 ربط حجوزات الرحلات برحلاتها — ماذا تكسب</h2>
+    <ul>
+      <li>تكلفة السكن الفعلية تدخل <b>ربحية الرحلة</b> وربحية العميل في التقارير المالية.</li>
+      <li>في شاشة الرحلة: قسم «سكن الرحلة من برنامج الحجوزات» (الفندق، الغرف، الليالي، التكلفة، رقم تأكيد الفندق) مع <b>مقارنة الغرف المحجوزة بالغرف المطلوبة</b> من تسكين المعتمرين (نقص/زيادة).</li>
+      <li>في برنامج الحجوزات: شارة 🧳 على الحجز المرتبط برحلة.</li>
+      <li>الحجز غير المطابق لأي رحلة يظهر في قائمة «بانتظار الربط» لاختيار الرحلة يدوياً.</li>
+    </ul></div>
+</section>
+
+<section class="page">
+  <div class="card"><h2>🖥️ معاينة — تبويب «🏨 الحجوزات» داخل الحسابات العامة (المرحلة الأولى)</h2>
+    <div class="mock"><div class="mock-h">🏨 ربط برنامج حجوزات الفنادق <small>· آخر مزامنة 10:42</small><span style="margin-inline-start:auto;display:flex;gap:6px;"><span class="btn">👁️ معاينة</span><span class="btn p">🔄 مزامنة</span></span></div><div class="mock-b">
+      <div class="kpis"><div class="kpi"><b class="latin">519</b><small>حجز مُرحَّل بقيد</small></div><div class="kpi"><b class="latin" style="color:#b45309;">58</b><small>بلا سعر (بلا قيد)</small></div><div class="kpi"><b class="latin" style="color:#b45309;">24</b><small>دفعة بانتظار اختيار الخزينة</small></div><div class="kpi"><b class="latin" style="color:#b91c1c;">3</b><small>حساب بلا ربط</small></div></div>
+      <div class="steps"><span class="on">📋 مراجعة الدفعات</span><span>🗺️ خريطة الحسابات</span><span>🧳 ربط الرحلات</span><span>⚖️ المطابقة</span></div>
+      <table class="t"><tr><th>التاريخ</th><th class="r">الطرف</th><th>الاتجاه</th><th>المبلغ</th><th class="r">البيان</th><th class="r">الحساب النقدي</th><th>العملة الفعلية</th></tr>
+      <tr><td class="latin">24/09</td><td class="r">ترافيل بنك</td><td>استلمنا</td><td class="latin">20,000</td><td class="r">نقدا 107500 جم</td><td class="r">💵 الخزينة الرئيسية <small style="color:#166534;">(مقترح)</small></td><td>جنيه 107,500 × 5.375</td></tr>
+      <tr><td class="latin">23/09</td><td class="r">احمد عطية</td><td>دفعنا</td><td class="latin">15,000</td><td class="r">دفعة مسددة من عهدة مكة</td><td class="r">👜 عهدة مكة <small style="color:#166534;">(مقترح)</small></td><td>ريال</td></tr>
+      <tr><td class="latin">22/09</td><td class="r">قافلة التوحيد</td><td>دفعنا</td><td class="latin">30,000</td><td class="r">تحويل الى الوكيل ريادة الرؤى</td><td class="r">🛂 الوكيل ريادة الرؤى <small style="color:#166534;">(مقترح)</small></td><td>ريال</td></tr>
+      <tr class="warn"><td class="latin">21/09</td><td class="r">الفنار</td><td>استلمنا</td><td class="latin">3,000</td><td class="r">ايصال851</td><td class="r">— اختر —</td><td>—</td></tr></table>
+    </div></div>
+    <div class="note i">المطابقة: رصيد كل عميل ومورد كما يحسبه برنامج الحجوزات ↔ رصيده في الدفتر، بنفس أسلوب مطابقة العملاء والوكلاء الحالية.</div></div>
+</section>
+
+<section class="page">
+  <div class="card"><h2>🪜 المراحل المقترحة</h2>
+    <div class="phase"><div class="n">1</div><div class="c"><b>ربط محاسبي بلا أي تغيير في برنامج الحجوزات:</b> قراءة الحجوزات والدفعات ← قيود تلقائية، خريطة الحسابات، مراجعة الدفعات واختيار الخزينة/البنك/العهدة/الوكيل بالعملة الفعلية، ربط الرحلات وعملاء العمرة، المطابقة. <b>النتيجة:</b> خزائن وبنوك وعُهد موحّدة وقيود وربحية رحلات.</div></div>
+    <div class="phase"><div class="n">2</div><div class="c"><b>توحيد الإدخال في برنامج الحجوزات:</b> الحساب النقدي والعملة في نموذج الدفعة، ربط أصحاب العُهد بحساباتهم، رقم القيد التلقائي يظهر في الحجز والكشف، الطرف المقابل للبند اليدوي، الدفع عن طريق الوكيل يُضاف لحسابه، + إصلاح ملاحظات الأمان والأخطاء المذكورة.</div></div>
+    <div class="phase"><div class="n">3</div><div class="c"><b>في برنامج العمرة:</b> سكن الرحلة من الحجوزات ومقارنة الغرف بالتسكين، والشارتات مع اتفاقيات السكن.</div></div>
+    <div class="phase"><div class="n">4</div><div class="c"><b>برنامج واحد:</b> نقل برنامج الحجوزات داخل مشروع برنامج العمرة (دخول واحد وصلاحيات واحدة)، مع الحفاظ على رابط بوابة العملاء والبوت وكل الشاشات كما هي، ثم تحويل الدفعات إلى سندات قبض/صرف مباشرة.</div></div>
+  </div>
+  <div class="card"><h2>❓ أسئلة أحتاج إجابتها قبل البدء</h2>
+    <div class="q"><b class="n">1</b>طريقة الدمج: <span class="o rec">على مراحل (أ) ⭐</span><span class="o">دمج كامل فوري (ب)</span><span class="o">برنامجان مع ربط دائم (ج)</span></div>
+    <div class="q"><b class="n">2</b>العملاء من نوع «آخر» مثل <b>سامح، الهتيمي، فايز المنيا، احمد وحيد</b>: هل هم عملاء برنامج العمرة ويُحاسَبون على السكن ضمن حساباتهم هناك (فنسجّل التكلفة فقط هنا)؟ أم يُحاسَبون على الحجوزات بسعر البيع المسجَّل في برنامج الحجوزات؟</div>
+    <div class="q"><b class="n">3</b><b>جمال عبد السلام</b> («خزينة الاستثمار»): هل هو شريك/مستثمر يموّل الشارتات (له عندنا)، أم أموال عنده لحسابنا (خزينة/عهدة)؟ وما علاقة <b>بلومون</b> (50% من بدر الماسة)؟</div>
+    <div class="q"><b class="n">4</b><b>الشارتات</b> (رويال بارك، بدر الماسة، درة اسماء): هل هي عقود حجز مجمَّع مدفوع مقدماً ثم تُستهلك غرفها؟ ولماذا تظهر «شارت بدر الماسة» كعميل أيضاً (11 حجزاً)؟ وهل ما زالت مزامنة «شارت نمبر وان / بلازا احد / بر الايمان» العكسية الموجودة في ورقة Settings مستخدمة (كودها غير موجود في الملفات المرسلة)؟</div>
+    <div class="q"><b class="n">5</b>«عهدة كريم شافعي - مكة» كعميل (8 حجوزات): ما معناها؟ غرف بيعت وحصّل ثمنها صاحب العهدة؟</div>
+    <div class="q"><b class="n">6</b>الدفع للموردين «عن طريق الوكيل ريادة الرؤى»: هل يُسجَّل اليوم أيضاً في حساب الوكيل ببرنامج العمرة؟ (سنجعله تسجيلاً واحداً يظهر في الحسابين)</div>
+    <div class="q"><b class="n">7</b>حسابات عملاء السكن: <span class="o rec">حساب واحد للعميل لو هو عميل في البرنامجين ⭐</span><span class="o">حسابات سكن منفصلة دائماً</span></div>
+    <div class="q"><b class="n">8</b>رقم القيد الحالي (عمود «القيد»): هل هو من ملف «حسابات سكن» عند المحاسب؟ هل نوقف كتابته يدوياً ونعتمد رقم القيد التلقائي؟</div>
+    <div class="q"><b class="n">9</b>تاريخ قيد الحجز: <span class="o rec">تاريخ الدخول (كما في كشف الحساب الحالي) ⭐</span><span class="o">تاريخ التأكيد</span></div>
+  </div>
+</section>
+</main>
+<script>function go(i,b){document.querySelectorAll('.page').forEach(function(p,j){p.classList.toggle('on',i===j);});document.querySelectorAll('.tabs button').forEach(function(x){x.classList.toggle('on',x===b);});window.scrollTo(0,0);}</script>
+</body></html>
