@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.207";
+var APP_VERSION = "4.208";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6048,11 +6048,13 @@ function _sessionHasPerm_(session, perm) {
     var dot = t.indexOf('.');
     if (dot > 0) {
       var scr = t.slice(0, dot), cap = t.slice(dot + 1);
+      // (V4.208) صلاحيات متدرجة: كل مستوى يشمل ما دونه — عرض < إضافة < تعديل < حذف
       set[scr + '.view'] = true;
+      if (cap === 'edit' || cap === 'delete') set[scr + '.add'] = true;
       if (cap === 'delete') set[scr + '.edit'] = true;
     }
   });
-  if (set['delete']) _PERM_SCREENS_.forEach(function(s){ set[s + '.delete'] = true; set[s + '.edit'] = true; set[s + '.view'] = true; });
+  if (set['delete']) _PERM_SCREENS_.forEach(function(s){ set[s + '.delete'] = true; set[s + '.edit'] = true; set[s + '.add'] = true; set[s + '.view'] = true; });
   if (set['admin'] || set['all']) return true;
   var req = String(perm).toLowerCase();
   if (set[req]) return true;
