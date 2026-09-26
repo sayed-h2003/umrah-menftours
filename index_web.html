@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.209 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.210 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.209)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.210)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.209</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.210</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7379,7 +7379,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.209";
+var CLIENT_APP_VERSION = "4.210";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45577,7 +45577,7 @@ function glAutoRecDraw() {
 }
 
 /* ---------------------------- 🏨 (V4.208) ربط برنامج حجوزات الفنادق ---------------------------- */
-var GL_HB_SUB_ = [['setup', '🔗 الربط والمزامنة'], ['map', '🗂️ خريطة الحسابات'], ['pays', '💵 مراجعة الدفعات'], ['trips', '🧳 ربط الرحلات'], ['rec', '⚖️ المطابقة']];
+var GL_HB_SUB_ = [['setup', '🔗 الربط والمزامنة'], ['map', '🗂️ خريطة الحسابات'], ['pays', '💵 مراجعة الدفعات'], ['trips', '🧳 ربط الرحلات'], ['housing', '🛏️ سكن الرحلات'], ['charters', '📜 عقود الشارت'], ['rec', '⚖️ المطابقة']];
 function glRenderHotels() {
   var box = document.getElementById('glBody'), sub = GL._hbSub || 'setup', H = GL.hb;
   box.innerHTML = '<div class="gl-card"><div class="d-flex align-items-center gap-2 flex-wrap"><b style="font-size:15px;">🏨 ربط برنامج حجوزات الفنادق بالدفتر</b><span class="gl-st" style="background:#ecfeff;color:#0e7490;">المرحلة H1</span>' +
@@ -45587,7 +45587,10 @@ function glRenderHotels() {
     '<div id="glHbBox" class="mt-2"></div>';
   if (!H) { document.getElementById('glHbBox').innerHTML = '<div class="gl-card text-muted">⏳ جاري قراءة برنامج الحجوزات…</div>'; return glHbLoad(false); }
   if (!H.on && sub !== 'setup') GL._hbSub = sub = 'setup';
-  ({ setup: glHbSetupView, map: glHbMapView, pays: glHbPaysView, trips: glHbTripsView, rec: glHbRecView }[sub] || glHbSetupView)();
+  if (sub === 'housing' && GL._hbSubPrev !== 'housing') GL._hbHous = null;
+  if (sub === 'charters' && GL._hbSubPrev !== 'charters') GL._hbCh = null;
+  GL._hbSubPrev = sub;
+  ({ setup: glHbSetupView, map: glHbMapView, pays: glHbPaysView, trips: glHbTripsView, housing: glHbHousingView, charters: glHbChartersView, rec: glHbRecView }[sub] || glHbSetupView)();
 }
 function glHbLoad(force) {
   if (force) { GL.hb = null; var b = document.getElementById('glHbBox'); if (b) b.innerHTML = '<div class="gl-card text-muted">⏳ جاري قراءة برنامج الحجوزات…</div>'; }
@@ -45821,6 +45824,106 @@ function glHbTripSave(btn) {
   if (!rows.length) return showToast('لا توجد تعديلات');
   btn.disabled = true;
   glRun('glHbSaveTrip', [rows], function () { showToast('✅ حُفظ — يظهر بالدفتر بعد المزامنة'); glHbLoad(true); }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+}
+/* ---- 🛏️ (V4.210-H3) سكن الرحلات ---- */
+function glHbHousingView() {
+  var box = document.getElementById('glHbBox');
+  if (!GL._hbHous) { box.innerHTML = '<div class="gl-card text-muted">⏳ جاري تجميع سكن الرحلات…</div>'; return glRun('glHbTripHousing', [], function (r) { GL._hbHous = r; glHbHousingView(); }, function (e) { box.innerHTML = '<div class="gl-card" style="color:#b91c1c;">' + glEsc(e.message || e) + '</div>'; }); }
+  var R = GL._hbHous, q = (GL._hbHQ || '').trim(), only = !!GL._hbHWarn;
+  var list = R.trips.filter(function (t) { return (!q || (t.trip + ' ' + t.company).indexOf(q) >= 0) && (!only || t.warn.length); });
+  var c = function (v) { return v == null ? '<span style="color:#b45309;">بلا سعر</span>' : glFmt(v); };
+  var cityCard = function (t, cty) {
+    var x = t.city[cty]; if (!x) return '<div class="small text-muted">' + cty + ': لا حجوزات' + (t.planned[cty] ? ' (المخطط: ' + glEsc(t.planned[cty]) + ')' : '') + '</div>';
+    return '<div class="small"><b>' + cty + '</b>: ' + x.hotels.map(glEsc).join('، ') + ' · <span class="gl-latin">' + x.rooms + '</span> غرفة · سعة <span class="gl-latin">' + x.cap + '</span> فرد · <span class="gl-latin">' + x.rn + '</span> غرفة/ليلة · تكلفة <span class="gl-latin">' + glFmt(x.cost) + '</span>' +
+      (t.planned[cty] ? ' <span class="text-muted">(المخطط: ' + glEsc(t.planned[cty]) + ')</span>' : '') + '</div>';
+  };
+  box.innerHTML = '<div class="gl-card"><div class="d-flex gap-2 align-items-center flex-wrap mb-1"><b>🛏️ سكن الرحلات من برنامج الحجوزات</b><span class="gl-pill">' + R.trips.length + ' رحلة</span>' +
+      '<input class="form-control form-control-sm" style="width:200px;" placeholder="بحث باسم الرحلة" value="' + glEsc(q) + '" oninput="GL._hbHQ=this.value;clearTimeout(GL._hbQt);GL._hbQt=setTimeout(glHbHousingView,300)">' +
+      '<label class="small d-flex align-items-center gap-1"><input type="checkbox" ' + (only ? 'checked' : '') + ' onchange="GL._hbHWarn=this.checked;glHbHousingView()"> التي بها تنبيهات فقط</label>' +
+      '<button class="btn btn-outline-primary btn-sm ms-auto" onclick="GL._hbHous=null;glHbHousingView()">↻</button><button class="btn btn-outline-dark btn-sm" onclick="glPrintBox(\'glHbHousBox\',\'سكن الرحلات\')">🖨️</button></div>' +
+    '<div class="gl-note">الحجوزات المرتبطة بكل رحلة (رحلات الشركة، وحجوزات عملاء العمرة بالربط التلقائي أو اليدوي من «🧳 ربط الرحلات»). السعة = دابل×2 + ثلاثي×3 + رباعي×4 + خماسي×5، وتُقارن بعدد المعتمرين في كشف الرحلة، ويُقارن الفندق المخطط بشاشة الرحلات بالمحجوز فعلاً.</div>' +
+    '<div id="glHbHousBox">' + (list.map(function (t) {
+      return '<details class="gl-card mt-2" style="padding:8px 10px;"' + (t.warn.length ? ' open' : '') + '><summary style="cursor:pointer;"><b>' + glEsc(t.trip) + '</b> <small class="text-muted">' + glEsc([t.company, t.go ? 'سفر ' + t.go : ''].filter(Boolean).join(' · ')) + '</small>' +
+          ' <span class="gl-pill">' + t.rows.length + ' حجز</span> <span class="gl-pill">👥 ' + t.pilgrims + ' معتمر</span> <span class="gl-pill">تكلفة <b class="gl-latin">' + glFmt(t.cost) + '</b></span>' +
+          (t.warn.length ? ' <span class="gl-pill" style="background:#fff7ed;color:#b45309;">⚠️ ' + t.warn.length + '</span>' : ' <span class="gl-pill" style="background:#dcfce7;color:#166534;">✅</span>') + '</summary>' +
+        (t.warn.length ? '<div class="gl-note mt-1" style="background:#fff7ed;">' + t.warn.map(glEsc).join('<br>') + '</div>' : '') +
+        '<div class="mt-1">' + cityCard(t, 'المدينة') + cityCard(t, 'مكة') + '</div>' +
+        '<div class="table-responsive mt-1" style="max-height:360px;overflow:auto;"><table class="gl-tbl"><thead><tr><th>المدينة</th><th>الحجز</th><th>العميل</th><th>الفندق</th><th>المورد</th><th>الدخول</th><th>الخروج</th><th>ليالي</th><th>د/ث/ر/خ</th><th>السعة</th><th>التكلفة</th><th>البيع</th><th>قيد آلي</th></tr></thead><tbody>' +
+          t.rows.map(function (r) {
+            return '<tr><td class="small">' + glEsc(r.city) + '</td><td class="gl-latin small">' + glEsc(r.inner) + '</td><td style="text-align:right;">' + glEsc(r.client) + '</td><td style="text-align:right;">' + glEsc(r.hotel) + '</td><td class="small" style="text-align:right;">' + glEsc(r.supplier) + '</td>' +
+              '<td class="gl-latin small">' + glEsc(r.ci) + '</td><td class="gl-latin small">' + glEsc(r.co) + '</td><td class="gl-latin">' + glEsc(r.nights) + '</td><td class="gl-latin small">' + r.rooms.map(function (n) { return n || '·'; }).join('/') + '</td><td class="gl-latin">' + r.cap + '</td>' +
+              '<td class="gl-latin">' + c(r.cost) + '</td><td class="gl-latin">' + c(r.sale) + '</td><td class="gl-latin small">' + glEsc(r.entry || '—') + '</td></tr>';
+          }).join('') + '</tbody></table></div></details>';
+    }).join('') || '<div class="text-muted mt-2">لا توجد رحلات مطابقة — اربط الحجوزات بالرحلات من «🧳 ربط الرحلات» و«🗂️ خريطة الحسابات».</div>') + '</div></div>';
+  GL._hbHous = R;
+}
+/* ---- 📜 (V4.210-H3) عقود الشارت ---- */
+function glHbChartersView() {
+  var box = document.getElementById('glHbBox');
+  if (!GL._hbCh) { box.innerHTML = '<div class="gl-card text-muted">⏳ جاري تحليل عقود الشارت…</div>'; return glRun('glHbCharters', [], function (r) { GL._hbCh = r; glHbChartersView(); }, function (e) { box.innerHTML = '<div class="gl-card" style="color:#b91c1c;">' + glEsc(e.message || e) + '</div>'; }); }
+  var R = GL._hbCh, c = function (v) { return Math.abs(v || 0) < 0.005 ? '<span style="color:#cbd5e1;">—</span>' : glFmt(v); };
+  var ranges = function (arr, color) { return arr.length ? arr.slice(0, 40).map(function (x) { return '<span class="gl-pill" style="background:' + color + ';">' + glEsc(x.from) + ' ← ' + glEsc(x.to) + ' · ' + x.nights + ' ل · <b>' + x.rooms + '</b> غ</span>'; }).join(' ') + (arr.length > 40 ? ' …' : '') : '<span class="text-muted">لا يوجد</span>'; };
+  box.innerHTML = '<div class="gl-card"><div class="d-flex gap-2 align-items-center flex-wrap mb-1"><b>📜 عقود الشارت</b><span class="gl-pill">' + R.charters.length + ' شارت</span>' +
+      (GL.can.add ? '<button class="btn btn-success btn-sm fw-bold ms-auto" onclick="glHbCharterForm()">➕ عقد شارت</button>' : '<span class="ms-auto"></span>') +
+      '<button class="btn btn-outline-primary btn-sm" onclick="GL._hbCh=null;glHbChartersView()">↻</button></div>' +
+    '<div class="gl-note">الشارت = غرف مشتراة لفترة طويلة بدفعات، تُباع حجوزات منفصلة للعملاء والرحلات. <b>المسحوب</b> = تكلفة الحجوزات التي مصدرها الشارت (دائن حساب الشارت بالدفتر)، و<b>المدفوع</b> = دفعاتنا للشارت ببرنامج الحجوزات، و<b>مقدَّم غير مستهلك</b> = المدفوع − المسحوب. سجّل العقد (الفترة وعدد الغرف والقيمة) لترى استغلال كل ليلة والفترات الفارغة المتاحة للبيع. في نهاية العقد، المقدَّم غير المستهلك (غرف لم تُستغل) يُحمَّل تكلفةً بزر «تسوية».</div>' +
+    '<div id="glHbChForm"></div>' +
+    (R.charters.map(function (h) {
+      return '<div class="gl-card mt-2" style="padding:10px;"><div class="d-flex gap-2 align-items-center flex-wrap"><b style="font-size:15px;">' + glEsc(h.name) + '</b>' +
+          (h.code ? '<a href="#" class="gl-latin small" onclick="glOpenLedger(\'' + glJs(h.code) + '\');return false;">' + glEsc(h.code) + '</a>' : '<span class="gl-pill" style="background:#fef2f2;color:#b91c1c;">غير مربوط بحساب — نوع «شارت» بالخريطة</span>') +
+          '<span class="gl-pill">' + h.bookings + ' حجز</span><span class="gl-pill">' + h.rnUsed + ' غرفة/ليلة</span>' + (h.shortBuys ? '<span class="gl-pill" title="حجوزات الشارت فيها عميل: نقص غرف/ليالٍ اشتُري من مورد آخر">🔁 ' + h.shortBuys + ' شراء نقص</span>' : '') +
+          (GL.can.edit && h.code && h.prepaid > 0.5 ? '<button class="btn btn-outline-danger btn-sm ms-auto" onclick="glHbCharterSettleUI(\'' + glJs(h.code) + '\',' + h.prepaid + ',\'' + glJs(h.name) + '\')">⚖️ تسوية غرف غير مستغلة</button>' : '') + '</div>' +
+        '<div class="gl-kpis mt-1" style="grid-template-columns:repeat(6,1fr);">' +
+          '<div><b class="gl-latin">' + c(h.value) + '</b><small>قيمة العقود</small></div><div><b class="gl-latin" style="color:#1d4ed8;">' + c(h.paid) + '</b><small>المدفوع</small></div>' +
+          '<div><b class="gl-latin">' + c(h.remainingPay) + '</b><small>متبقٍ للسداد</small></div><div><b class="gl-latin" style="color:#b91c1c;">' + c(h.drawn) + '</b><small>المسحوب (تكلفة الحجوزات)</small></div>' +
+          '<div><b class="gl-latin" style="color:' + (h.prepaid > 0 ? '#b45309' : '#1d4ed8') + ';">' + c(Math.abs(h.prepaid)) + '</b><small>' + (h.prepaid > 0 ? 'مقدَّم غير مستهلك' : 'مستحق للشارت علينا') + '</small></div><div><b class="gl-latin" style="color:#166534;">' + c(h.margin) + '</b><small>ربح بيع غرفه</small></div></div>' +
+        (h.contracts.length ? h.contracts.map(function (k) {
+          return '<div class="mt-2" style="border-top:1px dashed #e2e8f0;padding-top:6px;"><div class="d-flex gap-2 flex-wrap align-items-center small"><b>📄 ' + glEsc(k.hotel || '') + ' ' + glEsc(k.city || '') + '</b><span class="gl-latin">' + glEsc(k.from) + ' → ' + glEsc(k.to) + '</span>' +
+              '<span>' + k.rooms + ' غرفة × ' + (k.nights || 0) + ' ليلة</span><span>القيمة <b class="gl-latin">' + glFmt(k.value) + ' ' + glEsc(k.cur) + '</b></span>' +
+              (k.util != null ? '<span class="gl-pill" style="background:' + (k.util >= 90 ? '#dcfce7' : (k.util >= 60 ? '#fef9c3' : '#fef2f2')) + ';">استغلال <b class="gl-latin">' + k.util + '%</b></span>' : '') +
+              (k.unusedValue ? '<span class="gl-pill" style="background:#fff7ed;">قيمة غير مستغلة ≈ <b class="gl-latin">' + glFmt(k.unusedValue) + '</b></span>' : '') + (k.ended ? '<span class="gl-pill">منتهٍ</span>' : '') +
+              (GL.can.edit ? '<button class="btn btn-link btn-sm p-0 ms-auto" onclick="glHbCharterForm(\'' + glJs(k.id) + '\')">✎ تعديل</button>' : '') +
+              (GL.can.delete ? '<button class="btn btn-link btn-sm p-0 text-danger" onclick="glHbCharterDel(\'' + glJs(k.id) + '\')">🗑</button>' : '') + '</div>' +
+            (k.free ? '<div class="small mt-1">🟢 ليالٍ متاحة للبيع: ' + ranges(k.free, '#ecfdf5') + '</div>' : '') +
+            (k.over && k.over.length ? '<div class="small mt-1">🔴 محجوز أكثر من العقد (يحتاج شراء نقص): ' + ranges(k.over, '#fef2f2') + '</div>' : '') + '</div>';
+        }).join('') : '<div class="small text-muted mt-1">لا يوجد عقد مسجّل لهذا الشارت — أضف العقد لرؤية الاستغلال والفترات الفارغة.</div>') + '</div>';
+    }).join('') || '<div class="text-muted mt-2">لا يوجد شارت — حدّد نوع «شارت» للأسماء من خريطة الحسابات، أو أضف عقداً.</div>') + '</div>';
+}
+function glHbCharterForm(id) {
+  var R = GL._hbCh, k = null;
+  if (id) R.charters.forEach(function (h) { h.contracts.forEach(function (x) { if (x.id === id) { k = Object.assign({ name: h.name }, x); } }); });
+  k = k || { name: '', hotel: '', city: 'مكة', from: '', to: '', rooms: '', value: '', cur: 'SAR', notes: '' };
+  var names = R.charters.map(function (h) { return h.name; });
+  document.getElementById('glHbChForm').innerHTML = '<div class="gl-card mt-2" style="background:#f8fafc;"><b>' + (id ? '✎ تعديل عقد شارت' : '➕ عقد شارت جديد') + '</b><div class="row g-2 mt-1">' +
+    '<div class="col-md-3"><label class="gl-lbl">الشارت (كما ببرنامج الحجوزات)</label><input id="glChName" class="form-control form-control-sm" list="glChNames" value="' + glEsc(k.name) + '"><datalist id="glChNames">' + names.map(function (n) { return '<option value="' + glEsc(n) + '">'; }).join('') + '</datalist></div>' +
+    '<div class="col-md-3"><label class="gl-lbl">الفندق</label><input id="glChHotel" class="form-control form-control-sm" list="glChHotels" value="' + glEsc(k.hotel) + '"><datalist id="glChHotels">' + (R.hotels || []).map(function (n) { return '<option value="' + glEsc(n) + '">'; }).join('') + '</datalist></div>' +
+    '<div class="col-md-2"><label class="gl-lbl">المدينة</label><select id="glChCity" class="form-select form-select-sm"><option' + (k.city === 'مكة' ? ' selected' : '') + '>مكة</option><option' + (k.city === 'المدينة' ? ' selected' : '') + '>المدينة</option></select></div>' +
+    '<div class="col-md-2"><label class="gl-lbl">من</label>' + glDateInput('glChFrom', k.from) + '</div><div class="col-md-2"><label class="gl-lbl">إلى (تاريخ الخروج)</label>' + glDateInput('glChTo', k.to) + '</div>' +
+    '<div class="col-md-2"><label class="gl-lbl">عدد الغرف</label><input id="glChRooms" class="form-control form-control-sm gl-latin" value="' + glEsc(k.rooms) + '"></div>' +
+    '<div class="col-md-2"><label class="gl-lbl">قيمة العقد</label><input id="glChValue" class="form-control form-control-sm gl-latin" value="' + glEsc(k.value) + '"></div>' +
+    '<div class="col-md-2"><label class="gl-lbl">العملة</label><select id="glChCur" class="form-select form-select-sm">' + ['SAR', 'EGP', 'USD'].map(function (c) { return '<option' + (c === k.cur ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="col-md-6"><label class="gl-lbl">ملاحظات (نظام الدفعات…)</label><input id="glChNotes" class="form-control form-control-sm" value="' + glEsc(k.notes) + '"></div></div>' +
+    '<div class="d-flex gap-2 justify-content-end mt-2"><button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'glHbChForm\').innerHTML=\'\'">إلغاء</button><button class="btn btn-success btn-sm fw-bold" onclick="glHbCharterSave(this,\'' + glJs(id || '') + '\')">💾 حفظ</button></div></div>';
+}
+function glHbCharterSave(btn, id) {
+  var v = function (i) { return (document.getElementById(i) || {}).value || ''; };
+  btn.disabled = true;
+  glRun('glHbSaveCharter', [{ id: id, name: v('glChName'), hotel: v('glChHotel'), city: v('glChCity'), from: v('glChFrom'), to: v('glChTo'), rooms: v('glChRooms'), value: v('glChValue'), cur: v('glChCur'), notes: v('glChNotes') }],
+    function () { showToast('✅ حُفظ العقد'); GL._hbCh = null; glHbChartersView(); }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+}
+function glHbCharterDel(id) {
+  askConfirm_('حذف عقد الشارت من السجل؟ (لا يمس الحجوزات ولا القيود)', function () {
+    glRun('glHbDeleteCharter', [id], function () { showToast('تم الحذف'); GL._hbCh = null; glHbChartersView(); });
+  }, { title: 'حذف عقد شارت', danger: true });
+}
+function glHbCharterSettleUI(code, prepaid, name) {
+  var amt = prompt('تسوية شارت «' + name + '»: مبلغ الغرف غير المستغلة الذي يُحمَّل تكلفةً (ريال)\nالمقدَّم غير المستهلك حالياً: ' + glFmt(prepaid), String(prepaid));
+  if (amt === null) return;
+  var t0 = new Date(), d = prompt('تاريخ القيد (dd/mm/yyyy)', ('0' + t0.getDate()).slice(-2) + '/' + ('0' + (t0.getMonth() + 1)).slice(-2) + '/' + t0.getFullYear());
+  if (!d) return;
+  askConfirm_('قيد تسوية: من ح/ تكلفة السكن إلى ح/ ' + name + ' بمبلغ ' + amt + ' ريال بتاريخ ' + d + '؟', function () {
+    glRun('glHbCharterSettle', [code, d, amt, 'غرف غير مستغلة'], function (r) { _showPopup('✅ سُجّل قيد التسوية ' + r.id, 'success', 'تسوية شارت'); GL._hbCh = null; glRefreshData(function () { glHbChartersView(); }); });
+  }, { title: 'تسوية شارت', icon: '⚖️', yesLabel: 'تسجيل', danger: false });
 }
 /* ---- المطابقة ---- */
 function glHbRecView() {
