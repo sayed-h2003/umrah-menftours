@@ -78,6 +78,11 @@ function showDebugError(msg) {
     '<div class="debug-box">❌ ' + msg + '</div>';
 }
 
+// 🩺 (V4.215) تشخيص الطباعة من الخادم — يظهر في Console (F12)
+try {
+  var _pd_ = <?!= JSON.stringify(printDiag || []) ?>;
+  console.log('🖨️ [PRINT] تشخيص الخادم:\n  ' + _pd_.join('\n  '));
+} catch (e) { console.warn('🖨️ [PRINT] تعذّر قراءة التشخيص', e); }
 var bookingId = null;
 var isInvalidLink = false;
 // 📄 (V4.160) رمز الطباعة — تُطلب به بايتات مرفقات PDF (لا توجد جلسة تطبيق بهذه الصفحة)
@@ -109,7 +114,15 @@ if (isInvalidLink || !bookingId) {
   // صفحاته لصور عبر pdf.js مستبعدين الصفحات الفارغة، ثم نطبع. لو تعذّر ذلك تُطبع الصفحة الأولى
   // (الصورة البديلة الموجودة أصلاً داخل الحاوية) فلا يضيع المرفق.
   var _attEls = document.querySelectorAll('.pdf-att-sec');
-  if (!_attEls.length) { _printSoon_(1200); }
+  var _rc_ = document.getElementById('reportContent');
+  var _txt_ = _rc_ ? _rc_.innerText.replace(/\s+/g, '').length : 0;
+  console.log('🖨️ [PRINT] محتوى الصفحة: ' + (_rc_ ? _rc_.innerHTML.length : 0) + ' حرف HTML، ' + _txt_ + ' حرف نص، ' +
+    document.images.length + ' صورة، ' + _attEls.length + ' مرفق PDF');
+  if (!_rc_ || (!_txt_ && !document.images.length) || _rc_.querySelector('.debug-box')) {
+    console.error('🖨️ [PRINT] المحتوى فارغ أو به خطأ — أُلغيت الطباعة التلقائية (راجع التشخيص أعلاه)');
+    if (_rc_ && !_rc_.querySelector('.debug-box')) showDebugError('الإشعار وصل فارغاً من الخادم — افتح Console (F12) وأرسل سطور [PRINT]');
+  }
+  else if (!_attEls.length) { _printSoon_(1200); }
   else { _loadPdfJs_(function (ok) { ok ? _expandAllAtt_(_attEls) : _printSoon_(600); }); }
 }
 

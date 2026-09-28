@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.214";
+var APP_VERSION = "4.215";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -107,6 +107,10 @@ template.id = bookingId || "";
 template.printToken = printToken || "";
 template.invalidLink = !bookingId;
 template.reportHtml = "";
+// 🩺 (V4.215) تشخيص الطباعة: كل خطوة وأي خطأ يُمرَّر للصفحة ويظهر في Console (و«التنفيذ») بدل صفحة بيضاء صامتة
+var _pdiag = [];
+template.printDiag = _pdiag;
+_pdiag.push('token=' + (printToken ? 'نعم' : 'لا') + ' | bookingId=' + (bookingId || '—'));
 
 var title = 'إشعار رحلة العمرة';
 
@@ -117,17 +121,25 @@ try {
   var data =
     getPrintDataForView(bookingId);
 
+  _pdiag.push('getPrintDataForView: ' + (data ? (data.id ? 'OK id=' + data.id : 'بلا id — ' + (data.error || JSON.stringify(data).slice(0, 200))) : 'null'));
+  if (data && !data.id) {
+    template.reportHtml = '<div class="debug-box">❌ تعذّر قراءة بيانات الإشعار: ' + _printEsc_(data.error || 'بيانات فارغة') + '</div>';
+  }
   if (data && data.id) {
 
     // بناء جزء الصفحة من نفس القالب الموحّد المستخدم في المشاركة أيضاً (مصدر واحد فقط للتصميم)
     template.reportHtml = buildBookingNoticeHtml_(data, true);
+    _pdiag.push('buildBookingNoticeHtml_: ' + template.reportHtml.length + ' حرف');
 
     // 📎 (V4.159) الملحقات كلها (التذكرة ← مستند المستضيف ← أسماء المعتمرين ← المرفقات) من نفس
     // المصدر الموحَّد المستخدَم بملف المشاركة — كانت الطباعة تُرفق التذكرة وحدها
     try {
-      template.reportHtml += buildBookingExtraSections_(data);
+      var _ex = buildBookingExtraSections_(data);
+      template.reportHtml += _ex;
+      _pdiag.push('المرفقات: ' + _ex.length + ' حرف، ' + (_ex.match(/page-break-before/g) || []).length + ' قسم');
     } catch(tErr) {
       Logger.log('Print extras embed failed: ' + tErr);
+      _pdiag.push('❌ المرفقات: ' + tErr + (tErr && tErr.stack ? ' @ ' + tErr.stack : ''));
     }
 
     var safeDate =
@@ -152,8 +164,12 @@ try {
 } catch(err) {
 
   Logger.log(err);
+  _pdiag.push('❌ خطأ: ' + err + (err && err.stack ? ' @ ' + err.stack : ''));
+  template.reportHtml = '<div class="debug-box">❌ تعذّر تجهيز الإشعار للطباعة: ' + _printEsc_(String(err)) +
+    (err && err.stack ? '\n' + _printEsc_(String(err.stack)) : '') + '</div>' + (template.reportHtml || '');
 
 }
+Logger.log('🖨️ تشخيص الطباعة: ' + _pdiag.join(' ← '));
 
 }
 
@@ -3568,6 +3584,7 @@ function getWebAppUrl(authToken) {
  * @param {string} portVal القيمة الخام
  * @param {string} which 'arrival' أو 'departure'
  */
+function _printEsc_(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function _portSaudiSide_(portVal, which) {
   var s = String(portVal || "").trim();
   if (!s) return "";
@@ -3953,20 +3970,20 @@ function getPrintDataForView(bookingId) {
     
     // تنسيق موحّد يعالج 3 حالات: كائن Date، نص تاريخ/وقت نظيف، ونص Date.toString() خام محفوظ سابقاً
     // (مثل "Sat Dec 30 1899 01:35:00 GMT+0205") الذي كان يظهر كما هو في الإشعار المطبوع
-    var _tz_ = _tz_() || "Asia/Riyadh";
+    var tzP = _tz_() || "Asia/Riyadh";
     function fmtDate(v) {
-      if (v instanceof Date) return Utilities.formatDate(v, _tz_, "dd/MM/yyyy");
+      if (v instanceof Date) return Utilities.formatDate(v, tzP, "dd/MM/yyyy");
       var s = String(v || "").trim();
       if (!s) return "-";
       // نص Date.toString() خام؟ حوّله لـ Date ثم نسّقه
       var d = new Date(s);
       if (!isNaN(d.getTime()) && /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/.test(s)) {
-        return Utilities.formatDate(d, _tz_, "dd/MM/yyyy");
+        return Utilities.formatDate(d, tzP, "dd/MM/yyyy");
       }
       return s;
     }
     function fmtTime(v) {
-      if (v instanceof Date) return Utilities.formatDate(v, _tz_, "HH:mm");
+      if (v instanceof Date) return Utilities.formatDate(v, tzP, "HH:mm");
       var s = String(v || "").trim();
       if (!s) return "-";
       // نص وقت نظيف "HH:mm" (أو "H:mm") — أعده كما هو بعد التطبيع
@@ -3976,7 +3993,7 @@ function getPrintDataForView(bookingId) {
       }
       // نص Date.toString() خام — استخرج منه الوقت
       var d = new Date(s);
-      if (!isNaN(d.getTime())) return Utilities.formatDate(d, _tz_, "HH:mm");
+      if (!isNaN(d.getTime())) return Utilities.formatDate(d, tzP, "HH:mm");
       return s;
     }
     var extra = [];
