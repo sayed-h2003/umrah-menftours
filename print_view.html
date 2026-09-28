@@ -120,6 +120,11 @@ if (isInvalidLink || !bookingId) {
 
 // (V4.212) لا نطبع قبل اكتمال تحميل كل الصور (اللوجو وصور المرفقات) — الطباعة المبكرة كانت تُخرج
 // أماكن الصور بيضاء
+function _attFitCss_(w, h) {   // (V4.213) أبعاد صريحة بالمليمتر داخل صندوق 186×250مم — بلا max-height/object-fit
+  var W = 186, H = 250, ww = W, hh = H;
+  if (w > 0 && h > 0) { var r = h / w; ww = W; hh = W * r; if (hh > H) { hh = H; ww = H / r; } }
+  return 'width:' + ww.toFixed(1) + 'mm;height:' + hh.toFixed(1) + 'mm;display:block;margin:0 auto;border:1px solid #ccc;border-radius:12px;';
+}
 function _printSoon_(ms) {
   var imgs = Array.prototype.slice.call(document.images || []);
   var wait = imgs.map(function (im) {
@@ -179,7 +184,7 @@ function _expandAllAtt_(els) {
                     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
                     return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
                       if (_canvasBlank_(c)) return;
-                      pages.push({ no: no, data: c.toDataURL('image/jpeg', 0.82) });
+                      pages.push({ no: no, data: c.toDataURL('image/jpeg', 0.82), w: c.width, h: c.height });
                     });
                   });
                 });
@@ -197,7 +202,7 @@ function _expandAllAtt_(els) {
               pages.forEach(function (pg, i) {
                 var lbl = title + (doc.numPages > 1 ? (' — صفحة ' + pg.no + ' من ' + doc.numPages) : '');
                 html += (i === 0 ? '' : '<div style="page-break-before:always;"></div>') +
-                  bar(lbl) + '<img src="' + pg.data + '" style="' + css + '">';
+                  bar(lbl) + '<img src="' + pg.data + '" style="' + _attFitCss_(pg.w, pg.h) + '">';
               });
               el.innerHTML = html;
             });

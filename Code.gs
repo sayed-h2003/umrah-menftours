@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.212";
+var APP_VERSION = "4.213";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -10125,6 +10125,32 @@ function extractDriveFileId_(url) {
   return m ? m[0] : null;
 }
 
+// 📐 (V4.213) أبعاد صورة PNG/JPEG من بايتاتها — لتحديد عرض/ارتفاع الصورة بالمليمتر صراحةً. محوّل PDF
+// الخاص بجوجل يتجاهل max-height وobject-fit، فكانت صورة الصفحة المرفقة تتجاوز ارتفاع الورقة
+// فتنقسم وتُنتج صفحات بيضاء بين الصفحات — السبب الرئيسي لشكوى «الصفحات البيضاء».
+function _imgDims_(bytes) {
+  try {
+    var b = function (i) { return bytes[i] & 0xFF; };
+    if (b(0) === 0x89 && b(1) === 0x50) return { w: (b(16) << 24 | b(17) << 16 | b(18) << 8 | b(19)) >>> 0, h: (b(20) << 24 | b(21) << 16 | b(22) << 8 | b(23)) >>> 0 };
+    if (b(0) === 0xFF && b(1) === 0xD8) {
+      var i = 2;
+      while (i < bytes.length - 9) {
+        if (b(i) !== 0xFF) { i++; continue; }
+        var mk = b(i + 1), len = b(i + 2) << 8 | b(i + 3);
+        if ((mk >= 0xC0 && mk <= 0xC3) || (mk >= 0xC5 && mk <= 0xC7) || (mk >= 0xC9 && mk <= 0xCB) || (mk >= 0xCD && mk <= 0xCF))
+          return { h: b(i + 5) << 8 | b(i + 6), w: b(i + 7) << 8 | b(i + 8) };
+        i += 2 + len;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+// صندوق الصفحة المتاح لصورة مرفق (A4 بهوامش 6مم + شريط العنوان): 186 × 250 مم
+function _imgFitStyle_(dims) {
+  var W = 186, H = 250, w = W, h = H;
+  if (dims && dims.w > 0 && dims.h > 0) { var r = dims.h / dims.w; w = W; h = W * r; if (h > H) { h = H; w = H / r; } }
+  return 'width:' + w.toFixed(1) + 'mm;height:' + h.toFixed(1) + 'mm;display:block;margin:0 auto;border:1px solid #ccc;border-radius:12px;';
+}
 function buildTicketPdfSection_(ticketUrl, sectionTitle) {
   var ticketFileId = extractDriveFileId_(ticketUrl);
   if (!ticketFileId) return '';
@@ -10135,8 +10161,10 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
     var ticketImgBase64 = null;
     var ticketImgMime = null;
 
+    var imgBytes = null;
     if (ticketMime.indexOf('image/') === 0) {
-      ticketImgBase64 = Utilities.base64Encode(ticketFile.getBlob().getBytes());
+      imgBytes = ticketFile.getBlob().getBytes();
+      ticketImgBase64 = Utilities.base64Encode(imgBytes);
       ticketImgMime = ticketMime;
     } else if (ticketMime === 'application/pdf') {
       var thumbUrl = 'https://drive.google.com/thumbnail?id=' + ticketFileId + '&sz=w2000';
@@ -10145,8 +10173,9 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
         muteHttpExceptions: true
       });
       if (resp.getResponseCode() === 200) {
-        ticketImgBase64 = Utilities.base64Encode(resp.getBlob().getBytes());
-        ticketImgMime = 'image/png';
+        imgBytes = resp.getBlob().getBytes();
+        ticketImgBase64 = Utilities.base64Encode(imgBytes);
+        ticketImgMime = (imgBytes && (imgBytes[0] & 0xFF) === 0xFF) ? 'image/jpeg' : 'image/png';
       }
     }
 
@@ -10160,11 +10189,11 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
                  '<td bgcolor="#1e3d59" style="background:#1e3d59;padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;color:#ffffff;font-family:\'Cairo\',Tahoma,Arial,sans-serif;">' + (sectionTitle || '🎫 التذكرة المرفقة') + '</td>' +
                '</tr>' +
              '</table>';
-    var imgTag = '<img src="data:' + ticketImgMime + ';base64,' + ticketImgBase64 + '" style="width:100%;max-height:265mm;object-fit:contain;border:1px solid #ccc;border-radius:12px;display:block;">';
+    var imgTag = '<img src="data:' + ticketImgMime + ';base64,' + ticketImgBase64 + '" style="' + _imgFitStyle_(_imgDims_(imgBytes)) + '">';
     // 📄 (V4.160) مرفق PDF: يُلفّ بحاوية تحمل معرّف الملف كي يوسّعها المتصفّح لكل صفحات الملف
     // (pdf.js) قبل الطباعة أو بناء ملف المشاركة. الصورة بالداخل هي الصفحة الأولى وتبقى كبديل
     // آمن لو لم يعمل التوسيع لأي سبب — فلا يضيع المرفق أبداً.
-    if (ticketImgMime === 'image/png' && ticketMime === 'application/pdf') {
+    if (ticketMime === 'application/pdf') {
       return '<div class="pdf-att-sec" data-fid="' + ticketFileId + '" data-title="' +
                String(sectionTitle || '🎫 التذكرة المرفقة').replace(/"/g, '&quot;') + '" style="page-break-before:always;">' +
                titleBar + imgTag +
@@ -21203,6 +21232,10 @@ function _mfBarcodeFeeAt_(dateStr) {
 var _MF_ALL_MEMO_ = null;
 function _mfSupKey_(n) { return (typeof _normalizeArabicName_ === 'function' ? _normalizeArabicName_(n) : String(n || '')).replace(/\s+/g, ' ').trim(); }
 function _mfIsMurafiq_(s) { return String((s && s.type) || '').indexOf('مرافق') >= 0; }
+// 🧑‍✈️ (V4.213) المرافق المحسوب بهذا الملف فعلاً: «مرافق» وليس مُحدَّداً له «محسوب بملف آخر» (elsewhere) —
+// المرافق المشترك بين ملفين لنفس الموعد يختار المستخدم أين يُحسب (عدد المشرفين + الأفراد + رسوم الغرفة)
+// ليطابق ملف الوزارة؛ في الملف الآخر يبقى اسمه ظاهراً للعلم فقط ولا يدخل في أي عدد أو حساب.
+function _mfSupCounted_(s) { return _mfIsMurafiq_(s) && !_mfStr_(s && s.elsewhere); }
 function _mfDateIdx_(all) {
   if (all.__mfDateIdx && all.__mfDateIdxLen === all.length) return all.__mfDateIdx;
   var idx = {};
@@ -21218,12 +21251,12 @@ function _mfSupExempt_(f, all) {
   var peers = _mfDateIdx_(all)[f.goDate + '|' + f.retDate] || [], out = [];
   var mySeq = _mfNum_(f.seq) || Infinity;
   (f.sups || []).forEach(function (s) {
-    if (!_mfIsMurafiq_(s)) return;
+    if (!_mfSupCounted_(s)) return;
     var nm = _mfSupKey_(s.name); if (!nm) return;
     var owner = null, ownSeq = Infinity;
     peers.forEach(function (o) {
       if (o.id === f.id) return;
-      if (!(o.sups || []).some(function (x) { return _mfIsMurafiq_(x) && _mfSupKey_(x.name) === nm; })) return;
+      if (!(o.sups || []).some(function (x) { return _mfSupCounted_(x) && _mfSupKey_(x.name) === nm; })) return;
       var os = _mfNum_(o.seq) || Infinity;
       var earlier = os < mySeq || (os === mySeq && String(o.id) < String(f.id));
       if (earlier && (os < ownSeq || !owner)) { owner = o; ownSeq = os; }
@@ -21240,7 +21273,11 @@ function _mfCompute_(f, cfg) {
   var supExempt = _mfSupExempt_(f, _MF_ALL_MEMO_ || []);
   // 🧑‍✈️ (V4.113) المشرف «مرافق» فقط يُحتسب ضمن عدد المشرفين وله رسوم غرفة — «استقبال» (سواء
   // مشرف فعلي أو الوكيل السعودي نفسه) لا يُحسب أصلاً: لا رسوم غرفة ولا مخالصة ولا يدخل ضمن الأعداد.
-  var murafiq = sups.filter(function(s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+  var murafiq = sups.filter(_mfSupCounted_).length;   // (V4.213) بلا المرافق المحسوب بملف آخر باختيار المستخدم
+  var supElsewhere = sups.filter(function (s) { return _mfIsMurafiq_(s) && _mfStr_(s.elsewhere); }).map(function (s) {
+    var o = (_MF_ALL_MEMO_ || []).filter(function (x) { return x.id === s.elsewhere; })[0];
+    return { name: s.name, id: s.elsewhere, fileNo: o ? (o.fileNo || '') : '', seq: o ? (o.seq || '') : '' };
+  });
   var O = murafiq;
   var heads = N + O;
   // 🏛️ (V4.113) رسوم غرفة المراجعة VIP إجمالي ثابت للفرد (من الإعدادات — افتراضياً 3,100 ج)،
@@ -21268,7 +21305,7 @@ function _mfCompute_(f, cfg) {
   var AL = N > 0 ? (AB / N) : 0;                             // هامش الفرد
 
   return {
-    heads: heads, murafiq: murafiq, murafiqFee: murafiqFee, supExempt: supExempt, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode,
+    heads: heads, murafiq: murafiq, murafiqFee: murafiqFee, supExempt: supExempt, supElsewhere: supElsewhere, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode,
     vipByCount: vipByCount,
     revenue: Q, totalTickets: W, totalRoomFee: X, otherExp: Z,
     clearanceSAR: U, totalSAR: Y, totalExp: Math.round(AA), margin: Math.round(AB),
@@ -21289,6 +21326,7 @@ function _mfRoomFeeDetail_(f, c) {
   }
   if (c.murafiqFee > 0) parts.push(c.murafiqFee + ' مشرف × ' + fmt(c.supRoomFee) + ' ج');
   (c.supExempt || []).forEach(function (x) { parts.push('المرافق ' + x.name + ' محسوب بملف ' + (x.fileNo || ('#' + x.seq))); });
+  (c.supElsewhere || []).forEach(function (x) { parts.push('المرافق ' + x.name + ' (عدد ورسوم) محسوب بملف ' + (x.fileNo || (x.seq ? '#' + x.seq : 'آخر'))); });
   if (c.barcodeFee > 0) parts.push(N + ' باركود × ' + fmt(c.barcodeFee / (N || 1)) + ' ج');
   return parts.length ? parts.join(' + ') : '';
 }
@@ -22080,7 +22118,10 @@ function saveMinistryFile(authToken, data) {
         note: _mfStr_(b.note), isTrip: !!b.isTrip };
     }) : (old ? old.breakdown : []);
     var sups = Array.isArray(data.sups) ? data.sups.map(function(s) {
-      return { name: _mfStr_(s.name), type: _mfStr_(s.type) || 'مرافق', directTo: _mfStr_(s.directTo) };
+      var o = { name: _mfStr_(s.name), type: _mfStr_(s.type) || 'مرافق', directTo: _mfStr_(s.directTo) };
+      var ew = _mfStr_(s.elsewhere);
+      if (ew && (!old || ew !== old.id)) o.elsewhere = ew;   // (V4.213) محسوب بملف آخر
+      return o;
     }) : (old ? old.sups : []);
 
     var pilg = _mfNum_(data.pilgrims);
@@ -22146,7 +22187,7 @@ function saveMinistryFile(authToken, data) {
     }
     // 🧑‍✈️ (V4.113) «عدد المشرفين» يعكس فقط من نوعه «مرافق» — «استقبال» (مشرف فعلي أو الوكيل نفسه)
     // لا يُحسب ضمن العدد، ولا رسوم غرفة له ولا مخالصة (نفس منطق _mfCompute_)
-    f.supCount = f.sups.filter(function(s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+    f.supCount = f.sups.filter(_mfSupCounted_).length;
     // شركة النقل الافتراضية: اسم الوكيل، و«بدون» لو المشرف هو الوكيل نفسه (لا يوجد مشرف حقيقي أصلاً)
     if (!f.transport) {
       var isAgentSup = agentNm && f.sups.some(function(s) { return _mfStr_(s.name) === agentNm; });
@@ -22161,6 +22202,26 @@ function saveMinistryFile(authToken, data) {
     var row = _mfObjToRow_(f);
     if (isNew) sh.appendRow(row);
     else sh.getRange(old._row, 1, 1, MF_HEADERS.length).setValues([row]);
+    // 🧑‍✈️ (V4.213) اختيار مكان احتساب المرافق المشترك: تحديث المرافق بالملف الآخر (نفس القفل)
+    // supMoves = [{fileId, name, elsewhere}] — elsewhere: '__SELF__' ⇒ هذا الملف، '' ⇒ يُحسب هناك
+    var othersChanged = [];
+    (Array.isArray(data.supMoves) ? data.supMoves : []).forEach(function (mv) {
+      var o = all.filter(function (x) { return x.id === _mfStr_(mv && mv.fileId); })[0];
+      if (!o || o.id === f.id) return;
+      var nm = _mfSupKey_(mv.name), ew = _mfStr_(mv.elsewhere) === '__SELF__' ? f.id : _mfStr_(mv.elsewhere), hit = false;
+      if (ew === o.id) ew = '';
+      (o.sups || []).forEach(function (x) {
+        if (!_mfIsMurafiq_(x) || _mfSupKey_(x.name) !== nm) return;
+        if (_mfStr_(x.elsewhere) === ew) return;
+        if (ew) x.elsewhere = ew; else delete x.elsewhere;
+        hit = true;
+      });
+      if (!hit) return;
+      o.supCount = (o.sups || []).filter(_mfSupCounted_).length;
+      o.updatedBy = session.username; o.updatedAt = _mfStamp_();
+      sh.getRange(o._row, 1, 1, MF_HEADERS.length).setValues([_mfObjToRow_(o)]);
+      if (othersChanged.indexOf(o) < 0) othersChanged.push(o);
+    });
     // ⚡ (V4.178) أُفرِج عن القفل فور اكتمال الكتابة — releaseLock يفرغ التغييرات للشيت ضمنياً (فلا
     // حاجة لـSpreadsheetApp.flush الذي كان يفرض دورة تزامن زائدة داخل القفل). كل ما يلي (تسجيل
     // السجل، إبطال الكاش، حساب الأرصدة والقواعد) قراءة/حساب لا يحتاج تسلسلاً — فلا يظل القفل محجوزاً
@@ -22208,10 +22269,22 @@ function saveMinistryFile(authToken, data) {
     for (var _ai = 0; _ai < allAfter.length; _ai++) { if (allAfter[_ai].id === f.id) { _ix = _ai; break; } }
     if (_ix >= 0) allAfter[_ix] = f; else allAfter.push(f);
 
+    _MF_ALL_MEMO_ = allAfter;
     var balances = _mfBalances_(allAfter, _mfReadReceipts_());
     f.calc = _mfCompute_(f);
     f.flags = _mfRules_(f, allAfter, balances);
     var ret = { success: true, file: f, balances: balances };
+    if (othersChanged.length) {
+      ret.others = othersChanged.map(function (o) {
+        var c = {}; Object.keys(o).forEach(function (k) { if (k !== '_row' && k !== 'calc' && k !== 'flags') c[k] = o[k]; });
+        c.calc = _mfCompute_(o); c.flags = _mfRules_(o, allAfter, balances);
+        return c;
+      });
+      logChangesBatch_(session.username, othersChanged.map(function (o) {
+        return { action: 'تعديل ملف مراجعة وزارة', recordId: 'MF:' + o.id, field: 'مكان احتساب المرافق', oldVal: '-',
+          newVal: 'تحديث من ملف ' + (f.fileNo || ('#' + f.seq)) };
+      }));
+    }
     // 🔄 (V4.203) مزامنة بنود «بنود» التلقائية لحسابات العملاء بالرحلات المتأثرة (رسوم الغرفة من الملف)
     // — فقط لو تغيّر ما يؤثر على الرسوم، وبصمت: فشل المزامنة لا يُفشل حفظ الملف أبداً
     try {
@@ -22222,6 +22295,11 @@ function saveMinistryFile(authToken, data) {
         // ⚡ (V4.212) المزامنة كانت هنا داخل الحفظ (رحلتان عند الربط/تغيير الرحلة) فتُبطئه كثيراً — تُنفَّذ الآن
         // بنداء مستقل من الواجهة بعد رد الحفظ مباشرة (syncTripAccountsBg) فيظهر الحفظ فوراً
         ret.syncTrips = Object.keys(_ts);
+      }
+      if (othersChanged.length) {
+        var _ts2 = {}; (ret.syncTrips || []).forEach(function (t) { _ts2[t] = 1; });
+        othersChanged.forEach(function (o) { _mfTripsOf_(o).forEach(function (t) { _ts2[t] = 1; }); });
+        ret.syncTrips = Object.keys(_ts2);
       }
     } catch (eSync) {}
     // 🎯 حصة الأفراد الشهرية: تنبيه غير مانع فقط — الحفظ ينجح دائماً — عند تجاوز 36 فرد/شهر لكل
@@ -22802,13 +22880,13 @@ function extractRoomFeeReceiptSmart(authToken, base64Data, mimeType, aiFallback)
 function fetchSarSellRate(authToken, dateStr) {
   _mfPerm_(authToken, 'view');
   var day = _mfDate_(dateStr) || _mfToday_();
-  var cacheKey = 'sar_sell2_' + day.replace(/\//g, '_');   // (V4.212) مفتاح جديد: يتجاهل أي سعر شراء خُزّن خطأً
+  var cacheKey = 'sar_sell3_' + day.replace(/\//g, '_');   // (V4.213) مفتاح جديد: يتجاهل أي سعر شراء خُزّن خطأً
   var cache = CacheService.getScriptCache();
   try {
     var hit = cache.get(cacheKey);
     if (hit) {
       var c = JSON.parse(hit);
-      return { success: true, rate: c.rate, source: c.source, date: day, cached: true };
+      return { success: true, rate: c.rate, buy: c.buy || 0, method: c.method || '', source: c.source, date: day, cached: true };
     }
   } catch (e) {}
 
@@ -22822,12 +22900,11 @@ function fetchSarSellRate(authToken, dateStr) {
       var resp = UrlFetchApp.fetch(urls[i], { muteHttpExceptions: true, followRedirects: true,
         headers: { 'User-Agent': 'Mozilla/5.0' } });
       if (resp.getResponseCode() !== 200) { lastErr = 'HTTP ' + resp.getResponseCode(); continue; }
-      var html = String(resp.getContentText()).replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ');
-      var rate = _mfPickSarSell_(html);
-      if (rate) {
-        var out = { rate: rate, source: 'بنك مصر — سعر البيع' };
-        try { cache.put(cacheKey, JSON.stringify(out), 86400); } catch (e2) {}
-        return { success: true, rate: rate, source: out.source, date: day };
+      var pr = _mfPickSarRates_(String(resp.getContentText()));
+      if (pr && pr.sell) {
+        var out = { rate: pr.sell, buy: pr.buy || 0, method: pr.method, source: 'بنك مصر — سعر البيع للجمهور' };
+        try { cache.put(cacheKey, JSON.stringify(out), 21600); } catch (e2) {}
+        return { success: true, rate: out.rate, buy: out.buy, method: out.method, source: out.source, date: day };
       }
       lastErr = 'لم يُعثر على سطر الريال السعودي بالصفحة';
     } catch (e) { lastErr = String(e && e.message ? e.message : e); }
@@ -22835,26 +22912,55 @@ function fetchSarSellRate(authToken, dateStr) {
   return { success: false, error: 'تعذّر جلب سعر الريال من بنك مصر (' + lastErr + ') — أدخله يدوياً' };
 }
 
-// يلتقط سعر البيع من نص صفحة أسعار الصرف: أول رقمين بعد اسم الريال السعودي = شراء ثم بيع
-function _mfPickSarSell_(text) {
-  var t = _mfLatin_(String(text || '')).replace(/\s+/g, ' ');
-  var labels = ['Saudi Riyal', 'SAR', 'الريال السعودي', 'ريال سعودي'];
-  for (var i = 0; i < labels.length; i++) {
-    var idx = t.indexOf(labels[i]);
-    while (idx >= 0) {
-      var seg = t.substr(idx, 160);
-      var nums = seg.match(/\d+\.\d{2,6}/g) || [];
-      // نتجاهل القيم غير المنطقية لسعر الريال مقابل الجنيه
-      var ok = nums.filter(function(n) { var v = parseFloat(n); return v > 3 && v < 60; });
-      // (V4.212) سعر البيع للجمهور هو الأعلى دائماً — ترتيب عمودي الشراء/البيع يختلف بين نسخ الصفحة
-      // (العربية/الإنجليزية)، فكان يُلتقط أحياناً سعر الشراء (الأقل)
-      if (ok.length >= 2) return Math.round(Math.max(parseFloat(ok[0]), parseFloat(ok[1])) * 100) / 100;
-      if (ok.length === 1) return Math.round(parseFloat(ok[0]) * 100) / 100;
-      idx = t.indexOf(labels[i], idx + 1);
+// 💱 (V4.213) التقاط سعر بيع الريال (السعر الذي يبيع به البنك للجمهور = الأعلى) — ثلاث طرق بالترتيب:
+//   1) بيانات JSON داخل الصفحة (مواقع البنوك الحديثة تحمّل الأسعار كبيانات): أقرب حقل sell/بيع لرمز SAR
+//   2) جدول HTML: عمود رأسه «Sell/بيع» في صف الريال
+//   3) أي موضع لاسم الريال يتبعه رقمان على الأقل (شراء + بيع) ← الأعلى منهما. المواضع ذات الرقم الواحد
+//      (مثل محوِّل العملات «1 SAR = …» الذي يستخدم سعر الشراء) لا تُستخدم إلا لو لم يوجد غيرها.
+// يُعيد {sell, buy, method} — وتعرض الشاشة الرقمين معاً للتحقق.
+function _mfPickSarRates_(rawHtml) {
+  var raw = _mfLatin_(String(rawHtml || ''));
+  var ok = function (v) { v = parseFloat(v); return v > 3 && v < 60 ? v : 0; };
+  var r2 = function (v) { return Math.round(v * 100) / 100; };
+  // 1) JSON
+  var re = /["']?(?:currency(?:Code)?|code|iso|symbol)["']?\s*[:=]\s*["']SAR["']/gi, m;
+  while ((m = re.exec(raw))) {
+    var st = raw.lastIndexOf('{', m.index), en = raw.indexOf('}', m.index);   // نفس كائن الريال فقط
+    var win = (st >= 0 && en > m.index && m.index - st < 600 && en - m.index < 600) ? raw.slice(st, en + 1) : raw.substr(m.index, 300);
+    var sm = win.match(/["']?(?:sell(?:ing)?(?:_?rate)?|sale(?:_?rate)?|بيع)["']?\s*[:=]\s*["']?(\d+(?:\.\d+)?)/i);
+    var bm = win.match(/["']?(?:buy(?:ing)?(?:_?rate)?|purchase(?:_?rate)?|شراء)["']?\s*[:=]\s*["']?(\d+(?:\.\d+)?)/i);
+    if (sm && ok(sm[1])) return { sell: r2(ok(sm[1])), buy: bm && ok(bm[1]) ? r2(ok(bm[1])) : 0, method: 'json' };
+  }
+  // 2) جدول HTML برأس أعمدة
+  var cellsOf = function (tr) { return (tr.match(/<t[hd][^>]*>[\s\S]*?<\/t[hd]>/gi) || []).map(function (c) { return c.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(); }); };
+  var tables = raw.match(/<table[\s\S]*?<\/table>/gi) || [];
+  for (var t = 0; t < tables.length; t++) {
+    var rows = tables[t].match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    var sellIx = -1, buyIx = -1;
+    for (var k = 0; k < rows.length; k++) {
+      var cells = cellsOf(rows[k]);
+      if (sellIx < 0) cells.forEach(function (c, ci) { if (/sell|بيع/i.test(c) && sellIx < 0) sellIx = ci; if (/buy|شراء/i.test(c) && buyIx < 0) buyIx = ci; });
+      if (!cells.some(function (c) { return /Saudi Riyal|SAR|الريال السعودي|ريال سعودي/.test(c); })) continue;
+      if (sellIx >= 0 && ok(cells[sellIx])) return { sell: r2(ok(cells[sellIx])), buy: buyIx >= 0 ? r2(ok(cells[buyIx])) : 0, method: 'table' };
+      var nums = cells.map(ok).filter(Boolean);
+      if (nums.length >= 2) return { sell: r2(Math.max(nums[0], nums[1])), buy: r2(Math.min(nums[0], nums[1])), method: 'row' };
     }
   }
-  return 0;
+  // 3) النص الخام: أول موضع يتبعه رقمان
+  var text = raw.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
+  var labels = ['Saudi Riyal', 'SAR', 'الريال السعودي', 'ريال سعودي'], single = 0;
+  for (var i = 0; i < labels.length; i++) {
+    var idx = text.indexOf(labels[i]);
+    while (idx >= 0) {
+      var n = (text.substr(idx, 160).match(/\d+\.\d{2,6}/g) || []).map(ok).filter(Boolean);
+      if (n.length >= 2) return { sell: r2(Math.max(n[0], n[1])), buy: r2(Math.min(n[0], n[1])), method: 'text' };
+      if (n.length === 1 && !single) single = n[0];
+      idx = text.indexOf(labels[i], idx + 1);
+    }
+  }
+  return single ? { sell: r2(single), buy: 0, method: 'single' } : null;
 }
+function _mfPickSarSell_(text) { var r = _mfPickSarRates_(text); return r ? r.sell : 0; }
 
 /* ==================================================================================
    🏛️ (V4.108) استيراد ملفات مراجعة قديمة من إكسيل (للأدمن فقط)

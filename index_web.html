@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.212 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.213 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.212)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.213)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.212</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.213</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7391,7 +7391,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.212";
+var CLIENT_APP_VERSION = "4.213";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -31031,6 +31031,11 @@ function _pdfFetchBytes_(fileId) {
       .getDriveFileBase64(window.authToken, fileId);
   });
 }
+function _attFitCss_(w, h) {   // (V4.213) أبعاد صريحة بالمليمتر داخل صندوق 186×250مم — بلا max-height/object-fit
+  var W = 186, H = 250, ww = W, hh = H;
+  if (w > 0 && h > 0) { var r = h / w; ww = W; hh = W * r; if (hh > H) { hh = H; ww = H / r; } }
+  return 'width:' + ww.toFixed(1) + 'mm;height:' + hh.toFixed(1) + 'mm;display:block;margin:0 auto;border:1px solid #ccc;border-radius:12px;';
+}
 // يحوّل حاوية مرفق PDF واحدة إلى صور كل صفحاتها (بلا الفارغة)
 function _pdfExpandOne_(el) {
   var fid = el.getAttribute('data-fid');
@@ -31053,7 +31058,7 @@ function _pdfExpandOne_(el) {
               ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
               return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
                 if (_pdfCanvasIsBlank_(canvas)) return;   // 🚫 صفحة فارغة — تُستبعَد
-                pages.push({ no: pageNo, data: canvas.toDataURL('image/jpeg', 0.82) });
+                pages.push({ no: pageNo, data: canvas.toDataURL('image/jpeg', 0.82), w: canvas.width, h: canvas.height });
               });
             });
           });
@@ -31073,7 +31078,7 @@ function _pdfExpandOne_(el) {
       r.pages.forEach(function (pg, i) {
         var lbl = title + (r.total > 1 ? (' — صفحة ' + pg.no + ' من ' + r.total) : '');
         html += (i === 0 ? '' : '<div style="page-break-before:always;"></div>') +
-          bar(lbl) + '<img src="' + pg.data + '" style="' + imgCss + '">';
+          bar(lbl) + '<img src="' + pg.data + '" style="' + _attFitCss_(pg.w, pg.h) + '">';
       });
       el.innerHTML = html;
     })
@@ -34155,7 +34160,20 @@ function formatTimeOnly(value){
 // دالة لمعرفة اسم اليوم من التاريخ وإضافته
 
 
+// 🖨️ (V4.213) الطباعة = نفس ملف PDF الخاص بالحفظ/المشاركة (مع توسيع كل صفحات المرفقات) يُفتح في عارض Drive
+// للطباعة أو التنزيل. صفحة الطباعة القديمة كانت داخل إطار Apps Script فتخرج صفحاتها بيضاء (خصوصاً على
+// الموبايل وعند الحفظ PDF من المتصفح). النافذة تُفتح فوراً عند الضغط حتى لا يحجبها المتصفح.
 function printBookingPattern(id) {
+  var w = null;
+  try { w = window.open('', '_blank'); if (w) w.document.write('<div dir="rtl" style="font-family:Tahoma,Arial;padding:40px;text-align:center;">⏳ جاري تجهيز ملف الإشعار للطباعة…<br><small>تُضم كل صفحات التذكرة والمرفقات</small></div>'); } catch (e) {}
+  _shareNoticeBuild_(id, null, function (res) {
+    if (!res || !res.fileId) { try { if (w) w.close(); } catch (e) {} _printBookingLegacy_(id); return; }
+    var url = 'https://drive.google.com/file/d/' + res.fileId + '/view';
+    if (w && !w.closed) w.location.href = url; else window.open(url, '_blank');
+  }, function () { try { if (w) w.close(); } catch (e) {} _printBookingLegacy_(id); });
+}
+// المسار القديم (صفحة print_view) — احتياطي فقط لو تعذّر إنشاء ملف PDF
+function _printBookingLegacy_(id) {
 
   // ملاحظة: تم توحيد مسار الطباعة (موبايل وكمبيوتر) على نفس صفحة print_view.html
   // حتى يكون شكل ملف الطباعة مطابقاً دائماً لتصميم النظام (نفس الألوان والتخطيط)
@@ -36211,17 +36229,38 @@ function mfHasFlag(f, code) { return (f.flags || []).some(function (x) { return 
 // على أقدم ملف فقط (أصغر مسلسل) — الملف الجديد غير المحفوظ يُعامَل كالأحدث
 function mfSupKey(n) { return String(n || '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[\u064B-\u065F]/g, '').replace(/\s+/g, ' ').trim(); }
 function mfIsMurafiq(s) { return String((s && s.type) || '').indexOf('مرافق') >= 0; }
+// 🧑‍✈️ (V4.213) المرافق المحسوب هنا فعلاً (ليس «محسوب بملف آخر» باختيار المستخدم)
+function mfSupCounted(s) { return mfIsMurafiq(s) && !mfStr(s && s.elsewhere); }
+function mfFileLbl_(id) {
+  var o = ((window.MF && MF.files) || []).filter(function (x) { return x.id === id; })[0];
+  return o ? (o.fileNo ? 'ملف ' + o.fileNo : 'ملف #' + (o.seq || '')) + (o.clientLabel ? ' — ' + o.clientLabel : '') : 'ملف آخر';
+}
+// الملفات الأخرى بنفس موعدي السفر والعودة وفيها نفس المرافق محسوباً (تعارض يحتاج اختيار)
+function mfSupConflicts_(d) {
+  var out = [];
+  if (!d || !d.goDate || !d.retDate) return out;
+  (d.sups || []).forEach(function (s, i) {
+    if (!mfSupCounted(s)) return;
+    var nm = mfSupKey(s.name); if (!nm) return;
+    if (mfStr(d.agent) && mfStr(s.name) === mfStr(d.agent)) return;
+    ((window.MF && MF.files) || []).forEach(function (o) {
+      if (!o || o.id === d.id || o.goDate !== d.goDate || o.retDate !== d.retDate) return;
+      if ((o.sups || []).some(function (x) { return mfSupCounted(x) && mfSupKey(x.name) === nm; })) out.push({ i: i, name: s.name, other: o });
+    });
+  });
+  return out;
+}
 function mfSupExempt(f) {
   var all = (window.MF && MF.files) || [];
   if (!f || !f.goDate || !f.retDate || !all.length) return [];
   var mySeq = mfNum(f.seq) || Infinity, out = [];
   (f.sups || []).forEach(function (s) {
-    if (!mfIsMurafiq(s)) return;
+    if (!mfSupCounted(s)) return;
     var nm = mfSupKey(s.name); if (!nm) return;
     var owner = null, ownSeq = Infinity;
     all.forEach(function (o) {
       if (!o || o.id === f.id || o.goDate !== f.goDate || o.retDate !== f.retDate) return;
-      if (!(o.sups || []).some(function (x) { return mfIsMurafiq(x) && mfSupKey(x.name) === nm; })) return;
+      if (!(o.sups || []).some(function (x) { return mfSupCounted(x) && mfSupKey(x.name) === nm; })) return;
       var os = mfNum(o.seq) || Infinity;
       var earlier = os < mySeq || (os === mySeq && String(o.id) < String(f.id || ''));
       if (earlier && (os < ownSeq || !owner)) { owner = o; ownSeq = os; }
@@ -36238,7 +36277,11 @@ function mfCalc(f) {
   var supExempt = mfSupExempt(f);
   // 🧑‍✈️ (V4.113) «مرافق» فقط يُحتسب ضمن الأعداد وله رسوم غرفة — «استقبال» (سواء مشرف فعلي أو
   // الوكيل السعودي نفسه) لا يُحسب أصلاً — نفس منطق _mfCompute_ بالسيرفر تماماً.
-  var murafiq = sups.filter(function (s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+  var murafiq = sups.filter(mfSupCounted).length;
+  var supElsewhere = sups.filter(function (s) { return mfIsMurafiq(s) && mfStr(s.elsewhere); }).map(function (s) {
+    var o = ((window.MF && MF.files) || []).filter(function (x) { return x.id === s.elsewhere; })[0];
+    return { name: s.name, id: s.elsewhere, fileNo: o ? (o.fileNo || '') : '', seq: o ? (o.seq || '') : '' };
+  });
   var O = murafiq, heads = N + O;
   // 🏛️ (V4.113) رسوم غرفة VIP إجمالي ثابت للفرد من الإعدادات (افتراضياً 3,100) — وليست الرسوم
   // المسجَّلة + 100 كما كان سابقاً؛ لا تُطبَّق على تجديد الباركود إطلاقاً
@@ -36257,7 +36300,7 @@ function mfCalc(f) {
   var Y = U * heads;
   var AA = (Y * V) + W + X + Z + barcode;
   var AB = Q - AA;
-  return { heads: heads, murafiq: murafiq, murafiqFee: murafiqFee, supExempt: supExempt, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode, vipByCount: vipByCount,
+  return { heads: heads, murafiq: murafiq, murafiqFee: murafiqFee, supExempt: supExempt, supElsewhere: supElsewhere, roomFeeEffective: S, supRoomFee: supFee, barcodeFee: barcode, vipByCount: vipByCount,
     revenue: Q, totalTickets: W, totalRoomFee: X, otherExp: Z, clearanceSAR: U, totalSAR: Y,
     totalExp: Math.round(AA), margin: Math.round(AB), perPersonMargin: N > 0 ? Math.round(AB / N) : 0 };
 }
@@ -37101,6 +37144,11 @@ function mfApplySaved(res, opts) {
       MF.sups.push({ name: s.name, type: s.type, home: f.company, shared: [], mobile: '', notes: '' });
     }
   });
+  // 🧑‍✈️ (V4.213) ملفات أخرى تحدّث فيها مكان احتساب المرافق
+  (res.others || []).forEach(function (o) {
+    o._c = mfCalc(o);
+    MF.files.forEach(function (x, ix) { if (x.id === o.id) MF.files[ix] = o; });
+  });
   MF.selId = f.id;
   mfRender();
   if (!opts.silent) _showPopup('تم الحفظ وتحديث الصف فقط', 'success');
@@ -37479,7 +37527,7 @@ function mfDetail(f) {
     mfKV('الإيراد = معتمرين × سعر البرنامج', mfFmt(c.revenue)) +
     mfKV('إجمالي التذاكر = التذكرة × (معتمرين + مشرفين)', mfFmt(c.totalTickets)) +
     mfKV('إجمالي رسوم الغرفة = (معتمرين × ' + mfFmt(c.roomFeeEffective) + ') + (مرافقون ' + c.murafiqFee + ' × ' + mfFmt(c.supRoomFee) + ')' +
-      ((c.supExempt || []).length ? ' — معفى: ' + c.supExempt.map(function (x) { return mfEsc(x.name) + ' (محسوب بملف ' + mfEsc(x.fileNo || ('#' + x.seq)) + ')'; }).join('، ') : ''), mfFmt(c.totalRoomFee)) +
+      ((c.supExempt || []).concat(c.supElsewhere || []).length ? ' — معفى: ' + (c.supExempt || []).concat(c.supElsewhere || []).map(function (x) { return mfEsc(x.name) + ' (محسوب بملف ' + mfEsc(x.fileNo || ('#' + x.seq)) + ')'; }).join('، ') : ''), mfFmt(c.totalRoomFee)) +
     mfKV('مصروفات أخرى = رسوم إدارية × الأفراد', mfFmt(c.otherExp)) +
     (c.barcodeFee ? mfKV('رسوم تجديد الباركود', mfFmt(c.barcodeFee)) : '') +
     mfKV('النسبة المخصومة', (mfNum(f.pct).toFixed(2)) + '% = ' + mfFmt(c.revenue * mfNum(f.pct) / 100)) +
@@ -38557,7 +38605,9 @@ function mfFormRender() {
     var opts = [''].concat((d.breakdown || []).map(function (b) { return b.name; }));
     var isAgent = mfStr(s.name) && mfStr(s.name) === mfStr(d.agent);
     h += '<tr><td><input class="form-control form-control-sm" list="mfSupList" value="' + mfEsc(s.name) + '" oninput="mfSupSet(' + i + ',\'name\',this.value)" onblur="mfSupCheckHint_(' + i + ')">' +
-      (isAgent ? '<div class="mf-hint auto">✅ يطابق الوكيل السعودي ⇒ النوع «استقبال»</div>' : '<div class="mf-hint auto" id="mfSupHint_' + i + '" style="display:' + (mfSupHintText_(s.name, d.company, d.agent) ? '' : 'none') + ';color:#b45309;">' + mfEsc(mfSupHintText_(s.name, d.company, d.agent) || '') + '</div>') + '</td>' +
+      (isAgent ? '<div class="mf-hint auto">✅ يطابق الوكيل السعودي ⇒ النوع «استقبال»</div>' : '<div class="mf-hint auto" id="mfSupHint_' + i + '" style="display:' + (mfSupHintText_(s.name, d.company, d.agent) ? '' : 'none') + ';color:#b45309;">' + mfEsc(mfSupHintText_(s.name, d.company, d.agent) || '') + '</div>') +
+      (mfIsMurafiq(s) && mfStr(s.elsewhere) ? '<div class="mf-hint auto" style="color:#7c3aed;">↪ محسوب في ' + mfEsc(mfFileLbl_(s.elsewhere)) +
+        ' (لا يدخل في عدد المشرفين ولا الأفراد ولا رسوم الغرفة هنا) <button type="button" class="mf-btn sm" onclick="mfSupCountHere(' + i + ')">احتسبه هنا</button></div>' : '') + '</td>' +
       '<td>' + mfSel('', ['مرافق', 'استقبال', 'بدون مشرف'], s.type, 'mfSupSet(' + i + ',\'type\',this.value)') + '</td>' +
       '<td>' + mfSel('', opts, s.directTo, 'mfSupSet(' + i + ',\'directTo\',this.value)') + '</td>' +
       '<td><button class="mf-btn sm dgr" onclick="mfSupDel(' + i + ')">✕</button></td></tr>';
@@ -38565,7 +38615,8 @@ function mfFormRender() {
   if (!(d.sups || []).length) h += '<tr><td colspan="4" style="color:#94a3b8;">لا يوجد مشرفون</td></tr>';
   h += '</tbody></table><datalist id="mfSupList">' + scopedSups.map(function (s) { return '<option value="' + mfEsc(s.name) + '">'; }).join('') + '</datalist>';
   h += '<div class="mf-note info mt-2"><span>⚖️</span><div>المشرف «مرافق» فقط له رسوم غرفة (' +
-    mfL(mfFmt(c.supRoomFee)) + ' ج) والحد الأقصى 50 معتمراً لكل مرافق · «استقبال» و«الوكيل» بلا رسوم غرفة ولا مخالصة.</div></div>';
+    mfL(mfFmt(c.supRoomFee)) + ' ج) والحد الأقصى 50 معتمراً لكل مرافق · «استقبال» و«الوكيل» بلا رسوم غرفة ولا مخالصة.' +
+    ' المرافق المسجَّل في ملفين لنفس موعدي السفر والعودة يُسأل عند الحفظ أين يُحسب (مرة واحدة فقط كملف الوزارة).</div></div>';
   h += '</div>';
 
   /* ---------- 4) المالية ---------- */
@@ -38647,7 +38698,7 @@ function mfCalcNoteHtml(d, c) {
     ' · إجمالي رسوم الغرفة ' + mfL(mfFmt(c.totalRoomFee)) +
     ' <span style="color:#5c6b83;">(' + mfNum(d.pilgrims) + ' × ' + mfFmt(c.roomFeeEffective) + ' ج' +
     (c.murafiqFee ? (' + ' + c.murafiqFee + ' مشرف × ' + mfFmt(c.supRoomFee) + ' ج') : '') +
-    ((c.supExempt || []).length ? ' (المرافق ' + c.supExempt.map(function (x) { return mfEsc(x.name) + ' محسوب بملف ' + mfEsc(x.fileNo || ('#' + x.seq)); }).join('، ') + ')' : '') +
+    ((c.supExempt || []).concat(c.supElsewhere || []).length ? ' (المرافق ' + (c.supExempt || []).concat(c.supElsewhere || []).map(function (x) { return mfEsc(x.name) + ' محسوب بملف ' + mfEsc(x.fileNo || ('#' + x.seq)); }).join('، ') + ')' : '') +
     (c.vipByCount && d.reviewType !== 'VIP' ? ' — سعر VIP لأقل من 4 أفراد' : '') + ')</span>' +
     ' · <b>المخالصة للفرد ' + mfL(mfFmt(c.clearanceSAR)) + ' ريال</b>' +
     ' · إجمالي المصروف ' + mfL(mfFmt(c.totalExp)) + ' · <b>هامش الربح ' + mfL(mfFmt(c.margin)) + '</b>' +
@@ -38686,7 +38737,8 @@ function mfFetchFx() {
       var v = Math.round(mfNum(res.rate) * 100) / 100;   // رقمان عشريان بحد أقصى
       MF._draft.fxRate = v;
       var inp = document.getElementById('mfd_fx'); if (inp) inp.value = v;
-      if (hint) { hint.className = 'mf-hint auto'; hint.style.color = ''; hint.textContent = '🏦 ' + (res.source || 'بنك مصر') + ' بتاريخ ' + (res.date || '') + ' — استرشادي'; }
+      // (V4.213) عرض سعري البيع والشراء معاً للتحقق — المسجَّل دائماً سعر البيع (الأعلى)
+      if (hint) { hint.className = 'mf-hint auto'; hint.style.color = ''; hint.textContent = '🏦 ' + (res.source || 'بنك مصر') + ': بيع ' + v + (mfNum(res.buy) ? ' (شراء ' + mfNum(res.buy) + ')' : '') + ' بتاريخ ' + (res.date || '') + ' — استرشادي'; }
       mfFormLiveCalc();   // 💱 المخالصة بالريال تتحدّث فوراً مع سعر الصرف الجديد
       mfFormValidate();
     })
@@ -39032,7 +39084,14 @@ function mfBdSet(i, k, v) {
 }
 // 🧑‍✈️ (V4.113) عدد المشرفين المُعتَد به = «مرافق» فقط — «استقبال» (مشرف فعلي أو الوكيل نفسه) صفر
 function mfMurafiqCount(sups) {
-  return (sups || []).filter(function (s) { return String(s.type || '').indexOf('مرافق') >= 0; }).length;
+  return (sups || []).filter(mfSupCounted).length;   // (V4.213) بلا «محسوب بملف آخر»
+}
+// 🧑‍✈️ (V4.213) إلغاء «محسوب بملف آخر» ⇒ يُحسب في هذا الملف (والملف الآخر يُسأل عنه عند الحفظ)
+function mfSupCountHere(i) {
+  var s = (MF._draft.sups || [])[i]; if (!s) return;
+  delete s.elsewhere;
+  MF._draft.supCount = mfMurafiqCount(MF._draft.sups);
+  mfFormRender();
 }
 function mfSupAdd() {
   MF._draft.sups = MF._draft.sups || [];
@@ -39115,7 +39174,14 @@ function mfSaveDraft() {
   var d = MF._draft;
   if (!mfStr(d.company)) { _showPopup('اختر الشركة المصرية', 'error'); return; }
   mfSyncCounts();
-  d.supCount = (d.sups || []).length;
+  d.supCount = mfMurafiqCount(d.sups);
+  // 🧑‍✈️ (V4.213) مرافق مشترك مع ملف آخر لنفس موعدي السفر والعودة ⇒ يُسأل المستخدم أين يُحسب
+  if (!d._supAsked) {
+    d.supMoves = [];
+    var cf = mfSupConflicts_(d);
+    if (cf.length) { mfAskSupPlace_(d, cf, 0); return; }
+  }
+  delete d._supAsked;
   if (!mfStr(d.clientLabel)) d.clientLabel = (d.breakdown || []).map(function (b) { return b.name; }).filter(String).join(' + ');
   var btnBox = document.getElementById('mfFormWarn');
   if (btnBox) btnBox.innerHTML = '⏳ جاري الحفظ…';
@@ -39140,6 +39206,27 @@ function mfSaveDraft() {
 }
 // 🎯 (V4.152) تنبيه غير مانع بعد الحفظ عند تجاوز ملف «فردي» حصة شركته الشهرية (36) أو حد الملف
 // الواحد (9) — الحفظ نجح بالفعل ولا يمنعه هذا التنبيه، فقط يعرض التفاصيل ويقترح شركات بديلة
+function mfAskSupPlace_(d, cf, k) {
+  if (k >= cf.length) { d._supAsked = true; mfSaveDraft(); return; }
+  var c = cf[k], s = d.sups[c.i];
+  if (!mfSupCounted(s)) { mfAskSupPlace_(d, cf, k + 1); return; }   // حُسم بسؤال سابق
+  var other = mfFileLbl_(c.other.id);
+  showElegantConfirm({ icon: '🧑‍✈️', title: 'أين يُحسب المرافق «' + c.name + '»؟',
+    message: 'مسجَّل «مرافق» أيضاً في ' + other + ' لنفس موعدي السفر والعودة. الوزارة تحسبه مرة واحدة فقط — ' +
+      'اختر الملف الذي يظهر فيه ضمن عدد المشرفين والأفراد ورسوم الغرفة (ليطابق ملف الوزارة). في الملف الآخر يبقى اسمه ظاهراً للعلم فقط.',
+    buttons: [
+      { label: '✅ احتسابه في هذا الملف', class: 'btn-success', onClick: function () {
+        d.supMoves = (d.supMoves || []).concat([{ fileId: c.other.id, name: c.name, elsewhere: '__SELF__' }]);
+        mfAskSupPlace_(d, cf, k + 1);
+      } },
+      { label: '↪ احتسابه في ' + other, class: 'btn-primary', onClick: function () {
+        s.elsewhere = c.other.id;
+        d.supMoves = (d.supMoves || []).concat([{ fileId: c.other.id, name: c.name, elsewhere: '' }]);
+        mfAskSupPlace_(d, cf, k + 1);
+      } },
+      { label: 'رجوع بدون حفظ', class: 'btn-outline-secondary', onClick: function () { delete d.supMoves; mfFormValidate(); } }
+    ] });
+}
 function mfShowQuotaWarning_(qw) {
   if (!qw) return;
   var parts = [];
