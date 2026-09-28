@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.216";
+var APP_VERSION = "4.217";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22872,6 +22872,16 @@ function extractRoomFeeReceiptSmart(authToken, base64Data, mimeType, aiFallback)
    💱 (V4.111) سعر بيع الريال السعودي من بنك مصر بتاريخ تسجيل الملف — استرشادي فقط
    يُقرَّب لرقمين عشريين، ويُخزَّن مؤقتاً بالكاش ليوم واحد لتقليل النداءات.
    ================================================================================== */
+// 🏨 (V4.217) فتح برنامج حجوزات الفنادق من برنامج العمرة: hbHandoff موجودة فقط بعد إضافة ملفات HB_* (المرحلة 4)؛
+// النداء المباشر لها قبل ذلك كان يُسقط الشاشة بخطأ «hbHandoff is not a function» — هنا فحص ورسالة واضحة
+function hotelsHandoff(authToken) {
+  requireAuth_(authToken);
+  if (typeof hbHandoff !== 'function') {
+    return { success: false, notInstalled: true, error: 'برنامج حجوزات الفنادق لم يُدمج بعد داخل برنامج العمرة (المرحلة 4 بدليل التركيب: ملفات HB_*). حتى ذلك الحين استخدم رابط برنامج الحجوزات الحالي كالمعتاد.' };
+  }
+  var r = hbHandoff(authToken);
+  return { success: true, url: r.url };
+}
 function fetchSarSellRate(authToken, dateStr) {
   _mfPerm_(authToken, 'view');
   var day = _mfDate_(dateStr) || _mfToday_();
@@ -24997,7 +25007,7 @@ function getHousingAgreements(authToken, filters) {
   agrs.forEach(function (a) {
     a.allocations = (byAgr[a.id] || []).map(function (x) {
       var c = {}; for (var k in x) if (k !== '_row') c[k] = x[k];
-      var g = gIdx[c.groupRef];
+      var g = _vzGIdxMulti_(gIdx, c.groupRef);
       c.clients = g ? (g.clients || []) : [];
       c.tripName = g ? g.tripName : '';
       c.agent = g ? g.agent : '';
@@ -25051,14 +25061,16 @@ function _vzHousingAgrByGroup_() {
   try { _vzHaReadAll_().forEach(function (a) { byId[a.id] = a; }); } catch (e) { return out; }
   try {
     _vzAllocReadAll_().forEach(function (x) {
-      var g = _mfStr_(x.groupRef); if (!g) return;
       var a = byId[x.agrId]; if (!a) return;
       var city = a.city === 'المدينة' ? 'madinah' : 'makkah';
       var kind = (a.kind || 'سكن') === 'إعاشة' ? 'catering' : 'housing';
-      if (!out[g]) out[g] = { makkah: [], madinah: [], makkahCatering: [], madinahCatering: [] };
       var bucket = kind === 'catering' ? (city + 'Catering') : city;
       var rec = { agrNo: a.agrNo, hotel: a.hotel, supplier: a.supplier, count: x.count, from: x.from, to: x.to };
-      if (!out[g][bucket].some(function (y) { return y.agrNo === rec.agrNo; })) out[g][bucket].push(rec);
+      // (V4.217) تخصيص لعدة مجموعات «1001-1002» يُربط بكل مجموعة منها
+      _agrNosSplit_(x.groupRef).forEach(function (g) {
+        if (!out[g]) out[g] = { makkah: [], madinah: [], makkahCatering: [], madinahCatering: [] };
+        if (!out[g][bucket].some(function (y) { return y.agrNo === rec.agrNo; })) out[g][bucket].push(rec);
+      });
     });
   } catch (e2) {}
   return out;
@@ -25071,8 +25083,18 @@ function _vzHousingAgrByGroup_() {
      مسجَّلة من قبل، وإلا لا يحدث شيء.
    • رقم اتفاقية إعاشة ⇒ يُضاف لشاشة «اتفاقيات الإعاشة» (أو يُضاف رقم المجموعة لاتفاقية موجودة بها).
    • أكثر من رقم بنفس الخانة (مفصولة بفاصلة) ⇒ كل رقم على حدة. */
+// (V4.217) بيانات مجموعة واحدة أو عدة مجموعات «1001-1002» مدمجة (العملاء والرحلة والوكيل والشركة)
+function _vzGIdxMulti_(gIdx, ref) {
+  var gs = _agrNosSplit_(ref).map(function (r) { return gIdx[r]; }).filter(Boolean);
+  if (gs.length <= 1) return gs[0] || gIdx[_mfStr_(ref)] || null;
+  var uniq = function (arr) { var o = []; arr.forEach(function (x) { if (x && o.indexOf(x) < 0) o.push(x); }); return o; };
+  return { clients: uniq([].concat.apply([], gs.map(function (g) { return g.clients || []; }))),
+    tripName: uniq(gs.map(function (g) { return g.tripName; })).join(' + '), agent: uniq(gs.map(function (g) { return g.agent; })).join(' + '),
+    company: uniq(gs.map(function (g) { return g.company; })).join(' + ') };
+}
 function _agrNosSplit_(s) {
-  return String(s == null ? '' : s).split(/[،,\/\s]+/).map(function (x) { return _mfStr_(x); }).filter(String);
+  // (V4.217) الفاصل «-» أيضاً (بمسافات أو بدونها): «1001-1002» أو «1001 - 1002» ⇒ مجموعتان
+  return String(s == null ? '' : s).split(/[،,\/\s\-–—+&]+/).map(function (x) { return _mfStr_(x); }).filter(String);
 }
 function _vzSyncGroupHousingAllocs_(f, username) {
   var ref = _mfStr_(f.ref); if (!ref) return;
@@ -25087,7 +25109,7 @@ function _vzSyncGroupHousingAllocs_(f, username) {
   var seq = agrs.reduce(function (m, a) { return Math.max(m, _mfNum_(a.seq)); }, 0);
   var changed = false, catering = [], logs = [];
   var link = function (a, h) {
-    if (allocs.some(function (x) { return x.agrId === a.id && x.groupRef === ref; })) return;
+    if (allocs.some(function (x) { return x.agrId === a.id && _agrNosSplit_(x.groupRef).indexOf(ref) >= 0; })) return;
     var id = 'HL' + new Date().getTime() + Math.floor(Math.random() * 999);
     ash.appendRow([id, a.id, ref, _mfNum_(h.count) || _mfNum_(f.visaCount), _mfDate_(h.in) || a.from, _mfDate_(h.out) || a.to,
       'ربط تلقائي من بيانات المجموعة', username, stamp]);
@@ -25173,9 +25195,10 @@ function saveHousingAgreement(authToken, data) {
   if (VZ_HA_CITIES_.indexOf(city) < 0) throw new Error('اختر المدينة (مكة أو المدينة)');
   var sh = _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS);
   var all = _vzHaReadAll_();
-  // منع تكرار رقم الاتفاقية داخل نفس المدينة
+  // (V4.217) منع تكرار رقم الاتفاقية نهائياً (مثل اتفاقيات الإعاشة) — لا يُقبل نفس الرقم مرتين مهما كانت المدينة
   var kind = _mfStr_(data.kind) || 'سكن';
-  var dup = all.filter(function (a) { return a.agrNo === agrNo && a.city === city && (a.kind || 'سكن') === kind && a.id !== _mfStr_(data.id); });
+  var noKey = function (x) { return _mfStr_(x).replace(/\s+/g, '').toUpperCase(); };
+  var dup = all.filter(function (a) { return noKey(a.agrNo) === noKey(agrNo) && (a.kind || 'سكن') === kind && a.id !== _mfStr_(data.id); });
   // 📄 (V4.194) اتفاقية أُنشئت تلقائياً من بيانات مجموعة (برقمها فقط) ثم رُفع ملفها الفعلي لاحقاً ⇒ يُكمَّل
   // نفس السجل ببيانات الملف بدل رفضه كتكرار
   if (isNew && dup.length === 1 && /أُنشئت تلقائياً/.test(_mfStr_(dup[0].notes))) {
@@ -25183,7 +25206,7 @@ function saveHousingAgreement(authToken, data) {
     if (!_mfStr_(data.notes) || /أُنشئت تلقائياً/.test(_mfStr_(data.notes))) data.notes = dup[0].notes.replace(/أُنشئت تلقائياً/, 'أُنشئت تلقائياً ثم استُكملت من ملف');
     dup = [];
   }
-  if (dup.length) throw new Error('اتفاقية ' + kind + ' رقم ' + agrNo + ' مسجَّلة من قبل في ' + city);
+  if (dup.length) throw new Error('رقم الاتفاقية ' + agrNo + ' مسجَّل من قبل (اتفاقية ' + kind + ' في ' + dup[0].city + (dup[0].hotel ? ' — ' + dup[0].hotel : '') + ') — لا يُقبل تكرار رقم الاتفاقية');
   var stamp = _mfStamp_();
   var _savedId = '';
   var row = [null, 0, agrNo, city, _mfStr_(data.hotel), _mfNum_(data.capacity),
@@ -25207,7 +25230,7 @@ function saveHousingAgreement(authToken, data) {
   _agrNosSplit_(data.groupRef).forEach(function (ref) {
     try {
       var allocsNow = _vzAllocReadAll_();
-      if (!allocsNow.some(function (x) { return x.agrId === _savedId && x.groupRef === ref; })) {
+      if (!allocsNow.some(function (x) { return x.agrId === _savedId && _agrNosSplit_(x.groupRef).indexOf(ref) >= 0; })) {
         var cnt = _mfNum_(data.groupCount) || _mfNum_(data.capacity);
         var alId = 'HL' + new Date().getTime() + Math.floor(Math.random() * 999);
         _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS).appendRow([alId, _savedId, ref, cnt, _mfDate_(data.from), _mfDate_(data.to),
@@ -25277,8 +25300,8 @@ function saveHousingAllocation(authToken, data) {
     row[0] = cur.id;
     sh.getRange(cur._row, 1, 1, VZ_HALLOC_HEADERS.length).setValues([row.concat([cur.createdBy, cur.createdAt])]);
   }
-  // 🔁 (V4.134) الاتجاه العكسي: رقم الاتفاقية يُسجَّل تلقائياً في بيانات سكن المجموعة
-  try { _vzSyncAllocToGroup_(agr, ref, cnt, from, to, session.username); } catch (eBack) {}
+  // 🔁 (V4.134) الاتجاه العكسي: رقم الاتفاقية يُسجَّل تلقائياً في بيانات سكن المجموعة (كل مجموعة لو «1001-1002»)
+  _agrNosSplit_(ref).forEach(function (r1) { try { _vzSyncAllocToGroup_(agr, r1, cnt, from, to, session.username); } catch (eBack) {} });
   _vzHaClearCache_();
   logChange_(session.username, isNew ? 'إضافة تخصيص سكن' : 'تعديل تخصيص سكن', 'HL:' + row[0],
     'اتفاقية ' + agr.agrNo + ' — مجموعة ' + ref, '-', cnt + ' فرد · ' + from + ' → ' + to);
@@ -25341,7 +25364,7 @@ function postAgreementToAgentAccount(authToken, payload) {
   var refs = allocs.map(function (x) { return x.groupRef; });
   var trips = {}, clients = {};
   allocs.forEach(function (x) {
-    var g = gIdx[x.groupRef]; if (!g) return;
+    var g = _vzGIdxMulti_(gIdx, x.groupRef); if (!g) return;
     if (g.tripName) trips[g.tripName] = 1;
     (g.clients || []).forEach(function (c) { if (c) clients[c] = 1; });
   });

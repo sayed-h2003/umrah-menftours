@@ -691,6 +691,35 @@ function glVoidEntry(authToken, id, reason) {
     return { success: true };
   } finally { lock.releaseLock(); }
 }
+// 🗑️ (V4.217) حذف قيد نهائياً (للمدير): المسودة/المرحّل/الملغى اليدوي أو المستورد — لا القيود التلقائية (تُدار من
+// مصدرها) ولا قيود الفترات المقفلة. السند المحذوف لا يُعاد استخدام رقمه.
+function glDeleteEntry(authToken, id) {
+  var session = requireAuth_(authToken);
+  if (!_glIsAdmin_(session)) throw new Error('الحذف النهائي للقيود للمدير فقط — يمكنك «إلغاء» القيد بدلاً من ذلك');
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var f = _glFindEntry_(_glStr_(id)); if (!f) throw new Error('القيد غير موجود');
+    if (/^AUTO:/.test(_glStr_(f.r[6]))) throw new Error('هذا قيد تلقائي من شاشات البرنامج — يُحذف تلقائياً بحذف مصدره (راجع تبويب «القيود التلقائية»)');
+    if (_glStr_(f.r[3]) === 'قيد إقفال') throw new Error('قيد إقفال السنة يُلغى من «الإعدادات ← إعادة فتح السنة»');
+    if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
+    _glDeleteLinesOf_([_glStr_(id)]);
+    _glSheet_('entries').deleteRow(f.row);
+    logChange_(session.username, 'حذف قيد نهائياً', 'GL:' + id, _glStr_(f.r[3]) + ' — ' + _glStr_(f.r[5]), _glStr_(f.r[4]) + ' — ' + _glNum_(f.r[8]) + ' ج', '-');
+    return { success: true };
+  } finally { lock.releaseLock(); }
+}
+// 📜 (V4.217) سجل تعديلات قيد (إنشاء/تعديل/ترحيل/إلغاء/حذف) من سجل التعديلات العام
+function glEntryHistory(authToken, id) {
+  _glPerm_(authToken, 'view');
+  var key = 'GL:' + _glStr_(id), sheet = ensureAuditLogSheet_(), last = sheet.getLastRow(), out = [];
+  if (last < 2) return { success: true, rows: out };
+  sheet.getRange(2, 1, last - 1, 7).getValues().forEach(function (r) {
+    if (_glStr_(r[3]) !== key) return;
+    out.push({ timestamp: _glStr_(r[0]), username: _glStr_(r[1]) || '-', action: _glStr_(r[2]) || '-', field: _glStr_(r[4]) || '-',
+      oldValue: _glStr_(r[5]) || '-', newValue: _glStr_(r[6]) || '-' });
+  });
+  return { success: true, rows: out.reverse() };
+}
 function _glEntryObj_(r) {
   return { id: _glStr_(r[0]), seq: r[1], date: _glDate_(r[2]), type: _glStr_(r[3]), desc: _glStr_(r[4]), status: _glStr_(r[5]),
     sourceKey: _glStr_(r[6]), batchId: _glStr_(r[7]), totalBase: _glNum_(r[8]), ref: _glStr_(r[9]), trip: _glStr_(r[10]), company: _glStr_(r[11]),
@@ -1644,6 +1673,10 @@ function _glAutoBuild_(user, write) {
   if (_glHbOn_()) {
     try { hbOut = _glHbBuild_(roles, warn, party); }
     catch (e) { warn.push('تعذّرت قراءة برنامج حجوزات الفنادق: ' + e.message); }
+    // 🔀 (V4.217) «الـ ERP هو المصدر حتى تاريخ …»: حجوزات ودفعات ما قبله لا تُسجَّل من برنامج الحجوزات (ولا قيدها
+    // الافتتاحي) لأنها داخلة بالفعل في الأرصدة/القيود المنقولة من الـ ERP — منعاً للتكرار
+    var hbFromK = _glDKey_(_glDate_(set.hb_from || ''));
+    if (hbFromK) hbOut = hbOut.filter(function (e) { return _glDKey_(e.date) >= hbFromK; });
   }
 
   /* ---------- 4) ما قبل تاريخ البداية → قيد أرصدة افتتاحية واحد ---------- */
@@ -1696,6 +1729,19 @@ function _glAutoBuild_(user, write) {
   pre = pre.concat(hbPre);
   return { entries: post, preCount: pre.length, warnings: warn, roles: roles, party: party, calcItems: calcItems, calcPays: calcPays, receipts: receipts, mfFiles: mfFiles, files: files, tRows: tRows, tPrices: tPrices };
 }
+/* 📈 (V4.217) القيود التلقائية: كل حركة بعملتها الطبيعية، والمعادل بسعر صرف يوم القيد من «أسعار الصرف اليومية»
+   (نفس اليوم ⇒ أقرب يوم سابق). يُطبَّق على قيد بعملة أجنبية واحدة كانت أسطره بالسعر الافتراضي فقط — القيود المختلطة
+   (جنيه + ريال) لها أسعار موازنة خاصة فتبقى كما هي، والرصيد الافتتاحي المجمّع يحسب سعره من مكوّناته. بلا أسعار مسجّلة
+   يبقى السعر الافتراضي نفسه (لا تغيير). */
+function _glAutoDailyRate_(e, fxMap, defR) {
+  if (!e || !e.date || /^AUTO:(HB)?OPEN/.test(e.key || '')) return;
+  var curs = {}; (e.lines || []).forEach(function (l) { curs[l.currency || 'EGP'] = 1; });
+  var ks = Object.keys(curs); if (ks.length !== 1 || ks[0] === 'EGP') return;
+  var c = ks[0];
+  if (!(e.lines || []).every(function (l) { return Math.abs((+l.rate || 0) - defR[c]) < 1e-9; })) return;
+  var r = _glFxRateAt_(c, e.date, fxMap).rate;
+  if (r > 0 && r !== defR[c]) e.lines.forEach(function (l) { l.rate = r; });
+}
 // مقارنة المطلوب بالموجود وتطبيق الفرق — dry=true معاينة فقط
 function _glAutoApply_(built, user, dry) {
   var eSh = _glSheet_('entries'), lSh = _glSheet_('lines');
@@ -1703,10 +1749,11 @@ function _glAutoApply_(built, user, dry) {
   eRows.forEach(function (r, i) { var k = _glStr_(r[6]); if (/^AUTO:/.test(k)) existing[k] = i; });
   var res = { created: 0, updated: 0, voided: 0, same: 0, blocked: [], errors: [], samples: { created: [], updated: [], voided: [] } };
   var creates = [], updates = [], voids = [];
-  var want = {};
+  var want = {}, fxMap = _glFxDailyMap_(), defR = _glRates_();
   built.entries.forEach(function (e) {
     if (want[e.key]) { res.errors.push({ key: e.key, msg: 'مفتاح مكرر' }); return; }
     want[e.key] = 1;
+    _glAutoDailyRate_(e, fxMap, defR);
     var v;
     try { v = _glValidate_({ date: e.date, type: e.type || 'قيد تلقائي', desc: e.desc, trip: e.trip, company: e.company, lines: e.lines }, { allowBeforeStart: true, ignoreLock: true, allowSystem: true }); }
     catch (err) { res.errors.push({ key: e.key, date: e.date, desc: e.desc, msg: err.message }); return; }
@@ -2250,7 +2297,7 @@ function _glHbCfg_() {
   var s = _glSettings_();
   return { ssId: s.hb_ss_id || '', srcId: s.hb_src_id || '', mk: s.hb_mk_sheet || 'حجوزات مكة', mkRow: parseInt(s.hb_mk_row, 10) || 5,
     md: s.hb_md_sheet || 'حجوزات المدينة', mdRow: parseInt(s.hb_md_row, 10) || 6, pay: s.hb_pay_sheet || 'سجل الدفعات', prof: s.hb_prof_sheet || 'بيانات الحسابات',
-    viaKw: s.hb_via_kw === undefined ? 'حجز|حجوزات|فندق|فنادق|تسكين' : s.hb_via_kw };
+    viaKw: s.hb_via_kw === undefined ? 'حجز|حجوزات|فندق|فنادق|تسكين' : s.hb_via_kw, hbFrom: s.hb_from || '' };
 }
 // نفس computeBookingTotal_ ببرنامج الحجوزات حرفياً: Σ(عدد الغرف × السعر) × الليالي، وأي نوع محجوز بلا سعر ⇐ بلا سعر
 function _glHbTotal_(raw, role) {
@@ -2579,12 +2626,71 @@ function glHbSetup(authToken, cfg) {
   _glSetSetting_('hb_ss_id', id);
   Object.keys(keys).forEach(function (k) { if (keys[k] !== undefined && keys[k] !== null) _glSetSetting_(k, _glStr_(keys[k])); });
   if (cfg.viaKw !== undefined) _glSetSetting_('hb_via_kw', _glStr_(cfg.viaKw));
+  if (cfg.hbFrom !== undefined) { var hf = _glDate_(cfg.hbFrom); if (_glStr_(cfg.hbFrom) && !hf) throw new Error('تاريخ «مصدر الحركات» غير صالح'); _glSetSetting_('hb_from', hf); }
   _GL_HB_MEMO_ = null;
   var H;
   try { H = _glHbRead_(); }
   catch (e) { _glSetSetting_('hb_ss_id', old || ''); throw new Error('تعذّر فتح ملف الحجوزات: ' + e.message + ' — تأكد أن حساب السكربت يملك صلاحية الوصول للملف'); }
   logChange_(session.username, 'ربط برنامج الحجوزات بالحسابات', 'GL:hb', '-', '-', id);
   return { success: true, on: true, bookings: H.bookings.length, pays: H.pays.length, profiles: Object.keys(H.prof).length };
+}
+/* 🔀 (V4.217) تداخل الـ ERP المنقول مع قيود ربط برنامج الحجوزات: لكل حساب عليه أسطر من المصدرين — أرصدة ومعادل كل
+   مصدر ونطاق تواريخه — ليتبيّن أين يتكرر نفس الحجز/الدفعة. */
+function _glSrcOf_(r) {
+  var k = _glStr_(r[6]), ref = _glStr_(r[9]);
+  if (/^AUTO:HB/.test(k)) return 'hb';
+  if (/^ERP:/.test(k) || ref === 'ERP-OPENING' || /^ERP-/.test(ref)) return 'erp';
+  if (/^IMP:/.test(k)) return 'imp';
+  return '';
+}
+function glHbErpOverlap(authToken) {
+  _glPerm_(authToken, 'view');
+  var ents = {}; _glRows_('entries').forEach(function (r) { if (_glStr_(r[5]) !== GL_ST_VOID_) ents[_glStr_(r[0])] = r; });
+  var accs = _glAccounts_().map, by = {};
+  _glRows_('lines').forEach(function (l) {
+    var e = ents[_glStr_(l[0])]; if (!e) return;
+    var src = _glSrcOf_(e); if (src !== 'hb' && src !== 'erp') return;
+    var code = _glStr_(l[4]), d = _glDate_(e[2]), k = _glDKey_(d);
+    var o = by[code] || (by[code] = { code: code, erp: { base: 0, n: 0, first: '', last: '', ids: {} }, hb: { base: 0, n: 0, first: '', last: '', ids: {} } });
+    var x = o[src]; x.base = _glR2_(x.base + _glNum_(l[9]) - _glNum_(l[10])); x.ids[_glStr_(l[0])] = 1;
+    if (!x.first || k < x.first) x.first = k; if (!x.last || k > x.last) x.last = k;
+  });
+  var fmt = function (k) { return k ? k.slice(6, 8) + '/' + k.slice(4, 6) + '/' + k.slice(0, 4) : ''; };
+  var rows = Object.keys(by).map(function (c) { return by[c]; }).filter(function (o) { return o.erp.base || o.hb.base || (Object.keys(o.erp.ids).length && Object.keys(o.hb.ids).length); })
+    .filter(function (o) { return Object.keys(o.erp.ids).length && Object.keys(o.hb.ids).length; })
+    .map(function (o) {
+      var a = accs[o.code] || {};
+      return { code: o.code, name: a.name || o.code, kind: a.kind || '',
+        erp: { base: o.erp.base, n: Object.keys(o.erp.ids).length, first: fmt(o.erp.first), last: fmt(o.erp.last) },
+        hb: { base: o.hb.base, n: Object.keys(o.hb.ids).length, first: fmt(o.hb.first), last: fmt(o.hb.last) } };
+    }).sort(function (a, b) { return Math.abs(b.hb.base) - Math.abs(a.hb.base); });
+  var s = _glSettings_();
+  return { success: true, rows: rows, hbFrom: s.hb_from || '', startDate: s.startDate };
+}
+// إلغاء قيود الـ ERP المنقولة المؤرَّخة من تاريخ معيّن فأكثر والتي تمسّ حسابات بعينها (حسابات أطراف الحجوزات) —
+// لأن نفس الحركات تُسجَّل من برنامج الحجوزات. dry=true معاينة فقط. القيد الملغى يبقى ظاهراً للمراجعة.
+function glHbErpVoid(authToken, o) {
+  var session = requireAuth_(authToken);
+  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
+  o = o || {};
+  var fromK = _glDKey_(_glDate_(o.from)); if (!fromK) throw new Error('حدد التاريخ');
+  var codes = {}; (o.codes || []).forEach(function (c) { codes[_glStr_(c)] = 1; });
+  if (!Object.keys(codes).length) throw new Error('اختر الحسابات');
+  var lines = {}; _glRows_('lines').forEach(function (l) { (lines[_glStr_(l[0])] = lines[_glStr_(l[0])] || []).push(l); });
+  var hits = [];
+  _glRows_('entries').forEach(function (r) {
+    if (_glStr_(r[5]) === GL_ST_VOID_ || _glSrcOf_(r) !== 'erp' || _glStr_(r[9]) === 'ERP-OPENING') return;
+    var k = _glDKey_(_glDate_(r[2])); if (!k || k < fromK) return;
+    if (!(lines[_glStr_(r[0])] || []).some(function (l) { return codes[_glStr_(l[4])]; })) return;
+    hits.push({ id: _glStr_(r[0]), date: _glDate_(r[2]), desc: _glStr_(r[4]), base: _glNum_(r[8]), locked: _glLocked_(r[2]) });
+  });
+  if (o.dry) return { success: true, preview: hits };
+  var n = 0, skipped = 0;
+  hits.forEach(function (h) {
+    if (h.locked) { skipped++; return; }
+    glVoidEntry(authToken, h.id, 'مكرر مع قيود برنامج الحجوزات (المصدر من ' + _glDate_(o.from) + ')'); n++;
+  });
+  return { success: true, voided: n, skippedLocked: skipped };
 }
 function glHbState(authToken) {
   _glPerm_(authToken, 'view');
