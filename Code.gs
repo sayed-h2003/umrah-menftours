@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.215";
+var APP_VERSION = "4.216";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21103,6 +21103,8 @@ function _mfPerm_(authToken, cap) {
 /* ---------- أدوات مساعدة ---------- */
 // تطبيع الأرقام العربية/الفارسية إلى لاتينية (يُطبَّق على كل مُدخل نصّي قادم من الموبايل)
 function _mfLatin_(s) {
+  // (V4.216) خلية حوّلها الشيت لتاريخ ⇒ dd/MM/yyyy (+ الوقت لو له وقت) — لا صيغة «Wed Jul 01 2026 … GMT» في أي شاشة
+  if (s instanceof Date) return _fmtCellDate_(s);
   var str = String(s == null ? '' : s);
   // ⚡ (V4.186) مسار سريع: الغالبية العظمى من القيم بلا أي رقم عربي/فارسي أو فاصلة عربية —
   // فحص واحد بدل أربع عمليات استبدال لكل قيمة (الدالة تُستدعى مئات الآلاف من المرات بكل تحميل)
@@ -21113,7 +21115,12 @@ function _mfLatin_(s) {
     .replace(/٫/g, '.').replace(/٬/g, ',');
 }
 function _mfStr_(v) { return _mfLatin_(v).trim(); }
-function _mfNum_(v) { var n = parseFloat(_mfLatin_(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+function _mfNum_(v) { if (v instanceof Date) return 0; var n = parseFloat(_mfLatin_(v).replace(/,/g, '')); return isNaN(n) ? 0 : n; }
+function _fmtCellDate_(d) {
+  if (isNaN(d.getTime())) return '';
+  var tz = _tz_() || 'Asia/Riyadh', t = Utilities.formatDate(d, tz, 'HH:mm');
+  return Utilities.formatDate(d, tz, 'dd/MM/yyyy') + (t === '00:00' ? '' : ' ' + t);
+}
 
 // تاريخ إلى dd/mm/yyyy — يقبل Date أو نص بأي فاصل، ويكمل السنة الحالية لو غابت
 function _mfDate_(v) {
@@ -22906,12 +22913,19 @@ function fetchSarSellRate(authToken, dateStr) {
 //   3) أي موضع لاسم الريال يتبعه رقمان على الأقل (شراء + بيع) ← الأعلى منهما. المواضع ذات الرقم الواحد
 //      (مثل محوِّل العملات «1 SAR = …» الذي يستخدم سعر الشراء) لا تُستخدم إلا لو لم يوجد غيرها.
 // يُعيد {sell, buy, method} — وتعرض الشاشة الرقمين معاً للتحقق.
-function _mfPickSarRates_(rawHtml) {
+// (V4.216) نفس المحلّل لأي عملة: الريال السعودي والدولار الأمريكي (نطاق سعر منطقي لكل عملة بالجنيه)
+var _FX_PICK_DEF_ = {
+  SAR: { code: 'SAR', min: 3, max: 60, rowRx: /Saudi Riyal|SAR|الريال السعودي|ريال سعودي/, labels: ['Saudi Riyal', 'SAR', 'الريال السعودي', 'ريال سعودي'] },
+  USD: { code: 'USD', min: 10, max: 250, rowRx: /US Dollar|USD|الدولار الأمريكي|دولار أمريكي|الدولار الامريكي/, labels: ['US Dollar', 'USD', 'الدولار الأمريكي', 'دولار أمريكي', 'الدولار الامريكي'] }
+};
+function _mfPickSarRates_(rawHtml) { return _mfPickFxRates_(rawHtml, 'SAR'); }
+function _mfPickFxRates_(rawHtml, cur) {
+  var D = _FX_PICK_DEF_[cur] || _FX_PICK_DEF_.SAR;
   var raw = _mfLatin_(String(rawHtml || ''));
-  var ok = function (v) { v = parseFloat(v); return v > 3 && v < 60 ? v : 0; };
+  var ok = function (v) { v = parseFloat(v); return v > D.min && v < D.max ? v : 0; };
   var r2 = function (v) { return Math.round(v * 100) / 100; };
   // 1) JSON
-  var re = /["']?(?:currency(?:Code)?|code|iso|symbol)["']?\s*[:=]\s*["']SAR["']/gi, m;
+  var re = new RegExp('["\']?(?:currency(?:Code)?|code|iso|symbol)["\']?\\s*[:=]\\s*["\']' + D.code + '["\']', 'gi'), m;
   while ((m = re.exec(raw))) {
     var st = raw.lastIndexOf('{', m.index), en = raw.indexOf('}', m.index);   // نفس كائن الريال فقط
     var win = (st >= 0 && en > m.index && m.index - st < 600 && en - m.index < 600) ? raw.slice(st, en + 1) : raw.substr(m.index, 300);
@@ -22928,7 +22942,7 @@ function _mfPickSarRates_(rawHtml) {
     for (var k = 0; k < rows.length; k++) {
       var cells = cellsOf(rows[k]);
       if (sellIx < 0) cells.forEach(function (c, ci) { if (/sell|بيع/i.test(c) && sellIx < 0) sellIx = ci; if (/buy|شراء/i.test(c) && buyIx < 0) buyIx = ci; });
-      if (!cells.some(function (c) { return /Saudi Riyal|SAR|الريال السعودي|ريال سعودي/.test(c); })) continue;
+      if (!cells.some(function (c) { return D.rowRx.test(c); })) continue;
       if (sellIx >= 0 && ok(cells[sellIx])) return { sell: r2(ok(cells[sellIx])), buy: buyIx >= 0 ? r2(ok(cells[buyIx])) : 0, method: 'table' };
       var nums = cells.map(ok).filter(Boolean);
       if (nums.length >= 2) return { sell: r2(Math.max(nums[0], nums[1])), buy: r2(Math.min(nums[0], nums[1])), method: 'row' };
@@ -22936,7 +22950,7 @@ function _mfPickSarRates_(rawHtml) {
   }
   // 3) النص الخام: أول موضع يتبعه رقمان
   var text = raw.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
-  var labels = ['Saudi Riyal', 'SAR', 'الريال السعودي', 'ريال سعودي'], single = 0;
+  var labels = D.labels, single = 0;
   for (var i = 0; i < labels.length; i++) {
     var idx = text.indexOf(labels[i]);
     while (idx >= 0) {
@@ -22949,6 +22963,21 @@ function _mfPickSarRates_(rawHtml) {
   return single ? { sell: r2(single), buy: 0, method: 'single' } : null;
 }
 function _mfPickSarSell_(text) { var r = _mfPickSarRates_(text); return r ? r.sell : 0; }
+// (V4.216) أسعار بنك مصر الحالية للريال والدولار بقراءة واحدة للصفحة — {SAR:{sell,buy}, USD:{sell,buy}}
+function _fxFetchBanqueMisr_() {
+  var urls = ['https://www.banquemisr.com/en/exchange-rates', 'https://www.banquemisr.com/ar/%D8%A3%D8%B3%D8%B9%D8%A7%D8%B1-%D8%A7%D9%84%D8%B5%D8%B1%D9%81'];
+  var out = {}, lastErr = '';
+  for (var i = 0; i < urls.length && !(out.SAR && out.USD); i++) {
+    try {
+      var resp = UrlFetchApp.fetch(urls[i], { muteHttpExceptions: true, followRedirects: true, headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (resp.getResponseCode() !== 200) { lastErr = 'HTTP ' + resp.getResponseCode(); continue; }
+      var html = String(resp.getContentText());
+      ['SAR', 'USD'].forEach(function (c) { if (!out[c]) { var r = _mfPickFxRates_(html, c); if (r && r.sell) out[c] = r; } });
+    } catch (e) { lastErr = String(e && e.message ? e.message : e); }
+  }
+  if (!out.SAR && !out.USD) throw new Error('تعذّر جلب أسعار بنك مصر: ' + (lastErr || 'لم يُعثر على الأسعار بالصفحة'));
+  return out;
+}
 
 /* ==================================================================================
    🏛️ (V4.108) استيراد ملفات مراجعة قديمة من إكسيل (للأدمن فقط)
@@ -23560,7 +23589,8 @@ var VZ_PRICES_HEADERS = ['الوكيل','السعر','من تاريخ','إلى �
 var VZ_TRANS_PRICES_SHEET  = 'TransportAgentPrices';
 var VZ_TRANS_PRICES_HEADERS = ['الوكيل','السعر','من تاريخ','إلى تاريخ','أنشئ بواسطة','أنشئ في'];
 var VZ_ITEMS_SHEET   = 'AgentAccounts_Items';
-var VZ_ITEMS_HEADERS = ['المعرف','الوكيل','البيان','العملة','القيمة','دائن؟','ملاحظات','الترتيب','أنشئ بواسطة','أنشئ في','رقم القيد'];
+// (V4.216) عمود «التاريخ» أُضيف في الآخر (لا يزيح الأعمدة القديمة) — بنود قديمة بلا تاريخ تأخذ تاريخ إنشائها
+var VZ_ITEMS_HEADERS = ['المعرف','الوكيل','البيان','العملة','القيمة','دائن؟','ملاحظات','الترتيب','أنشئ بواسطة','أنشئ في','رقم القيد','التاريخ'];
 var VZ_PAY_SHEET     = 'AgentAccounts_Payments';
 var VZ_PAY_HEADERS   = ['المعرف','الوكيل','التاريخ','المبلغ','العملة','ملاحظات','أنشئ بواسطة','أنشئ في','رقم القيد'];
 // (V4.212) حالات المجموعة: «تم الإرسال» ← «تم إصدار الموفا» فقط — أُزيلت «تم السداد» من كل المواضع،
@@ -23789,7 +23819,8 @@ function _vzReadItems_(agent) {
   return sh.getRange(2, 1, last - 1, VZ_ITEMS_HEADERS.length).getValues().map(function (r, i) {
     return { id: _mfStr_(r[0]), agent: _mfStr_(r[1]), desc: _mfStr_(r[2]), currency: _mfStr_(r[3]) || 'SAR',
       value: _accNum_(r[4]), isCredit: _mfStr_(r[5]) === 'نعم', notes: _mfStr_(r[6]), order: _accNum_(r[7]),
-      createdBy: _mfStr_(r[8]), createdAt: _mfStr_(r[9]), entryNo: _mfStr_(r[10]), _row: i + 2 };
+      createdBy: _mfStr_(r[8]), createdAt: _mfDateTime_(r[9]), entryNo: _mfStr_(r[10]),
+      date: _mfDate_(r[11]) || _mfDate_(String(_mfDateTime_(r[9]) || '').split(' ')[0]), _row: i + 2 };
   }).filter(function (x) { return x.id && (!a || x.agent === a); });
 }
 function _vzReadPays_(agent) {
@@ -24637,15 +24668,20 @@ function saveAgentAccItem(authToken, item) {
   var sh = _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS);
   var now = _mfStamp_();
   var id = _mfStr_(item.id);
-  var rowVals = [id || _accId_('AI'), agent, _mfStr_(item.desc), _mfStr_(item.currency) || 'SAR',
-    _accNum_(item.value), item.isCredit ? 'نعم' : 'لا', _mfStr_(item.notes), _accNum_(item.order), session.username, now,
-    _mfStr_(item.entryNo)];
-  var isEdit = !!id;
+  var isEdit = !!id, hit = null;
   if (isEdit) {
-    var hit = _vzReadItems_('').filter(function (x) { return x.id === id; })[0];
+    hit = _vzReadItems_('').filter(function (x) { return x.id === id; })[0];
     if (!hit) return { success: false, error: 'البند غير موجود' };
-    sh.getRange(hit._row, 1, 1, VZ_ITEMS_HEADERS.length).setValues([rowVals]);
-  } else { sh.appendRow(rowVals); id = rowVals[0]; }
+  }
+  // (V4.216) تاريخ البند: المُدخل ⇒ تاريخه السابق ⇒ اليوم — وبيانات الإنشاء تبقى كما هي عند التعديل
+  var itDate = _mfDate_(item.date) || (hit ? hit.date : '') || _mfToday_();
+  var rowVals = [id || _accId_('AI'), agent, _mfStr_(item.desc), _mfStr_(item.currency) || 'SAR',
+    _accNum_(item.value), item.isCredit ? 'نعم' : 'لا', _mfStr_(item.notes), _accNum_(item.order),
+    hit ? (hit.createdBy || session.username) : session.username, hit ? (hit.createdAt || now) : now,
+    _mfStr_(item.entryNo), itDate];
+  if (isEdit) {
+    sh.getRange(hit._row, 1, 1, VZ_ITEMS_HEADERS.length).setNumberFormat('@').setValues([rowVals]);
+  } else { sh.getRange(sh.getLastRow() + 1, 1, 1, VZ_ITEMS_HEADERS.length).setNumberFormat('@').setValues([rowVals]); id = rowVals[0]; }
   // 📜 (V4.144) سجل التعديلات لكل بند مستقل عن باقي بنود نفس الوكيل — بمفتاح البند نفسه
   logChange_(session.username, isEdit ? 'تعديل بند حساب وكيل' : 'إضافة بند حساب وكيل', 'AI:' + id, _mfStr_(item.desc),
     '-', _accNum_(item.value) + ' ' + (item.currency || 'SAR') + (item.isCredit ? ' (دائن)' : ' (مدين)'));
@@ -24773,12 +24809,13 @@ function saveAgentAccItemsBatch(authToken, agent, isCredit, rows) {
   var out = [], entries = [];
   valid.forEach(function (r) {
     var id = _accId_('AI');
-    out.push([id, agent, _mfStr_(r.desc), 'SAR', _accNum_(r.value), isCredit ? 'نعم' : 'لا', '', 0, session.username, now, _mfStr_(r.entryNo)]);
+    out.push([id, agent, _mfStr_(r.desc), 'SAR', _accNum_(r.value), isCredit ? 'نعم' : 'لا', '', 0, session.username, now, _mfStr_(r.entryNo),
+      _mfDate_(r.date) || _mfToday_()]);   // (V4.216) تاريخ السطر الملصق
     entries.push({ action: 'إضافة بند حساب وكيل (لصق بنود)', recordId: 'AI:' + id,
       field: _mfStr_(r.desc), oldVal: '-', newVal: _accNum_(r.value) + ' ريال' + (isCredit ? ' (دائن)' : ' (مدين)') });
   });
   var last = sh.getLastRow();
-  sh.getRange(last + 1, 1, out.length, VZ_ITEMS_HEADERS.length).setValues(out);
+  sh.getRange(last + 1, 1, out.length, VZ_ITEMS_HEADERS.length).setNumberFormat('@').setValues(out);
   logChangesBatch_(session.username, entries);
   _vzClearCache_();
   return { success: true, count: out.length };
