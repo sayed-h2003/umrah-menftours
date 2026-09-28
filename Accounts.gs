@@ -699,7 +699,7 @@ function glDeleteEntry(authToken, id) {
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     var f = _glFindEntry_(_glStr_(id)); if (!f) throw new Error('القيد غير موجود');
-    if (/^AUTO:/.test(_glStr_(f.r[6]))) throw new Error('هذا قيد تلقائي من شاشات البرنامج — يُحذف تلقائياً بحذف مصدره (راجع تبويب «القيود التلقائية»)');
+    // (V4.218) القيد التلقائي يُحذف أيضاً للمدير — لكنه يُعاد إنشاؤه في المزامنة التالية ما دام مصدره موجوداً بالشاشات
     if (_glStr_(f.r[3]) === 'قيد إقفال') throw new Error('قيد إقفال السنة يُلغى من «الإعدادات ← إعادة فتح السنة»');
     if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
     _glDeleteLinesOf_([_glStr_(id)]);

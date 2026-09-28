@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.217 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.218 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.217)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.218)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.217</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.218</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7392,7 +7392,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.217";
+var CLIENT_APP_VERSION = "4.218";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45141,7 +45141,8 @@ function glDrawEntries() {
         '<td style="white-space:nowrap;" onclick="event.stopPropagation();">' +
           (e.status === 'مسودة' && GL.can.edit ? '<button class="btn btn-success btn-sm py-0 me-1" onclick="glPost(\'' + glJs(e.id) + '\')">ترحيل</button>' : '') +
           '<button class="btn btn-sm btn-link p-0 me-1" title="سجل التعديلات" onclick="glEntHistory(\'' + glJs(e.id) + '\')">📜</button>' +
-          (GL.can.del && !auto && e.type !== 'قيد إقفال' ? '<button class="btn btn-sm btn-link text-danger p-0" title="حذف / إلغاء القيد" onclick="glEntDelete(\'' + glJs(e.id) + '\',\'' + glJs(e.status) + '\')">🗑️</button>' : '') +
+          (GL.isAdmin && e.type !== 'قيد إقفال' ? '<button class="btn btn-sm btn-link text-danger p-0" title="حذف القيد" onclick="glEntDeleteNow(\'' + glJs(e.id) + '\',' + (auto ? 1 : 0) + ')">🗑️</button>' :
+            (GL.can.del && !auto && e.type !== 'قيد إقفال' ? '<button class="btn btn-sm btn-link text-danger p-0" title="حذف / إلغاء القيد" onclick="glEntDelete(\'' + glJs(e.id) + '\',\'' + glJs(e.status) + '\')">🗑️</button>' : '')) +
         '</td></tr>';
     }).join('') + (list.length ? '' : '<tr><td colspan="8" class="text-muted py-3">لا توجد قيود تطابق فلاتر الأعمدة</td></tr>') + '</tbody></table></div>';
 }
@@ -45203,6 +45204,13 @@ function glEntHistory(id) {
   });
 }
 // 🗑️ المسودة تُحذف مباشرة · المرحّل: «إلغاء» (يبقى أثره للمراجعة) أو «حذف نهائي» (للمدير)
+// 🗑️ (V4.218) المدير: حذف مباشر للقيد بتأكيد واحد (بدل القيد العكسي/الإلغاء) — يبقى أثره بسجل التعديلات
+function glEntDeleteNow(id, isAuto) {
+  askConfirm_('حذف القيد ' + id + ' نهائياً من الدفتر؟ لا يمكن التراجع (يبقى أثر الحذف في سجل التعديلات).' +
+    (isAuto ? '\n\n⚠️ هذا قيد تلقائي من شاشات البرنامج: سيُعاد إنشاؤه في المزامنة التالية ما دام مصدره موجوداً — لحذفه نهائياً احذف/عدّل مصدره بالشاشة.' : ''),
+    function () { glRun('glDeleteEntry', [id], function () { showToast('🗑️ حُذف القيد ' + id); glAfterChange(); }); },
+    { title: 'حذف قيد', danger: true });
+}
 function glEntDelete(id, status) {
   if (status === 'مسودة') { glVoid(id, status); return; }
   var btns = [];
@@ -45241,7 +45249,8 @@ function glShowEntry(id) {
         ((e.type === 'سند قبض' || e.type === 'سند صرف') ? '<button class="btn btn-dark btn-sm" onclick="glPrintVoucher(\'' + glJs(e.id) + '\')">🖨️ طباعة السند</button>' : '') +
         '<button class="btn btn-outline-dark btn-sm" onclick="glPrintEntry(\'' + glJs(e.id) + '\')">🖨️ طباعة القيد</button>' +
         (e.status === 'مسودة' && GL.can.edit ? '<button class="btn btn-primary btn-sm" onclick="glDlgClose();glEditEntry(\'' + glJs(e.id) + '\')">✏️ تعديل</button><button class="btn btn-success btn-sm" onclick="glDlgClose();glPost(\'' + glJs(e.id) + '\')">✅ ترحيل</button>' : '') +
-        (e.status !== 'ملغى' && GL.can.del && !/^AUTO:/.test(e.sourceKey || '') && e.type !== 'قيد إقفال' ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glVoid(\'' + glJs(e.id) + '\',\'' + glJs(e.status) + '\')">' + (e.status === 'مسودة' ? '🗑️ حذف المسودة' : '⛔ إلغاء القيد') + '</button>' : '') +
+        (GL.isAdmin && e.type !== 'قيد إقفال' ? '<button class="btn btn-danger btn-sm" onclick="glDlgClose();glEntDeleteNow(\'' + glJs(e.id) + '\',' + (/^AUTO:/.test(e.sourceKey || '') ? 1 : 0) + ')">🗑️ حذف القيد</button>' :
+          (e.status !== 'ملغى' && GL.can.del && !/^AUTO:/.test(e.sourceKey || '') && e.type !== 'قيد إقفال' ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glVoid(\'' + glJs(e.id) + '\',\'' + glJs(e.status) + '\')">' + (e.status === 'مسودة' ? '🗑️ حذف المسودة' : '⛔ إلغاء القيد') + '</button>' : '')) +
         (GL.can.add ? '<button class="btn btn-outline-secondary btn-sm" onclick="glDlgClose();glCopyEntry(\'' + glJs(e.id) + '\')">📄 نسخ كقيد جديد</button>' : '') +
       '</div>';
     GL._lastEntry = e;
