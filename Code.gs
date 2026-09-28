@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.213";
+var APP_VERSION = "4.214";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -10125,32 +10125,6 @@ function extractDriveFileId_(url) {
   return m ? m[0] : null;
 }
 
-// 📐 (V4.213) أبعاد صورة PNG/JPEG من بايتاتها — لتحديد عرض/ارتفاع الصورة بالمليمتر صراحةً. محوّل PDF
-// الخاص بجوجل يتجاهل max-height وobject-fit، فكانت صورة الصفحة المرفقة تتجاوز ارتفاع الورقة
-// فتنقسم وتُنتج صفحات بيضاء بين الصفحات — السبب الرئيسي لشكوى «الصفحات البيضاء».
-function _imgDims_(bytes) {
-  try {
-    var b = function (i) { return bytes[i] & 0xFF; };
-    if (b(0) === 0x89 && b(1) === 0x50) return { w: (b(16) << 24 | b(17) << 16 | b(18) << 8 | b(19)) >>> 0, h: (b(20) << 24 | b(21) << 16 | b(22) << 8 | b(23)) >>> 0 };
-    if (b(0) === 0xFF && b(1) === 0xD8) {
-      var i = 2;
-      while (i < bytes.length - 9) {
-        if (b(i) !== 0xFF) { i++; continue; }
-        var mk = b(i + 1), len = b(i + 2) << 8 | b(i + 3);
-        if ((mk >= 0xC0 && mk <= 0xC3) || (mk >= 0xC5 && mk <= 0xC7) || (mk >= 0xC9 && mk <= 0xCB) || (mk >= 0xCD && mk <= 0xCF))
-          return { h: b(i + 5) << 8 | b(i + 6), w: b(i + 7) << 8 | b(i + 8) };
-        i += 2 + len;
-      }
-    }
-  } catch (e) {}
-  return null;
-}
-// صندوق الصفحة المتاح لصورة مرفق (A4 بهوامش 6مم + شريط العنوان): 186 × 250 مم
-function _imgFitStyle_(dims) {
-  var W = 186, H = 250, w = W, h = H;
-  if (dims && dims.w > 0 && dims.h > 0) { var r = dims.h / dims.w; w = W; h = W * r; if (h > H) { h = H; w = H / r; } }
-  return 'width:' + w.toFixed(1) + 'mm;height:' + h.toFixed(1) + 'mm;display:block;margin:0 auto;border:1px solid #ccc;border-radius:12px;';
-}
 function buildTicketPdfSection_(ticketUrl, sectionTitle) {
   var ticketFileId = extractDriveFileId_(ticketUrl);
   if (!ticketFileId) return '';
@@ -10161,10 +10135,8 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
     var ticketImgBase64 = null;
     var ticketImgMime = null;
 
-    var imgBytes = null;
     if (ticketMime.indexOf('image/') === 0) {
-      imgBytes = ticketFile.getBlob().getBytes();
-      ticketImgBase64 = Utilities.base64Encode(imgBytes);
+      ticketImgBase64 = Utilities.base64Encode(ticketFile.getBlob().getBytes());
       ticketImgMime = ticketMime;
     } else if (ticketMime === 'application/pdf') {
       var thumbUrl = 'https://drive.google.com/thumbnail?id=' + ticketFileId + '&sz=w2000';
@@ -10173,9 +10145,8 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
         muteHttpExceptions: true
       });
       if (resp.getResponseCode() === 200) {
-        imgBytes = resp.getBlob().getBytes();
-        ticketImgBase64 = Utilities.base64Encode(imgBytes);
-        ticketImgMime = (imgBytes && (imgBytes[0] & 0xFF) === 0xFF) ? 'image/jpeg' : 'image/png';
+        ticketImgBase64 = Utilities.base64Encode(resp.getBlob().getBytes());
+        ticketImgMime = 'image/png';
       }
     }
 
@@ -10189,11 +10160,11 @@ function buildTicketPdfSection_(ticketUrl, sectionTitle) {
                  '<td bgcolor="#1e3d59" style="background:#1e3d59;padding:6px 14px;border-radius:8px;font-weight:700;font-size:14px;color:#ffffff;font-family:\'Cairo\',Tahoma,Arial,sans-serif;">' + (sectionTitle || '🎫 التذكرة المرفقة') + '</td>' +
                '</tr>' +
              '</table>';
-    var imgTag = '<img src="data:' + ticketImgMime + ';base64,' + ticketImgBase64 + '" style="' + _imgFitStyle_(_imgDims_(imgBytes)) + '">';
+    var imgTag = '<img src="data:' + ticketImgMime + ';base64,' + ticketImgBase64 + '" style="width:100%;max-height:265mm;object-fit:contain;border:1px solid #ccc;border-radius:12px;display:block;">';
     // 📄 (V4.160) مرفق PDF: يُلفّ بحاوية تحمل معرّف الملف كي يوسّعها المتصفّح لكل صفحات الملف
     // (pdf.js) قبل الطباعة أو بناء ملف المشاركة. الصورة بالداخل هي الصفحة الأولى وتبقى كبديل
     // آمن لو لم يعمل التوسيع لأي سبب — فلا يضيع المرفق أبداً.
-    if (ticketMime === 'application/pdf') {
+    if (ticketImgMime === 'image/png' && ticketMime === 'application/pdf') {
       return '<div class="pdf-att-sec" data-fid="' + ticketFileId + '" data-title="' +
                String(sectionTitle || '🎫 التذكرة المرفقة').replace(/"/g, '&quot;') + '" style="page-break-before:always;">' +
                titleBar + imgTag +

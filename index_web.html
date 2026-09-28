@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.213 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.214 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.213)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.214)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.213</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.214</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7391,7 +7391,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.213";
+var CLIENT_APP_VERSION = "4.214";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -31031,20 +31031,13 @@ function _pdfFetchBytes_(fileId) {
       .getDriveFileBase64(window.authToken, fileId);
   });
 }
-function _attFitCss_(w, h) {   // (V4.213) أبعاد صريحة بالمليمتر داخل صندوق 186×250مم — بلا max-height/object-fit
-  var W = 186, H = 250, ww = W, hh = H;
-  if (w > 0 && h > 0) { var r = h / w; ww = W; hh = W * r; if (hh > H) { hh = H; ww = H / r; } }
-  return 'width:' + ww.toFixed(1) + 'mm;height:' + hh.toFixed(1) + 'mm;display:block;margin:0 auto;border:1px solid #ccc;border-radius:12px;';
-}
 // يحوّل حاوية مرفق PDF واحدة إلى صور كل صفحاتها (بلا الفارغة)
 function _pdfExpandOne_(el) {
   var fid = el.getAttribute('data-fid');
   var title = el.getAttribute('data-title') || '🎫 مرفق';
   if (!fid || !window.pdfjsLib) return Promise.resolve();
   return _pdfFetchBytes_(fid)
-    // (V4.212) خرائط الأحرف والخطوط القياسية: بدونها ملفات PDF العربية/غير المضمَّنة الخطوط تُرسم صفحات بيضاء
-    .then(function (bytes) { return pdfjsLib.getDocument({ data: bytes, cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/', cMapPacked: true,
-      standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/' }).promise; })
+    .then(function (bytes) { return pdfjsLib.getDocument({ data: bytes }).promise; })
     .then(function (doc) {
       var pages = [], chain = Promise.resolve();
       for (var p = 1; p <= doc.numPages; p++) {
@@ -31058,7 +31051,7 @@ function _pdfExpandOne_(el) {
               ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
               return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
                 if (_pdfCanvasIsBlank_(canvas)) return;   // 🚫 صفحة فارغة — تُستبعَد
-                pages.push({ no: pageNo, data: canvas.toDataURL('image/jpeg', 0.82), w: canvas.width, h: canvas.height });
+                pages.push({ no: pageNo, data: canvas.toDataURL('image/jpeg', 0.82) });
               });
             });
           });
@@ -31078,7 +31071,7 @@ function _pdfExpandOne_(el) {
       r.pages.forEach(function (pg, i) {
         var lbl = title + (r.total > 1 ? (' — صفحة ' + pg.no + ' من ' + r.total) : '');
         html += (i === 0 ? '' : '<div style="page-break-before:always;"></div>') +
-          bar(lbl) + '<img src="' + pg.data + '" style="' + _attFitCss_(pg.w, pg.h) + '">';
+          bar(lbl) + '<img src="' + pg.data + '" style="' + imgCss + '">';
       });
       el.innerHTML = html;
     })
@@ -34160,20 +34153,7 @@ function formatTimeOnly(value){
 // دالة لمعرفة اسم اليوم من التاريخ وإضافته
 
 
-// 🖨️ (V4.213) الطباعة = نفس ملف PDF الخاص بالحفظ/المشاركة (مع توسيع كل صفحات المرفقات) يُفتح في عارض Drive
-// للطباعة أو التنزيل. صفحة الطباعة القديمة كانت داخل إطار Apps Script فتخرج صفحاتها بيضاء (خصوصاً على
-// الموبايل وعند الحفظ PDF من المتصفح). النافذة تُفتح فوراً عند الضغط حتى لا يحجبها المتصفح.
 function printBookingPattern(id) {
-  var w = null;
-  try { w = window.open('', '_blank'); if (w) w.document.write('<div dir="rtl" style="font-family:Tahoma,Arial;padding:40px;text-align:center;">⏳ جاري تجهيز ملف الإشعار للطباعة…<br><small>تُضم كل صفحات التذكرة والمرفقات</small></div>'); } catch (e) {}
-  _shareNoticeBuild_(id, null, function (res) {
-    if (!res || !res.fileId) { try { if (w) w.close(); } catch (e) {} _printBookingLegacy_(id); return; }
-    var url = 'https://drive.google.com/file/d/' + res.fileId + '/view';
-    if (w && !w.closed) w.location.href = url; else window.open(url, '_blank');
-  }, function () { try { if (w) w.close(); } catch (e) {} _printBookingLegacy_(id); });
-}
-// المسار القديم (صفحة print_view) — احتياطي فقط لو تعذّر إنشاء ملف PDF
-function _printBookingLegacy_(id) {
 
   // ملاحظة: تم توحيد مسار الطباعة (موبايل وكمبيوتر) على نفس صفحة print_view.html
   // حتى يكون شكل ملف الطباعة مطابقاً دائماً لتصميم النظام (نفس الألوان والتخطيط)

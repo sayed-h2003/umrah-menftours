@@ -37,31 +37,26 @@
       white-space: pre-wrap;
     }
 
-    /* (V4.212) إصلاح الصفحات البيضاء: كان ارتفاع الصفحة مثبَّتاً (height:297mm) مع zoom:92% — في كروم
-       الحديث يسبب ذلك صفحات فارغة أو قصّ المحتوى بعد الصفحة الأولى. الآن الارتفاع حر والتقسيم للمتصفح. */
     @media print {
       html, body {
-        width: auto;
-        height: auto;
-        min-height: 0;
+        width: 210mm;
+        height: 297mm;
         background: white;
         margin: 0;
         padding: 0;
       }
+      body { zoom: 92%; }
       .report-container {
         width: 100%;
         max-width: 100%;
-        min-height: 0;
         box-shadow: none;
         border-radius: 0;
         margin: 0;
         overflow: visible;
       }
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      img { break-inside: avoid; page-break-inside: avoid; }
       @page {
         size: A4;
-        margin: 6mm;
+        margin: 0;
       }
     }
   </style>
@@ -118,23 +113,8 @@ if (isInvalidLink || !bookingId) {
   else { _loadPdfJs_(function (ok) { ok ? _expandAllAtt_(_attEls) : _printSoon_(600); }); }
 }
 
-// (V4.212) لا نطبع قبل اكتمال تحميل كل الصور (اللوجو وصور المرفقات) — الطباعة المبكرة كانت تُخرج
-// أماكن الصور بيضاء
-function _attFitCss_(w, h) {   // (V4.213) أبعاد صريحة بالمليمتر داخل صندوق 186×250مم — بلا max-height/object-fit
-  var W = 186, H = 250, ww = W, hh = H;
-  if (w > 0 && h > 0) { var r = h / w; ww = W; hh = W * r; if (hh > H) { hh = H; ww = H / r; } }
-  return 'width:' + ww.toFixed(1) + 'mm;height:' + hh.toFixed(1) + 'mm;display:block;margin:0 auto;border:1px solid #ccc;border-radius:12px;';
-}
 function _printSoon_(ms) {
-  var imgs = Array.prototype.slice.call(document.images || []);
-  var wait = imgs.map(function (im) {
-    if (im.complete && im.naturalWidth) return Promise.resolve();
-    return new Promise(function (res) { im.onload = im.onerror = res; setTimeout(res, 8000); });
-  });
-  var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
-  Promise.all(wait.concat([fontsReady])).then(function () {
-    setTimeout(function () { window.focus(); window.print(); }, ms || 800);
-  });
+  setTimeout(function () { window.focus(); window.print(); }, ms || 800);
 }
 function _loadPdfJs_(cb) {
   var s = document.createElement('script');
@@ -170,8 +150,7 @@ function _expandAllAtt_(els) {
         try {
           var bin = atob(res.base64), bytes = new Uint8Array(bin.length);
           for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          pdfjsLib.getDocument({ data: bytes, cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/', cMapPacked: true,
-            standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/' }).promise.then(function (doc) {
+          pdfjsLib.getDocument({ data: bytes }).promise.then(function (doc) {
             var pages = [], chain = Promise.resolve();
             for (var p = 1; p <= doc.numPages; p++) {
               (function (no) {
@@ -184,7 +163,7 @@ function _expandAllAtt_(els) {
                     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
                     return page.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
                       if (_canvasBlank_(c)) return;
-                      pages.push({ no: no, data: c.toDataURL('image/jpeg', 0.82), w: c.width, h: c.height });
+                      pages.push({ no: no, data: c.toDataURL('image/jpeg', 0.82) });
                     });
                   });
                 });
@@ -202,7 +181,7 @@ function _expandAllAtt_(els) {
               pages.forEach(function (pg, i) {
                 var lbl = title + (doc.numPages > 1 ? (' — صفحة ' + pg.no + ' من ' + doc.numPages) : '');
                 html += (i === 0 ? '' : '<div style="page-break-before:always;"></div>') +
-                  bar(lbl) + '<img src="' + pg.data + '" style="' + _attFitCss_(pg.w, pg.h) + '">';
+                  bar(lbl) + '<img src="' + pg.data + '" style="' + css + '">';
               });
               el.innerHTML = html;
             });
