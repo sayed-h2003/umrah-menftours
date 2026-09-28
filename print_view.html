@@ -37,26 +37,31 @@
       white-space: pre-wrap;
     }
 
+    /* (V4.212) إصلاح الصفحات البيضاء: كان ارتفاع الصفحة مثبَّتاً (height:297mm) مع zoom:92% — في كروم
+       الحديث يسبب ذلك صفحات فارغة أو قصّ المحتوى بعد الصفحة الأولى. الآن الارتفاع حر والتقسيم للمتصفح. */
     @media print {
       html, body {
-        width: 210mm;
-        height: 297mm;
+        width: auto;
+        height: auto;
+        min-height: 0;
         background: white;
         margin: 0;
         padding: 0;
       }
-      body { zoom: 92%; }
       .report-container {
         width: 100%;
         max-width: 100%;
+        min-height: 0;
         box-shadow: none;
         border-radius: 0;
         margin: 0;
         overflow: visible;
       }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      img { break-inside: avoid; page-break-inside: avoid; }
       @page {
         size: A4;
-        margin: 0;
+        margin: 6mm;
       }
     }
   </style>
@@ -113,8 +118,18 @@ if (isInvalidLink || !bookingId) {
   else { _loadPdfJs_(function (ok) { ok ? _expandAllAtt_(_attEls) : _printSoon_(600); }); }
 }
 
+// (V4.212) لا نطبع قبل اكتمال تحميل كل الصور (اللوجو وصور المرفقات) — الطباعة المبكرة كانت تُخرج
+// أماكن الصور بيضاء
 function _printSoon_(ms) {
-  setTimeout(function () { window.focus(); window.print(); }, ms || 800);
+  var imgs = Array.prototype.slice.call(document.images || []);
+  var wait = imgs.map(function (im) {
+    if (im.complete && im.naturalWidth) return Promise.resolve();
+    return new Promise(function (res) { im.onload = im.onerror = res; setTimeout(res, 8000); });
+  });
+  var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+  Promise.all(wait.concat([fontsReady])).then(function () {
+    setTimeout(function () { window.focus(); window.print(); }, ms || 800);
+  });
 }
 function _loadPdfJs_(cb) {
   var s = document.createElement('script');
@@ -150,7 +165,8 @@ function _expandAllAtt_(els) {
         try {
           var bin = atob(res.base64), bytes = new Uint8Array(bin.length);
           for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          pdfjsLib.getDocument({ data: bytes }).promise.then(function (doc) {
+          pdfjsLib.getDocument({ data: bytes, cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/', cMapPacked: true,
+            standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/' }).promise.then(function (doc) {
             var pages = [], chain = Promise.resolve();
             for (var p = 1; p <= doc.numPages; p++) {
               (function (no) {
