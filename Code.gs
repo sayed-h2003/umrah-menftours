@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.224";
+var APP_VERSION = "4.225";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12104,6 +12104,7 @@ function _auditScreen_(action, field, recordId) {
   if (/^GL:/.test(rid)) {
     var ga = String(action || '');
     if (/اعتماد تغيير|تغييرات بانتظار/.test(ga)) return 'glapprove';
+    if (/إصدار كشف حساب/.test(ga)) return 'glstmt';
     if (/شيت عهدة/.test(ga)) return 'glcust';
     if (/مرفق|إرفاق/.test(ga)) return 'glatt';
     if (/صرف يومية|أسعار الصرف|سعر الصرف/.test(ga) || /^GL:fx/.test(rid)) return 'glfx';
@@ -12140,7 +12141,7 @@ var AUDIT_SCREEN_LABELS_ = {
   ministry: 'ملفات الوزارة', visas: 'متابعة الوكلاء', gl: 'الحسابات العامة — القيود والإيصالات', other: 'أخرى',
   glcoa: 'الحسابات العامة — دليل الحسابات', glcust: 'الحسابات العامة — شيت العهدة', glatt: 'الحسابات العامة — المرفقات',
   glfx: 'الحسابات العامة — أسعار الصرف', glhb: 'الحسابات العامة — ربط الحجوزات والـ ERP', glauto: 'الحسابات العامة — القيود التلقائية',
-  glset: 'الحسابات العامة — الإعدادات والإقفال والاستيراد', glapprove: 'الحسابات العامة — اعتماد التغييرات',
+  glset: 'الحسابات العامة — الإعدادات والإقفال والاستيراد', glapprove: 'الحسابات العامة — اعتماد التغييرات', glstmt: 'الحسابات العامة — كشوف الحساب المُصدَرة',
   transport: 'النقل', pricing: 'التسعير', housing: 'التسكين وأرقام الغرف', hotels: 'برنامج الحجوزات (الفنادق)'
 };
 function _auditTsNum_(s) {   // «dd/MM/yyyy HH:mm:ss» ⇒ رقم للترتيب
