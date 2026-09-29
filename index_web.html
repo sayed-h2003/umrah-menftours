@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.223 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.224 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.223)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.224)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.223</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.224</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4837,6 +4837,17 @@ input[type="date"]:not(:focus):not(:valid) {
   #mfColFilterPop .ph{ font-size:9.5px; font-weight:800; color:#94a3b8; margin-bottom:4px; }
   #mfColFilterPop input{ width:100%; font-size:11.5px; padding:5px 8px; border-radius:7px; border:1px solid #e2e8f0;
     background:#f8fafc; outline:none; font-family:inherit; }
+  /* ☑️ (V4.224) قائمة القيم للاختيار المتعدد تحت خانة التصفية الحركية — مثل اتفاقيات الإعاشة */
+  #mfColFilterPop{ width:260px; }
+  #mfColFilterPop .cf-acts{ display:flex; gap:10px; font-size:10.5px; margin:6px 2px 4px; }
+  #mfColFilterPop .cf-acts a{ cursor:pointer; color:#2563eb; text-decoration:none; font-weight:700; }
+  #mfColFilterPop .cf-acts a.r{ color:#b91c1c; }
+  #mfColFilterPop .cf-list{ max-height:260px; overflow:auto; border-top:1px solid #eef2f6; padding-top:4px; }
+  #mfColFilterPop .cf-it{ display:flex; align-items:center; gap:6px; font-size:11.5px; padding:2px 3px; border-radius:5px; cursor:pointer; }
+  #mfColFilterPop .cf-it:hover{ background:#f1f5f9; }
+  #mfColFilterPop .cf-it input{ width:auto; margin:0; }
+  #mfColFilterPop .cf-it .n{ color:#94a3b8; font-size:10px; margin-inline-start:auto; }
+  #mfColFilterPop .cf-hint{ font-size:9.5px; color:#94a3b8; margin-top:4px; }
 
   /* ===== (V4.111) أقسام الشاشة القابلة للطي + وميض التنبيهات ===== */
   #section-ministry .mf-sec{ border:1px solid var(--mfBorder); border-radius:12px; background:var(--mfSurf);
@@ -5116,7 +5127,7 @@ input[type="date"]:not(:focus):not(:valid) {
 <div id="mfDatePick"></div>
 <div id="mfCellTip"></div>
 <div id="mfTypeahead"></div>
-<div id="mfColFilterPop"><div class="ph" id="mfColFilterLbl"></div><input id="mfColFilterInput" placeholder="اكتب للتصفية..." autocomplete="off"></div>
+<div id="mfColFilterPop"><div class="ph" id="mfColFilterLbl"></div><input id="mfColFilterInput" placeholder="اكتب للتصفية..." autocomplete="off"><div id="mfColFilterBox"></div></div>
 <!-- ================= نهاية شاشة مراجعة ملفات الوزارة ================= -->
 
 <!-- ================= 🛂 (V4.133) متابعة التأشيرات والوكلاء — هوية بصرية زمردية/ذهبية مميّزة ================= -->
@@ -6093,15 +6104,14 @@ function _tblState_(id) {
 // يُسجَّل عند كل رسم — دالة إعادة الرسم التي تُستدعى بعد أي تغيير بالتصفية أو الترتيب
 function _tblRefresh_(id, fn) { _TBL_REFRESH_[id] = fn; }
 // يُطبِّق تصفية الأعمدة النشطة ثم الترتيب النشط على مصفوفة صفوف — rawFn(key, row) تُرجع القيمة الخام
+var _TBL_SRC_ = {};
 function _tblApply_(id, rows, cols, rawFn) {
   var st = _tblState_(id);
   var out = rows || [];
+  _TBL_SRC_[id] = { rows: out, raw: rawFn };   // (V4.224) مصدر قائمة القيم بنافذة التصفية
   Object.keys(st.colFilters).forEach(function (k) {
-    var val = st.colFilters[k]; if (!val) return;
-    out = out.filter(function (row) {
-      var rv = rawFn(k, row);
-      return String(rv == null ? '' : rv).toLowerCase().indexOf(String(val).toLowerCase()) >= 0;
-    });
+    var val = st.colFilters[k]; if (!_cfOn_(val)) return;
+    out = out.filter(function (row) { return _cfHit_(val, rawFn(k, row)); });
   });
   if (st.sort.key) {
     var def = (cols || []).filter(function (c) { return c.k === st.sort.key; })[0];
@@ -6152,7 +6162,7 @@ function _tblHead_(id, cols, thClass, reorderCols, reorderSaveFn, colWMap, colWS
     if (c.nof) return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + '>' + escapeHtml_(c.label) + '</th>';
     var si = st.sort.key === c.k ? (st.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + ' title="اسحب لإعادة ترتيب الأعمدة"><div class="' + thinCls + '"><span>' + escapeHtml_(c.label) + '</span>' +
-      '<button class="' + thClass + (st.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();_tblColFilter_(\'' + id + '\',event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="' + thClass + (_cfOn_(st.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();_tblColFilter_(\'' + id + '\',event,\'' + c.k + '\')">🔽</button>' +
       '<button class="' + thClass + (st.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();_tblSortBy_(\'' + id + '\',\'' + c.k + '\')">' + si + '</button></div>' + rszHandle(c.k) + '</th>';
   }).join('');
 }
@@ -6255,29 +6265,89 @@ function _tblDrop_(e, id, k) {
   _tblDragKey_ = null;
 }
 function _tblDragEnd_() { document.querySelectorAll('.tbl-dragover,.tbl-dragging').forEach(function (x) { x.classList.remove('tbl-dragover', 'tbl-dragging'); }); }
+/* ☑️ (V4.224) تصفية رأس العمود: كتابة = تصفية حركية لحظية (يحتوي على) · أو اختيار متعدد من قائمة قيم العمود
+   (مثل اتفاقيات الإعاشة) — قيمة الفلتر نص (يحتوي) أو مصفوفة (قيم محددة بالضبط). مشتركة بين كل الشاشات */
+function _cfOn_(v) { return Array.isArray(v) ? v.length > 0 : !!v; }
+function _cfNorm_(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
+function _cfHit_(val, raw) {
+  if (Array.isArray(val)) return val.indexOf(_cfNorm_(raw)) >= 0;
+  return _cfNorm_(raw).toLowerCase().indexOf(String(val).toLowerCase()) >= 0;
+}
+function _cfLbl_(v) { return Array.isArray(v) ? (v.length === 1 ? (v[0] || '(فارغ)') : v.length + ' قيم محددة') : v; }
+var _CF_ = null;
+// label: اسم العمود · cur: الفلتر الحالي · raws: قيم العمود لكل الصفوف · apply(v): يحفظ الفلتر ('' = إلغاء) ويعيد الرسم
+function _cfOpen_(ev, label, cur, raws, apply) {
+  var pop = document.getElementById('mfColFilterPop'); if (!pop) return;
+  var cnt = {}; (raws || []).forEach(function (r) { var v = _cfNorm_(r); cnt[v] = (cnt[v] || 0) + 1; });
+  var vals = Object.keys(cnt).sort(function (a, b) {
+    var na = Number(String(a).replace(/,/g, '')), nb = Number(String(b).replace(/,/g, ''));
+    if (a !== '' && b !== '' && !isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.localeCompare(b, 'ar');
+  });
+  _CF_ = { vals: vals, cnt: cnt, apply: apply, sel: Array.isArray(cur) ? cur.slice() : null };
+  document.getElementById('mfColFilterLbl').textContent = 'تصفية: ' + label;
+  var inp = document.getElementById('mfColFilterInput');
+  inp.value = typeof cur === 'string' ? cur : '';
+  inp.placeholder = 'اكتب للتصفية الحركية أو للبحث بالقائمة…';
+  inp.oninput = function () {
+    var q = _cfNorm_(inp.value);
+    if (!_CF_.sel) _CF_.apply(q);   // بلا اختيار من القائمة: الكتابة تصفّي الجدول لحظياً
+    _cfDraw_();
+  };
+  inp.onkeydown = function (e) { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); pop.classList.remove('show'); } };
+  _cfDraw_();
+  document.body.appendChild(pop);   // 🐛 (V4.164) آخر عنصر بالـ body حتى لا تختفي خلف النوافذ
+  var r = ev.currentTarget.getBoundingClientRect();
+  pop.classList.add('show');
+  var ph = pop.offsetHeight || 320, pw = pop.offsetWidth || 260;
+  pop.style.top = ((r.bottom + ph + 8 > window.innerHeight) ? Math.max(6, r.top - ph - 6) : (r.bottom + 6)) + 'px';
+  pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left - 90)) + 'px';
+  setTimeout(function () { inp.focus(); }, 30);
+}
+function _cfDraw_() {
+  var box = document.getElementById('mfColFilterBox'); if (!box || !_CF_) return;
+  var q = typeof _normalizeArabic_ === 'function' ? _normalizeArabic_(_cfNorm_(document.getElementById('mfColFilterInput').value)) : _cfNorm_(document.getElementById('mfColFilterInput').value).toLowerCase();
+  var norm = function (v) { return typeof _normalizeArabic_ === 'function' ? _normalizeArabic_(v) : v.toLowerCase(); };
+  var shown = _CF_.vals.filter(function (v) { return !q || norm(v).indexOf(q) >= 0; });
+  _CF_.shown = shown;
+  var sel = _CF_.sel, esc = function (x) { return String(x).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+  var lim = shown.slice(0, 400);
+  box.innerHTML = '<div class="cf-acts"><a onclick="_cfPickShown_(true)">☑ تحديد الظاهر</a><a onclick="_cfPickShown_(false)">☐ إلغاء الظاهر</a><a class="r" onclick="_cfClear_()">✖ مسح التصفية</a></div>' +
+    '<div class="cf-list">' + (lim.length ? lim.map(function (v, i) {
+      return '<label class="cf-it"><input type="checkbox" data-i="' + i + '"' + (sel && sel.indexOf(v) >= 0 ? ' checked' : '') + ' onchange="_cfTick_(this)"><span>' + (v === '' ? '<i style="color:#94a3b8;">(فارغ)</i>' : esc(v)) + '</span><span class="n">' + _CF_.cnt[v] + '</span></label>';
+    }).join('') : '<div class="cf-hint" style="text-align:center;padding:8px;">لا توجد قيم مطابقة</div>') + '</div>' +
+    (shown.length > lim.length ? '<div class="cf-hint">يظهر أول 400 قيمة — اكتب لتضييق القائمة</div>' : '') +
+    '<div class="cf-hint">' + (sel ? '☑ اختيار متعدد: ' + sel.length + ' قيمة — الكتابة تبحث بالقائمة فقط' : 'الكتابة تصفّي الجدول لحظياً · أو اختر قيمة/أكثر من القائمة') + '</div>';
+}
+function _cfTick_(cb) {
+  var v = _CF_.shown[+cb.getAttribute('data-i')];
+  var sel = _CF_.sel || [];
+  var i = sel.indexOf(v);
+  if (cb.checked && i < 0) sel.push(v); if (!cb.checked && i >= 0) sel.splice(i, 1);
+  _CF_.sel = sel.length ? sel : null;
+  _CF_.apply(_CF_.sel ? _CF_.sel.slice() : _cfNorm_(document.getElementById('mfColFilterInput').value));
+  _cfDraw_();
+}
+function _cfPickShown_(on) {
+  var sel = _CF_.sel || [];
+  _CF_.shown.slice(0, 400).forEach(function (v) { var i = sel.indexOf(v); if (on && i < 0) sel.push(v); if (!on && i >= 0) sel.splice(i, 1); });
+  _CF_.sel = sel.length ? sel : null;
+  _CF_.apply(_CF_.sel ? _CF_.sel.slice() : '');
+  _cfDraw_();
+}
+function _cfClear_() {
+  _CF_.sel = null; document.getElementById('mfColFilterInput').value = '';
+  _CF_.apply(''); _cfDraw_();
+}
 var _tblPopId = null, _tblPopKey = null;
 function _tblColFilter_(id, ev, k) {
   _tblPopId = id; _tblPopKey = k;
   var col = (_TBL_COLS_[id] || []).filter(function (c) { return c.k === k; })[0];
-  var pop = document.getElementById('mfColFilterPop'); if (!pop) return;
-  var lbl = document.getElementById('mfColFilterLbl'); if (lbl) lbl.textContent = 'تصفية: ' + (col ? col.label : k);
-  var inp = document.getElementById('mfColFilterInput'); if (!inp) return;
-  var st = _tblState_(id);
-  inp.value = st.colFilters[k] || '';
-  inp.oninput = function () {
-    var v = (inp.value || '').trim();
-    if (v) st.colFilters[_tblPopKey] = v; else delete st.colFilters[_tblPopKey];
-    if (_TBL_REFRESH_[_tblPopId]) _TBL_REFRESH_[_tblPopId]();
-  };
-  // 🐛 (V4.164) إعادة إلحاق النافذة المشتركة بآخر body عند كل ظهور — نوافذ مثل كشف حساب الوكيل
-  // بنفس z-index هذه النافذة بالضبط، وبما أنها تُنشأ لاحقاً بالـDOM كانت تُرسَم فوقها فتُخفيها
-  // كلياً (الضغط على 🔽 كان يعمل فعلاً، لكن النتيجة تظهر خلف النافذة المفتوحة بلا أثر ظاهر)
-  document.body.appendChild(pop);
-  var r = ev.currentTarget.getBoundingClientRect();
-  pop.style.top = (r.bottom + 6) + 'px';
-  pop.style.left = Math.max(8, Math.min(window.innerWidth - 195, r.left - 70)) + 'px';
-  pop.classList.add('show');
-  setTimeout(function () { inp.focus(); }, 30);
+  var st = _tblState_(id), src = _TBL_SRC_[id] || { rows: [], raw: function () { return ''; } };
+  _cfOpen_(ev, col ? col.label : k, st.colFilters[k], src.rows.map(function (r) { return src.raw(k, r); }), function (v) {
+    if (_cfOn_(v)) st.colFilters[k] = v; else delete st.colFilters[k];
+    if (_TBL_REFRESH_[id]) _TBL_REFRESH_[id]();
+  });
 }
 function _tblSortBy_(id, k) {
   var st = _tblState_(id);
@@ -36781,8 +36851,8 @@ function mfMatch(f) {
   var rt = mfDate(mfFV('mfF_retTo'));
   if (rt && !isNaN(mfMs(rt)) && !(mfMs(f.retDate) <= mfMs(rt))) return false;
   for (var k in MF.colFilters) {
-    var val = MF.colFilters[k]; if (!val) continue;
-    if (mfRaw(k, f).toLowerCase().indexOf(mfStr(val).toLowerCase()) < 0) return false;
+    var val = MF.colFilters[k]; if (!_cfOn_(val)) continue;
+    if (!_cfHit_(val, mfRaw(k, f))) return false;
   }
   var st = mfStatus(f);
   if (MF.facets.unreviewed && mfStr(f.fileNo)) return false;
@@ -36856,7 +36926,7 @@ function mfRender() {
     if (MF.hidden[c.k]) cls += ' mf-hide';
     var si = MF.sort.key === c.k ? (MF.sort.dir > 0 ? '▲' : '▼') : '⇅';
     var ics = c.nof ? '' :
-      '<button class="mf-thic' + (MF.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="mf-thic' + (_cfOn_(MF.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">🔽</button>' +
       '<button class="mf-thic' + (MF.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();mfSort(\'' + c.k + '\')">' + si + '</button>';
     h += '<th class="' + cls + '" style="' + st + '" draggable="true" data-key="' + c.k + '"' +
       ' title="' + mfEsc(c.g) + ' · ' + mfEsc(c.l) + '"' +
@@ -36990,9 +37060,9 @@ function mfRenderApplied(list) {
     if (v) chips.push({ l: p[1] + ': ' + v, f: (function (id) { return function () { document.getElementById(id).value = ''; }; })(p[0]) });
   });
   Object.keys(MF.colFilters).forEach(function (k) {
-    if (!MF.colFilters[k]) return;
+    if (!_cfOn_(MF.colFilters[k])) return;
     var c = MF_COLS.filter(function (x) { return x.k === k; })[0];
-    chips.push({ l: '🔽 ' + (c ? c.l : k) + ': ' + MF.colFilters[k], f: function () { delete MF.colFilters[k]; } });
+    chips.push({ l: '🔽 ' + (c ? c.l : k) + ': ' + _cfLbl_(MF.colFilters[k]), f: function () { delete MF.colFilters[k]; } });
   });
   var FL = { needsWork: 'يحتاج متابعة', unreviewed: 'لم تُراجع بعد', flag: 'به تنبيه قاعدة', approved: 'معتمد', notapproved: 'غير معتمد',
     posted: 'له رقم قيد', noref: 'بدون قيد', vip: 'VIP', urgent: 'سفر خلال 3 أيام', nobal: 'بلا رصيد كافٍ', notrip: 'غير مربوطة برحلة' };
@@ -37710,21 +37780,10 @@ var _mfPopKey = null;
 function mfColFilter(ev, k) {
   _mfPopKey = k;
   var col = MF_COLS.filter(function (c) { return c.k === k; })[0];
-  var pop = document.getElementById('mfColFilterPop');
-  document.getElementById('mfColFilterLbl').textContent = 'تصفية: ' + col.l;
-  var inp = document.getElementById('mfColFilterInput');
-  inp.value = MF.colFilters[k] || '';
-  inp.oninput = function () {
-    var v = mfStr(inp.value);
-    if (v) MF.colFilters[_mfPopKey] = v; else delete MF.colFilters[_mfPopKey];
+  _cfOpen_(ev, col ? col.l : k, MF.colFilters[k], MF.files.map(function (f) { return mfRaw(k, f); }), function (v) {
+    if (_cfOn_(v)) MF.colFilters[k] = v; else delete MF.colFilters[k];
     mfRender();
-  };
-  document.body.appendChild(pop);   // 🐛 (V4.164) — انظر نفس التعليق بـ_tblColFilter_
-  var r = ev.currentTarget.getBoundingClientRect();
-  pop.style.top = (r.bottom + 6) + 'px';
-  pop.style.left = Math.max(8, Math.min(window.innerWidth - 195, r.left - 70)) + 'px';
-  pop.classList.add('show');
-  setTimeout(function () { inp.focus(); }, 30);
+  });
 }
 
 /* ---------- التقويم المخصص ---------- */
@@ -41352,8 +41411,8 @@ function vzVisible() {
   var list = VZ.files.filter(vzMatch);
   // 🔎 (V4.136) تصفية ديناميكية لحظية من رأس الأعمدة — نص فرعي بلا حساسية لحالة الأحرف
   for (var k in VZ.colFilters) {
-    var val = VZ.colFilters[k]; if (!val) continue;
-    list = list.filter(function (f) { return String(vzColRaw(k, f)).toLowerCase().indexOf(mfStr(val).toLowerCase()) >= 0; });
+    var val = VZ.colFilters[k]; if (!_cfOn_(val)) continue;
+    list = list.filter(function (f) { return _cfHit_(val, vzColRaw(k, f)); });
   }
   // ↕️ (V4.136) الترتيب: رقمي للأعمدة الرقمية/التاريخية، وأبجدي عربي لغيرها
   var sk = VZ.sort.key, dir = VZ.sort.dir;
@@ -41492,21 +41551,10 @@ var _vzPopKey = null;
 function vzColFilter(ev, k) {
   _vzPopKey = k;
   var col = VZ_COL_DEFS_.filter(function (c) { return c.k === k; })[0];
-  var pop = document.getElementById('mfColFilterPop'); if (!pop) return;
-  document.getElementById('mfColFilterLbl').textContent = 'تصفية: ' + (col ? col.label : k);
-  var inp = document.getElementById('mfColFilterInput');
-  inp.value = VZ.colFilters[k] || '';
-  inp.oninput = function () {
-    var v = mfStr(inp.value);
-    if (v) VZ.colFilters[_vzPopKey] = v; else delete VZ.colFilters[_vzPopKey];
+  _cfOpen_(ev, col ? col.label : k, VZ.colFilters[k], VZ.files.filter(vzMatch).map(function (f) { return vzColRaw(k, f); }), function (v) {
+    if (_cfOn_(v)) VZ.colFilters[k] = v; else delete VZ.colFilters[k];
     vzRender();
-  };
-  document.body.appendChild(pop);   // 🐛 (V4.164) — انظر نفس التعليق بـ_tblColFilter_
-  var r = ev.currentTarget.getBoundingClientRect();
-  pop.style.top = (r.bottom + 6) + 'px';
-  pop.style.left = Math.max(8, Math.min(window.innerWidth - 195, r.left - 70)) + 'px';
-  pop.classList.add('show');
-  setTimeout(function () { inp.focus(); }, 30);
+  });
 }
 // شرائح الفلاتر النشطة مع X لكل فلتر + «إلغاء الكل»
 var VZ_FILTER_META = [
@@ -41530,9 +41578,9 @@ function vzRenderChips() {
   }
   // 🔎 (V4.136) شرائح تصفية الأعمدة الديناميكية أيضاً — كل فلتر عمود بعلامة X خاصة به
   Object.keys(VZ.colFilters).forEach(function (k) {
-    if (!VZ.colFilters[k]) return;
+    if (!_cfOn_(VZ.colFilters[k])) return;
     var c = VZ_COL_DEFS_.filter(function (x) { return x.k === k; })[0];
-    chips.push('<span class="vz-badge y" style="font-size:11px;padding:3px 8px;">🔽 ' + vzEsc(c ? c.label : k) + ': ' + vzEsc(VZ.colFilters[k]) +
+    chips.push('<span class="vz-badge y" style="font-size:11px;padding:3px 8px;">🔽 ' + vzEsc(c ? c.label : k) + ': ' + vzEsc(_cfLbl_(VZ.colFilters[k])) +
       ' <span style="cursor:pointer;font-weight:900;" onclick="vzClearColFilter(\'' + k + '\')">✕</span></span>');
   });
   box.innerHTML = chips.length ? (chips.join(' ') + ' <button class="vz-btn sm dgr" onclick="vzClearFilters()">✖ إلغاء كل الفلاتر</button>') : '';
@@ -41723,7 +41771,7 @@ function vzRender() {
     if (c.nof) return '<th' + wStyle + '>' + vzEsc(c.label) + '</th>';
     var si = VZ.sort.key === c.k ? (VZ.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + wStyle + '><div class="vz-thin"><span>' + vzEsc(c.label) + '</span>' +
-      '<button class="vz-thic' + (VZ.colFilters[c.k] ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();vzColFilter(event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="vz-thic' + (_cfOn_(VZ.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();vzColFilter(event,\'' + c.k + '\')">🔽</button>' +
       '<button class="vz-thic' + (VZ.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();vzSortBy(\'' + c.k + '\')">' + si + '</button>' +
       '</div>' + rsz.replace(/\{\{K\}\}/g, c.k) + '</th>';
   }).join('');
