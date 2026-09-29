@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.218";
+var APP_VERSION = "4.219";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6603,7 +6603,8 @@ var FOLDER_KEYS = {
   EXPORTS: 'FOLDER_ID_EXPORTS',
   TEMP:    'FOLDER_ID_TEMP',
   BACKUPS: 'FOLDER_ID_BACKUPS',
-  CATERING: 'FOLDER_ID_CATERING' // 📎 (V4.167) مرفقات اتفاقيات الإعاشة (الملف/الصورة المستخلَص منها)
+  CATERING: 'FOLDER_ID_CATERING', // 📎 (V4.167) مرفقات اتفاقيات الإعاشة (الملف/الصورة المستخلَص منها)
+  GLATT:   'FOLDER_ID_GLATT'     // 📎 (V4.219) مستندات القيود والسندات بالحسابات العامة
 };
 
 var FOLDER_DEFAULTS = {
@@ -6614,7 +6615,8 @@ var FOLDER_DEFAULTS = {
   EXPORTS:  'Exports',
   TEMP:    'Temp',
   BACKUPS: 'Backups',
-  CATERING: 'CateringAttachments'
+  CATERING: 'CateringAttachments',
+  GLATT:   'GLAttachments'
 };
 
 /**

@@ -25,6 +25,8 @@ var GL_SHEETS_ = {
   hbtrip:   { name: 'GL_HB_Trip',  headers: ['مفتاح الحجز', 'الرحلة', 'بواسطة', 'في'] },
   // (V4.210-H3) عقود الشارت: شراء غرف لفترة طويلة بدفعات، تُباع حجوزات منفصلة
   // (V4.216) أسعار الصرف اليومية (بيع/شراء بنك مصر للريال والدولار) — تُسجَّل يومياً ويُحسب منها المعادل بتاريخ كل قيد
+  // (V4.219) مستندات مرفقة بالقيود والسندات (ملفات بالدرايف)
+  attach:   { name: 'GL_Attachments', headers: ['رقم القيد', 'معرّف الملف', 'الاسم', 'النوع', 'الرابط', 'بواسطة', 'في'] },
   fxdaily:  { name: 'GL_FX_Daily', headers: ['التاريخ', 'ريال بيع', 'ريال شراء', 'دولار بيع', 'دولار شراء', 'المصدر', 'بواسطة', 'في'] },
   hbchar:   { name: 'GL_HB_Charters', headers: ['المعرّف', 'الشارت', 'الفندق', 'المدينة', 'من', 'إلى', 'عدد الغرف', 'قيمة العقد', 'العملة', 'ملاحظات', 'بواسطة', 'في'] }
 };
@@ -41,7 +43,7 @@ var GL_ENTRY_TYPES_ = ['قيد يومية', 'سند قبض', 'سند صرف', '�
 // (V4.207) أنواع يولّدها النظام وحده — لا تُختار بقيد يدوي
 var GL_SYS_TYPES_ = ['قيد تلقائي', 'قيد إقفال'];
 // الفئة (kind) تحدد سلوك الحساب بالشاشات: خزينة/بنك/عهدة تظهر بلوحة الأرصدة، عميل/وكيل تُربط بكيانات البرنامج
-var GL_KINDS_ = { safe: 'خزينة', bank: 'بنك', custody: 'عهدة', client: 'عميل', agent: 'وكيل', supplier: 'مورد', fx: 'وسيط عملات', roomfee: 'رسوم غرفة', other: '' };
+var GL_KINDS_ = { safe: 'خزينة', bank: 'بنك', custody: 'عهدة', client: 'عميل', agent: 'وكيل', supplier: 'مورد', trip: 'رحلة عمرة', fx: 'وسيط عملات', roomfee: 'رسوم غرفة', other: '' };
 
 // دليل الحسابات الأساسي (مستفاد من تصنيفات برنامج الـ ERP مع أكواد هرمية) — [كود، اسم، نوع، تجميعي؟، فئة]
 var GL_SEED_COA_ = [
@@ -228,18 +230,29 @@ function _glAccRow_(a, user) {
     a.active === false ? 'لا' : 'نعم', a.notes || '', user || '', _glNow_(), a.legacyId || ''];
 }
 // الكود التالي لحساب فرعي: كود الأب + تسلسل (3 أرقام لتحت المجموعات ذات 4 أرقام فأكثر، رقمان تحت ذات الرقم أو الرقمين)
-function _glNextChildCode_(parentCode) {
-  var accs = _glAccounts_().list, width = parentCode.length === 1 ? 1 : (parentCode.length === 2 ? 2 : 3), max = 0;
-  accs.forEach(function (a) {
-    if (a.parent === parentCode && a.code.indexOf(parentCode) === 0 && a.code.length === parentCode.length + width) {
-      var n = parseInt(a.code.slice(parentCode.length), 10); if (n > max) max = n;
+// (V4.219) أول كود فرعي متاح تحت الأب — أول رقم شاغر (لا «الأكبر + 1» فيفشل مع وجود 99 مثلاً رغم فراغات)، ولو امتلأت كل
+// أرقام العرض المعتاد يُكمل في نطاق إضافي «الأب + 00 + ثلاثة أرقام» (مثل 4100001) الذي لا يتعارض مع بادئة أي حساب قائم
+function _glFreeChildCode_(parentCode, taken) {
+  taken = taken || {};
+  var codes = _glAccounts_().list.map(function (a) { return a.code; }).concat(Object.keys(taken));
+  var used = {}; codes.forEach(function (c) { used[c] = 1; });
+  var clash = function (c) {   // مستخدم، أو بادئة لحساب قائم، أو حساب قائم (غير الأب وأجداده) بادئة له
+    if (used[c]) return true;
+    for (var k = 0; k < codes.length; k++) {
+      var x = codes[k];
+      if (x.length > c.length && x.indexOf(c) === 0) return true;
+      if (x.length < c.length && c.indexOf(x) === 0 && parentCode.indexOf(x) !== 0) return true;
     }
-  });
-  var next = String(max + 1);
-  if (next.length > width) throw new Error('امتلأت أكواد الحسابات تحت ' + parentCode);
-  while (next.length < width) next = '0' + next;
-  return parentCode + next;
+    return false;
+  };
+  var pad = function (n, w) { n = String(n); while (n.length < w) n = '0' + n; return n; };
+  var width = parentCode.length === 1 ? 1 : (parentCode.length === 2 ? 2 : 3), lim = Math.pow(10, width);
+  for (var n = 1; n < lim; n++) { var c = parentCode + pad(n, width); if (!clash(c)) return c; }
+  var base = parentCode + pad(0, width);
+  for (var m = 1; m < 1000; m++) { var c2 = base + pad(m, 3); if (!clash(c2)) return c2; }
+  throw new Error('امتلأت أكواد الحسابات تحت ' + parentCode);
 }
+function _glNextChildCode_(parentCode) { return _glFreeChildCode_(parentCode, {}); }
 function _glCreateAccount_(a, user) {
   var accs = _glAccounts_();
   var parent = accs.map[a.parent];
@@ -532,7 +545,7 @@ function _glValidate_(e, opts) {
   if (!opts.allowBeforeStart && type !== 'قيد افتتاحي' && type !== 'قيد مستورد' && _glDKey_(date) < _glDKey_(set.startDate)) {
     throw new Error('تاريخ القيد قبل تاريخ بداية الحسابات (' + set.startDate + ') — استخدم الأرصدة الافتتاحية أو الاستيراد المجمّع للبيانات القديمة');
   }
-  var lines = [], dB = 0, cB = 0, curs = {}, dC = {}, cC = {};
+  var lines = [], dB = 0, cB = 0, curs = {}, dC = {}, cC = {}, fxTol = 0;
   (e.lines || []).forEach(function (l, i) {
     var code = _glStr_(l.account), d = _glR2_(_glNum_(l.debit)), c = _glR2_(_glNum_(l.credit));
     if (!code && !d && !c) return;   // سطر فارغ
@@ -544,9 +557,12 @@ function _glValidate_(e, opts) {
     if ((d && c) || (!d && !c)) throw new Error('السطر ' + (i + 1) + ': أدخل مديناً أو دائناً (واحداً فقط)');
     var cur = _glCur_(l.currency || a.currency || 'EGP');
     if (a.currency && a.currency !== cur) throw new Error('السطر ' + (i + 1) + ': عملة الحساب «' + a.name + '» هي ' + a.currency);
-    var rate = cur === 'EGP' ? 1 : (_glNum_(l.rate) || rates[cur]);
-    if (!(rate > 0)) throw new Error('السطر ' + (i + 1) + ': سعر الصرف مطلوب');
-    var bd = _glR2_(d * rate), bc = _glR2_(c * rate);
+    var rate0 = cur === 'EGP' ? 1 : (_glNum_(l.rate) || rates[cur]);
+    if (!(rate0 > 0)) throw new Error('السطر ' + (i + 1) + ': سعر الصرف مطلوب');
+    // 💱 (V4.219) سعر الصرف يُحفظ ويُعرض بخانتين عشريتين كحد أقصى. أسطر نقل الأرصدة (exact) تحفظ معادلها الدقيق
+    var rate = cur === 'EGP' ? 1 : (Math.round(rate0 * 100) / 100 || rate0), brate = l.exact ? rate0 : rate;
+    if (cur !== 'EGP' && !l.exact) fxTol += (d + c) * 0.005;
+    var bd = _glR2_(d * brate), bc = _glR2_(c * brate);
     dB += bd; cB += bc; curs[cur] = 1; dC[cur] = (dC[cur] || 0) + d; cC[cur] = (cC[cur] || 0) + c;
     lines.push({ account: code, debit: d, credit: c, currency: cur, rate: rate, bDebit: bd, bCredit: bc,
       trip: _glStr_(l.trip || e.trip), company: _glStr_(l.company || e.company),
@@ -559,7 +575,15 @@ function _glValidate_(e, opts) {
     var k = Object.keys(curs)[0];
     if (Math.abs(_glR2_(dC[k] - cC[k])) > 0.009) throw new Error('القيد غير متوازن: المدين ' + _glR2_(dC[k]) + ' ≠ الدائن ' + _glR2_(cC[k]) + ' ' + k);
   } else if (Math.abs(_glR2_(dB - cB)) > 0.05) {
-    throw new Error('القيد غير متوازن بعملة الأساس: المدين المعادل ' + _glR2_(dB) + ' ≠ الدائن المعادل ' + _glR2_(cB) + ' جنيه');
+    var diffB = _glR2_(dB - cB);
+    if (Math.abs(diffB) > 0.05 + fxTol) throw new Error('القيد غير متوازن بعملة الأساس: المدين المعادل ' + _glR2_(dB) + ' ≠ الدائن المعادل ' + _glR2_(cB) + ' جنيه');
+    // فرق تقريب السعر لخانتين: يمتصه «وسيط تحويل العملات» (كفروق تحويل مثل الـ ERP)، وإلا يُضاف لمعادل أكبر سطر أجنبي
+    var brX = _glFxBridgeAcc_();
+    var willBridge = !opts.noBridge && type !== 'قيد افتتاحي' && type !== 'قيد إقفال' && set.fx_bridge !== 'لا' && brX && !lines.some(function (l) { return l.account === brX; });
+    if (!willBridge) {
+      var big = null; lines.forEach(function (l) { if (l.currency !== 'EGP' && (!big || l.debit + l.credit > big.debit + big.credit)) big = l; });
+      if (big) { if (big.debit) big.bDebit = _glR2_(big.bDebit - diffB); else big.bCredit = _glR2_(big.bCredit + diffB); dB = _glR2_(dB - (big.debit ? diffB : 0)); }
+    }
   }
   // 💱 (V4.208) تحويل العملة التلقائي (آلية الـ ERP): قيد بأكثر من عملة ← تُضاف أسطر على حساب
   // «وسيط تحويل العملات» تُصفّي كل عملة داخل نفسها، فيتوازن القيد بكل عملة على حدة وتبقى مراكز
@@ -572,7 +596,7 @@ function _glValidate_(e, opts) {
       Object.keys(net).sort().forEach(function (c) {
         var n = _glR2_(net[c]), b = _glR2_(bnet[c]);
         if (Math.abs(n) < 0.005) return;
-        var rate = c === 'EGP' ? 1 : Math.round(Math.abs(b / n) * 1e6) / 1e6;
+        var rate = c === 'EGP' ? 1 : Math.round(Math.abs(b / n) * 100) / 100;   // المعادل الدقيق في bDebit/bCredit
         lines.push({ account: br, debit: n < 0 ? -n : 0, credit: n > 0 ? n : 0, currency: c, rate: rate,
           bDebit: b < 0 ? -b : 0, bCredit: b > 0 ? b : 0, trip: _glStr_(e.trip), company: _glStr_(e.company), client: '', agent: '',
           desc: 'تحويل عملة تلقائي (' + c + ')' });
@@ -624,21 +648,31 @@ function glSaveEntry(authToken, e, post) {
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
-    var v = _glValidate_(e);
+    var fPeek = isEdit ? _glFindEntry_(_glStr_(e.id)) : null, autoPeek = !!(fPeek && /^AUTO:/.test(_glStr_(fPeek.r[6])));
+    var v = _glValidate_(e, autoPeek ? { allowBeforeStart: true, allowSystem: true } : {});
     var status = post ? GL_ST_POSTED_ : GL_ST_DRAFT_;
     var eSh = _glSheet_('entries'), lSh = _glSheet_('lines');
     if (isEdit) {
       var f = _glFindEntry_(_glStr_(e.id));
       if (!f) throw new Error('القيد غير موجود');
-      if (_glStr_(f.r[5]) !== GL_ST_DRAFT_) throw new Error('لا يُعدَّل إلا القيد المسودة — القيد المرحّل يُلغى ويُسجَّل غيره');
+      // ✏️ (V4.219) تعديل القيد المرحّل مباشرة لمن له صلاحية التعديل (بدل الإلغاء وإعادة التسجيل)، والقيد التلقائي
+      // للمدير فقط — يحتفظ بمفتاح مصدره وبصمته فلا تُعيد المزامنة كتابته إلا لو تغيّر مصدره نفسه بالشاشات
+      var oldSt = _glStr_(f.r[5]), isAuto = /^AUTO:/.test(_glStr_(f.r[6]));
+      if (oldSt === GL_ST_VOID_) throw new Error('القيد ملغى — لا يُعدَّل');
+      if (isAuto && !_glIsAdmin_(session)) throw new Error('تعديل القيود التلقائية للمدير فقط');
+      if (_glStr_(f.r[3]) === 'قيد إقفال') throw new Error('قيد إقفال السنة لا يُعدَّل يدوياً');
+      if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
+      if (oldSt === GL_ST_POSTED_) status = GL_ST_POSTED_;
+      if (isAuto) v.type = _glStr_(f.r[3]) || v.type;
       var sk = _glStr_(f.r[6]);
       if (GL_VCH_PREFIX_[v.type] && !sk) sk = 'VCH:' + _glNextVoucherNo_(v.type);   // سند قديم بلا رقم ⇒ يأخذ رقماً
-      var w = _glWriteEntry_(v, { id: f.r[0], seq: f.r[1], status: status, sourceKey: sk, batchId: f.r[7], desc: e.desc, ref: e.ref, trip: e.trip, company: e.company,
+      var w = _glWriteEntry_(v, { id: f.r[0], seq: f.r[1], status: status, sourceKey: sk, batchId: f.r[7], desc: e.desc, ref: isAuto ? f.r[9] : e.ref, trip: e.trip, company: e.company,
         createdBy: f.r[12], createdAt: f.r[13], row: f.row }, session.username);
       eSh.getRange(f.row, 1, 1, w.eRow.length).setValues([w.eRow]);
       _glDeleteLinesOf_([_glStr_(f.r[0])]);
       lSh.getRange(lSh.getLastRow() + 1, 1, w.lRows.length, w.lRows[0].length).setValues(w.lRows);
-      logChange_(session.username, post ? 'تعديل وترحيل قيد' : 'تعديل قيد مسودة', 'GL:' + f.r[0], 'القيد', '-', v.type + ' — ' + _glStr_(e.desc) + ' — ' + v.totalBase + ' ج');
+      logChange_(session.username, oldSt === GL_ST_POSTED_ ? 'تعديل قيد مرحّل' : (post ? 'تعديل وترحيل قيد' : 'تعديل قيد مسودة'), 'GL:' + f.r[0], 'القيد',
+        _glStr_(f.r[4]) + ' — ' + _glNum_(f.r[8]) + ' ج', v.type + ' — ' + _glStr_(e.desc) + ' — ' + v.totalBase + ' ج');
       return { success: true, id: _glStr_(f.r[0]), status: status, voucherNo: (sk.match(/^VCH:(.+)$/) || [])[1] || '' };
     }
     var seq = _glNextEntrySeq_(1), id = _glEntryId_(seq);
@@ -790,6 +824,7 @@ function _glEntryFull_(id) {
   var e = _glEntryObj_(f.r);
   e.lines = _glRows_('lines').filter(function (r) { return _glStr_(r[0]) === id; }).map(_glLineObj_)
     .sort(function (a, b) { return a.lineNo - b.lineNo; });
+  e.attachments = _glAttachMap_()[id] || [];
   return e;
 }
 function glGetEntry(authToken, id) {
@@ -880,7 +915,7 @@ function glTreasury(authToken, code, from, to) {
     (byEntry[id] = byEntry[id] || []).push(r);
     if (_glStr_(r[4]) === code) mine.push(r);
   });
-  var rows = [];
+  var rows = [], attMap = _glAttachMap_();
   mine.forEach(function (r) {
     var l = _glLineObj_(r), k = _glDKey_(l.date);
     if (k > lastK) lastK = k;
@@ -896,7 +931,7 @@ function glTreasury(authToken, code, from, to) {
     rows.push({ entryId: l.entryId, voucherNo: eo.voucherNo || ((_glStr_(eo.ref).match(/^(REC|PAY)-\d+$/) || [])[0]) || '', type: eo.type || '', date: l.date, _k: k,
       seq: e ? e[1] : 0, lineNo: l.lineNo, currency: l.currency, inAmt: l.debit, outAmt: l.credit,
       counter: names.length > 3 ? 'قيد متعدد الأطراف (' + names.length + ' حسابات)' : names.join(' + '),
-      desc: l.desc || eo.desc || '', entryDesc: eo.desc || '', createdBy: eo.createdBy || '', auto: /^AUTO:/.test(eo.sourceKey || '') });
+      desc: l.desc || eo.desc || '', entryDesc: eo.desc || '', createdBy: eo.createdBy || '', auto: /^AUTO:/.test(eo.sourceKey || ''), att: (attMap[l.entryId] || []).length });
   });
   rows.sort(function (a, b) { return a._k < b._k ? -1 : (a._k > b._k ? 1 : (a.seq - b.seq || a.lineNo - b.lineNo)); });
   var run = { EGP: open.EGP, SAR: open.SAR, USD: open.USD };
@@ -1404,14 +1439,7 @@ function _glHash_(str) {   // بصمة قصيرة ثابتة (djb2 مزدوج) �
   return (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36);
 }
 function _glCleanDesc_(s) { return _glStr_(s).replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*/gi, ' ').replace(/\s+/g, ' ').trim(); }
-function _glNextCodeIn_(parent, taken) {
-  var width = parent.length === 1 ? 1 : (parent.length === 2 ? 2 : 3), max = 0;
-  _glAccounts_().list.forEach(function (a) { if (a.parent === parent && a.code.length === parent.length + width) { var n = parseInt(a.code.slice(parent.length), 10); if (n > max) max = n; } });
-  Object.keys(taken || {}).forEach(function (c) { if (c.length === parent.length + width && c.indexOf(parent) === 0) { var n = parseInt(c.slice(parent.length), 10); if (n > max) max = n; } });
-  var s = String(max + 1); if (s.length > width) throw new Error('امتلأت أكواد الحسابات تحت ' + parent);
-  while (s.length < width) s = '0' + s;
-  return parent + s;
-}
+function _glNextCodeIn_(parent, taken) { return _glFreeChildCode_(parent, taken); }
 // إضافة حساب للذاكرة فقط (للمعاينة قبل الإنشاء الفعلي، وليراه الفحص فوراً)
 function _glMemoAddAcc_(row) {
   var m = _glAccounts_(), code = _glStr_(row[0]);
@@ -1516,7 +1544,7 @@ function _glAutoBuild_(user, write) {
   var sarRate = rates.SAR;
   var mkLine = function (acc, amt, dr, cur, extra) {
     var o = { account: acc, debit: dr ? amt : 0, credit: dr ? 0 : amt, currency: cur, rate: cur === 'EGP' ? 1 : (extra && extra.rate ? extra.rate : rates[cur]) };
-    if (extra) ['trip', 'company', 'client', 'agent', 'desc'].forEach(function (k) { if (extra[k]) o[k] = extra[k]; });
+    if (extra) ['trip', 'company', 'client', 'agent', 'desc', 'exact'].forEach(function (k) { if (extra[k]) o[k] = extra[k]; });
     return o;
   };
   var push = function (e) { if (e.lines.length >= 2) out.push(e); };
@@ -1576,8 +1604,8 @@ function _glAutoBuild_(user, write) {
         var rSar = Math.round(egpAmt / sarAmt * 1e6) / 1e6;
         var srcCr = p._fxRole !== 'due';   // 'pay': ينقص مستحق عملة المصدر ويزيد مستحق العملة الأخرى
         lines = [
-          mkLine(acc, src === 'SAR' ? sarAmt : egpAmt, !srcCr, src, Object.assign({ rate: src === 'SAR' ? rSar : 1, desc: d || 'تحويل عملة بحساب العميل' }, tag)),
-          mkLine(acc, dst === 'SAR' ? sarAmt : egpAmt, srcCr, dst, Object.assign({ rate: dst === 'SAR' ? rSar : 1, desc: d || 'تحويل عملة بحساب العميل' }, tag))
+          mkLine(acc, src === 'SAR' ? sarAmt : egpAmt, !srcCr, src, Object.assign({ exact: 1, rate: src === 'SAR' ? rSar : 1, desc: d || 'تحويل عملة بحساب العميل' }, tag)),
+          mkLine(acc, dst === 'SAR' ? sarAmt : egpAmt, srcCr, dst, Object.assign({ exact: 1, rate: dst === 'SAR' ? rSar : 1, desc: d || 'تحويل عملة بحساب العميل' }, tag))
         ];
       } else {
         var isCf = /⟦cf:/i.test(p.desc), neg = p.amount < 0;
@@ -1703,7 +1731,7 @@ function _glAutoBuild_(user, write) {
       var o = agg[k], amt = _glR2_(o.amt); if (Math.abs(amt) < 0.005) return;
       var rate = o.currency === 'EGP' ? 1 : Math.round(Math.abs(o.base / o.amt) * 1e6) / 1e6 || rates[o.currency];
       var acc = _glAccounts_().map[o.account];
-      oLines.push({ account: o.account, debit: amt > 0 ? amt : 0, credit: amt < 0 ? -amt : 0, currency: o.currency, rate: rate,
+      oLines.push({ account: o.account, debit: amt > 0 ? amt : 0, credit: amt < 0 ? -amt : 0, currency: o.currency, rate: rate, exact: 1,
         client: acc && acc.kind === 'client' ? acc.link : '', agent: acc && (acc.kind === 'agent' || acc.kind === 'supplier') ? acc.link : '',
         desc: o.account === GL_ACC_OPEN_DIFF_ ? 'مقابل أرصدة ما قبل ' + set.startDate : 'رصيد افتتاحي من شاشات البرنامج' });
       resid += _glR2_((amt > 0 ? amt : 0) * rate) - _glR2_((amt < 0 ? -amt : 0) * rate);
@@ -1856,7 +1884,8 @@ function glAutoSyncCron() {
   var lock = LockService.getScriptLock(); if (!lock.tryLock(30000)) return;
   try { var r = _glAutoRun_('مزامنة مجدولة', false); _glAutoSaveLast_(r, 'مزامنة مجدولة'); }
   catch (e) { try { _glSetSetting_('auto_last_error', _glNow_() + ' — ' + e.message); } catch (e2) {} }
-  finally { lock.releaseLock(); }
+  try { _glCsAutoAll_(); } catch (e3) {}   // (V4.219) شيتات العهد المربوطة بخيار «تلقائي»
+  lock.releaseLock();
 }
 function _glAutoSaveLast_(r, user) {
   _glSetSetting_('auto_last', JSON.stringify({ at: _glNow_(), by: user, created: r.created, updated: r.updated, voided: r.voided, same: r.same,
@@ -1876,6 +1905,278 @@ function glAutoSettings(authToken, o) {
   }
   logChange_(session.username, 'إعدادات القيود التلقائية', 'GL:auto', '-', '-', JSON.stringify(o));
   return { success: true };
+}
+/* 📎 (V4.219) مرفقات القيود والسندات (مثل برنامج الـ ERP): الملف يُحفظ بمجلد «GLAttachments» بالدرايف، وسطر بشيت
+   GL_Attachments يربطه برقم القيد. الحذف يرسل الملف لسلة المهملات ويحذف سطره. */
+function glAttachUpload(authToken, entryId, name, mime, b64) {
+  var session = _glPerm_(authToken, 'add');
+  entryId = _glStr_(entryId); if (!entryId || !_glFindEntry_(entryId)) throw new Error('القيد غير موجود');
+  if (!b64) throw new Error('الملف فارغ');
+  var bytes = Utilities.base64Decode(String(b64).replace(/^data:[^,]*,/, ''));
+  if (bytes.length > 15 * 1024 * 1024) throw new Error('حجم الملف أكبر من 15 ميجا');
+  var file = getDriveFolder_('GLATT').createFile(Utilities.newBlob(bytes, _glStr_(mime) || 'application/octet-stream', entryId + ' — ' + (_glStr_(name) || 'مستند')));
+  var sh = _glSheet_('attach');
+  sh.appendRow([entryId, file.getId(), _glStr_(name) || file.getName(), _glStr_(mime), file.getUrl(), session.username, _glNow_()]);
+  logChange_(session.username, 'إرفاق مستند بقيد', 'GL:' + entryId, 'مرفق', '-', _glStr_(name));
+  return { success: true, file: { id: file.getId(), name: _glStr_(name), url: file.getUrl(), mime: _glStr_(mime) } };
+}
+function _glAttachMap_() {
+  var out = {};
+  try { _glRows_('attach').forEach(function (r) { var id = _glStr_(r[0]); if (id) (out[id] = out[id] || []).push({ id: _glStr_(r[1]), name: _glStr_(r[2]), mime: _glStr_(r[3]), url: _glStr_(r[4]), by: _glStr_(r[5]), at: _glStr_(r[6]) }); }); } catch (e) {}
+  return out;
+}
+function glAttachList(authToken, entryId) { _glPerm_(authToken, 'view'); return { success: true, files: _glAttachMap_()[_glStr_(entryId)] || [] }; }
+function glAttachDelete(authToken, fileId) {
+  var session = _glPerm_(authToken, 'edit');
+  var sh = _glSheet_('attach'), rows = _glRows_('attach'), hit = -1, ent = '';
+  rows.forEach(function (r, i) { if (_glStr_(r[1]) === _glStr_(fileId)) { hit = i; ent = _glStr_(r[0]); } });
+  if (hit < 0) throw new Error('المرفق غير موجود');
+  try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) {}
+  sh.deleteRow(hit + 2);
+  logChange_(session.username, 'حذف مرفق قيد', 'GL:' + ent, 'مرفق', _glStr_(rows[hit][2]), '-');
+  return { success: true };
+}
+// شعار الشركة لرأس الكشوف المطبوعة (نفس شعار السندات)
+function glVchLogo(authToken) {
+  _glPerm_(authToken, 'view');
+  var b = _glVchBrand_(), logo = '';
+  try { logo = typeof getCompanyLogoBase64 === 'function' ? getCompanyLogoBase64(b.vch_logo_company || '') : ''; } catch (e) {}
+  return { success: true, logo: logo };
+}
+
+/* 🔗 (V4.219) ربط عهدة بشيت جوجل — بنفس تنسيق شيت العهدة:
+     A العهدة (وارد) · B المصروفات (صادر) · C البيان · D التاريخ · E الرصيد التراكمي (لا يُلمس) · F القيد · G الحساب / الطرف
+   المزامنة (يدوية من شاشة العهد، أو كل ساعة مع القيود التلقائية لو فُعّلت):
+   • صف بلا رقم قيد وطرفه معروف (اسم حساب مطابق بعد «ح/» أو كوده أو اسم اعتُمد قبل ذلك) ⇒ قيد مرحّل:
+       الوارد «صرف عهدة» (من ح/ العهدة إلى ح/ الطرف) · المصروف «تسوية عهدة» (من ح/ الطرف إلى ح/ العهدة) — ويُكتب رقم القيد في F.
+   • الطرف غير معروف ⇒ «بانتظار الاعتماد» مثل الـ ERP (بلا حساب وسيط): يختار صاحب صلاحية التعديل الحساب فيُعتمد ويُتذكَّر الاسم.
+   • صف تغيّر بعد قيده (مبلغ/تاريخ/بيان/طرف) ⇒ يُحدَّث قيده · قيد اختفى صفه من الشيت ⇒ يُعرض للمراجعة فقط (لا حذف تلقائي).
+   • صف سجّله برنامج الحجوزات (دفعة عميل/مورد من نفس الشيت) ⇒ يُربط بقيده التلقائي ولا يتكرر. */
+function _glCsCfg_(code) { try { return JSON.parse(_glSettings_()['custsheet:' + code] || '{}') || {}; } catch (e) { return {}; } }
+function _glCsMap_() { try { return JSON.parse(_glSettings_().custsheet_map || '{}') || {}; } catch (e) { return {}; } }
+function _glCsKey_(s) { return _glNorm_(String(s || '').replace(/^\s*ح\s*\/\s*/, '').replace(/^\s*حساب\s+/, '')); }
+function _glCsSheetId_(v) { var s = _glStr_(v), m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})/); return m ? m[1] : s; }
+function _glCsHash_(x) {
+  var s = [_glR2_(x.inAmt), _glR2_(x.outAmt), x.date, x.desc, x.hint].join('|'), h = 5381;
+  for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+function _glCsOpen_(cfg) {
+  var ss; try { ss = SpreadsheetApp.openById(cfg.id); } catch (e) { throw new Error('تعذّر فتح شيت العهدة — تأكد من الرابط ومن مشاركته مع حساب البرنامج: ' + e.message); }
+  var sh = cfg.tab ? ss.getSheetByName(cfg.tab) : ss.getSheets()[0];
+  if (!sh) throw new Error('الورقة «' + cfg.tab + '» غير موجودة بشيت العهدة');
+  return { ss: ss, sh: sh };
+}
+function _glCsReadRows_(sh, startRow) {
+  var last = sh.getLastRow(), out = [];
+  if (last < startRow) return out;
+  sh.getRange(startRow, 1, last - startRow + 1, 7).getValues().forEach(function (r, i) {
+    var x = { row: startRow + i, inAmt: r[0] instanceof Date ? 0 : _glR2_(_glNum_(r[0])), outAmt: r[1] instanceof Date ? 0 : _glR2_(_glNum_(r[1])),
+      desc: _glStr_(r[2]), date: _glDate_(r[3]), f: _glStr_(r[5]), hint: _glStr_(r[6]) };
+    if (!x.inAmt && !x.outAmt) return;
+    x.hash = _glCsHash_(x);
+    out.push(x);
+  });
+  return out;
+}
+function _glCsResolve_(hint, accs, learned, self) {
+  var k = _glCsKey_(hint); if (!k) return '';
+  var ok = function (c) { var a = accs.map[c]; return a && !a.isGroup && a.active && c !== self ? c : ''; };
+  if (learned[k] && ok(learned[k])) return learned[k];
+  var m = String(hint).match(/^\s*(\d{2,})(?:\s|$|[-—–])/); if (m && ok(m[1])) return m[1];
+  var ex = accs.list.filter(function (a) { return !a.isGroup && a.active && a.code !== self && _glCsKey_(a.name) === k; });
+  return ex.length === 1 ? ex[0].code : '';
+}
+function _glCsSuggest_(hint, accs, self) {
+  var k = _glCsKey_(hint); if (!k || k.length < 3) return [];
+  var toks = k.split(' ').filter(function (t) { return t.length >= 3; });
+  return accs.list.filter(function (a) { return !a.isGroup && a.active && a.code !== self; }).map(function (a) {
+    var n = _glCsKey_(a.name), sc = 0;
+    if (n.indexOf(k) >= 0 || k.indexOf(n) >= 0) sc += 5;
+    toks.forEach(function (t) { if (n.indexOf(t) >= 0) sc++; });
+    return { code: a.code, name: a.name, sc: sc };
+  }).filter(function (s) { return s.sc >= 2; }).sort(function (a, b) { return b.sc - a.sc; }).slice(0, 3).map(function (s) { return { code: s.code, name: s.name }; });
+}
+// قيد صف الشيت: الوارد «صرف عهدة» والمصروف «تسوية عهدة» — بعملة العهدة وسعر يوم الصف
+function _glCsEntry_(x, code, cp, cur, fx) {
+  var isIn = x.inAmt > 0, amt = isIn ? x.inAmt : x.outAmt, rate = _glFxRateAt_(cur, x.date, fx).rate;
+  var desc = x.desc || (isIn ? 'استلام عهدة' : 'مصروفات عهدة') + (x.hint ? ' — ' + x.hint : '');
+  var e = { date: x.date, type: isIn ? 'صرف عهدة' : 'تسوية عهدة', desc: desc, lines: [
+    { account: code, debit: isIn ? amt : 0, credit: isIn ? 0 : amt, currency: cur, rate: rate, desc: desc },
+    { account: cp, debit: isIn ? 0 : amt, credit: isIn ? amt : 0, currency: cur, rate: rate, desc: desc + (x.hint && x.desc ? ' — ' + x.hint : '') }] };
+  return { e: e, v: _glValidate_(e, {}) };
+}
+function glCustSheetGet(authToken, code) {
+  _glPerm_(authToken, 'view');
+  var a = _glAccounts_().map[_glStr_(code)]; if (!a || a.isGroup) throw new Error('اختر عهدة');
+  return { success: true, cfg: _glCsCfg_(a.code), account: { code: a.code, name: a.name, currency: a.currency || '' } };
+}
+function glCustSheetSave(authToken, code, cfg) {
+  var session = _glPerm_(authToken, 'edit');
+  var a = _glAccounts_().map[_glStr_(code)]; if (!a || a.isGroup) throw new Error('اختر عهدة');
+  cfg = cfg || {};
+  var id = _glCsSheetId_(cfg.url || cfg.id);
+  if (!id) { _glSetSetting_('custsheet:' + a.code, ''); logChange_(session.username, 'فك ربط شيت عهدة', 'GL:' + a.code, 'شيت العهدة', '-', '-'); return { success: true, cfg: {} }; }
+  var o = { id: id, tab: _glStr_(cfg.tab), startRow: Math.max(2, parseInt(cfg.startRow, 10) || 2) };
+  var S = _glCsOpen_(o);
+  o.tab = S.sh.getName(); o.title = S.ss.getName(); o.cur = _glCur_(a.currency || cfg.cur || 'EGP'); o.auto = !!cfg.auto;
+  o.by = session.username; o.at = _glNow_();
+  _glSetSetting_('custsheet:' + a.code, JSON.stringify(o));
+  logChange_(session.username, 'ربط شيت عهدة', 'GL:' + a.code, 'شيت العهدة', '-', o.title + ' / ' + o.tab);
+  return { success: true, cfg: o, rows: _glCsReadRows_(S.sh, o.startRow).length };
+}
+// preview=true ⇒ معاينة فقط بلا كتابة
+function glCustSheetSync(authToken, code, preview) {
+  var session = _glPerm_(authToken, preview ? 'view' : 'add');
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try { return _glCsSync_(_glStr_(code), session.username, { preview: !!preview }); }
+  finally { lock.releaseLock(); }
+}
+// اعتماد صفوف الطرف غير المعروف: items = [{row, account}] — ويُتذكَّر اسم الطرف ⇒ حسابه للمرات القادمة
+function glCustSheetApprove(authToken, code, items) {
+  var session = _glPerm_(authToken, 'edit');
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var pick = {}; (items || []).forEach(function (it) { if (it && it.row && _glStr_(it.account)) pick[+it.row] = _glStr_(it.account); });
+    if (!Object.keys(pick).length) throw new Error('اختر حساب الطرف لصف واحد على الأقل');
+    return _glCsSync_(_glStr_(code), session.username, { approve: pick });
+  } finally { lock.releaseLock(); }
+}
+function _glCsSync_(code, user, opts) {
+  opts = opts || {};
+  _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
+  var accs = _glAccounts_(), a = accs.map[code];
+  if (!a || a.isGroup) throw new Error('حساب العهدة غير موجود');
+  var cfg = _glCsCfg_(code); if (!cfg.id) throw new Error('لم يُربط شيت لهذه العهدة بعد');
+  var S = _glCsOpen_(cfg), rows = _glCsReadRows_(S.sh, cfg.startRow || 2);
+  var learned = _glCsMap_(), cur = _glCur_(a.currency || cfg.cur || 'EGP'), fx = _glFxDailyMap_();
+  var ents = {}, erp = {}, mine = {}, hbAuto = {};
+  _glRows_('entries').forEach(function (r, i) {
+    var id = _glStr_(r[0]), sk = _glStr_(r[6]); if (!id) return;
+    ents[id] = { row: i + 2, r: r };
+    if (/^ERP:/.test(sk)) erp[sk.slice(4)] = id;
+    if (sk === 'CUST:' + code) mine[id] = 1;
+    if (/^AUTO:HBP:CUSTODY:/.test(sk)) hbAuto[sk.slice(9)] = id;
+  });
+  // دفعات برنامج الحجوزات المأخوذة من نفس الشيت (معرّفها CUSTODY:<آخر 10 من معرّف الملف>:<الصف>)
+  var hbPays = {}, seg = String(cfg.id).slice(-10);
+  try { (_glHbRead_().pays || []).forEach(function (p) { if (p.id.indexOf('CUSTODY:' + seg + ':') === 0) hbPays[p.id] = p; }); } catch (e) {}
+  var out = { success: true, account: { code: a.code, name: a.name, currency: cur }, sheet: { title: cfg.title || '', tab: S.sh.getName(), url: 'https://docs.google.com/spreadsheets/d/' + cfg.id },
+    rows: rows.length, linked: 0, created: [], updated: [], hb: [], hbWait: [], pending: [], problems: [], orphans: [], preview: !!opts.preview };
+  var seen = {}, toCreate = [], toUpdate = [];
+  rows.forEach(function (x) {
+    var base = { row: x.row, date: x.date, desc: x.desc, inAmt: x.inAmt, outAmt: x.outAmt, hint: x.hint };
+    if (x.inAmt && x.outAmt) { base.msg = 'الصف فيه مبلغ عهدة ومصروف معاً — افصلهما في صفين'; out.problems.push(base); return; }
+    if (x.inAmt < 0 || x.outAmt < 0) { base.msg = 'مبلغ سالب'; out.problems.push(base); return; }
+    if (x.f) {
+      if (ents[x.f]) {
+        seen[x.f] = 1;
+        if (mine[x.f]) {
+          var er = ents[x.f].r, st = _glStr_(er[5]);
+          if (st === GL_ST_VOID_) { base.msg = 'قيده ' + x.f + ' ملغى — امسح رقم القيد من الشيت لتسجيله من جديد'; out.problems.push(base); return; }
+          if ((_glStr_(er[9]).match(/^cs:(.+)$/) || [])[1] !== x.hash) { toUpdate.push({ x: x, id: x.f, er: ents[x.f] }); return; }
+        }
+        out.linked++; return;
+      }
+      if (erp[x.f]) { seen[erp[x.f]] = 1; out.linked++; return; }
+      base.msg = 'رقم القيد «' + x.f + '» غير موجود بالحسابات العامة — امسحه من الشيت لتسجيل الصف'; out.problems.push(base); return;
+    }
+    var hbId = 'CUSTODY:' + seg + ':' + x.row;
+    if (hbAuto[hbId]) { seen[hbAuto[hbId]] = 1; toCreate.push({ x: x, linkOnly: hbAuto[hbId] }); return; }
+    if (hbPays[hbId]) { base.msg = 'دفعة مسجلة ببرنامج الحجوزات (' + hbPays[hbId].party + ') — يُقيَّد عبر مزامنة الحجوزات'; out.hbWait.push(base); return; }
+    if (!x.date) { base.msg = 'بلا تاريخ (العمود D)'; out.problems.push(base); return; }
+    var cp = (opts.approve && opts.approve[x.row]) || _glCsResolve_(x.hint, accs, learned, code);
+    if (!cp) { base.sugg = _glCsSuggest_(x.hint, accs, code); out.pending.push(base); return; }
+    toCreate.push({ x: x, cp: cp, approved: !!(opts.approve && opts.approve[x.row]) });
+  });
+  Object.keys(mine).forEach(function (id) {
+    if (seen[id]) return; var r = ents[id].r; if (_glStr_(r[5]) === GL_ST_VOID_) return;
+    out.orphans.push({ id: id, date: _glDate_(r[2]), desc: _glStr_(r[4]), amount: _glNum_(r[8]) });
+  });
+  if (opts.approve) toCreate = toCreate.filter(function (c) { return c.approved; });
+  if (opts.preview) {
+    out.created = toCreate.filter(function (c) { return !c.linkOnly; }).map(function (c) { return { row: c.x.row, date: c.x.date, desc: c.x.desc, inAmt: c.x.inAmt, outAmt: c.x.outAmt, hint: c.x.hint, account: c.cp }; });
+    out.hb = toCreate.filter(function (c) { return c.linkOnly; }).map(function (c) { return { row: c.x.row, id: c.linkOnly }; });
+    out.updated = toUpdate.map(function (u) { return { row: u.x.row, id: u.id }; });
+    return out;
+  }
+  var eSh = _glSheet_('entries'), lSh = _glSheet_('lines'), fW = [];
+  // 1) قيود جديدة (دفعة واحدة)
+  var built = [];
+  toCreate.forEach(function (c) {
+    if (c.linkOnly) { fW.push({ x: c.x, id: c.linkOnly }); out.hb.push({ row: c.x.row, id: c.linkOnly }); return; }
+    try { var b = _glCsEntry_(c.x, code, c.cp, cur, fx); b.c = c; built.push(b); }
+    catch (err) { out.problems.push({ row: c.x.row, date: c.x.date, desc: c.x.desc, inAmt: c.x.inAmt, outAmt: c.x.outAmt, hint: c.x.hint, msg: err.message }); }
+  });
+  if (built.length) {
+    var first = _glNextEntrySeq_(built.length), eRows = [], lRows = [];
+    built.forEach(function (b, i) {
+      var id = _glEntryId_(first + i);
+      var w = _glWriteEntry_(b.v, { id: id, seq: first + i, status: GL_ST_POSTED_, sourceKey: 'CUST:' + code, desc: b.e.desc, ref: 'cs:' + b.c.x.hash }, user);
+      eRows.push(w.eRow); lRows = lRows.concat(w.lRows);
+      fW.push({ x: b.c.x, id: id });
+      out.created.push({ row: b.c.x.row, id: id, date: b.c.x.date, desc: b.e.desc, inAmt: b.c.x.inAmt, outAmt: b.c.x.outAmt, account: b.c.cp });
+      if (b.c.approved && b.c.x.hint) learned[_glCsKey_(b.c.x.hint)] = b.c.cp;
+    });
+    eSh.getRange(eSh.getLastRow() + 1, 1, eRows.length, eRows[0].length).setValues(eRows);
+    lSh.getRange(lSh.getLastRow() + 1, 1, lRows.length, lRows[0].length).setValues(lRows);
+    if (built.some(function (b) { return b.c.approved; })) _glSetSetting_('custsheet_map', JSON.stringify(learned));
+  }
+  // 2) صفوف تغيّرت بعد قيدها ⇒ تحديث القيد في مكانه (الطرف: من الشيت لو معروف وإلا طرف القيد الحالي)
+  if (toUpdate.length) {
+    var oldLines = {}; _glRows_('lines').forEach(function (r) { var id = _glStr_(r[0]); if (id) (oldLines[id] = oldLines[id] || []).push(r); });
+    var done = [];
+    toUpdate.forEach(function (u) {
+      try {
+        if (_glLocked_(u.er.r[2])) throw new Error('القيد ' + u.id + ' في فترة مقفلة — لم يُحدَّث');
+        var prev = (oldLines[u.id] || []).filter(function (r) { return _glStr_(r[4]) !== code; })[0];
+        var cp = _glCsResolve_(u.x.hint, accs, learned, code) || (prev ? _glStr_(prev[4]) : '');
+        if (!cp) throw new Error('طرف الصف غير معروف');
+        if (!u.x.date) throw new Error('بلا تاريخ (العمود D)');
+        var b = _glCsEntry_(u.x, code, cp, cur, fx), r = u.er.r;
+        var w = _glWriteEntry_(b.v, { id: u.id, seq: r[1], status: _glStr_(r[5]) || GL_ST_POSTED_, sourceKey: 'CUST:' + code, batchId: r[7], desc: b.e.desc, ref: 'cs:' + u.x.hash,
+          createdBy: r[12], createdAt: r[13], row: u.er.row }, user);
+        eSh.getRange(u.er.row, 1, 1, w.eRow.length).setValues([w.eRow]);
+        done.push({ id: u.id, lRows: w.lRows });
+        out.updated.push({ row: u.x.row, id: u.id, date: u.x.date, desc: b.e.desc, inAmt: u.x.inAmt, outAmt: u.x.outAmt, account: cp });
+      } catch (err) { out.problems.push({ row: u.x.row, date: u.x.date, desc: u.x.desc, inAmt: u.x.inAmt, outAmt: u.x.outAmt, hint: u.x.hint, msg: err.message }); }
+    });
+    if (done.length) {
+      _glDeleteLinesOf_(done.map(function (d) { return d.id; }));
+      var nl = []; done.forEach(function (d) { nl = nl.concat(d.lRows); });
+      lSh.getRange(lSh.getLastRow() + 1, 1, nl.length, nl[0].length).setValues(nl);
+    }
+  }
+  // 3) كتابة رقم القيد في العمود F — بعد إعادة قراءة الشيت: نفس الصف لو لم يتغيّر، وإلا أول صف مطابق بلا رقم (لو أُدرجت صفوف أثناء المزامنة)
+  if (fW.length) {
+    var now = _glCsReadRows_(S.sh, cfg.startRow || 2), byRow = {}, byHash = {};
+    now.forEach(function (y) { byRow[y.row] = y; if (!y.f) (byHash[y.hash] = byHash[y.hash] || []).push(y); });
+    fW.forEach(function (w) {
+      var y = byRow[w.x.row];
+      if (!(y && !y.f && y.hash === w.x.hash)) y = (byHash[w.x.hash] || []).filter(function (z) { return !z._used && !z.f; })[0];
+      if (!y) { out.problems.push({ row: w.x.row, date: w.x.date, desc: w.x.desc, inAmt: w.x.inAmt, outAmt: w.x.outAmt, msg: 'سُجّل القيد ' + w.id + ' لكن تعذّر كتابة رقمه بالشيت (تغيّر الصف) — اكتبه يدوياً في F' }); return; }
+      y._used = 1; y.f = w.id;
+      S.sh.getRange(y.row, 6).setNumberFormat('@').setValue(w.id);
+    });
+  }
+  var n = out.created.length + out.updated.length + out.hb.length;
+  cfg.last = { at: _glNow_(), by: user, created: out.created.length, updated: out.updated.length, pending: out.pending.length, problems: out.problems.length };
+  _glSetSetting_('custsheet:' + code, JSON.stringify(cfg));
+  if (n) logChange_(user, opts.approve ? 'اعتماد صفوف شيت عهدة' : 'مزامنة شيت عهدة', 'GL:' + code, 'شيت العهدة', '-',
+    'جديدة ' + out.created.length + ' · معدّلة ' + out.updated.length + ' · مربوطة بالحجوزات ' + out.hb.length + ' · بانتظار الاعتماد ' + out.pending.length);
+  return out;
+}
+// المزامنة المجدولة لكل عهدة مربوطة فُعّل لها «تلقائي»
+function _glCsAutoAll_() {
+  var set = _glSettings_(), res = [];
+  Object.keys(set).forEach(function (k) {
+    if (k.indexOf('custsheet:') !== 0) return;
+    var cfg; try { cfg = JSON.parse(set[k] || '{}'); } catch (e) { return; }
+    if (!cfg || !cfg.id || !cfg.auto) return;
+    try { var r = _glCsSync_(k.slice(10), 'مزامنة مجدولة', {}); res.push(k.slice(10) + ': ' + r.created.length + '/' + r.pending.length); }
+    catch (e) { res.push(k.slice(10) + ': ' + e.message); }
+  });
+  return res;
 }
 /* 📈 (V4.216) أسعار الصرف اليومية — سجل يومي لأسعار بيع/شراء الريال والدولار من بنك مصر (مشغّل يومي تلقائي + جلب يدوي
    + إدخال/لصق للأيام السابقة). سعر أي تاريخ = سعر نفس اليوم، وإلا أقرب يوم سابق مسجَّل — فلا يُجلب السعر مع كل عملية. */
@@ -2060,7 +2361,7 @@ function glCloseYear(authToken, year, lockAfter) {
       if (Math.abs(amt) < 0.005 && Math.abs(base) < 0.005) return;
       if (Math.abs(amt) < 0.005) return;   // فرق معادل بلا مبلغ بالعملة (نادر جداً) — يبقى كما هو
       var rate = o.currency === 'EGP' ? 1 : Math.round(Math.abs(base / amt) * 1e6) / 1e6;
-      lines.push({ account: o.account, debit: amt < 0 ? -amt : 0, credit: amt > 0 ? amt : 0, currency: o.currency, rate: rate, desc: 'إقفال حساب ' + o.account + ' عن سنة ' + year });
+      lines.push({ account: o.account, debit: amt < 0 ? -amt : 0, credit: amt > 0 ? amt : 0, currency: o.currency, rate: rate, exact: 1, desc: 'إقفال حساب ' + o.account + ' عن سنة ' + year });
       resid += _glR2_((amt > 0 ? amt : 0) * rate) - _glR2_((amt < 0 ? -amt : 0) * rate);
     });
     if (!lines.length) throw new Error('لا توجد إيرادات أو مصروفات مرحّلة في سنة ' + year);
@@ -2300,16 +2601,19 @@ function _glHbCfg_() {
     viaKw: s.hb_via_kw === undefined ? 'حجز|حجوزات|فندق|فنادق|تسكين' : s.hb_via_kw, hbFrom: s.hb_from || '' };
 }
 // نفس computeBookingTotal_ ببرنامج الحجوزات حرفياً: Σ(عدد الغرف × السعر) × الليالي، وأي نوع محجوز بلا سعر ⇐ بلا سعر
+var GL_HB_ROOM_LBL_ = ['دابل', 'ثلاثي', 'رباعي', 'خماسي'];
+function _glNightsWord_(n) { n = Math.round(n || 0); return n >= 3 && n <= 10 ? 'ليالي' : 'ليلة'; }
 function _glHbTotal_(raw, role) {
-  var nights = parseFloat(raw[9]) || 0, cols = role === 'client' ? [25, 26, 27, 28] : [21, 22, 23, 24], per = 0, any = false, miss = false;
+  var nights = parseFloat(raw[9]) || 0, cols = role === 'client' ? [25, 26, 27, 28] : [21, 22, 23, 24], per = 0, any = false, miss = false, parts = [];
   for (var i = 0; i < 4; i++) {
     var cnt = parseFloat(raw[10 + i]) || 0; if (cnt <= 0) continue;
     any = true; var p = parseFloat(raw[cols[i]]);
     if (!isFinite(p)) { miss = true; continue; }
     per += cnt * p;
+    parts.push(cnt + ' ' + GL_HB_ROOM_LBL_[i] + ' × ' + _glR2_(p) + ' ريال');   // (V4.219) تفصيل الغرف كقيد الـ ERP
   }
   var ok = any && !miss;
-  return { value: ok ? _glR2_(per * nights) : 0, hasPrice: ok, rooms: any };
+  return { value: ok ? _glR2_(per * nights) : 0, hasPrice: ok, rooms: any, breakdown: ok ? parts.join(' + ') : '' };
 }
 var _GL_HB_MEMO_ = null;
 function _glHbRead_() {
@@ -2336,7 +2640,7 @@ function _glHbRead_() {
   if (psh && psh.getLastRow() > 1) psh.getRange(2, 1, psh.getLastRow() - 1, 10).getValues().forEach(function (r, i) {
     var party = _glStr_(r[1]), date = _glAutoDate_(r[0]); if (!party || !date) return;
     pays.push({ id: _glStr_(r[7]) || ('row' + (i + 2)), date: date, party: party, dir: _glStr_(r[2]), amount: parseFloat(r[3]) || 0,
-      note: _glStr_(r[4]), qaid: _glStr_(r[5]), linkId: _glStr_(r[9]) });
+      note: _glStr_(r[4]), qaid: /^JE-\d{6}$/.test(_glStr_(r[5])) ? '' : _glStr_(r[5]), linkId: _glStr_(r[9]) });   // (V4.219) رقم قيد الحسابات العامة المكتوب بشيت العهدة ليس «قيداً يدوياً»
   });
   // (V4.208-H2) البيانات المحاسبية التي يسجّلها برنامج الحجوزات نفسه مع الدفعة (الحساب النقدي والعملة الفعلية)
   var meta = {}, msh = ss.getSheetByName('البيانات المحاسبية للدفعات');
@@ -2516,8 +2820,14 @@ function _glHbBuild_(roles, warn, party) {
     if (b.status === 'لاغي') return;
     var cm = b.client ? info(b.client) : null, sm = b.supplier ? info(b.supplier) : null;
     var trip = _glHbTripOf_(b, cm, ov, ctx, accs), tc = trip && ctx.trips[trip] ? ctx.trips[trip].company : '';
-    var ref = (b.inner || ('صف ' + b.row)) + (b.qaid ? ' — قيد يدوي ' + b.qaid : '');
-    var what = b.hotel + ' ' + b.city + ' ' + b.ci + ' (' + b.nights + ' ليلة)';
+    // 📘 (V4.219) بيانات القيد بصيغة الـ ERP: رقم تأكيد الفندق (أو رقم الحجز الداخلي) + الفندق + من/إلى (dd/MM) + تفصيل الغرف + مدة الإقامة
+    var refNum = b.hotelRef || b.inner || ('صف ' + b.row), nw = _glNightsWord_(b.nights);
+    var span = b.hotel + ' من ' + String(b.ci || '').slice(0, 5) + ' إلى ' + String(b.co || '').slice(0, 5);
+    var nRooms = (b.rooms || []).reduce(function (s, x) { return s + x; }, 0);
+    var custStmt = 'حجز ' + refNum + ' ' + span + (b.sale.breakdown ? ' (' + b.sale.breakdown + ')' : '') + ' لمدة (' + b.nights + ') ' + nw;
+    var supStmt = 'حجز ' + refNum + ' ' + span + (b.cost.breakdown ? ' (' + b.cost.breakdown + ')' : '') + ' لمدة (' + b.nights + ') ' + nw + ' — العميل: ' + b.client;
+    var revStmt = 'ايراد حجز ' + refNum + ' ' + span + ' (' + nRooms + ' غرف لمدة ' + b.nights + ' ' + nw + ') العميل: ' + b.client + (b.supplier ? ' من ' + b.supplier : '');
+    var headStmt = 'حجز ' + refNum + ' - ' + span + (b.inner && b.inner !== refNum ? ' — حجز داخلي ' + b.inner : '') + (b.qaid ? ' — قيد ' + b.qaid : '');
     // (V4.208-H2) آلية الـ ERP: من ح/ العميل (البيع) — إلى ح/ المورد (التكلفة) — إلى ح/ إيرادات حجوزات المورد (الفرق = هامش ربح الحجز).
     // لكل مورد حساب إيراد خاص به يُرحَّل رصيده لـ«إيرادات السكن» نهاية الموسم. رحلات الشركة (بالتكلفة) وحجز عميل غير مسعَّر/غير مربوط:
     // من ح/ تكلفة السكن (بوسم الرحلة) إلى ح/ المورد. وحجز مورد غير مسعَّر: البيع كله لإيراد المورد حتى تُسعَّر التكلفة.
@@ -2528,21 +2838,21 @@ function _glHbBuild_(roles, warn, party) {
     if (sm && sm.type !== 'رحلة' && !b.cost.hasPrice && b.cost.rooms) st.unpriced++;
     var base = { trip: trip, company: tc };
     if (hasSale) {
-      var sv = b.sale.value, l1 = L(cm.code, Math.abs(sv), sv > 0, 'SAR', sar, Object.assign({ desc: 'بيع حجز ' + ref + ' — ' + what }, base, ptag(cm, b.client)));
+      var sv = b.sale.value, l1 = L(cm.code, Math.abs(sv), sv > 0, 'SAR', sar, Object.assign({ desc: custStmt }, base, ptag(cm, b.client)));
       l1.hbParty = 1; lines.push(l1);
     }
     if (hasCost) {
-      var cv = b.cost.value, l2 = L(sm.code, Math.abs(cv), cv < 0, 'SAR', sar, Object.assign({ desc: 'تكلفة حجز ' + ref + ' — ' + what + ' — ' + b.client }, base, ptag(sm, b.supplier)));
+      var cv = b.cost.value, l2 = L(sm.code, Math.abs(cv), cv < 0, 'SAR', sar, Object.assign({ desc: supStmt }, base, ptag(sm, b.supplier)));
       l2.hbParty = 1; lines.push(l2);
-      if (!hasSale) lines.push(L(roles.cost_house, Math.abs(cv), cv > 0, 'SAR', sar, Object.assign({ desc: 'تكلفة حجز ' + ref + ' — ' + what + ' — ' + b.client + (cm && cm.type === 'رحلة' ? '' : ' (بلا بيع مسجَّل)') }, base)));
+      if (!hasSale) lines.push(L(roles.cost_house, Math.abs(cv), cv > 0, 'SAR', sar, Object.assign({ desc: 'تكلفة ' + supStmt + (cm && cm.type === 'رحلة' ? '' : ' (بلا بيع مسجَّل)') }, base)));
     }
     if (hasSale) {
       var mg = _glR2_(b.sale.value - (hasCost ? b.cost.value : 0));
       var revAcc = (sm && sm.type !== 'رحلة') ? party('hbrev', sm.name || b.supplier) : roles.hb_rev;
       if (Math.abs(mg) >= 0.005) lines.push(L(revAcc, Math.abs(mg), mg < 0, 'SAR', sar, Object.assign({ client: b.client, agent: b.supplier,
-        desc: (hasCost ? 'ربح حجز ' : 'بيع حجز (التكلفة غير مسعَّرة) ') + ref + ' — ' + what + ' — ' + b.client }, base)));
+        desc: !hasCost ? revStmt + ' (التكلفة غير مسعَّرة)' : mg < 0 ? 'خسارة حجز ' + refNum + ' ' + b.hotel + ' — ' + Math.abs(mg).toFixed(2) + ' SAR' : revStmt }, base)));
     }
-    if (lines.length >= 2) out.push({ key: 'AUTO:HB:' + b.key, date: b.ci, desc: 'حجز فندقي ' + ref + ' — ' + b.client + ' ← ' + b.supplier + ' — ' + what,
+    if (lines.length >= 2) out.push({ key: 'AUTO:HB:' + b.key, date: b.ci, desc: headStmt,
       trip: trip, company: tc, lines: lines, src: 'hotel' });
   });
   // الدفعات: المرتبطة تُجمع بقيد واحد، والباقي مقابل الحساب النقدي المراجَع
@@ -2568,7 +2878,7 @@ function _glHbBuild_(roles, warn, party) {
       amt2 = r && r.amount && r.cur === cur ? _glR2_(r.amount) : _glR2_(pl.amt * sar / (rates[cur] || 1));
       var base = cur === 'EGP' ? amt2 : _glR2_(amt2 * rates[cur]);
       rate = cur === 'EGP' ? 1 : rates[cur];
-      pl.line.rate = Math.round(base / pl.amt * 1e6) / 1e6;   // الريال بسعر التحويل الفعلي فيتساوى المعادل
+      pl.line.rate = Math.round(base / pl.amt * 1e6) / 1e6; pl.line.exact = 1;   // الريال بسعر التحويل الفعلي فيتساوى المعادل
     }
     var otag = Object.assign({}, pl.tag); delete otag.client; delete otag.agent;
     out.push({ key: 'AUTO:HBP:' + p.id, date: p.date, desc: (p.dir || 'دفعة') + ' — ' + p.party + (p.note ? ' — ' + p.note : '') + (p.qaid ? ' — قيد يدوي ' + p.qaid : ''),
@@ -2691,6 +3001,100 @@ function glHbErpVoid(authToken, o) {
     glVoidEntry(authToken, h.id, 'مكرر مع قيود برنامج الحجوزات (المصدر من ' + _glDate_(o.from) + ')'); n++;
   });
   return { success: true, voided: n, skippedLocked: skipped };
+}
+/* 🧩 (V4.219) مطابقة قيود الـ ERP المنقولة مع قيود برنامج الحجوزات (بلا تكرار) — لكل قيد حجز/دفعة من الحجوزات يُبحث عن
+   قيد الـ ERP المقابل له:
+     الحجز: ① رقم القيد المسجَّل بالحجز (عمود «رقم القيد») = رقم قيد الـ ERP ② رقم تأكيد الفندق ③ رقم الحجز الداخلي — داخل بيان قيد ERP «حجز …»
+     الدفعة: نفس حساب الطرف + نفس المبلغ والعملة والاتجاه + تاريخ ±3 أيام (ويُرفض لو تعددت المرشحات أو سبق استخدام قيد الـ ERP)
+   ثم «حذف المطابق» (للمدير) يحذف قيود الـ ERP المطابقة فتبقى قيود الحجوزات وحدها — القيود غير المطابقة تُعرض لمراجعتها يدوياً. */
+function glHbErpMatch(authToken) {
+  _glPerm_(authToken, 'view');
+  _GL_HB_MEMO_ = null;
+  var H = _glHbRead_(), ents = {}, hbEnt = {}, erpList = [], lines = {};
+  _glRows_('lines').forEach(function (l) { (lines[_glStr_(l[0])] = lines[_glStr_(l[0])] || []).push(l); });
+  _glRows_('entries').forEach(function (r) {
+    var id = _glStr_(r[0]), sk = _glStr_(r[6]); if (!id || _glStr_(r[5]) === GL_ST_VOID_) return;
+    ents[id] = r;
+    if (/^AUTO:HB/.test(sk)) hbEnt[sk] = id;
+    if (/^ERP:/.test(sk)) {
+      var ls = lines[id] || [], txt = _glStr_(r[4]) + ' ' + ls.map(function (l) { return _glStr_(l[15]); }).join(' ');
+      erpList.push({ id: id, vid: sk.slice(4), date: _glDate_(r[2]), k: _glDKey_(_glDate_(r[2])), desc: _glStr_(r[4]), base: _glNum_(r[8]), txt: txt,
+        isBooking: /(^|\s)(ايراد\s+)?حجز\s/.test(' ' + txt) || /ايراد حجز|خسارة حجز/.test(txt), lines: ls, locked: _glLocked_(r[2]) });
+    }
+  });
+  var byVid = {}; erpList.forEach(function (x) { byVid[x.vid] = x; });
+  var used = {}, out = { success: true, bookings: [], payments: [], hbUnmatched: 0, erpLeft: [] };
+  var hasTok = function (txt, tok) {
+    tok = _glStr_(tok); if (tok.length < 3) return false;
+    var i = txt.indexOf(tok); if (i < 0) return false;
+    var pre = txt.charAt(i - 1), post = txt.charAt(i + tok.length);
+    return !/[0-9A-Za-z]/.test(pre) && !/[0-9A-Za-z]/.test(post);
+  };
+  // ① الحجوزات
+  H.bookings.forEach(function (b) {
+    var hid = hbEnt['AUTO:HB:' + b.key]; if (!hid) return;
+    var hit = null, how = '';
+    if (b.qaid && byVid[b.qaid] && !used[byVid[b.qaid].id]) { hit = byVid[b.qaid]; how = 'رقم القيد المسجَّل بالحجز'; }
+    [['hotelRef', 'رقم تأكيد الفندق'], ['inner', 'رقم الحجز الداخلي']].forEach(function (p) {
+      if (hit || !b[p[0]]) return;
+      var c = erpList.filter(function (x) { return x.isBooking && !used[x.id] && hasTok(x.txt, b[p[0]]); });
+      if (c.length === 1) { hit = c[0]; how = p[1]; }
+      else if (c.length > 1) { var near = c.filter(function (x) { return x.date === b.ci; }); if (near.length === 1) { hit = near[0]; how = p[1] + ' + تاريخ الدخول'; } }
+    });
+    if (!hit) { out.hbUnmatched++; return; }
+    used[hit.id] = 1;
+    out.bookings.push({ hb: hid, hbDesc: _glStr_(ents[hid][4]), hbBase: _glNum_(ents[hid][8]), erp: hit.id, erpVid: hit.vid, erpDate: hit.date, erpDesc: hit.desc, erpBase: hit.base, how: how, locked: hit.locked });
+  });
+  // ② الدفعات: سطر الطرف بقيد HBP مقابل سطر بنفس الحساب/المبلغ/الاتجاه بقيد ERP غير حجز خلال ±3 أيام
+  var dayN = function (k) { return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : NaN; };
+  Object.keys(hbEnt).forEach(function (sk) {
+    if (!/^AUTO:HB[PL]:/.test(sk)) return;
+    var hid = hbEnt[sk], r = ents[hid], hk = dayN(_glDKey_(_glDate_(r[2])));
+    var pl = (lines[hid] || [])[0]; if (!pl) return;   // السطر الأول = سطر الطرف
+    var acc = _glStr_(pl[4]), d = _glNum_(pl[5]), c = _glNum_(pl[6]), cur = _glStr_(pl[7]);
+    var cand = erpList.filter(function (x) {
+      if (used[x.id] || x.isBooking || Math.abs(dayN(x.k) - hk) > 3) return false;
+      return x.lines.some(function (l) { return _glStr_(l[4]) === acc && _glStr_(l[7]) === cur && Math.abs(_glNum_(l[5]) - d) < 0.01 && Math.abs(_glNum_(l[6]) - c) < 0.01; });
+    });
+    if (cand.length > 1) { var same = cand.filter(function (x) { return dayN(x.k) === hk; }); if (same.length === 1) cand = same; }
+    if (cand.length !== 1) { out.hbUnmatched++; return; }
+    var x = cand[0]; used[x.id] = 1;
+    out.payments.push({ hb: hid, hbDesc: _glStr_(r[4]), hbBase: _glNum_(r[8]), erp: x.id, erpVid: x.vid, erpDate: x.date, erpDesc: x.desc, erpBase: x.base,
+      how: 'الطرف + ' + (d || c) + ' ' + cur + (Math.abs(dayN(x.k) - hk) ? ' (فرق ' + Math.abs(dayN(x.k) - hk) + ' يوم)' : ''), locked: x.locked });
+  });
+  // ③ قيود ERP تمسّ حسابات أطراف الحجوزات ولم تُطابق — للمراجعة اليدوية
+  var hbAccs = {}; Object.keys(hbEnt).forEach(function (sk) { (lines[hbEnt[sk]] || []).forEach(function (l) { hbAccs[_glStr_(l[4])] = 1; }); });
+  var fromK = _glDKey_(_glSettings_().hb_from || '') || '';
+  erpList.forEach(function (x) {
+    if (used[x.id] || (fromK && x.k < fromK)) return;
+    if (!x.lines.some(function (l) { return hbAccs[_glStr_(l[4])]; })) return;
+    out.erpLeft.push({ erp: x.id, erpVid: x.vid, date: x.date, desc: x.desc, base: x.base, isBooking: x.isBooking });
+  });
+  out.erpLeft = out.erpLeft.slice(0, 500);
+  return out;
+}
+// حذف قيود الـ ERP المطابقة (للمدير): ids = أرقام قيود الـ ERP — لا يُحذف قيد في فترة مقفلة
+function glHbErpMatchApply(authToken, ids) {
+  var session = requireAuth_(authToken);
+  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    var want = {}; (ids || []).forEach(function (id) { want[_glStr_(id)] = 1; });
+    var sh = _glSheet_('entries'), rows = _glRows_('entries'), del = [], skipped = [];
+    rows.forEach(function (r, i) {
+      var id = _glStr_(r[0]); if (!want[id]) return;
+      if (!/^ERP:/.test(_glStr_(r[6]))) { skipped.push(id + ' (ليس من الـ ERP)'); return; }
+      if (_glLocked_(r[2])) { skipped.push(id + ' (فترة مقفلة)'); return; }
+      del.push({ id: id, row: i + 2, r: r });
+    });
+    if (!del.length) return { success: true, deleted: 0, skipped: skipped };
+    _glDeleteLinesOf_(del.map(function (d) { return d.id; }));
+    // حذف الصفوف كتلاً متصلة من الأسفل للأعلى
+    var rs = del.map(function (d) { return d.row; }).sort(function (a, b) { return b - a; });
+    for (var i = 0; i < rs.length; i++) { var j = i; while (j + 1 < rs.length && rs[j + 1] === rs[j] - 1) j++; sh.deleteRows(rs[j], i === j ? 1 : j - i + 1); i = j; }
+    logChange_(session.username, 'حذف قيود ERP مكررة مع الحجوزات', 'GL:hb-erp', 'قيود', del.length + ' قيد', del.map(function (d) { return d.id; }).slice(0, 60).join('، '));
+    return { success: true, deleted: del.length, skipped: skipped };
+  } finally { lock.releaseLock(); }
 }
 function glHbState(authToken) {
   _glPerm_(authToken, 'view');
@@ -2865,12 +3269,12 @@ function glHbSeasonClose(authToken, date) {
     var lines = [], net = 0;
     P.rows.forEach(function (r) {   // رصيد دائن (ربح) ⇐ يُجعل مديناً لتصفيته
       var amt = Math.abs(r.SAR), rate = amt ? Math.round(Math.abs(r.base / r.SAR) * 1e6) / 1e6 : 1;
-      if (amt >= 0.005) lines.push({ account: r.code, debit: r.SAR > 0 ? amt : 0, credit: r.SAR < 0 ? amt : 0, currency: 'SAR', rate: rate, desc: 'ترحيل ربح حجوزات ' + r.name + ' لإيرادات السكن' });
+      if (amt >= 0.005) lines.push({ account: r.code, debit: r.SAR > 0 ? amt : 0, credit: r.SAR < 0 ? amt : 0, currency: 'SAR', rate: rate, exact: 1, desc: 'ترحيل ربح حجوزات ' + r.name + ' لإيرادات السكن' });
       net += r.base;
     });
     net = _glR2_(net);
     var tot = _glR2_(P.total);
-    lines.push({ account: P.target, debit: tot < 0 ? -tot : 0, credit: tot > 0 ? tot : 0, currency: 'SAR', rate: tot ? Math.round(Math.abs(net / tot) * 1e6) / 1e6 : _glRates_().SAR, desc: 'أرباح حجوزات الفنادق حتى ' + P.date });
+    lines.push({ account: P.target, debit: tot < 0 ? -tot : 0, credit: tot > 0 ? tot : 0, currency: 'SAR', rate: tot ? Math.round(Math.abs(net / tot) * 1e6) / 1e6 : _glRates_().SAR, exact: 1, desc: 'أرباح حجوزات الفنادق حتى ' + P.date });
     var v = _glValidate_({ date: P.date, type: 'قيد يومية', desc: 'ترحيل أرباح حجوزات الفنادق (حسابات الموردين) إلى إيرادات السكن حتى ' + P.date, lines: lines }, { allowBeforeStart: true, noBridge: true });
     var seq = _glNextEntrySeq_(1), id = _glEntryId_(seq);
     var w = _glWriteEntry_(v, { id: id, seq: seq, status: GL_ST_POSTED_, sourceKey: 'HBSEASON:' + P.date, desc: 'ترحيل أرباح حجوزات الفنادق (حسابات الموردين) إلى إيرادات السكن حتى ' + P.date }, session.username);
