@@ -99,3 +99,64 @@ function hbFinishMigration() {
   Logger.log(JSON.stringify(r));
   return r;
 }
+
+/* ---------- 🏨 (V4.226) بيانات الحجز من كشف الحساب بالحسابات العامة: عرض وتعديل ----------
+   السطر المرتبط بحجز (قيد AUTO:HB) يفتح بيانات الحجز من شيت المصدر نفسه، والتعديل يُكتب بنفس دالة
+   برنامج الحجوزات (editBookingFieldsAsUser_ — نفس السجل والتنبيهات وقاعدة «مؤكد») بهوية المستخدم المطابق
+   وسقف صلاحيته، ثم يُعاد بناء قيد الحجز بالحسابات العامة (التعديل بعد القيد ينتظر الاعتماد كالمعتاد). */
+function _hbBridgeUser_(session) {
+  var sh = ensureUsersSheet_(), idx = findUserRow_(sh, session.username), row = null, isAdm = _sessionHasPerm_(session, 'admin');
+  if (idx !== -1) row = sh.getRange(idx, 1, 1, 8).getValues()[0];
+  else if (isAdm && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues().some(function (r) { if (r[6] !== false && userRecordFromRow_(r).role === 'admin') { row = r; return true; } return false; });
+  if (!row) throw new Error('المستخدم «' + session.username + '» غير معرَّف في برنامج الحجوزات — يضيفه المدير بنفس اسم الدخول');
+  if (row[6] === false) throw new Error('حسابك معطَّل في برنامج الحجوزات');
+  var cap = isAdm ? 'admin' : (['delete', 'edit', 'add', 'view'].filter(function (c) { return _sessionHasPerm_(session, 'hotels.' + c); })[0] || 'view');
+  return capUserBySso_(userRecordFromRow_(row), cap);
+}
+function _hbBridgeFind_(glKey) {
+  _GL_HB_MEMO_ = null;
+  var b = _glHbRead_().bookings.filter(function (x) { return x.key === glKey; })[0];
+  if (!b) throw new Error('لم يُعثر على الحجز بملف الحجوزات (ربما حُذف أو تغيّر رقمه الداخلي)');
+  var s = getSourceSettings_(), ss = openSourceSpreadsheet_(s), sh = ss.getSheetByName(b.city === 'مكة' ? s.meccaSheet : s.medinaSheet);
+  if (!sh) throw new Error('شيت ' + b.city + ' غير موجود بمصدر الحجوزات');
+  var row = b.row, raw = sh.getRange(row, 1, 1, SOURCE_LAST_COL).getValues()[0];
+  if (b.inner && String(raw[2] || '').trim() !== b.inner) {   // الصف تحرّك — بحث بالرقم الداخلي
+    var start = b.city === 'مكة' ? s.meccaStartRow : s.medinaStartRow, last = sh.getLastRow(), vals = last >= start ? sh.getRange(start, 1, last - start + 1, SOURCE_LAST_COL).getValues() : [];
+    row = 0; vals.some(function (r, i) { if (String(r[2] || '').trim() === b.inner) { raw = r; row = start + i; return true; } return false; });
+    if (!row) throw new Error('لم يُعثر على الحجز ' + b.inner + ' بشيت ' + b.city);
+  }
+  return { key: bookingKey_(raw, b.city), raw: raw, city: b.city, row: row };
+}
+function hbBridgeBookingGet(authToken, glKey) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'admin') && !_sessionHasPerm_(session, 'hotels.view') && !_sessionHasPerm_(session, 'gl.view')) throw new Error('لا تملك صلاحية عرض الحجوزات');
+  var f = _hbBridgeFind_(String(glKey || '')), raw = f.raw, user = null;
+  try { user = _hbBridgeUser_(session); } catch (e) { }
+  var d = function (v) { return v instanceof Date ? Utilities.formatDate(v, 'GMT+3', 'yyyy-MM-dd') : String(v || ''); };
+  var showCost = user ? hasFinanceLevel_(user, 'cost') : false, showSale = user ? hasFinanceLevel_(user, 'sale') : false;
+  var canEdit = !!(user && hasScreenLevel_(user, 'bookings', 'edit') && bookingCityAllowed_(user, f.city));
+  var cost = computeBookingTotal_(raw, 'supplier'), sale = computeBookingTotal_(raw, 'client');
+  return { success: true, glKey: glKey, key: f.key, city: f.city, row: f.row, canEdit: canEdit, showCost: showCost, showSale: showSale, noUser: !user,
+    qaid: String(raw[0] || ''), inner: String(raw[2] || ''), client: String(raw[3] || ''), hotel: String(raw[4] || ''), ci: d(raw[7]), co: d(raw[8]), nights: raw[9],
+    rooms: [raw[10], raw[11], raw[12], raw[13]].map(function (v) { return Number(v) || 0; }), supplier: String(raw[14] || ''), status: String(raw[15] || ''), hotelRef: String(raw[17] || ''), note: String(raw[20] || ''),
+    costP: showCost ? [raw[21], raw[22], raw[23], raw[24]].map(function (v) { return v === '' ? '' : Number(v) || 0; }) : null,
+    saleP: showSale ? [raw[25], raw[26], raw[27], raw[28]].map(function (v) { return v === '' ? '' : Number(v) || 0; }) : null,
+    costTotal: showCost && cost.hasPrice ? cost.value : null, saleTotal: showSale && sale.hasPrice ? sale.value : null };
+}
+function hbBridgeBookingSave(authToken, glKey, bookingKey, fields) {
+  var session = requireAuth_(authToken);
+  var user = _hbBridgeUser_(session);
+  if (!hasScreenLevel_(user, 'bookings', 'edit')) throw new Error('تعديل الحجوزات يحتاج صلاحية «تعديل» بشاشة الحجوزات ببرنامج الحجوزات');
+  var allow = { 5: 1, 8: 1, 9: 1, 11: 1, 12: 1, 13: 1, 14: 1, 15: 1, 16: 1, 18: 1, 21: 1, 22: 1, 23: 1, 24: 1, 25: 1, 26: 1, 27: 1, 28: 1, 29: 1 };
+  var map = {}; Object.keys(fields || {}).forEach(function (c) { if (allow[c]) map[c] = fields[c]; });
+  if (!Object.keys(map).length) return { success: true, count: 0 };
+  var r = editBookingFieldsAsUser_(user, String(bookingKey || ''), map);
+  if (!r || !r.ok) throw new Error((r && r.error) || 'تعذّر حفظ الحجز');
+  var gl = { updated: 0, pending: 0 };
+  try {
+    _GL_HB_MEMO_ = null; _GL_ACC_MEMO_ = null;
+    var lock = LockService.getScriptLock(); lock.waitLock(30000);
+    try { var a = _glAutoRun_(session.username, false, { onlyKeys: ['AUTO:HB:' + glKey] }); gl = { updated: a.updated, pending: a.pending, created: a.created }; } finally { lock.releaseLock(); }
+  } catch (e) { gl.error = e.message; }
+  return { success: true, count: r.count, gl: gl };
+}
