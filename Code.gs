@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.222";
+var APP_VERSION = "4.223";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12109,7 +12109,7 @@ function _auditScreen_(action, field, recordId) {
     if (/صرف يومية|أسعار الصرف|سعر الصرف/.test(ga) || /^GL:fx/.test(rid)) return 'glfx';
     if (/حجوزات|شارت|ERP مكررة/.test(ga) || /^GL:hb/.test(rid)) return 'glhb';
     if (/القيود التلقائية|قيود الرحلات/.test(ga) || /^GL:auto/.test(rid)) return 'glauto';
-    if (/بالدليل|من الدليل|ربط العملاء والوكلاء/.test(ga) || /^GL:sync/.test(rid)) return 'glcoa';
+    if (/بالدليل|من الدليل|ربط العملاء والوكلاء|دمج حساب/.test(ga) || /^GL:sync/.test(rid)) return 'glcoa';
     if (/إعدادات|تجهيز|ربط ملف|إقفال|فتح كل الفترات|إعادة فتح|استيراد|نقل بيانات الـ ERP/.test(ga) || /^GL:(setup|settings|lock)/.test(rid)) return 'glset';
     return 'gl';
   }
