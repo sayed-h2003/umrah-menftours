@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.226 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.227 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.226)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.227)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.226</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.227</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7584,7 +7584,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.226";
+var CLIENT_APP_VERSION = "4.227";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -48341,22 +48341,55 @@ function glHbMatchUI(btn) {
     var lk = function (id) { return '<a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(id) + '\');return false;">' + glEsc(id) + '</a>'; };
     var h = '<div class="d-flex flex-wrap gap-2 mb-2"><span class="gl-pill">🏨 حجوزات مطابقة: <b>' + res.bookings.length + '</b></span><span class="gl-pill">💵 دفعات مطابقة: <b>' + res.payments.length + '</b></span>' +
       '<span class="gl-pill">قيود حجوزات بلا مقابل بالـ ERP: <b>' + res.hbUnmatched + '</b></span><span class="gl-pill" style="background:#fef3c7;">قيود ERP على أطراف الحجوزات لم تُطابق: <b>' + res.erpLeft.length + '</b></span></div>';
-    if (pairs.length) h += '<div class="table-responsive" style="max-height:380px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr><th><input type="checkbox" checked onchange="document.querySelectorAll(\'.glHbMC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>النوع</th>' +
-      '<th>قيد الحجوزات (يبقى)</th><th>بيانه</th><th>المبلغ</th><th>قيد الـ ERP (يُحذف)</th><th>التاريخ</th><th>بيانه</th><th>المبلغ</th><th>طريقة المطابقة</th></tr></thead><tbody>' +
+    // (V4.227) لكل زوج: أي المصدرين يُعتمد (ويُحذف الآخر) — الحجوزات (الافتراضي) أو الـ ERP (حين يكون قيد الحجوزات يحتاج ضبطاً)
+    if (pairs.length) h += (GL.isAdmin ? '<div class="d-flex gap-2 align-items-center flex-wrap mb-1"><span class="small fw-bold">تحديد الكل:</span>' +
+        '<button class="btn btn-sm btn-outline-primary" onclick="glHbMatchAll_(\'hb\')">🏨 اعتماد الحجوزات</button><button class="btn btn-sm btn-outline-dark" onclick="glHbMatchAll_(\'erp\')">📥 اعتماد الـ ERP</button>' +
+        '<button class="btn btn-sm btn-outline-secondary" onclick="glHbMatchAll_(\'\')">— تجاهل الكل —</button><span class="small text-muted">المبلغ الأحمر = مختلف بين المصدرين — راجعه قبل الاختيار</span></div>' : '') +
+      '<div class="table-responsive" style="max-height:380px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr><th style="min-width:150px;">المصدر المعتمد</th><th>النوع</th>' +
+      '<th>قيد الحجوزات</th><th>بيانه</th><th>المبلغ</th><th>قيد الـ ERP</th><th>التاريخ</th><th>بيانه</th><th>المبلغ</th><th>طريقة المطابقة</th></tr></thead><tbody>' +
       pairs.map(function (x) {
         var diff = String(x.hbAmt || '') !== String(x.erpAmt || '');
-        return '<tr' + (x.locked ? ' style="opacity:.55;"' : '') + '><td>' + (x.locked ? '🔒' : '<input type="checkbox" class="glHbMC" value="' + glEsc(x.erp) + '" checked>') + '</td><td>' + x.kind + '</td><td>' + lk(x.hb) + '</td>' +
+        return '<tr' + (x.locked ? ' style="opacity:.55;"' : '') + '><td>' + (x.locked ? '🔒 فترة مقفلة' : '<select class="form-select form-select-sm glHbMS" data-erp="' + glEsc(x.erp) + '" data-hb="' + glEsc(x.hb) + '" onchange="glHbMatchPaint_(this)">' +
+            '<option value="hb" selected>🏨 الحجوزات (حذف الـ ERP)</option><option value="erp">📥 الـ ERP (حذف الحجوزات)</option><option value="">— تجاهل —</option></select>') + '</td><td>' + x.kind + '</td><td class="glHbC-hb">' + lk(x.hb) + '</td>' +
           '<td style="text-align:right;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + glEsc(x.hbDesc) + '">' + glEsc(x.hbDesc) + '</td><td class="gl-latin" style="white-space:nowrap;">' + glEsc(x.hbAmt || glFmt(x.hbBase)) + '</td>' +
-          '<td>' + lk(x.erp) + '<div style="font-size:10px;color:#94a3b8;">' + glEsc(x.erpVid) + '</div></td><td class="gl-latin">' + glEsc(x.erpDate) + '</td>' +
+          '<td class="glHbC-erp">' + lk(x.erp) + '<div style="font-size:10px;color:#94a3b8;">' + glEsc(x.erpVid) + '</div></td><td class="gl-latin">' + glEsc(x.erpDate) + '</td>' +
           '<td style="text-align:right;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + glEsc(x.erpDesc) + '">' + glEsc(x.erpDesc) + '</td>' +
           '<td class="gl-latin"' + (diff ? ' style="color:#b91c1c;font-weight:800;" title="المبلغ بالعملة مختلف — راجع قبل الحذف"' : '') + '>' + glEsc(x.erpAmt || glFmt(x.erpBase)) + '</td><td style="font-size:10.5px;">' + glEsc(x.how) + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      (GL.isAdmin ? '<div class="d-flex justify-content-end gap-2 mt-2"><button class="btn btn-danger btn-sm fw-bold" onclick="glHbMatchApply(this)">🗑️ حذف قيود الـ ERP المطابقة المحددة</button></div>' : '<div class="small text-muted">الحذف للمدير فقط.</div>');
+      (GL.isAdmin ? '<div class="d-flex justify-content-end gap-2 mt-2"><button class="btn btn-danger btn-sm fw-bold" onclick="glHbMatchApply(this)">✅ تنفيذ الاختيارات (حذف المصدر غير المعتمد)</button></div>' : '<div class="small text-muted">التنفيذ للمدير فقط.</div>');
     else h += '<div class="small text-muted">لا توجد قيود ERP مطابقة لقيود الحجوزات.</div>';
     if (res.erpLeft.length) h += '<details class="mt-2"><summary class="small fw-bold">📋 قيود الـ ERP على حسابات أطراف الحجوزات ولم تُطابق (' + res.erpLeft.length + ') — راجعها يدوياً</summary><div style="max-height:260px;overflow:auto;font-size:11.5px;">' +
       res.erpLeft.map(function (x) { return '<div>' + lk(x.erp) + ' · <span class="gl-latin">' + glEsc(x.date) + '</span> · ' + (x.isBooking ? '🏨 ' : '') + glEsc(x.desc) + ' · <span class="gl-latin">' + glEsc(x.amt || glFmt(x.base)) + '</span></div>'; }).join('') + '</div></details>';
+    h += '<div id="glHbKeepBox" class="mt-2"></div>';
     box.innerHTML = h;
+    document.querySelectorAll('.glHbMS').forEach(glHbMatchPaint_);
+    glHbKeepLoad_();
   }, function (e) { if (btn) btn.disabled = false; box.innerHTML = '<span class="text-danger">' + glEsc(e.message || e) + '</span>'; });
+}
+// تلوين الزوج حسب الاختيار: المعتمد أخضر، والذي سيُحذف مشطوب
+function glHbMatchPaint_(sel) {
+  var tr = sel.closest('tr'), v = sel.value, hb = tr.querySelector('.glHbC-hb'), erp = tr.querySelector('.glHbC-erp');
+  [[hb, 'hb'], [erp, 'erp']].forEach(function (p) { if (!p[0]) return; p[0].style.background = !v ? '' : (v === p[1] ? '#dcfce7' : '#fee2e2'); p[0].style.textDecoration = v && v !== p[1] ? 'line-through' : ''; });
+}
+function glHbMatchAll_(v) { document.querySelectorAll('.glHbMS').forEach(function (s) { s.value = v; glHbMatchPaint_(s); }); }
+function glHbKeepLoad_() {
+  var box = document.getElementById('glHbKeepBox'); if (!box) return;
+  glRun('glHbKeepList', [], function (r) {
+    if (!r.rows.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<details><summary class="small fw-bold">📥 قيود حجوزات استُبدلت بقيد الـ ERP (' + r.rows.length + ') — لا تُعيدها المزامنة</summary><div class="table-responsive mt-1" style="max-height:260px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr>' +
+      (GL.isAdmin ? '<th></th>' : '') + '<th>قيد الحجوزات المحذوف</th><th>قيد الـ ERP المعتمد</th><th>بيانه</th><th>بواسطة</th></tr></thead><tbody>' +
+      r.rows.map(function (x) { return '<tr>' + (GL.isAdmin ? '<td><input type="checkbox" class="glHbKC" value="' + glEsc(x.key) + '"></td>' : '') + '<td style="text-align:right;">' + glEsc(x.hbDesc) + '<div class="small text-muted gl-latin">' + glEsc(x.key) + '</div></td>' +
+        '<td><a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.erp) + '\');return false;">' + glEsc(x.erp) + '</a><div class="small gl-latin">' + glEsc(x.erpDate) + '</div></td><td style="text-align:right;">' + glEsc(x.erpDesc) + '</td><td class="small">' + glEsc(x.by + ' — ' + x.at) + '</td></tr>'; }).join('') +
+      '</tbody></table></div>' + (GL.isAdmin ? '<div class="text-end mt-1"><button class="btn btn-sm btn-outline-warning" onclick="glHbKeepUndo_(this)">↩️ إرجاع المحدد لقيود الحجوزات</button></div>' : '') + '</details>';
+  }, function () { box.innerHTML = ''; });
+}
+function glHbKeepUndo_(btn) {
+  var keys = Array.prototype.map.call(document.querySelectorAll('.glHbKC:checked'), function (c) { return c.value; });
+  if (!keys.length) return _showPopup('حدد قيداً واحداً على الأقل', 'warning');
+  askConfirm_('إرجاع ' + keys.length + ' قيد؟ يعود قيد الحجوزات بالمزامنة التالية ويبقى قيد الـ ERP — شغّل المطابقة بعدها لحذف أحدهما.', function () {
+    btn.disabled = true;
+    glRun('glHbKeepUndo', [keys], function (r) { showToast('↩️ أُرجع ' + r.restored + ' — يعود بالمزامنة التالية'); glHbKeepLoad_(); }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+  }, { title: 'إرجاع قيود الحجوزات', danger: false });
 }
 function glHbFxFixUI(btn) {
   var url = glVal('glHbFxUrl'), box = document.getElementById('glHbFxBox'); if (!url) return _showPopup('أدخل رابط شيت الـ ERP', 'warning');
@@ -48382,12 +48415,14 @@ function glHbFxFixGo_(btn) {
   }, { title: 'تصحيح مبالغ الدفعات', danger: false });
 }
 function glHbMatchApply(btn) {
-  var ids = Array.prototype.map.call(document.querySelectorAll('.glHbMC:checked'), function (c) { return c.value; });
-  if (!ids.length) return _showPopup('حدد قيداً واحداً على الأقل', 'warning');
-  askConfirm_('حذف ' + ids.length + ' قيد ERP مطابق نهائياً؟ تبقى قيود برنامج الحجوزات المقابلة لها (نفس الحجوزات والدفعات) فلا يتكرر شيء.', function () {
+  var items = Array.prototype.map.call(document.querySelectorAll('.glHbMS'), function (s) { return { erp: s.getAttribute('data-erp'), hb: s.getAttribute('data-hb'), keep: s.value }; }).filter(function (x) { return x.keep; });
+  if (!items.length) return _showPopup('اختر المصدر المعتمد لزوج واحد على الأقل', 'warning');
+  var nH = items.filter(function (x) { return x.keep === 'hb'; }).length, nE = items.length - nH;
+  askConfirm_((nH ? '🏨 اعتماد الحجوزات: حذف ' + nH + ' قيد ERP نهائياً (والجنيه الفعلي للدفعات يُنقل لمراجعتها).\n' : '') +
+    (nE ? '📥 اعتماد الـ ERP: حذف ' + nE + ' قيد حجوزات تلقائي — ولا تُعيده المزامنة (يمكن إرجاعه من قائمة «استُبدلت بقيد الـ ERP»).' : ''), function () {
     btn.disabled = true;
-    glRun('glHbErpMatchApply', [ids], function (res) {
-      showToast('🗑️ حُذف ' + res.deleted + ' قيد ERP مكرر' + (res.skipped.length ? ' — تُرك ' + res.skipped.length : ''));
+    glRun('glHbErpMatchApply', [items], function (res) {
+      showToast('✅ حُذف ' + (res.deletedErp || 0) + ' قيد ERP و' + (res.deletedHb || 0) + ' قيد حجوزات' + (res.skipped.length ? ' — تُرك ' + res.skipped.length : ''));
       glRefreshData(function () { glHbMatchUI(null); });
     }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
   }, { title: 'حذف قيود مكررة', danger: true });
