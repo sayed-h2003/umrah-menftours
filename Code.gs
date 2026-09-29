@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.221";
+var APP_VERSION = "4.222";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -11597,9 +11597,17 @@ function logChange_(username, action, recordId, field, oldVal, newVal) {
       oldVal === undefined || oldVal === null ? "-" : String(oldVal),
       newVal === undefined || newVal === null ? "-" : String(newVal)
     ]);
+    _glMarkDirty_(action, recordId);
   } catch (e) {
     Logger.log("logChange_ failed: " + e.message);
   }
+}
+// ⚡ (V4.222) أي حفظ بشاشات البرنامج (عدا الحسابات العامة نفسها والدخول/الخروج) ⇒ علامة «تغيّر» تلتقطها المزامنة اللحظية
+function _glMarkDirty_(action, recordId) {
+  try {
+    if (/^(GL|HB):/.test(String(recordId || '')) || /تسجيل (دخول|خروج)/.test(String(action || ''))) return;
+    CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600);
+  } catch (e) {}
 }
 
 // يكتب عدة سجلات تعديل دفعة واحدة بعملية sheet واحدة (setValues) بدل استدعاء appendRow لكل سجل على حدة
@@ -11623,6 +11631,7 @@ function logChangesBatch_(username, entries) {
     });
     var startRow = sheet.getLastRow() + 1;
     sheet.getRange(startRow, 1, rows.length, 7).setValues(rows);
+    _glMarkDirty_(entries[0].action, entries[0].recordId);
   } catch (e) {
     Logger.log("logChangesBatch_ failed: " + e.message);
   }
@@ -14234,8 +14243,10 @@ function getClientAccount(authToken, client) {
   var mergeTrips = null;
   try { mergeTrips = _accMergeGroupRead_(client).trips; } catch (eMg) { mergeTrips = null; }
 
+  // 📘 (V4.222) رقم قيد إيرادات كل رحلة بالحسابات العامة (وهل له تغيير بانتظار الاعتماد)
+  var glLinks = null; try { if (typeof _glClientLinks_ === 'function') glLinks = _glClientLinks_(client); } catch (eGl) { glLinks = null; }
   return { success: true, client: client, trips: stats.rows, noTripCount: stats.noTripCount,
-           items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips };
+           items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips, gl: glLinks };
 }
 
 // 🕘 (V4.90) سجل تعديلات كامل لحساب عميل واحد — كل عمليات AuditLog التي مرجعها اسم هذا العميل
@@ -16463,6 +16474,38 @@ function getTripClientsBalances(authToken, trip) {
 // 📊 (V4.48) ملخص حسابات كل عملاء رحلة واحدة في جدول واحد — شاشة «ملخص حسابات الرحلة» الجديدة.
 // لكل عميل: الأعداد (رجال/سيدات/أطفال/رضّع) + بيان نصي لبنود حسابه + المستحق/المسدد/الرصيد بالعملتين.
 // يشمل أيضاً عملاء لهم معتمرون بالرحلة لكن بلا حساب مفتوح بعد (hasAccount:false) بدل إسقاطهم بصمت.
+// 📝 (V4.82→V4.222) بيان حساب العميل في الرحلة نصاً واحداً — يُستخدم بملخص حسابات الرحلة وبقيد إيرادات الرحلة
+function _accOrderStatementItems_(items) {
+    var sorted = items.slice().sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
+    return sorted.filter(function(it) { return !it.isDiscount; }).concat(sorted.filter(function(it) { return it.isDiscount; }));
+}
+// 🔀 (V4.90) الفاصل بين كل بند والتالي: «+» دائمًا، إلا لو التالي بند خصم فيكون «−» بدلاً منه — بلا
+// فاصل مزدوج (كان يظهر «+ −خصم» معًا وهو خطأ)؛ أول بند بلا فاصل أصلاً
+function _accTripStatement_(rawItems) {
+    var items = _accOrderStatementItems_(rawItems);
+    if (!items.length) return '';
+    var out = '';
+    items.forEach(function(it, idx) {
+      var curTxt = it.currency === 'SAR' ? 'ريال' : 'جنيه';
+      var nightsTxt = it.nights > 0 ? ' × ' + it.nights + ' ليلة' : '';
+      var qty = (!it.isDirect && it.count) ? (it.count + nightsTxt + (it.price ? (' × ' + it.price) : '')) : '';
+      var txt;
+      if (qty) txt = it.desc + ' ' + qty + ' ' + curTxt;
+      else if (it.price) txt = it.desc + ' ' + it.price + ' ' + curTxt;
+      else txt = it.desc + ' ' + _accNum_(it.value) + ' ' + curTxt;
+      // 🩹 (V4.105 / V4.123 / V4.128) لا تُكرَّر كلمة "خصم" لو كان بيان البند نفسه بادئاً بها
+      // (مثال: بند وصفه "خصم فرق تذكرة" كان يظهر "خصم خصم فرق تذكرة" ببيان الحساب).
+      // 🐞 سبب استمرار العطل رغم محاولتَي الإصلاح السابقتين: كان الفحص /^خصم\b/ يستخدم حدّ الكلمة
+      // \b، وهو في جافاسكربت معرَّف على [A-Za-z0-9_] فقط — فلا يوجد "حدّ كلمة" بعد حرف عربي إطلاقاً،
+      // وبالتالي كان الشرط يفشل دائماً مع أي نص عربي فتُضاف "خصم" مرة ثانية في كل مرة.
+      // البديل: مطابقة بادئة صريحة (الكلمة وحدها، أو متبوعة بمسافة/علامة ترقيم).
+      var descNorm = String(it.desc || '').replace(/^[\s‎‏؜\-–—]+/, '');
+      if (it.isDiscount && !/^خصم(?:$|[\s:،.\-–—])/.test(descNorm)) txt = 'خصم ' + txt;
+      out += (idx === 0 ? '' : (it.isDiscount ? ' − ' : ' + ')) + txt;
+    });
+    return out;
+}
+
 function getTripAccountsSummary(authToken, tripName) {
   _accPerm_(authToken, 'view');
   tripName = String(tripName || '').trim();
@@ -16584,36 +16627,8 @@ function getTripAccountsSummary(authToken, tripName) {
   // 🔀 (V4.88) نفس ترتيب البنود المحفوظ بكشف حساب العميل الفعلي لهذه الرحلة (حقل order — السحب
   // والإفلات)، مع دفع بنود الخصم دومًا لآخر القائمة (خصم الجنيه بعد آخر بند جنيه، وخصم الريال بعد
   // آخر بند ريال) — بطلب صريح ومؤكَّد
-  var orderStatementItems_ = function(items) {
-    var sorted = items.slice().sort(function(a, b) { return (a.order || 0) - (b.order || 0); });
-    return sorted.filter(function(it) { return !it.isDiscount; }).concat(sorted.filter(function(it) { return it.isDiscount; }));
-  };
-  // 🔀 (V4.90) الفاصل بين كل بند والتالي: «+» دائمًا، إلا لو التالي بند خصم فيكون «−» بدلاً منه — بلا
-  // فاصل مزدوج (كان يظهر «+ −خصم» معًا وهو خطأ)؛ أول بند بلا فاصل أصلاً
-  var fmtStatement_ = function(rawItems) {
-    var items = orderStatementItems_(rawItems);
-    if (!items.length) return '';
-    var out = '';
-    items.forEach(function(it, idx) {
-      var curTxt = it.currency === 'SAR' ? 'ريال' : 'جنيه';
-      var nightsTxt = it.nights > 0 ? ' × ' + it.nights + ' ليلة' : '';
-      var qty = (!it.isDirect && it.count) ? (it.count + nightsTxt + (it.price ? (' × ' + it.price) : '')) : '';
-      var txt;
-      if (qty) txt = it.desc + ' ' + qty + ' ' + curTxt;
-      else if (it.price) txt = it.desc + ' ' + it.price + ' ' + curTxt;
-      else txt = it.desc + ' ' + _accNum_(it.value) + ' ' + curTxt;
-      // 🩹 (V4.105 / V4.123 / V4.128) لا تُكرَّر كلمة "خصم" لو كان بيان البند نفسه بادئاً بها
-      // (مثال: بند وصفه "خصم فرق تذكرة" كان يظهر "خصم خصم فرق تذكرة" ببيان الحساب).
-      // 🐞 سبب استمرار العطل رغم محاولتَي الإصلاح السابقتين: كان الفحص /^خصم\b/ يستخدم حدّ الكلمة
-      // \b، وهو في جافاسكربت معرَّف على [A-Za-z0-9_] فقط — فلا يوجد "حدّ كلمة" بعد حرف عربي إطلاقاً،
-      // وبالتالي كان الشرط يفشل دائماً مع أي نص عربي فتُضاف "خصم" مرة ثانية في كل مرة.
-      // البديل: مطابقة بادئة صريحة (الكلمة وحدها، أو متبوعة بمسافة/علامة ترقيم).
-      var descNorm = String(it.desc || '').replace(/^[\s‎‏؜\-–—]+/, '');
-      if (it.isDiscount && !/^خصم(?:$|[\s:،.\-–—])/.test(descNorm)) txt = 'خصم ' + txt;
-      out += (idx === 0 ? '' : (it.isDiscount ? ' − ' : ' + ')) + txt;
-    });
-    return out;
-  };
+  // (V4.222) البيان صار دالة عامة مشتركة مع قيد إيرادات الرحلة بالحسابات العامة — نفس النص حرفياً
+  var fmtStatement_ = _accTripStatement_;
 
   var rows = Object.keys(allClients).sort().map(function(cl) {
     var items = itemsByClient[cl] || [], pays = paysByClient[cl] || [];

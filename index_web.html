@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.221 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.222 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.221)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.222)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.221</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.222</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1642,7 +1642,7 @@ input[type="date"]:not(:focus):not(:valid) {
 
     <!-- 📒 (V4.205) الحسابات العامة (الدفتر العام) -->
     <a id="link-gl-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('gl'); closeAppSidebarOnMobile();">
-      <i class="fas fa-book me-2 text-warning"></i> الحسابات العامة
+      <i class="fas fa-book me-2 text-warning"></i> الحسابات العامة <span id="glNavBadge" class="badge rounded-pill bg-danger ms-1" style="display:none;font-size:10px;" title="تغييرات قيود بانتظار الاعتماد"></span>
     </a>
 
     <!-- 🏨 (V4.211-H4) برنامج حجوزات الفنادق — نفس البرنامج، يفتح بتبويب جديد بدخول موحّد -->
@@ -7408,7 +7408,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.221";
+var CLIENT_APP_VERSION = "4.222";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -24847,7 +24847,7 @@ function _accRenderLegacy_() { // ⛔ النسخة القديمة قبل الن�
       '<span class="fw-bold" style="font-size:13.5px;">✈️ ' + esc(trip) + '</span>' +
       '<span class="small" style="opacity:.85;">' + esc(row.departDate || '') + (row.returnDate ? ' ← ' + esc(row.returnDate) : '') +
       ' · 👨' + row.adults + ' 🧒' + row.children + ' 👶' + row.infants + '</span>' +
-      '<span style="margin-inline-start:auto;"></span>' +
+      '<span style="margin-inline-start:auto;"></span>' + _accGlChip_(trip) +
       _accNetBadge_(t.netE, 'جنيه', true) + (_hasSar ? ' ' + _accNetBadge_(t.netS, 'ريال', true) : '') + '</div>';
 
     if (al) {
@@ -28135,6 +28135,7 @@ function _accGenInsert_(btn) {
         // ⚡ (V4.199) البنود المولَّدة تُضاف محلياً من رد السيرفر بدل إعادة تحميل الحساب كاملاً
         if (_accData && Array.isArray(res.created) && res.created.length && res.created[0].desc !== undefined) _accApplyCreated_(res.created, []);
         else _accLoad_();
+        glKickSoon_(true);
       }
       else alert('❌ ' + ((res && res.error) || 'فشل الإدراج'));
     })
@@ -28144,6 +28145,19 @@ function _accGenInsert_(btn) {
 
 // ---------- ✏️ تعديل بنود الرحلة كلها دفعة واحدة ----------
 var _accEditTrip = '';
+// 📘 (V4.222) رقم قيد إيرادات الرحلة بالحسابات العامة: مُزامن / تغيّر بعد القيد وينتظر الاعتماد / لم يُقيَّد بعد
+function _accGlChip_(trip) {
+  var g = _accData && _accData.gl; if (!g) return '';
+  var x = g[trip];
+  if (!x) return '<span class="badge" style="background:rgba(255,255,255,.18);font-size:10.5px;" title="يُسجَّل قيد الرحلة تلقائياً خلال أقل من دقيقة من الحفظ">📘 لم يُقيَّد بعد</span> ';
+  var canOpen = typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'));
+  return '<span class="badge" style="background:' + (x.pending ? '#f59e0b;color:#111' : 'rgba(255,255,255,.22)') + ';font-size:10.5px;' + (canOpen ? 'cursor:pointer;' : '') + '"' +
+    (canOpen ? ' onclick="_accOpenGl_(\'' + String(x.id).replace(/'/g, '') + '\')"' : '') + ' title="' + (x.pending ? 'تغيّر حساب الرحلة بعد القيد — بانتظار الاعتماد بالحسابات العامة' : 'مُرحَّل ومُزامن مع الحسابات العامة') + '">📘 قيد ' + escapeHtml_(x.id) + (x.pending ? ' ⚠️ بانتظار الاعتماد' : ' ✓') + '</span> ';
+}
+function _accOpenGl_(id) {
+  try { switchPage('gl'); } catch (e) {}
+  var t0 = Date.now(), iv = setInterval(function () { if (window.GL && GL.ready) { clearInterval(iv); glShowEntry(id); } else if (Date.now() - t0 > 20000) clearInterval(iv); }, 400);
+}
 function _accEditAll_(trip) {
   _accEditTrip = trip;
   var items = _accData.items.filter(function(i) { return i.trip === trip; });
@@ -28300,6 +28314,7 @@ function _accEditSave_(btn) {
       tripItems.sort(function(a, b) { return (a.order == null ? 1e9 : a.order) - (b.order == null ? 1e9 : b.order); });
       pos.forEach(function(p, k) { _accData.items[p] = tripItems[k]; });
       bootstrap.Modal.getInstance(document.getElementById('accEditModal')).hide(); _accRender_();
+      glKickSoon_(true);
     }
     else alert('❌ ' + (err || 'فشل الحفظ'));
   };
@@ -45011,6 +45026,7 @@ function glInit(keepTab) {
     if (!res.ready) { GL.ready = false; glRenderSetup(); return; }
     GL.ready = true; GL.accounts = res.accounts || []; GL.map = {}; GL.accounts.forEach(function (a) { GL.map[a.code] = a; });
     GL.balances = res.balances || {}; GL.settings = res.settings || {}; GL.rates = res.rates || GL.rates; GL.fxDaily = res.fxDaily || GL.fxDaily || {}; GL.can = res.can || {}; GL.url = res.url;
+    GL.pendingCount = res.pendingCount || 0; GL.tripMode = !!res.tripMode; glNavBadge_();
     document.getElementById('glActs').classList.toggle('d-none', !GL.can.add);
     glTab(keepTab ? GL.tab : (GL.tab || 'home'));
   }, function (e) { box.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc(e && e.message ? e.message : e) + '</div>'; });
@@ -45027,6 +45043,7 @@ function glTab(t) {
   GL.tab = t;
   document.querySelectorAll('#glTabs .gl-tab').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); });
   if (!GL.ready) return;
+  setTimeout(function () { if (GL.tab === t) glPendingBanner_(); }, 0);
   ({ home: glRenderHome, treasury: glRenderTreasury, banks: glRenderBanks, custody: glRenderCustody, entries: glRenderEntries, ledger: glRenderLedger, trial: glRenderTrial, reports: glRenderReports, auto: glRenderAuto, hotels: glRenderHotels, coa: glRenderCoa, import: glRenderImport, settings: glRenderSettings }[t] || glRenderHome)();
   glWireLiveFilters_(t);
 }
@@ -46241,6 +46258,7 @@ function glRenderCash(kind) {
       '<span style="flex:1;"></span>' +
       (GL.can.add ? K.acts.map(function (x) { return '<button class="btn btn-sm fw-bold ' + x[2].replace('btn-outline-primary', 'btn-light') + '" onclick="glCashNew_(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') : '') +
       (kind === 'custody' ? '<button class="btn btn-sm btn-warning fw-bold" onclick="glCustSheetDlg(GL._cash.custody.code)" title="ربط العهدة بشيت جوجل ومزامنته">🔗 شيت العهدة</button>' : '') +
+      (kind === 'safe' ? '<button class="btn btn-sm btn-warning fw-bold" onclick="glCpDlg()" title="دفعات شاشة حسابات العملاء المسجلة تحت التسوية — حدد خزينتها أو بنكها">💵 توجيه الدفعات</button>' : '') +
     '</div>' +
     '<div class="gl-fbar">' +
       '<span class="gl-lbl" style="margin:0;">من</span><div style="width:125px;">' + glDateInput('glTrFrom', st.from) + '</div>' +
@@ -47024,14 +47042,155 @@ function glRenderAuto() {
       (GL.isAdmin ? '<button class="btn btn-success btn-sm fw-bold" onclick="glAutoSyncUI(this)">🔄 مزامنة الآن</button>' : '') +
       '<button class="btn btn-outline-dark btn-sm" onclick="glAutoRecUI(this)">⚖️ تقرير المطابقة</button></div></div>' +
     '<div class="gl-note mt-2">الشاشات الحالية تبقى هي المصدر: كل بند ودفعة بحسابات العملاء، وكل مجموعة تأشيرات ودورة نقل وبند ودفعة بحسابات الوكلاء، وكل إيصال رسوم غرفة وملف مراجَع — يتحول لقيد مرحّل في الدفتر تلقائياً. أي تعديل أو حذف بالشاشة يعدّل قيده أو يلغيه في المزامنة التالية، والقيود التلقائية لا تُعدَّل يدوياً.<br>' +
-      '💵 دفعات الشاشات لا تحدد خزينة أو بنكاً، فتسجَّل في حساب <b>«نقدية تحت التسوية»</b> — انقلها للخزينة أو البنك بسند <b>«🔁 تحويل نقدية»</b>، ولا تسجّل سند قبض لنفس الدفعة على حساب العميل حتى لا تتكرر.</div>' +
+      '💵 دفعات الشاشات لا تحدد خزينة أو بنكاً، فتسجَّل في حساب <b>«نقدية تحت التسوية»</b> — وجّهها للخزينة أو البنك أو العهدة من «💰 الخزينة ← 💵 توجيه الدفعات» (أو سجّلها مباشرة بإيصال استلام من الحسابات العامة فتنزل دفعة بحسابات العملاء تلقائياً).' +
     '<div class="d-flex gap-3 flex-wrap align-items-center small">' +
       '<span>🕘 آخر مزامنة: ' + (last ? '<b class="gl-latin">' + glEsc(last.at) + '</b> (' + glEsc(last.by) + ') — جديد ' + last.created + '، معدّل ' + last.updated + '، ملغى ' + last.voided + (last.blocked ? '، <b style="color:#b45309;">محجوز ' + last.blocked + '</b>' : '') + (last.errors ? '، <b style="color:#b91c1c;">أخطاء ' + last.errors + '</b>' : '') : 'لم تتم بعد') + '</span>' +
       (s.auto_last_error ? '<span style="color:#b91c1c;">⚠️ ' + glEsc(s.auto_last_error) + '</span>' : '') +
       (GL.isAdmin ? '<label class="d-flex align-items-center gap-1 ms-auto"><input type="checkbox" ' + (s.auto_cron === 'نعم' ? 'checked' : '') + ' onchange="glAutoSetUI({cron:this.checked})"> مزامنة تلقائية كل ساعة</label>' +
         '<label class="d-flex align-items-center gap-1"><input type="checkbox" ' + (s.auto_open !== 'لا' ? 'checked' : '') + ' onchange="glAutoSetUI({autoOpen:this.checked})"> أرصدة افتتاحية من بيانات ما قبل ' + glEsc(s.startDate || '') + '</label>' : '') +
-    '</div></div><div id="glAutoRes" class="mt-2"></div>';
+    '</div></div>' +
+    // 🧳 (V4.222) قيود الرحلات الجديدة: حالة الوضع + إعادة البناء (للمدير) + الاعتماد
+    '<div class="gl-card mt-2" style="border:2px solid ' + (GL.tripMode ? '#16a34a' : '#f59e0b') + ';"><div class="d-flex align-items-center gap-2 flex-wrap"><b>🧳 قيود الرحلات (حساب لكل رحلة تحت «4101 إيرادات رحلات العمرة»)</b>' +
+      '<span class="gl-st" style="background:' + (GL.tripMode ? '#dcfce7;color:#166534' : '#fef3c7;color:#92400e') + ';">' + (GL.tripMode ? '✅ مفعّلة' : '⏳ غير مفعّلة بعد') + '</span>' +
+      '<span class="ms-auto d-flex gap-2 flex-wrap"><button class="btn btn-outline-warning btn-sm fw-bold" onclick="glPendingDlg()">🔔 تغييرات بانتظار الاعتماد <span class="badge bg-danger">' + (GL.pendingCount || 0) + '</span></button>' +
+      (GL.isAdmin ? '<button class="btn btn-warning btn-sm fw-bold" onclick="glTripRebuildUI(this,true)">🧹 إعادة بناء قيود الرحلات</button>' : '') + '</span></div>' +
+      '<div class="gl-note mt-2" style="font-size:12.5px;">• <b>قيد إيرادات الرحلة</b> لكل عميل: من ح/ العميل «الرحلة (بيان الحساب)» إلى ح/ الرحلة «العميل (بيان الحساب)» — نفس نص ملخص حسابات الرحلة.<br>' +
+      '• على ح/ الرحلة (مدين): رسوم غرفة ملفات الوزارة المراجَعة (موزّعة بعدد معتمري كل رحلة) · تأشيرات المجموعات بعد إصدار الموفا · دورات النقل المسعّرة (بالمقاطع الإضافية). رصيد حساب الرحلة = ربحها.<br>' +
+      '• الجديد يُقيَّد فوراً (خلال أقل من دقيقة من الحفظ) ويظهر رقم قيده بحسابات العملاء · أي تغيير بعد القيد (أو حذف المصدر) ينتظر <b>الاعتماد</b> ولا يُكتب بصمت.<br>' +
+      '• إيصال استلام/صرف على حساب عميل بالحسابات العامة ⇒ دفعة بحسابات العملاء (عامة لتخصيصها، أو على الرحلة المحددة بالإيصال).</div><div id="glTripRbRes"></div></div>' +
+    '<div id="glAutoRes" class="mt-2"></div>';
   if (GL._autoRes) glAutoDraw(GL._autoRes, GL._autoResDry);
+}
+/* 🧳 (V4.222) إعادة بناء قيود الرحلات · الاعتماد · التنبيهات · توجيه الدفعات */
+function glTripRebuildUI(btn, dry) {
+  var box = document.getElementById('glTripRbRes'); if (btn) btn.disabled = true;
+  box.innerHTML = '<div class="text-muted py-2">⏳ ' + (dry ? 'فحص…' : 'جاري إعادة البناء — قد يستغرق دقيقة…') + '</div>';
+  glRun('glTripRebuild', [!!dry], function (r) {
+    if (btn) btn.disabled = false;
+    var names = { CI: 'بنود العملاء (الشكل القديم)', TRIP: 'قيود الرحلات', VZ: 'التأشيرات', TR: 'النقل', MF: 'رسوم غرفة الملفات', OPEN: 'الافتتاحي المجمّع' };
+    var list = Object.keys(r.byPrefix || {}).map(function (k) { return '<li>' + (names[k] || k) + ': <b>' + r.byPrefix[k].n + '</b> قيد (معادل <span class="gl-latin">' + glFmt(r.byPrefix[k].base) + '</span>)</li>'; }).join('');
+    if (r.dry) {
+      box.innerHTML = '<div class="gl-note mt-2"><b>سيحدث بالترتيب:</b><ol style="margin:4px 0;">' +
+        '<li>نسخة احتياطية كاملة من القيود التي ستُحذف (شيت GL_Backup بملف الحسابات).</li>' +
+        '<li>حذف نهائي لـ <b>' + r.total + '</b> قيد تلقائي قديم للرحلات:<ul>' + (list || '<li>لا شيء</li>') + '</ul></li>' +
+        '<li>' + (r.group === 'leaf' ? 'الحساب الحالي 4101 «' + glEsc(r.groupName) + '» يُعاد ترقيمه لكود جديد تحت 41 (بأسطره: ' + r.groupLines + ') ثم تُنشأ المجموعة 4101 «إيرادات رحلات العمرة»' :
+          r.group === 'group' ? 'المجموعة 4101 موجودة بالفعل' : 'إنشاء المجموعة 4101 «إيرادات رحلات العمرة»') + '.</li>' +
+        '<li>تسجيل كل القيود بالشكل الجديد مباشرة (حساب لكل رحلة) — قيود الحجوزات والـ ERP واليدوية والإيصالات ودفعات العملاء وبنود/دفعات الوكلاء تبقى كما هي.</li></ol>' +
+        (r.locked ? '<div class="text-danger fw-bold">⚠️ ' + r.locked + ' قيداً في فترة مقفلة — افتح الفترة أولاً.</div>' : '') +
+        '<div class="d-flex justify-content-end"><button class="btn btn-danger btn-sm fw-bold" ' + (r.locked ? 'disabled' : '') + ' onclick="askConfirm_(\'حذف ' + r.total + ' قيد تلقائي قديم نهائياً (بعد نسخة احتياطية) وإعادة البناء بالشكل الجديد؟\', function(){glTripRebuildUI(null,false);}, {title:\'إعادة بناء قيود الرحلات\', danger:true})">🧹 تنفيذ إعادة البناء</button></div></div>';
+      return;
+    }
+    GL.tripMode = true;
+    box.innerHTML = '<div class="alert alert-success mt-2 mb-0" style="font-size:13px;">✅ تمت إعادة البناء: حُذف <b>' + r.deleted + '</b> قيد (النسخة الاحتياطية: <b>' + glEsc(r.backup) + '</b>) وسُجّل <b>' + r.created + '</b> قيد جديد' +
+      (r.movedOld4101 ? ' · الحساب القديم 4101 صار <b class="gl-latin">' + glEsc(r.movedOld4101) + '</b>' : '') +
+      ' · ميزان الأسطر: مدين <span class="gl-latin">' + glFmt(r.trial.debit) + '</span> / دائن <span class="gl-latin">' + glFmt(r.trial.credit) + '</span>' +
+      ((r.errors || []).length ? '<div class="text-danger mt-1">⚠️ ' + r.errors.length + ' قيد لم يُسجَّل: ' + r.errors.slice(0, 5).map(function (e) { return glEsc(e.desc + ' — ' + e.msg); }).join(' · ') + '</div>' : '') +
+      ((r.warnings || []).length ? '<div class="mt-1" style="color:#92400e;">' + r.warnings.slice(0, 8).map(glEsc).join('<br>') + '</div>' : '') + '</div>';
+    glAfterChange();
+  }, function (e) { if (btn) btn.disabled = false; box.innerHTML = '<div class="alert alert-danger mt-2">❌ ' + glEsc(e.message || e) + '</div>'; });
+}
+function glNavBadge_() {
+  var b = document.getElementById('glNavBadge'); if (!b) return;
+  var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
+}
+function glPendingBanner_() {
+  var box = document.getElementById('glBody'); if (!box || !GL.pendingCount || document.getElementById('glPendBanner')) return;
+  box.insertAdjacentHTML('afterbegin', '<div id="glPendBanner" class="alert alert-warning py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">🔔 <b>' + GL.pendingCount +
+    '</b> تغيير على قيود مسجَّلة ينتظر الاعتماد (تعديل مصدرها بالشاشات بعد القيد).<button class="btn btn-warning btn-sm fw-bold ms-auto" onclick="glPendingDlg()">مراجعة واعتماد</button></div>');
+}
+function glPendingDlg() {
+  glRun('glPendingList', [], function (res) {
+    GL.pendingCount = res.rows.filter(function (x) { return x.status !== 'مرفوض'; }).length; glNavBadge_();
+    var can = res.canApprove, rows = res.rows;
+    var h = rows.length ? '<div class="small text-muted mb-2">كل تغيير حدث بمصدر قيد مسجَّل (بند/سعر/عدد/حذف…). «✅ اعتماد» يحدّث القيد بنفس رقمه، و«⛔ رفض» يُبقيه كما هو (ويعود التنبيه لو تغيّر المصدر مرة أخرى).</div>' +
+      '<div class="table-responsive" style="max-height:60vh;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr>' + (can ? '<th><input type="checkbox" checked onchange="document.querySelectorAll(\'.glPdC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th>' : '') +
+      '<th>القيد</th><th>النوع</th><th>البيان الحالي</th><th>المعادل الحالي</th><th>بعد التغيير</th><th>المعادل الجديد</th><th>منذ</th><th>الحالة</th></tr></thead><tbody>' +
+      rows.map(function (x) {
+        var d = _glR2_c(x.newBase - x.oldBase);
+        return '<tr' + (x.status === 'مرفوض' ? ' style="opacity:.55;"' : '') + '>' + (can ? '<td><input type="checkbox" class="glPdC" value="' + glEsc(x.key) + '"' + (x.status === 'مرفوض' ? '' : ' checked') + '></td>' : '') +
+          '<td><a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.id) + '\');return false;">' + glEsc(x.id) + '</a></td><td>' + (x.kind === 'إلغاء' ? '<b class="text-danger">⛔ إلغاء</b>' : '✏️ تعديل') + '</td>' +
+          '<td style="text-align:right;max-width:260px;">' + glEsc(x.oldDesc) + '</td><td class="gl-latin">' + glFmt(x.oldBase) + '</td>' +
+          '<td style="text-align:right;max-width:260px;">' + glEsc(x.newDesc) + '</td><td class="gl-latin" style="font-weight:800;color:' + (d > 0 ? '#166534' : d < 0 ? '#b91c1c' : 'inherit') + ';">' + glFmt(x.newBase) + (d ? ' <small>(' + (d > 0 ? '+' : '') + glFmt(d) + ')</small>' : '') + '</td>' +
+          '<td class="gl-latin" style="font-size:10.5px;">' + glEsc(x.at) + '</td><td>' + (x.status === 'مرفوض' ? '⛔ مرفوض — ' + glEsc(x.by) : '⏳ بانتظار') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      (can ? '<div class="d-flex gap-2 justify-content-end mt-2"><button class="btn btn-outline-danger btn-sm" onclick="glPendingAct(false,this)">⛔ رفض المحدد</button><button class="btn btn-success btn-sm fw-bold" onclick="glPendingAct(true,this)">✅ اعتماد المحدد</button></div>'
+        : '<div class="small text-muted mt-2">الاعتماد يحتاج صلاحية «✅ اعتماد تغييرات القيود».</div>')
+      : '<div class="text-center py-4" style="color:#166534;font-weight:700;">✅ لا توجد تغييرات بانتظار الاعتماد</div>';
+    glDlg('🔔 تغييرات القيود بانتظار الاعتماد (' + rows.length + ')', h, 1150);
+  });
+}
+function _glR2_c(n) { return Math.round((+n || 0) * 100) / 100; }
+function glPendingAct(approve, btn) {
+  var keys = Array.prototype.map.call(document.querySelectorAll('.glPdC:checked'), function (c) { return c.value; });
+  if (!keys.length) return _showPopup('حدد تغييراً واحداً على الأقل', 'warning');
+  var go = function (note) {
+    btn.disabled = true;
+    glRun(approve ? 'glPendingApprove' : 'glPendingReject', approve ? [keys] : [keys, note || ''], function (r) {
+      GL.pendingCount = r.pending || 0; glNavBadge_();
+      showToast(approve ? '✅ اعتُمد: معدّل ' + r.updated + (r.voided ? '، ملغى ' + r.voided : '') + (r.blocked && r.blocked.length ? ' — ' + r.blocked.length + ' بفترة مقفلة' : '') : '⛔ رُفض ' + keys.length + ' تغيير');
+      glDlgClose(); glAfterChange();
+    }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+  };
+  if (approve) go(); else askPrompt_('سبب الرفض (اختياري):', '', go, { title: 'رفض التغييرات', okLabel: 'رفض', danger: true });
+}
+// ⚡ المزامنة اللحظية + التنبيه: كل 40 ثانية (وعند العودة للصفحة) — القيود الجديدة تظهر كتنبيه لمن له صلاحية الحسابات
+var _glKickBusy = false;
+function glKick_() {
+  if (_glKickBusy || !window.authToken || document.hidden) return;
+  _glKickBusy = true;
+  var since = ''; try { since = localStorage.getItem('glKickSince') || ''; } catch (e) {}
+  google.script.run.withSuccessHandler(function (r) {
+    _glKickBusy = false; if (!r || !r.success) return;
+    try { if (r.now) localStorage.setItem('glKickSince', r.now); } catch (e) {}
+    if (r.pending !== undefined) { GL.pendingCount = r.pending; glNavBadge_(); }
+    var rec = (r.recent || []).filter(function (x) { return x.what === 'جديد'; });
+    if (since && rec.length && typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'))) {
+      showToast('📘 ' + rec.length + ' قيد تلقائي جديد: ' + rec.slice(0, 2).map(function (x) { return x.id + ' — ' + String(x.desc || '').slice(0, 60); }).join(' · ') + (rec.length > 2 ? ' …' : ''));
+    }
+    if (r.pending && since && typeof hasPermission === 'function' && hasPermission('gl.view') && !window._glPendWarned) { window._glPendWarned = 1; showToast('🔔 ' + r.pending + ' تغيير على القيود بانتظار الاعتماد — الحسابات العامة ← القيود التلقائية'); }
+  }).withFailureHandler(function () { _glKickBusy = false; }).glAutoKick(window.authToken, since);
+}
+setInterval(glKick_, 40000);
+// بعد حفظ بحسابات العملاء: مزامنة خلال ثوانٍ ثم تحديث رقم قيد الرحلة بالشاشة (بلا إعادة تحميل كاملة)
+function glKickSoon_(refreshAcc) {
+  setTimeout(function () {
+    glKick_();
+    if (refreshAcc && window._accData && window._accData.gl !== undefined) setTimeout(function () {
+      google.script.run.withSuccessHandler(function (res) {
+        if (res && res.success && window._accData && res.client === window._accData.client) { window._accData.gl = res.gl; try { _accRender_(); } catch (e) {} }
+      }).getClientAccount(window.authToken, window._accData.client);
+    }, 25000);
+  }, 2500);
+}
+document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(glKick_, 1500); });
+// 💵 توجيه دفعات حسابات العملاء (نقدية تحت التسوية) للخزينة/البنك/العهدة
+function glCpDlg() {
+  glRun('glCpList', [], function (res) {
+    var cashAccs = GL.accounts.filter(function (a) { return !a.isGroup && a.active && /^(safe|bank|custody)$/.test(a.kind); });
+    var rows = res.rows, pend = rows.filter(function (x) { return x.unsettled; });
+    var sel = '<select id="glCpTo" class="form-select form-select-sm" style="width:auto;min-width:220px;">' + cashAccs.map(function (a) { return '<option value="' + glEsc(a.code) + '">' + glEsc(a.name) + ' (' + glEsc(a.code) + ')' + (a.currency ? ' — ' + GL_CUR_LBL_[a.currency] : '') + '</option>'; }).join('') + '</select>';
+    var h = '<div class="gl-note" style="font-size:12.5px;">الدفعات المسجلة من شاشة حسابات العملاء تُقيَّد في <b>«نقدية تحت التسوية»</b> حتى تحدد أين دخلت فعلاً. اختر الدفعات ثم الحساب النقدي ⇒ يتحوّل قيدها ويبقى ثابتاً مع كل مزامنة. ' +
+      '<b>' + pend.length + '</b> دفعة تحت التسوية من ' + rows.length + '.</div>' +
+      '<div class="d-flex gap-2 align-items-center flex-wrap mb-2"><label class="small"><input type="checkbox" id="glCpAll" onchange="glCpDraw_()"> عرض الموجَّهة أيضاً</label><span class="ms-auto">توجيه المحدد إلى:</span>' + sel +
+      (GL.can.edit ? '<button class="btn btn-success btn-sm fw-bold" onclick="glCpGo_(this)">💵 توجيه</button>' : '') + '</div><div id="glCpBox"></div>';
+    GL._cpRows = rows;
+    glDlg('💵 توجيه دفعات العملاء (نقدية تحت التسوية)', h, 1050); glCpDraw_();
+  });
+}
+function glCpDraw_() {
+  var all = (document.getElementById('glCpAll') || {}).checked, rows = (GL._cpRows || []).filter(function (x) { return all || x.unsettled; });
+  document.getElementById('glCpBox').innerHTML = rows.length ? '<div class="table-responsive" style="max-height:55vh;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" onchange="document.querySelectorAll(\'.glCpC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>التاريخ</th><th>العميل</th><th>البيان</th><th>المبلغ</th><th>الحساب النقدي الحالي</th><th>القيد</th></tr></thead><tbody>' +
+    rows.map(function (x) {
+      return '<tr><td><input type="checkbox" class="glCpC" value="' + glEsc(x.payId) + '"></td><td class="gl-latin">' + glEsc(x.date) + '</td><td style="text-align:right;">' + glEsc(x.client) + '</td><td style="text-align:right;max-width:280px;">' + glEsc(x.desc) + '</td>' +
+        '<td class="gl-latin"><b>' + glFmt(x.amount) + '</b> ' + (GL_CUR_LBL_[x.currency] || '') + '</td><td>' + (x.unsettled ? '<span class="gl-st" style="background:#fef3c7;color:#92400e;">تحت التسوية</span>' : glEsc(glAccLabel(x.cash))) + '</td>' +
+        '<td><a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.entryId) + '\');return false;">' + glEsc(x.entryId) + '</a></td></tr>';
+    }).join('') + '</tbody></table></div>' : '<div class="text-center py-3" style="color:#166534;font-weight:700;">✅ لا توجد دفعات تحت التسوية</div>';
+}
+function glCpGo_(btn) {
+  var ids = Array.prototype.map.call(document.querySelectorAll('.glCpC:checked'), function (c) { return c.value; });
+  if (!ids.length) return _showPopup('حدد دفعة واحدة على الأقل', 'warning');
+  var code = document.getElementById('glCpTo').value; btn.disabled = true;
+  glRun('glCpDirect', [ids, code], function (r) { showToast('💵 وُجّهت ' + ids.length + ' دفعة إلى ' + glAccLabel(code)); glDlgClose(); glAfterChange(); }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
 }
 function glAutoSetUI(o) {
   glRun('glAutoSettings', [o], function () {
