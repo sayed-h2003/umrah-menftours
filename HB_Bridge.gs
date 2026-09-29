@@ -34,7 +34,10 @@ function hbHandoff(authToken) {
   if (!_sessionHasPerm_(session, 'admin') && !_sessionHasPerm_(session, 'hotels.view')) throw new Error('لا تملك صلاحية الدخول لبرنامج حجوزات الفنادق');
   hbProgramSS_();   // يفشل مبكراً برسالة واضحة لو الملف غير مربوط
   var code = Utilities.getUuid().replace(/-/g, '');
-  CacheService.getScriptCache().put('hbsso_' + code, JSON.stringify({ u: session.username, admin: _sessionHasPerm_(session, 'admin') }), 120);
+  // 🔐 (V4.220) سقف صلاحية الحجوزات الممنوح ببرنامج العمرة (متدرّج) ينتقل مع الدخول الموحّد
+  var isAdm = _sessionHasPerm_(session, 'admin');
+  var cap = isAdm ? 'admin' : (['delete', 'edit', 'add', 'view'].filter(function (c) { return _sessionHasPerm_(session, 'hotels.' + c); })[0] || 'view');
+  CacheService.getScriptCache().put('hbsso_' + code, JSON.stringify({ u: session.username, admin: isAdm, cap: cap }), 120);
   return { url: ScriptApp.getService().getUrl() + '?page=hotels&sso=' + code };
 }
 // من واجهة الحجوزات: يستبدل الرمز بجلسة حجوزات عادية لنفس اسم المستخدم (صلاحياته هناك كما هي)
@@ -57,7 +60,8 @@ function hbSsoLogin(code) {
     if (row[6] === false) throw new Error('هذا الحساب معطَّل في برنامج الحجوزات — تواصل مع المدير');
     var user = userRecordFromRow_(row), minutes = getSessionDurationMinutes(), token = Utilities.getUuid();
     var sessions = readSessions_();
-    sessions[token] = { username: user.username, expiresAt: Date.now() + minutes * 60000 };
+    sessions[token] = { username: user.username, expiresAt: Date.now() + minutes * 60000, cap: info.cap || 'view' };
+    user = capUserBySso_(user, info.cap || 'view');
     writeSessions_(sessions);
     hbLogChange_(user, 'الدخول', user.username, 'دخول موحّد من برنامج العمرة (' + info.u + ')', '', '');
     return safeReturn_({ ok: true, token: token, user: user, sessionMinutes: minutes });

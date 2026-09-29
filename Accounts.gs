@@ -113,6 +113,14 @@ function _glPerm_(authToken, cap) {
   return session;
 }
 function _glIsAdmin_(session) { return _sessionHasPerm_(session, 'admin'); }
+// 🔒 (V4.220) الإعدادات والاستيراد والمزامنات الخارجية والعمليات المؤثرة جوهرياً = للمدير فقط
+function _glAdminPerm_(authToken) {
+  var session = requireAuth_(authToken);
+  if (!_glIsAdmin_(session)) throw new Error('هذا الإجراء للمدير فقط (إعدادات / استيراد / مزامنة خارجية / عملية مؤثرة)');
+  return session;
+}
+// ✅ (V4.220) صلاحية خاصة لاعتماد التغييرات على القيود بعد تسجيلها (المدير يملكها تلقائياً)
+function _glCanApprove_(session) { return _glIsAdmin_(session) || _sessionHasPerm_(session, 'gl.approve'); }
 // (V4.216) خلية حوّلها الشيت لتاريخ ⇒ نص dd/MM/yyyy (مع الوقت لو له وقت) — لا تظهر صيغة «Wed Jul 01 2026 … GMT» أبداً
 function _glStr_(v) {
   if (v instanceof Date) {
@@ -329,7 +337,7 @@ function glBootstrap(authToken) {
     fxDaily: (function () { var m = _glFxDailyMap_(), o = {}; Object.keys(m).forEach(function (k) { o[k] = [m[k].SAR || 0, m[k].USD || 0, m[k].src || '']; }); return o; })(),
     settings: _glSettingsOut_(), rates: _glRates_(), types: GL_TYPES_, kinds: GL_KINDS_, entryTypes: GL_ENTRY_TYPES_,
     accounts: accs, balances: bal,
-    can: { add: _sessionHasPerm_(session, 'gl.add'), edit: _sessionHasPerm_(session, 'gl.edit'), del: _sessionHasPerm_(session, 'gl.delete') }
+    can: { add: _sessionHasPerm_(session, 'gl.add'), edit: _sessionHasPerm_(session, 'gl.edit'), del: _sessionHasPerm_(session, 'gl.delete'), approve: _glCanApprove_(session) }
   };
 }
 // أرصدة الحسابات الورقية المرحّلة حتى تاريخ (أو كلها): {code: {EGP, SAR, USD, base}} (الموجب = مدين)
@@ -483,7 +491,7 @@ function glMoveAccount(authToken, code, newParent) {
 }
 // ربط تلقائي: حساب لكل عميل (تحت 1201) ولكل وكيل سعودي (تحت 2101) لا يوجد له حساب بعد
 function glSyncParties(authToken) {
-  var session = _glPerm_(authToken, 'add');
+  var session = _glAdminPerm_(authToken);
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null;
@@ -984,7 +992,7 @@ function _glMatchAccount_(txt) {
 }
 // معاينة: kind = 'opening' (صفوف: الحساب، مدين، دائن، العملة، سعر الصرف) أو 'entries' (رقم القيد، التاريخ، الحساب، مدين، دائن، العملة، سعر الصرف، البيان، الرحلة، العميل)
 function glImportPreview(authToken, kind, rows) {
-  _glPerm_(authToken, 'add');
+  _glAdminPerm_(authToken);
   if (!Array.isArray(rows) || !rows.length) throw new Error('لا توجد صفوف');
   if (rows.length > 5000) throw new Error('الحد الأقصى 5000 سطر في الدفعة الواحدة');
   var rates = _glRates_(), memo = {};
@@ -1030,7 +1038,7 @@ function glImportPreview(authToken, kind, rows) {
 // الترحيل: payload = {kind, rows:[{group?, date?, accountCode | newKey, debit, credit, currency, rate, desc, trip, client}],
 //   newAccounts:[{key, name, parent, kind, currency}], date (للافتتاحي), note}
 function glImportCommit(authToken, payload) {
-  var session = _glPerm_(authToken, 'add');
+  var session = _glAdminPerm_(authToken);
   payload = payload || {};
   var kind = payload.kind === 'entries' ? 'entries' : 'opening';
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
@@ -1099,7 +1107,7 @@ function glListBatches(authToken) {
 }
 // إلغاء دفعة استيراد كاملة: كل قيودها تصبح «ملغى» (يبقى أثرها للمراجعة)
 function glUndoBatch(authToken, batchId) {
-  var session = _glPerm_(authToken, 'delete');
+  var session = _glAdminPerm_(authToken);
   batchId = _glStr_(batchId);
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
@@ -1265,7 +1273,7 @@ function _glErpPlan_(url, opts) {
     after: afterList, catsCount: Object.keys(cats).length, erpName: ss.getName() };
 }
 function glErpPreview(authToken, url, opts) {
-  _glPerm_(authToken, 'add');
+  _glAdminPerm_(authToken);
   var p = _glErpPlan_(url, opts);
   var byParent = {};
   p.accounts.forEach(function (a) { var k = a.parent; var o = (byParent[k] = byParent[k] || { parent: k, name: (_glAccounts_().map[k] || {}).name || k, n: 0, newN: 0, reuse: 0 }); o.n++; if (a.action === 'new') o.newN++; if (a.action === 'reuse') o.reuse++; });
@@ -1867,7 +1875,7 @@ function glAutoPreview(authToken) {
   return r;
 }
 function glAutoSync(authToken) {
-  var session = _glPerm_(authToken, 'add');
+  var session = _glAdminPerm_(authToken);
   var lock = LockService.getScriptLock(); lock.waitLock(60000);
   try {
     var r = _glAutoRun_(session.username, false);
@@ -2012,7 +2020,7 @@ function glCustSheetGet(authToken, code) {
   return { success: true, cfg: _glCsCfg_(a.code), account: { code: a.code, name: a.name, currency: a.currency || '' } };
 }
 function glCustSheetSave(authToken, code, cfg) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glAdminPerm_(authToken);
   var a = _glAccounts_().map[_glStr_(code)]; if (!a || a.isGroup) throw new Error('اختر عهدة');
   cfg = cfg || {};
   var id = _glCsSheetId_(cfg.url || cfg.id);
@@ -2027,7 +2035,7 @@ function glCustSheetSave(authToken, code, cfg) {
 }
 // preview=true ⇒ معاينة فقط بلا كتابة
 function glCustSheetSync(authToken, code, preview) {
-  var session = _glPerm_(authToken, preview ? 'view' : 'add');
+  var session = preview ? _glPerm_(authToken, 'view') : _glAdminPerm_(authToken);
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try { return _glCsSync_(_glStr_(code), session.username, { preview: !!preview }); }
   finally { lock.releaseLock(); }
@@ -2224,7 +2232,7 @@ function glFxDaily(authToken) {
   return { success: true, rows: rows, cron: s.fx_daily_cron === 'نعم', error: s.fx_daily_err || '' };
 }
 function glFxFetchNow(authToken) {
-  var session = _glPerm_(authToken, 'add');
+  var session = _glAdminPerm_(authToken);
   return { success: true, row: _glFxFetchToday_(session.username) };
 }
 // إدخال/لصق أسعار أيام سابقة: rows = [{date, SAR, USD, SARbuy?, USDbuy?}]
@@ -3142,7 +3150,7 @@ function glHbState(authToken) {
 }
 // حفظ خريطة الأسماء — وإنشاء الحسابات الناقصة تحت آبائها (لا تكرار: حساب قائم بنفس الربط/الاسم يُعاد استخدامه)
 function glHbSaveMap(authToken, rows) {
-  var session = _glPerm_(authToken, 'add');
+  var session = _glAdminPerm_(authToken);
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
@@ -3260,7 +3268,7 @@ function _glHbSeasonPlan_(date) {
 }
 function glHbSeasonPreview(authToken, date) { _glPerm_(authToken, 'view'); _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; var r = _glHbSeasonPlan_(date); r.success = true; return r; }
 function glHbSeasonClose(authToken, date) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glAdminPerm_(authToken);
   var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;

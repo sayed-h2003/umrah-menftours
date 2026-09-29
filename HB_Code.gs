@@ -357,6 +357,22 @@ function login(username, password) {
 //    متبقية). للمستخدم النشط يعني كتابة واحدة كل ~50 دقيقة بدل واحدة كل دقيقة
 var SESSION_MEMO_ = {};
 var SESSION_CACHE_TTL_ = 30;   // ثوانٍ — قصير جدًا حتى تُلتقط قيود الجلسة والصلاحيات بسرعة
+// 🔐 (V4.220) الدخول الموحّد من برنامج العمرة يحمل «سقف» صلاحية الحجوزات الممنوحة هناك (عرض/إضافة/تعديل/حذف):
+// صلاحية كل شاشة هنا = الأقل بين صلاحية المستخدم في برنامج الحجوزات وهذا السقف، ومدير هنا بلا صلاحية مدير
+// هناك يعمل كمستخدم عادي. «admin» أو بلا سقف (دخول مباشر بكلمة المرور) = كما هو.
+function capUserBySso_(user, cap) {
+  if (!user || !cap || cap === 'admin') return user;
+  var capRank = permLevelRank_(cap);
+  var perms = {};
+  ALL_SCREENS_.forEach(function (s) {
+    var lv = user.permissions && user.permissions[s] ? user.permissions[s] : 'none';
+    perms[s] = permLevelRank_(lv) > capRank ? cap : lv;
+  });
+  user.permissions = perms;
+  if (user.role === 'admin') { user.role = 'user'; user.ssoCapped = true; }
+  user.ssoCap = cap;
+  return user;
+}
 function checkSession(token) {
   try {
     if (!token) return { ok: false };
@@ -390,7 +406,7 @@ function checkSession(token) {
       sessions[token].expiresAt = Date.now() + minutes * 60000;
       writeSessions_(sessions);
     }
-    var out = safeReturn_({ ok: true, user: userRecordFromRow_(row), sessionMinutes: minutes });
+    var out = safeReturn_({ ok: true, user: capUserBySso_(userRecordFromRow_(row), sess.cap), sessionMinutes: minutes });
     SESSION_MEMO_[token] = out;
     if (cache) { try { cache.put(cacheKey, JSON.stringify(out), SESSION_CACHE_TTL_); } catch (e3) {} }
     return out;

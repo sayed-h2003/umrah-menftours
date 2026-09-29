@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.220";
+var APP_VERSION = "4.221";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6053,12 +6053,12 @@ function checkPasswordMatch_(plainPassword, storedValue) {
 /* 🔐 نموذج الصلاحيات الذكية (سيرفر): يفهم رموز "screen.cap" مع التتالي + الرموز القديمة
    - أي صلاحية شاشة تعني العرض؛ الحذف يعني التعديل والعرض
    - الرمز القديم "delete" يمنح الحذف في كل الشاشات (حفاظاً على السلوك السابق) */
-var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl','hotels'];
+var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl','hotels','stats'];
 var _PERM_LEGACY_MAP_ = {
   'add':'bookings.add','edit':'bookings.edit','delete':'bookings.delete',
   'print':'bookings.print','approve':'bookings.approve',
   'trips':'trips.view','registry':'registry.view',
-  'transport_accounts':'transport.view','audit_log':'audit.view'
+  'transport_accounts':'transport.view','audit_log':'audit.view','stats':'stats.view'
 };
 function _sessionHasPerm_(session, perm) {
   var raw = String((session && session.permissions) || "").toLowerCase();
@@ -12090,13 +12090,31 @@ function _auditScreen_(action, field, recordId) {
   // (MF:/VZ:/AI:/AP:) ثم بنص العملية؛ كانت عملياتهما تتبعثر بين «أخرى» و«الإعدادات» و«الرحلات»
   // و«حسابات العملاء» حسب اسم الحقل المعدَّل، ولا يوجد اختيار لهما بفلتر الشاشة إطلاقاً
   var rid = String(recordId || '');
-  if (/^GL:/.test(rid)) return 'gl';   // 📒 (V4.205) الحسابات العامة
+  if (/^HB:/.test(rid)) return 'hotels';   // 🏨 (V4.220) سجل برنامج الحجوزات المدموج
+  // 📒 (V4.205) الحسابات العامة — (V4.220) مقسّمة لأقسامها لتتبّع أدق
+  if (/^GL:/.test(rid)) {
+    var ga = String(action || '');
+    if (/اعتماد تغيير|تغييرات بانتظار/.test(ga)) return 'glapprove';
+    if (/شيت عهدة/.test(ga)) return 'glcust';
+    if (/مرفق|إرفاق/.test(ga)) return 'glatt';
+    if (/صرف يومية|أسعار الصرف|سعر الصرف/.test(ga) || /^GL:fx/.test(rid)) return 'glfx';
+    if (/حجوزات|شارت|ERP مكررة/.test(ga) || /^GL:hb/.test(rid)) return 'glhb';
+    if (/القيود التلقائية|قيود الرحلات/.test(ga) || /^GL:auto/.test(rid)) return 'glauto';
+    if (/بالدليل|من الدليل|ربط العملاء والوكلاء/.test(ga) || /^GL:sync/.test(rid)) return 'glcoa';
+    if (/إعدادات|تجهيز|ربط ملف|إقفال|فتح كل الفترات|إعادة فتح|استيراد|نقل بيانات الـ ERP/.test(ga) || /^GL:(setup|settings|lock)/.test(rid)) return 'glset';
+    return 'gl';
+  }
   if (/^MF:/.test(rid)) return 'ministry';
   if (/^(VZ|AI|AP|HA|HL):/.test(rid)) return 'visas';
   var act = String(action || '');
   if (/ملف مراجعة|ملفات مراجعة|رسوم غرفة|حصة أفراد|نوع الملف|إضافة مشرف|تعديل مشرف|حذف مشرف|لمشرفين|مشاركة جماعية لمشرف/.test(act)) return 'ministry';
+  if (/دورات نقل|دورة نقل|النقل السعودي/.test(act)) return 'transport';
   if (/تأشيرات|وكيل|اتفاقية سكن|تخصيص سكن|حسابات الشركات للوكلاء|سعر جماعي/.test(act)) return 'visas';
   if (/مستخدم|دخول|خروج|كلمة المرور|صلاحي/.test(a)) return 'users';
+  // 🚌💲🛏️ (V4.220) النقل والتسعير والتسكين — كانت تقع في «أخرى» أو «الوكلاء» أو «المعتمرون»
+  if (/النقل السعودي|دورات النقل|دورة نقل|دورات نقل|كشف النقل/.test(a)) return 'transport';
+  if (/تسكين|أرقام غرف|دمج تسكين/.test(a)) return 'housing';
+  if (/حفظ تسعير|تعديل تسعير|تسعير رحلة|التسعير/.test(act)) return 'pricing';
   if (/معتمر|كشف|تسكين|جواز|محرم/.test(a))         return 'pilgrims';
   // ⚠️ (V4.91) قبل فحص «رحلة» عمداً: أفعال حسابات العملاء كثيرًا ما تذكر اسم الرحلة كحقل (مثال:
   // «دمج رحلات دائم بكشف حساب») فتقع خطأً بتصنيف «الرحلات» لولا هذا الترتيب
@@ -12110,8 +12128,38 @@ function _auditScreen_(action, field, recordId) {
 var AUDIT_SCREEN_LABELS_ = {
   bookings: 'الإشعارات', trips: 'الرحلات', pilgrims: 'المعتمرون / الكشف', accounts: 'حسابات العملاء',
   users: 'إدارة المستخدمين', settings: 'الإعدادات', catering: 'اتفاقيات الإعاشة',
-  ministry: 'ملفات الوزارة', visas: 'متابعة الوكلاء', gl: 'الحسابات العامة', other: 'أخرى'
+  ministry: 'ملفات الوزارة', visas: 'متابعة الوكلاء', gl: 'الحسابات العامة — القيود والإيصالات', other: 'أخرى',
+  glcoa: 'الحسابات العامة — دليل الحسابات', glcust: 'الحسابات العامة — شيت العهدة', glatt: 'الحسابات العامة — المرفقات',
+  glfx: 'الحسابات العامة — أسعار الصرف', glhb: 'الحسابات العامة — ربط الحجوزات والـ ERP', glauto: 'الحسابات العامة — القيود التلقائية',
+  glset: 'الحسابات العامة — الإعدادات والإقفال والاستيراد', glapprove: 'الحسابات العامة — اعتماد التغييرات',
+  transport: 'النقل', pricing: 'التسعير', housing: 'التسكين وأرقام الغرف', hotels: 'برنامج الحجوزات (الفنادق)'
 };
+function _auditTsNum_(s) {   // «dd/MM/yyyy HH:mm:ss» ⇒ رقم للترتيب
+  var m = String(s || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  return m ? new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime() : 0;
+}
+function _auditScreenMatch_(scr, filter) { return !filter || scr === filter || (filter === 'gl*' && /^gl/.test(scr)); }
+// 🏨 (V4.220) قراءة سجل تعديلات برنامج الحجوزات (شيت بملف الحجوزات) وتحويله لنفس شكل سجل البرنامج
+function _auditHotelsRows_(maxRows) {
+  var out = [];
+  try {
+    if (typeof getSS_ !== 'function' || typeof CHANGELOG_SHEET_NAME === 'undefined') return out;
+    var sh = getSS_().getSheetByName(CHANGELOG_SHEET_NAME); if (!sh) return out;
+    var last = sh.getLastRow(); if (last < 2) return out;
+    var start = Math.max(2, last - maxRows + 1);
+    sh.getRange(start, 1, last - start + 1, 10).getValues().forEach(function (r) {
+      if (!r[0] && !r[5]) return;
+      var d = r[0] instanceof Date ? r[0] : null;
+      out.push({ tsDate: d, timestamp: d ? Utilities.formatDate(d, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss') : String(r[0] || '-'),
+        username: String(r[5] || '-'), action: 'الحجوزات: ' + String(r[6] || 'تعديل'),
+        recordId: 'HB:' + String(r[2] || r[1] || r[9] || '-'),
+        field: [r[3] ? 'العميل: ' + r[3] : '', String(r[4] || '')].filter(String).join(' — ') || '-',
+        oldValue: r[7] === '' || r[7] == null ? '-' : String(r[7]), newValue: r[8] === '' || r[8] == null ? '-' : String(r[8]),
+        screen: 'hotels', screenLabel: 'برنامج الحجوزات (الفنادق)' });
+    });
+  } catch (e) { Logger.log('audit hotels: ' + e.message); }
+  return out;
+}
 
 function getAuditLog(authToken, filters) {
   requireAuditLogPermission_(authToken);
@@ -12197,7 +12245,7 @@ function getAuditLog(authToken, filters) {
     // إخفاء عمليات الدخول/الخروج افتراضياً إلا لو الفلتر مفعّل صراحة
     if (LOGIN_LOGOUT_ACTIONS.indexOf(entry.action) !== -1 && !showLoginLogout) continue;
 
-    if (filterScreen    && entry.screen !== filterScreen) continue;
+    if (filterScreen    && !_auditScreenMatch_(entry.screen, filterScreen)) continue;
     if (filterRecordId && entry.recordId.indexOf(filterRecordId) === -1) continue;
     if (filterUsername  && entry.username.indexOf(filterUsername)  === -1) continue;
     if (filterAction    && entry.action.indexOf(filterAction)    === -1) continue;
@@ -12212,9 +12260,29 @@ function getAuditLog(authToken, filters) {
       if (filterToDate && tsDate > new Date(filterToDate + 'T23:59:59')) continue;
     }
 
+    entry._t = tsDate ? tsDate.getTime() : _auditTsNum_(tsStr);
     result.push(entry);
     if (result.length >= 500) break; // (V4.186) أحدث 500 نتيجة مطابقة تكفي للعرض
   }
+  // 🏨 (V4.220) دمج سجل برنامج الحجوزات (كل الشاشات أو شاشة الحجوزات فقط) بنفس الفلاتر ثم ترتيب زمني
+  if (!filterScreen || filterScreen === 'hotels') {
+    var hb = _auditHotelsRows_(maxRows).filter(function (e) {
+      if (filterRecordId && e.recordId.indexOf(filterRecordId) === -1) return false;
+      if (filterUsername && e.username.indexOf(filterUsername) === -1) return false;
+      if (filterAction && e.action.indexOf(filterAction) === -1) return false;
+      if (filterEntity && (e.recordId + ' ' + e.field + ' ' + e.oldValue + ' ' + e.newValue).indexOf(filterEntity) === -1) return false;
+      if ((filterFromDate || filterToDate) && e.tsDate) {
+        if (filterFromDate && e.tsDate < new Date(filterFromDate)) return false;
+        if (filterToDate && e.tsDate > new Date(filterToDate + 'T23:59:59')) return false;
+      }
+      return true;
+    });
+    if (hb.length) {
+      hb.forEach(function (e) { e._t = e.tsDate ? e.tsDate.getTime() : _auditTsNum_(e.timestamp); delete e.tsDate; });
+      result = result.concat(hb).sort(function (a, b) { return (b._t || 0) - (a._t || 0); }).slice(0, 500);
+    }
+  }
+  result.forEach(function (e) { delete e._t; });
   Logger.log('getAuditLog: returning ' + result.length + ' entries');
   return result;
 }

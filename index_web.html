@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.220 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.221 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.220)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.221)', diag);
 }, 6000);
 </script>
 
@@ -1503,7 +1503,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.220</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.221</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5353,8 +5353,8 @@ input[type="date"]:not(:focus):not(:valid) {
     <span class="gl-tab" data-t="auto" onclick="glTab('auto')">🤖 القيود التلقائية</span>
     <span class="gl-tab" data-t="hotels" onclick="glTab('hotels')">🏨 الحجوزات</span>
     <span class="gl-tab" data-t="coa" onclick="glTab('coa')">🌳 دليل الحسابات</span>
-    <span class="gl-tab" data-t="import" onclick="glTab('import')">📥 الاستيراد المجمّع</span>
-    <span class="gl-tab" data-t="settings" onclick="glTab('settings')">⚙️ الإعدادات</span>
+    <span class="gl-tab gl-adm" data-t="import" onclick="glTab('import')">📥 الاستيراد المجمّع</span>
+    <span class="gl-tab gl-adm" data-t="settings" onclick="glTab('settings')">⚙️ الإعدادات</span>
   </div>
   <div id="glBody"></div>
 </div>
@@ -5479,7 +5479,23 @@ input[type="date"]:not(:focus):not(:valid) {
           <!-- 🏛️🛂 (V4.186) الشاشتان الجديدتان — كل عملياتهما تُراقَب هنا -->
           <option value="ministry">🏛️ ملفات الوزارة</option>
           <option value="visas">🛂 متابعة الوكلاء والتأشيرات</option>
-          <option value="gl">📒 الحسابات العامة</option>
+          <option value="transport">🚌 النقل</option>
+          <option value="pricing">💲 التسعير</option>
+          <option value="housing">🛏️ التسكين وأرقام الغرف</option>
+          <!-- 📒 (V4.220) الحسابات العامة مقسّمة لأقسامها -->
+          <optgroup label="📒 الحسابات العامة">
+            <option value="gl*">📒 كل الحسابات العامة</option>
+            <option value="gl">🧾 القيود والإيصالات والخزينة</option>
+            <option value="glcoa">🌳 دليل الحسابات</option>
+            <option value="glcust">👜 شيت العهدة</option>
+            <option value="glatt">📎 المرفقات</option>
+            <option value="glfx">💱 أسعار الصرف</option>
+            <option value="glauto">🤖 القيود التلقائية</option>
+            <option value="glapprove">✅ اعتماد التغييرات</option>
+            <option value="glhb">🏨 ربط الحجوزات والـ ERP</option>
+            <option value="glset">⚙️ الإعدادات والإقفال والاستيراد</option>
+          </optgroup>
+          <option value="hotels">🏨 برنامج الحجوزات (الفنادق)</option>
           <option value="other">📦 أخرى</option>
         </select>
         <select id="auditFilterAction" class="form-select form-select-sm audit-filter" style="width:auto;min-width:130px;" onchange="applyAuditLogFilters()" title="نوع العملية">
@@ -7392,7 +7408,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.220";
+var CLIENT_APP_VERSION = "4.221";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7608,6 +7624,7 @@ function _buildPermMatrixHtml(prefix) {
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="bookings.approve" id="' + prefix + '-x-approve"><label class="form-check-label small" for="' + prefix + '-x-approve">✅ اعتماد الإشعار</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="ministry.approve" id="' + prefix + '-x-mfApprove"><label class="form-check-label small" for="' + prefix + '-x-mfApprove" title="اعتماد ملف مراجعة الوزارة يدوياً — الاعتماد التلقائي بسبب رقم القيد لا يحتاج هذه الصلاحية">✅ اعتماد ملف مراجعة الوزارة</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="visas.finance" id="' + prefix + '-x-vzFinance"><label class="form-check-label small" for="' + prefix + '-x-vzFinance" title="الجانب المالي في شاشة التأشيرات والوكلاء: أسعار الوكلاء + المستحق + كشوف حساب الوكلاء + الإحصائيات المالية. من يسجّل ويتابع فقط لا يرى هذه البيانات.">💰 الجانب المالي للتأشيرات والوكلاء</label></div>' +
+      '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="gl.approve" id="' + prefix + '-x-glApprove"><label class="form-check-label small" for="' + prefix + '-x-glApprove" title="اعتماد التغييرات التي تحدث على القيود بعد تسجيلها (تعديل مصدرها بالشاشات) — المدير يملكها تلقائياً">✅ اعتماد تغييرات القيود</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="settings_basic" id="' + prefix + '-x-settingsBasic"><label class="form-check-label small" for="' + prefix + '-x-settingsBasic" title="الشركات والوكلاء واللوجوهات + تنبيه البريد اليومي + تنبيه تيليجرام اليومي + الحقول الإلزامية في الإشعار">⚙️ إعدادات أساسية</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="trips.client_link" id="' + prefix + '-x-clientLink"><label class="form-check-label small" for="' + prefix + '-x-clientLink" title="إنشاء/إلغاء روابط قراءة-فقط لعملاء الرحلة">🔗 رابط العميل</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="r70.sim" id="' + prefix + '-x-r70sim"><label class="form-check-label small" for="' + prefix + '-x-r70sim" title="فتح نموذج محاكاة افتراضية لقاعدة عودة الـ70% (بدون أي تأثير على البيانات)">🧪 محاكاة قاعدة الـ70%</label></div>' +
@@ -13943,7 +13960,9 @@ function _auditRowsHtml_(entries, opts) {
   opts = opts || {};
   var esc = escapeHtml_;
   var SC = { bookings: '#dbeafe', trips: '#dcfce7', pilgrims: '#fef9c3', users: '#fce7f3', settings: '#f3e8ff', other: '#f1f5f9',
-    accounts: '#ffedd5', catering: '#ecfccb', ministry: '#e0e7ff', visas: '#ccfbf1' };
+    accounts: '#ffedd5', catering: '#ecfccb', ministry: '#e0e7ff', visas: '#ccfbf1',
+    gl: '#e0f2fe', glcoa: '#e0f2fe', glcust: '#e0f2fe', glatt: '#e0f2fe', glfx: '#e0f2fe', glauto: '#e0f2fe', glapprove: '#e0f2fe', glhb: '#e0f2fe', glset: '#e0f2fe',
+    transport: '#fef3c7', pricing: '#fae8ff', housing: '#fef9c3', hotels: '#ede9fe' };
   return _auditGroup_(entries).map(function (g) {
     var det = g.changes.map(_auditChangeHtml_).filter(Boolean).join('');
     return '<tr>' +
@@ -19903,6 +19922,8 @@ function _shareMultiTripSummaryPdf(btn) {
 // وداخلياً يُقسَّم تلقائياً حسب فندق كل معتمر في هذه المدينة (كل غرفة فندق واحد ثابت — "الرحلة زي باكيدج")
 function generateHousing(city) {
   window._hotelColorMap_ = {};
+  // 🔑 (V4.220) أرقام غرف الفندق تُقرأ من جديد من الكشف — إلا لو فيه أرقام مُدخلة لم تُحفظ بعد
+  try { var _hk = _hrnKey_(city || 'madinah'); if (!(window._hrnDirty || {})[_hk] && window._hrnMaps) delete window._hrnMaps[_hk]; } catch (e) {}
   window._unhousedPilgrims = []; // 🚷 تُصفَّر عند كل توليد تسكين جديد — تُعاد تعبئتها أدناه بالمستبعدين يدوياً فقط
   city = city || 'madinah';
   var cityField = (city === 'makkah') ? 'hotelMakkah' : 'hotelMadinah';
@@ -20287,7 +20308,7 @@ function _renderHousingCards() {
 
   // 🔢 ترقيم عام متسلسل لكل الغرف (لا يُعاد من 1 لكل فندق) — يمنع تكرار "غرفة 1" بين الفنادق
   var roomLabels = rooms.map(function(room, i) {
-    var hno = _roomHotelNo_(room);   // 🔑 (V4.220) رقم الغرفة بالفندق
+    var hno = _roomHotelNo_(i);   // 🔑 (V4.220) رقم الغرفة بالفندق
     return 'غرفة ' + (i + 1) + (hno ? ' · 🔑 ' + escapeHtml_(hno) : '');
   });
 
@@ -20678,39 +20699,43 @@ function saveHousingToManifest() {
 
 /* 🔢 (V4.220) أرقام غرف الفندق الحقيقية: لكل غرفة بالتسكين رقمها في الفندق (يُدخل يدوياً) — يظهر على الكروت والطباعة
    ويُحفظ مع رقم الغرفة بالكشف «(الفندق) غرفة 5 — 512» فيُقرأ تلقائياً عند فتح التسكين مرة أخرى */
-function _roomHotelNoOf_(label) { var m = String(label || '').match(/غرفة\s*\d+\s*—\s*([^—()]+?)\s*$/); return m ? m[1] : ''; }
-function _roomHotelNo_(room) {
-  if (!room) return '';
-  if (room.hotelRoomNo !== undefined) return String(room.hotelRoomNo || '');
-  var tally = {}, best = '', bn = 0;
-  (room.members || []).forEach(function (m) { var h = _roomHotelNoOf_(m.roomNo); if (h) { tally[h] = (tally[h] || 0) + 1; if (tally[h] > bn) { bn = tally[h]; best = h; } } });
-  return best;
+// 🔑 (V4.220) الرقم مرتبط بالغرفة نفسها (غرفة N بالتسكين) وليس بالأسماء — نقل الأسماء لا يغيّره.
+// الخريطة {N: رقم الفندق} لكل رحلة+مدينة تُقرأ من الكشف «(الفندق) غرفة N — 512» وتُعدَّل من النافذة
+function _hrnParse_(label) { var m = String(label || '').match(/غرفة\s*(\d+)\s*—\s*([^—()]+?)\s*$/); return m ? { n: +m[1], h: m[2] } : null; }
+function _hrnKey_(city) { return ((window._currentTripData || {}).name || '') + '|' + (city || window._activeHousingCity || ''); }
+function _hrnMap_() {
+  window._hrnMaps = window._hrnMaps || {};
+  var k = _hrnKey_();
+  if (!window._hrnMaps[k]) {
+    var tally = {}, m = {};
+    (window._housingRooms || []).forEach(function (r) { (r.members || []).forEach(function (p) {
+      var x = _hrnParse_(p.roomNo); if (!x) return; var t = tally[x.n] = tally[x.n] || {}; t[x.h] = (t[x.h] || 0) + 1; }); });
+    (window._unhousedPilgrims || []).forEach(function (p) { var x = _hrnParse_(p.roomNo); if (x) { var t = tally[x.n] = tally[x.n] || {}; t[x.h] = (t[x.h] || 0) + 1; } });
+    Object.keys(tally).forEach(function (n) { m[n] = Object.keys(tally[n]).sort(function (a, b) { return tally[n][b] - tally[n][a]; })[0]; });
+    window._hrnMaps[k] = m;
+  }
+  return window._hrnMaps[k];
 }
-function _roomHotelNoConflict_(room) {
-  var set = {}; (room.members || []).forEach(function (m) { var h = _roomHotelNoOf_(m.roomNo); if (h) set[h] = 1; });
-  return Object.keys(set).length > 1;
-}
+function _roomHotelNo_(idx) { return String(_hrnMap_()[idx + 1] || ''); }
 function openHotelRoomNosDlg() {
   var rooms = window._housingRooms || [];
   if (!rooms.length) { alert('لا يوجد تسكين — ولّد التسكين أولاً'); return; }
   var t = window._currentTripData || {}, city = window._activeHousingCity === 'makkah' ? 'مكة' : 'المدينة';
   var byHotel = {}, order = [];
   rooms.forEach(function (r, i) { var h = r.hotel || 'بدون فندق محدد'; if (!byHotel[h]) { byHotel[h] = []; order.push(h); } byHotel[h].push(i); });
-  var html = '<div class="small text-muted mb-2">اكتب رقم كل غرفة في الفندق ثم «تطبيق». يظهر الرقم على كروت التسكين والطباعة وملف المشرف، ويُحفظ مع رقم الغرفة بالكشف. «📋 لصق» يملأ أرقام الفندق بالترتيب من عمود منسوخ (إكسل).</div>' +
+  var html = '<div class="small text-muted mb-2">اكتب رقم كل غرفة في الفندق ثم «تطبيق». الرقم ثابت للغرفة نفسها (غرفة 1، 2، …) ولا يتغير بنقل الأسماء بين الغرف. يظهر على كروت التسكين والطباعة وملف المشرف، ويُحفظ مع رقم الغرفة بالكشف. «📋 لصق» يملأ الأرقام بالترتيب من عمود منسوخ (إكسل).</div>' +
     order.map(function (h, hi) {
-      var idxs = byHotel[h], done = idxs.filter(function (i) { return _roomHotelNo_(rooms[i]); }).length;
+      var idxs = byHotel[h], done = idxs.filter(function (i) { return _roomHotelNo_(i); }).length;
       return '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:10px;overflow:hidden;">' +
         '<div style="background:' + _hotelColor_(h === 'بدون فندق محدد' ? '' : h) + ';color:#fff;padding:5px 10px;font-weight:800;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">🏨 ' + escapeHtml_(h) +
           ' <span class="badge bg-light text-dark">' + idxs.length + ' غرفة</span><span class="badge bg-light text-dark">✍️ ' + done + ' / ' + idxs.length + '</span><span style="flex:1"></span>' +
           '<button class="btn btn-light btn-sm py-0" onclick="_hrnPaste_(' + hi + ')">📋 لصق عمود أرقام</button><button class="btn btn-outline-light btn-sm py-0" onclick="_hrnClear_(' + hi + ')">🧹 مسح</button></div>' +
-        '<div class="table-responsive"><table class="table table-sm table-bordered mb-0 align-middle" style="font-size:12.5px;text-align:center;"><thead class="table-light"><tr><th>غرفة التسكين</th><th>طبيعة التسكين</th><th>العدد الفعلي</th><th>الأسماء</th><th style="width:130px;">رقم الغرفة بالفندق</th></tr></thead><tbody>' +
+        '<div class="table-responsive"><table class="table table-sm table-bordered mb-0 align-middle" style="font-size:12.5px;text-align:center;"><thead class="table-light"><tr><th>غرفة التسكين</th><th>طبيعة التسكين</th><th>العدد الفعلي</th><th style="width:150px;">رقم الغرفة بالفندق</th></tr></thead><tbody>' +
         idxs.map(function (i) {
           var r = rooms[i], beds = r.members.filter(function (m) { return !m.noBed; }).length, kids = r.members.length - beds;
           return '<tr><td><b>غرفة ' + (i + 1) + '</b></td><td>' + escapeHtml_(_dynamicRoomType_(r)) + (r.shortage ? ' <small class="text-warning">(ناقصة ' + r.shortageCount + ')</small>' : '') + '</td>' +
             '<td>' + beds + (kids ? ' <small class="text-muted">+ ' + kids + ' طفل</small>' : '') + '</td>' +
-            '<td style="text-align:right;font-size:11px;max-width:320px;">' + r.members.map(function (m) { return escapeHtml_(m.name); }).join(' · ') + '</td>' +
-            '<td><input class="form-control form-control-sm hrn-inp hrn-h' + hi + '" data-idx="' + i + '" dir="ltr" style="text-align:center;font-weight:700;" value="' + escapeHtml_(_roomHotelNo_(r)) + '">' +
-              (_roomHotelNoConflict_(r) ? '<div class="small text-danger">⚠️ شاغلوها من غرف مختلفة</div>' : '') + '</td></tr>';
+            '<td><input class="form-control form-control-sm hrn-inp hrn-h' + hi + '" data-idx="' + i + '" dir="ltr" style="text-align:center;font-weight:700;" value="' + escapeHtml_(_roomHotelNo_(i)) + '"></td></tr>';
         }).join('') + '</tbody></table></div></div>';
     }).join('') +
     '<div class="d-flex gap-2 justify-content-end flex-wrap"><button class="btn btn-outline-success btn-sm fw-bold" onclick="_hrnApply_(false)">✅ تطبيق على التسكين</button>' +
@@ -20732,9 +20757,10 @@ function _hrnClear_(hi) { document.querySelectorAll('.hrn-h' + hi).forEach(funct
 function _hrnApply_(andSave) {
   var rooms = window._housingRooms || [], dup = {}, dups = [];
   document.querySelectorAll('.hrn-inp').forEach(function (inp) {
-    var r = rooms[+inp.dataset.idx]; if (!r) return;
-    var v = _toLatinDigits_(inp.value).trim().replace(/—/g, '-');
-    r.hotelRoomNo = v;
+    var ix = +inp.dataset.idx, r = rooms[ix]; if (!r) return;
+    var v = _toLatinDigits_(inp.value).trim().replace(/[—()]/g, '-');
+    var mp = _hrnMap_(); if (v) mp[ix + 1] = v; else delete mp[ix + 1];
+    window._hrnDirty = window._hrnDirty || {}; window._hrnDirty[_hrnKey_()] = 1;
     var key = (r.hotel || '') + '|' + v; if (v) { if (dup[key]) dups.push(v); dup[key] = 1; }
   });
   var go = function () {
@@ -20761,7 +20787,7 @@ function _doSaveHousingToManifest_(rooms, unhoused) {
   rooms.forEach(function(r, roomIdx) {
     var roomLabel = 'غرفة ' + (roomIdx + 1);
     if (r.hotel) { roomLabel = '(' + r.hotel + ') ' + roomLabel; }
-    var _hno = _roomHotelNo_(r); if (_hno) roomLabel += ' — ' + _hno;   // 🔑 (V4.220) رقم الغرفة بالفندق يُحفظ مع رقم التسكين
+    var _hno = _roomHotelNo_(roomIdx); if (_hno) roomLabel += ' — ' + _hno;   // 🔑 (V4.220) رقم الغرفة بالفندق يُحفظ مع رقم التسكين
     var adultsInRoom = r.members.filter(function(m) { return !m.noBed; });
     var freshGroupId = adultsInRoom.length > 1 ? ('G' + Date.now() + '_' + (groupCounter++)) : '';
     // ⬆️ لو الغرفة تجاوزت سعة نوعها المتعاقد (5 في "رباعي" مثلاً)، النوع الفعلي = خماسي — يُكتَب
@@ -20830,6 +20856,7 @@ function _doSaveHousingToManifest_(rooms, unhoused) {
   _recolorRoomGroups();
   updatePilgrimsCount(); // تحديث المسلسلات بعد إعادة الترتيب
   _markPilgrimsDirty();
+  try { if (window._hrnDirty) delete window._hrnDirty[_hrnKey_()]; } catch (e) {}   // 🔑 الأرقام صارت بالكشف
   var inst = bootstrap.Modal.getInstance(document.getElementById('housingModal'));
   if (inst) inst.hide();
   var msg = '✅ تم تطبيق التسكين على ' + applied + ' معتمر وإعادة ترتيب الكشف حسب الغرف — اضغط "💾 حفظ الكشف" لحفظه نهائياً';
@@ -21542,7 +21569,7 @@ function _housingPrintableHtml() {
   var cardsHtml = '';
   rooms.forEach(function(room, roomIdx) {
     // 🔢 ترقيم عام متسلسل (مطابق لشاشة التسكين والحفظ) — بلا تكرار بين الفنادق
-    var roomLabel = 'غرفة ' + (roomIdx + 1) + (_roomHotelNo_(room) ? ' · 🔑 ' + escapeHtml_(_roomHotelNo_(room)) : '');
+    var roomLabel = 'غرفة ' + (roomIdx + 1) + (_roomHotelNo_(roomIdx) ? ' · 🔑 ' + escapeHtml_(_roomHotelNo_(roomIdx)) : '');
     var bedsCount = room.members.filter(function(m){ return !m.noBed; }).length;
     var hTh = 'border:1px solid #cbd5e1; padding:3px 5px; background-color:#e2e8f0; text-align:center;';
     var footerText = (room.hotel ? ('🏨 ' + room.hotel) : 'بلا فندق محدد') + (cityCheckIn ? (' | 📅 ' + cityCheckIn + ' → ' + (cityCheckOut || '-')) : '') + (room.shortage ? (' | 🛏️ سرير فارغ: ' + room.shortageCount) : '');
@@ -22540,8 +22567,16 @@ var AUDIT_SCREEN_ACTIONS = {
     {v:'حذف قيد تأشيرات', t:'🗑️ حذف مجموعة'}, {v:'رقم القيد', t:'🧾 رقم القيد'}, {v:'تسعير', t:'💲 التسعير'}, {v:'سعر جماعي', t:'💲 سعر جماعي'},
     {v:'بند حساب وكيل', t:'📒 بنود حساب الوكيل'}, {v:'دفعة وكيل', t:'💳 دفعات الوكيل'}, {v:'اتفاقية سكن', t:'🏨 اتفاقيات السكن/الإعاشة'},
     {v:'تخصيص سكن', t:'🛏️ تخصيصات السكن'}, {v:'حسابات الشركات للوكلاء', t:'🧑‍💼 حسابات الشركات'}, {v:'استيراد', t:'📥 استيراد'} ],
-  gl: [ {v:'', t:'كل عمليات الحسابات العامة'}, {v:'قيد', t:'🧾 القيود'}, {v:'ترحيل قيد', t:'✅ الترحيل'}, {v:'إلغاء', t:'⛔ الإلغاء'},
-    {v:'حساب بالدليل', t:'🌳 دليل الحسابات'}, {v:'استيراد', t:'📥 الاستيراد المجمّع'}, {v:'إعدادات الحسابات', t:'⚙️ الإعدادات'} ]
+  gl: [ {v:'', t:'كل عمليات القيود والإيصالات'}, {v:'تسجيل', t:'➕ تسجيل قيد/إيصال'}, {v:'تعديل', t:'✏️ تعديل'}, {v:'ترحيل قيد', t:'✅ الترحيل'}, {v:'إلغاء', t:'⛔ الإلغاء'}, {v:'حذف', t:'🗑️ الحذف'} ],
+  'gl*': [ {v:'', t:'كل عمليات الحسابات العامة'}, {v:'قيد', t:'🧾 القيود'}, {v:'ترحيل قيد', t:'✅ الترحيل'}, {v:'إلغاء', t:'⛔ الإلغاء'},
+    {v:'حساب بالدليل', t:'🌳 دليل الحسابات'}, {v:'استيراد', t:'📥 الاستيراد المجمّع'}, {v:'إعدادات', t:'⚙️ الإعدادات'} ],
+  glcoa: [ {v:'', t:'كل عمليات الدليل'}, {v:'إضافة حساب', t:'➕ إضافة'}, {v:'تعديل حساب', t:'✏️ تعديل'}, {v:'نقل حساب', t:'🔀 نقل'}, {v:'حذف حساب', t:'🗑️ حذف'} ],
+  glcust: [ {v:'', t:'كل عمليات شيت العهدة'}, {v:'ربط شيت', t:'🔗 ربط/فك ربط'}, {v:'مزامنة', t:'🔄 مزامنة'}, {v:'اعتماد', t:'✅ اعتماد صفوف'} ],
+  glhb: [ {v:'', t:'كل عمليات ربط الحجوزات'}, {v:'خريطة', t:'🗺️ خريطة الحسابات'}, {v:'مراجعة دفعات', t:'💵 مراجعة الدفعات'}, {v:'شارت', t:'📑 عقود الشارت'}, {v:'ERP', t:'🧩 مطابقة الـ ERP'}, {v:'ترحيل أرباح', t:'🏁 ترحيل الأرباح'} ],
+  glset: [ {v:'', t:'كل الإعدادات والإقفال'}, {v:'إعدادات', t:'⚙️ الإعدادات'}, {v:'إقفال', t:'🔒 الإقفال'}, {v:'استيراد', t:'📥 الاستيراد'}, {v:'ERP', t:'📦 نقل الـ ERP'} ],
+  transport: [ {v:'', t:'كل عمليات النقل'}, {v:'تعديل صف كشف النقل', t:'✏️ تعديل صف'}, {v:'تسعير', t:'💲 التسعير'} ],
+  pricing: [ {v:'', t:'كل عمليات التسعير'}, {v:'تسعير رحلة', t:'🧳 تسعير رحلة'}, {v:'تسعير بنود', t:'🧾 تسعير بنود عميل'} ],
+  hotels: [ {v:'', t:'كل عمليات برنامج الحجوزات'}, {v:'حجز', t:'🛏️ الحجوزات'}, {v:'دفعة', t:'💵 الدفعات'} ]
 };
 // عند تغيير الشاشة: أعِد بناء قائمة العمليات المطابقة لها ثم أعد التحميل
 function _onAuditScreenChange() {
@@ -44970,6 +45005,9 @@ function glInit(keepTab) {
   box.innerHTML = '<div class="text-center text-muted py-5">⏳ جاري تحميل الحسابات…</div>';
   glRun('glBootstrap', [], function (res) {
     GL.isAdmin = !!res.isAdmin;
+    // 🔒 (V4.220) الاستيراد والإعدادات للمدير فقط — لا تظهر لغيره
+    document.querySelectorAll('#glTabs .gl-adm').forEach(function (t) { t.style.display = GL.isAdmin ? '' : 'none'; });
+    if (!GL.isAdmin && (GL.tab === 'import' || GL.tab === 'settings')) GL.tab = 'home';
     if (!res.ready) { GL.ready = false; glRenderSetup(); return; }
     GL.ready = true; GL.accounts = res.accounts || []; GL.map = {}; GL.accounts.forEach(function (a) { GL.map[a.code] = a; });
     GL.balances = res.balances || {}; GL.settings = res.settings || {}; GL.rates = res.rates || GL.rates; GL.fxDaily = res.fxDaily || GL.fxDaily || {}; GL.can = res.can || {}; GL.url = res.url;
@@ -46237,10 +46275,10 @@ function glCustSheetDlg(code) {
         '<div class="col-md-2"><label class="d-flex gap-1 align-items-center small mb-1"><input type="checkbox" id="glCsAuto"' + (c.auto ? ' checked' : '') + '> 🕐 مزامنة كل ساعة</label></div>' +
       '</div>' +
       '<div class="d-flex gap-2 mt-2 flex-wrap align-items-center">' +
-        (GL.can.edit ? '<button class="btn btn-primary btn-sm" onclick="glCsSave_(\'' + jc + '\',this)">💾 حفظ الربط</button>' : '') +
+        (GL.isAdmin ? '<button class="btn btn-primary btn-sm" onclick="glCsSave_(\'' + jc + '\',this)">💾 حفظ الربط</button>' : '') +
         (c.id ? '<a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener" href="' + glEsc(url) + '">📄 فتح الشيت</a>' +
           '<button class="btn btn-outline-dark btn-sm" onclick="glCsRun_(\'' + jc + '\',true,this)">👁 معاينة بلا تسجيل</button>' +
-          (GL.can.add ? '<button class="btn btn-success btn-sm fw-bold" onclick="glCsRun_(\'' + jc + '\',false,this)">🔄 مزامنة الآن</button>' : '') : '') +
+          (GL.isAdmin ? '<button class="btn btn-success btn-sm fw-bold" onclick="glCsRun_(\'' + jc + '\',false,this)">🔄 مزامنة الآن</button>' : '') : '') +
         (L ? '<span class="small text-muted ms-auto">آخر مزامنة <span class="gl-latin">' + glEsc(L.at) + '</span> (' + glEsc(L.by) + '): جديدة ' + L.created + ' · معدّلة ' + L.updated + ' · بانتظار الاعتماد ' + L.pending + '</span>' : '') +
       '</div><div id="glCsRes" class="mt-2"></div>';
     glDlg('🔗 شيت العهدة — ' + glEsc(a.name) + ' <span class="gl-latin">(' + glEsc(a.code) + ')</span>' + (c.title ? ' · 📄 ' + glEsc(c.title) + ' / ' + glEsc(c.tab || '') : ''), h, 1080);
@@ -46462,7 +46500,7 @@ function glRenderCoa() {
   box.innerHTML = '<div class="gl-fbar"><input id="glCoaQ" class="form-control form-control-sm" style="flex:1;min-width:220px;" placeholder="🔎 بحث بالكود أو الاسم" value="' + glEsc(q) + '" oninput="GL._coaQ=this.value;glCoaDraw()">' +
     '<button class="btn btn-outline-secondary btn-sm" onclick="glCoaAll(true)" title="إظهار كل الحسابات الفرعية">⊞ توسيع الكل</button>' +
     '<button class="btn btn-outline-secondary btn-sm" onclick="glCoaAll(false)" title="طي كل الأقسام">⊟ طي الكل</button>' +
-    (GL.can.add ? '<button class="btn btn-outline-primary btn-sm" onclick="glSyncParties(this)" title="إنشاء حساب لكل عميل (تحت عملاء العمرة) ولكل وكيل سعودي (تحت الوكلاء) غير موجود بعد">🔗 ربط العملاء والوكلاء</button>' : '') +
+    (GL.isAdmin ? '<button class="btn btn-outline-primary btn-sm" onclick="glSyncParties(this)" title="إنشاء حساب لكل عميل (تحت عملاء العمرة) ولكل وكيل سعودي (تحت الوكلاء) غير موجود بعد">🔗 ربط العملاء والوكلاء</button>' : '') +
     '</div><div id="glCoaBox"></div>';
   glCoaDraw();
 }
@@ -46923,7 +46961,7 @@ function glRenderSettings() {
       '<div class="gl-note mt-1">يُسجَّل سعر بيع وشراء الريال والدولار يومياً، ويُستخدم تلقائياً كسعر افتراضي لأي قيد حسب تاريخه (سعر نفس اليوم أو أقرب يوم سابق) — يمكن تعديله داخل القيد. ' +
         'بنك مصر يعرض سعر اليوم فقط، فالأيام السابقة (من 01/07/2026) تُدخل هنا مرة واحدة بلصقها من إكسيل.</div>' +
       '<div class="d-flex gap-2 flex-wrap align-items-center mb-2">' +
-        '<button class="btn btn-outline-primary btn-sm" onclick="glFxFetchNowUI(this)">⬇️ جلب وتسجيل سعر اليوم الآن</button>' +
+        (GL.isAdmin ? '<button class="btn btn-outline-primary btn-sm" onclick="glFxFetchNowUI(this)">⬇️ جلب وتسجيل سعر اليوم الآن</button>' : '') +
         (GL.isAdmin ? '<label class="small d-flex align-items-center gap-1"><input type="checkbox" id="glFxCron" onchange="glFxCronUI(this)"> تسجيل تلقائي كل يوم (11 صباحاً)</label>' : '') +
         '<span id="glFxErr" class="small text-danger"></span></div>' +
       (GL.isAdmin ? '<details class="mb-2"><summary class="small fw-bold" style="cursor:pointer;">📋 لصق أسعار أيام سابقة من إكسيل</summary>' +
@@ -46983,7 +47021,7 @@ function glRenderAuto() {
   box.innerHTML = '<div class="gl-card">' +
     '<div class="d-flex align-items-center gap-2 flex-wrap"><b style="font-size:15px;">🤖 القيود التلقائية من شاشات البرنامج</b><span class="gl-st" style="background:#ecfeff;color:#0e7490;">وضع الظل</span>' +
       '<div class="ms-auto d-flex gap-2 flex-wrap"><button class="btn btn-outline-primary btn-sm" onclick="glAutoPreviewUI(this)">👁️ معاينة التغييرات</button>' +
-      (GL.can.add ? '<button class="btn btn-success btn-sm fw-bold" onclick="glAutoSyncUI(this)">🔄 مزامنة الآن</button>' : '') +
+      (GL.isAdmin ? '<button class="btn btn-success btn-sm fw-bold" onclick="glAutoSyncUI(this)">🔄 مزامنة الآن</button>' : '') +
       '<button class="btn btn-outline-dark btn-sm" onclick="glAutoRecUI(this)">⚖️ تقرير المطابقة</button></div></div>' +
     '<div class="gl-note mt-2">الشاشات الحالية تبقى هي المصدر: كل بند ودفعة بحسابات العملاء، وكل مجموعة تأشيرات ودورة نقل وبند ودفعة بحسابات الوكلاء، وكل إيصال رسوم غرفة وملف مراجَع — يتحول لقيد مرحّل في الدفتر تلقائياً. أي تعديل أو حذف بالشاشة يعدّل قيده أو يلغيه في المزامنة التالية، والقيود التلقائية لا تُعدَّل يدوياً.<br>' +
       '💵 دفعات الشاشات لا تحدد خزينة أو بنكاً، فتسجَّل في حساب <b>«نقدية تحت التسوية»</b> — انقلها للخزينة أو البنك بسند <b>«🔁 تحويل نقدية»</b>، ولا تسجّل سند قبض لنفس الدفعة على حساب العميل حتى لا تتكرر.</div>' +
@@ -47114,7 +47152,7 @@ function glHbSetupView() {
     (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>🏁 ترحيل أرباح الموردين إلى إيرادات السكن (نهاية الموسم)</b>' +
       '<div class="gl-note mt-1">ربح كل حجز يُسجَّل في حساب «إيرادات حجوزات — المورد» (تحت 47) فترى ربح كل مورد على حدة. في نهاية الموسم يُصفّى رصيد كل هذه الحسابات حتى التاريخ المختار بقيد يومية واحد إلى «إيرادات السكن». يمكن تكراره لاحقاً فيرحّل ما استجد فقط.</div>' +
       '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">حتى تاريخ</label><div style="width:140px;">' + glDateInput('glHbSeasonD', '') + '</div></div>' +
-      '<button class="btn btn-outline-primary btn-sm" onclick="glHbSeasonUI(this,false)">👁️ معاينة</button>' + (GL.can.edit ? '<button class="btn btn-warning btn-sm fw-bold" onclick="glHbSeasonUI(this,true)">🏁 ترحيل</button>' : '') + '</div><div id="glHbSeasonRes"></div></div>' : '') +
+      '<button class="btn btn-outline-primary btn-sm" onclick="glHbSeasonUI(this,false)">👁️ معاينة</button>' + (GL.isAdmin ? '<button class="btn btn-warning btn-sm fw-bold" onclick="glHbSeasonUI(this,true)">🏁 ترحيل</button>' : '') + '</div><div id="glHbSeasonRes"></div></div>' : '') +
     (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>🔀 تداخل بيانات الـ ERP المنقولة مع قيود برنامج الحجوزات</b>' +
       '<div class="gl-note mt-1">الحسابات التي عليها أسطر من المصدرين معاً (نفس الحجز/الدفعة قد يكون مسجَّلاً مرتين). الحل: ① حدّد أعلاه «الـ ERP هو المصدر حتى تاريخ» ثم زامن ② قيود الـ ERP المنقولة بعد ذلك التاريخ لهذه الحسابات تُلغى من هنا (بمعاينة أولاً) لأن برنامج الحجوزات يسجّلها.</div>' +
       '<button class="btn btn-outline-primary btn-sm" onclick="glHbOverlapUI(this)">🔎 فحص التداخل</button><div id="glHbOvBox" class="mt-2"></div></div>' : '') +
@@ -47281,7 +47319,7 @@ function glHbMapView() {
       '<input class="form-control form-control-sm" style="width:180px;" placeholder="بحث بالاسم" value="' + glEsc(q) + '" oninput="GL._hbQ=this.value;clearTimeout(GL._hbQt);GL._hbQt=setTimeout(glHbMapView,300)">' +
       '<label class="small d-flex align-items-center gap-1"><input type="checkbox" ' + (only ? 'checked' : '') + ' onchange="GL._hbOnlyNew=this.checked;glHbMapView()"> غير المربوط فقط</label>' +
       '<span id="glHbMapN" class="small" style="color:#b45309;"></span>' +
-      (GL.can.add ? '<div class="ms-auto d-flex gap-1"><button class="btn btn-outline-success btn-sm" onclick="glHbMapSave(this,true)">✔️ اعتماد المقترح لكل غير المربوط</button><button class="btn btn-success btn-sm fw-bold" onclick="glHbMapSave(this)">💾 حفظ التعديلات</button></div>' : '') + '</div>' +
+      (GL.isAdmin ? '<div class="ms-auto d-flex gap-1"><button class="btn btn-outline-success btn-sm" onclick="glHbMapSave(this,true)">✔️ اعتماد المقترح لكل غير المربوط</button><button class="btn btn-success btn-sm fw-bold" onclick="glHbMapSave(this)">💾 حفظ التعديلات</button></div>' : '') + '</div>' +
     '<div class="gl-note">النوع يحدد القيد: <b>عميل سكن</b> (تحت 1203) و<b>عميل عمرة</b> (نفس حسابه ببرنامج العمرة تحت 1201 — مثل سامح والهتيمي) يُسجَّل عليهما البيع بسعر البيع · <b>مورد</b> و<b>شارت</b> تحت 2103، ويُنشأ لكل منهما تلقائياً حساب «إيرادات حجوزات — الاسم» تحت 47 يجمع ربح حجوزاته (الشارت لو ظهر كعميل يُسجَّل عليه البيع وفرقه ربح لمورد الحجز) · <b>عهدة</b> حساب العهدة نفسه (باع حجزاً وحصّل قيمته) · <b>رحلة الشركة</b> بالتكلفة فقط موسومة برحلة العمرة المختارة · <b>تجاهل</b> لا يُسجَّل. الرصيد = رصيد كشف الحساب ببرنامج الحجوزات (موجب مدين).</div>' +
     '<div class="table-responsive" style="max-height:560px;overflow:auto;"><table class="gl-tbl" id="glHbMapT"><thead><tr><th>الاسم ببرنامج الحجوزات</th><th>كعميل</th><th>كمورد</th><th>دفعات</th><th>الرصيد (ريال)</th><th>النوع</th><th>الحساب / الرحلة</th><th></th></tr></thead><tbody>' +
       (list.map(glHbMapRow).join('') || '<tr><td colspan="8" class="text-muted">' + (only ? '✅ كل الأسماء مربوطة' : 'لا نتائج') + '</td></tr>') + '</tbody></table></div></div>';
