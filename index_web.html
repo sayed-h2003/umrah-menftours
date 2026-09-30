@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.233 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.234 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.233)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.234)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.233</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.234</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7585,7 +7585,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.233";
+var CLIENT_APP_VERSION = "4.234";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -41418,18 +41418,36 @@ function vzLoad(force, silent) {
 // mfApplySaved بشاشة ملفات الوزارة. هذا يُصلح أيضاً ظهور البيانات القديمة بالجدول بعد الحفظ: كان
 // الجدول يُرسَم من نسخة قديمة ريثما تصل دورة التحميل الكاملة (وأحياناً من نسخة مخبأة أقدم).
 // الأرصدة المحسوبة بالخادم تُحدَّث بعدها بهدوء بالخلفية بلا وميض.
+function vzApplyBalances_(res) {   // ⚡ (V4.234) دمج أرصدة الوكلاء المتأثرة (مطلقة) محلياً
+  if (res && res.agentBalances) { VZ.agentBalances = VZ.agentBalances || {}; Object.keys(res.agentBalances).forEach(function (k) { VZ.agentBalances[k] = res.agentBalances[k]; }); }
+}
 function vzApplySavedFile_(res) {
   _bgSyncTrips_(res);
   if (!res || !res.file) { vzLoad(true); return; }
-  var f = res.file, i = -1;
-  (VZ.files || []).forEach(function (x, ix) { if (x.id === f.id) i = ix; });
+  var f = res.file, i = -1, old = null;
+  (VZ.files || []).forEach(function (x, ix) { if (x.id === f.id) { i = ix; old = x; } });
   if (i >= 0) VZ.files[i] = f; else VZ.files.push(f);
   VZ.selId = f.id;
   // 🛂 (V4.155) روابط الرحلات بالمجموعات مخبَّأة بالذاكرة لشاشتي الرحلات والسجل العام — إبطالها
   // هنا يجعل شارة "التأشيرات" بجوار اسم الرحلة تعكس الربط الجديد فور فتح تلك الشاشة
   window._vzTripLinks = null;
+  vzApplyBalances_(res);   // ⚡ (V4.234) الأرصدة رجعت مع الحفظ — تطبَّق محلياً
   vzRender();
-  vzRefreshSoon_();
+  // ⚡ (V4.234) لا إعادة بناء getVisaBootstrap الكامل بعد كل حفظ. تحديث خلفي احتياطي فقط عند تغيّر
+  // السكن/الاتفاقيات (تؤثر على خرائط السكن والإعاشة) أو تعذّر رجوع الأرصدة ولدى المستخدم صلاحية مالية.
+  var _hasH = function (x) { return !!(x && ((x.housing && x.housing.length) || x.makkahHousingAgr || x.madinahHousingAgr || x.makkahCateringAgr || x.madinahCateringAgr)); };
+  var housingChanged = old
+    ? (JSON.stringify(old.housing || []) !== JSON.stringify(f.housing || []) || old.makkahHousingAgr !== f.makkahHousingAgr || old.madinahHousingAgr !== f.madinahHousingAgr || old.makkahCateringAgr !== f.makkahCateringAgr || old.madinahCateringAgr !== f.madinahCateringAgr)
+    : _hasH(f);
+  if (housingChanged || (!res.agentBalances && vzFin())) vzRefreshSoon_();
+}
+function vzApplyDelete_(res) {   // ⚡ (V4.234) حذف محلي بلا إعادة بناء كامل
+  if (!res || !res.removedIds) { vzLoad(true); return; }
+  var rm = {}; res.removedIds.forEach(function (id) { rm[id] = 1; });
+  VZ.files = (VZ.files || []).filter(function (x) { return !rm[x.id]; });
+  vzApplyBalances_(res);
+  window._vzTripLinks = null;
+  vzRender();
 }
 // تحديث خلفي مؤجَّل وموحَّد — حفظات متتابعة سريعة تُجمَّع في تحديث واحد بدل تحديث لكل حفظة
 var _vzRefreshTimer_ = null;
@@ -41562,7 +41580,7 @@ function vzFilesDelSelected() {
   showElegantConfirm({ icon: '🗑️', title: 'حذف جماعي', message: 'حذف ' + ids.length + ' مجموعة تأشيرات محدَّدة؟ لا يمكن التراجع عن هذا.', buttons: [
     { label: 'حذف', class: 'btn-danger', onClick: function () {
       google.script.run
-        .withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; } VZ._filesSel = {}; _showPopup('حُذفت ' + res.count + ' مجموعة', 'success'); vzLoad(true); })
+        .withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; } VZ._filesSel = {}; _showPopup('حُذفت ' + res.count + ' مجموعة', 'success'); vzApplyDelete_(res); })
         .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
         .deleteVisaFilesBatch(window.authToken, ids);
     } }, { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
@@ -43018,7 +43036,7 @@ function vzDeleteFile(id) {
   var f = vzGet(id); if (!f) return;
   showElegantConfirm({ icon: '🗑️', title: 'حذف قيد التأشيرات', message: 'حذف القيد ' + (f.ref ? 'رقم ' + f.ref : '(بدون رقم)') + ' للوكيل ' + (f.agent || '') + '؟',
     buttons: [{ label: 'حذف', class: 'btn-danger', onClick: function () {
-      google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; } _showPopup('تم الحذف', 'success'); vzLoad(true); })
+      google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; } _showPopup('تم الحذف', 'success'); vzApplyDelete_(res); })
         .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).deleteVisaFile(window.authToken, id);
     } }, { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
 }

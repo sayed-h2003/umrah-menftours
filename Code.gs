@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.233";
+var APP_VERSION = "4.234";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -24357,6 +24357,26 @@ function getVisaFileHistory(authToken, id) {
   }
   return { success: true, entries: out };
 }
+// ⚡ (V4.234) إعادة حساب أرصدة مفاتيح حسابات الوكلاء المتأثرة فقط (بلا إعادة بناء getVisaBootstrap الكامل)
+// — تُرجَع مطلقة (لا دلتا) فلا انحراف؛ يُطابق تماماً ما يبنيه getVisaBootstrap لتلك المفاتيح.
+function _vzBalancesForAgents_(agentNames) {
+  var map = _vzAcctMap_();
+  var agentSet = {}; (agentNames || []).forEach(function (a) { a = _mfStr_(a); if (a) agentSet[a] = 1; });
+  var names = Object.keys(agentSet); if (!names.length) return {};
+  var keys = _vzAcctKeys_(names, map).filter(function (ac) { return agentSet[ac.agent]; });
+  if (!keys.length) return {};
+  var files = _vzReadAll_(), items = _vzReadItems_(''), pays = _vzReadPays_(''), out = {};
+  keys.forEach(function (ac) {
+    var transDebit = 0;
+    try { _vzTransportRunsFor_(ac.key, map).rows.forEach(function (t) { transDebit += _mfNum_(t.value); }); } catch (e) {}
+    out[ac.key] = _vzAgentBalance_(ac.key,
+      files.filter(function (f) { return _vzFileInAcct_(f, ac.key, map); }),
+      items.filter(function (x) { return x.agent === ac.key; }),
+      pays.filter(function (x) { return x.agent === ac.key; }),
+      transDebit);
+  });
+  return out;
+}
 function saveVisaFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
@@ -24441,7 +24461,10 @@ function saveVisaFile(authToken, data) {
         _vzSync = Object.keys(_vts);   // ⚡ (V4.212) تُنفَّذ بعد رد الحفظ عبر syncTripAccountsBg
       }
     } catch (eSync) {}
-    return { success: true, file: f, syncTrips: _vzSync || [] };
+    // ⚡ (V4.234) أرصدة الوكلاء المتأثرين فقط (الجديد + القديم إن تغيّر) — يطبّقها العميل محلياً بلا getVisaBootstrap
+    var _vzBal;
+    try { if (_vzHasFinance_(session)) _vzBal = _vzBalancesForAgents_([f.agent].concat(old ? [old.agent] : [])); } catch (eB) {}
+    return { success: true, file: f, syncTrips: _vzSync || [], agentBalances: _vzBal };
   } finally { if (!_vzLockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
 }
 
@@ -24521,7 +24544,8 @@ function deleteVisaFile(authToken, id) {
   sh.deleteRow(hit._row);
   logChange_(session.username, 'حذف قيد تأشيرات', 'VZ:' + hit.id, 'قيد ' + (hit.ref || hit.seq) + ' — ' + (hit.agent || '-'), '-', '-');
   _vzClearCache_();
-  return { success: true };
+  var _vzBal; try { if (_vzHasFinance_(session)) _vzBal = _vzBalancesForAgents_([hit.agent]); } catch (eB) {}   // ⚡ (V4.234)
+  return { success: true, removedIds: [hit.id], agentBalances: _vzBal };
 }
 // 🗑️ (V4.149) حذف جماعي لعدة مجموعات تأشيرات دفعة واحدة — يحذف الصفوف من الأسفل للأعلى
 // كي لا يختل ترقيم الصفوف الباقية أثناء الحذف المتتابع
@@ -24532,12 +24556,15 @@ function deleteVisaFilesBatch(authToken, ids) {
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
   var all = _vzReadAll_();
   var hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+  var _vzAg = {};
   hits.forEach(function (hit) {
     sh.deleteRow(hit._row);
+    if (hit.agent) _vzAg[hit.agent] = 1;
     logChange_(session.username, 'حذف قيد تأشيرات (جماعي)', 'VZ:' + hit.id, 'قيد ' + (hit.ref || hit.seq) + ' — ' + (hit.agent || '-'), '-', '-');
   });
   _vzClearCache_();
-  return { success: true, count: hits.length };
+  var _vzBal; try { if (_vzHasFinance_(session)) _vzBal = _vzBalancesForAgents_(Object.keys(_vzAg)); } catch (eB) {}   // ⚡ (V4.234)
+  return { success: true, count: hits.length, removedIds: hits.map(function (h) { return h.id; }), agentBalances: _vzBal };
 }
 
 /* -------- تسعير الوكلاء (فترات) -------- */
