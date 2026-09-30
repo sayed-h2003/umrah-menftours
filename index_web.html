@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.228 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.229 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.228)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.229)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.228</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.229</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7584,7 +7584,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.228";
+var CLIENT_APP_VERSION = "4.229";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -48175,31 +48175,70 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 // 💵 توجيه دفعات حسابات العملاء (نقدية تحت التسوية) للخزينة/البنك/العهدة
 function glCpDlg() {
   glRun('glCpList', [], function (res) {
-    var cashAccs = GL.accounts.filter(function (a) { return !a.isGroup && a.active && /^(safe|bank|custody)$/.test(a.kind); });
     var rows = res.rows, pend = rows.filter(function (x) { return x.unsettled; });
-    var sel = '<select id="glCpTo" class="form-select form-select-sm" style="width:auto;min-width:220px;">' + cashAccs.map(function (a) { return '<option value="' + glEsc(a.code) + '">' + glEsc(a.name) + ' (' + glEsc(a.code) + ')' + (a.currency ? ' — ' + GL_CUR_LBL_[a.currency] : '') + '</option>'; }).join('') + '</select>';
-    var h = '<div class="gl-note" style="font-size:12.5px;">الدفعات المسجلة من شاشة حسابات العملاء تُقيَّد في <b>«نقدية تحت التسوية»</b> حتى تحدد أين دخلت فعلاً. اختر الدفعات ثم الحساب النقدي ⇒ يتحوّل قيدها ويبقى ثابتاً مع كل مزامنة. ' +
+    var h = '<div class="gl-note" style="font-size:12.5px;">الدفعات المسجلة من شاشة حسابات العملاء تُقيَّد في <b>«نقدية تحت التسوية»</b> حتى تحدد أين دخلت فعلاً. حدِّد أمام كل دفعة الحساب الذي دخلت فيه فعلاً (أي حساب ببحث تنبؤي) ثم <b>احفظ المحدد</b> — يتحوّل قيدها ويبقى ثابتاً مع كل مزامنة. الدفعات المكررة يمكن حذفها. ' +
       '<b>' + pend.length + '</b> دفعة تحت التسوية من ' + rows.length + '.</div>' +
-      '<div class="d-flex gap-2 align-items-center flex-wrap mb-2"><label class="small"><input type="checkbox" id="glCpAll" onchange="glCpDraw_()"> عرض الموجَّهة أيضاً</label><span class="ms-auto">توجيه المحدد إلى:</span>' + sel +
-      (GL.can.edit ? '<button class="btn btn-success btn-sm fw-bold" onclick="glCpGo_(this)">💵 توجيه</button>' : '') + '</div><div id="glCpBox"></div>';
+      '<div class="d-flex gap-2 align-items-center flex-wrap mb-2"><label class="small"><input type="checkbox" id="glCpAll" onchange="glCpDraw_()"> عرض الموجَّهة أيضاً</label>' +
+      '<span class="text-muted small">حدِّد الحساب أمام الدفعة، علّم المربع، ثم:</span>' +
+      (GL.can.edit ? '<button class="btn btn-success btn-sm fw-bold ms-auto" onclick="glCpSave_(this)">💾 حفظ توجيه المحدد</button>' +
+        '<button class="btn btn-outline-danger btn-sm" onclick="glCpDel_(this)">🗑️ حذف المحدد</button>' : '') +
+      '</div><div id="glCpBox"></div>';
     GL._cpRows = rows;
-    glDlg('💵 توجيه دفعات العملاء (نقدية تحت التسوية)', h, 1050); glCpDraw_();
+    glDlg('💵 توجيه دفعات العملاء (نقدية تحت التسوية)', h, 1120); glCpDraw_();
   });
 }
 function glCpDraw_() {
   var all = (document.getElementById('glCpAll') || {}).checked, rows = (GL._cpRows || []).filter(function (x) { return all || x.unsettled; });
-  document.getElementById('glCpBox').innerHTML = rows.length ? '<div class="table-responsive" style="max-height:55vh;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" onchange="document.querySelectorAll(\'.glCpC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>التاريخ</th><th>العميل</th><th>البيان</th><th>المبلغ</th><th>الحساب النقدي الحالي</th><th>القيد</th></tr></thead><tbody>' +
+  var canEd = GL.can.edit;
+  document.getElementById('glCpBox').innerHTML = rows.length ? '<div class="table-responsive" style="max-height:58vh;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" onchange="document.querySelectorAll(\'.glCpC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>التاريخ</th><th>العميل</th><th>البيان</th><th>المبلغ</th><th style="min-width:240px;">توجيه إلى (أي حساب)</th><th>القيد</th></tr></thead><tbody>' +
     rows.map(function (x) {
-      return '<tr data-eid="' + glEsc(x.entryId) + '"><td><input type="checkbox" class="glCpC" value="' + glEsc(x.payId) + '"></td><td class="gl-latin">' + glEsc(x.date) + '</td><td style="text-align:right;">' + glEsc(x.client) + '</td><td style="text-align:right;max-width:280px;">' + glEsc(x.desc) + '</td>' +
-        '<td class="gl-latin"><b>' + glFmt(x.amount) + '</b> ' + (GL_CUR_LBL_[x.currency] || '') + '</td><td>' + (x.unsettled ? '<span class="gl-st" style="background:#fef3c7;color:#92400e;">تحت التسوية</span>' : glEsc(glAccLabel(x.cash))) + '</td>' +
+      var cur = (!x.unsettled && x.cash) ? x.cash : '';   // الحساب النقدي الحالي إن كانت موجَّهة
+      return '<tr data-eid="' + glEsc(x.entryId) + '" data-pid="' + glEsc(x.payId) + '"><td><input type="checkbox" class="glCpC" value="' + glEsc(x.payId) + '"></td><td class="gl-latin">' + glEsc(x.date) + '</td><td style="text-align:right;">' + glEsc(x.client) + '</td><td style="text-align:right;max-width:240px;">' + glEsc(x.desc) + '</td>' +
+        '<td class="gl-latin"><b>' + glFmt(x.amount) + '</b> ' + (GL_CUR_LBL_[x.currency] || '') + '</td>' +
+        '<td>' + (canEd ? glAccInput('glCpAcc', '', cur, x.unsettled ? '🔎 اختر الحساب النقدي' : '🔎 غيّر الحساب') : (x.unsettled ? '<span class="gl-st" style="background:#fef3c7;color:#92400e;">تحت التسوية</span>' : glEsc(glAccLabel(x.cash)))) + '</td>' +
         '<td><a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.entryId) + '\');return false;">' + glEsc(x.entryId) + '</a></td></tr>';
     }).join('') + '</tbody></table></div>' : '<div class="text-center py-3" style="color:#166534;font-weight:700;">✅ لا توجد دفعات تحت التسوية</div>';
 }
-function glCpGo_(btn) {
-  var ids = Array.prototype.map.call(document.querySelectorAll('.glCpC:checked'), function (c) { return c.value; });
-  if (!ids.length) return _showPopup('حدد دفعة واحدة على الأقل', 'warning');
-  var code = document.getElementById('glCpTo').value; btn.disabled = true;
-  glRun('glCpDirect', [ids, code], function (r) { showToast('💵 وُجّهت ' + ids.length + ' دفعة إلى ' + glAccLabel(code)); glDlgClose(); glAfterChange(); }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+// جمع الدفعات المعلَّمة مع الحساب المختار أمام كل منها
+function _glCpChecked_() {
+  return Array.prototype.map.call(document.querySelectorAll('#glCpBox .glCpC:checked'), function (c) {
+    var tr = c.closest('tr'), inp = tr.querySelector('.glCpAcc');
+    return { payId: c.value, code: inp ? glAccVal(inp) : '', raw: inp ? String(inp.value || '').trim() : '' };
+  });
+}
+// تطبيق دلتا الأرصدة محلياً بلا إعادة تحميل كامل من الخادم
+function glCpApplyDelta_(r) {
+  if (r.balances) GL.balances = r.balances;
+  if (typeof r.pendingCount === 'number') { GL.pendingCount = r.pendingCount; glNavBadge_(); }
+  if (r.rows) GL._cpRows = r.rows;
+  glCpDraw_();
+  if (GL.ready && GL.tab) try { glTab(GL.tab); } catch (e) {}   // إعادة رسم الشاشة الحالية من الحالة المحلية فقط
+}
+function glCpSave_(btn) {
+  var items = _glCpChecked_();
+  if (!items.length) return _showPopup('علّم دفعة واحدة على الأقل', 'warning');
+  var bad = items.filter(function (it) { return it.raw && !it.code; });
+  if (bad.length) return _showPopup('حساب غير معروف في ' + bad.length + ' دفعة — اختر من قائمة البحث', 'warning');
+  var setN = items.filter(function (it) { return it.code; }).length, clrN = items.length - setN;
+  var send = items.map(function (it) { return { payId: it.payId, code: it.code }; });
+  btn.disabled = true; var t = btn.innerHTML; btn.innerHTML = '⏳ جاري الحفظ…';
+  glRun('glCpApply', [send], function (r) {
+    btn.disabled = false; btn.innerHTML = t;
+    showToast('💾 وُجّهت ' + setN + ' دفعة' + (clrN ? ' · أُلغي توجيه ' + clrN : ''));
+    glCpApplyDelta_(r);
+  }, function (e) { btn.disabled = false; btn.innerHTML = t; _showPopup(e.message || e, 'error'); });
+}
+function glCpDel_(btn) {
+  var ids = Array.prototype.map.call(document.querySelectorAll('#glCpBox .glCpC:checked'), function (c) { return c.value; });
+  if (!ids.length) return _showPopup('علّم دفعة واحدة على الأقل', 'warning');
+  askConfirm_('حذف ' + ids.length + ' دفعة نهائياً من شاشة حسابات العملاء؟\nيُلغى قيدها التلقائي — استخدمه للدفعات المكررة فقط.', function () {
+    btn.disabled = true; var t = btn.innerHTML; btn.innerHTML = '⏳ جاري الحذف…';
+    glRun('glCpDelete', [ids], function (r) {
+      btn.disabled = false; btn.innerHTML = t;
+      showToast('🗑️ حُذفت ' + (r.deleted || ids.length) + ' دفعة');
+      glCpApplyDelta_(r);
+    }, function (e) { btn.disabled = false; btn.innerHTML = t; _showPopup(e.message || e, 'error'); });
+  }, { title: 'حذف دفعات', icon: '🗑️', yesLabel: 'حذف', danger: true });
 }
 function glAutoSetUI(o) {
   glRun('glAutoSettings', [o], function () {

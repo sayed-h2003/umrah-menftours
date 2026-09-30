@@ -2548,33 +2548,97 @@ function glCpList(authToken) {
   _glRows_('lines').forEach(function (l) { (lines[_glStr_(l[0])] = lines[_glStr_(l[0])] || []).push(l); });
   ents.forEach(function (r) {
     var k = _glStr_(r[6]); if (!/^AUTO:CP:/.test(k) || _glStr_(r[5]) === GL_ST_VOID_) return;
+    var payId = k.slice(8), want = dir[payId] || '';
     var ls = lines[_glStr_(r[0])] || [], cl = ls.filter(function (l) { return _glStr_(l[4]) !== cash && accs[_glStr_(l[4])] && accs[_glStr_(l[4])].kind === 'client'; })[0];
-    var cashL = ls.filter(function (l) { var a = accs[_glStr_(l[4])]; return _glStr_(l[4]) === cash || (a && /^(safe|bank|custody)$/.test(a.kind)); })[0];
-    if (!cashL) return;
-    out.push({ payId: k.slice(8), entryId: _glStr_(r[0]), date: _glDate_(r[2]), desc: _glStr_(r[4]), client: cl ? _glStr_(cl[13]) || (accs[_glStr_(cl[4])] || {}).name : '',
-      amount: _glNum_(cashL[5]) || -_glNum_(cashL[6]), currency: _glStr_(cashL[7]), cash: _glStr_(cashL[4]), directed: !!dir[k.slice(8)], unsettled: _glStr_(cashL[4]) === cash });
+    // (V4.229) سطر الطرف المقابل = الحساب الموجَّه إليه صراحةً، وإلا الخزينة/البنك/العهدة/تحت التسوية، وإلا أي طرف غير العميل
+    var cashL = (want ? ls.filter(function (l) { return _glStr_(l[4]) === want; })[0] : null)
+      || ls.filter(function (l) { var a = accs[_glStr_(l[4])]; return _glStr_(l[4]) === cash || (a && /^(safe|bank|custody)$/.test(a.kind)); })[0]
+      || ls.filter(function (l) { var a = accs[_glStr_(l[4])]; return !(a && a.kind === 'client'); })[0];
+    if (!cashL) return;   // تحويل عملة (طرفاه عميل) لا يُوجَّه
+    out.push({ payId: payId, entryId: _glStr_(r[0]), date: _glDate_(r[2]), desc: _glStr_(r[4]), client: cl ? _glStr_(cl[13]) || (accs[_glStr_(cl[4])] || {}).name : '',
+      amount: _glNum_(cashL[5]) || -_glNum_(cashL[6]), currency: _glStr_(cashL[7]), cash: _glStr_(cashL[4]), directed: !!want, unsettled: _glStr_(cashL[4]) === cash });
   });
   out.sort(function (a, b) { return _glDKey_(b.date) < _glDKey_(a.date) ? -1 : 1; });
   return { success: true, rows: out, cashRole: cash };
 }
+// (V4.229) توجيه صريح: أي حساب ورقي غير تجميعي (وليس النقديات فقط) — يُترك للبناء تحديد اتجاه القيد
 function glCpDirect(authToken, payIds, code) {
   var session = _glPerm_(authToken, 'edit');
   code = _glStr_(code); var a = _glAccounts_().map[code];
-  if (!a || a.isGroup || !/^(safe|bank|custody)$/.test(a.kind)) throw new Error('اختر خزينة أو بنكاً أو عهدة');
+  if (!a || a.isGroup) throw new Error('اختر حساباً ورقياً صالحاً');
   var ids = (payIds || []).map(_glStr_).filter(String); if (!ids.length) throw new Error('اختر دفعة واحدة على الأقل');
   var lock = LockService.getScriptLock(); lock.waitLock(60000);
   try {
-    var sh = _glSheet_('cpdir'), rows = _glRows_('cpdir'), at = {}, now = _glNow_();
+    var rows = _glRows_('cpdir'), at = {}, now = _glNow_();
     rows.forEach(function (r, i) { at[_glStr_(r[0])] = i; });
     ids.forEach(function (id) {
       if (at[id] !== undefined) rows[at[id]] = [id, code, session.username, now];
       else rows.push([id, code, session.username, now]);
     });
-    if (rows.length) sh.getRange(2, 1, rows.length, 4).setValues(rows);
+    _glCpDirWrite_(rows);
     var only = {}; ids.forEach(function (id) { only['AUTO:CP:' + id] = 1; });
     var r = _glAutoRun_(session.username, false, { bypass: true, onlyKeys: only });   // توجيه صريح من المستخدم ⇒ يُطبَّق مباشرة
-    logChange_(session.username, 'توجيه دفعات عملاء لحساب نقدي', 'GL:' + code, a.name, ids.length + ' دفعة', 'معدّل ' + r.updated);
+    logChange_(session.username, 'توجيه دفعات عملاء لحساب', 'GL:' + code, a.name, ids.length + ' دفعة', 'معدّل ' + r.updated);
     return { success: true, updated: r.updated };
+  } finally { lock.releaseLock(); }
+}
+// إعادة كتابة شيت توجيه الدفعات كاملاً (يسمح بحذف صفوف عند إلغاء التوجيه)
+function _glCpDirWrite_(rows) {
+  var sh = _glSheet_('cpdir'), last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, 4).clearContent();
+  if (rows && rows.length) sh.getRange(2, 1, rows.length, 4).setValues(rows);
+}
+function _glCpPending_() { try { return _glTripMode_() ? _glPendingCount_() : 0; } catch (e) { return 0; } }
+// (V4.229) توجيه مجمّع لكل دفعة على حدة لأي حساب: items=[{payId, code}] — code فارغ = إلغاء التوجيه (يعود لنقدية تحت التسوية)
+function glCpApply(authToken, items) {
+  var session = _glPerm_(authToken, 'edit');
+  items = (items || []).map(function (it) { return { payId: _glStr_(it && it.payId), code: _glStr_(it && it.code) }; }).filter(function (it) { return it.payId; });
+  if (!items.length) throw new Error('اختر دفعة واحدة على الأقل');
+  var accMap = _glAccounts_().map;
+  items.forEach(function (it) { if (it.code) { var a = accMap[it.code]; if (!a || a.isGroup) throw new Error('حساب غير صالح: ' + it.code); } });
+  var lock = LockService.getScriptLock(); lock.waitLock(60000);
+  try {
+    var rows = _glRows_('cpdir'), at = {}, now = _glNow_(), setN = 0, clrN = 0;
+    rows.forEach(function (r, i) { at[_glStr_(r[0])] = i; });
+    items.forEach(function (it) {
+      if (it.code) {
+        if (at[it.payId] !== undefined) rows[at[it.payId]] = [it.payId, it.code, session.username, now];
+        else { rows.push([it.payId, it.code, session.username, now]); at[it.payId] = rows.length - 1; }
+        setN++;
+      } else if (at[it.payId] !== undefined) { rows[at[it.payId]] = null; clrN++; }
+    });
+    rows = rows.filter(function (r) { return r; });
+    _glCpDirWrite_(rows);
+    var only = {}; items.forEach(function (it) { only['AUTO:CP:' + it.payId] = 1; });
+    var r = _glAutoRun_(session.username, false, { bypass: true, onlyKeys: only });
+    logChange_(session.username, 'توجيه دفعات عملاء (مجمّع)', 'GL', '', items.length + ' دفعة', 'موجَّه ' + setN + ' · مُلغى توجيه ' + clrN + ' · معدّل ' + r.updated);
+    return { success: true, updated: r.updated, directed: setN, cleared: clrN, rows: glCpList(authToken).rows, balances: _glBalances_(null), pendingCount: _glCpPending_() };
+  } finally { lock.releaseLock(); }
+}
+// (V4.229) حذف دفعات عملاء (قد تكون مكررة) من شاشة التوجيه — يُحذف السجل بشاشة حسابات العملاء ويُلغى قيدها التلقائي
+function glCpDelete(authToken, payIds) {
+  var session = _glPerm_(authToken, 'edit');
+  var ids = (payIds || []).map(_glStr_).filter(String); if (!ids.length) throw new Error('اختر دفعة واحدة على الأقل');
+  var idset = {}; ids.forEach(function (id) { idset[id] = 1; });
+  var lock = LockService.getScriptLock(); lock.waitLock(60000);
+  try {
+    var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS), last = sh.getLastRow(), del = 0;
+    if (last >= 2) {
+      var vals = sh.getRange(2, 1, last - 1, 9).getValues();
+      for (var i = vals.length - 1; i >= 0; i--) {
+        if (!idset[String(vals[i][0])]) continue;
+        logChange_(session.username, 'حذف ' + (String(vals[i][3]) === 'تحويل' ? 'تحويل عملة' : 'دفعة حساب') + ' (شاشة التوجيه)', String(vals[i][1]), String(vals[i][2]), vals[i][5] + ' ' + vals[i][6], '-');
+        var marker = _accCfMarkerOf_(vals[i][8]);
+        sh.deleteRow(i + 2);
+        if (marker) try { _accCfFindAndDelete_(marker, ACC_PAY_SHEET, String(vals[i][0])); } catch (e) {}
+        del++;
+      }
+    }
+    var rows = _glRows_('cpdir').filter(function (r) { return !idset[_glStr_(r[0])]; });
+    _glCpDirWrite_(rows);
+    var only = {}; ids.forEach(function (id) { only['AUTO:CP:' + id] = 1; });
+    var r = _glAutoRun_(session.username, false, { bypass: true, onlyKeys: only });   // الدفعة اختفت من البناء ⇒ يُلغى قيدها
+    return { success: true, deleted: del, voided: r.voided, rows: glCpList(authToken).rows, balances: _glBalances_(null), pendingCount: _glCpPending_() };
   } finally { lock.releaseLock(); }
 }
 
