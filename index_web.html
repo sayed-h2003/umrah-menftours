@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.236 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.237 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.236)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.237)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.236</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.237</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5357,6 +5357,10 @@ input[type="date"]:not(:focus):not(:valid) {
   .gl-sttblw{ max-height:64vh; overflow:auto; border-top:1px solid #e2e8f0; }
   .gl-sttbl{ font-size:12.3px; }
   .gl-sttbl thead th{ padding:6px 6px; }
+  .gl-sttbl .gl-stact{ white-space:nowrap; text-align:center; width:1%; padding:2px 4px !important; }
+  .gl-stab{ border:1px solid #cbd5e1; background:#fff; border-radius:6px; padding:0 5px; margin:0 1px; font-size:12px; line-height:20px; cursor:pointer; }
+  .gl-stab:hover{ background:#eff6ff; border-color:#93c5fd; } .gl-stab.del:hover{ background:#fef2f2; border-color:#fca5a5; }
+  @media print{ .gl-stact{ display:none !important; } }
   .gl-sttbl thead th.curh{ background:#b8913a !important; }
   .gl-sttbl thead th.sub{ background:#274b6d !important; font-size:11px; }
   .gl-sttbl td.d{ text-align:right; min-width:220px; } .gl-sttbl td.sm{ font-size:11.5px; color:#475569; }
@@ -7613,7 +7617,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.236";
+var CLIENT_APP_VERSION = "4.237";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45754,7 +45758,9 @@ function glShowEntry(id) {
         '<button class="btn btn-outline-dark btn-sm" onclick="glPrintEntry(\'' + glJs(e.id) + '\')">🖨️ طباعة القيد</button>' +
         (e.status === 'مسودة' && GL.can.edit ? '<button class="btn btn-primary btn-sm" onclick="glDlgClose();glEditEntry(\'' + glJs(e.id) + '\')">✏️ تعديل</button><button class="btn btn-success btn-sm" onclick="glDlgClose();glPost(\'' + glJs(e.id) + '\')">✅ ترحيل</button>' : '') +
         (glCanEditPosted_(e) ? '<button class="btn btn-primary btn-sm" onclick="glDlgClose();glEditEntry(\'' + glJs(e.id) + '\')">✏️ تعديل</button>' : '') +
-        (GL.isAdmin && e.type !== 'قيد إقفال' ? '<button class="btn btn-danger btn-sm" onclick="glDlgClose();glEntDeleteNow(\'' + glJs(e.id) + '\',' + (/^AUTO:/.test(e.sourceKey || '') ? 1 : 0) + ')">🗑️ حذف القيد</button>' :
+        '<button class="btn btn-outline-secondary btn-sm" onclick="glRowHist_(\'' + glJs(e.id) + '\')">📜 سجل التعديلات</button>' +
+        (/^AUTO:/.test(e.sourceKey || '') && e.status === 'مرحّل' && (GL.can.del || GL.isAdmin) ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glRowDel_(\'' + glJs(e.id) + '\',\'' + glJs(glRowSrc_(e.sourceKey) || 'AUTO') + '\',\'مرحّل\')">🗑️ حذف</button>' :
+        GL.isAdmin && e.type !== 'قيد إقفال' ? '<button class="btn btn-danger btn-sm" onclick="glDlgClose();glEntDeleteNow(\'' + glJs(e.id) + '\',' + (/^AUTO:/.test(e.sourceKey || '') ? 1 : 0) + ')">🗑️ حذف القيد</button>' :
           (e.status !== 'ملغى' && GL.can.del && !/^AUTO:/.test(e.sourceKey || '') && e.type !== 'قيد إقفال' ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glVoid(\'' + glJs(e.id) + '\',\'' + glJs(e.status) + '\')">' + (e.status === 'مسودة' ? '🗑️ حذف المسودة' : '⛔ إلغاء القيد') + '</button>' : '')) +
         (GL.can.add ? '<button class="btn btn-outline-secondary btn-sm" onclick="glDlgClose();glCopyEntry(\'' + glJs(e.id) + '\')">📄 نسخ كقيد جديد</button>' : '') +
       '</div>';
@@ -45779,6 +45785,83 @@ function glVoid(id, status) {
     glRun('glVoidEntry', [id, reason, true], function (res) { showToast('⛔ أُلغي القيد ' + id); glApplyDelta_(res); });
   }, { title: 'إلغاء قيد مرحّل', icon: '⛔', okLabel: 'إلغاء القيد', danger: true });
 }
+/* ✏️🗑️📜 (V4.237) إجراءات صف بكشف الحساب/نافذة القيد: تعديل · حذف (بتأكيد) · سجل التعديلات — للقيد أو الدفعة أو البند مصدره */
+var GL_AGG_SRC_ = { TRIP: 'بنود العميل بالرحلة', CI: 'بنود العميل بالرحلة', TR: 'تشغيلة النقل', HB: 'حجز الفنادق', HBP: 'دفعة الحجوزات', OPEN: 'الأرصدة الافتتاحية', HBOPEN: 'الأرصدة الافتتاحية للحجوزات' };
+var GL_ONE_SRC_ = { CP: 'دفعة العميل من «حسابات العملاء»', AP: 'دفعة الوكيل من «متابعة الوكلاء»', AI: 'بند حساب الوكيل من «متابعة الوكلاء»', VZ: 'مجموعة التأشيرات من «متابعة الوكلاء»', MF: 'ملف المراجعة من «ملفات الوزارة»', RF: 'إيصال رسوم الغرفة من «ملفات الوزارة»' };
+function glRowEdit_(id, auto) {
+  if (auto && !GL.isAdmin) return _showPopup('هذا قيد تلقائي من شاشات البرنامج — يُعدَّل من مصدره بالشاشة فيتحدّث القيد تلقائياً (تعديل القيد التلقائي مباشرة للمدير فقط)', 'info');
+  glEditEntry(id);
+}
+function glRowDel_(id, src, status) {
+  src = src || '';
+  if (!src) {   // قيد يدوي/سند/مستورد
+    if (GL.isAdmin) return askConfirm_('حذف القيد ' + id + ' نهائياً من الدفتر؟\nلا يمكن التراجع — يبقى أثر الحذف في سجل التعديلات.', function () {
+      glRun('glRowDelete', [id], function (res) { showToast('🗑️ حُذف القيد ' + id); glApplyDelta_(res); });
+    }, { title: 'تأكيد الحذف', danger: true });
+    if (!GL.can.del) return _showPopup('لا تملك صلاحية حذف/إلغاء القيود', 'warning');
+    return glVoid(id, status || 'مرحّل');   // غير المدير: إلغاء بسبب (يبقى أثره)
+  }
+  if (GL_AGG_SRC_[src]) return _showPopup('هذا قيد مجمَّع تلقائياً من «' + GL_AGG_SRC_[src] + '» — احذف/عدّل البند أو الحركة من شاشتها وسيتحدّث القيد تلقائياً', 'info');
+  var what = GL_ONE_SRC_[src] || 'مصدر القيد';
+  askConfirm_('سيتم حذف ' + what + ' نهائياً، وإلغاء القيد ' + id + ' فوراً.\nهل أنت متأكد؟', function () {
+    glRun('glRowDelete', [id], function (res) { showToast('🗑️ حُذف المصدر وأُلغي القيد ' + id); glApplyDelta_(res); });
+  }, { title: 'تأكيد الحذف', danger: true });
+}
+function glRowHist_(id) {   // نافذة مستقلة فوق أي نافذة مفتوحة (لا تُغلق نموذج التعديل)
+  var old = document.getElementById('glHistOv'); if (old) old.remove();
+  var ov = document.createElement('div'); ov.id = 'glHistOv'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147482700;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:12px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(960px,98vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden;">' +
+    '<div style="background:linear-gradient(135deg,#1e3d59,#0f4c4c);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:8px;"><b style="flex:1;">📜 سجل تعديلات الصف — <span class="gl-latin">' + glEsc(id) + '</span></b>' +
+    '<button class="btn btn-light btn-sm" onclick="document.getElementById(\'glHistOv\').remove()">✕</button></div><div id="glHistBody" style="padding:14px 16px;overflow:auto;"><div class="text-center text-muted py-3">⏳ جارٍ التحميل…</div></div></div>';
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  glRun('glRowHistory', [id], function (res) {
+    var b = document.getElementById('glHistBody'); if (!b) return;
+    var note = res.auto ? '(القيد + ' + (res.source || 'مصدره') + ' بالشاشات — عمود «المرجع» يبيّن أيهما)' : '(من الإنشاء حتى آخر تعديل)';
+    b.innerHTML = typeof _auditTableHtml_ === 'function' ? _auditTableHtml_(res.rows || [], { emptyMsg: 'لا توجد تعديلات مسجَّلة لهذا الصف.', note: note })
+      : (res.rows || []).map(function (r) { return '<div>' + glEsc(r.timestamp + ' — ' + r.username + ' — ' + r.recordId + ' — ' + r.action + ': ' + r.oldValue + ' ← ' + r.newValue) + '</div>'; }).join('');
+  }, function (e) { var b = document.getElementById('glHistBody'); if (b) b.innerHTML = '<div class="text-danger">' + glEsc(e.message || e) + '</div>'; });
+}
+function glRowSrc_(sk) { return ((sk || '').match(/^AUTO:([A-Z]+)/) || [])[1] || ''; }
+// ⚡ (V4.237) تحديث كشف الحساب المعروض محلياً بعد تعديل/حذف/إلغاء قيد — بلا إعادة تحميل الكشف (10+ ثوانٍ).
+// للكشف «من البداية» فقط (بلا فترة)؛ غير ذلك يُعاد تحميله كالمعتاد
+function glStPatch_(res) {
+  var st = GL._st; if (!st || !st.account || st.from || st.to) return false;
+  var id = res.removedId || (res.savedRow && res.savedRow.id) || res.id; if (!id) return false;
+  var code = st.account.code, e = res.savedRow, old = st.rows.filter(function (x) { return x.entryId === id; });
+  if (!old.length && !(e && (e.lines || []).some(function (l) { return l.account === code; }))) return true;   // لا يخص هذا الحساب
+  var att = old.length ? old[0].att : 0, r2 = function (n) { return Math.round((Number(n) || 0) * 100) / 100; };
+  var clean = function (t) { return String(t || '').replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*/gi, ' ').replace(/\s+/g, ' ').trim(); };
+  st.rows = st.rows.filter(function (x) { return x.entryId !== id; });
+  if (e && e.status === 'مرحّل' && !res.deleted) {
+    var names = [];
+    (e.lines || []).forEach(function (l) { if (l.account === code) return; var a = GL.map[l.account]; if (a && a.kind === 'fx') return; var n = a ? (a.link || a.name) : l.account; if (names.indexOf(n) < 0) names.push(n); });
+    var sk = e.sourceKey || '';
+    (e.lines || []).forEach(function (l) {
+      if (l.account !== code) return;
+      var d = l.date || e.date;
+      st.rows.push({ entryId: e.id, lineNo: l.lineNo, date: d, _k: glDKey(d), seq: +e.seq || 0, currency: l.currency, debit: l.debit || 0, credit: l.credit || 0, bDebit: l.bDebit || 0, bCredit: l.bCredit || 0, rate: l.rate,
+        desc: clean(l.desc || e.desc), entryDesc: clean(e.desc), type: e.type || '', voucherNo: e.voucherNo || '', ref: /^h:|^cs:/.test(e.ref || '') ? '' : (e.ref || ''),
+        trip: l.trip || e.trip || '', company: l.company || e.company || '', counter: names.length > 3 ? 'متعدد (' + names.length + ')' : names.join(' + '),
+        auto: /^AUTO:/.test(sk), src: glRowSrc_(sk), att: att, pending: '' });
+    });
+  }
+  st.rows.sort(function (a, b) { return a._k < b._k ? -1 : (a._k > b._k ? 1 : (a.seq - b.seq || a.lineNo - b.lineNo)); });
+  var run = {}, tot = {}, today = {}, tk = glDKey(glToday()), runB = st.openingBase || 0;
+  Object.keys(st.opening || {}).forEach(function (c) { run[c] = st.opening[c] || 0; today[c] = st.opening[c] || 0; tot[c] = { dr: 0, cr: 0 }; });
+  st.rows.forEach(function (x) {
+    var c = x.currency; if (run[c] === undefined) { run[c] = 0; today[c] = 0; tot[c] = { dr: 0, cr: 0 }; }
+    run[c] = r2(run[c] + x.debit - x.credit); runB = r2(runB + x.bDebit - x.bCredit);
+    tot[c].dr = r2(tot[c].dr + x.debit); tot[c].cr = r2(tot[c].cr + x.credit);
+    if (x._k <= tk) today[c] = r2(today[c] + x.debit - x.credit);
+    x.bal = run[c]; x.balBase = runB;
+  });
+  st.closing = run; st.closingBase = runB; st.totals = tot; st.today = today;
+  st.pending = st.rows.filter(function (x) { return x.pending; }).length;
+  st._stale = true;   // أعمار الديون تُعاد من السيرفر عند الطباعة/التصدير
+  return true;
+}
 function glAfterChange() { glRefreshData(function () { glTab(GL.tab); }); }
 // ⚡ (V4.232) تحديث محلي بعد حفظ/ترحيل/إلغاء/حذف قيد — يطبّق دلتا الأرصدة ويحدّث جدول القيود بلا
 // glBootstrap ولا إعادة جلب القائمة. الخزينة/البنوك/العهد/الرئيسية تُرسَم من GL.balances محلياً.
@@ -45794,6 +45877,7 @@ function glApplyDelta_(res, action) {
     if (glEntSplice_(res)) { glDrawEntries(); return; }
     if (typeof glLoadEntries === 'function') { glLoadEntries(); return; }   // قيد جديد خارج الفلتر ⇒ إعادة تحميل القائمة فقط (بلا bootstrap)
   }
+  if (GL.tab === 'stmt' && GL._st) { try { if (glStPatch_(res)) { glDrawStmt(); return; } } catch (e) {} }   // ⚡ (V4.237) كشف الحساب محلياً
   if (GL.ready && GL.tab) try { glTab(GL.tab); } catch (e) {}   // الرئيسية/الخزينة/البنوك/العهد/الدليل تُرسَم من الحالة المحلية
 }
 function glEntSplice_(res) {
@@ -46020,6 +46104,13 @@ function glCopyEntry(id) {
   var e = GL._lastEntry; if (!e || e.id !== id) return;
   var c = JSON.parse(JSON.stringify(e)); c.id = ''; c.date = glToday(); c.status = ''; glEntryDlg('journal', c);
 }
+// (V4.237) أزرار نافذة تعديل القيد: 🗑️ حذف (بتأكيد) + 📜 سجل التعديلات
+function glEdRowBtns_(e) {
+  if (!e || !e.id) return '';
+  var id = glJs(e.id), src = /^AUTO:/.test(e.sourceKey || '') ? (glRowSrc_(e.sourceKey) || 'AUTO') : '';
+  return '<button class="btn btn-outline-secondary btn-sm" onclick="glRowHist_(\'' + id + '\')">📜 سجل التعديلات</button>' +
+    ((GL.can.del || GL.isAdmin) && e.type !== 'قيد إقفال' ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glRowDel_(\'' + id + '\',\'' + glJs(src) + '\',\'' + glJs(e.status || '') + '\')">🗑️ حذف</button>' : '');
+}
 function glEntryDlg(kind, entry) {
   var V = GL_VOUCHERS_[kind] || GL_VOUCHERS_.journal; GL._vk = kind; GL._editId = entry && entry.id ? entry.id : '';
   var e = entry || {};
@@ -46068,8 +46159,10 @@ function glEntryDlg(kind, entry) {
   var foot = editingPosted ? '<div class="d-flex gap-2 justify-content-end align-items-center mt-3">' +
       (/^AUTO:/.test(entry.sourceKey || '') ? '<span class="small text-muted me-auto">🤖 قيد تلقائي: يبقى تعديلك ما لم يتغيّر مصدره بالشاشات (عندها تعيد المزامنة بناءه)</span>' : '') +
       (isRP ? '<button class="btn btn-dark btn-sm fw-bold" onclick="glSaveEntryUI(true, this, \'print\')">🖨️ حفظ وطباعة</button>' : '') +
+      glEdRowBtns_(entry) +
       '<button class="btn btn-success btn-sm fw-bold" onclick="glSaveEntryUI(true, this)">💾 حفظ التعديل</button></div>' :
     '<div class="d-flex gap-2 justify-content-end align-items-center flex-wrap mt-3">' +
+    (entry && entry.id ? glEdRowBtns_(entry) : '') +
     '<button class="btn btn-link btn-sm text-muted me-auto" onclick="glSaveEntryUI(false, this)" title="يُحفظ دون ترحيل ولا يؤثر على الأرصدة">📝 حفظ كمسودة</button>' +
     '<button class="btn btn-outline-success btn-sm fw-bold" onclick="glSaveEntryUI(true, this, \'new\')" title="يحفظ ويُفرغ النموذج لتسجيل ' + (isVchK ? 'إيصال' : 'قيد') + ' جديد">💾➕ حفظ + جديد</button>' +
     (isRP ? '<button class="btn btn-dark btn-sm fw-bold" onclick="glSaveEntryUI(true, this, \'print\')">🖨️ حفظ وطباعة</button>' : '') +
@@ -47091,8 +47184,8 @@ function glStTable_(res, M, o, mode) {
   if (hasHb) { fx.push(['hotel', 'الفندق', 'Hotel']); fx.push(['ci', 'الدخول', 'In']); fx.push(['co', 'الخروج', 'Out']); fx.push(['nr', 'ليالي×غرف', 'N×R']); }
   var ord = (glStLay_().order || []);
   if (ord.length) fx.sort(function (a, b) { var ia = ord.indexOf(a[0]), ib = ord.indexOf(b[0]); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
-  var withStat = run && cols.status, per = run ? (withStat ? 4 : 3) : 2, showEq = cols.eq && scr, showAtt = cols.att && scr;
-  var nFix = fx.length, nAll = nFix + curs.length * per + (showEq ? 1 : 0) + (showAtt ? 1 : 0);
+  var withStat = run && cols.status, per = run ? (withStat ? 4 : 3) : 2, showEq = cols.eq && scr, showAtt = cols.att && scr, showAct = scr;
+  var nFix = fx.length, nAll = nFix + curs.length * per + (showEq ? 1 : 0) + (showAtt ? 1 : 0) + (showAct ? 1 : 0);
   var fth = function (f) {
     var flt = scr && /^(date|entry|ref|type|desc|counter|trip|hotel)$/.test(f[0]) ? ' <span class="gl-stf' + (_cfOn_((GL._stCf || {})[f[0]]) ? ' on' : '') + '" onclick="glStCf_(event,\'' + f[0] + '\',\'' + f[1] + '\')">🔽</span>' : '';
     return '<th rowspan="2" class="fx-' + f[0] + '"' + (scr ? ' data-ck="' + f[0] + '" data-fx="1"' : '') + '>' + L(f[1], f[2]) + flt + '</th>';
@@ -47100,7 +47193,7 @@ function glStTable_(res, M, o, mode) {
   var sth = function (c, k, ar, en) { return '<th class="sub c-' + c + '"' + (scr ? ' data-ck="' + c + '.' + k + '"' : '') + '>' + L(ar, en) + '</th>'; };
   var h = '<table class="' + (scr ? 'gl-tbl gl-sttbl' : 'pt') + '"><thead><tr>' + fx.map(fth).join('') +
     curs.map(function (c) { return '<th colspan="' + per + '" class="curh c-' + c + '">' + L(GL_ST_CUR_FULL_[c], GL_ST_CUR_EN_[c]) + '</th>'; }).join('') +
-    (showEq ? '<th rowspan="2" data-ck="eq">المعادل بالجنيه</th>' : '') + (showAtt ? '<th rowspan="2" data-ck="att">📎</th>' : '') + '</tr><tr>' +
+    (showEq ? '<th rowspan="2" data-ck="eq">المعادل بالجنيه</th>' : '') + (showAtt ? '<th rowspan="2" data-ck="att">📎</th>' : '') + (showAct ? '<th rowspan="2" class="gl-stact">إجراءات</th>' : '') + '</tr><tr>' +
     curs.map(function (c) { return sth(c, 'dr', 'مدين', 'Debit') + sth(c, 'cr', 'دائن', 'Credit') + (run ? sth(c, 'bal', 'الرصيد', 'Balance') : '') + (withStat ? sth(c, 'st', 'الحالة', 'Status') : ''); }).join('') +
     '</tr></thead><tbody>';
   var stTxt = function (v) { var s = glStStat_(res.role, v); return bi ? s.t + '<div class="en">' + s.en + '</div>' : s.t; };
@@ -47121,9 +47214,16 @@ function glStTable_(res, M, o, mode) {
     }).join('');
   };
   var netTxt = function (end) { return run ? '' : ' <span class="gnet">· الصافي: ' + curs.filter(function (c) { return Math.abs(end[c] || 0) >= 0.01; }).map(function (c) { var v = end[c]; return glStAmt_(v, c) + ' ' + glStStat_(res.role, v).t; }).join(' + ') + '</span>'; };
-  var tail = (showEq ? '<td></td>' : '') + (showAtt ? '<td></td>' : '');
+  var tail = (showEq ? '<td></td>' : '') + (showAtt ? '<td></td>' : '') + (showAct ? '<td></td>' : '');
+  var actCell = function (x) {   // (V4.237) تعديل · حذف · سجل التعديلات لكل صف
+    var id = glJs(x.entryId), src = x.auto ? (x.src || 'AUTO') : '';
+    return '<td class="gl-stact" onclick="event.stopPropagation()" ondblclick="event.stopPropagation()">' +
+      (GL.can.edit ? '<button class="gl-stab" title="تعديل" onclick="glRowEdit_(\'' + id + '\',' + (x.auto ? 1 : 0) + ')">✏️</button>' : '') +
+      ((GL.can.del || GL.isAdmin) ? '<button class="gl-stab del" title="حذف" onclick="glRowDel_(\'' + id + '\',\'' + glJs(src) + '\',\'مرحّل\')">🗑️</button>' : '') +
+      '<button class="gl-stab" title="سجل تعديلات الصف" onclick="glRowHist_(\'' + id + '\')">📜</button></td>';
+  };
   var anyOpen = curs.some(function (c) { return Math.abs(res.opening[c] || 0) >= 0.01; });
-  if (anyOpen || M.gmode !== 'trip') h += '<tr class="op"><td colspan="' + nFix + '" class="lbl">' + L('رصيد أول المدة', 'Opening balance') + (res.from ? ' — ' + E(res.from) : '') + '</td>' + sumCells(null, res.opening, false) + (showEq ? '<td class="n">' + glFmt(res.openingBase) + '</td>' : '') + (showAtt ? '<td></td>' : '') + '</tr>';
+  if (anyOpen || M.gmode !== 'trip') h += '<tr class="op"><td colspan="' + nFix + '" class="lbl">' + L('رصيد أول المدة', 'Opening balance') + (res.from ? ' — ' + E(res.from) : '') + '</td>' + sumCells(null, res.opening, false) + (showEq ? '<td class="n">' + glFmt(res.openingBase) + '</td>' : '') + (showAtt ? '<td></td>' : '') + (showAct ? '<td></td>' : '') + '</tr>';
   var rowHtml = function (x) {
     var cells = fx.map(function (f) {
       switch (f[0]) {
@@ -47143,7 +47243,7 @@ function glStTable_(res, M, o, mode) {
       return '<td></td>';
     }).join('');
     return '<tr' + (scr ? ' data-eid="' + E(x.entryId) + '"' : '') + (x.pending ? ' class="pend"' : '') + '>' + cells + curCells(x) +
-      (showEq ? '<td class="n eq">' + glFmt(x.balBase) + '</td>' : '') + (showAtt ? '<td>' + (x.att ? '<span class="gl-stch a" style="cursor:pointer;" onclick="event.stopPropagation();glShowEntry(\'' + glJs(x.entryId) + '\')">📎' + x.att + '</span>' : '') + '</td>' : '') + '</tr>';
+      (showEq ? '<td class="n eq">' + glFmt(x.balBase) + '</td>' : '') + (showAtt ? '<td>' + (x.att ? '<span class="gl-stch a" style="cursor:pointer;" onclick="event.stopPropagation();glShowEntry(\'' + glJs(x.entryId) + '\')">📎' + x.att + '</span>' : '') + '</td>' : '') + (showAct ? actCell(x) : '') + '</tr>';
   };
   var summary = M.group === 'summary';
   M.groups.forEach(function (g) {
@@ -47154,7 +47254,7 @@ function glStTable_(res, M, o, mode) {
     h += '<tr class="sub"><td colspan="' + nFix + '" class="lbl">' + L('إجمالي ', 'Subtotal ') + E(g.label.replace(/^\S+\s/, '')) + netTxt(g.end) + '</td>' + sumCells(g.tot, g.end, true) + tail + '</tr>';
   });
   if (!M.rows.length) h += '<tr><td colspan="' + nAll + '" class="text-muted" style="padding:18px;text-align:center;">لا توجد حركات في هذه الفترة' + (M.filtered ? ' (أو التصفية)' : '') + '</td></tr>';
-  h += '<tr class="tot"><td colspan="' + nFix + '" class="lbl">' + L(run ? 'الإجمالي والرصيد النهائي' : 'الإجمالي', run ? 'Totals & closing balance' : 'Totals') + '</td>' + sumCells(M.tot, M.close, true) + (showEq ? '<td class="n">' + glFmt(res.closingBase) + '</td>' : '') + (showAtt ? '<td></td>' : '') + '</tr>';
+  h += '<tr class="tot"><td colspan="' + nFix + '" class="lbl">' + L(run ? 'الإجمالي والرصيد النهائي' : 'الإجمالي', run ? 'Totals & closing balance' : 'Totals') + '</td>' + sumCells(M.tot, M.close, true) + (showEq ? '<td class="n">' + glFmt(res.closingBase) + '</td>' : '') + (showAtt ? '<td></td>' : '') + (showAct ? '<td></td>' : '') + '</tr>';
   if (!run) h += '<tr class="tot fin"><td colspan="' + nFix + '" class="lbl">' + L('الرصيد النهائي', 'Closing balance') + '</td>' + sumCells(null, M.close, false) + tail + '</tr>';
   return h + '</tbody></table>';
 }
@@ -47229,7 +47329,9 @@ function glStGo_(kind, btn) {
       glStDeliver_(kind, R, o, m, btn);
     }, function (e) { if (btn) btn.disabled = false; _showPopup(e.message || e, 'error'); });
   };
-  if (o.period === 'all' && (res.from || res.to)) glRun('glStatement', [res.account.code, '', ''], run); else run(res);
+  if (o.period === 'all' && (res.from || res.to)) glRun('glStatement', [res.account.code, '', ''], run);
+  else if (res._stale) glRun('glStatement', [res.account.code, res.from || '', res.to || ''], function (R) { GL._st = R; run(R); });   // (V4.237) بعد تحديث محلي: أعمار الديون من السيرفر
+  else run(res);
 }
 function glStBalTxt_(R, o, ascii) {
   var M = glStModel_(R, glStDocOpts_(R, o));

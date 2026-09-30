@@ -729,7 +729,33 @@ function _glWriteEntry_(v, meta, user) {
   });
   return { eRow: eRow, lRows: lRows };
 }
+// ⚡ (V4.237) بحث بمحرك الشيت (TextFinder) عن صفوف قيد بعينه بدل قراءة الشيت كاملاً (آلاف السطور) — يقرأ صفوفه فقط.
+// يُرجع null لو البحث غير متاح (فيُستخدم المسح الكامل القديم)
+function _glFindRows_(key, id) {
+  id = _glStr_(id); if (!id) return [];
+  var sh = _glSheet_(key), last = sh.getLastRow(); if (last < 2) return [];
+  var col = sh.getRange(2, 1, last - 1, 1);
+  if (typeof col.createTextFinder !== 'function') return null;
+  var nums; try { nums = col.createTextFinder(id).matchEntireCell(true).matchCase(true).findAll().map(function (h) { return h.getRow(); }); } catch (e) { return null; }
+  nums.sort(function (a, b) { return a - b; });
+  var W = GL_SHEETS_[key].headers.length, out = [];
+  for (var i = 0; i < nums.length;) {
+    var j = i; while (j + 1 < nums.length && nums[j + 1] === nums[j] + 1) j++;
+    sh.getRange(nums[i], 1, j - i + 1, W).getValues().forEach(function (v, k) { if (_glStr_(v[0]) === id) out.push({ row: nums[i] + k, r: v }); });
+    i = j + 1;
+  }
+  return out;
+}
+function _glRowBlocks_(rows) {   // أرقام صفوف ⇒ كتل متصلة [بداية، عدد] من الأسفل للأعلى (للحذف)
+  var n = rows.map(function (x) { return x.row; }).sort(function (a, b) { return a - b; }), out = [];
+  for (var i = 0; i < n.length;) { var j = i; while (j + 1 < n.length && n[j + 1] === n[j] + 1) j++; out.push([n[i], j - i + 1]); i = j + 1; }
+  return out.reverse();
+}
 function _glDeleteLinesOf_(ids) {
+  if (ids.length === 1) {
+    var hit = _glFindRows_('lines', ids[0]);
+    if (hit && hit.length) { var sh1 = _glSheet_('lines'); _glRowBlocks_(hit).forEach(function (b) { sh1.deleteRows(b[0], b[1]); }); return; }
+  }
   var set = {}; ids.forEach(function (id) { set[id] = 1; });
   var sh = _glSheet_('lines'), last = sh.getLastRow(); if (last < 2) return;
   var col = sh.getRange(2, 1, last - 1, 1).getValues();
@@ -740,6 +766,10 @@ function _glDeleteLinesOf_(ids) {
   }
 }
 function _glSetLinesStatus_(ids, status) {
+  if (ids.length === 1) {
+    var hit = _glFindRows_('lines', ids[0]);
+    if (hit && hit.length) { var sh1 = _glSheet_('lines'); _glRowBlocks_(hit).forEach(function (b) { var v = []; for (var k = 0; k < b[1]; k++) v.push([status]); sh1.getRange(b[0], 4, b[1], 1).setValues(v); }); return; }
+  }
   var set = {}; ids.forEach(function (id) { set[id] = 1; });
   var sh = _glSheet_('lines'), last = sh.getLastRow(); if (last < 2) return;
   var vals = sh.getRange(2, 1, last - 1, 4).getValues();
@@ -748,13 +778,19 @@ function _glSetLinesStatus_(ids, status) {
   if (changed) sh.getRange(2, 4, vals.length, 1).setValues(vals.map(function (r) { return [r[3]]; }));
 }
 function _glFindEntry_(id) {
+  var hit = _glFindRows_('entries', id);
+  if (hit && hit.length) return { row: hit[0].row, r: hit[0].r };
   var rows = _glRows_('entries');
   for (var i = 0; i < rows.length; i++) if (_glStr_(rows[i][0]) === id) return { row: i + 2, r: rows[i] };
   return null;
 }
 // ⚡ (V4.232) تحديث محلي بلا إعادة تحميل كامل: دوال الحفظ/الإلغاء/الحذف تُرجع «دلتا أرصدة» محسوبة من
 // سطور القيد نفسه (المرحّلة فقط) بدل مسح كل السطور (_glBalances_) وإعادة جلب الحسابات مع كل حفظ.
-function _glLinesOf_(id) { id = _glStr_(id); return _glRows_('lines').filter(function (r) { return _glStr_(r[0]) === id; }); }
+function _glLinesOf_(id) {
+  id = _glStr_(id);
+  var hit = _glFindRows_('lines', id); if (hit && hit.length) return hit.map(function (x) { return x.r; });
+  return _glRows_('lines').filter(function (r) { return _glStr_(r[0]) === id; });
+}
 function _glLineDelta_(rows, sign, out) {
   out = out || {};
   (rows || []).forEach(function (l) {
@@ -905,6 +941,71 @@ function glEntryHistory(authToken, id) {
   });
   return { success: true, rows: out.reverse() };
 }
+// 📜 (V4.237) سجل تعديلات صف بكشف الحساب: القيد نفسه + مصدره بشاشات البرنامج (الدفعة/البند/المجموعة/الملف/الإيصال…)
+function _glAutoSrc_(sk) { var m = _glStr_(sk).match(/^AUTO:([A-Z]+):(.*)$/); return m ? { src: m[1], id: m[2].replace(/#\d+$/, '') } : null; }
+var GL_SRC_LBL_ = { CP: 'دفعة العميل', CI: 'بنود العميل بالرحلة', TRIP: 'بنود العميل بالرحلة', AP: 'دفعة الوكيل', AI: 'بند حساب الوكيل', VZ: 'مجموعة التأشيرات',
+  MF: 'ملف المراجعة', RF: 'إيصال رسوم الغرفة', TR: 'تشغيلة النقل', HB: 'حجز الفنادق', HBP: 'دفعة الحجوزات', OPEN: 'الأرصدة الافتتاحية' };
+function glRowHistory(authToken, entryId) {
+  _glPerm_(authToken, 'view');
+  var id = _glStr_(entryId), f = _glFindEntry_(id); if (!f) throw new Error('القيد غير موجود');
+  var so = _glAutoSrc_(f.r[6]), keys = {}, ct = null;
+  keys['GL:' + id] = 'القيد ' + id;
+  if (so) {
+    var L = GL_SRC_LBL_[so.src] || 'المصدر';
+    if (/^(AP|AI|VZ|MF)$/.test(so.src)) keys[so.src + ':' + so.id] = L;
+    else if (so.src === 'TR' || so.src === 'RF') { keys[so.id] = L; var rn = (_glStr_(f.r[4]).match(/إيصال\s+(\S+)/) || [])[1]; if (rn && rn !== '—') keys[rn] = L; }
+    else if (so.src === 'TRIP' || so.src === 'CI') { var p = so.id.split('|'); ct = { client: p[0], trip: p[1] || 'عام', rx: null, lbl: L }; }
+    else if (so.src === 'CP') {
+      try {
+        var pSh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
+        if (pSh.getLastRow() >= 2) pSh.getRange(2, 1, pSh.getLastRow() - 1, 3).getValues().some(function (r) {
+          if (_glStr_(r[0]) !== so.id) return false; ct = { client: _glStr_(r[1]), trip: _glStr_(r[2]) || 'عام', rx: /دفعة|تحويل/, lbl: 'دفعات العميل بالرحلة' }; return true; });
+      } catch (e) {}
+    }
+  }
+  var sheet = ensureAuditLogSheet_(), last = sheet.getLastRow(), out = [];
+  if (last >= 2) sheet.getRange(2, 1, last - 1, 7).getValues().forEach(function (r) {
+    var rec = _glStr_(r[3]), scope = keys[rec];
+    if (!scope && ct && rec === ct.client && _glStr_(r[4]) === ct.trip && (!ct.rx || ct.rx.test(_glStr_(r[2])))) scope = ct.lbl;
+    if (!scope) return;
+    out.push({ timestamp: _glStr_(r[0]), username: _glStr_(r[1]) || '-', action: _glStr_(r[2]) || '-', recordId: scope, field: _glStr_(r[4]) || '-',
+      oldValue: _glStr_(r[5]) || '-', newValue: _glStr_(r[6]) || '-' });
+  });
+  return { success: true, rows: out.reverse(), source: so ? (GL_SRC_LBL_[so.src] || so.src) : '', auto: !!so };
+}
+// 🗑️ (V4.237) حذف صف من كشف الحساب: قيد يدوي ⇒ حذف نهائي (المدير) · قيد تلقائي مصدره سجل منفرد (دفعة/بند/مجموعة/ملف/إيصال)
+// ⇒ يُحذف المصدر من شاشته (بصلاحياتها) ويُلغى القيد فوراً بلا انتظار المزامنة · القيود المجمّعة (بنود رحلة/افتتاحي/نقل/حجوزات) تُعدَّل من مصدرها
+function glRowDelete(authToken, entryId) {
+  var session = requireAuth_(authToken);
+  var id = _glStr_(entryId), f = _glFindEntry_(id); if (!f) throw new Error('القيد غير موجود');
+  var so = _glAutoSrc_(f.r[6]);
+  if (!so) return glDeleteEntry(authToken, id);
+  if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
+  var r;
+  switch (so.src) {
+    case 'CP': r = deleteAccPayment(authToken, so.id); break;
+    case 'AP': r = deleteAgentPayment(authToken, so.id); break;
+    case 'AI': r = deleteAgentAccItem(authToken, so.id); break;
+    case 'VZ': r = deleteVisaFile(authToken, so.id); break;
+    case 'MF': r = deleteMinistryFile(authToken, so.id); break;
+    case 'RF':
+      if (/\|/.test(so.id)) throw new Error('إيصال رسوم غرفة بلا رقم — احذفه من شاشة ملفات الوزارة ← الإيصالات');
+      r = deleteRoomFeeReceipt(authToken, so.id); break;
+    default:
+      throw new Error('هذا قيد مجمَّع من «' + (GL_SRC_LBL_[so.src] || so.src) + '» — يُعدَّل أو يُحذف من مصدره بالشاشة (مثلاً حذف البند من حسابات العميل) فيتحدّث القيد تلقائياً');
+  }
+  if (r && r.success === false) throw new Error(r.error || 'تعذّر حذف المصدر');
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var g = _glFindEntry_(id); if (!g || _glStr_(g.r[5]) === GL_ST_VOID_) return { success: true, id: id, sourceDeleted: so.src, removedId: id, deleted: true, balancesDelta: {} };
+    var was = _glLinesOf_(id), sh = _glSheet_('entries');
+    sh.getRange(g.row, 6).setValue(GL_ST_VOID_);
+    sh.getRange(g.row, 17, 1, 3).setValues([[session.username, _glNow_(), 'حُذف مصدره من كشف الحساب']]);
+    _glSetLinesStatus_([id], GL_ST_VOID_);
+    logChange_(session.username, 'حذف صف من كشف الحساب', 'GL:' + id, GL_SRC_LBL_[so.src] || so.src, _glStr_(f.r[4]) + ' — ' + _glNum_(f.r[8]) + ' ج', 'ملغى (حُذف المصدر)');
+    return { success: true, id: id, sourceDeleted: so.src, balancesDelta: _glLineDelta_(was, -1, {}), pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(id) };
+  } finally { lock.releaseLock(); }
+}
 function _glEntryObj_(r) {
   return { id: _glStr_(r[0]), seq: r[1], date: _glDate_(r[2]), type: _glStr_(r[3]), desc: _glStr_(r[4]), status: _glStr_(r[5]),
     sourceKey: _glStr_(r[6]), batchId: _glStr_(r[7]), totalBase: _glNum_(r[8]), ref: _glStr_(r[9]), trip: _glStr_(r[10]), company: _glStr_(r[11]),
@@ -973,7 +1074,7 @@ function _glLineObj_(r) {
 function _glEntryFull_(id) {
   var f = _glFindEntry_(id); if (!f) return null;
   var e = _glEntryObj_(f.r);
-  e.lines = _glRows_('lines').filter(function (r) { return _glStr_(r[0]) === id; }).map(_glLineObj_)
+  e.lines = _glLinesOf_(id).map(_glLineObj_)
     .sort(function (a, b) { return a.lineNo - b.lineNo; });
   e.attachments = _glAttachMap_()[id] || [];
   return e;
