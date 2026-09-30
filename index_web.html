@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.234 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.235 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.234)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.235)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.234</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.235</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7585,7 +7585,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.234";
+var CLIENT_APP_VERSION = "4.235";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -26414,9 +26414,15 @@ function _accOrphanList_() {
     return '<button class="btn btn-outline-warning btn-sm m-1" onclick="_accOrphanFix_(\'' + _accJs_(d.client) + '\', \'' + _accJs_(t) + '\')">' + escapeHtml_(t) + ' (' + by[t].i + ' بند، ' + by[t].p + ' دفعة)</button>';
   }).join('') + '</div>', 'warning', 'أسطر خارج كشوف الرحلات');
 }
+// 🛡️ (V4.235) إغلاق نافذة المعالجة مع إعادة تفعيل مصيدة تركيز مودال Bootstrap المُعطَّلة عند الفتح
+function _accOrfClose_() {
+  (window._accOrfTraps || []).forEach(function (ft) { try { ft.activate(); } catch (e) {} });
+  window._accOrfTraps = [];
+  var o = document.getElementById('_accOrfOv'); if (o) o.remove();
+}
 // نافذة المعالجة: نقل لعميل آخر / نقل للقسم «عام» / حذف البنود (الدفعات تُنقل للعام ولا تُحذف)
 function _accOrphanFix_(client, trip) {
-  var prev = document.getElementById('_accOrfOv'); if (prev) prev.remove();
+  if (document.getElementById('_accOrfOv')) _accOrfClose_();
   var cands = ((window._tasCache && window._tasCache.trip === trip) ? (window._tasCache.rows || []) : [])
     .filter(function (r) { return r.client !== client && (r.men + r.women + r.children + r.infants) > 0; }).map(function (r) { return r.client; });
   var defTarget = cands[0] || '';
@@ -26431,9 +26437,17 @@ function _accOrphanFix_(client, trip) {
       '<datalist id="_orfCands">' + cands.map(function (c) { return '<option value="' + escapeHtml_(c) + '">'; }).join('') + '</datalist></label>' +
     '<label class="d-block mb-2"><input type="radio" name="_orfA" value="moveTrip"> نقلها إلى القسم «عام» بحساب نفس العميل</label>' +
     '<label class="d-block mb-3"><input type="radio" name="_orfA" value="clear"> حذف البنود (والدفعات إن وجدت تُنقل إلى «عام» — لا تُحذف أي دفعة)</label>' +
-    '<div class="d-flex gap-2 justify-content-end"><button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'_accOrfOv\').remove()">إلغاء</button>' +
+    '<div class="d-flex gap-2 justify-content-end"><button class="btn btn-secondary btn-sm" onclick="_accOrfClose_()">إلغاء</button>' +
     '<button class="btn btn-warning btn-sm fw-bold" id="_orfGo">تنفيذ</button></div></div>';
   document.body.appendChild(ov);
+  // 🛡️ (V4.235) تُفتح هذه النافذة فوق مودال Bootstrap (ملخّص حساب الرحلة) الملحق بـbody — مصيدة تركيز
+  // المودال كانت تمنع الكتابة في خانة اسم العميل (نفس علّة V4.228). نُعطّلها مؤقتاً ونُعيدها عند الإغلاق.
+  window._accOrfTraps = [];
+  try { if (window.bootstrap && bootstrap.Modal) document.querySelectorAll('.modal.show').forEach(function (m) {
+    var inst = bootstrap.Modal.getInstance(m);
+    if (inst && inst._focustrap && typeof inst._focustrap.deactivate === 'function') { inst._focustrap.deactivate(); window._accOrfTraps.push(inst._focustrap); }
+  }); } catch (e) {}
+  setTimeout(function () { var t = document.getElementById('_orfTarget'); if (t) { try { t.focus(); t.select(); } catch (e) {} } }, 30);
   document.getElementById('_orfGo').onclick = function () {
     var a = (ov.querySelector('input[name="_orfA"]:checked') || {}).value, t = a === 'moveClient' ? document.getElementById('_orfTarget').value.trim() : (a === 'moveTrip' ? 'عام' : '');
     if (a === 'moveClient' && !t) { _showPopup('اكتب اسم العميل الجديد', 'warning'); return; }
@@ -26442,7 +26456,7 @@ function _accOrphanFix_(client, trip) {
       var btn = document.getElementById('_orfGo'); if (btn) btn.disabled = true;
       google.script.run.withSuccessHandler(function (res) {
         if (!res || !res.success) { if (btn) btn.disabled = false; _showPopup((res && res.error) || 'تعذّر التنفيذ', 'error'); return; }
-        ov.remove(); showToast('✅ تمت المعالجة: ' + res.items + ' بند، ' + res.payments + ' دفعة');
+        _accOrfClose_(); showToast('✅ تمت المعالجة: ' + res.items + ' بند، ' + res.payments + ' دفعة');
         try { if (window._tasCache && window._tasCache.trip === trip) _tasLoadResults_(trip); } catch (e) {}
         try { if (window._accData && window._accData.client === client) _accLoad_(); } catch (e) {}
       }).withFailureHandler(function (e) { if (btn) btn.disabled = false; _showPopup(e.message || e, 'error'); })
