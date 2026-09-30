@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.232";
+var APP_VERSION = "4.233";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21163,7 +21163,9 @@ var MF_HEADERS = [
   // الأعمدة القديمة)، نفس فكرة extraTrips بمجموعات التأشيرات
   'رحلات إضافية مرتبطة',
   // 🏛️ (V4.230) ملف «رسوم تنفيذ»: يُحاسَب العميل برسم تنفيذ للفرد بدل رسوم الغرفة (عمود أُضيف بالنهاية)
-  'رسوم تنفيذ'
+  'رسوم تنفيذ',
+  // 🏛️ (V4.233) تحكم يدوي بالقواعد: المستخدم أدخل نوع المراجعة/رسوم الغرفة يدوياً متجاوزاً القواعد التلقائية (VIP لأقل من 4)
+  'تحكم يدوي'
 ];
 
 var MF_SUP_SHEET = 'MinistrySupervisors';
@@ -21190,7 +21192,7 @@ var MF_FIELD_LABELS_ = {
   makkahHotel:'فندق مكة', makkahIn:'دخول مكة', makkahOut:'خروج مكة',
   transport:'شركة النقل', notes:'ملاحظات', breakdown:'بنود العميل', sups:'المشرفون',
   selected:'المعتمرون المختارون', fileType:'نوع الملف', extraTrips:'رحلات إضافية مرتبطة',
-  execFeeOverride:'رسوم تنفيذ (تجاوز يدوي)'
+  execFeeOverride:'رسوم تنفيذ (تجاوز يدوي)', manualType:'تحكم يدوي بالقواعد'
 };
 
 /* ---------- صلاحية الشاشة ---------- */
@@ -21380,8 +21382,11 @@ function _mfCompute_(f, cfg) {
   // (نوعا المراجعة متنافيان أصلاً).
   // 🏛️ (V4.115) قاعدة إضافية: الملف الذي عدد معتمريه أقل من 4 أفراد تُحتسب له رسوم غرفة VIP
   // أيضاً (بغضّ النظر عن نوع المراجعة) — عدا تجديد الباركود الذي له تسعيره الخاص.
-  var vipByCount = (N > 0 && N < 4 && f.reviewType !== 'تجديد باركود');
-  var S = (f.reviewType === 'VIP' || vipByCount) ? (_mfNum_(cfg.vipRoomFee) || 3100) : _mfNum_(f.roomFee);
+  // 🏛️ (V4.233) قاعدة «أقل من 4 أفراد ⇒ VIP» لا تُطبَّق على ملفات «مجموعات»، ولا عند التحكم اليدوي
+  // (المستخدم تجاهل القواعد وأدخل القيم يدوياً) — القرار له مع تنبيه غير مانع بالواجهة.
+  var vipByCount = (N > 0 && N < 4 && f.reviewType !== 'تجديد باركود' && f.fileType !== 'مجموعات' && !f.manualType);
+  // 🏛️ (V4.233) التحكم اليدوي: تُعتمد رسوم الغرفة المُدخلة كما هي (حتى لو VIP) — تجاوزٌ صريح من المستخدم
+  var S = f.manualType ? _mfNum_(f.roomFee) : ((f.reviewType === 'VIP' || vipByCount) ? (_mfNum_(cfg.vipRoomFee) || 3100) : _mfNum_(f.roomFee));
   var supFee = _mfNum_(cfg.supRoomFee) || 200;
   var R = _mfNum_(f.ticket), T = _mfNum_(f.adminFee), V = _mfNum_(f.fxRate);
   var AC = _mfNum_(f.pct) / 100;
@@ -21632,7 +21637,9 @@ function _mfRowToObj_(r) {
     extraTrips: _mfStr_(r[40]),
     // 🏛️ (V4.230/V4.231) تجاوز رسوم التنفيذ اليدوي للملف: '' = تلقائي (حسب سياسة الشركة/العميل) ·
     // 'نعم' = تفعيل يدوي · 'لا' = إلغاء يدوي (رسوم غرفة عادية رغم السياسة)
-    execFeeOverride: _mfStr_(r[41])
+    execFeeOverride: _mfStr_(r[41]),
+    // 🏛️ (V4.233) تحكم يدوي بالقواعد: نوع المراجعة/رسوم الغرفة كما أدخلها المستخدم (تجاوز قاعدة VIP لأقل من 4)
+    manualType: (_mfStr_(r[42]) === 'نعم')
   };
   // 🏛️ (V4.231) execFee الفعّال = التجاوز اليدوي إن وُجد، وإلا الافتراضي من سياسة رسوم التنفيذ (شركة/عميل + تاريخ سريان)
   o.execFee = _mfExecEffective_(o);
@@ -21648,7 +21655,8 @@ function _mfObjToRow_(f) {
     f.madinahHotel, f.madinahIn, f.madinahOut, f.makkahHotel, f.makkahIn, f.makkahOut,
     f.transport, f.notes, JSON.stringify(f.selected || []),
     f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
-    f.fileType, f.extraTrips, _mfStr_(f.execFeeOverride)   // (V4.231) '' تلقائي · 'نعم' تفعيل · 'لا' إلغاء
+    f.fileType, f.extraTrips, _mfStr_(f.execFeeOverride),   // (V4.231) '' تلقائي · 'نعم' تفعيل · 'لا' إلغاء
+    (f.manualType ? 'نعم' : 'لا')   // (V4.233) تحكم يدوي بالقواعد
   ];
 }
 // 🧳 (V4.184) كل رحلات ملف المراجعة: الأساسية + الإضافية (نفس منطق _vzTripSplit_/_vzTripsOf_)
@@ -22304,6 +22312,8 @@ function saveMinistryFile(authToken, data) {
       extraTrips: _mfStr_(data.extraTrips),
       // 🏛️ (V4.230/V4.231) تجاوز رسوم التنفيذ اليدوي: '' تلقائي (حسب السياسة) · 'نعم' تفعيل · 'لا' إلغاء
       execFeeOverride: (function () { var v = _mfStr_(data.execFeeOverride); return (v === 'نعم' || v === 'لا') ? v : ''; })(),
+      // 🏛️ (V4.233) تحكم يدوي بالقواعد (نوع المراجعة/رسوم الغرفة) — يتجاوز قاعدة VIP لأقل من 4 أفراد
+      manualType: !!data._manualType,
       goDate: _mfDate_(data.goDate), retDate: _mfDate_(data.retDate),
       pilgrims: pilg, supCount: 0,   // 🧑‍✈️ (V4.113) يُحتسب أدناه بعد تطبيق قاعدة الوكيل ⇒ استقبال (مرافق فقط يُحتسب)
       sups: sups,

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.232 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.233 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.232)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.233)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.232</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.233</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7585,7 +7585,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.232";
+var CLIENT_APP_VERSION = "4.233";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -36547,9 +36547,10 @@ function mfCalc(f) {
   var O = murafiq, heads = N + O;
   // 🏛️ (V4.113) رسوم غرفة VIP إجمالي ثابت للفرد من الإعدادات (افتراضياً 3,100) — وليست الرسوم
   // المسجَّلة + 100 كما كان سابقاً؛ لا تُطبَّق على تجديد الباركود إطلاقاً
-  // 🏛️ (V4.115) أقل من 4 معتمرين ⇒ رسوم غرفة VIP أيضاً (نفس قاعدة السيرفر تماماً)
-  var vipByCount = (N > 0 && N < 4 && f.reviewType !== 'تجديد باركود');
-  var S = (f.reviewType === 'VIP' || vipByCount) ? (mfNum(cfg.vipRoomFee) || 3100) : mfNum(f.roomFee);
+  // 🏛️ (V4.115/V4.233) أقل من 4 معتمرين ⇒ VIP — إلا لملفات «مجموعات» أو عند التحكم اليدوي (نفس قاعدة السيرفر)
+  var vipByCount = (N > 0 && N < 4 && f.reviewType !== 'تجديد باركود' && f.fileType !== 'مجموعات' && !(f._manualType || f.manualType));
+  var manual = !!(f._manualType || f.manualType);
+  var S = manual ? mfNum(f.roomFee) : ((f.reviewType === 'VIP' || vipByCount) ? (mfNum(cfg.vipRoomFee) || 3100) : mfNum(f.roomFee));
   var supFee = mfNum(cfg.supRoomFee) || 200;
   var R = mfNum(f.ticket), T = mfNum(f.adminFee), V = mfNum(f.fxRate), AC = mfNum(f.pct) / 100;
   var barcode = (f.reviewType === 'تجديد باركود') ? mfBarcodeFee(f.reviewDate) * N : 0;
@@ -37396,7 +37397,7 @@ function mfPayload(f) {
     madinahHotel: f.madinahHotel, madinahIn: f.madinahIn, madinahOut: f.madinahOut,
     makkahHotel: f.makkahHotel, makkahIn: f.makkahIn, makkahOut: f.makkahOut,
     transport: f.transport, notes: f.notes, selected: f.selected,
-    _manualType: !!f._manualType,
+    _manualType: !!(f._manualType || f.manualType),   // 🏛️ (V4.233) يبقى التحكم اليدوي عند إعادة التعديل
     fileType: f.fileType, _manualFileType: !!f._manualFileType,
     execFeeOverride: mfStr(f.execFeeOverride || ''),   // 🏛️ (V4.231) '' تلقائي (حسب السياسة) · 'نعم' تفعيل · 'لا' إلغاء
     execFee: !!f.execFee   // القيمة الفعّالة (للعرض فقط — لا تُرسل مؤثِّرة)
@@ -38950,12 +38951,19 @@ function mfFormRender() {
   h += '<div class="mf-step' + (cur === 3 ? ' on' : '') + '"><div class="row g-2">';
   h += mfFld('سعر البرنامج (للفرد)', mfNumFld('progPrice', d.progPrice), 2);
   h += mfFld('سعر التذكرة (للفرد)', mfNumFld('ticket', d.ticket) + '<div class="mf-hint">موحّد للرحلة — قابل للتغيير</div>', 2);
-  // 🏛️ (V4.113) في حالة VIP: رسوم الغرفة إجمالي ثابت من الإعدادات — الحقل يُعرض للقراءة فقط
+  // 🏛️ (V4.233) رسوم الغرفة دائماً قابلة للتعديل — تعديلها (أو تغيير نوع المراجعة) = تحكم يدوي يتجاوز
+  // قاعدة VIP لأقل من 4 أفراد، مع تنبيه غير مانع والقرار للمستخدم (استثناءات المراجعة).
+  var _mfN4 = mfNum(d.pilgrims), _mfManual = !!(d._manualType || d.manualType);
+  var _mfLt4 = _mfN4 > 0 && _mfN4 < 4 && d.reviewType !== 'تجديد باركود' && d.fileType !== 'مجموعات';
+  var _mfVip = mfNum(MF.cfg.vipRoomFee) || 3100;
+  var _mfRoomShown = _mfManual ? d.roomFee : ((c && c.roomFeeEffective) || d.roomFee);
   h += mfFld('رسوم الغرفة (للفرد)',
-    (d.reviewType === 'VIP'
-      ? ('<input class="form-control form-control-sm" value="' + mfFmt((MF.cfg.vipRoomFee) || 3100) + '" disabled>' +
-         '<div class="mf-hint auto">VIP: إجمالي ثابت من الإعدادات (بدل الرسوم المسجَّلة)</div>')
-      : (mfNumFld('roomFee', d.roomFee) + '<div class="mf-hint">من الإعدادات حسب التاريخ</div>')), 2);
+    '<input class="form-control form-control-sm" value="' + mfEsc(_mfRoomShown || '') + '" oninput="mfDraftNum(\'roomFee\',this.value)" onchange="mfMarkManual_()">' +
+    '<div class="mf-hint' + ((_mfLt4 && !_mfManual) ? ' auto' : '') + '">' +
+      (_mfManual ? '✋ تحكم يدوي — تُعتمد القيمة ونوع المراجعة كما أدخلتَهما (تجاوزٌ لقاعدة VIP، تنبيه غير مانع)'
+        : (_mfLt4 ? '⚠️ أقل من 4 أفراد ⇒ القاعدة التلقائية «VIP» (' + mfFmt(_mfVip) + ' للفرد) — عدّل القيمة أو نوع المراجعة للتجاوز'
+          : (d.reviewType === 'VIP' ? 'VIP: الافتراضي ' + mfFmt(_mfVip) + ' — قابل للتعديل يدوياً' : 'من الإعدادات حسب التاريخ · قابلة للتعديل'))) +
+    '</div>', 2);
   h += mfFld('رسوم إدارية (للفرد)', mfNumFld('adminFee', d.adminFee), 2);
   // 🏛️ (V4.230/V4.231) رسوم التنفيذ: بدل رسوم الغرفة — لا تُرحَّل رسوم الغرفة على الرحلة/العميل، بل يُحاسَب
   // العميل برسم «رسوم التنفيذ» للفرد (بدون المشرف) من تسعير بنود العميل. الوضع الافتراضي يُضبط للشركات/العملاء
@@ -39299,6 +39307,8 @@ function mfDateFld(id, v, cb) {
 }
 function mfDraftSet(k, v) { MF._draft[k] = (typeof v === 'boolean') ? v : mfStr(v); mfFormHead(MF._draft); mfFormLiveCalc(); mfFormValidate(); }
 function mfDraftNum(k, v) { MF._draft[k] = mfNum(v); mfFormLiveCalc(); mfFormValidate(); }
+// 🏛️ (V4.233) تعديل رسوم الغرفة يدوياً = تحكم يدوي بالقواعد (يتجاوز VIP لأقل من 4) — تنبيه غير مانع
+function mfMarkManual_() { if (!MF._draft._manualType) { MF._draft._manualType = true; mfFormRender(); } }
 function mfDraftCompany(v) {
   MF._draft.company = mfStr(v);
   var c = (MF.companies || []).filter(function (x) { return x.company === MF._draft.company; })[0];
