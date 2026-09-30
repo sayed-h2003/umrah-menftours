@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.235 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.236 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.235)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.236)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.235</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.236</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6573,7 +6573,35 @@ function _onlineStart_() {
   if (_onlineTimer_) return; // لا نبدأ أكثر من نبضة واحدة
   var wrap = document.getElementById('onlineUsersWrap'); if (wrap) wrap.classList.remove('d-none');
   _onlineTick_();
-  _onlineTimer_ = setInterval(_onlineTick_, 60000);
+  _onlineTimer_ = 1;
+  _pulseStart_();   // ⚡ (V4.236) النبضات اللاحقة عبر النبضة الموحّدة (appPulse)
+}
+/* ⚡ (V4.236) نبضة موحّدة: نداء واحد كل دقيقة (كل دقيقتين والتبويب مخفي) بدل 3 نداءات دورية منفصلة
+   (المتصلون + التنبيهات + المزامنة اللحظية) — كل نداء للسيرفر يكلّف 2-5 ثوانٍ تشغيل مهما كان صغيراً.
+   التنبيهات لا تُعاد إلا لو تغيّرت، والتبويب المخفي يرسل «آخر ظهور» فقط. */
+var _PULSE_ = { busy: false, last: Date.now(), notifVer: '', timer: null };
+function _pulseStart_() {
+  if (_PULSE_.timer) return;
+  _PULSE_.timer = setInterval(function () { _pulseTick_(false); }, 15000);
+  try { document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(function () { _pulseTick_(true); }, 1200); }); } catch (e) {}
+  setTimeout(function () { _pulseTick_(true); }, 4000);   // أول نبضة بعد الإقلاع (التنبيهات + حالة القيود)
+}
+function _pulseTick_(force) {
+  if (!window.authToken || _PULSE_.busy) return;
+  var now = Date.now(), gap = document.hidden ? 110000 : 60000;
+  if (force ? (now - _PULSE_.last < 8000 && _PULSE_.notifVer) : (now - _PULSE_.last < gap)) return;
+  _PULSE_.last = now; _PULSE_.busy = true;
+  var vis = !document.hidden, bell = document.getElementById('notifBellWrap');
+  var canNotif = vis && !!bell && !bell.classList.contains('d-none');
+  var since = ''; try { since = localStorage.getItem('glKickSince') || ''; } catch (e) {}
+  google.script.run.withSuccessHandler(function (r) {
+    _PULSE_.busy = false; if (!r || !r.success) return;
+    if (r.online != null) { var el = document.getElementById('onlineUsersCount'); if (el) el.textContent = r.online; }
+    if (r.notifications) { window._notifCache = r.notifications; _PULSE_.notifVer = r.notifVer || ''; try { _notifRenderBadge_(); } catch (e) {} }
+    if (r.gl && typeof _glKickHandle_ === 'function') _glKickHandle_(r.gl, since);
+    if (r.glDue && typeof glKick_ === 'function') glKick_();
+  }).withFailureHandler(function () { _PULSE_.busy = false; })
+    .appPulse(window.authToken, { online: true, notif: canNotif, notifVer: _PULSE_.notifVer, gl: vis, glSince: since });
 }
 var _onlineLastBeat_ = 0;
 function _onlineTick_() {
@@ -7585,7 +7613,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.235";
+var CLIENT_APP_VERSION = "4.236";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -24094,14 +24122,8 @@ function _notifMarkAllRead_() {
       clearInterval(iv);
       var wrap = document.getElementById('notifBellWrap');
       if (wrap) wrap.classList.toggle('d-none', !(hasPermission('admin') || hasPermission('accounts.view')));
-      _notifRefreshBadge_();
-      setInterval(_notifRefreshBadge_, 90000);
-      // ⚡ (V4.177) تحديث فوري بمجرد العودة للتبويب — يعوّض الدورات التي تُتخطّى وهو مخفي
-      try {
-        document.addEventListener('visibilitychange', function () {
-          if (document.visibilityState === 'visible') _notifRefreshBadge_();
-        });
-      } catch (e) {}
+      // ⚡ (V4.236) التحديث الدوري للشارة صار ضمن النبضة الموحّدة (_pulseTick_) — لا مؤقّت منفصل هنا
+      if (typeof _pulseTick_ === 'function') setTimeout(function () { _pulseTick_(true); }, 300);
     } else if (tries > 600) clearInterval(iv);
   }, 1000);
 })();
@@ -48328,36 +48350,44 @@ function glPendingAct(approve, btn) {
   };
   if (approve) go(); else askPrompt_('سبب الرفض (اختياري):', '', go, { title: 'رفض التغييرات', okLabel: 'رفض', danger: true });
 }
-// ⚡ المزامنة اللحظية + التنبيه: كل 40 ثانية (وعند العودة للصفحة) — القيود الجديدة تظهر كتنبيه لمن له صلاحية الحسابات
+// ⚡ المزامنة اللحظية + التنبيه — (V4.236) الحالة تصل مع النبضة الموحّدة، والمزامنة الثقيلة تُطلب فقط حين يُبلغ السيرفر
+// هذا المتصفح بأن دوره (glDue) أو بعد حفظ بحسابات العملاء (glKickSoon_)
 var _glKickBusy = false;
+function _glKickHandle_(r, since) {
+  if (!r) return;
+  try { if (r.now) localStorage.setItem('glKickSince', r.now); } catch (e) {}
+  if (r.pending !== undefined && typeof GL !== 'undefined') { GL.pendingCount = r.pending; try { glNavBadge_(); } catch (e) {} }
+  var rec = (r.recent || []).filter(function (x) { return x.what === 'جديد'; });
+  if (since && rec.length && typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'))) {
+    showToast('📘 ' + rec.length + ' قيد تلقائي جديد: ' + rec.slice(0, 2).map(function (x) { return x.id + ' — ' + String(x.desc || '').slice(0, 60); }).join(' · ') + (rec.length > 2 ? ' …' : ''));
+  }
+  if (r.pending && since && typeof hasPermission === 'function' && hasPermission('gl.view') && !window._glPendWarned) { window._glPendWarned = 1; showToast('🔔 ' + r.pending + ' تغيير على القيود بانتظار الاعتماد — الحسابات العامة ← القيود التلقائية'); }
+}
 function glKick_() {
-  if (_glKickBusy || !window.authToken || document.hidden) return;
+  if (_glKickBusy || !window.authToken) return;
   _glKickBusy = true;
   var since = ''; try { since = localStorage.getItem('glKickSince') || ''; } catch (e) {}
   google.script.run.withSuccessHandler(function (r) {
     _glKickBusy = false; if (!r || !r.success) return;
-    try { if (r.now) localStorage.setItem('glKickSince', r.now); } catch (e) {}
-    if (r.pending !== undefined) { GL.pendingCount = r.pending; glNavBadge_(); }
-    var rec = (r.recent || []).filter(function (x) { return x.what === 'جديد'; });
-    if (since && rec.length && typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'))) {
-      showToast('📘 ' + rec.length + ' قيد تلقائي جديد: ' + rec.slice(0, 2).map(function (x) { return x.id + ' — ' + String(x.desc || '').slice(0, 60); }).join(' · ') + (rec.length > 2 ? ' …' : ''));
-    }
-    if (r.pending && since && typeof hasPermission === 'function' && hasPermission('gl.view') && !window._glPendWarned) { window._glPendWarned = 1; showToast('🔔 ' + r.pending + ' تغيير على القيود بانتظار الاعتماد — الحسابات العامة ← القيود التلقائية'); }
+    _glKickHandle_(r, since);
+    if (r.ran && window._glAccLinksWanted) _glAccLinksRefresh_();
+    // لم تعمل الآن (مزامنة أخرى جارية/آخرها قبل ثوانٍ) ⇒ محاولة واحدة لاحقة حتى يظهر رقم القيد
+    else if (!r.ran && window._glAccLinksWanted && !window._glKickRetry) window._glKickRetry = setTimeout(function () { window._glKickRetry = null; glKick_(); }, 22000);
   }).withFailureHandler(function () { _glKickBusy = false; }).glAutoKick(window.authToken, since);
 }
-setInterval(glKick_, 40000);
+// رقم قيد الرحلة بشاشة حسابات العملاء: نداء خفيف بعد اكتمال المزامنة (بدل إعادة تحميل حساب العميل كاملاً)
+function _glAccLinksRefresh_() {
+  var d = window._accData; window._glAccLinksWanted = false;
+  if (!d || d.gl === undefined || !d.client) return;
+  google.script.run.withSuccessHandler(function (res) {
+    if (res && res.success && window._accData && res.client === window._accData.client) { window._accData.gl = res.gl; try { _accRender_(); } catch (e) {} }
+  }).withFailureHandler(function () {}).glClientLinks(window.authToken, d.client);
+}
 // بعد حفظ بحسابات العملاء: مزامنة خلال ثوانٍ ثم تحديث رقم قيد الرحلة بالشاشة (بلا إعادة تحميل كاملة)
 function glKickSoon_(refreshAcc) {
-  setTimeout(function () {
-    glKick_();
-    if (refreshAcc && window._accData && window._accData.gl !== undefined) setTimeout(function () {
-      google.script.run.withSuccessHandler(function (res) {
-        if (res && res.success && window._accData && res.client === window._accData.client) { window._accData.gl = res.gl; try { _accRender_(); } catch (e) {} }
-      }).getClientAccount(window.authToken, window._accData.client);
-    }, 25000);
-  }, 2500);
+  if (refreshAcc) window._glAccLinksWanted = true;
+  setTimeout(glKick_, 2500);
 }
-document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(glKick_, 1500); });
 // 💵 توجيه دفعات حسابات العملاء (نقدية تحت التسوية) للخزينة/البنك/العهدة
 function glCpDlg() {
   glRun('glCpList', [], function (res) {

@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.235";
+var APP_VERSION = "4.236";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6474,6 +6474,40 @@ function heartbeatOnline(authToken) {
   var uniq = {}; Object.keys(map).forEach(function(t) { uniq[map[t].username] = 1; });
   return { success: true, count: Object.keys(uniq).length };
 }
+/* ⚡ (V4.236) نبضة موحّدة: كان كل متصفح مفتوح يرسل 3 نداءات دورية منفصلة (المتصلون كل دقيقة + التنبيهات كل 90 ثانية +
+   المزامنة اللحظية كل 40 ثانية) — وكل نداء يكلّف 2-5 ثوانٍ تشغيل على السيرفر مهما كان خفيفاً. الآن نداء واحد يجمعها:
+   p.online ⇒ تحديث «آخر ظهور»، p.notif ⇒ التنبيهات فقط لو تغيّر إصدارها عن p.notifVer، p.gl ⇒ حالة القيود.
+   المزامنة الثقيلة نفسها لا تعمل داخل النبضة؛ تُرجع glDue=true لمتصفح واحد فقط فيطلبها بنداء منفصل. */
+function appPulse(authToken, p) {
+  var session = requireAuth_(authToken); p = p || {};
+  var out = { success: true };
+  if (p.online) {
+    var map = _onlinePrune_();
+    map[authToken] = { username: session.username, fullName: session.fullName || session.username, ts: Date.now() };
+    _onlineWrite_(map);
+    var uniq = {}; Object.keys(map).forEach(function(t) { uniq[map[t].username] = 1; });
+    out.online = Object.keys(uniq).length;
+  }
+  if (p.notif) {
+    // الإصدار صالح فقط والكاش قائم — أي كتابة بالتنبيهات تمسح الكاش فيُعاد البناء بإصدار جديد
+    var ver = _notifVer_(), hit = false;
+    try { var cm = CacheService.getScriptCache().getAll([NOTIF_CACHE_KEY, NOTIF_CACHE_KEY + '_chunked']); hit = cm[NOTIF_CACHE_KEY] != null || cm[NOTIF_CACHE_KEY + '_chunked'] === 'true'; } catch (eN) {}
+    if (hit && ver && p.notifVer && ver === String(p.notifVer)) out.notifSame = true;
+    else { var n = getNotifications(authToken); out.notifications = n.notifications || []; out.notifVer = _notifVer_(); }
+  }
+  if (p.gl && typeof _glKickStatus_ === 'function') {
+    try {
+      if (_glSSId_() && _glTripMode_()) {
+        out.gl = _glKickStatus_(session, p.glSince);
+        if (_glLiveDue_()) {
+          var c = CacheService.getScriptCache();
+          if (!c.get('gl_live_claim')) { c.put('gl_live_claim', String(authToken).slice(-12), 60); out.glDue = true; }
+        }
+      }
+    } catch (eG) {}
+  }
+  return out;
+}
 // القائمة الكاملة (أسماء) — تُستدعى فقط عند فتح القائمة المنسدلة، وليس دورياً
 function getOnlineUsersNow(authToken) {
   requireAuth_(authToken);
@@ -11602,10 +11636,13 @@ function logChange_(username, action, recordId, field, oldVal, newVal) {
     Logger.log("logChange_ failed: " + e.message);
   }
 }
+var GL_NODIRTY_RX_ = /كلمة المرور|مستخدم|صلاحي|تعديل إعدادات (النظام|التنبيهات|بوت)|تليجرام|تنبيه|مجلد Drive|إصدار كشف حساب|دالة إدارية|اتفاقي(ة|ات) (إعاشة|سكن)|اتفاقية سكن|تخصيص سكن|السجل العام|سجل المعتمرين|تخصيص معتمر|جوال مشرف|مشاركة جماعية|تفضيلات|واجهة/;
 // ⚡ (V4.222) أي حفظ بشاشات البرنامج (عدا الحسابات العامة نفسها والدخول/الخروج) ⇒ علامة «تغيّر» تلتقطها المزامنة اللحظية
 function _glMarkDirty_(action, recordId) {
   try {
     if (/^(GL|HB):/.test(String(recordId || '')) || /تسجيل (دخول|خروج)/.test(String(action || ''))) return;
+    // ⚡ (V4.236) عمليات لا تمس أي مصدر للقيود (مستخدمون/صلاحيات/إعدادات عرض/تنبيهات/سكن وإعاشة/سجل المعتمرين…) لا تُطلق مزامنة
+    if (GL_NODIRTY_RX_.test(String(action || ''))) return;
     CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600);
   } catch (e) {}
 }
@@ -13714,6 +13751,10 @@ function _notifPush_(type, message, client, trip, perm, username) {
    نُخزِّن الصفوف الخام فقط (بلا أي تصفية) ثم تُطبَّق صلاحية كل مستخدم على النسخة المخزَّنة كما كان
    تماماً — فلا يرى أحد تنبيهاً ليس من حقه. يُمسح الكاش فوراً مع أي كتابة (إضافة/تعليم كمقروء/حذف). */
 var NOTIF_CACHE_KEY = 'notifications_rows_cache';
+// ⚡ (V4.236) رقم إصدار للتنبيهات: يتغير كلما أُعيد بناء كاشها (أي إضافة/قراءة/حذف تمسح الكاش) — النبضة الدورية ترسل
+// آخر إصدار عند المتصفح فيرد السيرفر «لا جديد» بلا إعادة إرسال القائمة
+function _notifVerBump_() { try { CacheService.getScriptCache().put('notif_ver', Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36), 21600); } catch (e) {} }
+function _notifVer_() { try { return CacheService.getScriptCache().get('notif_ver') || ''; } catch (e) { return ''; } }
 function getNotifications(authToken) {
   var session = requireAuth_(authToken);
   var vals = getCachedData(NOTIF_CACHE_KEY);
@@ -13728,6 +13769,7 @@ function getNotifications(authToken) {
       return c;
     });
     setCachedData(NOTIF_CACHE_KEY, vals);
+    _notifVerBump_();
   }
   var out = [];
   vals.forEach(function(r) {
