@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.237 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.238 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.237)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.238)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.237</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.238</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7369,7 +7369,7 @@ function _showPopup(message, type, title) {
 
     var ov = document.createElement('div');
     ov.id = '_smartPopupOverlay';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);' +
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483210;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);' +
       'display:flex;align-items:center;justify-content:center;padding:16px;' +
       'opacity:0;transition:opacity .2s ease;';
     ov.dir = 'rtl';
@@ -7617,7 +7617,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.237";
+var CLIENT_APP_VERSION = "4.238";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45810,7 +45810,7 @@ function glRowDel_(id, src, status) {
 function glRowHist_(id) {   // نافذة مستقلة فوق أي نافذة مفتوحة (لا تُغلق نموذج التعديل)
   var old = document.getElementById('glHistOv'); if (old) old.remove();
   var ov = document.createElement('div'); ov.id = 'glHistOv'; ov.dir = 'rtl';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:2147482700;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:12px;';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483020;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:12px;';
   ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(960px,98vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden;">' +
     '<div style="background:linear-gradient(135deg,#1e3d59,#0f4c4c);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:8px;"><b style="flex:1;">📜 سجل تعديلات الصف — <span class="gl-latin">' + glEsc(id) + '</span></b>' +
     '<button class="btn btn-light btn-sm" onclick="document.getElementById(\'glHistOv\').remove()">✕</button></div><div id="glHistBody" style="padding:14px 16px;overflow:auto;"><div class="text-center text-muted py-3">⏳ جارٍ التحميل…</div></div></div>';
@@ -46051,6 +46051,9 @@ function glDlg(title, html, width) {
     '<div style="background:linear-gradient(135deg,#1e3d59,#0f4c4c);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:8px;"><b style="flex:1;">' + title + '</b>' +
     '<button class="btn btn-light btn-sm" onclick="glDlgClose()">✕</button></div><div id="glDlgBody" style="padding:14px 16px;overflow:auto;">' + html + '</div></div>';
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) glDlgClose(); });
+  // 🛡️ (V4.238) شاشات الرحلات (التسكين…) تُرفع لطبقة 2147483000 عند فتحها (_detachModalToBody_) فكانت النافذة
+  // (مثل «أرقام غرف الفندق») تظهر خلفها — نرفع النافذة فوق أي مودال مفتوح (وتبقى رسائل التأكيد/التنبيه فوقها)
+  try { if (document.querySelector('.modal.show')) ov.style.zIndex = '2147483010'; } catch (eZ) {}
   document.body.appendChild(ov);
   // 🛡️ (V4.228) عند فتح النافذة فوق مودال Bootstrap مفتوح (مثل شاشة التسكين): يبقى مصيدة التركيز
   // بالمودال تسحب التركيز فلا تُكتب الحقول وتبدو النافذة «خلف الشاشة». نوقف مصيدة تركيز المودالات
@@ -48669,11 +48672,18 @@ function glHbSetupView() {
         f('glHbMk', 'شيت حجوزات مكة', c.mk || 'حجوزات مكة', 'col-md-3') + f('glHbMkR', 'أول صف', c.mkRow || 5, 'col-md-1') + f('glHbMd', 'شيت حجوزات المدينة', c.md || 'حجوزات المدينة', 'col-md-3') + f('glHbMdR', 'أول صف', c.mdRow || 6, 'col-md-1') +
         f('glHbPay', 'شيت الدفعات', c.pay || 'سجل الدفعات', 'col-md-2') + f('glHbProf', 'شيت بيانات الحسابات', c.prof || 'بيانات الحسابات', 'col-md-2') +
         f('glHbVia', 'كلمات بنود «على الوكيل» التي هي تحويلات عملاء الفنادق عبره (تعبير نمطي)', c.viaKw, 'col-md-9') +
-        f('glHbFrom', '🔀 الـ ERP هو المصدر حتى تاريخ (اختياري)', c.hbFrom || '', 'col-md-3') + '</div>' +
-      '<div class="gl-note mt-1">🔀 لو نقلت بيانات الـ ERP (الأرصدة حتى تاريخ القطع + القيود بعده) وفيها حجوزات ودفعات الفنادق: ضع هنا اليوم الذي يبدأ منه برنامج الحجوزات كمصدر (مثلاً 01/07/2026) — ما قبله لا يُسجَّل من برنامج الحجوزات (ولا قيده الافتتاحي) لأنه داخل في الـ ERP. تقرير «التداخل» أسفل هذه الصفحة يوضح الحسابات المشتركة.</div>' +
+        f('glHbFrom', '🔀 برنامج الحجوزات مصدر «الحجوزات» من تاريخ', c.hbFrom || '', 'col-md-3') + '</div>' +
+      '<div class="gl-note mt-1">🔀 لو نقلت بيانات الـ ERP (الأرصدة حتى تاريخ القطع + القيود بعده) وفيها حجوزات ودفعات الفنادق: ضع هنا اليوم الذي يبدأ منه برنامج الحجوزات كمصدر <b>للحجوزات</b> (مثلاً 01/07/2026) — ما قبله لا يُسجَّل من برنامج الحجوزات (ولا قيده الافتتاحي) لأنه داخل في الـ ERP. وللدفعات تاريخ مستقل في بطاقة «💵 فصل مصدر الدفعات» أسفل. تقرير «التداخل» أسفل هذه الصفحة يوضح الحسابات المشتركة.</div>' +
       '<div class="gl-note mt-1">🛂 الدفعة المحوَّلة عبر وكيل (مثل ريادة الرؤى) تُسجَّل: من ح/ «مقاصة دفعات الفنادق عبر الوكلاء» إلى ح/ العميل. وبند حساب الوكيل ببرنامج العمرة (على الوكيل) الذي يحتوي بيانه إحدى الكلمات أعلاه يُسجَّل: من ح/ الوكيل إلى ح/ نفس المقاصة — فيلتقيان ولا يتكرر المبلغ، ورصيد المقاصة يكشف أي تحويل ناقص من أحد الطرفين.</div>' +
       (GL.isAdmin ? '<div class="d-flex gap-2 justify-content-end"><button class="btn btn-success btn-sm fw-bold" onclick="glHbSetupUI(this)">💾 ربط واختبار</button>' +
         (H.on ? '<button class="btn btn-outline-danger btn-sm" onclick="glHbSetupUI(this,true)">فصل الربط</button>' : '') + '</div>' : '<div class="small text-muted">الربط للمدير فقط.</div>') + '</div>' +
+    // 💵 (V4.238) فصل مصدر الدفعات عن الحجوزات
+    (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>💵 فصل مصدر الدفعات عن مصدر الحجوزات</b>' +
+      '<div class="gl-note mt-1">الحجوزات من برنامج الحجوزات (من التاريخ أعلاه)، أما <b>الدفعات</b> فمصدرها الـ ERP حتى اليوم السابق للتاريخ هنا، ثم من برنامج الحجوزات. ' +
+      'المعاينة تعرض دفعات الحجوزات قبل التاريخ: ما له مقابل بالـ ERP يُلغى قيده تلقائياً، وما ليس له مقابل يبقى افتراضياً (يمكنك إلغاء إبقائه). ودفعات الـ ERP بعد التاريخ على أطراف الحجوزات تُلغى (مكررة).</div>' +
+      '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">دفعات برنامج الحجوزات تبدأ من</label><div style="width:140px;">' + glDateInput('glHbPayFrom', c.hbPayFrom || '') + '</div></div>' +
+      '<button class="btn btn-outline-primary btn-sm" onclick="glHbPaySplitPrev(this)">👁️ معاينة</button>' +
+      (c.hbPayFrom ? '<span class="small text-muted">المطبَّق حالياً: <b class="gl-latin">' + glEsc(c.hbPayFrom) + '</b></span>' : '') + '</div><div id="glHbPayBox" class="mt-2"></div></div>' : '') +
     (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>🏁 ترحيل أرباح الموردين إلى إيرادات السكن (نهاية الموسم)</b>' +
       '<div class="gl-note mt-1">ربح كل حجز يُسجَّل في حساب «إيرادات حجوزات — المورد» (تحت 47) فترى ربح كل مورد على حدة. في نهاية الموسم يُصفّى رصيد كل هذه الحسابات حتى التاريخ المختار بقيد يومية واحد إلى «إيرادات السكن». يمكن تكراره لاحقاً فيرحّل ما استجد فقط.</div>' +
       '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">حتى تاريخ</label><div style="width:140px;">' + glDateInput('glHbSeasonD', '') + '</div></div>' +
@@ -48701,7 +48711,7 @@ function glHbOverlapUI(btn) {
           '<td>' + r.erp.n + '</td><td class="gl-latin" style="font-size:10.5px;">' + glEsc(r.erp.first + ' → ' + r.erp.last) + '</td><td class="gl-latin" style="white-space:nowrap;">' + glCurBal_(r.erp.cur) + '</td>' +
           '<td>' + r.hb.n + '</td><td class="gl-latin" style="font-size:10.5px;">' + glEsc(r.hb.first + ' → ' + r.hb.last) + '</td><td class="gl-latin" style="white-space:nowrap;">' + glCurBal_(r.hb.cur) + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      (GL.isAdmin ? '<div class="d-flex gap-2 align-items-end flex-wrap mt-2"><div><label class="gl-lbl">إلغاء قيود الـ ERP لهذه الحسابات من تاريخ</label><div style="width:140px;">' + glDateInput('glHbOvFrom', res.hbFrom || res.startDate) + '</div></div>' +
+      (GL.isAdmin ? '<div class="d-flex gap-2 align-items-end flex-wrap mt-2"><div><label class="gl-lbl">نوع قيود الـ ERP</label><select id="glHbOvKind" class="form-select form-select-sm" style="width:170px;"><option value="book">🏨 الحجوزات فقط</option><option value="pay">💵 الدفعات فقط</option><option value="">الكل</option></select></div><div><label class="gl-lbl">إلغاء قيود الـ ERP لهذه الحسابات من تاريخ</label><div style="width:140px;">' + glDateInput('glHbOvFrom', res.hbFrom || res.startDate) + '</div></div>' +
         '<button class="btn btn-outline-danger btn-sm" onclick="glHbOvVoid(this,true)">👁️ معاينة القيود</button><button class="btn btn-danger btn-sm" onclick="glHbOvVoid(this,false)">⛔ إلغاء القيود المكررة</button></div><div id="glHbOvRes" class="mt-1"></div>' : '');
   }, function (e) { btn.disabled = false; box.innerHTML = '<span class="text-danger">' + glEsc(e.message || e) + '</span>'; });
 }
@@ -48799,12 +48809,54 @@ function glHbMatchApply(btn) {
     }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
   }, { title: 'حذف قيود مكررة', danger: true });
 }
+function glHbPaySplitPrev(btn) {
+  var from = (document.getElementById('glHbPayFrom') || {}).value || '', box = document.getElementById('glHbPayBox');
+  if (!from) return _showPopup('حدد تاريخ بداية دفعات برنامج الحجوزات', 'warning');
+  btn.disabled = true; box.innerHTML = '<div class="text-muted small">⏳ جارٍ المطابقة مع الـ ERP (قد تستغرق دقيقة)…</div>';
+  glRun('glHbPaySplitPreview', [from], function (res) {
+    btn.disabled = false; GL._hbPS = res; var E = glEsc;
+    var lk = function (id) { return id ? '<a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(id) + '\');return false;">' + E(id) + '</a>' : ''; };
+    var keepNow = {}; (res.keep || []).forEach(function (k) { keepNow[k] = 1; });
+    var h = '<div class="d-flex flex-wrap gap-2 mb-2"><span class="gl-pill">دفعات حجوزات قبل ' + E(res.payFrom) + ': <b>' + res.hbPays.length + '</b></span>' +
+      '<span class="gl-pill" style="background:#dcfce7;">لها مقابل بالـ ERP (تُلغى): <b>' + res.hbMatched + '</b></span>' +
+      '<span class="gl-pill" style="background:#fef3c7;">بلا مقابل (تبقى افتراضياً): <b>' + res.hbUnmatched + '</b></span>' +
+      '<span class="gl-pill" style="background:#fee2e2;">دفعات ERP بعد التاريخ (مكررة): <b>' + res.erpAfterN + '</b></span>' +
+      '<span class="gl-pill" style="background:#e0f2fe;">دفعات ERP أُلغيت سابقاً قبل التاريخ (تُستعاد): <b>' + res.erpRestoreN + '</b></span></div>';
+    if (res.hbPays.length) h += '<div class="table-responsive" style="max-height:300px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr><th>إبقاء؟</th><th>قيد الحجوزات</th><th>التاريخ</th><th>البيان</th><th>المبلغ</th><th>مقابله بالـ ERP</th></tr></thead><tbody>' +
+      res.hbPays.map(function (x) {
+        var keep = !x.matched || keepNow[x.key];
+        return '<tr' + (x.matched ? '' : ' style="background:#fffbeb;"') + '><td><input type="checkbox" class="glHbPsK" value="' + E(x.key) + '" data-restore="' + (x.viaRestore ? 1 : 0) + '"' + (keep ? ' checked' : '') + '></td><td>' + lk(x.id) + '</td><td class="gl-latin">' + E(x.date) + '</td>' +
+          '<td style="text-align:right;">' + E(x.desc) + '</td><td class="gl-latin" style="white-space:nowrap;">' + E(x.amt) + '</td><td>' + (x.matched ? lk(x.erp) + ' <small class="text-muted">' + E(x.erpDate) + (x.viaRestore ? ' (مُلغى — سيُستعاد)' : '') + '</small>' : '<span class="text-warning">⚠️ لا مقابل</span>') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+    if (res.isAdmin) h += '<div class="d-flex gap-3 flex-wrap mt-2 small"><label><input type="checkbox" id="glHbPsVoid" checked> إلغاء دفعات الـ ERP المكررة بعد التاريخ (' + res.erpAfterN + ')</label>' +
+      '<label><input type="checkbox" id="glHbPsRest" checked> استعادة دفعات الـ ERP التي أُلغيت سابقاً قبل التاريخ (' + res.erpRestoreN + ')</label></div>' +
+      '<div class="d-flex justify-content-end mt-2"><button class="btn btn-success btn-sm fw-bold" onclick="glHbPaySplitGo(this)">✅ تطبيق الفصل وتصحيح القيود</button></div>';
+    else h += '<div class="small text-muted mt-2">التطبيق للمدير فقط.</div>';
+    box.innerHTML = h;
+  }, function (e) { btn.disabled = false; box.innerHTML = '<span class="text-danger">' + glEsc(e.message || e) + '</span>'; });
+}
+function glHbPaySplitGo(btn) {
+  var res = GL._hbPS; if (!res) return;
+  var rest = !!(document.getElementById('glHbPsRest') || {}).checked, vd = !!(document.getElementById('glHbPsVoid') || {}).checked;
+  // دفعة مطابقة عبر قيد ERP مُلغى: لو لن يُستعاد تبقى دفعة الحجوزات (وإلا تضيع)
+  var keep = Array.prototype.filter.call(document.querySelectorAll('.glHbPsK'), function (c) { return c.checked || (c.dataset.restore === '1' && !rest); }).map(function (c) { return c.value; });
+  var nOut = res.hbPays.length - keep.length;
+  askConfirm_('تطبيق: دفعات برنامج الحجوزات من ' + res.payFrom + '\n• إلغاء ' + nOut + ' قيد دفعة حجوزات قبل التاريخ (مصدرها الـ ERP)\n• إبقاء ' + keep.length + ' دفعة بلا مقابل' +
+    (vd ? '\n• إلغاء ' + res.erpAfterN + ' دفعة ERP مكررة بعد التاريخ' : '') + (rest ? '\n• استعادة ' + res.erpRestoreN + ' دفعة ERP' : '') + '\n\nالقيود الملغاة تبقى ظاهرة بحالة «ملغى» للمراجعة.', function () {
+    btn.disabled = true; btn.innerHTML = '⏳ جارٍ التطبيق (قد يستغرق دقيقة)…';
+    glRun('glHbPaySplitApply', [{ payFrom: res.payFrom, keep: keep, voidErpAfter: vd, restoreErpBefore: rest }], function (r) {
+      _showPopup('✅ تم فصل المصادر:\n• دفعات حجوزات أُلغيت: ' + r.hbVoided + (r.hbCreated ? ' · أُنشئت: ' + r.hbCreated : '') + '\n• دفعات ERP أُلغيت: ' + r.erpVoided + '\n• دفعات ERP استُعيدت: ' + r.erpRestored +
+        (r.blocked ? '\n⚠️ ' + r.blocked + ' بفترة مقفلة لم تتغير' : ''), 'success', 'فصل مصدر الدفعات');
+      glRefreshData(function () { glHbLoad(true); });
+    }, function (e) { btn.disabled = false; btn.innerHTML = '✅ تطبيق الفصل وتصحيح القيود'; _showPopup(e.message || e, 'error'); });
+  }, { title: 'فصل مصدر الدفعات', danger: true });
+}
 function glHbOvVoid(btn, dry) {
   var codes = Array.prototype.map.call(document.querySelectorAll('.glHbOvC:checked'), function (c) { return c.value; });
-  var from = (document.getElementById('glHbOvFrom') || {}).value || '', out = document.getElementById('glHbOvRes');
+  var from = (document.getElementById('glHbOvFrom') || {}).value || '', out = document.getElementById('glHbOvRes'), kind = (document.getElementById('glHbOvKind') || {}).value || 'book';
   var run = function () {
     btn.disabled = true;
-    glRun('glHbErpVoid', [{ from: from, codes: codes, dry: dry }], function (res) {
+    glRun('glHbErpVoid', [{ from: from, codes: codes, dry: dry, kind: kind }], function (res) {
       btn.disabled = false;
       if (dry) out.innerHTML = res.preview.length ? '<div class="small">سيُلغى ' + res.preview.length + ' قيد:</div><div style="max-height:200px;overflow:auto;font-size:11px;">' +
         res.preview.map(function (h) { return '<div>' + glEsc(h.id + ' · ' + h.date + ' · ' + h.desc + ' · ' + (h.amt || '') + (h.locked ? ' 🔒 (فترة مقفلة — لن يُلغى)' : '')) + '</div>'; }).join('') + '</div>'

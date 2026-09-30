@@ -2280,8 +2280,15 @@ function _glAutoBuild_(user, write, scope) {
     catch (e) { warn.push('تعذّرت قراءة برنامج حجوزات الفنادق: ' + e.message); }
     // 🔀 (V4.217) «الـ ERP هو المصدر حتى تاريخ …»: حجوزات ودفعات ما قبله لا تُسجَّل من برنامج الحجوزات (ولا قيدها
     // الافتتاحي) لأنها داخلة بالفعل في الأرصدة/القيود المنقولة من الـ ERP — منعاً للتكرار
-    var hbFromK = _glDKey_(_glDate_(set.hb_from || ''));
-    if (hbFromK) hbOut = hbOut.filter(function (e) { return _glDKey_(e.date) >= hbFromK; });
+    var hbFromK = _glDKey_(_glDate_(set.hb_from || '')), hpp = _glHbPayPolicy_();
+    // 💵 (V4.238) فصل مصدر الدفعات عن الحجوزات: دفعات الحجوزات قبل «hb_pay_from» مصدرها الـ ERP فلا تُسجَّل من برنامج
+    // الحجوزات — عدا دفعات بلا مقابل بالـ ERP اختار المستخدم إبقاءها (hb_pay_keep)
+    hbOut = hbOut.filter(function (e) {
+      var k = _glDKey_(e.date);
+      if (hbFromK && k < hbFromK) return false;
+      if (hpp.fromK && k < hpp.fromK && /^AUTO:HB[PL]:/.test(e.key) && !hpp.keep[e.key]) return false;
+      return true;
+    });
   }
 
   }   // scope
@@ -2375,8 +2382,10 @@ function _glAutoApply_(built, user, dry, opts) {
   var res = { created: 0, updated: 0, voided: 0, same: 0, pending: 0, blocked: [], errors: [], samples: { created: [], updated: [], voided: [] }, createdList: [] };
   var creates = [], updates = [], voids = [];
   var want = {}, fxMap = _glFxDailyMap_(), defR = _glRates_();
-  var only = opts.onlyKeys || null, approval = !opts.bypass && _glApprovalOn_();
+  var only = opts.onlyKeys || null, approval = !opts.bypass && _glApprovalOn_(), onlyRx = opts.onlyRx || null;
   if (Array.isArray(only)) { var ok_ = {}; only.forEach(function (k) { ok_[k] = 1; }); only = ok_; }
+  // (V4.238) onlyRx: قصر التطبيق على نمط مفاتيح (مثل دفعات الحجوزات) · onlyCV: إنشاء/إلغاء فقط بلا تعديل القيود القائمة
+  var restricted = !!(only || onlyRx), inOnly = function (k) { return (!only || !!only[k]) && (!onlyRx || onlyRx.test(k)); };
   var pend = approval ? _glPendingRows_() : {}, newPend = {}, oldLines = null, accM = _glAccounts_().map;
   var newDate = '', newType = '';
   var oldOf = function (id) { if (!oldLines) { oldLines = {}; _glRows_('lines').forEach(function (l) { (oldLines[_glStr_(l[0])] = oldLines[_glStr_(l[0])] || []).push(l); }); } return oldLines[id] || []; };
@@ -2403,7 +2412,7 @@ function _glAutoApply_(built, user, dry, opts) {
   };
   var keepErp = _glHbKeepMap_();
   built.entries.forEach(function (e) {
-    if (only && !only[e.key]) { want[e.key] = 1; return; }
+    if (restricted && !inOnly(e.key)) { want[e.key] = 1; return; }
     if (want[e.key]) { res.errors.push({ key: e.key, msg: 'مفتاح مكرر' }); return; }
     want[e.key] = 1;
     if (keepErp[e.key]) { res.same++; return; }   // (V4.227) اعتُمد قيد الـ ERP بدلاً منه — لا يُنشأ ولا يُعدَّل
@@ -2419,13 +2428,14 @@ function _glAutoApply_(built, user, dry, opts) {
     }
     var r = eRows[ix];
     if (_glStr_(r[5]) === GL_ST_POSTED_ && _glStr_(r[9]) === hash) { res.same++; return; }
+    if (opts.onlyCV && opts.onlyCV.test(e.key)) { res.same++; return; }   // (V4.238) تصحيح المصادر: لا يعدّل قيود الدفعات القائمة
     if (_glLocked_(r[2]) || _glLocked_(v.date)) { res.blocked.push({ key: e.key, date: v.date, desc: e.desc, why: 'تغيّر مصدره بعد إقفال الفترة' }); return; }
     if (approval && _glStr_(r[5]) === GL_ST_POSTED_ && !cosmetic(r, e, v)) { newDate = v.date; newType = v.type; queue(e.key, ix, 'تعديل', e.desc, v.totalBase, hash, v.lines); return; }
     updates.push({ ix: ix, e: e, v: v, hash: hash }); res.updated++;
     if (res.samples.updated.length < 30) res.samples.updated.push({ id: _glStr_(r[0]), date: v.date, desc: e.desc, base: v.totalBase, oldBase: _glNum_(r[8]), amt: _glAmtTxt_(v.lines, accM), oldAmt: _glAmtTxt_(oldOf(_glStr_(r[0])), accM) });
   });
   Object.keys(existing).forEach(function (k) {
-    if (want[k] || (only && !only[k])) return;
+    if (want[k] || (restricted && !inOnly(k))) return;
     var r = eRows[existing[k]];
     if (_glStr_(r[5]) === GL_ST_VOID_) return;
     if (_glLocked_(r[2])) { res.blocked.push({ key: k, date: _glDate_(r[2]), desc: _glStr_(r[4]), why: 'حُذف مصدره بعد إقفال الفترة' }); return; }
@@ -2434,7 +2444,7 @@ function _glAutoApply_(built, user, dry, opts) {
     if (res.samples.voided.length < 30) res.samples.voided.push({ id: _glStr_(r[0]), date: _glDate_(r[2]), desc: _glStr_(r[4]), base: _glNum_(r[8]), amt: _glAmtTxt_(oldOf(_glStr_(r[0])), accM) });
   });
   // قائمة الاعتماد: تُستبدل كاملة بما يحتاج اعتماداً الآن (ما عاد مصدره كما كان يخرج منها تلقائياً)
-  if (!dry && approval && !only) {
+  if (!dry && approval && !restricted) {
     if (_glPendSame_(pend, newPend)) { try { CacheService.getScriptCache().put('gl_pend_n', String(Object.keys(newPend).filter(function (k) { return _glStr_(newPend[k][9]) !== 'مرفوض'; }).length), 21600); } catch (eC) {} }
     else _glPendingWrite_(newPend);   // ⚡ (V4.236) لا إعادة كتابة لقائمة الاعتماد بكل مزامنة إن لم تتغيّر
   }
@@ -3662,7 +3672,7 @@ function _glHbCfg_() {
   var s = _glSettings_();
   return { ssId: s.hb_ss_id || '', srcId: s.hb_src_id || '', mk: s.hb_mk_sheet || 'حجوزات مكة', mkRow: parseInt(s.hb_mk_row, 10) || 5,
     md: s.hb_md_sheet || 'حجوزات المدينة', mdRow: parseInt(s.hb_md_row, 10) || 6, pay: s.hb_pay_sheet || 'سجل الدفعات', prof: s.hb_prof_sheet || 'بيانات الحسابات',
-    viaKw: s.hb_via_kw === undefined ? 'حجز|حجوزات|فندق|فنادق|تسكين' : s.hb_via_kw, hbFrom: s.hb_from || '' };
+    viaKw: s.hb_via_kw === undefined ? 'حجز|حجوزات|فندق|فنادق|تسكين' : s.hb_via_kw, hbFrom: s.hb_from || '', hbPayFrom: s.hb_pay_from || '' };
 }
 // نفس computeBookingTotal_ ببرنامج الحجوزات حرفياً: Σ(عدد الغرف × السعر) × الليالي، وأي نوع محجوز بلا سعر ⇐ بلا سعر
 var GL_HB_ROOM_LBL_ = ['دابل', 'ثلاثي', 'رباعي', 'خماسي'];
@@ -4054,24 +4064,121 @@ function glHbErpVoid(authToken, o) {
   var session = requireAuth_(authToken);
   if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
   o = o || {};
-  var fromK = _glDKey_(_glDate_(o.from)); if (!fromK) throw new Error('حدد التاريخ');
+  var kind = o.kind === 'book' || o.kind === 'pay' ? o.kind : '';   // (V4.238) الحجوزات فقط / الدفعات فقط / الكل
+  var fromK = _glDKey_(_glDate_(o.from)); if (!fromK && kind !== 'book') throw new Error('حدد التاريخ');
   var codes = {}; (o.codes || []).forEach(function (c) { codes[_glStr_(c)] = 1; });
   if (!Object.keys(codes).length) throw new Error('اختر الحسابات');
   var lines = {}; _glRows_('lines').forEach(function (l) { (lines[_glStr_(l[0])] = lines[_glStr_(l[0])] || []).push(l); });
   var hits = [];
   _glRows_('entries').forEach(function (r) {
     if (_glStr_(r[5]) === GL_ST_VOID_ || _glSrcOf_(r) !== 'erp' || _glStr_(r[9]) === 'ERP-OPENING') return;
-    var k = _glDKey_(_glDate_(r[2])); if (!k || k < fromK) return;
+    var k = _glDKey_(_glDate_(r[2])); if (!k || (fromK && k < fromK)) return;
     if (!(lines[_glStr_(r[0])] || []).some(function (l) { return codes[_glStr_(l[4])]; })) return;
+    if (kind && (kind === 'book') !== _glErpIsBooking_(r, lines[_glStr_(r[0])] || [])) return;
     hits.push({ id: _glStr_(r[0]), date: _glDate_(r[2]), desc: _glStr_(r[4]), base: _glNum_(r[8]), amt: _glAmtTxt_(lines[_glStr_(r[0])] || []), locked: _glLocked_(r[2]) });
   });
   if (o.dry) return { success: true, preview: hits };
   var n = 0, skipped = 0;
   hits.forEach(function (h) {
     if (h.locked) { skipped++; return; }
-    glVoidEntry(authToken, h.id, 'مكرر مع قيود برنامج الحجوزات (المصدر من ' + _glDate_(o.from) + ')'); n++;
+    glVoidEntry(authToken, h.id, 'مكرر مع قيود برنامج الحجوزات (' + (kind === 'book' ? 'الحجوزات' : kind === 'pay' ? 'الدفعات' : 'المصدر') + (fromK ? ' من ' + _glDate_(o.from) : '') + ')'); n++;
   });
   return { success: true, voided: n, skippedLocked: skipped };
+}
+function _glErpIsBooking_(r, ls) {
+  var txt = _glStr_(r[4]) + ' ' + (ls || []).map(function (l) { return _glStr_(l[15]); }).join(' ');
+  return /(^|\s)(ايراد\s+)?حجز\s/.test(' ' + txt) || /ايراد حجز|خسارة حجز/.test(txt);
+}
+function _glHbPayPolicy_() {
+  var s = _glSettings_(), keep = {};
+  try { JSON.parse(s.hb_pay_keep || '[]').forEach(function (k) { keep[k] = 1; }); } catch (e) {}
+  return { from: s.hb_pay_from || '', fromK: _glDKey_(_glDate_(s.hb_pay_from || '')), keep: keep };
+}
+/* 💵 (V4.238) فصل مصدر الدفعات عن مصدر الحجوزات: الحجوزات من برنامج الحجوزات، والدفعات من الـ ERP حتى تاريخ معيّن ثم
+   من برنامج الحجوزات. المعاينة تعرض دفعات الحجوزات المسجّلة قبل التاريخ: ما له مقابل بالـ ERP (نفس الطرف والمبلغ ±3 أيام)
+   يُلغى قيده تلقائياً، وما ليس له مقابل (ربما حُذف مقابله سابقاً بأداة المطابقة) يبقى افتراضياً حتى لا تضيع الدفعة.
+   ومن جهة الـ ERP: دفعاته بعد التاريخ على أطراف الحجوزات مكررة ⇒ تُلغى، وما أُلغي منها سابقاً قبل التاريخ ⇒ يُستعاد. */
+function _glHbPaySplitScan_(authToken, payFrom) {
+  var fromK = _glDKey_(_glDate_(payFrom)); if (!fromK) throw new Error('حدد تاريخ بداية دفعات برنامج الحجوزات');
+  var M = glHbErpMatch(authToken), matched = {};
+  M.payments.forEach(function (x) { matched[x.hb] = x; });
+  var lines = {}; _glRows_('lines').forEach(function (l) { (lines[_glStr_(l[0])] = lines[_glStr_(l[0])] || []).push(l); });
+  var hbPays = [], hbAccs = {}, erpAfter = [], erpRestore = [];
+  var ents = _glRows_('entries');
+  ents.forEach(function (r) { if (/^AUTO:HB/.test(_glStr_(r[6])) && _glStr_(r[5]) !== GL_ST_VOID_) (lines[_glStr_(r[0])] || []).forEach(function (l) { hbAccs[_glStr_(l[4])] = 1; }); });
+  var accM = _glAccounts_().map;
+  ents.forEach(function (r) {
+    var id = _glStr_(r[0]), sk = _glStr_(r[6]), st = _glStr_(r[5]), k = _glDKey_(_glDate_(r[2])), ls = lines[id] || [];
+    if (/^AUTO:HB[PL]:/.test(sk) && st !== GL_ST_VOID_ && k < fromK) {
+      var m = matched[id];
+      hbPays.push({ key: sk, id: id, date: _glDate_(r[2]), desc: _glStr_(r[4]), amt: _glAmtTxt_(ls, accM), matched: !!m, erp: m ? m.erp : '', erpDate: m ? m.erpDate : '' });
+      return;
+    }
+    if (!/^ERP:/.test(sk) || _glStr_(r[9]) === 'ERP-OPENING' || _glErpIsBooking_(r, ls)) return;
+    if (!ls.some(function (l) { return hbAccs[_glStr_(l[4])]; })) return;
+    var row = { id: id, date: _glDate_(r[2]), desc: _glStr_(r[4]), amt: _glAmtTxt_(ls, accM), locked: _glLocked_(r[2]) };
+    if (st !== GL_ST_VOID_ && k >= fromK) erpAfter.push(row);
+    else if (st === GL_ST_VOID_ && k < fromK && /مكرر مع قيود برنامج الحجوزات/.test(_glStr_(r[18]))) erpRestore.push(row);
+  });
+  // دفعة حجوزات بلا مقابل حالي بالـ ERP لكن مقابلها أُلغي سابقاً (سيُستعاد) ⇒ تُعتبر مطابقة (نفس الطرف والمبلغ والعملة ±3 أيام)
+  var dayN = function (k) { return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : NaN; }, usedR = {};
+  hbPays.forEach(function (h) {
+    if (h.matched) return;
+    var pl = (lines[h.id] || [])[0]; if (!pl) return;
+    var acc = _glStr_(pl[4]), d = _glNum_(pl[5]), c = _glNum_(pl[6]), cur = _glStr_(pl[7]), hk = dayN(_glDKey_(h.date));
+    var hit = erpRestore.filter(function (x) {
+      return !usedR[x.id] && Math.abs(dayN(_glDKey_(x.date)) - hk) <= 3 && (lines[x.id] || []).some(function (l) { return _glStr_(l[4]) === acc && _glStr_(l[7]) === cur && Math.abs(_glNum_(l[5]) - d) < 0.01 && Math.abs(_glNum_(l[6]) - c) < 0.01; });
+    });
+    if (hit.length === 1) { usedR[hit[0].id] = 1; h.matched = true; h.erp = hit[0].id; h.erpDate = hit[0].date; h.viaRestore = true; }
+  });
+  hbPays.sort(function (a, b) { return a.matched - b.matched; });
+  return { fromK: fromK, hbPays: hbPays, erpAfter: erpAfter, erpRestore: erpRestore };
+}
+function glHbPaySplitPreview(authToken, payFrom) {
+  var session = _glPerm_(authToken, 'view');
+  var S = _glHbPaySplitScan_(authToken, payFrom), pol = _glHbPayPolicy_();
+  return { success: true, payFrom: _glDate_(payFrom), current: pol.from, keep: Object.keys(pol.keep),
+    hbPays: S.hbPays.slice(0, 1500), hbMatched: S.hbPays.filter(function (x) { return x.matched; }).length, hbUnmatched: S.hbPays.filter(function (x) { return !x.matched; }).length,
+    erpAfter: S.erpAfter.slice(0, 800), erpAfterN: S.erpAfter.length, erpRestore: S.erpRestore.slice(0, 800), erpRestoreN: S.erpRestore.length, isAdmin: _glIsAdmin_(session) };
+}
+// o: {payFrom, keep:[مفاتيح دفعات حجوزات بلا مقابل تُبقى], voidErpAfter, restoreErpBefore}
+function glHbPaySplitApply(authToken, o) {
+  var session = requireAuth_(authToken);
+  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
+  o = o || {};
+  var payFrom = _glDate_(o.payFrom); if (!payFrom) throw new Error('حدد تاريخ بداية دفعات برنامج الحجوزات');
+  var S = _glHbPaySplitScan_(authToken, payFrom);
+  var lock = LockService.getScriptLock(); lock.waitLock(120000);
+  try {
+    _glSetSetting_('hb_pay_from', payFrom);
+    _glSetSetting_('hb_pay_keep', JSON.stringify((o.keep || []).map(_glStr_).filter(function (k) { return /^AUTO:HB[PL]:/.test(k); })));
+    var restored = 0, voided = 0, now = _glNow_();
+    if (o.restoreErpBefore && S.erpRestore.length) {
+      var eSh = _glSheet_('entries');
+      S.erpRestore.forEach(function (x) {
+        if (x.locked) return;
+        var f = _glFindEntry_(x.id); if (!f) return;
+        eSh.getRange(f.row, 6).setValue(GL_ST_POSTED_);
+        eSh.getRange(f.row, 17, 1, 3).setValues([[session.username, now, '']]);
+        _glSetLinesStatus_([x.id], GL_ST_POSTED_); restored++;
+      });
+    }
+    if (o.voidErpAfter && S.erpAfter.length) {
+      var eSh2 = _glSheet_('entries');
+      S.erpAfter.forEach(function (x) {
+        if (x.locked) return;
+        var f = _glFindEntry_(x.id); if (!f) return;
+        eSh2.getRange(f.row, 6).setValue(GL_ST_VOID_);
+        eSh2.getRange(f.row, 17, 1, 3).setValues([[session.username, now, 'مكرر مع قيود برنامج الحجوزات (الدفعات من ' + payFrom + ')']]);
+        _glSetLinesStatus_([x.id], GL_ST_VOID_); voided++;
+      });
+    }
+    // دفعات الحجوزات: إلغاء ما قبل التاريخ (عدا المُبقاة) وإنشاء ما يلزم — بلا انتظار الاعتماد وبلا تعديل أي قيد آخر
+    var r = _glAutoRun_(session.username, false, { bypass: true, onlyRx: /^AUTO:HB([PL]:|OPEN$)/, onlyCV: /^AUTO:HB[PL]:/ });   // + قيد الحجوزات الافتتاحي (يتأثر بالدفعات)
+    logChange_(session.username, 'فصل مصدر دفعات الحجوزات', 'GL:hb', 'دفعات الحجوزات من', '-',
+      payFrom + ' — أُلغي من الحجوزات ' + r.voided + '، أُنشئ ' + r.created + '، ERP أُلغي ' + voided + '، ERP استُعيد ' + restored + '، مُبقى ' + (o.keep || []).length);
+    return { success: true, hbVoided: r.voided, hbCreated: r.created, erpVoided: voided, erpRestored: restored, blocked: r.blocked.length };
+  } finally { lock.releaseLock(); }
 }
 /* 🧩 (V4.219) مطابقة قيود الـ ERP المنقولة مع قيود برنامج الحجوزات (بلا تكرار) — لكل قيد حجز/دفعة من الحجوزات يُبحث عن
    قيد الـ ERP المقابل له:
