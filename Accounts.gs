@@ -742,6 +742,30 @@ function _glFindEntry_(id) {
   for (var i = 0; i < rows.length; i++) if (_glStr_(rows[i][0]) === id) return { row: i + 2, r: rows[i] };
   return null;
 }
+// ⚡ (V4.232) تحديث محلي بلا إعادة تحميل كامل: دوال الحفظ/الإلغاء/الحذف تُرجع «دلتا أرصدة» محسوبة من
+// سطور القيد نفسه (المرحّلة فقط) بدل مسح كل السطور (_glBalances_) وإعادة جلب الحسابات مع كل حفظ.
+function _glLinesOf_(id) { id = _glStr_(id); return _glRows_('lines').filter(function (r) { return _glStr_(r[0]) === id; }); }
+function _glLineDelta_(rows, sign, out) {
+  out = out || {};
+  (rows || []).forEach(function (l) {
+    if (_glStr_(l[3]) !== GL_ST_POSTED_) return;   // الأرصدة تجمع المرحّل فقط (نفس مرشّح _glBalances_)
+    var code = _glStr_(l[4]); if (!code) return;
+    var cur = _glCur_(l[7]), o = (out[code] = out[code] || { EGP: 0, SAR: 0, USD: 0, base: 0 });
+    o[cur] = _glR2_(o[cur] + sign * (_glNum_(l[5]) - _glNum_(l[6])));
+    o.base = _glR2_(o.base + sign * (_glNum_(l[9]) - _glNum_(l[10])));
+  });
+  return out;
+}
+function _glRowToListEntry_(eRow, lRows) {   // صف بشكل glListEntries من صفوف بالذاكرة (بلا إعادة قراءة)
+  var e = _glEntryObj_(eRow);
+  e.lines = (lRows || []).map(_glLineObj_).sort(function (a, b) { return a.lineNo - b.lineNo; });
+  e._k = _glDKey_(e.date);
+  return e;
+}
+function _glListEntryRow_(id) {   // صف بشكل glListEntries بقراءة السطور الحالية (بعد كتابتها)
+  var f = _glFindEntry_(id); if (!f) return null;
+  return _glRowToListEntry_(f.r, _glLinesOf_(id));
+}
 function glSaveEntry(authToken, e, post) {
   e = e || {};
   var isEdit = !!_glStr_(e.id);
@@ -765,6 +789,7 @@ function glSaveEntry(authToken, e, post) {
       if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
       if (oldSt === GL_ST_POSTED_) status = GL_ST_POSTED_;
       if (isAuto) v.type = _glStr_(f.r[3]) || v.type;
+      var _oldLines = (oldSt === GL_ST_POSTED_) ? _glLinesOf_(_glStr_(f.r[0])) : [];   // ⚡ (V4.232) للدلتا — قبل الحذف
       var sk = _glStr_(f.r[6]);
       if (GL_VCH_PREFIX_[v.type] && !sk) sk = 'VCH:' + _glNextVoucherNo_(v.type);   // سند قديم بلا رقم ⇒ يأخذ رقماً
       var w = _glWriteEntry_(v, { id: f.r[0], seq: f.r[1], status: status, sourceKey: sk, batchId: f.r[7], desc: e.desc, ref: isAuto ? f.r[9] : e.ref, trip: e.trip, company: e.company,
@@ -775,7 +800,9 @@ function glSaveEntry(authToken, e, post) {
       logChange_(session.username, oldSt === GL_ST_POSTED_ ? 'تعديل قيد مرحّل' : (post ? 'تعديل وترحيل قيد' : 'تعديل قيد مسودة'), 'GL:' + f.r[0], 'القيد',
         _glStr_(f.r[4]) + ' — ' + _glNum_(f.r[8]) + ' ج', v.type + ' — ' + _glStr_(e.desc) + ' — ' + v.totalBase + ' ج');
       _glSyncVoucherPays_(_glStr_(f.r[0]), session.username);   // (V4.222) إيصال على حساب عميل ⇒ دفعة بحسابات العملاء
-      return { success: true, id: _glStr_(f.r[0]), status: status, voucherNo: (sk.match(/^VCH:(.+)$/) || [])[1] || '' };
+      var _delta = {}; _glLineDelta_(_oldLines, -1, _delta); if (status === GL_ST_POSTED_) _glLineDelta_(w.lRows, 1, _delta);
+      return { success: true, id: _glStr_(f.r[0]), status: status, voucherNo: (sk.match(/^VCH:(.+)$/) || [])[1] || '',
+        balancesDelta: _delta, pendingCount: _glCpPending_(), savedRow: _glRowToListEntry_(w.eRow, w.lRows) };
     }
     var seq = _glNextEntrySeq_(1), id = _glEntryId_(seq);
     var vno = (GL_VCH_PREFIX_[v.type] && !_glStr_(e.sourceKey)) ? _glNextVoucherNo_(v.type) : '';
@@ -784,7 +811,9 @@ function glSaveEntry(authToken, e, post) {
     lSh.getRange(lSh.getLastRow() + 1, 1, w2.lRows.length, w2.lRows[0].length).setValues(w2.lRows);
     logChange_(session.username, post ? 'تسجيل وترحيل قيد' : 'تسجيل قيد مسودة', 'GL:' + id, 'القيد', '-', (vno ? vno + ' — ' : '') + v.type + ' — ' + _glStr_(e.desc) + ' — ' + v.totalBase + ' ج');
     if (status === GL_ST_POSTED_) _glSyncVoucherPays_(id, session.username);
-    return { success: true, id: id, status: status, voucherNo: vno };
+    var _delta2 = {}; if (status === GL_ST_POSTED_) _glLineDelta_(w2.lRows, 1, _delta2);
+    return { success: true, id: id, status: status, voucherNo: vno,
+      balancesDelta: _delta2, pendingCount: _glCpPending_(), savedRow: _glRowToListEntry_(w2.eRow, w2.lRows) };
   } finally { lock.releaseLock(); }
 }
 function glPostEntry(authToken, id) {
@@ -801,10 +830,12 @@ function glPostEntry(authToken, id) {
     _glSetLinesStatus_([_glStr_(id)], GL_ST_POSTED_);
     logChange_(session.username, 'ترحيل قيد', 'GL:' + id, 'الحالة', GL_ST_DRAFT_, GL_ST_POSTED_);
     _glSyncVoucherPays_(_glStr_(id), session.username);
-    return { success: true };
+    return { success: true, id: _glStr_(id), balancesDelta: _glLineDelta_(_glLinesOf_(_glStr_(id)), 1, {}),
+      pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)) };   // ⚡ (V4.232) دلتا محلية
   } finally { lock.releaseLock(); }
 }
-function glVoidEntry(authToken, id, reason) {
+// wantDelta: (V4.232) تُرجع دلتا الأرصدة للتحديث المحلي — يمرّرها نداء الواجهة فقط، لا حلقة glHbErpVoid الداخلية
+function glVoidEntry(authToken, id, reason, wantDelta) {
   var session = _glPerm_(authToken, 'delete');
   reason = _glStr_(reason);
   if (!reason) throw new Error('سبب الإلغاء مطلوب');
@@ -819,15 +850,18 @@ function glVoidEntry(authToken, id, reason) {
       _glDeleteLinesOf_([_glStr_(id)]);
       _glSheet_('entries').deleteRow(f.row);
       logChange_(session.username, 'حذف قيد مسودة', 'GL:' + id, 'القيد', _glStr_(f.r[4]), '-');
-      return { success: true, deleted: true };
+      return { success: true, deleted: true, removedId: _glStr_(id), balancesDelta: {}, pendingCount: wantDelta ? _glCpPending_() : undefined };
     }
+    var _voidLines = wantDelta ? _glLinesOf_(_glStr_(id)) : [];   // ⚡ (V4.232) قبل تغيير الحالة (مرحّلة)
     var sh = _glSheet_('entries');
     sh.getRange(f.row, 6).setValue(GL_ST_VOID_);
     sh.getRange(f.row, 17, 1, 3).setValues([[session.username, _glNow_(), reason]]);
     _glSetLinesStatus_([_glStr_(id)], GL_ST_VOID_);
     logChange_(session.username, 'إلغاء قيد مرحّل', 'GL:' + id, 'الحالة', GL_ST_POSTED_, GL_ST_VOID_ + ' — ' + reason);
     _glSyncVoucherPays_(_glStr_(id), session.username);
-    return { success: true };
+    if (!wantDelta) return { success: true };   // حلقة glHbErpVoid الداخلية — بلا دلتا
+    return { success: true, id: _glStr_(id), balancesDelta: _glLineDelta_(_voidLines, -1, {}),
+      pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)) };
   } finally { lock.releaseLock(); }
 }
 // 🗑️ (V4.217) حذف قيد نهائياً (للمدير): المسودة/المرحّل/الملغى اليدوي أو المستورد — لا القيود التلقائية (تُدار من
@@ -841,11 +875,12 @@ function glDeleteEntry(authToken, id) {
     // (V4.218) القيد التلقائي يُحذف أيضاً للمدير — لكنه يُعاد إنشاؤه في المزامنة التالية ما دام مصدره موجوداً بالشاشات
     if (_glStr_(f.r[3]) === 'قيد إقفال') throw new Error('قيد إقفال السنة يُلغى من «الإعدادات ← إعادة فتح السنة»');
     if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
+    var _delLines = _glLinesOf_(_glStr_(id));   // ⚡ (V4.232) قبل الحذف — للدلتا (المرحّل فقط يؤثر)
     _glDeleteLinesOf_([_glStr_(id)]);
     _glSheet_('entries').deleteRow(f.row);
     _glSyncVoucherPays_(_glStr_(id), session.username);   // (V4.222) تُحذف الدفعة المقابلة بحسابات العملاء
     logChange_(session.username, 'حذف قيد نهائياً', 'GL:' + id, _glStr_(f.r[3]) + ' — ' + _glStr_(f.r[5]), _glStr_(f.r[4]) + ' — ' + _glNum_(f.r[8]) + ' ج', '-');
-    return { success: true };
+    return { success: true, deleted: true, removedId: _glStr_(id), balancesDelta: _glLineDelta_(_delLines, -1, {}), pendingCount: _glCpPending_() };
   } finally { lock.releaseLock(); }
 }
 // 📜 (V4.217) سجل تعديلات قيد (إنشاء/تعديل/ترحيل/إلغاء/حذف) من سجل التعديلات العام

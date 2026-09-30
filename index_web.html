@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.231 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.232 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.231)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.232)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.231</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.232</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7585,7 +7585,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.231";
+var CLIENT_APP_VERSION = "4.232";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45640,7 +45640,7 @@ function glEntHistory(id) {
 function glEntDeleteNow(id, isAuto) {
   askConfirm_('حذف القيد ' + id + ' نهائياً من الدفتر؟ لا يمكن التراجع (يبقى أثر الحذف في سجل التعديلات).' +
     (isAuto ? '\n\n⚠️ هذا قيد تلقائي من شاشات البرنامج: سيُعاد إنشاؤه في المزامنة التالية ما دام مصدره موجوداً — لحذفه نهائياً احذف/عدّل مصدره بالشاشة.' : ''),
-    function () { glRun('glDeleteEntry', [id], function () { showToast('🗑️ حُذف القيد ' + id); glAfterChange(); }); },
+    function () { glRun('glDeleteEntry', [id], function (res) { showToast('🗑️ حُذف القيد ' + id); glApplyDelta_(res); }); },
     { title: 'حذف قيد', danger: true });
 }
 function glEntDelete(id, status) {
@@ -45649,7 +45649,7 @@ function glEntDelete(id, status) {
   if (status === 'مرحّل') btns.push({ label: '⛔ إلغاء القيد (يبقى ظاهراً بحالة «ملغى»)', class: 'btn-warning', onClick: function () { glVoid(id, status); } });
   if (GL.isAdmin) btns.push({ label: '🗑️ حذف نهائي من الدفتر', class: 'btn-danger', onClick: function () {
     askConfirm_('حذف القيد ' + id + ' نهائياً؟ لا يمكن التراجع (يبقى أثر الحذف بسجل التعديلات).', function () {
-      glRun('glDeleteEntry', [id], function () { showToast('🗑️ حُذف القيد ' + id); glAfterChange(); });
+      glRun('glDeleteEntry', [id], function (res) { showToast('🗑️ حُذف القيد ' + id); glApplyDelta_(res); });
     }, { title: 'حذف قيد', danger: true });
   } });
   btns.push({ label: 'رجوع', class: 'btn-outline-secondary', onClick: function () {} });
@@ -45700,22 +45700,71 @@ function glShowEntry(id) {
 }
 function glPost(id) {
   askConfirm_('ترحيل القيد ' + id + '؟ بعد الترحيل لا يمكن تعديله (يمكن إلغاؤه فقط).', function () {
-    glRun('glPostEntry', [id], function () { showToast('✅ رُحِّل القيد ' + id); glAfterChange(); });
+    glRun('glPostEntry', [id], function (res) { showToast('✅ رُحِّل القيد ' + id); glApplyDelta_(res); });
   }, { title: 'ترحيل قيد', icon: '✅', yesLabel: 'ترحيل', danger: false });
 }
 function glVoid(id, status) {
   if (status === 'مسودة') {
     askConfirm_('حذف القيد المسودة ' + id + ' نهائياً؟', function () {
-      glRun('glVoidEntry', [id, 'حذف مسودة'], function () { showToast('🗑️ حُذفت المسودة'); glAfterChange(); });
+      glRun('glVoidEntry', [id, 'حذف مسودة', true], function (res) { showToast('🗑️ حُذفت المسودة'); glApplyDelta_(res); });
     }, { title: 'حذف مسودة', danger: true });
     return;
   }
   askPrompt_('سبب إلغاء القيد ' + id + ' (يبقى القيد ظاهراً بحالة «ملغى» ولا يؤثر على الأرصدة):', '', function (reason) {
     if (!String(reason || '').trim()) { _showPopup('سبب الإلغاء مطلوب', 'warning'); return; }
-    glRun('glVoidEntry', [id, reason], function () { showToast('⛔ أُلغي القيد ' + id); glAfterChange(); });
+    glRun('glVoidEntry', [id, reason, true], function (res) { showToast('⛔ أُلغي القيد ' + id); glApplyDelta_(res); });
   }, { title: 'إلغاء قيد مرحّل', icon: '⛔', okLabel: 'إلغاء القيد', danger: true });
 }
 function glAfterChange() { glRefreshData(function () { glTab(GL.tab); }); }
+// ⚡ (V4.232) تحديث محلي بعد حفظ/ترحيل/إلغاء/حذف قيد — يطبّق دلتا الأرصدة ويحدّث جدول القيود بلا
+// glBootstrap ولا إعادة جلب القائمة. الخزينة/البنوك/العهد/الرئيسية تُرسَم من GL.balances محلياً.
+function glApplyDelta_(res, action) {
+  if (!res || (!res.balancesDelta && !res.savedRow && !res.deleted && !res.removedId)) { glAfterChange(); return; }
+  var r2 = function (n) { return Math.round((Number(n) || 0) * 100) / 100; };
+  if (res.balancesDelta) Object.keys(res.balancesDelta).forEach(function (code) {
+    var d = res.balancesDelta[code], o = GL.balances[code] || (GL.balances[code] = { EGP: 0, SAR: 0, USD: 0, base: 0 });
+    o.EGP = r2(o.EGP + (d.EGP || 0)); o.SAR = r2(o.SAR + (d.SAR || 0)); o.USD = r2(o.USD + (d.USD || 0)); o.base = r2(o.base + (d.base || 0));
+  });
+  if (typeof res.pendingCount === 'number') { GL.pendingCount = res.pendingCount; glNavBadge_(); }
+  if (GL.tab === 'entries' && Array.isArray(GL._entries)) {
+    if (glEntSplice_(res)) { glDrawEntries(); return; }
+    if (typeof glLoadEntries === 'function') { glLoadEntries(); return; }   // قيد جديد خارج الفلتر ⇒ إعادة تحميل القائمة فقط (بلا bootstrap)
+  }
+  if (GL.ready && GL.tab) try { glTab(GL.tab); } catch (e) {}   // الرئيسية/الخزينة/البنوك/العهد/الدليل تُرسَم من الحالة المحلية
+}
+function glEntSplice_(res) {
+  var arr = GL._entries;
+  if (res.deleted || res.removedId) {   // حذف نهائي أو حذف مسودة
+    var rid = res.removedId || (res.savedRow && res.savedRow.id) || res.id;
+    var i = arr.findIndex(function (x) { return x.id === rid; });
+    if (i >= 0) { arr.splice(i, 1); if (typeof GL._entTotal === 'number') GL._entTotal = Math.max(0, GL._entTotal - 1); }
+    return true;
+  }
+  var row = res.savedRow; if (!row) return false;
+  var j = arr.findIndex(function (x) { return x.id === row.id; });
+  if (j >= 0) { arr[j] = row; return true; }   // تعديل/ترحيل/إلغاء مرحّل — يبقى ظاهراً بحالته الجديدة
+  if (!glEntMatchesFilter_(row)) return false;   // قيد جديد خارج فلتر الشريط العلوي ⇒ إعادة تحميل
+  arr.push(row);
+  arr.sort(function (a, b) { return a._k < b._k ? 1 : (a._k > b._k ? -1 : (b.seq - a.seq)); });
+  if (arr.length > 400) arr.length = 400;
+  if (typeof GL._entTotal === 'number') GL._entTotal++;
+  return true;
+}
+// مطابقة فلتر الشريط العلوي (GL._ef) كما يفعل glListEntries بالخادم — للقيد الجديد فقط
+function glEntMatchesFilter_(e) {
+  var f = GL._ef || {}, dk = function (s) { var m = String(s || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + m[2] + m[1] : ''; };
+  var k = e._k || dk(e.date), from = dk(f.from), to = dk(f.to);
+  if (from && k && k < from) return false;
+  if (to && k && k > to) return false;
+  if (f.type && e.type !== f.type) return false;
+  if (f.status && e.status !== f.status) return false;
+  if (f.q) {
+    var nm = function (s) { return (typeof _normalizeArabic_ === 'function' ? _normalizeArabic_(s || '') : String(s || '').toLowerCase()); };
+    var hay = nm([e.id, e.voucherNo, e.desc, e.ref, e.type, e.trip, e.company].concat((e.lines || []).map(function (l) { return l.desc + ' ' + l.client + ' ' + l.agent + ' ' + l.trip; })).join(' '));
+    if (hay.indexOf(nm(f.q)) < 0) return false;
+  }
+  return true;
+}
 function glPrintEntry(id) {
   var e = GL._lastEntry; if (!e || e.id !== id) return;
   var d = 0, c = 0;
@@ -46219,7 +46268,7 @@ function glSaveEntryUI(post, btn, mode) {
     glDlgClose();
     showToast((post ? '✅ حُفظ ' : '💾 حُفظ كمسودة ') + res.id + (res.voucherNo ? ' — إيصال رقم ' + res.voucherNo : ''));
     if (mode === 'print') glPrintVoucher(res.id);
-    glAttUploadAll_(res.id, pend, function () { glAfterChange(); });
+    glAttUploadAll_(res.id, pend, function () { glApplyDelta_(res); });   // ⚡ (V4.232) تحديث محلي بلا إعادة تحميل كامل
     if (mode === 'new') {
       GL._vMainPreset = mainCode; glNew(kind);
       var d = document.getElementById('glEDate'); if (d && e.date) { d.value = e.date; if (d._fp) d._fp.setDate(e.date, false, 'd/m/Y'); }
