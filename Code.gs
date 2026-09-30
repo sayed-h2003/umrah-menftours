@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.230";
+var APP_VERSION = "4.231";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -21190,7 +21190,7 @@ var MF_FIELD_LABELS_ = {
   makkahHotel:'فندق مكة', makkahIn:'دخول مكة', makkahOut:'خروج مكة',
   transport:'شركة النقل', notes:'ملاحظات', breakdown:'بنود العميل', sups:'المشرفون',
   selected:'المعتمرون المختارون', fileType:'نوع الملف', extraTrips:'رحلات إضافية مرتبطة',
-  execFee:'رسوم تنفيذ (بدل رسوم الغرفة)'
+  execFeeOverride:'رسوم تنفيذ (تجاوز يدوي)'
 };
 
 /* ---------- صلاحية الشاشة ---------- */
@@ -21552,8 +21552,64 @@ function _mfAutoReviewType_(reviewDate, goDate, current) {
 }
 
 /* ---------- قراءة/كتابة صفوف الشيت ---------- */
+/* ============================================================
+   🏛️ (V4.231) سياسة رسوم التنفيذ: الشركات/العملاء الذين يُطبَّق عليهم نظام رسوم التنفيذ
+   افتراضياً (بدل رسوم الغرفة) من تاريخ سريان قابل للتغيير — حتى بأثر رجعي (يُحتسب لحظياً عند
+   القراءة بلا إعادة كتابة الملفات). للمدير فقط. ويبقى لكل ملف تجاوز يدوي (تفعيل/إلغاء).
+   ============================================================ */
+var _MF_EXEC_POLICY_MEMO_ = null;
+function _mfExecPolicy_() {
+  if (_MF_EXEC_POLICY_MEMO_) return _MF_EXEC_POLICY_MEMO_;
+  var out = [];
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty('MF_EXEC_POLICY');
+    if (raw) {
+      var a = JSON.parse(raw);
+      if (Array.isArray(a)) out = a.filter(function (p) { return p && p.name && p.from; })
+        .map(function (p) { return { kind: (p.kind === 'client' ? 'client' : 'company'), name: String(p.name).trim(), from: String(p.from).trim() }; });
+    }
+  } catch (e) {}
+  _MF_EXEC_POLICY_MEMO_ = out;
+  return out;
+}
+// القيمة الفعّالة لرسوم التنفيذ لملف: التجاوز اليدوي إن وُجد، وإلا مطابقة سياسة (شركة/عميل + تاريخ المراجعة ≥ تاريخ السريان)
+function _mfExecEffective_(f, policy) {
+  var ov = _mfStr_(f.execFeeOverride);
+  if (ov === 'نعم') return true;
+  if (ov === 'لا') return false;
+  policy = policy || _mfExecPolicy_();
+  if (!policy.length || !_mfStr_(f.reviewDate)) return false;
+  var rd = _mfMs_(f.reviewDate); if (isNaN(rd)) return false;
+  var comp = _mfStr_(f.company);
+  var clients = (f.breakdown || []).map(function (b) { return _mfStr_(b.name); });
+  if (_mfStr_(f.clientLabel)) clients.push(_mfStr_(f.clientLabel));
+  return policy.some(function (p) {
+    var fromMs = _mfMs_(p.from); if (isNaN(fromMs) || rd < fromMs) return false;
+    if (p.kind === 'company') return _accNameMatch_(comp, p.name);
+    return clients.some(function (c) { return _accNameMatch_(c, p.name); });
+  });
+}
+function getMfExecPolicy(authToken) {
+  _mfPerm_(authToken, 'view');
+  return { success: true, policy: _mfExecPolicy_() };
+}
+function saveMfExecPolicy(authToken, list) {
+  var session = requireAdminPermission_(authToken);   // 🔒 للمدير فقط (صلاحية admin/all)
+  var dOk = function (s) { return /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(String(s || '').trim()); };
+  var clean = [];
+  (list || []).forEach(function (p) {
+    var name = String(p && p.name || '').trim(), from = _mfDate_(p && p.from);
+    if (!name || !dOk(from)) return;
+    clean.push({ kind: (p && p.kind === 'client' ? 'client' : 'company'), name: name, from: from });
+  });
+  PropertiesService.getScriptProperties().setProperty('MF_EXEC_POLICY', JSON.stringify(clean));
+  _MF_EXEC_POLICY_MEMO_ = null;
+  try { _mfClearBootstrapCache_(); } catch (e) {}   // execFee الفعّال تغيّر ⇒ أبطِل كاش لقطة الوزارة
+  logChange_(session.username, 'تعديل سياسة رسوم التنفيذ', '-', 'MF_EXEC_POLICY', '-', clean.length + ' جهة');
+  return { success: true, policy: clean };
+}
 function _mfRowToObj_(r) {
-  return {
+  var o = {
     id: _mfStr_(r[0]), seq: _mfNum_(r[1]), fileNo: _mfStr_(r[2]),
     approved: (_mfStr_(r[3]) === 'نعم'), eInvoice: _mfStr_(r[4]), ref: _mfStr_(r[5]),
     company: _mfStr_(r[6]), agent: _mfStr_(r[7]),
@@ -21574,9 +21630,13 @@ function _mfRowToObj_(r) {
     fileType: _mfStr_(r[39]) || '',
     // 🧳 (V4.184) رحلات إضافية مرتبطة — نفس فكرة extraTrips بمجموعات التأشيرات
     extraTrips: _mfStr_(r[40]),
-    // 🏛️ (V4.230) ملف «رسوم تنفيذ» — يُحاسَب العميل برسم تنفيذ للفرد بدل رسوم الغرفة
-    execFee: (_mfStr_(r[41]) === 'نعم')
+    // 🏛️ (V4.230/V4.231) تجاوز رسوم التنفيذ اليدوي للملف: '' = تلقائي (حسب سياسة الشركة/العميل) ·
+    // 'نعم' = تفعيل يدوي · 'لا' = إلغاء يدوي (رسوم غرفة عادية رغم السياسة)
+    execFeeOverride: _mfStr_(r[41])
   };
+  // 🏛️ (V4.231) execFee الفعّال = التجاوز اليدوي إن وُجد، وإلا الافتراضي من سياسة رسوم التنفيذ (شركة/عميل + تاريخ سريان)
+  o.execFee = _mfExecEffective_(o);
+  return o;
 }
 function _mfObjToRow_(f) {
   return [
@@ -21588,7 +21648,7 @@ function _mfObjToRow_(f) {
     f.madinahHotel, f.madinahIn, f.madinahOut, f.makkahHotel, f.makkahIn, f.makkahOut,
     f.transport, f.notes, JSON.stringify(f.selected || []),
     f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
-    f.fileType, f.extraTrips, (f.execFee ? 'نعم' : 'لا')
+    f.fileType, f.extraTrips, _mfStr_(f.execFeeOverride)   // (V4.231) '' تلقائي · 'نعم' تفعيل · 'لا' إلغاء
   ];
 }
 // 🧳 (V4.184) كل رحلات ملف المراجعة: الأساسية + الإضافية (نفس منطق _vzTripSplit_/_vzTripsOf_)
@@ -21977,8 +22037,10 @@ function getMinistryBootstrap(authToken) {
     add: _sessionHasPerm_(session, 'ministry.add'),
     edit: _sessionHasPerm_(session, 'ministry.edit'),
     del: _sessionHasPerm_(session, 'ministry.delete'),
-    approve: _sessionHasPerm_(session, 'ministry.approve')
+    approve: _sessionHasPerm_(session, 'ministry.approve'),
+    admin: _sessionHasPerm_(session, 'admin')   // 🏛️ (V4.231) سياسة رسوم التنفيذ للمدير فقط
   };
+  out.execPolicy = _mfExecPolicy_();   // 🏛️ (V4.231) سياسة رسوم التنفيذ (شركات/عملاء افتراضياً)
   // 🐛 (V4.177) بناء بدأ قبل عملية حفظ وانتهى بعدها ⇒ يحمل بيانات تسبق الحفظ — نُعلم الواجهة
   // كي لا تستبدل به الصفوف المحدَّثة محلياً (نفس منطق getVisaBootstrap تماماً)
   out.dataVer = _mfDataVer_();
@@ -22240,8 +22302,8 @@ function saveMinistryFile(authToken, data) {
       breakdown: bd, tripName: _mfStr_(data.tripName),
       // 🧳 (V4.184) رحلات إضافية مرتبطة بنفس الملف — نفس فكرة extraTrips بمجموعات التأشيرات
       extraTrips: _mfStr_(data.extraTrips),
-      // 🏛️ (V4.230) ملف «رسوم تنفيذ» — يُحاسَب العميل برسم تنفيذ للفرد بدل رسوم الغرفة
-      execFee: !!data.execFee,
+      // 🏛️ (V4.230/V4.231) تجاوز رسوم التنفيذ اليدوي: '' تلقائي (حسب السياسة) · 'نعم' تفعيل · 'لا' إلغاء
+      execFeeOverride: (function () { var v = _mfStr_(data.execFeeOverride); return (v === 'نعم' || v === 'لا') ? v : ''; })(),
       goDate: _mfDate_(data.goDate), retDate: _mfDate_(data.retDate),
       pilgrims: pilg, supCount: 0,   // 🧑‍✈️ (V4.113) يُحتسب أدناه بعد تطبيق قاعدة الوكيل ⇒ استقبال (مرافق فقط يُحتسب)
       sups: sups,
@@ -22298,6 +22360,7 @@ function saveMinistryFile(authToken, data) {
       f.approved = false;
     }
 
+    f.execFee = _mfExecEffective_(f);   // 🏛️ (V4.231) القيمة الفعّالة (تجاوز يدوي أو سياسة) — للرد على الواجهة
     var row = _mfObjToRow_(f);
     if (isNew) sh.appendRow(row);
     else sh.getRange(old._row, 1, 1, MF_HEADERS.length).setValues([row]);

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.230 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.231 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.230)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.231)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.230</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.231</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4993,6 +4993,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="mf-btn" onclick="mfOpenColWin(event)">🧩 تخصيص الأعمدة</button>
       <div class="mf-sep"></div>
       <button class="mf-btn gold" onclick="mfOpenReceipts()">🏦 إيصالات رسوم الغرفة</button>
+      <button class="mf-btn" id="mfExecPolBtn" style="display:none;" onclick="mfExecPolicyOpen()">⚙️ سياسة رسوم التنفيذ</button>
       <button class="mf-btn" onclick="mfOpenSupReg()">🧑‍✈️ سجل المشرفين</button>
       <button class="mf-btn" onclick="mfOpenSuggest()">🎯 اقتراح مشرف</button>
       <button class="mf-btn" onclick="mfOpenQuotaStats()">📊 حصص الأفراد الشهرية</button>
@@ -7584,7 +7585,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.230";
+var CLIENT_APP_VERSION = "4.231";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -29251,6 +29252,7 @@ function openGlobalSearch() {
           MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
           MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
           MF.balances = res.balances || {}; MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
+          MF.execPolicy = res.execPolicy || [];   // 🏛️ (V4.231) سياسة رسوم التنفيذ
           MF.files.forEach(function(f) { f._c = mfCalc(f); });
           MF.loaded = true;
         }
@@ -36849,6 +36851,8 @@ function mfInit() {
   if (!window._mfTripInfo && typeof _mfLoadTripLinks_ === 'function') _mfLoadTripLinks_();
   var ib = document.getElementById('mfImportBtn');
   if (ib) ib.style.display = hasPermission('admin') ? '' : 'none';
+  var eb = document.getElementById('mfExecPolBtn');   // 🏛️ (V4.231) سياسة رسوم التنفيذ — للمدير
+  if (eb) eb.style.display = (hasPermission('admin') || (MF.can && MF.can.admin)) ? '' : 'none';
 }
 // 🔎 (V4.108) يحمّل السجل العام للمعتمرين بالخلفية (لو لم يكن محمَّلاً) — يتيح للبحث الشامل بهذه
 // الشاشة إيجاد الملف حسب اسم المعتمر أو رقم جوازه عبر مطابقة رحلته المرتبطة
@@ -36877,6 +36881,7 @@ function mfLoad(force) {
       MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
       MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
       MF.balances = res.balances || {}; MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
+      MF.execPolicy = res.execPolicy || [];   // 🏛️ (V4.231) سياسة رسوم التنفيذ
       MF.files.forEach(function (f) { f._c = mfCalc(f); });
       MF.loaded = true;
       mfRestoreColPrefs();
@@ -37393,7 +37398,8 @@ function mfPayload(f) {
     transport: f.transport, notes: f.notes, selected: f.selected,
     _manualType: !!f._manualType,
     fileType: f.fileType, _manualFileType: !!f._manualFileType,
-    execFee: !!f.execFee   // 🏛️ (V4.230) ملف رسوم تنفيذ (بدل رسوم الغرفة)
+    execFeeOverride: mfStr(f.execFeeOverride || ''),   // 🏛️ (V4.231) '' تلقائي (حسب السياسة) · 'نعم' تفعيل · 'لا' إلغاء
+    execFee: !!f.execFee   // القيمة الفعّالة (للعرض فقط — لا تُرسل مؤثِّرة)
   };
 }
 
@@ -38381,6 +38387,60 @@ function mfModal(title, body, foot, wide) {
 function mfCloseModal() { var o = document.getElementById('mfModalOv'); if (o && o.parentNode) o.parentNode.removeChild(o); }
 
 /* ============================================================
+   🏛️ (V4.231) سياسة رسوم التنفيذ الافتراضية (للمدير): الشركات/العملاء الذين يُطبَّق عليهم نظام
+   رسوم التنفيذ بدل رسوم الغرفة تلقائياً من تاريخ سريان (حتى بأثر رجعي) — ويبقى لكل ملف تجاوز يدوي.
+   ============================================================ */
+function mfExecPolicyOpen() {
+  if (!(hasPermission('admin') || (MF.can && MF.can.admin))) { _showPopup('سياسة رسوم التنفيذ متاحة للمدير فقط', 'error'); return; }
+  MF._execPol = (MF.execPolicy || []).map(function (p) { return { kind: p.kind === 'client' ? 'client' : 'company', name: p.name || '', from: p.from || '' }; });
+  var dl = '<datalist id="mfExecComps">' + (MF.companies || []).map(function (c) { return '<option value="' + mfEsc(c) + '">'; }).join('') + '</datalist>' +
+    '<datalist id="mfExecClients">' + (MF.clients || []).map(function (c) { return '<option value="' + mfEsc(c) + '">'; }).join('') + '</datalist>';
+  mfModal('⚙️ سياسة رسوم التنفيذ الافتراضية',
+    '<div class="mf-note info" style="margin-bottom:10px;">اختر الشركات أو العملاء الذين يُطبَّق عليهم <b>نظام رسوم التنفيذ</b> (بدل رسوم الغرفة) افتراضياً، وتاريخ بدء التطبيق — يسري حتى <b>بأثر رجعي</b> على الملفات من هذا التاريخ. يبقى لكل ملف تجاوز يدوي (تلقائي/تفعيل/إلغاء) من نموذج الملف.</div>' +
+    '<div id="mfExecPolBox"></div>' + dl +
+    '<button class="mf-btn pri mt-2" onclick="mfExecPolAdd_()">➕ إضافة شركة/عميل</button>',
+    '<button class="mf-btn pri" onclick="mfExecPolicySave_(this)">💾 حفظ السياسة</button>' +
+    '<button class="mf-btn" onclick="mfCloseModal()">إلغاء</button>' +
+    '<span class="mf-hint" style="margin-inline-start:auto;">تُحدَّث كل الملفات المتأثرة فور الحفظ</span>',
+    720);
+  mfExecPolicyDraw_();
+}
+function mfExecPolicyDraw_() {
+  var box = document.getElementById('mfExecPolBox'); if (!box) return;
+  var rows = MF._execPol || [], th = 'padding:5px 7px;text-align:right;border-bottom:2px solid #e2e8f0;font-weight:800;color:#334155;';
+  box.innerHTML = rows.length ? '<table style="width:100%;border-collapse:collapse;font-size:12.5px;"><thead><tr>' +
+    '<th style="' + th + 'width:110px;">النوع</th><th style="' + th + '">الاسم</th><th style="' + th + 'width:160px;">يبدأ من</th><th style="' + th + 'width:44px;"></th></tr></thead><tbody>' +
+    rows.map(function (p, i) {
+      var td = 'padding:4px 6px;border-bottom:1px solid #f1f5f9;';
+      return '<tr><td style="' + td + '"><select class="form-select form-select-sm" onchange="mfExecPolSet_(' + i + ',\'kind\',this.value)">' +
+        '<option value="company"' + (p.kind !== 'client' ? ' selected' : '') + '>شركة</option>' +
+        '<option value="client"' + (p.kind === 'client' ? ' selected' : '') + '>عميل</option></select></td>' +
+        '<td style="' + td + '"><input class="form-control form-control-sm" list="' + (p.kind === 'client' ? 'mfExecClients' : 'mfExecComps') + '" value="' + mfEsc(p.name) + '" oninput="mfExecPolSet_(' + i + ',\'name\',this.value)" placeholder="اسم الشركة أو العميل"></td>' +
+        '<td style="' + td + '"><div class="mf-date"><input id="mfExecFrom_' + i + '" maxlength="10" value="' + mfEsc(p.from) + '" oninput="mfExecPolSet_(' + i + ',\'from\',this.value)" placeholder="يوم/شهر/سنة"><button type="button" onclick="mfPickDate(\'mfExecFrom_' + i + '\',event)">📅</button></div></td>' +
+        '<td style="' + td + 'text-align:center;"><button class="mf-btn sm dgr" onclick="mfExecPolDel_(' + i + ')">✕</button></td></tr>';
+    }).join('') + '</tbody></table>' : '<div class="text-center py-3" style="color:#94a3b8;">لا توجد شركات/عملاء بعد — أضِف صفاً.</div>';
+  mfAttachDateInputs();
+}
+function mfExecPolAdd_() { (MF._execPol = MF._execPol || []).push({ kind: 'company', name: '', from: MF.today || '' }); mfExecPolicyDraw_(); }
+function mfExecPolSet_(i, k, v) { if (MF._execPol && MF._execPol[i]) MF._execPol[i][k] = (k === 'from' ? mfStr(v) : v); }
+function mfExecPolDel_(i) { if (MF._execPol) { MF._execPol.splice(i, 1); mfExecPolicyDraw_(); } }
+function mfExecPolicySave_(btn) {
+  var raw = MF._execPol || [];
+  var bad = raw.some(function (p) { return mfStr(p.name).trim() && !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(mfDate(p.from)); });
+  if (bad) { _showPopup('أكمل تاريخ البدء (يوم/شهر/سنة) لكل صف', 'warning'); return; }
+  var rows = raw.map(function (p) { return { kind: p.kind === 'client' ? 'client' : 'company', name: mfStr(p.name).trim(), from: mfDate(p.from) }; })
+    .filter(function (p) { return p.name && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(p.from); });
+  btn.disabled = true; var t = btn.innerHTML; btn.innerHTML = '⏳ جاري الحفظ…';
+  google.script.run.withSuccessHandler(function (res) {
+    MF.execPolicy = (res && res.policy) || rows;
+    showToast('✅ حُفظت سياسة رسوم التنفيذ (' + MF.execPolicy.length + ' جهة)');
+    mfCloseModal();
+    mfLoad(true);   // إعادة حساب رسوم التنفيذ الفعّالة لكل الملفات
+  }).withFailureHandler(function (e) { btn.disabled = false; btn.innerHTML = t; _showPopup(e && e.message ? e.message : e, 'error'); })
+    .saveMfExecPolicy(window.authToken, rows);
+}
+
+/* ============================================================
    🔍 (V4.184) نافذة "بحث عن معتمر ← اختيار رحلته" — مشتركة بين ملفات الوزارة ومجموعات
    التأشيرات (وأي شاشة أخرى تحتاجها لاحقاً): يبحث المستخدم باسم المعتمر أو رقم جوازه حين لا يعرف
    اسم رحلته، فتُعرض كل رحلات كل معتمر مطابق ليختار منها. نافذة مستقلة بأعلى من mfModal (كي تُفتح
@@ -38723,7 +38783,7 @@ function mfEditFile(id) {
     breakdown: [], tripName: '', goDate: '', retDate: '', pilgrims: 0, supCount: 0, sups: [],
     progPrice: 0, ticket: 0, roomFee: mfRoomFeeAt(MF.today), adminFee: 0, pct: 0, fxRate: 0,
     madinahHotel: '', madinahIn: '', madinahOut: '', makkahHotel: '', makkahIn: '', makkahOut: '',
-    transport: '', notes: '', selected: [], execFee: false
+    transport: '', notes: '', selected: [], execFeeOverride: '', execFee: false
   };
   MF._draft = d;
   MF._step = 0;
@@ -38897,13 +38957,24 @@ function mfFormRender() {
          '<div class="mf-hint auto">VIP: إجمالي ثابت من الإعدادات (بدل الرسوم المسجَّلة)</div>')
       : (mfNumFld('roomFee', d.roomFee) + '<div class="mf-hint">من الإعدادات حسب التاريخ</div>')), 2);
   h += mfFld('رسوم إدارية (للفرد)', mfNumFld('adminFee', d.adminFee), 2);
-  // 🏛️ (V4.230) ملف «رسوم تنفيذ»: لا تُرحَّل رسوم الغرفة محاسبياً على الرحلة/العميل — يُحاسَب العميل
-  // برسم تنفيذ للفرد (بدون المشرف) من تسعير بند العميل «رسوم التنفيذ». رسوم الغرفة الفعلية تظل مسحوبة
-  // من رصيد إيداعات الشركة بشاشة رسوم الغرفة فقط.
-  h += '<div class="col-12"><label class="mf-note ' + (d.execFee ? 'good' : 'info') + '" style="cursor:pointer;display:flex;gap:8px;align-items:center;margin:2px 0;">' +
-    '<input type="checkbox"' + (d.execFee ? ' checked' : '') + ' onchange="mfDraftExec(this.checked)">' +
-    '<span>🏛️ رسوم تنفيذ (بدل رسوم الغرفة) — لا تُرحَّل رسوم الغرفة على الرحلة/العميل، ويُحاسَب العميل برسم «رسوم التنفيذ» للفرد بدون المشرف (يُسعَّر ببنود العميل بفترة). رسوم الغرفة الفعلية تظل مسحوبة من رصيد الشركة بشاشة رسوم الغرفة.</span>' +
-    '</label></div>';
+  // 🏛️ (V4.230/V4.231) رسوم التنفيذ: بدل رسوم الغرفة — لا تُرحَّل رسوم الغرفة على الرحلة/العميل، بل يُحاسَب
+  // العميل برسم «رسوم التنفيذ» للفرد (بدون المشرف) من تسعير بنود العميل. الوضع الافتراضي يُضبط للشركات/العملاء
+  // من زر «سياسة رسوم التنفيذ» (للمدير)، ولكل ملف تجاوز يدوي (تلقائي/تفعيل/إلغاء).
+  var _execOv = mfStr(d.execFeeOverride || '');
+  var _execAuto = mfExecPolicyDefault_(d);
+  var _execEff = _execOv === 'نعم' ? true : (_execOv === 'لا' ? false : _execAuto);
+  h += '<div class="col-12"><div class="mf-note ' + (_execEff ? 'good' : 'info') + '" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0;">' +
+    '<span>🏛️ رسوم التنفيذ (بدل رسوم الغرفة):</span>' +
+    '<select class="form-select form-select-sm" style="width:auto;min-width:210px;" onchange="mfDraftExec(this.value)">' +
+      '<option value=""' + (_execOv === '' ? ' selected' : '') + '>تلقائي حسب السياسة (' + (_execAuto ? 'مُفعَّل' : 'غير مفعّل') + ')</option>' +
+      '<option value="نعم"' + (_execOv === 'نعم' ? ' selected' : '') + '>تفعيل رسوم التنفيذ</option>' +
+      '<option value="لا"' + (_execOv === 'لا' ? ' selected' : '') + '>إلغاء (رسوم غرفة عادية)</option>' +
+    '</select>' +
+    (_execOv ? '<span class="mf-badge" style="background:#fef9c3;color:#854d0e;">تجاوز يدوي</span>' : '') +
+    '<span class="mf-hint" style="flex-basis:100%;">' + (_execEff
+      ? '✅ لن تُرحَّل رسوم الغرفة على الرحلة/العميل — يُحاسَب العميل برسم «رسوم التنفيذ» للفرد (بدون المشرف) من تسعير بنود العميل. رسوم الغرفة الفعلية تظل مسحوبة من رصيد الشركة بشاشة رسوم الغرفة.'
+      : 'رسوم غرفة عادية تُرحَّل على الرحلة/العميل.') + '</span>' +
+    '</div></div>';
   h += mfFld('النسبة %', mfNumFld('pct', d.pct) + '<div class="mf-hint">افتراضي ' + mfDefaultPct(d.pilgrims).toFixed(2) + '% حسب العدد</div>', 2);
   h += mfFld('سعر صرف الريال',
     '<div style="display:flex;gap:4px;align-items:center;">' +
@@ -39350,7 +39421,22 @@ function mfDraftGo(v) {
 function mfDraftRet(v) { MF._draft.retDate = mfDate(v); mfFormRender(); }
 function mfDraftType(v) { MF._draft.reviewType = mfStr(v); MF._draft._manualType = true; mfFormRender(); }
 function mfDraftFileType(v) { MF._draft.fileType = mfStr(v); MF._draft._manualFileType = true; mfFormRender(); }
-function mfDraftExec(v) { MF._draft.execFee = !!v; mfFormRender(); }   // 🏛️ (V4.230) ملف رسوم تنفيذ
+function mfDraftExec(v) { MF._draft.execFeeOverride = (v === 'نعم' || v === 'لا') ? v : ''; mfFormRender(); }   // 🏛️ (V4.231) تجاوز رسوم التنفيذ
+// معاينة الوضع الافتراضي حسب سياسة رسوم التنفيذ (الخادم هو المرجع النهائي — هذه معاينة فقط)
+function mfExecPolicyDefault_(d) {
+  var pol = MF.execPolicy || []; if (!pol.length) return false;
+  var rd = mfMs(mfDate(d.reviewDate)); if (isNaN(rd)) return false;
+  var nm = function (s) { return typeof _normalizeArabic_ === 'function' ? _normalizeArabic_(s || '') : String(s || '').trim().toLowerCase(); };
+  var comp = nm(d.company);
+  var clients = (d.breakdown || []).map(function (b) { return nm(b.name); });
+  if (d.clientLabel) clients.push(nm(d.clientLabel));
+  var hit = function (a, p) { return a === p || a.indexOf(p + ' - ') === 0; };
+  return pol.some(function (p) {
+    var fm = mfMs(mfDate(p.from)); if (isNaN(fm) || rd < fm) return false;
+    var pn = nm(p.name);
+    return p.kind === 'company' ? hit(comp, pn) : clients.some(function (c) { return hit(c, pn); });
+  });
+}
 function mfBdAdd() { MF._draft.breakdown = MF._draft.breakdown || []; MF._draft.breakdown.push({ name: '', count: 0, sups: 0, note: '' }); mfFormRender(); }
 function mfBdDel(i) { MF._draft.breakdown.splice(i, 1); mfSyncCounts(); mfFormRender(); }
 function mfBdSet(i, k, v) {
