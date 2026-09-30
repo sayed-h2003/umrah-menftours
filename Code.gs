@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.229";
+var APP_VERSION = "4.230";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -13536,6 +13536,9 @@ var ACC_BOND_BASE_ = [
   // 🧑‍✈️ (V4.156) تأشيرة المشرف — تُسعَّر للعميل كبقية البنود الأساسية، وتُولَّد حين يكون المشرف خاصاً به
   { key: 'تأشيرة المشرف',    cur: 'SAR' },
   { key: 'شركة',             cur: 'EGP' }, { key: 'ضرائب',            cur: 'EGP' },
+  // 🏛️ (V4.230) رسوم التنفيذ — رسم ثابت للفرد يُحاسَب به العميل في ملفات الوزارة المُعلَّمة «رسوم تنفيذ»
+  // بدل رسوم الغرفة (بدون المشرف). يُسعَّر للعميل بفترات كبقية البنود.
+  { key: 'رسوم التنفيذ',     cur: 'EGP' },
   { key: 'الإعاشة',          cur: 'SAR' }
 ];
 var ACC_PAY_HEADERS   = ['المعرف','العميل','اسم الرحلة','النوع','التاريخ','المبلغ','العملة','سعر الصرف','البيان','أنشئ بواسطة','أنشئ في','الرقم التسلسلي'];
@@ -15111,6 +15114,13 @@ function _accMfFeesList_(client, trip) {
     if (!n && !sups) return;
     var c = _mfCompute_(f, cfg);
     var lines = [];
+    // 🏛️ (V4.230) ملف «رسوم تنفيذ»: يُحاسَب العميل برسم تنفيذ للفرد (بدون المشرف) بدل رسوم الغرفة —
+    // السعر من تسعير بند العميل «رسوم التنفيذ» بتاريخ الملف (fallback 0 حتى يُسعَّر)
+    if (f.execFee) {
+      if (n) { lines.push({ key: 'رسوم التنفيذ', count: n, cost: 0 });
+        out.push({ id: f.id, fileNo: f.fileNo || '', date: f.reviewDate, reviewType: f.reviewType || '', lines: lines }); }
+      return;
+    }
     if (f.reviewType === 'تجديد باركود') {
       if (n) lines.push({ key: 'تجديد باركود', count: n, cost: _mfBarcodeFeeAt_(f.reviewDate) });
     } else if (f.reviewType === 'VIP' || c.vipByCount) {
@@ -15145,7 +15155,7 @@ function _accMfDesc_(key, a) { return key + (a && a.refs.length ? ' — ملف '
    كل بند يُدرَج بعلامة مصدر مخفية ⟦src:…⟧ في بيانه فلا يُعرض للإدراج مرتين.
    ============================================================ */
 function _accSrcMarker_(k) { return '⟦src:' + String(k).replace(/[^A-Za-z0-9._-]/g, '') + '⟧'; }
-var ACC_MF_KEY_CODE_ = { 'رسوم غرفة': 'room', 'رسوم غرفة VIP': 'vip', 'رسوم غرفة المشرف': 'sup', 'تجديد باركود': 'bar' };
+var ACC_MF_KEY_CODE_ = { 'رسوم غرفة': 'room', 'رسوم غرفة VIP': 'vip', 'رسوم غرفة المشرف': 'sup', 'تجديد باركود': 'bar', 'رسوم التنفيذ': 'exec' };
 function getClientUnlinkedFees(authToken, client) {
   _accPerm_(authToken, 'view');
   client = String(client || '').trim();
@@ -15229,6 +15239,7 @@ function _accBondKey_(desc) {
   if (desc.indexOf('رسوم غرفة المشرف') === 0) return 'رسوم غرفة المشرف';
   if (desc.indexOf('رسوم غرفة VIP') === 0) return 'رسوم غرفة VIP';
   if (desc.indexOf('رسوم غرفة') === 0) return 'رسوم غرفة';
+  if (desc.indexOf('رسوم التنفيذ') === 0) return 'رسوم التنفيذ';   // (V4.230)
   if (desc.indexOf('تجديد باركود') === 0) return 'تجديد باركود';
   if (desc.indexOf('تذاكر الأطفال') === 0) return 'تذاكر الأطفال';
   if (desc.indexOf('تذاكر الرضع') === 0) return 'تذاكر الرضع';
@@ -15261,7 +15272,7 @@ function _accBondsDesired_(authToken, client, trip) {
   // لو لا ملفات مراجَعة بعد: التقدير القديم من الكشف (يُستبدل تلقائياً بالمزامنة عند تسجيل المراجعة)
   var mf = _accMfFeesAgg_(client, trip);
   if (mf.any) {
-    ['رسوم غرفة', 'رسوم غرفة VIP', 'رسوم غرفة المشرف', 'تجديد باركود'].forEach(function (k) {
+    ['رسوم غرفة', 'رسوم غرفة VIP', 'رسوم غرفة المشرف', 'تجديد باركود', 'رسوم التنفيذ'].forEach(function (k) {
       var a = mf.agg[k]; if (!a || !a.count) return;
       push(k, _accMfDesc_(k, a), k === 'رسوم غرفة المشرف' ? 'مشرف' : 'كبير', 'EGP', a.count, 0, row.company || '', a.cost);
     });
@@ -21150,7 +21161,9 @@ var MF_HEADERS = [
   'نوع الملف',
   // 🧳 (V4.184) رحلات إضافية مرتبطة بنفس ملف المراجعة — عمود أُضيف بالنهاية (لا يزحزح فهارس
   // الأعمدة القديمة)، نفس فكرة extraTrips بمجموعات التأشيرات
-  'رحلات إضافية مرتبطة'
+  'رحلات إضافية مرتبطة',
+  // 🏛️ (V4.230) ملف «رسوم تنفيذ»: يُحاسَب العميل برسم تنفيذ للفرد بدل رسوم الغرفة (عمود أُضيف بالنهاية)
+  'رسوم تنفيذ'
 ];
 
 var MF_SUP_SHEET = 'MinistrySupervisors';
@@ -21176,7 +21189,8 @@ var MF_FIELD_LABELS_ = {
   madinahHotel:'فندق المدينة', madinahIn:'دخول المدينة', madinahOut:'خروج المدينة',
   makkahHotel:'فندق مكة', makkahIn:'دخول مكة', makkahOut:'خروج مكة',
   transport:'شركة النقل', notes:'ملاحظات', breakdown:'بنود العميل', sups:'المشرفون',
-  selected:'المعتمرون المختارون', fileType:'نوع الملف', extraTrips:'رحلات إضافية مرتبطة'
+  selected:'المعتمرون المختارون', fileType:'نوع الملف', extraTrips:'رحلات إضافية مرتبطة',
+  execFee:'رسوم تنفيذ (بدل رسوم الغرفة)'
 };
 
 /* ---------- صلاحية الشاشة ---------- */
@@ -21559,7 +21573,9 @@ function _mfRowToObj_(r) {
     // ولا يُحتسب ضمن حصة الأفراد (فقط القيمة الحرفية «فردي» تُحتسب)
     fileType: _mfStr_(r[39]) || '',
     // 🧳 (V4.184) رحلات إضافية مرتبطة — نفس فكرة extraTrips بمجموعات التأشيرات
-    extraTrips: _mfStr_(r[40])
+    extraTrips: _mfStr_(r[40]),
+    // 🏛️ (V4.230) ملف «رسوم تنفيذ» — يُحاسَب العميل برسم تنفيذ للفرد بدل رسوم الغرفة
+    execFee: (_mfStr_(r[41]) === 'نعم')
   };
 }
 function _mfObjToRow_(f) {
@@ -21572,7 +21588,7 @@ function _mfObjToRow_(f) {
     f.madinahHotel, f.madinahIn, f.madinahOut, f.makkahHotel, f.makkahIn, f.makkahOut,
     f.transport, f.notes, JSON.stringify(f.selected || []),
     f.createdBy, f.createdAt, f.updatedBy, f.updatedAt,
-    f.fileType, f.extraTrips
+    f.fileType, f.extraTrips, (f.execFee ? 'نعم' : 'لا')
   ];
 }
 // 🧳 (V4.184) كل رحلات ملف المراجعة: الأساسية + الإضافية (نفس منطق _vzTripSplit_/_vzTripsOf_)
@@ -22224,6 +22240,8 @@ function saveMinistryFile(authToken, data) {
       breakdown: bd, tripName: _mfStr_(data.tripName),
       // 🧳 (V4.184) رحلات إضافية مرتبطة بنفس الملف — نفس فكرة extraTrips بمجموعات التأشيرات
       extraTrips: _mfStr_(data.extraTrips),
+      // 🏛️ (V4.230) ملف «رسوم تنفيذ» — يُحاسَب العميل برسم تنفيذ للفرد بدل رسوم الغرفة
+      execFee: !!data.execFee,
       goDate: _mfDate_(data.goDate), retDate: _mfDate_(data.retDate),
       pilgrims: pilg, supCount: 0,   // 🧑‍✈️ (V4.113) يُحتسب أدناه بعد تطبيق قاعدة الوكيل ⇒ استقبال (مرافق فقط يُحتسب)
       sups: sups,

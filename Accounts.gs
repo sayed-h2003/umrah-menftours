@@ -1733,6 +1733,7 @@ var GL_AUTO_ROLES_ = {
   rev_house:  ['41', 'إيرادات السكن والإعاشة', 'REV', 0, '', ''],
   rev_trans:  ['41', 'إيرادات النقل', 'REV', 0, '', ''],
   rev_room:   ['41', 'إيرادات رسوم الغرفة والباركود', 'REV', 0, '', ''],
+  rev_exec:   ['41', 'إيرادات رسوم التنفيذ', 'REV', 0, '', ''],   // (V4.230) رسوم تنفيذ ملفات الوزارة (بدل رسوم الغرفة)
   rev_ticket: ['41', 'إيرادات التذاكر', 'REV', 0, '', ''],
   rev_sup:    ['41', 'إيرادات الإشراف', 'REV', 0, '', ''],
   disc:       ['41', 'خصومات مسموح بها للعملاء', 'REV', 0, '', '4199'],
@@ -1857,6 +1858,7 @@ function _glTripWeights_(trips, breakdown) {
 function _glCpDirMap_() { var o = {}; try { _glRows_('cpdir').forEach(function (r) { var id = _glStr_(r[0]); if (id && _glStr_(r[1])) o[id] = _glStr_(r[1]); }); } catch (e) {} return o; }
 function _glRevRole_(desc) {
   var d = _glStr_(desc);
+  if (/تنفيذ/.test(d)) return 'rev_exec';   // (V4.230) رسوم التنفيذ — قبل فحص رسوم الغرفة
   if (/تأشير|تاشير|فيز/.test(d)) return 'rev_visa';
   if (/رسوم\s*(ال)?غرف|باركود/.test(d)) return 'rev_room';
   if (/تذاكر|تذكر|طيران/.test(d)) return 'rev_ticket';
@@ -2088,6 +2090,10 @@ function _glAutoBuild_(user, write) {
   });
   mfFiles.forEach(function (f) {
     if (!f.reviewDate || !f.company) return;
+    // 🏛️ (V4.230) ملف «رسوم تنفيذ»: لا يُسجَّل رسم الغرفة محاسبياً على الرحلة/العميل — يُحاسَب العميل
+    // برسم تنفيذ ثابت للفرد (بند تسعير عميل «رسوم التنفيذ») يصل للدفتر عبر بنود حساب العميل (AUTO:TRIP/CI).
+    // ورسم الغرفة الفعلي يظل مسحوباً من رصيد إيداعات الشركة بشاشة رسوم الغرفة فقط (بلا قيد).
+    if (f.execFee) return;
     var c = _mfCompute_(f, cfg), v = _glR2_(c.totalRoomFee); if (!v) return;
     var acc = party('roomfee', f.company);
     // 🧳 (V4.222) رسوم غرفة الملف على حساب الرحلة المرتبطة (موزّعة بعدد معتمري كل رحلة بالملف)

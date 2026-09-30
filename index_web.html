@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.229 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.230 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.229)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.230)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.229</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.230</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7584,7 +7584,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.229";
+var CLIENT_APP_VERSION = "4.230";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -37392,7 +37392,8 @@ function mfPayload(f) {
     makkahHotel: f.makkahHotel, makkahIn: f.makkahIn, makkahOut: f.makkahOut,
     transport: f.transport, notes: f.notes, selected: f.selected,
     _manualType: !!f._manualType,
-    fileType: f.fileType, _manualFileType: !!f._manualFileType
+    fileType: f.fileType, _manualFileType: !!f._manualFileType,
+    execFee: !!f.execFee   // 🏛️ (V4.230) ملف رسوم تنفيذ (بدل رسوم الغرفة)
   };
 }
 
@@ -38722,7 +38723,7 @@ function mfEditFile(id) {
     breakdown: [], tripName: '', goDate: '', retDate: '', pilgrims: 0, supCount: 0, sups: [],
     progPrice: 0, ticket: 0, roomFee: mfRoomFeeAt(MF.today), adminFee: 0, pct: 0, fxRate: 0,
     madinahHotel: '', madinahIn: '', madinahOut: '', makkahHotel: '', makkahIn: '', makkahOut: '',
-    transport: '', notes: '', selected: []
+    transport: '', notes: '', selected: [], execFee: false
   };
   MF._draft = d;
   MF._step = 0;
@@ -38896,6 +38897,13 @@ function mfFormRender() {
          '<div class="mf-hint auto">VIP: إجمالي ثابت من الإعدادات (بدل الرسوم المسجَّلة)</div>')
       : (mfNumFld('roomFee', d.roomFee) + '<div class="mf-hint">من الإعدادات حسب التاريخ</div>')), 2);
   h += mfFld('رسوم إدارية (للفرد)', mfNumFld('adminFee', d.adminFee), 2);
+  // 🏛️ (V4.230) ملف «رسوم تنفيذ»: لا تُرحَّل رسوم الغرفة محاسبياً على الرحلة/العميل — يُحاسَب العميل
+  // برسم تنفيذ للفرد (بدون المشرف) من تسعير بند العميل «رسوم التنفيذ». رسوم الغرفة الفعلية تظل مسحوبة
+  // من رصيد إيداعات الشركة بشاشة رسوم الغرفة فقط.
+  h += '<div class="col-12"><label class="mf-note ' + (d.execFee ? 'good' : 'info') + '" style="cursor:pointer;display:flex;gap:8px;align-items:center;margin:2px 0;">' +
+    '<input type="checkbox"' + (d.execFee ? ' checked' : '') + ' onchange="mfDraftExec(this.checked)">' +
+    '<span>🏛️ رسوم تنفيذ (بدل رسوم الغرفة) — لا تُرحَّل رسوم الغرفة على الرحلة/العميل، ويُحاسَب العميل برسم «رسوم التنفيذ» للفرد بدون المشرف (يُسعَّر ببنود العميل بفترة). رسوم الغرفة الفعلية تظل مسحوبة من رصيد الشركة بشاشة رسوم الغرفة.</span>' +
+    '</label></div>';
   h += mfFld('النسبة %', mfNumFld('pct', d.pct) + '<div class="mf-hint">افتراضي ' + mfDefaultPct(d.pilgrims).toFixed(2) + '% حسب العدد</div>', 2);
   h += mfFld('سعر صرف الريال',
     '<div style="display:flex;gap:4px;align-items:center;">' +
@@ -39342,6 +39350,7 @@ function mfDraftGo(v) {
 function mfDraftRet(v) { MF._draft.retDate = mfDate(v); mfFormRender(); }
 function mfDraftType(v) { MF._draft.reviewType = mfStr(v); MF._draft._manualType = true; mfFormRender(); }
 function mfDraftFileType(v) { MF._draft.fileType = mfStr(v); MF._draft._manualFileType = true; mfFormRender(); }
+function mfDraftExec(v) { MF._draft.execFee = !!v; mfFormRender(); }   // 🏛️ (V4.230) ملف رسوم تنفيذ
 function mfBdAdd() { MF._draft.breakdown = MF._draft.breakdown || []; MF._draft.breakdown.push({ name: '', count: 0, sups: 0, note: '' }); mfFormRender(); }
 function mfBdDel(i) { MF._draft.breakdown.splice(i, 1); mfSyncCounts(); mfFormRender(); }
 function mfBdSet(i, k, v) {
