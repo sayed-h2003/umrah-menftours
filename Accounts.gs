@@ -850,7 +850,7 @@ function glSaveEntry(authToken, e, post) {
       _glSyncVoucherPays_(_glStr_(f.r[0]), session.username);   // (V4.222) إيصال على حساب عميل ⇒ دفعة بحسابات العملاء
       var _delta = {}; _glLineDelta_(_oldLines, -1, _delta); if (status === GL_ST_POSTED_) _glLineDelta_(w.lRows, 1, _delta);
       return { success: true, id: _glStr_(f.r[0]), status: status, voucherNo: (sk.match(/^VCH:(.+)$/) || [])[1] || '',
-        balancesDelta: _delta, pendingCount: _glCpPending_(), savedRow: _glRowToListEntry_(w.eRow, w.lRows) };
+        balancesDelta: _delta, pendingCount: _glCpPending_(), savedRow: _glRowToListEntry_(w.eRow, w.lRows), hbMirror: _GL_HB_MIRROR_LAST_ };
     }
     var seq = _glNextEntrySeq_(1), id = _glEntryId_(seq);
     var vno = (GL_VCH_PREFIX_[v.type] && !_glStr_(e.sourceKey)) ? _glNextVoucherNo_(v.type) : '';
@@ -858,10 +858,11 @@ function glSaveEntry(authToken, e, post) {
     eSh.getRange(eSh.getLastRow() + 1, 1, 1, w2.eRow.length).setValues([w2.eRow]);
     lSh.getRange(lSh.getLastRow() + 1, 1, w2.lRows.length, w2.lRows[0].length).setValues(w2.lRows);
     logChange_(session.username, post ? 'تسجيل وترحيل قيد' : 'تسجيل قيد مسودة', 'GL:' + id, 'القيد', '-', (vno ? vno + ' — ' : '') + v.type + ' — ' + _glStr_(e.desc) + ' — ' + v.totalBase + ' ج');
+    _GL_HB_MIRROR_LAST_ = null;
     if (status === GL_ST_POSTED_) _glSyncVoucherPays_(id, session.username);
     var _delta2 = {}; if (status === GL_ST_POSTED_) _glLineDelta_(w2.lRows, 1, _delta2);
     return { success: true, id: id, status: status, voucherNo: vno,
-      balancesDelta: _delta2, pendingCount: _glCpPending_(), savedRow: _glRowToListEntry_(w2.eRow, w2.lRows) };
+      balancesDelta: _delta2, pendingCount: _glCpPending_(), savedRow: _glRowToListEntry_(w2.eRow, w2.lRows), hbMirror: _GL_HB_MIRROR_LAST_ };
   } finally { lock.releaseLock(); }
 }
 function glPostEntry(authToken, id) {
@@ -879,7 +880,7 @@ function glPostEntry(authToken, id) {
     logChange_(session.username, 'ترحيل قيد', 'GL:' + id, 'الحالة', GL_ST_DRAFT_, GL_ST_POSTED_);
     _glSyncVoucherPays_(_glStr_(id), session.username);
     return { success: true, id: _glStr_(id), balancesDelta: _glLineDelta_(_glLinesOf_(_glStr_(id)), 1, {}),
-      pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)) };   // ⚡ (V4.232) دلتا محلية
+      pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)), hbMirror: _GL_HB_MIRROR_LAST_ };   // ⚡ (V4.232) دلتا محلية
   } finally { lock.releaseLock(); }
 }
 // wantDelta: (V4.232) تُرجع دلتا الأرصدة للتحديث المحلي — يمرّرها نداء الواجهة فقط، لا حلقة glHbErpVoid الداخلية
@@ -2949,7 +2950,12 @@ function glCpDelete(authToken, payIds) {
 // 🔁 إيصال استلام/صرف على حساب عميل بالحسابات العامة ⇒ دفعة بشاشة حسابات العملاء (عامة، أو على الرحلة لو حُددت بالإيصال
 // وللعميل بنود بها) بعلامة مخفية ⟦src:gl-رقم القيد⟧ — تُحدَّث مع تعديل الإيصال وتُحذف بإلغائه/حذفه، ولا تُقيَّد مرة ثانية
 function _glSyncVoucherPays_(entryId, user) {
-  try { _glHbMirrorSync_(entryId); } catch (eM) { try { Logger.log('hb mirror: ' + eM.message); } catch (e0) {} }   // (V4.241) نسخة بسجل دفعات الحجوزات
+  _GL_HB_MIRROR_LAST_ = null;
+  try {   // (V4.241) نسخة بسجل دفعات الحجوزات — (V4.246) والنتيجة/سبب عدم النسخ تُعاد للواجهة
+    var mr = _glHbMirrorSync_(entryId, { notify: true, by: _glHbStaffName_(user) });
+    if (mr && mr.written) _GL_HB_MIRROR_LAST_ = { written: mr.written };
+    else { var wy = _glHbMirrorWhy_(_glStr_(entryId)); if (wy) _GL_HB_MIRROR_LAST_ = wy; }
+  } catch (eM) { try { Logger.log('hb mirror: ' + eM.message); } catch (e0) {} }
   try {
     entryId = _glStr_(entryId); if (!entryId) return;
     var tag = '⟦src:gl-' + entryId + '⟧', want = [], f = _glFindEntry_(entryId);
@@ -4209,6 +4215,28 @@ function _glHbMirrorRows_(id, cutK, parties, fx) {
   });
 }
 // يُستدعى بعد حفظ/ترحيل/إلغاء/حذف أي قيد. opt.force: إعادة كتابة كل الصفوف (أداة المزامنة الشاملة)
+// (V4.246) سبب عدم النسخ لبرنامج الحجوزات لقيد على حساب طرف حجوزات — يُعرض للمستخدم بعد الحفظ بدل الصمت
+var _GL_HB_MIRROR_LAST_ = null;
+function _glHbStaffName_(u) {   // اسم الموظف كما يظهر في تنبيهات برنامج الحجوزات (اسم العرض هناك إن وُجد)
+  u = _glStr_(u); if (!u) return 'البرنامج الرئيسي';
+  try { if (typeof ensureUsersSheet_ === 'function') { var sh = ensureUsersSheet_(), i = findUserRow_(sh, u); if (i !== -1) return _glStr_(sh.getRange(i, 2).getValue()) || u; } } catch (e) {}
+  return u;
+}
+function _glHbMirrorWhy_(id) {
+  try {
+    var f = _glFindEntry_(id); if (!f) return null;
+    var parties = _glHbMirrorParties_(), names = [];
+    _glLinesOf_(id).forEach(function (l) { var n = parties[_glStr_(l[4])]; if (n && names.indexOf(n) < 0) names.push(n); });
+    if (!names.length) return null;
+    var e = _glEntryObj_(f.r), from = _glSettings_().hb_gl_only_from || '', why = '';
+    if (!_glSettings_().hb_ss_id) why = 'برنامج الحجوزات غير مربوط بالحسابات';
+    else if (!from) why = 'لم يُفعَّل بعد «تاريخ القطع» — الحسابات العامة ← 🏨 الحجوزات ← 💳 دفعات الفنادق ← 🔒 تاريخ القطع (بعد تطبيقه تُنسخ القيود من التاريخ تلقائياً، ومنها هذا القيد)';
+    else if (e.status !== GL_ST_POSTED_) why = 'القيد مسودة غير مرحّل';
+    else if (_glDKey_(e.date) < _glDKey_(_glDate_(from))) why = 'تاريخ القيد ' + e.date + ' قبل تاريخ القطع ' + from;
+    else if (e.sourceKey && !/^VCH:/.test(e.sourceKey)) why = 'قيد تلقائي/مستورد لا يُنسخ';
+    return why ? { names: names, why: why } : null;
+  } catch (x) { return null; }
+}
 function _glHbMirrorSync_(entryId, opt) {
   opt = opt || {};
   var id = _glStr_(entryId); if (!id) return null;
@@ -4230,6 +4258,17 @@ function _glHbMirrorSync_(entryId, opt) {
     if (wasRow) mSh.getRange(wasRow, 1, 1, 3).setValues([row]); else mSh.getRange(mSh.getLastRow() + 1, 1, 1, 3).setValues([row]);
   } else if (wasRow) mSh.deleteRow(wasRow);
   _GL_HB_MEMO_ = null;
+  try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eI) {}
+  // 🔔 (V4.246) تنبيه تليجرام «دفعة» كما كان يرسله برنامج الحجوزات عند تسجيل الدفعة هناك — لأول نسخة فقط
+  // (لا عند تعديل القيد ولا في إعادة النسخ الشاملة)
+  if (opt.notify && !wasRow && want.length && typeof tgEnqueue_ === 'function') {
+    want.forEach(function (w) {
+      try {
+        tgEnqueue_('payment', { client: w[1], amount: w[3], note: w[2] + (w[4] ? ' — ' + w[4] : ''), by: opt.by || 'البرنامج الرئيسي',
+          payDate: _glDate_(w[0]), qaid: w[5] || '', balParties: [{ name: w[1], roleHint: w[2] === 'دفعنا له' ? 'supplier' : 'client' }], ts: new Date().getTime() });
+      } catch (eT) { Logger.log('hb mirror tg: ' + eT.message); }
+    });
+  }
   return { written: want.length, removed: Math.max(0, have.length - want.length) };
 }
 // ضبط تاريخ القطع (للمدير) + مزامنة النسخ العاكسة لكل القيود من التاريخ. date فارغ ⇒ إيقاف (تُحذف كل النسخ العاكسة)
