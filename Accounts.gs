@@ -4356,6 +4356,13 @@ function glHbMirrorResync(authToken) {
   try { return Object.assign({ success: true, from: _glSettings_().hb_gl_only_from || '' }, _glHbMirrorAll_()); }
   finally { lock.releaseLock(); }
 }
+// (V4.248) حساب طرف برنامج الحجوزات بالاسم (لأزرار الدفعة داخل كشفه الفندقي) — عبر خريطة الأسماء
+function glHbPartyCode(authToken, name) {
+  _glPerm_(authToken, 'view');
+  var m = _glHbMap_()[_glHbKey_(name)], accs = _glAccounts_().map;
+  var code = m && m.code && accs[m.code] && !accs[m.code].isGroup && !/^(رحلة|تجاهل)$/.test(m.type) ? m.code : '';
+  return { success: true, name: _glStr_(name), code: code, type: m ? m.type : '' };
+}
 // قائمة القيود المنسوخة لبرنامج الحجوزات (لتبويب «💳 دفعات الفنادق»)
 function glHbMirrorList(authToken) {
   _glPerm_(authToken, 'view');

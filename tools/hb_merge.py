@@ -34,6 +34,44 @@ def server(s):
     s = s.replace("'GEMINI_API_KEY_1'", "'HB_GEMINI_API_KEY_1'").replace("'GEMINI_API_KEY_2'", "'HB_GEMINI_API_KEY_2'")
     return s
 
+# (V4.248) وضع التضمين: بلا شاشة دخول (حالة «جارٍ الفتح…» بدلها) · شريط واحد (يُخفى شريط البرنامج إلا كروت الإحصاءات) ·
+# جرس طلبات العملاء رقماً على تبويب البرنامج الرئيسي · أزرار الدفعات بالكشف تفتح نموذج البرنامج الرئيسي · كل المدفوعات للعرض فقط
+HB_EMBED_JS = r'''
+if (HB_EMBED) {
+  try { document.documentElement.classList.add('hb-embed'); } catch (eE) {}
+  var hbPost_ = function (m) { try { window.parent.postMessage(m, '*'); } catch (eP) {} };
+  window.hbEmbedReady_ = function () { var o = document.getElementById('hbEmbedLoad'); if (o) o.remove(); hbPost_({ hbReady: 1 }); };
+  window.hbEmbedFail_ = function (msg) {
+    var o = document.getElementById('hbEmbedLoad'); if (!o) return;
+    o.innerHTML = '<div class="hbel-box"><b>تعذّر فتح برنامج الحجوزات</b><span>' + String(msg || '').replace(/[<>&]/g, '') + '</span><button type="button" onclick="window.parent.postMessage({hbRetry:1},\'*\')">↻ إعادة المحاولة</button></div>';
+  };
+  document.addEventListener('DOMContentLoaded', function () {
+    var o = document.createElement('div'); o.id = 'hbEmbedLoad';
+    o.innerHTML = '<div class="hbel-box"><span class="hbel-spin"></span><span>جارٍ فتح الشاشة…</span></div>';
+    document.body.appendChild(o);
+    setTimeout(function () { if (document.getElementById('hbEmbedLoad') && !(typeof currentUser !== 'undefined' && currentUser)) hbEmbedFail_('انتهت مهلة الدخول الموحّد'); }, 30000);
+    var last = null;
+    setInterval(function () {   // جرس طلبات العملاء ⇒ رقم على تبويب «بوابة العملاء» بالبرنامج الرئيسي
+      var b = document.getElementById('portalReqBellBadge'), n = b && !b.hidden ? (parseInt(b.textContent, 10) || 0) : 0;
+      if (n !== last) { last = n; hbPost_({ hbBell: n }); }
+    }, 3000);
+  });
+  // أزرار الدفعات (الكشف وكل المدفوعات) ⇒ نموذج الدفعة بالبرنامج الرئيسي بالطرف المحدد
+  document.addEventListener('click', function (ev) {
+    var t = ev.target && ev.target.closest && ev.target.closest('#stmtAddPaymentBtn,#stmtAddBatchBtn,#stmtAddLinkedBtn');
+    if (!t) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var c = document.getElementById('customer');
+    hbPost_({ hbPay: { kind: t.id === 'stmtAddLinkedBtn' ? 'link' : (t.id === 'stmtAddBatchBtn' ? 'multi' : 'single'), party: c ? String(c.value || '').trim() : '' } });
+  }, true);
+  window.addEventListener('message', function (ev) {
+    var d = ev && ev.data; if (!d) return;
+    if (d.hbRefresh) { try { if (typeof currentPageKey_ === 'function' && currentPageKey_() === 'statement' && typeof refreshStatement === 'function' && typeof cacheData !== 'undefined' && cacheData) refreshStatement(); } catch (eR) {} return; }
+    if (!d.hbShow) return;
+    try { if (typeof currentUser !== 'undefined' && currentUser) showPage(String(d.hbShow)); else INITIAL_PAGE = String(d.hbShow); } catch (eM) {}
+  });
+}'''
+
 def build():
     out = {}
     code = server(open(os.path.join(SRC, 'Code.gs'), encoding='utf-8').read())
@@ -61,24 +99,21 @@ def build():
     # والأزرار والفلاتر كما هي؛ يُخفى شريط تنقّله فقط (التنقّل من تبويبات برنامج العمرة عبر postMessage)
     app = must(app, 'var SSO_CODE = "<?!= ssoCode ?>";', 'var SSO_CODE = "<?!= ssoCode ?>";\n'
       'var HB_EMBED = "<?!= embed ?>" === \'1\';\n'
-      'if (HB_EMBED) {\n'
-      '  try { document.documentElement.classList.add(\'hb-embed\'); } catch (eE) {}\n'
-      '  window.addEventListener(\'message\', function (ev) {\n'
-      '    var d = ev && ev.data; if (!d || !d.hbShow) return;\n'
-      '    try { if (typeof currentUser !== \'undefined\' && currentUser) showPage(String(d.hbShow)); else INITIAL_PAGE = String(d.hbShow); } catch (eM) {}\n'
-      '  });\n'
-      '}')
+      + HB_EMBED_JS)
     app = must(app, "  document.getElementById('page-' + key).classList.add('active');",
       "  document.getElementById('page-' + key).classList.add('active');\n"
       "  if (typeof HB_EMBED !== 'undefined' && HB_EMBED) { try { window.parent.postMessage({ hbPage: key }, '*'); } catch (eP) {} }")
+    app = must(app, "function onAuthSuccess_(token, user, sessionMinutes) {\n  currentSessionToken = token; currentUser = user;",
+      "function onAuthSuccess_(token, user, sessionMinutes) {\n  currentSessionToken = token; currentUser = user;\n"
+      "  if (typeof HB_EMBED !== 'undefined' && HB_EMBED && typeof hbEmbedReady_ === 'function') setTimeout(hbEmbedReady_, 0);   // (V4.248) إخفاء «جارٍ الفتح…»")
     app = must(app, "  var wanted = ['statement','bookings','arrivals','payments','import','settings','users'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';",
       "  var wanted = ['statement','bookings','arrivals','payments','import','settings','users','statsReport','clientPortal','changelog'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';")
     app = must(app, "  if (stored) {\n    google.script.run.withSuccessHandler(function (res) {\n      if (res && res.ok) onAuthSuccess_(stored, res.user, res.sessionMinutes);",
       "  if (SSO_CODE) {\n"
       "    google.script.run.withSuccessHandler(function (res) {\n"
       "      if (res && res.ok) { try { sessionStorage.setItem(SESSION_TOKEN_KEY_, res.token); } catch (ex) {} onAuthSuccess_(res.token, res.user, res.sessionMinutes); }\n"
-      "      else { var er = document.getElementById('loginErr'); if (er) er.textContent = (res && res.error) || 'تعذّر الدخول الموحّد — سجّل الدخول يدويًا'; }\n"
-      "    }).withFailureHandler(function (err) { var er = document.getElementById('loginErr'); if (er) er.textContent = 'خطأ: ' + err.message; }).hbSsoLogin(SSO_CODE);\n"
+      "      else { var er = document.getElementById('loginErr'); if (er) er.textContent = (res && res.error) || 'تعذّر الدخول الموحّد — سجّل الدخول يدويًا'; if (HB_EMBED) hbEmbedFail_((res && res.error) || 'تعذّر الدخول الموحّد'); }\n"
+      "    }).withFailureHandler(function (err) { var er = document.getElementById('loginErr'); if (er) er.textContent = 'خطأ: ' + err.message; if (HB_EMBED) hbEmbedFail_(err.message); }).hbSsoLogin(SSO_CODE);\n"
       "  } else if (stored) {\n    google.script.run.withSuccessHandler(function (res) {\n      if (res && res.ok) onAuthSuccess_(stored, res.user, res.sessionMinutes);")
     app = must(app, '      <button data-page="settings">⚙ الإعدادات</button>\n    </div>',
       '      <button data-page="settings">⚙ الإعدادات</button>\n'
@@ -92,7 +127,15 @@ def build():
   #page-statsReport .stat .v { font-family:'Cairo','Tajawal',Arial,sans-serif; }
   #page-statsReport .stat { border-top:3px solid #1e3d59; }
   .app-nav .links .hb-back-umrah { background:#1e3d59; color:#fff; border-radius:8px; }
-  html.hb-embed .app-nav .links, html.hb-embed .app-nav .brand, html.hb-embed #mobileTabs { display:none !important; }
+  html.hb-embed .app-nav-row1, html.hb-embed #navUserBox, html.hb-embed #loginScreen, html.hb-embed #mobileTabs { display:none !important; }
+  html.hb-embed #page-payments button[onclick*="Modal"] { display:none !important; }   /* كل المدفوعات: عرض فقط */
+  html.hb-embed .app-nav { padding-top:4px !important; padding-bottom:4px !important; }
+  #hbEmbedLoad { position:fixed; inset:0; z-index:2147483000; background:#f4f6f9; display:grid; place-items:center; font-family:'Cairo','Tajawal',Tahoma,sans-serif; direction:rtl; }
+  #hbEmbedLoad .hbel-box { display:grid; gap:10px; justify-items:center; color:#1e3d59; font-weight:700; text-align:center; max-width:420px; padding:0 16px; }
+  #hbEmbedLoad .hbel-box span { color:#5b6b7b; font-weight:600; }
+  #hbEmbedLoad button { background:#1e3d59; color:#fff; border:0; border-radius:8px; padding:6px 16px; font-weight:700; cursor:pointer; }
+  .hbel-spin { width:30px; height:30px; border-radius:50%; border:3px solid #e3e9f0; border-top-color:#e0b043; animation:hbelS 1s linear infinite; }
+  @keyframes hbelS { to { transform:rotate(360deg); } }
 </style>
 </head>''')
     out['HB_App.html'] = app
