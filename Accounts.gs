@@ -27,7 +27,7 @@ var GL_SHEETS_ = {
   batches:  { name: 'GL_Batches',  headers: ['رقم الدفعة', 'النوع', 'الوصف', 'عدد القيود', 'الحالة', 'أنشئ بواسطة', 'أنشئ في'] },
   // (V4.208) ربط برنامج حجوزات الفنادق: خريطة الأسماء، ومراجعة الدفعات (الحساب النقدي والعملة الفعلية)، وربط الحجوزات بالرحلات
   hbmap:    { name: 'GL_HB_Map',   headers: ['الاسم', 'النوع', 'كود الحساب', 'الربط', 'ملاحظات', 'بواسطة', 'في'] },
-  hbpay:    { name: 'GL_HB_Pay',   headers: ['معرّف الدفعة', 'الحساب النقدي', 'العملة', 'المبلغ بالعملة', 'سعر الصرف', 'بواسطة', 'في', 'حساب الطرف'] },
+  hbpay:    { name: 'GL_HB_Pay',   headers: ['معرّف الدفعة', 'الحساب النقدي', 'العملة', 'المبلغ بالعملة', 'سعر الصرف', 'بواسطة', 'في', 'حساب الطرف', 'ربط يدوي (دفعة مرتبطة)'] },
   hbtrip:   { name: 'GL_HB_Trip',  headers: ['مفتاح الحجز', 'الرحلة', 'بواسطة', 'في'] },
   // (V4.227) قيود الحجوزات التلقائية المستبدَلة بقيد الـ ERP المطابق (اختيار «اعتماد الـ ERP») — لا يُعاد إنشاؤها بالمزامنة
   hbkeep:   { name: 'GL_HB_KeepERP', headers: ['مفتاح القيد التلقائي', 'قيد الـ ERP المعتمد', 'بيان قيد الحجوزات المحذوف', 'بواسطة', 'في'] },
@@ -3740,9 +3740,12 @@ function _glHbMap_() {
 }
 function _glHbPayRev_() {
   var o = {};
-  _glRowsW_('hbpay').forEach(function (r) { var id = _glStr_(r[0]); if (id) o[id] = { cash: _glStr_(r[1]), cur: _glStr_(r[2]) ? _glCur_(r[2]) : '', amount: _glNum_(r[3]), rate: _glNum_(r[4]), by: _glStr_(r[5]), at: _glStr_(r[6]), party: _glStr_(r[7]) }; });
+  _glRowsW_('hbpay').forEach(function (r) { var id = _glStr_(r[0]); if (id) o[id] = { cash: _glStr_(r[1]), cur: _glStr_(r[2]) ? _glCur_(r[2]) : '', amount: _glNum_(r[3]), rate: _glNum_(r[4]), by: _glStr_(r[5]), at: _glStr_(r[6]), party: _glStr_(r[7]), linkGroup: _glStr_(r[8]) }; });
   return o;
 }
+// 🔗 (V4.239) مفتاح التجميع الفعلي لدفعة: رقم الربط من برنامج الحجوزات نفسه، وإلا رابط يدوي مُسجَّل هنا (شاشة مراجعة
+// الدفعات) — فيُقيَّد الطرفان بقيد واحد مباشر (بلا مرور على أي حساب نقدي) تماماً كالدفعة المرتبطة من المصدر
+function _glHbLinkOf_(p, rev) { return p.linkId || ((rev[p.id] || {}).linkGroup) || ''; }
 function _glHbTripOv_() { var o = {}; _glRows_('hbtrip').forEach(function (r) { var k = _glStr_(r[0]); if (k) o[k] = _glStr_(r[1]); }); return o; }
 // كل الأطراف بمجاميعها ورصيدها بمنطق كشف الحساب ببرنامج الحجوزات (موجب = مدين/مستحق على الطرف)
 function _glHbParties_(H) {
@@ -3931,7 +3934,7 @@ function _glHbBuild_(roles, warn, party) {
   });
   // الدفعات: المرتبطة تُجمع بقيد واحد، والباقي مقابل الحساب النقدي المراجَع
   var groups = {}, singles = [];
-  H.pays.forEach(function (p) { if (p.linkId) (groups[p.linkId] = groups[p.linkId] || []).push(p); else singles.push(p); });
+  H.pays.forEach(function (p) { var lg = _glHbLinkOf_(p, rev); if (lg) (groups[lg] = groups[lg] || []).push(p); else singles.push(p); });
   Object.keys(groups).forEach(function (g) { if (groups[g].length < 2) { singles = singles.concat(groups[g]); delete groups[g]; } });
   var partyLine = function (p, m) {
     var delta = GL_HB_CREDIT_DIRS_[p.dir] ? -p.amount : p.amount, amt = _glR2_(Math.abs(delta));
@@ -4274,7 +4277,7 @@ function _glHbRevFromErp_(list, user) {
     rev[x.payId] = { cash: cash, cur: c.cur, amount: c.cur === 'SAR' ? '' : c.amt, rate: '', by: user + ' (من الـ ERP)', at: now, party: old.party || '' };
     done.push(x.payId);
   });
-  if (done.length) _glHbWriteAll_('hbpay', Object.keys(rev).map(function (id) { var r = rev[id]; return [id, r.cash, r.cur, r.amount || '', r.rate || '', r.by, r.at, r.party || '']; }));
+  if (done.length) _glHbWriteAll_('hbpay', Object.keys(rev).map(function (id) { var r = rev[id]; return [id, r.cash, r.cur, r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
   return done;
 }
 /* 🩹 (V4.226) تصحيح دفعات الحجوزات التي حُذف قيد الـ ERP المقابل لها سابقاً وسُجِّل جنيهها بالتقدير:
@@ -4424,8 +4427,9 @@ function glHbState(authToken) {
   }).sort(function (a, b) { return (a.map ? 1 : 0) - (b.map ? 1 : 0) || (b.asClient + b.asSup + b.pays) - (a.asClient + a.asSup + a.pays); });
   var cands = _glHbCashCands_();
   res.pays = H.pays.map(function (p) {
-    var e = ents['AUTO:HBP:' + p.id] || (p.linkId ? ents['AUTO:HBL:' + p.linkId] : null);
-    return { id: p.id, date: p.date, party: p.party, dir: p.dir, amount: p.amount, note: p.note, qaid: p.qaid, linkId: p.linkId,
+    var lg = _glHbLinkOf_(p, rev), manual = !p.linkId && !!lg;
+    var e = ents['AUTO:HBP:' + p.id] || (lg ? ents['AUTO:HBL:' + lg] : null);
+    return { id: p.id, date: p.date, party: p.party, dir: p.dir, amount: p.amount, note: p.note, qaid: p.qaid, linkId: lg, manualLink: manual,
       rev: rev[p.id] || p.meta || null, sug: _glHbPaySuggest_(p, cands, roles), entry: e ? e.id : '',
       pcode: (function () { var m = map[_glHbKey_(p.party)]; return m ? (m.type === 'رحلة' ? ((roles.hb_trip || {}).code || roles.hb_trip || '') : m.code) : ''; })(), party2: (rev[p.id] || {}).party || '' };
   }).sort(function (a, b) { return _glDKey_(b.date).localeCompare(_glDKey_(a.date)); });
@@ -4509,10 +4513,37 @@ function glHbSavePay(authToken, rows) {
       if (a && a.currency && a.currency !== cur) throw new Error('عملة الحساب «' + a.name + '» هي ' + a.currency);
       rev[id] = { cash: _glStr_(x.cash), cur: cur, amount: _glR2_(_glNum_(x.amount)), rate: _glNum_(x.rate), by: session.username, at: now, party: party }; n++;
     });
-    _glHbWriteAll_('hbpay', Object.keys(rev).map(function (id) { var r = rev[id]; return [id, r.cash, r.cur, r.amount || '', r.rate || '', r.by, r.at, r.party || '']; }));
+    _glHbWriteAll_('hbpay', Object.keys(rev).map(function (id) { var r = rev[id]; return [id, r.cash, r.cur, r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
     logChange_(session.username, 'مراجعة دفعات برنامج الحجوزات', 'GL:hb', '-', '-', n + ' دفعة');
     return { success: true, saved: n };
   } finally { lock.releaseLock(); }
+}
+// 🔗 (V4.239) ربط دفعتين (أو أكثر) من برنامج الحجوزات يدوياً كـ«دفعة مرتبطة»: تحويل مباشر بين الطرفين بلا مرور
+// على أي حساب نقدي — لحالة دفعتين منفصلتين بسجل الدفعات (برنامج الحجوزات لا يدعم ربطهما هناك) تمثلان نفس التحويل
+// الواحد فعلياً (مثلاً: استلمنا من مورد أ + دفعنا لمورد ب بنفس المبلغ تقريباً = تحويل مباشر بينهما)
+function glHbLinkPays(authToken, ids) {
+  var session = _glPerm_(authToken, 'edit');
+  ids = (ids || []).map(_glStr_).filter(String);
+  if (ids.length < 2) throw new Error('اختر دفعتين على الأقل');
+  var H = _glHbRead_(), rev = _glHbPayRev_(), by = {}; H.pays.forEach(function (p) { by[p.id] = p; });
+  ids.forEach(function (id) {
+    var p = by[id]; if (!p) throw new Error('الدفعة ' + id + ' غير موجودة');
+    if (_glHbLinkOf_(p, rev)) throw new Error('الدفعة ' + id + ' مرتبطة بالفعل');
+  });
+  var key = 'm' + Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+  ids.forEach(function (id) { rev[id] = Object.assign({}, rev[id] || {}, { by: session.username, at: _glNow_(), linkGroup: key }); });
+  _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
+  logChange_(session.username, 'ربط دفعات برنامج الحجوزات يدوياً', 'GL:hb', '-', '-', ids.length + ' دفعة — ' + ids.join('، '));
+  return { success: true, key: key, n: ids.length };
+}
+function glHbUnlinkPay(authToken, id) {
+  var session = _glPerm_(authToken, 'edit');
+  id = _glStr_(id); var rev = _glHbPayRev_();
+  if (!rev[id] || !rev[id].linkGroup) throw new Error('الدفعة غير مرتبطة يدوياً');
+  rev[id].linkGroup = ''; rev[id].by = session.username; rev[id].at = _glNow_();
+  _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
+  logChange_(session.username, 'فك ربط دفعة برنامج حجوزات', 'GL:hb', '-', '-', id);
+  return { success: true };
 }
 // تحديد رحلة حجز يدوياً: trip='' يعيد التلقائي، '-' بلا رحلة
 function glHbSaveTrip(authToken, rows) {
