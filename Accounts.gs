@@ -47,7 +47,7 @@ var GL_TYPES_ = {
 };
 var GL_CURRENCIES_ = ['EGP', 'SAR', 'USD'];
 var GL_ST_DRAFT_ = 'مسودة', GL_ST_POSTED_ = 'مرحّل', GL_ST_VOID_ = 'ملغى';
-var GL_ENTRY_TYPES_ = ['قيد يومية', 'سند قبض', 'سند صرف', 'صرف عهدة', 'تسوية عهدة', 'تحويل نقدية', 'تحويل عملة', 'قيد افتتاحي', 'قيد مستورد', 'قيد تلقائي', 'قيد إقفال'];
+var GL_ENTRY_TYPES_ = ['قيد يومية', 'سند قبض', 'سند صرف', 'إيداع بنكي', 'سحب بنكي', 'صرف عهدة', 'تسوية عهدة', 'تحويل نقدية', 'تحويل عملة', 'قيد افتتاحي', 'قيد مستورد', 'قيد تلقائي', 'قيد إقفال'];
 // (V4.207) أنواع يولّدها النظام وحده — لا تُختار بقيد يدوي
 var GL_SYS_TYPES_ = ['قيد تلقائي', 'قيد إقفال'];
 // الفئة (kind) تحدد سلوك الحساب بالشاشات: خزينة/بنك/عهدة تظهر بلوحة الأرصدة، عميل/وكيل تُربط بكيانات البرنامج
@@ -2891,8 +2891,9 @@ function _glSyncVoucherPays_(entryId, user) {
   try {
     entryId = _glStr_(entryId); if (!entryId) return;
     var tag = '⟦src:gl-' + entryId + '⟧', want = [], f = _glFindEntry_(entryId);
-    if (f && _glStr_(f.r[5]) === GL_ST_POSTED_ && (_glStr_(f.r[3]) === 'سند قبض' || _glStr_(f.r[3]) === 'سند صرف')) {
-      var e = _glEntryFull_(entryId), accs = _glAccounts_().map, isRec = e.type === 'سند قبض';
+    // (V4.240) إيداع/سحب البنك مثل سند القبض/الصرف بالنسبة لدفعات العملاء (بلا رقم إيصال)
+    if (f && _glStr_(f.r[5]) === GL_ST_POSTED_ && /^(سند قبض|سند صرف|إيداع بنكي|سحب بنكي)$/.test(_glStr_(f.r[3]))) {
+      var e = _glEntryFull_(entryId), accs = _glAccounts_().map, isRec = e.type === 'سند قبض' || e.type === 'إيداع بنكي';
       var tripsOf = {};
       try { var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS); if (iSh.getLastRow() > 1) iSh.getRange(2, 2, iSh.getLastRow() - 1, 2).getValues().forEach(function (r) { tripsOf[_glStr_(r[0]) + '|' + _glStr_(r[1])] = 1; }); } catch (e1) {}
       e.lines.forEach(function (l) {

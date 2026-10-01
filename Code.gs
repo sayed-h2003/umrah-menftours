@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.239";
+var APP_VERSION = "4.240";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22308,6 +22308,29 @@ function getMfHousingForSelectedPilgrims(authToken, tripName, selectedKeys) {
 }
 
 /* ---------- حفظ ملف مراجعة (إضافة/تعديل) ---------- */
+// 📅 (V4.240) فحص منطقية تواريخ السفر والسكن بملف الوزارة — يمنع الحفظ حتى تُصحَّح:
+// العودة بعد السفر · كل دخول/خروج سكن داخل فترة السفر→العودة · الخروج بعد الدخول بكل مدينة · لا تداخل بين المدينتين
+function _mfDatesIssues_(f) {
+  var k = function (d) { var m = String(d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? m[3] + m[2] + m[1] : ''; };
+  var go = k(f.goDate), ret = k(f.retDate), out = [];
+  if (go && ret && ret < go) out.push('تاريخ العودة (' + f.retDate + ') قبل تاريخ السفر (' + f.goDate + ')');
+  var cities = [['المدينة', f.madinahIn, f.madinahOut], ['مكة', f.makkahIn, f.makkahOut]], iv = [];
+  cities.forEach(function (c) {
+    var a = k(c[1]), b = k(c[2]);
+    if (!a && !b) return;
+    if (a && !b) { out.push('أدخل تاريخ الخروج من ' + c[0]); return; }
+    if (b && !a) { out.push('أدخل تاريخ الدخول إلى ' + c[0]); return; }
+    if (b <= a) out.push('تاريخ الخروج من ' + c[0] + ' (' + c[2] + ') يجب أن يكون بعد تاريخ الدخول (' + c[1] + ')');
+    if (go && a < go) out.push('دخول ' + c[0] + ' (' + c[1] + ') قبل تاريخ السفر (' + f.goDate + ')');
+    if (ret && b > ret) out.push('خروج ' + c[0] + ' (' + c[2] + ') بعد تاريخ العودة (' + f.retDate + ')');
+    if (ret && a > ret) out.push('دخول ' + c[0] + ' (' + c[1] + ') بعد تاريخ العودة (' + f.retDate + ')');
+    if (go && b < go) out.push('خروج ' + c[0] + ' (' + c[2] + ') قبل تاريخ السفر (' + f.goDate + ')');
+    if (b > a) iv.push([a, b, c[0]]);
+  });
+  // يوم الانتقال نفسه مسموح (الخروج من مدينة والدخول للأخرى بنفس اليوم)
+  if (iv.length === 2 && iv[0][0] < iv[1][1] && iv[1][0] < iv[0][1]) out.push('تعارض بين فترتي السكن: المدينة ومكة متداخلتان — الدخول لإحداهما يجب أن يكون في يوم الخروج من الأخرى أو بعده');
+  return out;
+}
 function saveMinistryFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _mfPerm_(authToken, isNew ? 'add' : 'edit');
@@ -22373,6 +22396,8 @@ function saveMinistryFile(authToken, data) {
       updatedBy: session.username, updatedAt: _mfStamp_()
     };
 
+    var _dIss = _mfDatesIssues_(f);
+    if (_dIss.length) return { success: false, error: '📅 صحّح التواريخ قبل الحفظ:\n• ' + _dIss.join('\n• '), dateIssues: _dIss };
     // نوع المراجعة التلقائي (جمعة/سبت أو أقل من 3 أيام) — ما لم يُثبّته الموظف يدوياً
     if (!data._manualType) f.reviewType = _mfAutoReviewType_(f.reviewDate, f.goDate, f.reviewType);
     // 🎯 (V4.178) نوع الملف التلقائي: «فردي» لو لا مشرف حقيقي (المشرف = الوكيل نفسه أو نص «الوكيل
@@ -24940,7 +24965,7 @@ function saveAgentAccItem(authToken, item) {
   } else { sh.getRange(sh.getLastRow() + 1, 1, 1, VZ_ITEMS_HEADERS.length).setNumberFormat('@').setValues([rowVals]); id = rowVals[0]; }
   // 📜 (V4.144) سجل التعديلات لكل بند مستقل عن باقي بنود نفس الوكيل — بمفتاح البند نفسه
   logChange_(session.username, isEdit ? 'تعديل بند حساب وكيل' : 'إضافة بند حساب وكيل', 'AI:' + id, _mfStr_(item.desc),
-    '-', _accNum_(item.value) + ' ' + (item.currency || 'SAR') + (item.isCredit ? ' (دائن)' : ' (مدين)'));
+    '-', _accNum_(item.value) + ' ' + (item.currency || 'SAR') + (item.isCredit ? ' (مدين)' : ' (دائن)'));
   _vzClearCache_();
   return { success: true };
 }
@@ -25068,7 +25093,7 @@ function saveAgentAccItemsBatch(authToken, agent, isCredit, rows) {
     out.push([id, agent, _mfStr_(r.desc), 'SAR', _accNum_(r.value), isCredit ? 'نعم' : 'لا', '', 0, session.username, now, _mfStr_(r.entryNo),
       _mfDate_(r.date) || _mfToday_()]);   // (V4.216) تاريخ السطر الملصق
     entries.push({ action: 'إضافة بند حساب وكيل (لصق بنود)', recordId: 'AI:' + id,
-      field: _mfStr_(r.desc), oldVal: '-', newVal: _accNum_(r.value) + ' ريال' + (isCredit ? ' (دائن)' : ' (مدين)') });
+      field: _mfStr_(r.desc), oldVal: '-', newVal: _accNum_(r.value) + ' ريال' + (isCredit ? ' (مدين)' : ' (دائن)') });
   });
   var last = sh.getLastRow();
   sh.getRange(last + 1, 1, out.length, VZ_ITEMS_HEADERS.length).setNumberFormat('@').setValues(out);
