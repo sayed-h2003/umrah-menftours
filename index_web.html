@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.244 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.245 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.244)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.245)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.244</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.245</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7621,7 +7621,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.244";
+var CLIENT_APP_VERSION = "4.245";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -47122,10 +47122,17 @@ function glLoadStmt(keep) {
   var box = document.getElementById('glStBox'); if (!box) return;
   var ov = document.createElement('div'); ov.className = 'gl-stload'; ov.innerHTML = '⏳ جارٍ تجهيز الكشف…';
   if (box.firstChild) box.firstChild.appendChild(ov); else box.innerHTML = '<div class="text-center text-muted py-5">⏳ جارٍ تجهيز الكشف…</div>';
-  glRun('glStatement', [code, GL._sFrom || '', GL._sTo || ''], function (res) {
-    if (code !== GL._stCode) return;
+  // ⚡ (V4.245) الكشف يُقرأ لهذا الحساب وحده ويظهر فوراً، وبيانات الحجوزات (الفندق/التواريخ/الحجوزات بلا سعر) تُكمَّل بنداء ثانٍ
+  var reqId = GL._stReq = (GL._stReq || 0) + 1, from = GL._sFrom || '', to = GL._sTo || '';
+  glRun('glStatement', [code, from, to, { fast: true }], function (res) {
+    if (code !== GL._stCode || reqId !== GL._stReq) return;
     GL._st = res; glDrawStmt();
-  }, function (e) { box.innerHTML = '<div class="text-danger text-center py-4">' + glEsc(e.message || e) + '</div>'; });
+    if (res.hbLater) glRun('glStatementHb', [code, from, to], function (h) {
+      if (GL._st !== res) return;
+      res.rows.forEach(function (x) { if (x.hbKey && h.byKey[x.hbKey]) x.hb = h.byKey[x.hbKey]; });
+      res.unpriced = h.unpriced || []; res.hbLater = false; glDrawStmt();
+    }, function () {});
+  }, function (e) { if (reqId === GL._stReq) box.innerHTML = '<div class="text-danger text-center py-4">' + glEsc(e.message || e) + '</div>'; });
 }
 // العملات الظاهرة: الافتراضي = عملات الحركات الفعلية للحساب، مع اختيار متعدد (لا يُحفظ بين الحسابات)
 function glStOpts_(res) {
@@ -48765,318 +48772,64 @@ function glRenderHotels() {
   ({ setup: glHbSetupView, hpay: glHbHpayView, map: glHbMapView, pays: glHbPaysView, trips: glHbTripsView, housing: glHbHousingView, charters: glHbChartersView, rec: glHbRecView }[sub] || glHbSetupView)();
 }
 /* ============================================================================
-   🏨 (V4.242 — دمج برنامج الحجوزات، المرحلة 2) الفنادق داخل البرنامج: الحجوزات · الوصول والأرصدة · بيان الأرصدة
-   الشاشات تستدعي دوال برنامج الحجوزات نفسها (نفس الحسابات والسجل والتنبيهات والصلاحيات) بجلسة حجوزات تُصدَر
-   لنفس المستخدم (hbBridgeSession). الإضافة/التعديل تكتب في شيت الحجوزات مباشرة ثم يتحدّث قيد الحجز بالحسابات.
+   🏨 (V4.245 — دمج برنامج الحجوزات، المرحلة 2) «الفنادق والحجوزات» داخل البرنامج: برنامج الحجوزات نفسه مضمَّناً
+   في الصفحة (نفس ملفات HB_* بنفس المشروع) — فتبقى كل الشاشات والأزرار والفلاتر والوظائف مطابقة حرفياً
+   (متابعة الأرصدة بملخصها وطباعتها، كل الحجوزات بتخصيص الأعمدة وتحجيمها ونقلها وتصفية رؤوسها وحالاتها المخصصة…).
+   الدخول موحّد برمز لمرة واحدة، وشريط تنقّل برنامج الحجوزات مخفي — التنقّل من التبويبات هنا (postMessage).
    ============================================================================ */
-var HBX = { tok: '', user: null, cities: ['مكة', 'المدينة'], tab: 'book', f: null, rows: null, total: 0, stats: null, sort: { k: 'ci', d: 1 }, q: '', statuses: [] };
-var HBX_LV_ = { none: 0, view: 1, add: 2, edit: 3, delete: 4 };
-function hbxCan(screen, lv) { var u = HBX.user; if (!u) return false; if (u.admin) return true; return (HBX_LV_[(u.permissions || {})[screen]] || 0) >= HBX_LV_[lv]; }
-function hbxIso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
-function hbxDisp(iso) { var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : (iso || ''); }
-function hbxToIso(v) { var s = String(v || ''), m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? m[3] + '-' + m[2] + '-' + m[1] : s.slice(0, 10); }
-function hbxNum(v) { return v == null || v === '' ? '' : glFmt(v); }
-function hbxDefFilter() { var d = new Date(); d.setDate(d.getDate() - 7); return { excludeCancelled: true, checkInFrom: hbxIso(d) }; }
-// نداء دالة ببرنامج الحجوزات: «$T» = رمز جلسة الحجوزات — تُصدَر عند أول نداء وتتجدّد تلقائياً لو انتهت
-function hbxCall(fn, args, ok, fail, retried) {
-  var err = function (m) { if (fail) fail({ message: m }); else _showPopup(m, 'error'); };
-  var again = function (m) { if (!retried && /الجلسة/.test(m || '')) { HBX.tok = ''; hbxCall(fn, args, ok, fail, true); return true; } return false; };
-  var go = function () {
-    var r = google.script.run.withSuccessHandler(function (res) {
-      if (res && res.error && !res.ok) { if (!again(res.error)) err(res.error); return; }
-      ok(res);
-    }).withFailureHandler(function (e) { var m = (e && e.message) || String(e); if (!again(m)) err(m); });
-    r[fn].apply(r, (args || []).map(function (a) { return a === '$T' ? HBX.tok : a; }));
-  };
-  if (HBX.tok) return go();
-  google.script.run.withSuccessHandler(function (s) { HBX.tok = s.token; HBX.user = s.user; HBX.cities = s.cities || HBX.cities; go(); })
-    .withFailureHandler(function (e) {
-      var m = (e && e.message) || String(e);
-      if (/hbBridgeSession|is not a function|not found|غير موجود/i.test(m)) m = 'شاشات الفنادق تحتاج أولاً تركيب ملفات برنامج الحجوزات داخل مشروع برنامج العمرة (خطوة H4 بدليل التركيب). حتى ذلك الحين استخدم برنامج الحجوزات الحالي.';
-      err(m);
-    }).hbBridgeSession(window.authToken);
-}
-function hbxGlRefresh() { try { google.script.run.withSuccessHandler(function (r) { if (r && r.pending) _showPopup('🕒 تعديل حجز مقيَّد ينتظر الاعتماد بالحسابات العامة (' + r.pending + ')', 'info'); }).withFailureHandler(function () {}).hbBridgeGlRefresh(window.authToken); } catch (e) {} }
-
+var HBX_PAGES_ = [['arrivals', 'متابعة الأرصدة'], ['statement', 'كشف حساب'], ['bookings', 'كل الحجوزات'], ['payments', 'كل المدفوعات'], ['statsReport', '📊 الإحصائيات'],
+  ['clientPortal', '🔗 بوابة العملاء'], ['changelog', '📜 سجل التعديلات'], ['users', '👤 المستخدمون'], ['settings', '⚙ الإعدادات']];
+var HBX = { page: '', frame: null, loading: false };
 function hbxInit() {
   var root = document.getElementById('hbxRoot'); if (!root) return;
-  if (!HBX.f) HBX.f = hbxDefFilter();
-  root.innerHTML = '<div class="gl-head"><h5>🏨 الفنادق</h5><small style="opacity:.8;">الحجوزات والوصول والأرصدة — من شيت الحجوزات مباشرة</small><span style="flex:1;"></span>' +
-    '<div class="d-flex gap-1 flex-wrap" id="hbxTabs"></div></div><div id="hbxBody" class="mt-2"><div class="gl-card text-muted">⏳ جارٍ الاتصال ببرنامج الحجوزات…</div></div>';
-  hbxCall('getDistinctBookingStatuses', ['$T'], function (st) { HBX.statuses = st || []; hbxTabs(); hbxShow(HBX.tab); },
-    function (e) { document.getElementById('hbxBody').innerHTML = '<div class="gl-card" style="color:#b91c1c;">⚠️ ' + glEsc(e.message) + '</div>'; });
+  if (!HBX.page) { try { HBX.page = localStorage.getItem('hbx_page') || ''; } catch (e) {} HBX.page = HBX.page || 'arrivals'; }
+  if (!document.getElementById('hbxTabs')) {
+    root.innerHTML = '<div class="gl-head" style="padding:6px 10px;"><h5 style="font-size:15px;">🏨 الفنادق والحجوزات</h5><span style="flex:1;"></span>' +
+      '<div class="d-flex gap-1 flex-wrap" id="hbxTabs"></div></div><div id="hbxWrap" class="mt-1" style="position:relative;"></div>';
+    if (!window._hbxMsg) { window._hbxMsg = 1; window.addEventListener('message', function (ev) { var d = ev && ev.data; if (d && d.hbPage) { HBX.page = String(d.hbPage); hbxTabs(); } }); }
+    window.addEventListener('resize', hbxSize);
+  }
+  hbxTabs();
+  if (!HBX.frame) hbxLoad();
+  hbxSize();
 }
 function hbxTabs() {
-  var T = [['book', '📋 الحجوزات', hbxCan('bookings', 'view')], ['arr', '🛬 الوصول والأرصدة', hbxCan('arrivals', 'view')], ['bal', '⚖️ بيان الأرصدة بتاريخ', hbxCan('balancesReport', 'view')],
-    ['pay', '💳 الدفعات', hasPermission('admin') || hasPermission('gl.view')]];
-  if (!T.some(function (t) { return t[0] === HBX.tab && t[2]; })) HBX.tab = (T.filter(function (t) { return t[2]; })[0] || T[0])[0];
-  document.getElementById('hbxTabs').innerHTML = T.filter(function (t) { return t[2]; }).map(function (t) {
-    return '<button class="btn btn-sm ' + (HBX.tab === t[0] ? 'btn-warning fw-bold' : 'btn-outline-light') + '" onclick="hbxShow(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') +
-    '<button class="btn btn-sm btn-outline-light" title="الإحصائيات، البوابة، المستخدمون، البوت… (تنتقل في المراحل التالية)" onclick="openHotelsApp_()">↗ برنامج الحجوزات الكامل</button>';
+  var el = document.getElementById('hbxTabs'); if (!el) return;
+  el.innerHTML = HBX_PAGES_.map(function (t) {
+    return '<button class="btn btn-sm ' + (HBX.page === t[0] ? 'btn-warning fw-bold' : 'btn-outline-light') + '" onclick="hbxShow(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') +
+    ((hasPermission('admin') || hasPermission('gl.view')) ? '<button class="btn btn-sm btn-success fw-bold" title="تسجيل دفعة فندق (الحسابات العامة) — الدفعات من البرنامج الرئيسي فقط" onclick="hbxPay()">💳 تسجيل دفعة</button>' : '') +
+    '<button class="btn btn-sm btn-outline-light" title="إعادة تحميل برنامج الحجوزات" onclick="hbxLoad()">↻</button>' +
+    '<button class="btn btn-sm btn-outline-light" title="فتح برنامج الحجوزات في نافذة مستقلة" onclick="openHotelsApp_()">↗</button>';
 }
-function hbxShow(t) {
-  HBX.tab = t; if (document.getElementById('hbxTabs')) hbxTabs();
-  if (t === 'pay') { if (typeof GL !== 'undefined') GL._hbSub = 'hpay'; switchPage('gl'); setTimeout(function () { try { glTab('hotels'); } catch (e) {} }, 50); return; }
-  ({ book: hbxBookView, arr: hbxArrView, bal: hbxBalView }[t] || hbxBookView)();
+function hbxShow(key) {
+  HBX.page = key; try { localStorage.setItem('hbx_page', key); } catch (e) {}
+  hbxTabs();
+  if (HBX.frame && HBX.frame.contentWindow) HBX.frame.contentWindow.postMessage({ hbShow: key }, '*'); else hbxLoad();
 }
-
-/* ---------------- 📋 الحجوزات ---------------- */
-var HBX_CARDS_ = [['todayCount', 'وصول اليوم', '#1d4ed8'], ['tomorrowCount', 'وصول غداً', '#0e7490'], ['missingSale', 'بلا سعر بيع', '#b45309'],
-  ['missingSupplier', 'بلا مورد', '#b45309'], ['missingHotel', 'بلا فندق', '#b45309'], ['qaidEdit', 'عُدّل بعد القيد', '#b91c1c']];
-var HBX_FL_ = { client: 'العميل', hotel: 'الفندق', supplier: 'المورد', innerRef: 'رقم الحجز', hotelRef: 'رقم الفندق', city: 'المدينة', checkInFrom: 'دخول من', checkInTo: 'دخول إلى',
-  noSale: 'بلا سعر بيع', noSupplier: 'بلا مورد', noHotel: 'بلا فندق', qaidEdit: 'عُدّل بعد القيد', includeIncomplete: '+ الناقصة', allStatus: 'كل الحالات' };
-function hbxBookView() {
-  var f = HBX.f, E = glEsc, inp = function (k, ph, w) { return '<input id="hbxF_' + k + '" class="form-control form-control-sm" style="width:' + (w || 140) + 'px;" placeholder="' + ph + '" value="' + E(f[k] || '') + '" onkeydown="if(event.key===\'Enter\')hbxSearch()">'; };
-  var dt = function (k, lbl) { return '<label class="small text-muted">' + lbl + ' <input type="date" id="hbxF_' + k + '" class="form-control form-control-sm d-inline-block" style="width:140px;" value="' + E(f[k] || '') + '"></label>'; };
-  document.getElementById('hbxBody').innerHTML =
-    '<div class="gl-kpis" id="hbxCards" style="grid-template-columns:repeat(6,1fr);"></div>' +
-    '<div class="gl-card"><div class="d-flex gap-2 flex-wrap align-items-center">' + inp('client', 'العميل') + inp('hotel', 'الفندق') + inp('supplier', 'المورد') + inp('innerRef', 'رقم الحجز', 110) + inp('hotelRef', 'رقم الفندق', 110) +
-      '<select id="hbxF_city" class="form-select form-select-sm" style="width:110px;"><option value="">كل المدن</option>' + HBX.cities.map(function (c) { return '<option' + (f.city === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select>' +
-      '<select id="hbxF_st" class="form-select form-select-sm" style="width:150px;"><option value="">بدون الملغي</option><option value="*"' + (f.allStatus ? ' selected' : '') + '>كل الحالات</option>' +
-        HBX.statuses.map(function (s) { return '<option value="' + E(s) + '"' + ((f.statuses || [])[0] === s ? ' selected' : '') + '>' + E(s) + '</option>'; }).join('') + '</select>' +
-      dt('checkInFrom', 'دخول من') + dt('checkInTo', 'إلى') +
-      '<label class="small"><input type="checkbox" id="hbxF_inc"' + (f.includeIncomplete ? ' checked' : '') + '> + الناقصة خارج الفترة</label>' +
-      '<button class="btn btn-primary btn-sm fw-bold" onclick="hbxSearch()">🔎 بحث</button><button class="btn btn-outline-secondary btn-sm" onclick="HBX.f=hbxDefFilter();hbxBookView()">مسح</button>' +
-      (hbxCan('bookings', 'add') ? '<button class="btn btn-success btn-sm fw-bold ms-auto" onclick="hbxEdit(\'\')">➕ حجز جديد</button>' : '') + '</div>' +
-      '<div id="hbxChips" class="d-flex gap-1 flex-wrap mt-1"></div></div>' +
-    '<div class="gl-card mt-2"><div class="d-flex align-items-center gap-2 mb-1"><b id="hbxCount"></b><input class="form-control form-control-sm" style="max-width:260px;" placeholder="🔎 بحث سريع داخل النتائج" value="' + E(HBX.q) + '" oninput="HBX.q=this.value;hbxDraw()">' +
-      '<button class="btn btn-outline-secondary btn-sm ms-auto" onclick="hbxPrint(\'hbxTblWrap\',\'الحجوزات\')">🖨️ طباعة</button></div><div id="hbxTblWrap"><div class="text-muted small">⏳</div></div></div>';
-  hbxCall('getBookingsQuickStats', ['$T'], function (s) {
-    HBX.stats = s || {}; var el = document.getElementById('hbxCards'); if (!el) return;
-    el.innerHTML = HBX_CARDS_.map(function (c) { return '<div style="cursor:pointer;" onclick="hbxCard(\'' + c[0] + '\')"><b class="gl-latin" style="color:' + c[2] + ';">' + (s[c[0]] || 0) + '</b><small>' + c[1] + '</small></div>'; }).join('');
-  }, function () {});
-  hbxSearch(true);
+function hbxPay() { if (typeof GL !== 'undefined') GL._hbSub = 'hpay'; switchPage('gl'); setTimeout(function () { try { glTab('hotels'); } catch (e) {} }, 60); }
+function hbxSize() {
+  var w = document.getElementById('hbxWrap'); if (!w) return;
+  var top = w.getBoundingClientRect().top; var h = Math.max(420, window.innerHeight - Math.max(0, top) - 8);
+  w.style.height = h + 'px'; if (HBX.frame) HBX.frame.style.height = h + 'px';
 }
-function hbxCard(k) {
-  var s = HBX.stats || {}, f = { excludeCancelled: true };
-  if (k === 'todayCount') { f.checkInFrom = f.checkInTo = s.todayIso; }
-  else if (k === 'tomorrowCount') { f.checkInFrom = f.checkInTo = s.tomorrowIso; }
-  else if (k === 'missingSale') { f.noSale = true; f.noQaid = true; }
-  else if (k === 'missingSupplier') f.noSupplier = true;
-  else if (k === 'missingHotel') f.noHotel = true;
-  else if (k === 'qaidEdit') f.qaidEdit = true;
-  HBX.f = f; hbxBookView();
-}
-function hbxReadFilter() {
-  var f = {}, v = function (k) { var el = document.getElementById('hbxF_' + k); return el ? el.value.trim() : ''; };
-  ['client', 'hotel', 'supplier', 'innerRef', 'hotelRef', 'city', 'checkInFrom', 'checkInTo'].forEach(function (k) { if (v(k)) f[k] = v(k); });
-  var st = v('st'); if (st === '*') f.allStatus = true; else if (st) f.statuses = [st]; else f.excludeCancelled = true;
-  if ((document.getElementById('hbxF_inc') || {}).checked) f.includeIncomplete = true;
-  ['noSale', 'noSupplier', 'noHotel', 'qaidEdit', 'noQaid'].forEach(function (k) { if (HBX.f && HBX.f[k]) f[k] = true; });
-  return f;
-}
-function hbxSearch(keep) {
-  if (!keep) HBX.f = hbxReadFilter();
-  var f = HBX.f, wrap = document.getElementById('hbxTblWrap'); if (wrap) wrap.innerHTML = '<div class="text-muted small">⏳ جارٍ البحث…</div>';
-  hbxChips();
-  var q = Object.assign({}, f); delete q.allStatus;
-  hbxCall('searchBookings', [q, '$T'], function (res) { HBX.rows = res.rows || []; HBX.total = res.total || HBX.rows.length; hbxDraw(); },
-    function (e) { if (wrap) wrap.innerHTML = '<div class="text-danger small">' + glEsc(e.message) + '</div>'; });
-}
-function hbxChips() {
-  var el = document.getElementById('hbxChips'); if (!el) return;
-  var f = HBX.f, ks = Object.keys(f).filter(function (k) { return k !== 'excludeCancelled' && k !== 'noQaid' && f[k]; });
-  el.innerHTML = ks.length ? '<span class="small text-muted">الفلاتر المطبقة:</span>' + ks.map(function (k) {
-    var v = f[k] === true ? '' : ': ' + (k === 'statuses' ? f[k].join('، ') : /checkIn/.test(k) ? hbxDisp(f[k]) : f[k]);
-    return '<span class="gl-pill">' + glEsc((HBX_FL_[k] || (k === 'statuses' ? 'الحالة' : k)) + v) + ' <a href="#" onclick="delete HBX.f[\'' + k + '\'];if(\'' + k + '\'===\'statuses\'||\'' + k + '\'===\'allStatus\')HBX.f.excludeCancelled=true;hbxBookView();return false;">✕</a></span>';
-  }).join('') + '<a href="#" class="small" onclick="HBX.f={excludeCancelled:true};hbxBookView();return false;">إلغاء كل الفلاتر</a>' : '';
-}
-var HBX_COLS_ = [['inner', 'الحجز'], ['client', 'العميل'], ['hotel', 'الفندق'], ['ci', 'الدخول'], ['co', 'الخروج'], ['nights', 'ل'], ['rooms', 'الغرف'], ['supplier', 'المورد'],
-  ['status', 'الحالة'], ['sale', 'البيع'], ['cost', 'التكلفة'], ['qaid', 'القيد']];
-function hbxRowVal(r, k) {
-  switch (k) {
-    case 'inner': return String(r.innerRef || ''); case 'ci': return hbxToIso(r.raw && r.raw[7]); case 'co': return hbxToIso(r.raw && r.raw[8]);
-    case 'rooms': return r.totalRooms || 0; case 'sale': return r.sale == null ? -1e15 : r.sale; case 'cost': return r.cost == null ? -1e15 : r.cost;
-    default: return r[k] == null ? '' : r[k];
-  }
-}
-function hbxSort(k) { HBX.sort = { k: k, d: HBX.sort.k === k ? -HBX.sort.d : 1 }; hbxDraw(); }
-function hbxDraw() {
-  var wrap = document.getElementById('hbxTblWrap'); if (!wrap || !HBX.rows) return;
-  var E = glEsc, q = (HBX.q || '').trim().toLowerCase(), S = HBX.sort, u = HBX.user || {};
-  var rows = HBX.rows.filter(function (r) { return !q || [r.innerRef, r.hotelRef, r.client, r.hotel, r.supplier, r.status, r.qaid, r.salesAgent].join(' ').toLowerCase().indexOf(q) >= 0; });
-  rows.sort(function (a, b) { var x = hbxRowVal(a, S.k), y = hbxRowVal(b, S.k); return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'ar')) * S.d; });
-  var tot = { rooms: 0, sale: 0, cost: 0 };
-  rows.forEach(function (r) { tot.rooms += r.totalRooms || 0; tot.sale += r.sale || 0; tot.cost += r.cost || 0; });
-  document.getElementById('hbxCount').textContent = rows.length + ' حجز' + (HBX.total > HBX.rows.length ? ' (من ' + HBX.total + ' — ضيّق الفلاتر لعرض الباقي)' : '');
-  var lbl = ['دابل', 'ثلاثي', 'رباعي', 'خماسي'], canEd = hbxCan('bookings', 'edit');
-  var stCol = function (s) { return s === 'لاغي' ? '#b91c1c' : /مؤكد/.test(s) ? '#166534' : '#b45309'; };
-  wrap.innerHTML = '<div class="table-responsive" style="max-height:66vh;"><table class="gl-tbl"><thead><tr>' +
-    HBX_COLS_.filter(function (c) { return (c[0] !== 'sale' || u.showSale) && (c[0] !== 'cost' || u.showCost); }).map(function (c) {
-      return '<th style="cursor:pointer;white-space:nowrap;" onclick="hbxSort(\'' + c[0] + '\')">' + c[1] + (S.k === c[0] ? (S.d > 0 ? ' ▲' : ' ▼') : '') + '</th>'; }).join('') + '<th>تنفيذ</th><th></th></tr></thead><tbody>' +
-    rows.map(function (r) {
-      var raw = r.raw || [], br = [10, 11, 12, 13].map(function (i, j) { var n = parseInt(raw[i], 10) || 0; return n ? n + ' ' + lbl[j] : ''; }).filter(Boolean).join(' + ');
-      return '<tr' + (r.status === 'لاغي' ? ' style="opacity:.55;"' : '') + '><td class="gl-latin" style="white-space:nowrap;">' + E(r.innerRef) + '<div class="small text-muted">' + E(r.city) + (r.hotelRef ? ' · ' + E(r.hotelRef) : '') + '</div></td>' +
-        '<td style="text-align:right;">' + E(r.client) + '</td><td style="text-align:right;">' + (E(r.hotel) || '<span class="text-danger small">—</span>') + '</td>' +
-        '<td class="gl-latin">' + E(raw[7]) + '</td><td class="gl-latin">' + E(raw[8]) + '</td><td class="gl-latin">' + (r.nights || '') + '</td>' +
-        '<td style="white-space:nowrap;"><b class="gl-latin">' + (r.totalRooms || 0) + '</b> <small class="text-muted">' + E(br) + '</small></td>' +
-        '<td style="text-align:right;">' + (E(r.supplier) || '<span class="text-danger small">—</span>') + '</td><td style="color:' + stCol(r.status) + ';font-weight:700;">' + E(r.status) + '</td>' +
-        (u.showSale ? '<td class="gl-latin">' + (r.hasSale ? hbxNum(r.sale) : '<span class="text-danger small">بلا سعر</span>') + '</td>' : '') +
-        (u.showCost ? '<td class="gl-latin">' + (r.hasCost ? hbxNum(r.cost) : '<span class="text-danger small">بلا سعر</span>') + '</td>' : '') +
-        '<td class="gl-latin">' + (r.qaid ? E(r.qaid) : (canEd ? '<a href="#" class="small" onclick="hbxQaid(\'' + glJs(r.key) + '\');return false;">＋ قيد</a>' : '')) + '</td>' +
-        '<td><input type="checkbox"' + (r.exec ? ' checked' : '') + (canEd ? ' onchange="hbxExec(\'' + glJs(r.key) + '\',this)"' : ' disabled') + '></td>' +
-        '<td><button class="btn btn-sm btn-link p-0" title="' + (canEd ? 'عرض / تعديل' : 'عرض') + '" onclick="hbxEdit(\'' + glJs(r.key) + '\')">' + (canEd ? '✏️' : '👁️') + '</button></td></tr>';
-    }).join('') + '</tbody><tfoot><tr style="font-weight:700;background:#f1f5f9;"><td colspan="6">الإجمالي</td><td class="gl-latin">' + tot.rooms + '</td><td colspan="2"></td>' +
-    (u.showSale ? '<td class="gl-latin">' + glFmt(tot.sale) + '</td>' : '') + (u.showCost ? '<td class="gl-latin">' + glFmt(tot.cost) + '</td>' : '') + '<td colspan="3"></td></tr></tfoot></table></div>';
-}
-function hbxRowOf(key) { return (HBX.rows || []).filter(function (r) { return r.key === key; })[0]; }
-function hbxQaid(key) {
-  var v = prompt('رقم القيد اليدوي لهذا الحجز (يُفعَّل «تنفيذ» تلقائياً):'); if (v == null || !String(v).trim()) return;
-  hbxCall('registerBookingQaid', [key, String(v).trim(), '$T'], function (r) {
-    if (r && r.ok === false) return _showPopup(r.error || 'تعذّر الحفظ', 'error');
-    var row = hbxRowOf(key); if (row) { row.qaid = String(v).trim(); row.exec = true; } hbxDraw(); _showPopup('✅ سُجّل رقم القيد', 'success');
-  });
-}
-function hbxExec(key, cb) {
-  hbxCall('setBookingExecution', [key, cb.checked, '$T'], function (r) {
-    if (r && r.ok === false) { cb.checked = !cb.checked; return _showPopup(r.error || 'تعذّر الحفظ', 'error'); }
-    var row = hbxRowOf(key); if (row) row.exec = cb.checked;
-  }, function (e) { cb.checked = !cb.checked; _showPopup(e.message, 'error'); });
-}
-// نموذج الحجز: إضافة (key فارغ) أو عرض/تعديل — رقم العمود بشيت المصدر (1 = A) لكل حقل
-var HBX_FCOL_ = { hotel: 5, checkIn: 8, checkOut: 9, doubles: 11, triples: 12, quads: 13, quints: 14, supplier: 15, status: 16, hotelRef: 18, salesAgent: 20, note: 21,
-  costDouble: 22, costTriple: 23, costQuad: 24, costQuint: 25, saleDouble: 26, saleTriple: 27, saleQuad: 28, saleQuint: 29 };
-function hbxEdit(key) {
-  if (!key) return hbxForm(null);
-  hbxCall('getBookingDetails', [key, '$T'], function (d) { if (!d) return _showPopup('لم يُعثر على الحجز (ربما تغيّر رقمه)', 'error'); hbxForm(d); });
-}
-function hbxForm(d) {
-  var isNew = !d, u = HBX.user || {}, ro = !isNew && !hbxCan('bookings', 'edit'), E = glEsc; d = d || { status: 'مطلوب', city: HBX.cities[0] };
-  HBX._edit = d;
-  var dis = ro ? ' disabled' : '';
-  var f = function (k, lbl, type, w) { return '<div class="' + (w || 'col-md-3') + '"><label class="gl-lbl">' + lbl + '</label><input id="hbxE_' + k + '" type="' + (type || 'text') + '" class="form-control form-control-sm' + (type === 'number' ? ' gl-latin' : '') + '" value="' + E(d[k] == null ? '' : d[k]) + '"' + dis + '></div>'; };
-  var names = {}; (HBX.rows || []).forEach(function (r) { if (r.client) names[r.client] = 1; if (r.supplier) names[r.supplier] = 1; });
-  var dl = '<datalist id="hbxNames">' + Object.keys(names).sort().map(function (n) { return '<option value="' + E(n) + '">'; }).join('') + '</datalist>';
-  var rooms = ['doubles', 'triples', 'quads', 'quints'], lbl = ['دابل', 'ثلاثي', 'رباعي', 'خماسي'];
-  var priceRow = function (pre, title) { return '<div class="col-12"><div class="gl-lbl mt-1">' + title + ' (لكل غرفة / ليلة — ريال)</div><div class="row g-2">' +
-    ['Double', 'Triple', 'Quad', 'Quint'].map(function (x, i) { return f(pre + x, lbl[i], 'number', 'col-3'); }).join('') + '</div></div>'; };
-  var html = dl + '<div class="row g-2">' +
-    (isNew ? '<div class="col-md-2"><label class="gl-lbl">المدينة</label><select id="hbxE_city" class="form-select form-select-sm">' + HBX.cities.map(function (c) { return '<option' + (d.city === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
-      '<div class="col-md-4"><label class="gl-lbl">العميل *</label><input id="hbxE_client" list="hbxNames" class="form-control form-control-sm"></div>'
-      : '<div class="col-12 small"><b>' + E(d.innerRef) + '</b> · ' + E(d.city) + ' · العميل: <b>' + E(d.client) + '</b>' + (d.qaid ? ' · قيد: <span class="gl-latin">' + E(d.qaid) + '</span>' : '') + '</div>') +
-    f('hotel', 'الفندق', 'text', isNew ? 'col-md-6' : 'col-md-5') + f('checkIn', 'الدخول', 'date', 'col-md-2') + f('checkOut', 'الخروج', 'date', 'col-md-2') +
-    (isNew ? '' : '<div class="col-md-1"><label class="gl-lbl">ليالي</label><div class="gl-latin pt-1">' + E(d.nights) + '</div></div>') +
-    '<div class="col-12"><div class="row g-2">' + rooms.map(function (k, i) { return f(k, 'غرف ' + lbl[i], 'number', 'col-3'); }).join('') + '</div></div>' +
-    '<div class="col-md-4"><label class="gl-lbl">المورد</label><input id="hbxE_supplier" list="hbxNames" class="form-control form-control-sm" value="' + E(d.supplier || '') + '"' + dis + '></div>' +
-    '<div class="col-md-3"><label class="gl-lbl">الحالة</label><input id="hbxE_status" list="hbxStList" class="form-control form-control-sm" value="' + E(d.status || '') + '"' + dis + '><datalist id="hbxStList">' + HBX.statuses.map(function (s) { return '<option value="' + E(s) + '">'; }).join('') + '</datalist></div>' +
-    f('hotelRef', 'رقم حجز الفندق', 'text') + f('salesAgent', 'مسئول البيع', 'text', 'col-md-2') +
-    (isNew ? f('optionDate', 'OPTION DATE', 'date') : '') +
-    (u.showSale ? priceRow('sale', '💰 سعر البيع') : '') + (u.showCost ? priceRow('cost', '🏷️ سعر التكلفة') : '') +
-    '<div class="col-12"><label class="gl-lbl">ملاحظات</label><textarea id="hbxE_note" class="form-control form-control-sm" rows="2"' + dis + '>' + E(d.note || '') + '</textarea></div>' +
-    (isNew ? '' : '<div class="col-12 small text-muted">' + (u.showSale && d.sale != null ? 'إجمالي البيع: <b class="gl-latin">' + glFmt(d.sale) + '</b> · ' : '') + (u.showCost && d.cost != null ? 'إجمالي التكلفة: <b class="gl-latin">' + glFmt(d.cost) + '</b>' : '') + '</div>') +
-    '</div><div class="d-flex gap-2 justify-content-end mt-3">' +
-    (!isNew ? '<button class="btn btn-outline-secondary btn-sm me-auto" title="تأكيد الحجز PDF والطباعة والمشاركة من برنامج الحجوزات" onclick="openHotelsApp_()">🖨️ التأكيد (برنامج الحجوزات)</button>' : '') +
-    (ro ? '' : '<button class="btn btn-success btn-sm fw-bold" onclick="hbxSave(this,false)">💾 ' + (isNew ? 'تسجيل الحجز' : 'حفظ التعديل') + '</button>') + '</div>';
-  glDlg(isNew ? '➕ حجز جديد' : (ro ? '👁️ ' : '✏️ ') + 'الحجز ' + E(d.innerRef || ''), html, 900);
-}
-function hbxSave(btn, force) {
-  var d = HBX._edit || {}, isNew = !d.key, g = function (k) { var el = document.getElementById('hbxE_' + k); return el ? el.value.trim() : undefined; };
-  btn.disabled = true;
-  var done = function () { btn.disabled = false; };
-  if (isNew) {
-    var p = { city: g('city'), client: g('client'), hotel: g('hotel'), checkIn: g('checkIn'), checkOut: g('checkOut'), supplier: g('supplier'), status: g('status'), hotelRef: g('hotelRef'),
-      salesAgent: g('salesAgent'), notes: g('note'), optionDate: g('optionDate'), forceRegister: !!force };
-    ['doubles', 'triples', 'quads', 'quints'].forEach(function (k) { p[k] = g(k); });
-    ['sale', 'cost'].forEach(function (pre) { ['Double', 'Triple', 'Quad', 'Quint'].forEach(function (x) { var v = g(pre + x); if (v !== undefined && v !== '') p[pre + x] = v; }); });
-    hbxCall('appendBookingFromForm', ['$T', p], function (r) {
-      done();
-      if (r && r.duplicate) { if (confirm('يوجد حجز مشابه (' + (r.match.innerRef || '') + (r.match.hotelRef ? ' / ' + r.match.hotelRef : '') + ' — ' + (r.match.status || '') + ').\nتسجيل الحجز الجديد على أي حال؟')) hbxSave(btn, true); return; }
-      if (!r || !r.ok) return _showPopup((r && r.error) || 'تعذّر التسجيل', 'error');
-      glDlgClose(); _showPopup('✅ سُجّل الحجز ' + r.innerRef + ' (' + r.city + ')', 'success'); hbxGlRefresh(); hbxSearch(true);
-    }, function (e) { done(); _showPopup(e.message, 'error'); });
-    return;
-  }
-  var map = {}, cur = function (k) { var v = d[k]; return v == null ? '' : String(v).trim(); };
-  Object.keys(HBX_FCOL_).forEach(function (k) {
-    var v = g(k); if (v === undefined) return;
-    if (k === 'checkIn' || k === 'checkOut') { if (v && v !== cur(k).slice(0, 10)) map[HBX_FCOL_[k]] = v; return; }
-    if (/^(doubles|triples|quads|quints)$/.test(k)) { if ((parseInt(v, 10) || 0) !== (parseInt(cur(k), 10) || 0)) map[HBX_FCOL_[k]] = parseInt(v, 10) > 0 ? parseInt(v, 10) : ''; return; }
-    if (/^(sale|cost)(Double|Triple|Quad|Quint)$/.test(k)) { var a = v === '' ? '' : parseFloat(v), b = cur(k) === '' ? '' : parseFloat(cur(k)); if (a !== b && !(a === '' && isNaN(b))) map[HBX_FCOL_[k]] = a; return; }
-    if (v !== cur(k)) map[HBX_FCOL_[k]] = v;
-  });
-  if (!Object.keys(map).length) { done(); glDlgClose(); return; }
-  hbxCall('editBookingFields', [d.key, map, '$T'], function (r) {
-    done();
-    if (!r || !r.ok) return _showPopup((r && r.error) || 'تعذّر الحفظ', 'error');
-    glDlgClose(); _showPopup('✅ حُفظ تعديل الحجز (' + r.count + ' حقل)', 'success'); hbxGlRefresh(); hbxSearch(true);
-  }, function (e) { done(); _showPopup(e.message, 'error'); });
-}
-
-/* ---------------- 🛬 الوصول والأرصدة ---------------- */
-function hbxArrView() {
-  var t = new Date(), t2 = new Date(); t2.setDate(t2.getDate() + 2);
-  HBX.arr = HBX.arr || { from: hbxIso(t), to: hbxIso(t2), inc: false };
-  var a = HBX.arr;
-  document.getElementById('hbxBody').innerHTML = '<div class="gl-card"><div class="d-flex gap-2 flex-wrap align-items-center">' +
-    '<label class="small text-muted">من <input type="date" id="hbxA_from" class="form-control form-control-sm d-inline-block" style="width:150px;" value="' + a.from + '"></label>' +
-    '<label class="small text-muted">إلى <input type="date" id="hbxA_to" class="form-control form-control-sm d-inline-block" style="width:150px;" value="' + a.to + '"></label>' +
-    '<label class="small"><input type="checkbox" id="hbxA_inc"' + (a.inc ? ' checked' : '') + '> عرض كل الحسابات ذات الدخول</label>' +
-    '<button class="btn btn-primary btn-sm fw-bold" onclick="hbxArrLoad()">عرض</button><button class="btn btn-outline-secondary btn-sm ms-auto" onclick="hbxPrint(\'hbxArrBox\',\'متابعة الوصول والأرصدة\')">🖨️ طباعة</button></div></div>' +
-    '<div id="hbxArrBox" class="mt-2"></div>';
-  hbxArrLoad();
-}
-function hbxArrLoad() {
-  var a = HBX.arr; a.from = document.getElementById('hbxA_from').value; a.to = document.getElementById('hbxA_to').value; a.inc = document.getElementById('hbxA_inc').checked;
-  var box = document.getElementById('hbxArrBox'); box.innerHTML = '<div class="gl-card text-muted">⏳</div>';
-  hbxCall('getArrivalsByDateRange', [a.from, a.to, a.inc, '$T'], function (res) {
-    var E = glEsc, u = HBX.user || {};
-    if (!res.days || !res.days.length) { box.innerHTML = '<div class="gl-card text-muted">لا يوجد وصول في هذه الفترة</div>'; return; }
-    var col = { bad: '#b91c1c', ok: '#166534', warn: '#b45309' };
-    var grp = function (gs, role) {
-      if (!gs.length) return '';
-      return '<div class="col-md-6"><div class="gl-lbl">' + (role === 'client' ? '👥 العملاء' : '🏨 الموردون') + '</div><table class="gl-tbl"><thead><tr><th>الاسم</th><th>الحجوزات</th>' + ((role === 'client' ? u.showSale : u.showCost) ? '<th>القيمة</th>' : '') + '<th>الرصيد</th></tr></thead><tbody>' +
-        gs.map(function (g) {
-          return '<tr><td style="text-align:right;"><b>' + E(g.name) + '</b>' + (g.historicalMissing ? ' <small class="text-warning" title="حجوزات بلا سعر بالفترة">⚠️' + g.historicalMissing + '</small>' : '') + '</td>' +
-            '<td style="text-align:right;font-size:12px;">' + g.items.map(function (b) { return E(b.hotel || '—') + ' <span class="gl-latin">' + E(b.checkIn) + '→' + E(b.checkOut) + '</span> (' + b.totalRooms + ' غ)' + (b.hotelRef ? ' <small class="gl-latin text-muted">' + E(b.hotelRef) + '</small>' : ''); }).join('<br>') + '</td>' +
-            ((role === 'client' ? u.showSale : u.showCost) ? '<td class="gl-latin">' + glFmt(g.total) + (g.missing ? ' <small class="text-danger">+بلا سعر</small>' : '') + '</td>' : '') +
-            '<td style="color:' + (col[g.status] || '#334155') + ';font-weight:700;white-space:nowrap;">' + E(g.balance) + '</td></tr>';
-        }).join('') + '</tbody></table></div>';
-    };
-    box.innerHTML = res.days.map(function (d) {
-      return '<div class="gl-card mt-2"><b>📅 ' + E(d.dateDisp) + '</b> <span class="gl-pill">' + d.count + ' حجز</span><div class="row g-2 mt-1">' + grp(d.clientGroups, 'client') + grp(d.supplierGroups, 'supplier') + '</div></div>';
-    }).join('');
-  }, function (e) { box.innerHTML = '<div class="gl-card text-danger">' + glEsc(e.message) + '</div>'; });
-}
-
-/* ---------------- ⚖️ بيان الأرصدة بتاريخ ---------------- */
-function hbxBalView() {
-  HBX.bal = HBX.bal || { d: hbxIso(new Date()), q: '', nz: true };
-  var b = HBX.bal;
-  document.getElementById('hbxBody').innerHTML = '<div class="gl-card"><div class="d-flex gap-2 flex-wrap align-items-center">' +
-    '<label class="small text-muted">حتى تاريخ <input type="date" id="hbxB_d" class="form-control form-control-sm d-inline-block" style="width:150px;" value="' + b.d + '"></label><small class="text-muted">(فارغ = الرصيد النهائي شاملاً المستقبلي)</small>' +
-    '<button class="btn btn-primary btn-sm fw-bold" onclick="hbxBalLoad()">عرض</button>' +
-    '<input class="form-control form-control-sm" style="max-width:220px;" placeholder="🔎 بحث بالاسم" value="' + glEsc(b.q) + '" oninput="HBX.bal.q=this.value;hbxBalDraw()">' +
-    '<label class="small"><input type="checkbox"' + (b.nz ? ' checked' : '') + ' onchange="HBX.bal.nz=this.checked;hbxBalDraw()"> إخفاء الأرصدة الصفرية</label>' +
-    '<button class="btn btn-outline-secondary btn-sm ms-auto" onclick="hbxPrint(\'hbxBalBox\',\'بيان الأرصدة\')">🖨️ طباعة</button></div>' +
-    '<div class="small text-muted mt-1">نفس أرقام كشف الحساب ببرنامج الحجوزات (الحجوزات + الدفعات، شاملة الدفعات المسجلة من البرنامج الرئيسي).</div></div><div id="hbxBalBox" class="mt-2"></div>';
-  hbxBalLoad();
-}
-function hbxBalLoad() {
-  HBX.bal.d = document.getElementById('hbxB_d').value;
-  var box = document.getElementById('hbxBalBox'); box.innerHTML = '<div class="gl-card text-muted">⏳</div>';
-  hbxCall('getPartyBalancesAsOf', [HBX.bal.d || '', '$T'], function (res) { HBX.bal.res = res; hbxBalDraw(); }, function (e) { box.innerHTML = '<div class="gl-card text-danger">' + glEsc(e.message) + '</div>'; });
-}
-function hbxBalDraw() {
-  var res = HBX.bal.res, box = document.getElementById('hbxBalBox'); if (!res || !box) return;
-  var E = glEsc, q = (HBX.bal.q || '').trim().toLowerCase();
-  var tbl = function (list, role) {
-    var L = list.filter(function (x) { return (!q || x.name.toLowerCase().indexOf(q) >= 0) && (!HBX.bal.nz || Math.round(x.balanceNum || 0) !== 0); }), sum = 0;
-    L.forEach(function (x) { sum += x.balanceNum || 0; });
-    return '<div class="col-md-6"><div class="gl-card"><b>' + (role === 'client' ? '👥 العملاء' : '🏨 الموردون') + '</b> <span class="gl-pill">' + L.length + '</span>' +
-      '<table class="gl-tbl mt-1"><thead><tr><th>الاسم</th><th>الرصيد</th><th>آخر دخول</th></tr></thead><tbody>' +
-      L.map(function (x) {
-        var bad = role === 'client' ? x.balanceNum > 0 : x.balanceNum < 0;
-        return '<tr><td style="text-align:right;">' + E(x.name) + (x.hasUnpricedBooking ? ' <small class="text-warning" title="له حجز بلا سعر">⚠️</small>' : '') + '</td><td class="gl-latin" style="color:' + (bad ? '#b91c1c' : '#166534') + ';font-weight:700;">' + E(x.balanceFmt) + '</td>' +
-          '<td class="gl-latin"' + (x.isOnCutoffDate ? ' style="background:#fef3c7;"' : '') + '>' + E(x.lastCheckIn) + '</td></tr>';
-      }).join('') + '</tbody><tfoot><tr style="font-weight:700;background:#f1f5f9;"><td>الإجمالي</td><td class="gl-latin">' + glFmt(Math.round(sum)) + '</td><td></td></tr></tfoot></table></div></div>';
-  };
-  box.innerHTML = '<div class="small mb-1">' + (res.noCutoff ? 'الرصيد النهائي' : 'حتى <b class="gl-latin">' + E(res.cutoffDisp) + '</b>') + '</div><div class="row g-2">' + tbl(res.clients || [], 'client') + tbl(res.suppliers || [], 'supplier') + '</div>';
-}
-function hbxPrint(id, title) {
-  var el = document.getElementById(id); if (!el) return;
-  var w = window.open('', '_blank'); if (!w) return _showPopup('اسمح بالنوافذ المنبثقة للطباعة', 'warning');
-  w.document.write('<html dir="rtl"><head><meta charset="utf-8"><title>' + glEsc(title) + '</title><style>body{font-family:Tahoma,Arial;font-size:12px;margin:12px;} table{border-collapse:collapse;width:100%;margin-bottom:10px;} th,td{border:1px solid #cbd5e1;padding:3px 5px;text-align:center;} th{background:#1e3d59;color:#fff;} thead{display:table-header-group;} button,input,a{display:none!important;} .row{display:flex;gap:10px;} .col-md-6{flex:1;} .gl-card{margin-bottom:8px;}</style></head><body><h3>🏨 ' + glEsc(title) + ' — ' + new Date().toLocaleDateString('en-GB') + '</h3>' + el.innerHTML + '</body></html>');
-  w.document.close(); setTimeout(function () { try { w.focus(); w.print(); } catch (e) {} }, 300);
+function hbxLoad() {
+  var w = document.getElementById('hbxWrap'); if (!w || HBX.loading) return;
+  HBX.loading = true; HBX.frame = null;
+  w.innerHTML = '<div class="gl-card text-muted">⏳ جارٍ فتح برنامج الحجوزات…</div>';
+  google.script.run.withSuccessHandler(function (r) {
+    HBX.loading = false;
+    if (!r || !r.success) { w.innerHTML = '<div class="gl-card" style="color:#b91c1c;">⚠️ ' + glEsc((r && r.error) || 'تعذّر فتح برنامج الحجوزات') + '</div>'; return; }
+    var f = document.createElement('iframe');
+    f.src = r.url + '&hp=' + encodeURIComponent(HBX.page) + '&embed=1';
+    f.style.cssText = 'width:100%;border:0;border-radius:12px;background:#fff;box-shadow:0 2px 8px rgba(15,23,42,.08);';
+    f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
+    w.innerHTML = ''; w.appendChild(f); HBX.frame = f; hbxSize();
+  }).withFailureHandler(function (e) {
+    HBX.loading = false;
+    var m = (e && e.message) || String(e);
+    if (/hbHandoff|is not a function|not found|غير موجود/i.test(m)) m = 'برنامج الحجوزات لم يُركَّب داخل مشروع برنامج العمرة بعد (خطوة H4 بدليل التركيب).';
+    w.innerHTML = '<div class="gl-card" style="color:#b91c1c;">⚠️ ' + glEsc(m) + '</div>';
+  }).hotelsHandoff(window.authToken);
 }
 /* 💳 (V4.241 — دمج المرحلة 1) دفعات الفنادق من البرنامج الرئيسي: من هنا أو من أي شاشة (الخزينة/البنوك/العهد/القيود) —
    أي سند أو قيد على حساب طرف من أطراف الحجوزات يُنسخ تلقائياً لسجل دفعات برنامج الحجوزات (GL:…) ليبقى كشف حسابه هناك صحيحاً */

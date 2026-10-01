@@ -42,7 +42,8 @@ def build():
     code = must(code, "  var initialPage = (e && e.parameter && e.parameter.page) || 'statement';",
                 "  var initialPage = (e && e.parameter && (e.parameter.hp || (e.parameter.page !== 'hotels' ? e.parameter.page : ''))) || 'statement';")
     code = must(code, "    tmpl.initialPage = initialPage;\n",
-                "    tmpl.initialPage = initialPage;\n    tmpl.ssoCode = String((e && e.parameter && e.parameter.sso) || '').replace(/[^\\w-]/g, '');\n")
+                "    tmpl.initialPage = initialPage;\n    tmpl.ssoCode = String((e && e.parameter && e.parameter.sso) || '').replace(/[^\\w-]/g, '');\n"
+                "    tmpl.embed = (e && e.parameter && e.parameter.embed === '1') ? '1' : '';   // (V4.245) مضمَّن داخل شاشة «الفنادق» ببرنامج العمرة\n")
     code = must(code, "        .setTitle('حجوزات وحسابات سكن')", "        .setTitle('حجوزات الفنادق — منف')")
     code = must(code, 'var HB_APP_VERSION = "', '// (H4) مدموج داخل مشروع برنامج العمرة — ملفات HB_*\nvar HB_APP_VERSION = "')
     out['HB_Code.gs'] = code
@@ -56,6 +57,22 @@ def build():
     app = ident(app, [('getAppVersion', 'hbGetAppVersion')])
     app = must(app, "var SESSION_TOKEN_KEY_ = 'umrah_session_token';", "var SESSION_TOKEN_KEY_ = 'hb_session_token';   // (H4) لا يختلط بجلسة برنامج العمرة")
     app = must(app, 'var INITIAL_PAGE = "<?!= initialPage ?>";', 'var INITIAL_PAGE = "<?!= initialPage ?>";\nvar SSO_CODE = "<?!= ssoCode ?>";   // (H4) دخول موحّد من برنامج العمرة (رمز لمرة واحدة)')
+    # (V4.245) وضع التضمين: برنامج الحجوزات كاملاً داخل شاشة «🏨 الفنادق والحجوزات» ببرنامج العمرة — كل الشاشات
+    # والأزرار والفلاتر كما هي؛ يُخفى شريط تنقّله فقط (التنقّل من تبويبات برنامج العمرة عبر postMessage)
+    app = must(app, 'var SSO_CODE = "<?!= ssoCode ?>";', 'var SSO_CODE = "<?!= ssoCode ?>";\n'
+      'var HB_EMBED = "<?!= embed ?>" === \'1\';\n'
+      'if (HB_EMBED) {\n'
+      '  try { document.documentElement.classList.add(\'hb-embed\'); } catch (eE) {}\n'
+      '  window.addEventListener(\'message\', function (ev) {\n'
+      '    var d = ev && ev.data; if (!d || !d.hbShow) return;\n'
+      '    try { if (typeof currentUser !== \'undefined\' && currentUser) showPage(String(d.hbShow)); else INITIAL_PAGE = String(d.hbShow); } catch (eM) {}\n'
+      '  });\n'
+      '}')
+    app = must(app, "  document.getElementById('page-' + key).classList.add('active');",
+      "  document.getElementById('page-' + key).classList.add('active');\n"
+      "  if (typeof HB_EMBED !== 'undefined' && HB_EMBED) { try { window.parent.postMessage({ hbPage: key }, '*'); } catch (eP) {} }")
+    app = must(app, "  var wanted = ['statement','bookings','arrivals','payments','import','settings','users'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';",
+      "  var wanted = ['statement','bookings','arrivals','payments','import','settings','users','statsReport','clientPortal','changelog'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';")
     app = must(app, "  if (stored) {\n    google.script.run.withSuccessHandler(function (res) {\n      if (res && res.ok) onAuthSuccess_(stored, res.user, res.sessionMinutes);",
       "  if (SSO_CODE) {\n"
       "    google.script.run.withSuccessHandler(function (res) {\n"
@@ -75,6 +92,7 @@ def build():
   #page-statsReport .stat .v { font-family:'Cairo','Tajawal',Arial,sans-serif; }
   #page-statsReport .stat { border-top:3px solid #1e3d59; }
   .app-nav .links .hb-back-umrah { background:#1e3d59; color:#fff; border-radius:8px; }
+  html.hb-embed .app-nav .links, html.hb-embed .app-nav .brand, html.hb-embed #mobileTabs { display:none !important; }
 </style>
 </head>''')
     out['HB_App.html'] = app

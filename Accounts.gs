@@ -1184,6 +1184,48 @@ function _glStmtCtx_() {
   try { _glRows_('hbmap').forEach(function (r) { var c = _glStr_(r[2]); if (c) (ctx.hbNames[c] = ctx.hbNames[c] || []).push({ name: _glStr_(r[0]), type: _glStr_(r[1]) }); }); } catch (e) {}
   return ctx;
 }
+// ⚡ (V4.245) سياق كشف حساب واحد: بدل قراءة شيت السطور كاملاً (16 عموداً × كل السطور منذ نقل الـ ERP) تُقرأ الأعمدة A:E فقط
+// لكل السطور (للأطراف المقابلة)، ثم سطور الحساب نفسه كاملة على دفعات متجاورة، والقيود A:L فقط
+function _glStmtCtxFor_(code) {
+  var ctx = { accs: _glAccounts_(), entries: {}, byAcc: {}, byEntry: {}, pend: {}, att: {}, trips: {}, hbNames: {}, hb: null };
+  var lSh = _glSheet_('lines'), last = lSh.getLastRow(), W = GL_SHEETS_.lines.headers.length, mine = [];
+  if (last >= 2) {
+    var ae = lSh.getRange(2, 1, last - 1, 5).getValues(), need = {};
+    ae.forEach(function (r, i) {
+      if (_glStr_(r[3]) !== GL_ST_POSTED_) return;
+      var id = _glStr_(r[0]);
+      if (_glStr_(r[4]) === code) { mine.push(i); need[id] = 1; }
+    });
+    ae.forEach(function (r) { var id = _glStr_(r[0]); if (need[id] && _glStr_(r[3]) === GL_ST_POSTED_) (ctx.byEntry[id] = ctx.byEntry[id] || []).push(r); });
+    var rows = [];
+    if (mine.length) {
+      var runs = [], a = mine[0], b = mine[0];
+      for (var k = 1; k < mine.length; k++) { if (mine[k] - b <= 4) b = mine[k]; else { runs.push([a, b]); a = b = mine[k]; } }
+      runs.push([a, b]);
+      if (runs.length > 60) {   // حساب حركاته متناثرة جداً ⇒ قراءة واحدة كاملة أسرع من عشرات القراءات
+        var full = lSh.getRange(2, 1, last - 1, W).getValues(); mine.forEach(function (i) { rows.push(full[i]); });
+      } else {
+        var set = {}; mine.forEach(function (i) { set[i] = 1; });
+        runs.forEach(function (ru) { lSh.getRange(ru[0] + 2, 1, ru[1] - ru[0] + 1, W).getValues().forEach(function (r, j) { if (set[ru[0] + j]) rows.push(r); }); });
+      }
+    }
+    ctx.byAcc[code] = rows;
+    var eSh = _glSheet_('entries'), eLast = eSh.getLastRow();
+    if (eLast >= 2 && mine.length) eSh.getRange(2, 1, eLast - 1, 12).getValues().forEach(function (r) {
+      var id = _glStr_(r[0]); if (!need[id]) return; while (r.length < 19) r.push(''); ctx.entries[id] = r;
+    });
+  }
+  var pr = _glPendingRows_(); Object.keys(pr).forEach(function (k) { var r = pr[k].row; if (_glStr_(r[9]) !== 'مرفوض') ctx.pend[_glStr_(r[1])] = _glStr_(r[2]) || 'تعديل'; });
+  try { ctx.att = _glAttachMap_(); } catch (e) {}
+  try {
+    var sh = getSpreadsheet_().getSheetByName(TRIPS_SHEET_NAME_);
+    if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 6).getValues().forEach(function (r) {
+      var n = _glStr_(r[0]); if (n) ctx.trips[n] = { company: _glStr_(r[1]), go: _glAutoDate_(r[4]), back: _glAutoDate_(r[5]) };
+    });
+  } catch (e) {}
+  try { _glRows_('hbmap').forEach(function (r) { var c = _glStr_(r[2]); if (c) (ctx.hbNames[c] = ctx.hbNames[c] || []).push({ name: _glStr_(r[0]), type: _glStr_(r[1]) }); }); } catch (e) {}
+  return ctx;
+}
 function _glStmtHb_(ctx) {
   if (ctx.hb !== null) return ctx.hb;
   ctx.hb = false;
@@ -1253,8 +1295,9 @@ function _glStmtCore_(code, from, to, ctx) {
     x.bal = run[x.currency]; x.balBase = runB;
   });
   // بيانات الحجز + الحجوزات بلا سعر (لا تدخل الرصيد) — للحسابات المرتبطة ببرنامج الحجوزات
-  var unpriced = [];
-  if (hasHb || hbN.length) {
+  var unpriced = [], hbLater = false;
+  if ((hasHb || hbN.length) && ctx.skipHb) hbLater = true;   // (V4.245) بيانات الحجز تُجلب بنداء ثانٍ — الكشف يظهر فوراً
+  else if (hasHb || hbN.length) {
     var H = _glStmtHb_(ctx);
     if (H) {
       var bk = {}; H.bookings.forEach(function (b) { bk[b.key] = b; });
@@ -1282,11 +1325,22 @@ function _glStmtCore_(code, from, to, ctx) {
   var closeBase = runB, pendN = rows.filter(function (x) { return x.pending; }).length;
   return { success: true, account: { code: acc.code, name: acc.name, kind: acc.kind, type: acc.type, link: acc.link, currency: acc.currency, parent: acc.parent, parentName: (accs.map[acc.parent] || {}).name || '' },
     role: role, hbRole: hbRole, from: _glDate_(from) || '', to: _glDate_(to) || '', asOf: asOf, opening: open, openingBase: openBase, closing: run, closingBase: closeBase, totals: tot, today: today,
-    rows: rows, unpriced: unpriced, trips: tripInfo, pending: pendN, aging: sign ? _glAging_(all, sign, asOf) : {} };
+    rows: rows, unpriced: unpriced, hbLater: hbLater, trips: tripInfo, pending: pendN, aging: sign ? _glAging_(all, sign, asOf) : {} };
 }
-function glStatement(authToken, code, from, to) {
+// opts.fast: (V4.245) سياق الحساب وحده + بيانات الحجز لاحقاً (glStatementHb) — الواجهة تطلبه هكذا
+function glStatement(authToken, code, from, to, opts) {
   _glPerm_(authToken, 'view');
-  return _glStmtCore_(_glStr_(code), from, to, _glStmtCtx_());
+  code = _glStr_(code);
+  if (opts && opts.fast) { var c = _glStmtCtxFor_(code); c.skipHb = true; return _glStmtCore_(code, from, to, c); }
+  return _glStmtCore_(code, from, to, _glStmtCtx_());
+}
+// بيانات الحجز لسطور الكشف + الحجوزات بلا سعر (نفس منطق _glStmtCore_) — تُدمج بالواجهة بعد ظهور الكشف
+function glStatementHb(authToken, code, from, to) {
+  _glPerm_(authToken, 'view');
+  code = _glStr_(code);
+  var c = _glStmtCtxFor_(code), r = _glStmtCore_(code, from, to, c), byKey = {};
+  r.rows.forEach(function (x) { if (x.hbKey && x.hb) byKey[x.hbKey] = x.hb; });
+  return { success: true, code: code, byKey: byKey, unpriced: r.unpriced };
 }
 // كشوف جماعية: كل الحسابات المختارة (أو كل حسابات نوع له رصيد) بسياق قراءة واحد
 function glStatements(authToken, codes, from, to, opts) {

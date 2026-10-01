@@ -1295,6 +1295,7 @@
   #page-statsReport .stat .v { font-family:'Cairo','Tajawal',Arial,sans-serif; }
   #page-statsReport .stat { border-top:3px solid #1e3d59; }
   .app-nav .links .hb-back-umrah { background:#1e3d59; color:#fff; border-radius:8px; }
+  html.hb-embed .app-nav .links, html.hb-embed .app-nav .brand, html.hb-embed #mobileTabs { display:none !important; }
 </style>
 </head>
 <body>
@@ -3034,7 +3035,15 @@
 <script>
 var APP_BASE_URL = "<?!= baseUrl ?>";
 var INITIAL_PAGE = "<?!= initialPage ?>";
-var SSO_CODE = "<?!= ssoCode ?>";   // (H4) دخول موحّد من برنامج العمرة (رمز لمرة واحدة)
+var SSO_CODE = "<?!= ssoCode ?>";
+var HB_EMBED = "<?!= embed ?>" === '1';
+if (HB_EMBED) {
+  try { document.documentElement.classList.add('hb-embed'); } catch (eE) {}
+  window.addEventListener('message', function (ev) {
+    var d = ev && ev.data; if (!d || !d.hbShow) return;
+    try { if (typeof currentUser !== 'undefined' && currentUser) showPage(String(d.hbShow)); else INITIAL_PAGE = String(d.hbShow); } catch (eM) {}
+  });
+}   // (H4) دخول موحّد من برنامج العمرة (رمز لمرة واحدة)
 
 /* ============================================================ */
 /* الحل الجذري: طابور تسلسلي لكل نداءات الخادم (google.script.run) */
@@ -3345,6 +3354,7 @@ function showPage(key, restore) {
   if (prev && prev !== key) WIN_LAST_ = prev;
   document.querySelectorAll('.app-page').forEach(function (p) { p.classList.remove('active'); });
   document.getElementById('page-' + key).classList.add('active');
+  if (typeof HB_EMBED !== 'undefined' && HB_EMBED) { try { window.parent.postMessage({ hbPage: key }, '*'); } catch (eP) {} }
   document.querySelectorAll('#navLinks button').forEach(function (b) { b.classList.toggle('active', b.dataset.page === key); });
   syncMobileTabs_(key);
   closeMobileMore_();
@@ -4117,7 +4127,7 @@ function startApp_() {
     cpRefreshBell_();
   }, 180000);
 
-  var wanted = ['statement','bookings','arrivals','payments','import','settings','users'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';
+  var wanted = ['statement','bookings','arrivals','payments','import','settings','users','statsReport','clientPortal','changelog'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';
   if (isScreenAllowed_(wanted)) {
     showPage(wanted);
   } else {

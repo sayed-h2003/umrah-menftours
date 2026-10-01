@@ -1881,6 +1881,7 @@ function hbDoGet_(e) {
     tmpl.baseUrl = getAppBaseUrl_();
     tmpl.initialPage = initialPage;
     tmpl.ssoCode = String((e && e.parameter && e.parameter.sso) || '').replace(/[^\w-]/g, '');
+    tmpl.embed = (e && e.parameter && e.parameter.embed === '1') ? '1' : '';   // (V4.245) مضمَّن داخل شاشة «الفنادق» ببرنامج العمرة
     return tmpl.evaluate()
         .setTitle('حجوزات الفنادق — منف')
         // ⚠️ لا تحذف هذا السطر ولا تكتفِ بوسم <meta> المكتوب داخل App.html: Apps Script يحذف
