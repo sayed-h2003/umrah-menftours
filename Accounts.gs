@@ -3095,7 +3095,12 @@ function _glCsReadRows_(sh, startRow, cfg) {
   var last = sh.getLastRow(), out = [], C = _glCsCols_(cfg), OLD = 5;   // F = عمود رقم القيد القديم (ترحيل تلقائي لأرقام JE- المكتوبة فيه)
   if (last < startRow) return out;
   var W = Math.max(C.in, C.out, C.desc, C.date, C.party, C.qaid, OLD) + 1;
+  W = Math.max(W, Math.min(26, sh.getLastColumn() || W));   // (V4.249) قراءة كل أعمدة الصف لاكتشاف صفوف «الإجمالي»
+  var skipNext = false, TOT = /(^|\s)(ال)?[اإأ]جمال[يى]|المجموع/;
   sh.getRange(startRow, 1, last - startRow + 1, W).getValues().forEach(function (r, i) {
+    // (V4.249) صف «الإجمالي» (مجموع الاستلام والصرف) والصف التالي له (الرصيد) لا يُقيَّدان أبداً
+    if (skipNext) { skipNext = false; return; }
+    if (r.some(function (v) { return typeof v === 'string' && TOT.test(v); })) { skipNext = true; return; }
     var x = { row: startRow + i, inAmt: r[C.in] instanceof Date ? 0 : _glR2_(_glNum_(r[C.in])), outAmt: r[C.out] instanceof Date ? 0 : _glR2_(_glNum_(r[C.out])),
       desc: _glStr_(r[C.desc]), date: _glDate_(r[C.date]), f: _glStr_(r[C.qaid]), hint: _glStr_(r[C.party]) };
     if (!x.f && C.qaid !== OLD && /^JE-\d{6}$/.test(_glStr_(r[OLD]))) { x.f = _glStr_(r[OLD]); x.fOld = 1; }
@@ -3184,7 +3189,7 @@ function glCustSheetSave(authToken, code, cfg) {
     o.cols = cc;
   }
   var S = _glCsOpen_(o);
-  o.tab = S.sh.getName(); o.title = S.ss.getName(); o.cur = _glCur_(a.currency || cfg.cur || 'EGP'); o.auto = !!cfg.auto;
+  o.tab = S.sh.getName(); o.title = S.ss.getName(); o.cur = _glCur_(a.currency || cfg.cur || 'SAR'); o.auto = !!cfg.auto;   // (V4.249) الافتراضي ريال ويمكن تغييره
   o.by = session.username; o.at = _glNow_();
   _glSetSetting_('custsheet:' + a.code, JSON.stringify(o));
   logChange_(session.username, 'ربط شيت عهدة', 'GL:' + a.code, 'شيت العهدة', '-', o.title + ' / ' + o.tab);
@@ -3216,7 +3221,7 @@ function _glCsSync_(code, user, opts) {
   var S = _glCsOpen_(cfg), rows = _glCsReadRows_(S.sh, cfg.startRow || 2, cfg), QC = _glCsCols_(cfg).qaid + 1;
   // نقل أرقام القيود القديمة من F إلى عمود القيد الجديد (مرة واحدة، بلا مسح F)
   if (!opts.preview) rows.forEach(function (x) { if (x.fOld) try { S.sh.getRange(x.row, QC).setNumberFormat('@').setValue(x.f); } catch (e) { } });
-  var learned = _glCsMap_(), cur = _glCur_(a.currency || cfg.cur || 'EGP'), fx = _glFxDailyMap_();
+  var learned = _glCsMap_(), cur = _glCur_(a.currency || cfg.cur || 'SAR'), fx = _glFxDailyMap_();
   var ents = {}, erp = {}, mine = {}, hbAuto = {};
   _glRows_('entries').forEach(function (r, i) {
     var id = _glStr_(r[0]), sk = _glStr_(r[6]); if (!id) return;

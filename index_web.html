@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.248 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.249 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.248)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.249)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.248</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.249</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7625,7 +7625,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.248";
+var CLIENT_APP_VERSION = "4.249";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -46282,7 +46282,7 @@ function glEntryDlg(kind, entry) {
     body = '<div class="gl-box mb-2"><div class="row g-2 align-items-end">' +
       '<div class="col-md-6"><label class="gl-lbl">' + V.mainLbl + '</label>' + glAccInput('glVMain', V.main, GL._vMainPreset || '') + '</div>' +
       '<div class="col-md-3"><label class="gl-lbl">المبلغ</label><input id="glVAmt" class="form-control form-control-sm gl-latin" oninput="glVCalc()"></div>' +
-      '<div class="col-md-2"><label class="gl-lbl">العملة</label>' + glCurSelect('glVCur', 'EGP') + '</div>' +
+      '<div class="col-md-2"><label class="gl-lbl">العملة</label>' + glCurSelect('glVCur', (kind === 'custOut' || kind === 'custSettle') ? 'SAR' : 'EGP') + '</div>' +   // (V4.249) العهد بالريال افتراضياً (قابل للتغيير)
       '<div class="col-md-1"><label class="gl-lbl">السعر</label><input id="glVRate" class="form-control form-control-sm gl-latin" placeholder="1" oninput="this.dataset.manual=1"></div></div></div>' +
       '<div class="gl-lbl">' + V.counterLbl + ' (يمكن التوزيع على أكثر من حساب)</div>' +
       '<div class="table-responsive"><table class="gl-tbl" id="glVLines"><thead><tr><th style="min-width:240px;">الحساب</th><th style="width:120px;">المبلغ</th><th style="min-width:160px;">البيان</th><th style="width:30px;"></th></tr></thead><tbody></tbody></table></div>' +
@@ -46358,6 +46358,7 @@ function glEntryDlg(kind, entry) {
     var mainInp = document.querySelector('#glDlgBody .glVMain');
     if (mainInp) mainInp.addEventListener('change', function () { var a = GL.map[glAccVal(this)]; if (a && a.currency && curSel) { curSel.value = a.currency; curSel.dispatchEvent(new Event('change')); } });
     if (mainInp && _preset) mainInp.dispatchEvent(new Event('change'));   // (V4.216) مفتوح من شاشة الخزينة ⇒ عملتها
+    else if (curSel && curSel.value !== 'EGP' && !e.id) curSel.dispatchEvent(new Event('change'));   // (V4.249) سعر الريال الافتراضي للعهد
     // ✏️ (V4.219) تعديل سند قائم: تعبئة الحساب الرئيسي والمبلغ والعملة والسعر والأطراف المقابلة
     var fit = e.id ? glEntryVoucherFit_(e) : null;
     if (fit && fit.kind === kind && mainInp) {
@@ -47840,6 +47841,9 @@ function glCustSheetDlg(code) {
         '<div class="col-md-3"><label class="gl-lbl">اسم الورقة (فارغ = الأولى)</label><input id="glCsTab" class="form-control form-control-sm" value="' + glEsc(c.tab || '') + '"></div>' +
         '<div class="col-md-1"><label class="gl-lbl">أول صف</label><input id="glCsRow" class="form-control form-control-sm gl-latin" value="' + (c.startRow || 2) + '"></div>' +
         '<div class="col-md-2"><label class="d-flex gap-1 align-items-center small mb-1"><input type="checkbox" id="glCsAuto"' + (c.auto ? ' checked' : '') + '> 🕐 مزامنة كل ساعة</label></div>' +
+        // (V4.249) عملة قيود العهدة: الافتراضي ريال ويمكن تغييرها — حساب عهدة بعملة ثابتة يُقيَّد بعملته (تُغيَّر من تعديل الحساب)
+        '<div class="col-md-2"><label class="gl-lbl">عملة العهدة</label><select id="glCsCur" class="form-select form-select-sm"' + (a.currency ? ' disabled title="عملة الحساب ثابتة بالدليل — تُغيَّر من تعديل الحساب"' : '') + '>' +
+          ['SAR', 'EGP', 'USD'].map(function (k) { return '<option value="' + k + '"' + ((a.currency || c.cur || 'SAR') === k ? ' selected' : '') + '>' + GL_CUR_LBL_[k] + '</option>'; }).join('') + '</select></div>' +
       '</div><div class="row g-2 mt-1"><div class="col-12 small fw-bold" style="color:#0f2557;">🔤 أعمدة المزامنة (حرف العمود)</div>' +
         [['in', 'الوارد'], ['out', 'الصادر'], ['desc', 'البيان'], ['date', 'التاريخ'], ['party', 'الحساب/الطرف'], ['qaid', 'رقم القيد']].map(function (f) {
           return '<div class="col-4 col-md-2"><label class="gl-lbl">' + f[1] + '</label><input id="glCsC_' + f[0] + '" class="form-control form-control-sm gl-latin text-center" maxlength="2" style="text-transform:uppercase;" value="' + glEsc(CC[f[0]]) + '"' + (GL.isAdmin ? '' : ' disabled') + '></div>';
@@ -47856,7 +47860,7 @@ function glCustSheetDlg(code) {
   });
 }
 function glCsSave_(code, btn) {
-  var o = { url: glVal('glCsUrl'), tab: glVal('glCsTab'), startRow: glVal('glCsRow'), auto: document.getElementById('glCsAuto').checked, cols: {} };
+  var o = { url: glVal('glCsUrl'), tab: glVal('glCsTab'), startRow: glVal('glCsRow'), auto: document.getElementById('glCsAuto').checked, cols: {}, cur: (document.getElementById('glCsCur') || {}).value || 'SAR' };
   ['in', 'out', 'desc', 'date', 'party', 'qaid'].forEach(function (k) { o.cols[k] = glVal('glCsC_' + k).toUpperCase(); });
   btn.disabled = true;
   glRun('glCustSheetSave', [code, o], function (res) {
