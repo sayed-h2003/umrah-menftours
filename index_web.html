@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.246 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.247 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.246)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.247)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.246</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.247</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5461,6 +5461,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <!-- (V4.219) سندات القبض/الصرف من شاشة 🏦 الخزينة، وحركات العهد من شاشة 👜 العهد -->
       <button class="btn btn-light btn-sm" onclick="glNew('transfer')">🔁 تحويل نقدية</button>
       <button class="btn btn-light btn-sm" onclick="glNew('fx')">💱 تحويل عملة</button>
+      <button class="btn btn-light btn-sm" onclick="glNew('ptransfer')" title="تحويل مباشر بين أي حسابين (مثل عميل يحوّل لمورد) بمبلغ واحد">⇄ تحويل بين طرفين</button>
       <button class="btn btn-warning btn-sm" onclick="glNew('journal')">🧾 قيد يومية</button>
     </div>
   </div>
@@ -5469,6 +5470,7 @@ input[type="date"]:not(:focus):not(:valid) {
     <span class="gl-tab" data-t="treasury" onclick="glTab('treasury')">💰 الخزينة</span>
     <span class="gl-tab" data-t="banks" onclick="glTab('banks')">🏛️ البنوك</span>
     <span class="gl-tab" data-t="custody" onclick="glTab('custody')">👜 العهد</span>
+    <span class="gl-tab" style="background:#ecfdf5;border-color:#86efac;" onclick="glNew('ptransfer')" title="تحويل مباشر بين أي حسابين بمبلغ واحد">⇄ تحويل بين طرفين</span>
     <span class="gl-tab" data-t="entries" onclick="glTab('entries')">🧾 القيود</span>
     <span class="gl-tab" data-t="stmt" onclick="glTab('stmt')">📒 كشف حساب</span>
     <span class="gl-tab" data-t="ledger" onclick="glTab('ledger')">📖 دفتر الأستاذ</span>
@@ -7621,7 +7623,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.246";
+var CLIENT_APP_VERSION = "4.247";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -46195,17 +46197,23 @@ var GL_VOUCHERS_ = {
   custOut:  { title: '👜 صرف عهدة', type: 'صرف عهدة', main: '', mainLbl: 'العهدة (أي حساب)', mainSide: 'D', counterLbl: 'مصروفة من (أي حساب)', counterFilter: '' },
   custSettle: { title: '🧾 تسوية عهدة', type: 'تسوية عهدة', main: '', mainLbl: 'العهدة (أي حساب)', mainSide: 'C', counterLbl: 'المصروفات / الحسابات المسوّاة' },
   transfer: { title: '🔁 تحويل نقدية', type: 'تحويل نقدية', main: 'safe,bank,custody', mainLbl: 'من حساب', mainSide: 'C', counterLbl: 'إلى حساب', counterFilter: 'safe,bank,custody' },
-  fx:       { title: '💱 تحويل عملة', type: 'تحويل عملة' }
+  fx:       { title: '💱 تحويل عملة', type: 'تحويل عملة' },
+  // ⇄ (V4.247) تحويل مباشر بين أي حسابين (مثل «الدفعة المرتبطة» ببرنامج الحجوزات): مبلغ واحد، وعملتان مختلفتان عبر الوسيط
+  ptransfer: { title: '⇄ تحويل بين طرفين', type: 'تحويل بين طرفين' }
 };
 function glNew(kind) { glEntryDlg(kind, null); }
 // ✏️ (V4.219) السند يُعدَّل في نموذجه (قبض/صرف/عهدة/تحويل) لو شكله يسمح — وإلا في نموذج القيد اليومي
-var GL_TYPE_KIND_ = { 'سند قبض': 'receipt', 'سند صرف': 'payment', 'إيداع بنكي': 'bankIn', 'سحب بنكي': 'bankOut', 'صرف عهدة': 'custOut', 'تسوية عهدة': 'custSettle', 'تحويل نقدية': 'transfer' };
+var GL_TYPE_KIND_ = { 'تحويل بين طرفين': 'ptransfer', 'سند قبض': 'receipt', 'سند صرف': 'payment', 'إيداع بنكي': 'bankIn', 'سحب بنكي': 'bankOut', 'صرف عهدة': 'custOut', 'تسوية عهدة': 'custSettle', 'تحويل نقدية': 'transfer' };
 function glEntryVoucherFit_(e) {
   var k = GL_TYPE_KIND_[e && e.type]; if (!k) return null;
+  var br = glFxBridgeCode_(), ls = (e.lines || []).filter(function (l) { return !br || l.account !== br; });   // (V4.247) أسطر الوسيط يعيد الخادم إنشاءها
+  if (k === 'ptransfer') {
+    var dr = ls.filter(function (l) { return l.debit > 0; }), cr = ls.filter(function (l) { return l.credit > 0; });
+    return dr.length === 1 && cr.length === 1 ? { kind: k, to: dr[0], from: cr[0] } : null;
+  }
   var V = GL_VOUCHERS_[k], side = V.mainSide === 'D' ? 'debit' : 'credit', other = side === 'debit' ? 'credit' : 'debit';
-  var mains = e.lines.filter(function (l) { return l[side] > 0; }), cs = e.lines.filter(function (l) { return l[other] > 0; });
+  var mains = ls.filter(function (l) { return l[side] > 0; }), cs = ls.filter(function (l) { return l[other] > 0; });
   if (mains.length !== 1 || !cs.length) return null;
-  var cur = mains[0].currency; if (cs.some(function (l) { return l.currency !== cur; })) return null;
   return { kind: k, side: side, other: other, main: mains[0], counters: cs };
 }
 function glEditEntry(id) { glRun('glGetEntry', [id], function (res) { var f = glEntryVoucherFit_(res.entry); glEntryDlg(f ? f.kind : 'journal', res.entry); }); }
@@ -46244,6 +46252,15 @@ function glEntryDlg(kind, entry) {
     body = '<div class="table-responsive"><table class="gl-tbl" id="glJLines"><thead><tr><th style="min-width:230px;">الحساب</th><th style="min-width:150px;">البيان</th><th style="width:110px;">مدين</th><th style="width:110px;">دائن</th><th style="width:90px;">العملة</th><th style="width:80px;">سعر الصرف</th><th style="width:30px;"></th></tr></thead><tbody></tbody></table></div>' +
       '<button class="btn btn-outline-primary btn-sm mt-1" onclick="glJAddLine()">➕ سطر</button>' +
       '<div id="glJTot" class="gl-note mt-2"></div>';
+  } else if (kind === 'ptransfer') {
+    body = '<div class="row g-2">' +
+      '<div class="col-md-6 gl-box"><div class="gl-lbl">من حساب (المحوِّل — دائن)</div>' + glAccInput('glPtFrom', '', '') + '</div>' +
+      '<div class="col-md-6 gl-box"><div class="gl-lbl">إلى حساب (المستلم — مدين)</div>' + glAccInput('glPtTo', '', '') + '</div>' +
+      '<div class="col-md-4"><label class="gl-lbl">المبلغ</label><input id="glPtAmt" class="form-control form-control-sm gl-latin" oninput="glPtCalc()"></div>' +
+      '<div class="col-md-2"><label class="gl-lbl">العملة</label>' + glCurSelect('glPtCur', 'SAR') + '</div>' +
+      '<div class="col-md-2"><label class="gl-lbl">سعر الريال/الدولار</label><input id="glPtRate" class="form-control form-control-sm gl-latin" placeholder="سعر اليوم" oninput="this.dataset.manual=this.value?1:\'\';glPtCalc()"></div>' +
+      '<div class="col-md-12"><div class="small text-muted">البيان يُكتب تلقائياً: «تحويل من …» على المستلم و«تحويل إلى …» على المحوِّل — وما تكتبه في خانة البيان أعلاه يُضاف كملاحظة. ' +
+        'لو عملة الحسابين مختلفة يُحسب المبلغ المقابل بالسعر ويُسجَّل عبر «وسيط تحويل العملات».</div><div id="glPtPrev" class="gl-note mt-1"></div></div></div>';
   } else if (kind === 'fx') {
     // 💱 (V4.219) مثل الـ ERP: سعر بيع الريال والدولار بتاريخ القيد تلقائياً ⇒ المبلغ المضاف يُحسب تلقائياً (ويمكن كتابته يدوياً)،
     // والقيد رباعي عبر «وسيط تحويل العملات»: من ح/ الوسيط إلى ح/ المصدر (بعملته) · من ح/ المستلم إلى ح/ الوسيط (بعملته)
@@ -46301,6 +46318,23 @@ function glEntryDlg(kind, entry) {
     glFxCalc();
     if (!e.id) glFxAutoRates_();
   }
+  if (kind === 'ptransfer') {
+    ['glPtFrom', 'glPtTo'].forEach(function (c) { var i = document.querySelector('#glDlgBody .' + c); if (i) i.addEventListener('change', glPtCalc); });
+    var pc = document.querySelector('#glDlgBody .glPtCur'); if (pc) pc.addEventListener('change', glPtCalc);
+    var pf = e.id ? glEntryVoucherFit_(e) : null;
+    if (pf && pf.kind === 'ptransfer') {
+      var fi = document.querySelector('#glDlgBody .glPtFrom'), ti = document.querySelector('#glDlgBody .glPtTo');
+      fi.dataset.code = pf.from.account; fi.value = glAccLabel(pf.from.account); ti.dataset.code = pf.to.account; ti.value = glAccLabel(pf.to.account);
+      document.getElementById('glPtAmt').value = pf.from.credit; if (pc) pc.value = pf.from.currency;
+      if (pf.from.currency !== 'EGP') { var rr = document.getElementById('glPtRate'); rr.value = glR2Rate(pf.from.rate); rr.dataset.manual = 1; }
+      var dd = document.getElementById('glEDesc'); if (dd && /^تحويل من /.test(dd.value)) dd.value = '';
+    } else if (GL._ptPreset) {
+      var ps = GL._ptPreset, f2 = document.querySelector('#glDlgBody .glPtFrom'), t2 = document.querySelector('#glDlgBody .glPtTo');
+      if (ps.from) { f2.dataset.code = ps.from; f2.value = glAccLabel(ps.from); } if (ps.to) { t2.dataset.code = ps.to; t2.value = glAccLabel(ps.to); }
+    }
+    GL._ptPreset = null;
+    glPtCalc();
+  }
   // 📈 (V4.216) تغيير تاريخ القيد ⇒ أسعار الصرف غير المعدّلة يدوياً تتبع سعر ذلك التاريخ
   var dEl = document.getElementById('glEDate');
   if (dEl) dEl.addEventListener('change', function () {
@@ -46315,7 +46349,7 @@ function glEntryDlg(kind, entry) {
     if (document.getElementById('glFxRSAR')) glFxAutoRates_();
   });
   // (V4.219) إصلاح: تهيئة نماذج السندات (سطر الطرف المقابل + ربط العملة بالحساب) كانت لا تعمل منذ V4.216
-  if (kind !== 'journal' && kind !== 'fx') {
+  if (kind !== 'journal' && kind !== 'fx' && kind !== 'ptransfer') {
     glVAddLine(); glVCalc();
     var curSel = document.querySelector('#glDlgBody .glVCur');
     if (curSel) curSel.addEventListener('change', function () { var r = document.getElementById('glVRate'); if (r) r.value = this.value === 'EGP' ? '' : glRateAt(this.value, glDlgDate_()); glVCalc(); });
@@ -46334,6 +46368,7 @@ function glEntryDlg(kind, entry) {
         glVAddLine();
         var tr = tb.lastElementChild, ai = tr.querySelector('.glVAcc');
         ai.dataset.code = l.account; ai.value = glAccLabel(l.account);
+        var lc = tr.querySelector('.glVLCur'); if (lc) { lc.value = l.currency; lc.dataset.touched = '1'; }
         tr.querySelector('.glVA').value = l[fit.other]; tr.querySelector('.glVD').value = l.desc && l.desc !== e.desc ? l.desc : '';
       });
       glVCalc(true);
@@ -46417,20 +46452,68 @@ function glVAddLine() {
   var V = GL_VOUCHERS_[GL._vk], tb = document.querySelector('#glVLines tbody'); if (!tb) return;
   var tr = document.createElement('tr');
   tr.innerHTML = '<td>' + glAccInput('glVAcc', V.counterFilter || '', '') + '</td>' +
-    '<td><input class="form-control form-control-sm gl-latin glVA" oninput="glVCalc(this)"></td>' +
+    '<td><div class="d-flex gap-1"><input class="form-control form-control-sm gl-latin glVA" oninput="glVCalc(this)">' +
+      '<select class="form-select form-select-sm glVLCur" style="width:78px;" title="عملة الطرف (مختلفة عن السند ⇒ عبر وسيط التحويل)" onchange="this.dataset.touched=1;glVCalc(this)">' +
+      ['EGP', 'SAR', 'USD'].map(function (c) { return '<option value="' + c + '"' + (c === ((document.querySelector('#glDlgBody .glVCur') || {}).value || 'EGP') ? ' selected' : '') + '>' + GL_CUR_LBL_[c] + '</option>'; }).join('') + '</select></div></td>' +
     '<td><input class="form-control form-control-sm glVD"></td>' +
     '<td><button class="btn btn-sm btn-link text-danger p-0" onclick="this.closest(\'tr\').remove();glVCalc()">✖</button></td>';
   tb.appendChild(tr);
   glVCalc();
+}
+// ⇄ (V4.247) أسطر «تحويل بين طرفين»: مبلغ واحد بعملته — لو عملة أحد الحسابين ثابتة ومختلفة يُحسب مقابلها بالسعر
+function glPtLines_(note) {
+  var q = function (c) { return document.querySelector('#glDlgBody .' + c); };
+  var from = glAccVal(q('glPtFrom')), to = glAccVal(q('glPtTo')), amt = glNum((document.getElementById('glPtAmt') || {}).value), cur = (q('glPtCur') || {}).value || 'SAR';
+  var d = glDlgDate_(), rIn = document.getElementById('glPtRate'), rCur = cur === 'EGP' ? 1 : glR2Rate(glNum(rIn && rIn.value) || glRateAt(cur, d));
+  var rr = function (c) { return c === 'EGP' ? 1 : (c === cur ? rCur : glRateAt(c, d)); };
+  var fa = GL.map[from], ta = GL.map[to], fc = (fa && fa.currency) || cur, tc = (ta && ta.currency) || cur;
+  var conv = function (c) { return c === cur ? amt : Math.round(amt * rr(cur) / rr(c) * 100) / 100; };
+  var fAmt = conv(fc), tAmt = conv(tc), nm = function (a, c) { return a ? (a.link || a.name) : (c || '…'); };
+  note = String(note || '').trim(); if (/^تحويل من /.test(note)) note = '';
+  var o = { from: from, to: to, amt: amt, fc: fc, tc: tc, fAmt: fAmt, tAmt: tAmt, lines: [] };
+  o.desc = 'تحويل من ' + nm(fa, from) + ' إلى ' + nm(ta, to) + (note ? ' — ' + note : '');
+  o.lines.push({ account: to, debit: tAmt, currency: tc, rate: rr(tc), desc: 'تحويل من ' + nm(fa, from) + (note ? ' — ' + note : '') });
+  o.lines.push({ account: from, credit: fAmt, currency: fc, rate: rr(fc), desc: 'تحويل إلى ' + nm(ta, to) + (note ? ' — ' + note : '') });
+  if (fc !== tc) glFxSmartDesc_(o.lines, '');
+  return o;
+}
+function glPtCalc() {
+  var el = document.getElementById('glPtPrev'); if (!el) return;
+  var o = glPtLines_((document.getElementById('glEDesc') || {}).value);
+  if (!o.from || !o.to || !o.amt) { el.innerHTML = 'اختر الحسابين وأدخل المبلغ'; return; }
+  el.innerHTML = '<table class="gl-tbl"><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>البيان</th></tr></thead><tbody>' + o.lines.map(function (l) {
+    return '<tr><td style="text-align:right;">' + glEsc(glAccLabel(l.account)) + '</td><td class="gl-latin">' + (l.debit ? glFmt(l.debit) + ' ' + GL_CUR_LBL_[l.currency] : '') + '</td><td class="gl-latin">' + (l.credit ? glFmt(l.credit) + ' ' + GL_CUR_LBL_[l.currency] : '') + '</td><td style="text-align:right;">' + glEsc(l.desc) + '</td></tr>'; }).join('') +
+    '</tbody></table>' + (o.fc !== o.tc ? '<small>💱 عملتان مختلفتان — يُضاف سطرا «وسيط تحويل العملات» تلقائياً عند الحفظ</small>' : '');
+}
+// 💱 (V4.247) بيان ذكي لقيد بعملتين (جنيه + عملة أجنبية): يُلحق بكل سطر «قيمة <مبلغ العملة الأخرى> / <السعر>» مثل بيان الوسيط
+// (مثال: «دفعة ت ح/ سكن قيمة 100,000 جنيه / 13.98») — لا يُكرَّر لو موجود، ولا يمس سطور الوسيط
+function glFxSmartDesc_(lines, entryDesc) {
+  var br = glFxBridgeCode_(), L = (lines || []).filter(function (l) { return l.account && l.account !== br && ((+l.debit || 0) + (+l.credit || 0)); });
+  var curs = {}; L.forEach(function (l) { curs[l.currency] = 1; }); var cs = Object.keys(curs);
+  if (cs.length !== 2 || cs.indexOf('EGP') < 0) return;
+  var F = cs[0] === 'EGP' ? cs[1] : cs[0], dr = { EGP: 0 }, cr = { EGP: 0 }, tot = {}; dr[F] = 0; cr[F] = 0;
+  L.forEach(function (l) { dr[l.currency] += +l.debit || 0; cr[l.currency] += +l.credit || 0; });
+  tot.EGP = Math.max(dr.EGP, cr.EGP); tot[F] = Math.max(dr[F], cr[F]);
+  if (!tot.EGP || !tot[F]) return;
+  var rate = glR2Rate(tot.EGP / tot[F]);
+  L.forEach(function (l) {
+    var d = String(l.desc || entryDesc || '').trim(); if (/قيمة [\d,.]+ /.test(d)) return;
+    l.desc = (d ? d + ' ' : '') + (l.currency === F ? 'قيمة ' + glFmt(tot.EGP) + ' جنيه / ' + rate : 'قيمة ' + glFmt(tot[F]) + ' ' + GL_CUR_LBL_[F] + ' × ' + rate);
+  });
 }
 function glVCalc(src) {
   var el = document.getElementById('glVTot'); if (!el) return;
   var amt = glNum((document.getElementById('glVAmt') || {}).value);
   var rows = document.querySelectorAll('#glVLines tbody tr');
   // سطر واحد: يأخذ المبلغ كاملاً تلقائياً
-  if (rows.length === 1 && !src) rows[0].querySelector('.glVA').value = amt || '';
-  var sum = 0; rows.forEach(function (tr) { sum += glNum(tr.querySelector('.glVA').value); });
-  var diff = Math.round((amt - sum) * 100) / 100;
+  var vc0 = (document.querySelector('#glDlgBody .glVCur') || {}).value || 'EGP', rc0 = rows.length === 1 ? rows[0].querySelector('.glVLCur') : null;
+  if (rows.length === 1 && !src && (!rc0 || rc0.dataset.touched !== '1' || rc0.value === vc0)) rows[0].querySelector('.glVA').value = amt || '';
+  var vc = (document.querySelector('#glDlgBody .glVCur') || {}).value || 'EGP', sum = 0, oth = {};
+  rows.forEach(function (tr) { var c = (tr.querySelector('.glVLCur') || {}).value || vc, v = glNum(tr.querySelector('.glVA').value); if (c === vc) sum += v; else oth[c] = (oth[c] || 0) + v; });
+  if (rows.length === 1 && !src) { var c1 = rows[0].querySelector('.glVLCur'); if (c1 && c1.dataset.touched !== '1') c1.value = vc; }
+  var diff = Math.round((amt - sum) * 100) / 100, ok = Object.keys(oth);
+  if (ok.length) { el.innerHTML = '💱 مبلغ السند: <b class="gl-latin">' + glFmt(amt) + '</b> ' + GL_CUR_LBL_[vc] + ' · بعملته: <b class="gl-latin">' + glFmt(sum) + '</b> · المتبقي <b class="gl-latin">' + glFmt(diff) + '</b> ' + GL_CUR_LBL_[vc] +
+    ' يقابله ' + ok.map(function (c) { return '<b class="gl-latin">' + glFmt(oth[c]) + '</b> ' + GL_CUR_LBL_[c]; }).join(' + ') + (diff > 0 && oth[ok[0]] ? ' · السعر الضمني <b class="gl-latin">' + glR2Rate(vc === 'EGP' ? diff / oth[ok[0]] : oth[ok[0]] / diff) + '</b>' : '') + ' — يُسجَّل عبر وسيط التحويل'; return; }
   el.innerHTML = 'مبلغ السند: <b class="gl-latin">' + glFmt(amt) + '</b> · الموزَّع: <b class="gl-latin">' + glFmt(sum) + '</b> · ' +
     (Math.abs(diff) < 0.01 && amt ? '<b style="color:#166534;">✅ مطابق</b>' : '<b style="color:#b91c1c;">المتبقي ' + glFmt(diff) + '</b>');
 }
@@ -46497,6 +46580,13 @@ function glBuildEntry() {
     var imp = Math.abs(bd) >= 0.01 ? glJImplied_(ls) : null;   // (V4.219) آلية الـ ERP للقيد بعملتين
     if (imp) ls.forEach(function (l) { if (l.currency === imp.cur && !l.manual) l.rate = imp.rate; });
     e.lines = ls.filter(function (l) { return l.account || l.debit || l.credit; }).map(function (l) { var o = Object.assign({}, l); delete o.manual; delete o._txt; return o; });
+    glFxSmartDesc_(e.lines, e.desc);   // (V4.247) قيد بعملتين ⇒ «… قيمة 100,000 جنيه / 13.98»
+  } else if (kind === 'ptransfer') {
+    var po = glPtLines_(e.desc);
+    if (!po.from || !po.to) throw new Error('اختر الحسابين');
+    if (po.from === po.to) throw new Error('الحسابان متطابقان');
+    if (!po.amt) throw new Error('أدخل المبلغ');
+    e.desc = po.desc; e.lines = po.lines;
   } else if (kind === 'fx') {
     var o = glFxLines_(e.desc);
     if (!o.from || !o.to) throw new Error('اختر الحسابين');
@@ -46512,21 +46602,34 @@ function glBuildEntry() {
     if (!amt) throw new Error('أدخل المبلغ');
     var sum = 0, cl = [];
     document.querySelectorAll('#glVLines tbody tr').forEach(function (tr) {
-      var a = glAccVal(tr.querySelector('.glVAcc')), v = glNum(tr.querySelector('.glVA').value);
+      var a = glAccVal(tr.querySelector('.glVAcc')), v = glNum(tr.querySelector('.glVA').value), cs = tr.querySelector('.glVLCur');
       if (!a && !v) return;
       if (!a) throw new Error('حساب غير معروف: «' + tr.querySelector('.glVAcc').value + '»');
-      sum += v; cl.push({ account: a, amount: v, desc: tr.querySelector('.glVD').value.trim() });
+      cl.push({ account: a, amount: v, cur: cs ? cs.value : cur, desc: tr.querySelector('.glVD').value.trim() });
     });
     if (!cl.length) throw new Error('أضف الطرف المقابل');
-    if (Math.abs(sum - amt) > 0.009) throw new Error('مجموع الأطراف (' + glFmt(sum) + ') لا يساوي مبلغ السند (' + glFmt(amt) + ')');
+    // 💱 (V4.247) طرف بعملة غير عملة السند ⇒ يُسجَّل بعملته عبر «وسيط تحويل العملات» (سعره ضمني من مبلغي العملتين)
+    var same = cl.filter(function (c) { return c.cur === cur; }), oth = cl.filter(function (c) { return c.cur !== cur; });
+    same.forEach(function (c) { sum += c.amount; });
+    if (!oth.length && Math.abs(sum - amt) > 0.009) throw new Error('مجموع الأطراف (' + glFmt(sum) + ') لا يساوي مبلغ السند (' + glFmt(amt) + ')');
+    if (oth.length) {
+      if (oth.some(function (c) { return c.cur !== oth[0].cur; })) throw new Error('الأطراف بعملة مختلفة عن السند يجب أن تكون بعملة واحدة');
+      var rest = Math.round((amt - sum) * 100) / 100, oSum = 0; oth.forEach(function (c) { oSum += c.amount; });
+      if (rest <= 0.009) throw new Error('مبلغ السند مستغرَق بأطراف عملته — لا يتبقى شيء للطرف بالعملة الأخرى');
+      if (!oSum) throw new Error('أدخل مبلغ الطرف بعملته');
+      var oc = oth[0].cur, oRate = oc === 'EGP' ? 1 : glR2Rate(rest * rate / oSum);
+      if (cur !== 'EGP' && oc === 'EGP') rate = glR2Rate(oSum / rest);   // سند بالريال مقابل جنيه ⇒ سعر الريال الضمني
+      oth.forEach(function (c) { c.rate = oRate; });
+    }
     var mainLine = { account: main, currency: cur, rate: rate, desc: e.desc };
     mainLine[V.mainSide === 'D' ? 'debit' : 'credit'] = amt;
     e.lines.push(mainLine);
     cl.forEach(function (c) {
-      var l = { account: c.account, currency: cur, rate: rate, desc: c.desc || e.desc };
+      var l = { account: c.account, currency: c.cur, rate: c.cur === cur ? rate : c.rate, desc: c.desc || e.desc };
       l[V.mainSide === 'D' ? 'credit' : 'debit'] = c.amount;
       e.lines.push(l);
     });
+    if (oth.length) glFxSmartDesc_(e.lines, e.desc);
   }
   return e;
 }
@@ -48884,10 +48987,8 @@ function glHbpNew(kind) {
   var d = document.getElementById('glEDesc'); if (d && !d.value) { var a = GL.map[code]; d.value = (kind === 'receipt' || kind === 'bankIn' ? 'استلام من ' : 'دفع إلى ') + (a ? a.name : code); }
 }
 function glHbpTransfer() {
-  var code = (document.getElementById('glHbpParty') || {}).value || '', r = GL.rates || {};
-  glEntryDlg('journal', { desc: 'تحويل مباشر بين طرفين (دفعة مرتبطة)', lines: [
-    { account: '', debit: '', currency: 'SAR', desc: 'دفعنا له (المستلم)' },
-    { account: code, credit: '', currency: 'SAR', desc: 'استلمنا منه (المحوِّل)' }] });
+  GL._ptPreset = { from: (document.getElementById('glHbpParty') || {}).value || '' };
+  glNew('ptransfer');
 }
 function glHbpList() {
   var el = document.getElementById('glHbpList'); if (!el) return;
