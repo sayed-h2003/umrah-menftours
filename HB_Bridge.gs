@@ -92,7 +92,11 @@ function _hbImportProps_() {
 }
 // للمدير من المحرر: نقل الإعدادات + تجهيز مشغّلات تليجرام/العهد + ضبط ويب هوك البوت على الرابط الجديد
 function hbFinishMigration() {
-  requireScriptOwner_();
+  // (V4.243) صاحب السكربت قد لا يُعرَف ببريده داخل مشروع العمرة ⇒ يُسمح فقط ما دامت ورقة النقل «_hb_migration» موجودة
+  // (تنشئها دالة التصدير بالمشروع القديم وتُحذف هنا بعد الاستيراد مباشرة — نافذة دقائق لمرة واحدة)
+  var hasMig = false; try { hasMig = !!hbProgramSS_().getSheetByName(HB_MIGRATION_SHEET_); } catch (e0) {}
+  if (!hasMig) throw new Error('لا توجد ورقة «' + HB_MIGRATION_SHEET_ + '» بملف الحجوزات — شغّل أولاً hbExportPropsForMerge من محرر مشروع الحجوزات القديم (بعد لصق ملف OLD_PROJECT_Stub فيه)، ثم أعد تشغيل hbFinishMigration هنا');
+  requireScriptOwner_({ allowNoEmail: true });
   var r = _hbImportProps_();
   try { ensureTgQueueSheet_(); ensureTelegramTrigger_(); r.triggers = 'OK'; } catch (e) { r.triggers = e.message; }
   try { tgWebhookSelfHeal_(); r.webhook = 'OK'; } catch (e) { r.webhook = e.message; }

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.242 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.243 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.242)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.243)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.242</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.243</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7621,7 +7621,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.242";
+var CLIENT_APP_VERSION = "4.243";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -48714,7 +48714,7 @@ function glAutoDraw(r, dry) {
       k(r.same, 'بلا تغيير') + k((r.blocked || []).length, 'محجوز (فترة مقفلة)', '#b45309') + k((r.errors || []).length, 'خطأ', '#b91c1c') + '</div>' +
     '<div class="d-flex gap-1 flex-wrap mb-1">' + src + '</div>' +
     (r.newAccounts ? '<details><summary class="small fw-bold" style="cursor:pointer;">➕ ' + (dry ? 'حسابات ستُنشأ' : 'حسابات أُنشئت') + ' بالدليل (' + r.newAccounts + ')</summary><div class="small mt-1" style="columns:2;">' + (r.newAccountNames || []).map(function (n) { return '<div>' + glEsc(n) + '</div>'; }).join('') + '</div></details>' : '') +
-    ((r.warnings || []).length ? '<div class="gl-note mt-2" style="background:#fff7ed;">' + r.warnings.map(glEsc).join('<br>') + '</div>' : '') +
+    ((r.warnings || []).length ? '<details class="mt-2"><summary class="small fw-bold" style="cursor:pointer;color:#92400e;">⚠️ تنبيهات (' + r.warnings.length + ')</summary><div class="gl-note mt-1" style="background:#fff7ed;max-height:240px;overflow:auto;">' + r.warnings.map(glEsc).join('<br>') + '</div></details>' : '') +
     tbl('⛔ أخطاء (لم تُسجَّل)', r.errors, [['التاريخ', 'date', 1], ['البيان', 'desc'], ['السبب', 'msg']]) +
     tbl('🔒 تغييرات محجوزة بفترة مقفلة', r.blocked, [['التاريخ', 'date', 1], ['البيان', 'desc'], ['السبب', 'why']]) +
     tbl('➕ ' + (dry ? 'قيود ستُنشأ' : 'قيود أُنشئت') + ' (أول 30)', (r.samples || {}).created, [['التاريخ', 'date', 1], ['البيان', 'desc'], ['المبلغ', 'amt', 1]]) +
@@ -49400,7 +49400,7 @@ function glHbSyncUI(btn) {
     glRun('glAutoSync', [], function (res) {
       btn.disabled = false; btn.innerHTML = '🔄 مزامنة القيود الآن';
       _showPopup('✅ جديد ' + res.created + ' · معدّل ' + res.updated + ' · ملغى ' + res.voided + ' · بلا تغيير ' + res.same + (res.errors.length ? '\n⛔ أخطاء: ' + res.errors.length + ' — التفاصيل بتبويب القيود التلقائية' : '') +
-        ((res.warnings || []).length ? '\n\n' + res.warnings.join('\n') : ''), res.errors.length ? 'warning' : 'success', 'المزامنة');
+        ((res.warnings || []).length ? '\n\n⚠️ ' + res.warnings.slice(0, 4).join('\n⚠️ ') + (res.warnings.length > 4 ? '\n… و' + (res.warnings.length - 4) + ' تنبيهات أخرى بتبويب «القيود التلقائية»' : '') : ''), res.errors.length ? 'warning' : 'success', 'المزامنة');
       GL._autoRes = res; GL._autoResDry = false;
       glRefreshData(function () { glHbLoad(true); });
     }, function (e) { btn.disabled = false; btn.innerHTML = '🔄 مزامنة القيود الآن'; _showPopup(e.message || e, 'error'); });

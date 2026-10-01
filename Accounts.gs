@@ -2343,6 +2343,11 @@ function _glAutoBuild_(user, write, scope) {
     } else hbPre.forEach(function (e) { post.push(e); });
   }
   pre = pre.concat(hbPre);
+  // (V4.243) تحذيرات متكررة (مجموعة تأشيرات/ملف وزارة بلا رحلة) تُجمَّع في سطر واحد لكل نوع بدل مئات السطور
+  var grpW = [[/^مجموعة تأشيرات (.*) بلا رحلة مرتبطة/, 'مجموعة تأشيرات بلا رحلة مرتبطة — سُجّلت على تكلفة التأشيرات العامة'],
+    [/^ملف وزارة (.*) بلا رحلة مرتبطة/, 'ملف وزارة بلا رحلة مرتبطة — سُجّلت رسومه على «رسوم غرفة الوزارة» العامة']], grpRefs = [[], []];
+  warn = warn.filter(function (w) { for (var gi = 0; gi < grpW.length; gi++) { var gm = String(w).match(grpW[gi][0]); if (gm) { grpRefs[gi].push(gm[1]); return false; } } return true; });
+  grpW.forEach(function (g, gi) { var L = grpRefs[gi]; if (L.length) warn.push(L.length + ' ' + g[1] + ': ' + L.slice(0, 12).join('، ') + (L.length > 12 ? ' …و' + (L.length - 12) + ' غيرها' : '')); });
   return { entries: post, preCount: pre.length, warnings: warn, roles: roles, party: party, calcItems: calcItems, calcPays: calcPays, receipts: receipts, mfFiles: mfFiles, files: files, tRows: tRows, tPrices: tPrices };
 }
 /* 📈 (V4.217) القيود التلقائية: كل حركة بعملتها الطبيعية، والمعادل بسعر صرف يوم القيد من «أسعار الصرف اليومية»
