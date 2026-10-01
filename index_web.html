@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.249 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.250 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.249)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.250)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.249</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.250</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7625,7 +7625,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.249";
+var CLIENT_APP_VERSION = "4.250";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -47840,7 +47840,10 @@ function glCustSheetDlg(code) {
         '<div class="col-md-6"><label class="gl-lbl">رابط شيت العهدة</label><input id="glCsUrl" class="form-control form-control-sm gl-latin" dir="ltr" value="' + glEsc(url) + '" placeholder="https://docs.google.com/spreadsheets/d/…"></div>' +
         '<div class="col-md-3"><label class="gl-lbl">اسم الورقة (فارغ = الأولى)</label><input id="glCsTab" class="form-control form-control-sm" value="' + glEsc(c.tab || '') + '"></div>' +
         '<div class="col-md-1"><label class="gl-lbl">أول صف</label><input id="glCsRow" class="form-control form-control-sm gl-latin" value="' + (c.startRow || 2) + '"></div>' +
-        '<div class="col-md-2"><label class="d-flex gap-1 align-items-center small mb-1"><input type="checkbox" id="glCsAuto"' + (c.auto ? ' checked' : '') + '> 🕐 مزامنة كل ساعة</label></div>' +
+        // ⏱️ (V4.250) المزامنة التلقائية كل N دقيقة أو كل N ساعة
+        '<div class="col-md-3"><label class="d-flex gap-1 align-items-center small mb-1"><input type="checkbox" id="glCsAuto"' + (c.auto ? ' checked' : '') + '> 🕐 مزامنة تلقائية كل</label>' +
+          '<div class="d-flex gap-1"><input id="glCsEveryN" type="number" min="1" max="59" class="form-control form-control-sm gl-latin text-center" style="width:70px;" value="' + ((c.every && c.every.n) || 1) + '">' +
+          '<select id="glCsEveryU" class="form-select form-select-sm"><option value="min"' + (c.every && c.every.unit === 'min' ? ' selected' : '') + '>دقيقة</option><option value="hour"' + (!c.every || c.every.unit !== 'min' ? ' selected' : '') + '>ساعة</option></select></div></div>' +
         // (V4.249) عملة قيود العهدة: الافتراضي ريال ويمكن تغييرها — حساب عهدة بعملة ثابتة يُقيَّد بعملته (تُغيَّر من تعديل الحساب)
         '<div class="col-md-2"><label class="gl-lbl">عملة العهدة</label><select id="glCsCur" class="form-select form-select-sm"' + (a.currency ? ' disabled title="عملة الحساب ثابتة بالدليل — تُغيَّر من تعديل الحساب"' : '') + '>' +
           ['SAR', 'EGP', 'USD'].map(function (k) { return '<option value="' + k + '"' + ((a.currency || c.cur || 'SAR') === k ? ' selected' : '') + '>' + GL_CUR_LBL_[k] + '</option>'; }).join('') + '</select></div>' +
@@ -47860,7 +47863,8 @@ function glCustSheetDlg(code) {
   });
 }
 function glCsSave_(code, btn) {
-  var o = { url: glVal('glCsUrl'), tab: glVal('glCsTab'), startRow: glVal('glCsRow'), auto: document.getElementById('glCsAuto').checked, cols: {}, cur: (document.getElementById('glCsCur') || {}).value || 'SAR' };
+  var o = { url: glVal('glCsUrl'), tab: glVal('glCsTab'), startRow: glVal('glCsRow'), auto: document.getElementById('glCsAuto').checked, cols: {}, cur: (document.getElementById('glCsCur') || {}).value || 'SAR',
+    every: { unit: (document.getElementById('glCsEveryU') || {}).value || 'hour', n: parseInt((document.getElementById('glCsEveryN') || {}).value, 10) || 1 } };
   ['in', 'out', 'desc', 'date', 'party', 'qaid'].forEach(function (k) { o.cols[k] = glVal('glCsC_' + k).toUpperCase(); });
   btn.disabled = true;
   glRun('glCustSheetSave', [code, o], function (res) {

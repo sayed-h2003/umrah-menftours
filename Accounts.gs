@@ -3190,9 +3190,16 @@ function glCustSheetSave(authToken, code, cfg) {
   }
   var S = _glCsOpen_(o);
   o.tab = S.sh.getName(); o.title = S.ss.getName(); o.cur = _glCur_(a.currency || cfg.cur || 'SAR'); o.auto = !!cfg.auto;   // (V4.249) الافتراضي ريال ويمكن تغييره
+  // ⏱️ (V4.250) تكرار المزامنة التلقائية: كل N دقيقة (1-59) أو كل N ساعة (1-24)
+  var ev = cfg.every || {}, unit = ev.unit === 'min' ? 'min' : 'hour', n = parseInt(ev.n, 10) || 1;
+  if (unit === 'min' && (n < 1 || n > 59)) throw new Error('عدد الدقائق من 1 إلى 59');
+  if (unit === 'hour' && (n < 1 || n > 24)) throw new Error('عدد الساعات من 1 إلى 24');
+  o.every = { unit: unit, n: n };
   o.by = session.username; o.at = _glNow_();
+  if (cfg.last === undefined) { var old = _glCsCfg_(a.code); if (old.last) o.last = old.last; }
   _glSetSetting_('custsheet:' + a.code, JSON.stringify(o));
-  logChange_(session.username, 'ربط شيت عهدة', 'GL:' + a.code, 'شيت العهدة', '-', o.title + ' / ' + o.tab);
+  _GL_SET_MEMO_ = null; try { _glCsEnsureTrigger_(); } catch (eT) { Logger.log('custsheet trigger: ' + eT.message); }
+  logChange_(session.username, 'ربط شيت عهدة', 'GL:' + a.code, 'شيت العهدة', '-', o.title + ' / ' + o.tab + (o.auto ? ' — تلقائي كل ' + o.every.n + (o.every.unit === 'min' ? ' دقيقة' : ' ساعة') : ''));
   return { success: true, cfg: o, rows: _glCsReadRows_(S.sh, o.startRow, o).length };
 }
 // preview=true ⇒ معاينة فقط بلا كتابة
@@ -3344,17 +3351,45 @@ function _glCsSync_(code, user, opts) {
     'جديدة ' + out.created.length + ' · معدّلة ' + out.updated.length + ' · مربوطة بالحجوزات ' + out.hb.length + ' · بانتظار الاعتماد ' + out.pending.length);
   return out;
 }
-// المزامنة المجدولة لكل عهدة مربوطة فُعّل لها «تلقائي»
+// المزامنة المجدولة لكل عهدة مربوطة فُعّل لها «تلقائي» — (V4.250) كلٌّ حسب تكراره (دقائق/ساعات) ولا تُكرَّر قبل موعدها
+function _glCsEveryMin_(cfg) { var e = (cfg && cfg.every) || {}, n = parseInt(e.n, 10) || 1; return e.unit === 'min' ? n : n * 60; }
 function _glCsAutoAll_() {
-  var set = _glSettings_(), res = [];
+  _GL_SET_MEMO_ = null;
+  var set = _glSettings_(), res = [], P = PropertiesService.getScriptProperties(), last = {};
+  try { last = JSON.parse(P.getProperty('GL_CS_LAST_AUTO') || '{}') || {}; } catch (e) {}
+  var now = Date.now();
   Object.keys(set).forEach(function (k) {
     if (k.indexOf('custsheet:') !== 0) return;
     var cfg; try { cfg = JSON.parse(set[k] || '{}'); } catch (e) { return; }
     if (!cfg || !cfg.id || !cfg.auto) return;
-    try { var r = _glCsSync_(k.slice(10), 'مزامنة مجدولة', {}); res.push(k.slice(10) + ': ' + r.created.length + '/' + r.pending.length); }
-    catch (e) { res.push(k.slice(10) + ': ' + e.message); }
+    var code = k.slice(10);
+    if (last[code] && now - last[code] < _glCsEveryMin_(cfg) * 60000 - 45000) return;   // لم يحن موعدها (هامش 45 ثانية لتذبذب المشغّل)
+    last[code] = now;
+    try { var r = _glCsSync_(code, 'مزامنة مجدولة', {}); res.push(code + ': ' + r.created.length + '/' + r.pending.length); }
+    catch (e) { res.push(code + ': ' + e.message); }
   });
+  try { P.setProperty('GL_CS_LAST_AUTO', JSON.stringify(last)); } catch (e) {}
   return res;
+}
+// ⏱️ (V4.250) مشغّل مستقل لمزامنة شيتات العهد بأقصر تكرار مطلوب (دقيقة/5/10/15/30 أو كل ساعة) — يُعاد ضبطه عند حفظ أي إعداد
+function glCustSheetCron() {
+  var lock = LockService.getScriptLock(); if (!lock.tryLock(5000)) return;
+  try { _glCsAutoAll_(); } catch (e) { Logger.log('glCustSheetCron: ' + e.message); } finally { lock.releaseLock(); }
+}
+function _glCsEnsureTrigger_() {
+  var set = _glSettings_(), minI = 0;
+  Object.keys(set).forEach(function (k) {
+    if (k.indexOf('custsheet:') !== 0) return;
+    var cfg; try { cfg = JSON.parse(set[k] || '{}'); } catch (e) { return; }
+    if (!cfg || !cfg.id || !cfg.auto) return;
+    var m = _glCsEveryMin_(cfg); if (!minI || m < minI) minI = m;
+  });
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'glCustSheetCron') ScriptApp.deleteTrigger(t); });
+  if (!minI) return { every: 0 };
+  if (minI >= 60) { ScriptApp.newTrigger('glCustSheetCron').timeBased().everyHours(1).create(); return { every: 60 }; }
+  var step = [30, 15, 10, 5, 1].filter(function (x) { return x <= minI && minI % x === 0; })[0] || 1;
+  ScriptApp.newTrigger('glCustSheetCron').timeBased().everyMinutes(step).create();
+  return { every: step };
 }
 /* 📈 (V4.216) أسعار الصرف اليومية — سجل يومي لأسعار بيع/شراء الريال والدولار من بنك مصر (مشغّل يومي تلقائي + جلب يدوي
    + إدخال/لصق للأيام السابقة). سعر أي تاريخ = سعر نفس اليوم، وإلا أقرب يوم سابق مسجَّل — فلا يُجلب السعر مع كل عملية. */
