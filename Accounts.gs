@@ -29,6 +29,8 @@ var GL_SHEETS_ = {
   hbmap:    { name: 'GL_HB_Map',   headers: ['الاسم', 'النوع', 'كود الحساب', 'الربط', 'ملاحظات', 'بواسطة', 'في'] },
   hbpay:    { name: 'GL_HB_Pay',   headers: ['معرّف الدفعة', 'الحساب النقدي', 'العملة', 'المبلغ بالعملة', 'سعر الصرف', 'بواسطة', 'في', 'حساب الطرف', 'ربط يدوي (دفعة مرتبطة)'] },
   hbtrip:   { name: 'GL_HB_Trip',  headers: ['مفتاح الحجز', 'الرحلة', 'بواسطة', 'في'] },
+  // (V4.241) القيود التي كُتبت لها نسخة عاكسة بسجل دفعات برنامج الحجوزات (لتحديثها/حذفها لاحقاً بلا فتح ملف الحجوزات مع كل حفظ)
+  hbmir:    { name: 'GL_HB_Mirror', headers: ['رقم القيد', 'عدد الصفوف', 'في'] },
   // (V4.227) قيود الحجوزات التلقائية المستبدَلة بقيد الـ ERP المطابق (اختيار «اعتماد الـ ERP») — لا يُعاد إنشاؤها بالمزامنة
   hbkeep:   { name: 'GL_HB_KeepERP', headers: ['مفتاح القيد التلقائي', 'قيد الـ ERP المعتمد', 'بيان قيد الحجوزات المحذوف', 'بواسطة', 'في'] },
   // (V4.210-H3) عقود الشارت: شراء غرف لفترة طويلة بدفعات، تُباع حجوزات منفصلة
@@ -2888,6 +2890,7 @@ function glCpDelete(authToken, payIds) {
 // 🔁 إيصال استلام/صرف على حساب عميل بالحسابات العامة ⇒ دفعة بشاشة حسابات العملاء (عامة، أو على الرحلة لو حُددت بالإيصال
 // وللعميل بنود بها) بعلامة مخفية ⟦src:gl-رقم القيد⟧ — تُحدَّث مع تعديل الإيصال وتُحذف بإلغائه/حذفه، ولا تُقيَّد مرة ثانية
 function _glSyncVoucherPays_(entryId, user) {
+  try { _glHbMirrorSync_(entryId); } catch (eM) { try { Logger.log('hb mirror: ' + eM.message); } catch (e0) {} }   // (V4.241) نسخة بسجل دفعات الحجوزات
   try {
     entryId = _glStr_(entryId); if (!entryId) return;
     var tag = '⟦src:gl-' + entryId + '⟧', want = [], f = _glFindEntry_(entryId);
@@ -3673,7 +3676,7 @@ function _glHbCfg_() {
   var s = _glSettings_();
   return { ssId: s.hb_ss_id || '', srcId: s.hb_src_id || '', mk: s.hb_mk_sheet || 'حجوزات مكة', mkRow: parseInt(s.hb_mk_row, 10) || 5,
     md: s.hb_md_sheet || 'حجوزات المدينة', mdRow: parseInt(s.hb_md_row, 10) || 6, pay: s.hb_pay_sheet || 'سجل الدفعات', prof: s.hb_prof_sheet || 'بيانات الحسابات',
-    viaKw: s.hb_via_kw === undefined ? 'حجز|حجوزات|فندق|فنادق|تسكين' : s.hb_via_kw, hbFrom: s.hb_from || '', hbPayFrom: s.hb_pay_from || '' };
+    viaKw: s.hb_via_kw === undefined ? 'حجز|حجوزات|فندق|فنادق|تسكين' : s.hb_via_kw, hbFrom: s.hb_from || '', hbPayFrom: s.hb_pay_from || '', hbGlOnly: s.hb_gl_only_from || '' };
 }
 // نفس computeBookingTotal_ ببرنامج الحجوزات حرفياً: Σ(عدد الغرف × السعر) × الليالي، وأي نوع محجوز بلا سعر ⇐ بلا سعر
 var GL_HB_ROOM_LBL_ = ['دابل', 'ثلاثي', 'رباعي', 'خماسي'];
@@ -3711,9 +3714,15 @@ function _glHbRead_() {
         sale: _glHbTotal_(r, 'client'), cost: _glHbTotal_(r, 'supplier'), rooms: [10, 11, 12, 13].map(function (c) { return parseFloat(r[c]) || 0; }) });
     });
   });
-  var pays = [], psh = ss.getSheetByName(c.pay);
+  var pays = [], psh = ss.getSheetByName(c.pay), onlyK = _glDKey_(_glDate_(_glSettings_().hb_gl_only_from || ''));
   if (psh && psh.getLastRow() > 1) psh.getRange(2, 1, psh.getLastRow() - 1, 10).getValues().forEach(function (r, i) {
     var party = _glStr_(r[1]), date = _glAutoDate_(r[0]); if (!party || !date) return;
+    // 🔗 (V4.241 — دمج المرحلة 1) النسخ العاكسة «GL:» أصلها قيود الحسابات العامة نفسها ⇒ لا تُقرأ كدفعات؛ وبعد تاريخ القطع
+    // الدفعات تُسجَّل من البرنامج الرئيسي فقط ⇒ أي دفعة لاحقة بشيت الحجوزات (عدا مزامنة العهد CUSTODY:) لا تُقيَّد مرتين
+    var pid = _glStr_(r[7]);
+    if (/^GL:/.test(pid) || /^GL:/.test(_glStr_(r[9]))) return;
+    // (دفعة بتاريخ لاحق سُجّلت قبل القطع تبقى — مسجَّلة قبل قفل الأزرار)
+    if (onlyK && _glDKey_(date) >= onlyK && !/^CUSTODY:/.test(pid) && !(r[6] && _glDKey_(_glAutoDate_(r[6])) && _glDKey_(_glAutoDate_(r[6])) < onlyK)) return;
     pays.push({ id: _glStr_(r[7]) || ('row' + (i + 2)), date: date, party: party, dir: _glStr_(r[2]), amount: parseFloat(r[3]) || 0,
       note: _glStr_(r[4]), qaid: /^JE-\d{6}$/.test(_glStr_(r[5])) ? '' : _glStr_(r[5]), linkId: _glStr_(r[9]) });   // (V4.219) رقم قيد الحسابات العامة المكتوب بشيت العهدة ليس «قيداً يدوياً»
   });
@@ -3926,7 +3935,10 @@ function _glHbBuild_(roles, warn, party) {
     }
     if (hasSale) {
       var mg = _glR2_(b.sale.value - (hasCost ? b.cost.value : 0));
-      var revAcc = (sm && sm.type !== 'رحلة') ? party('hbrev', sm.name || b.supplier) : roles.hb_rev;
+      // (V4.241) حجز بلا مورد: إيراده لحساب «إيرادات حجوزات — بدون مورد» (فرعي) — كان يذهب لـ«إيرادات السكن» مباشرة
+      // فيفشل لو صار حساباً تجميعياً بالدليل
+      var hbRevAcc = accs[roles.hb_rev], revAcc = (sm && sm.type !== 'رحلة') ? party('hbrev', sm.name || b.supplier)
+        : (hbRevAcc && !hbRevAcc.isGroup ? roles.hb_rev : party('hbrev', 'بدون مورد'));
       if (Math.abs(mg) >= 0.005) lines.push(L(revAcc, Math.abs(mg), mg < 0, 'SAR', sar, Object.assign({ client: b.client, agent: b.supplier,
         desc: !hasCost ? revStmt + ' (التكلفة غير مسعَّرة)' : mg < 0 ? 'خسارة حجز ' + refNum + ' ' + b.hotel + ' — ' + Math.abs(mg).toFixed(2) + ' SAR' : revStmt }, base)));
     }
@@ -4097,6 +4109,136 @@ function _glHbPayPolicy_() {
   var s = _glSettings_(), keep = {};
   try { JSON.parse(s.hb_pay_keep || '[]').forEach(function (k) { keep[k] = 1; }); } catch (e) {}
   return { from: s.hb_pay_from || '', fromK: _glDKey_(_glDate_(s.hb_pay_from || '')), keep: keep };
+}
+/* 🔗 (V4.241 — دمج المرحلة 1) دفعات الفنادق من البرنامج الرئيسي فقط بعد «hb_gl_only_from»:
+   • أي قيد يدوي/سند (خزينة، بنوك، عهد، قيود، دفعات الفنادق) مرحّل بتاريخ القطع أو بعده وفيه سطر على حساب طرف من أطراف
+     الحجوزات (خريطة الأسماء: عميل سكن/مورد/شارت) ⇒ تُكتب له نسخة بسجل دفعات برنامج الحجوزات بمعرّف GL:<القيد>:<n>
+     ليبقى كشف الحساب والبوت والبوابة هناك صحيحاً خلال الفترة الانتقالية. قيد بطرفين أو أكثر ⇒ رقم ربط GL:<القيد>.
+   • دائن الطرف = «استلمنا منه» · مدين الطرف = «دفعنا له» · المبلغ بالريال (غير الريال ⇒ المعادل ÷ سعر الريال بتاريخ القيد).
+   • عملاء العمرة والرحلات والعهد لا تُنسخ (العهد لها مزامنة شيت العهدة CUSTODY: الخاصة بها).
+   • النسخ العاكسة لا تُقرأ كدفعات بالمزامنة (_glHbRead_) فلا يتكرر القيد. */
+function _glHbOnlyK_() { return _glDKey_(_glDate_(_glSettings_().hb_gl_only_from || '')); }
+function _glHbMirrorParties_() {
+  var o = {}, accs = _glAccounts_().map;
+  _glRows_('hbmap').forEach(function (r) {
+    var n = _glStr_(r[0]), t = _glStr_(r[1]), code = _glStr_(r[2]);
+    if (!n || !code || o[code] || !/^(عميل|مورد|شارت)$/.test(t)) return;
+    var a = accs[code]; if (!a || a.isGroup) return;
+    o[code] = n;
+  });
+  return o;
+}
+function _glHbMirrorRows_(id, cutK, parties, fx) {
+  var f = _glFindEntry_(id); if (!f) return [];
+  var e = _glEntryObj_(f.r);
+  if (e.status !== GL_ST_POSTED_ || (e.sourceKey && !/^VCH:/.test(e.sourceKey))) return [];
+  var k = _glDKey_(e.date); if (!k || k < cutK) return [];
+  parties = parties || _glHbMirrorParties_();
+  var sarRate = _glFxRateAt_('SAR', e.date, fx).rate || _glRates_().SAR || 1, out = [];
+  _glLinesOf_(id).map(_glLineObj_).sort(function (a, b) { return a.lineNo - b.lineNo; }).forEach(function (l) {
+    var nm = parties[l.account]; if (!nm) return;
+    var net = _glR2_(l.debit - l.credit); if (Math.abs(net) < 0.005) return;
+    var amt = l.currency === 'SAR' ? Math.abs(net) : _glR2_(Math.abs(l.bDebit - l.bCredit) / sarRate);
+    if (!amt) return;
+    out.push({ name: nm, dir: net < 0 ? 'استلمنا منه' : 'دفعنا له', amt: amt, note: l.desc || e.desc,
+      cur: l.currency !== 'SAR' ? ' (' + _glR2_(Math.abs(net)) + ' ' + l.currency + ')' : '' });
+  });
+  var m = e.date.match(/^(\d{2})\/(\d{2})\/(\d{4})$/), d = new Date(+m[3], +m[2] - 1, +m[1]), ref = e.voucherNo || id;
+  var link = out.length >= 2 ? 'GL:' + id : '', now = new Date();
+  return out.map(function (x, i) {
+    return [d, x.name, x.dir, x.amt, (x.note || e.type) + x.cur + ' — ' + e.type + ' ' + ref, ref, now, 'GL:' + id + ':' + (i + 1), false, link];
+  });
+}
+// يُستدعى بعد حفظ/ترحيل/إلغاء/حذف أي قيد. opt.force: إعادة كتابة كل الصفوف (أداة المزامنة الشاملة)
+function _glHbMirrorSync_(entryId, opt) {
+  opt = opt || {};
+  var id = _glStr_(entryId); if (!id) return null;
+  var cutK = opt.cutK || _glHbOnlyK_(), was = _glFindRows_('hbmir', id), wasRow = was && was.length ? was[0].row : 0;
+  if (was === null) _glRows_('hbmir').some(function (r, i) { if (_glStr_(r[0]) === id) { wasRow = i + 2; return true; } return false; });
+  var want = cutK ? _glHbMirrorRows_(id, cutK, opt.parties, opt.fx) : [];
+  if (!want.length && !wasRow) return null;   // لا نسخة سابقة ولا جديدة ⇒ بلا فتح ملف الحجوزات
+  var c = _glHbCfg_(); if (!c.ssId) return null;
+  var ss = opt.ss || SpreadsheetApp.openById(c.ssId), sh = ss.getSheetByName(c.pay); if (!sh) return null;
+  var pre = 'GL:' + id + ':', last = sh.getLastRow(), have = [];
+  if (last >= 2) sh.getRange(2, 8, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(pre) === 0) have.push(i + 2); });
+  var n = Math.min(have.length, want.length);
+  for (var i = 0; i < n; i++) sh.getRange(have[i], 1, 1, 10).setValues([want[i]]);
+  for (var j = have.length - 1; j >= want.length; j--) sh.deleteRow(have[j]);
+  if (want.length > n) sh.getRange(sh.getLastRow() + 1, 1, want.length - n, 10).setValues(want.slice(n));
+  var mSh = _glSheet_('hbmir');
+  if (want.length) {
+    var row = [id, want.length, _glNow_()];
+    if (wasRow) mSh.getRange(wasRow, 1, 1, 3).setValues([row]); else mSh.getRange(mSh.getLastRow() + 1, 1, 1, 3).setValues([row]);
+  } else if (wasRow) mSh.deleteRow(wasRow);
+  _GL_HB_MEMO_ = null;
+  return { written: want.length, removed: Math.max(0, have.length - want.length) };
+}
+// ضبط تاريخ القطع (للمدير) + مزامنة النسخ العاكسة لكل القيود من التاريخ. date فارغ ⇒ إيقاف (تُحذف كل النسخ العاكسة)
+function glHbGlOnlySet(authToken, date) {
+  var session = requireAuth_(authToken);
+  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
+  var d = _glDate_(date); if (_glStr_(date) && !d) throw new Error('تاريخ غير صالح');
+  var lock = LockService.getScriptLock(); lock.waitLock(120000);
+  try {
+    var old = _glSettings_().hb_gl_only_from || '';
+    _glSetSetting_('hb_gl_only_from', d || '');
+    _GL_SET_MEMO_ = null; _GL_HB_MEMO_ = null;
+    var r = _glHbMirrorAll_();
+    logChange_(session.username, 'تاريخ قطع دفعات الحجوزات', 'GL:SETTINGS', 'hb_gl_only_from', old || '-', d || '-');
+    return Object.assign({ success: true, from: d || '' }, r);
+  } finally { lock.releaseLock(); }
+}
+function glHbMirrorResync(authToken) {
+  var session = requireAuth_(authToken);
+  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
+  var lock = LockService.getScriptLock(); lock.waitLock(120000);
+  try { return Object.assign({ success: true, from: _glSettings_().hb_gl_only_from || '' }, _glHbMirrorAll_()); }
+  finally { lock.releaseLock(); }
+}
+// قائمة القيود المنسوخة لبرنامج الحجوزات (لتبويب «💳 دفعات الفنادق»)
+function glHbMirrorList(authToken) {
+  _glPerm_(authToken, 'view');
+  var m = {}; _glRows_('hbmir').forEach(function (r) { var id = _glStr_(r[0]); if (id) m[id] = { n: _glNum_(r[1]), at: _glStr_(r[2]) }; });
+  var ids = Object.keys(m), out = [];
+  if (ids.length) {
+    var lines = {}; _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (m[id]) (lines[id] = lines[id] || []).push(_glLineObj_(l)); });
+    _glRows_('entries').forEach(function (r) {
+      var id = _glStr_(r[0]); if (!m[id]) return;
+      var e = _glEntryObj_(r);
+      out.push({ id: id, date: e.date, type: e.type, desc: e.desc, status: e.status, voucherNo: e.voucherNo, rows: m[id].n, at: m[id].at,
+        lines: (lines[id] || []).map(function (l) { return { account: l.account, debit: l.debit, credit: l.credit, currency: l.currency }; }) });
+    });
+  }
+  out.sort(function (a, b) { return _glDKey_(b.date).localeCompare(_glDKey_(a.date)) || b.id.localeCompare(a.id); });
+  return { success: true, from: _glSettings_().hb_gl_only_from || '', rows: out.slice(0, 1500), parties: _glHbMirrorParties_() };
+}
+function _glHbMirrorAll_() {
+  var cutK = _glHbOnlyK_(), ids = {}, parties = _glHbMirrorParties_(), fx = _glFxDailyMap_();
+  _glRows_('hbmir').forEach(function (r) { var id = _glStr_(r[0]); if (id) ids[id] = 1; });
+  if (cutK) {
+    var lines = {}; _glRows_('lines').forEach(function (l) { if (parties[_glStr_(l[4])]) lines[_glStr_(l[0])] = 1; });
+    _glRows_('entries').forEach(function (r) {
+      var id = _glStr_(r[0]), sk = _glStr_(r[6]);
+      if (lines[id] && _glStr_(r[5]) === GL_ST_POSTED_ && (!sk || /^VCH:/.test(sk)) && _glDKey_(_glDate_(r[2])) >= cutK) ids[id] = 1;
+    });
+  }
+  var c = _glHbCfg_(); if (!c.ssId) return { mirrored: 0, rows: 0 };
+  var ss = SpreadsheetApp.openById(c.ssId), n = 0, rows = 0;
+  Object.keys(ids).forEach(function (id) {
+    var r = _glHbMirrorSync_(id, { cutK: cutK, parties: parties, fx: fx, ss: ss });
+    if (r && r.written) { n++; rows += r.written; }
+  });
+  // صفوف GL: يتيمة (قيد لم يعد موجوداً بالسجل) ⇒ تُحذف
+  var sh = ss.getSheetByName(c.pay), orphan = 0;
+  if (sh && sh.getLastRow() >= 2) {
+    var keep = {}; _glRows_('hbmir').forEach(function (r) { keep[_glStr_(r[0])] = 1; });
+    var del = [];
+    sh.getRange(2, 8, sh.getLastRow() - 1, 1).getValues().forEach(function (r, i) {
+      var m = String(r[0]).match(/^GL:(.+):\d+$/); if (m && !keep[m[1]]) del.push(i + 2);
+    });
+    for (var j = del.length - 1; j >= 0; j--) { sh.deleteRow(del[j]); orphan++; }
+  }
+  return { mirrored: n, rows: rows, orphans: orphan };
 }
 /* 💵 (V4.238) فصل مصدر الدفعات عن مصدر الحجوزات: الحجوزات من برنامج الحجوزات، والدفعات من الـ ERP حتى تاريخ معيّن ثم
    من برنامج الحجوزات. المعاينة تعرض دفعات الحجوزات المسجّلة قبل التاريخ: ما له مقابل بالـ ERP (نفس الطرف والمبلغ ±3 أيام)
@@ -4599,7 +4741,14 @@ function _glHbSeasonPlan_(date) {
     rows.push({ code: a.code, name: a.name, SAR: -net, base: -base }); tot = _glR2_(tot - net);
   });
   rows.sort(function (x, y) { return y.SAR - x.SAR; });
-  return { date: d, rows: rows, total: tot, target: roles.hb_rev, targetName: (accs.map[roles.hb_rev] || {}).name || 'إيرادات السكن' };
+  // (V4.241) «إيرادات السكن» صار تجميعياً بالدليل ⇒ الترحيل لأول حساب فرعي تحته (يفضَّل ما اسمه به «سكن»)
+  var tgt = roles.hb_rev, ta = accs.map[tgt];
+  if (ta && ta.isGroup) {
+    var kids = accs.list.filter(function (x) { return x.parent === tgt && !x.isGroup && x.active !== false && x.kind !== 'hbrev'; });
+    var pick = kids.filter(function (x) { return /سكن/.test(x.name); })[0] || kids[0];
+    tgt = pick ? pick.code : '';
+  }
+  return { date: d, rows: rows, total: tot, target: tgt, targetName: tgt ? (accs.map[tgt] || {}).name : '⚠️ «إيرادات السكن» حساب تجميعي بلا حساب فرعي — أضف حساباً فرعياً تحته أولاً' };
 }
 function glHbSeasonPreview(authToken, date) { _glPerm_(authToken, 'view'); _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; var r = _glHbSeasonPlan_(date); r.success = true; return r; }
 function glHbSeasonClose(authToken, date) {
@@ -4609,6 +4758,7 @@ function glHbSeasonClose(authToken, date) {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
     var P = _glHbSeasonPlan_(date);
     if (!P.rows.length) throw new Error('لا توجد أرباح موردين غير مرحّلة حتى ' + P.date);
+    if (!P.target) throw new Error(P.targetName);
     var lines = [], net = 0;
     P.rows.forEach(function (r) {   // رصيد دائن (ربح) ⇐ يُجعل مديناً لتصفيته
       var amt = Math.abs(r.SAR), rate = amt ? Math.round(Math.abs(r.base / r.SAR) * 1e6) / 1e6 : 1;
