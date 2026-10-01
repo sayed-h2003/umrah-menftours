@@ -196,3 +196,29 @@ function hbBridgeGlRefresh(authToken) {
   } catch (e) { return { success: false, error: e.message }; }
   finally { lock.releaseLock(); }
 }
+
+/* ---------- 🤖 (V4.244) رابط ويب هوك بوت الحجوزات ----------
+   داخل المحرر/المشغّلات قد يعيد ScriptApp.getService().getUrl() رابط الاختبار (/dev بمعرّف السكربت) لا رابط النشر
+   (/exec بمعرّف النشر) — فسُجّل البوت على رابط لا يعمل بعد hbFinishMigration، والإصلاح الذاتي كل دقيقة يكرره.
+   الحل: أول فتح لبرنامج العمرة من المتصفح (سياق النشر الحقيقي) يحفظ رابط /exec الصحيح، ويُعاد تسجيل البوت عليه فوراً. */
+function hbRememberExecUrl_() {
+  try {
+    var u = String(ScriptApp.getService().getUrl() || '').split('?')[0];
+    if (!/\/macros\/s\/[^\/]+\/exec$/.test(u)) return;          // رابط /dev أو غير معروف ⇒ لا شيء
+    var c = CacheService.getScriptCache(); if (c.get('hb_exec_ok') === u) return;
+    var p = PropertiesService.getScriptProperties(), old = p.getProperty(TG_PROP_HOOKURL_) || '';
+    if (old !== u) {
+      p.setProperty(TG_PROP_HOOKURL_, u);
+      try { tgWebhookSelfHeal_(); } catch (e1) { Logger.log('hbRememberExecUrl_/heal: ' + e1.message); }
+    }
+    c.put('hb_exec_ok', u, 21600);
+  } catch (e) { Logger.log('hbRememberExecUrl_: ' + e.message); }
+}
+// تشخيص من المحرر: يطبع وضع البوت والرابط المتوقع وحالة الويب هوك كما يراها تليجرام
+function hbBotStatus() {
+  var p = PropertiesService.getScriptProperties();
+  var r = { mode: tgBotMode_() || '(متوقف)', hasToken: !!tgToken_(), savedExecUrl: p.getProperty(TG_PROP_HOOKURL_) || '(لم يُحفظ — افتح برنامج العمرة من رابطه مرة)',
+    expected: tgWebhookUrl_(), telegram: tgWebhookHealth_() };
+  Logger.log(JSON.stringify(r, null, 2));
+  return r;
+}

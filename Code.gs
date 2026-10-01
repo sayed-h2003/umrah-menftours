@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.243";
+var APP_VERSION = "4.244";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -74,6 +74,8 @@ function doGet(e) {
   // 🧭 تشخيص: يثبت في سجل Executions أن هذا التنفيذ هو فعلاً من نسخة الكود التي تحمل هذا الإصدار،
   // فتقدر تتأكد إن النشر (Deploy) الفعلي محدَّث بمقارنة الرقم هنا مع V3.57 في الشريط العلوي بالمتصفح.
   Logger.log("🚀 doGet نُفِّذَت — APP_VERSION: " + APP_VERSION + " | page: " + (e && e.parameter && e.parameter.page) + " | time: " + new Date());
+  // 🤖 (V4.244) حفظ رابط النشر /exec الحقيقي لويب هوك بوت الحجوزات (المحرر والمشغّلات قد يرون رابط /dev)
+  try { if (typeof hbRememberExecUrl_ === 'function') hbRememberExecUrl_(); } catch (eHook) {}
 
   // 🔗 صفحة العميل (قراءة فقط): ?view=trip&t=<رمز المشاركة> — بلا تسجيل دخول وبلا أي تعديل
   if (e && e.parameter && e.parameter.view === 'trip') {
