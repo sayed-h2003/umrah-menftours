@@ -3,7 +3,7 @@
 // إصدار البرنامج - يُحدَّث يدوياً (رقم النسخة فقط) بعد كل تعديل
 // لتتبع آخر نسخة مرفوعة، ويظهر تلقائياً في الشريط الجانبي وصفحة كشف الحساب
 // ==========================================================
-var APP_VERSION = "7.16.0";
+var APP_VERSION = "7.17.1";
 
 // سقف عدد صفوف نتائج شاشة "كل الحجوزات" المُرسلة للمتصفح في الطلب الواحد
 var BOOKINGS_RESULT_CAP_ = 1500;
@@ -4399,6 +4399,7 @@ function scanLegacyPaymentSheets(token) {
 function importLegacyPayments(sheetNames, token) {
   try {
     var admin = requireAdmin_(token);
+    hbGlOnlyGuardNew_();   // (V4.241) بعد تاريخ القطع الدفعات من البرنامج الرئيسي فقط
     var ss = getSS_();
     var paySheet = ensurePaymentsSheet_();
     var roleMap = buildPartyRoleMap_();
@@ -4447,6 +4448,7 @@ function importLegacyPayments(sheetNames, token) {
 function syncLegacyPayments(token) {
   try {
     requireAdmin_(token);
+    hbGlOnlyGuardNew_();   // (V4.241) بعد تاريخ القطع الدفعات من البرنامج الرئيسي فقط
     var ss = getSS_();
     var paySheet = ensurePaymentsSheet_();
     var roleMap = buildPartyRoleMap_();
@@ -4804,9 +4806,41 @@ function parseAmountLoose_(v) {
 // payment = {partyName, date(yyyy-mm-dd), direction:'in'|'out'|<تسمية كاملة>, amount, note, qaid,
 //   id (اختياري — لإعادة إنشاء دفعة محذوفة بنفس معرّفها الأصلي عند "تراجع" عن حذف، بدل توليد
 //   معرّف جديد لا يطابق أي مرجع سابق), legacyImported (اختياري)}
+// 🔒 (V4.241 — دمج المرحلة 1) الدفعات تُسجَّل من البرنامج الرئيسي فقط بعد تاريخ القطع (الحسابات العامة ← الخزينة/البنوك/
+// العهد/القيود/دفعات الفنادق). الدفعات القديمة قبل التاريخ تبقى قابلة للتعديل هنا؛ والنسخ العاكسة (GL:) تُعدَّل من البرنامج الرئيسي فقط
+function hbGlOnlyFrom_() {
+  try {
+    if (typeof _glSettings_ === 'function') return String(_glSettings_().hb_gl_only_from || '');   // داخل مشروع العمرة (بعد H4)
+    // المشروع المستقل القديم (قبل H4): يُقرأ التاريخ من GL_Settings بملف الحسابات العامة المربوط (GL_LINK_SS_ID) — كاش 5 دقائق
+    var c = CacheService.getScriptCache(), v = c.get('hb_gl_only_from');
+    if (v !== null) return v === '-' ? '' : v;
+    v = '';
+    var id = typeof glLinkId_ === 'function' ? glLinkId_() : '';
+    if (id) {
+      var sh = SpreadsheetApp.openById(id).getSheetByName('GL_Settings');
+      if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+        if (String(r[0]).trim() === 'hb_gl_only_from') v = r[1] instanceof Date ? Utilities.formatDate(r[1], 'GMT+3', 'dd/MM/yyyy') : String(r[1] || '').trim();
+      });
+    }
+    c.put('hb_gl_only_from', v || '-', 300);
+    return v;
+  } catch (e) { return ''; }
+}
+var HB_GL_ONLY_MSG_ = 'تسجيل وتعديل الدفعات صار من البرنامج الرئيسي فقط: الحسابات العامة ← الخزينة / البنوك / العهد / القيود / 🏨 دفعات الفنادق. الدفعة تظهر هنا تلقائياً بعد حفظها هناك.';
+function hbGlOnlyGuardNew_() { var f = hbGlOnlyFrom_(); if (f) throw new Error(HB_GL_ONLY_MSG_ + ' (منذ ' + f + ')'); }
+function hbGlOnlyGuardRow_(sh, id) {
+  if (/^GL:/.test(String(id || ''))) throw new Error('هذه الدفعة مسجّلة من البرنامج الرئيسي — عدّلها أو احذفها من هناك (الحسابات العامة).');
+  var f = hbGlOnlyFrom_(); if (!f) return;
+  var m = f.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if (!m) return;
+  var cut = new Date(+m[3], +m[2] - 1, +m[1]).getTime();
+  var idx = findPaymentRowById_(sh, id); if (idx < 2) return;
+  var d = sh.getRange(idx, 1).getValue();
+  if (d instanceof Date && d.getTime() >= cut) throw new Error(HB_GL_ONLY_MSG_ + ' (منذ ' + f + ')');
+}
 function registerPayment(payment, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'add');
+    hbGlOnlyGuardNew_();
     if (!payment.partyName) throw new Error('اسم الطرف مطلوب');
     var amount = parseAmountLoose_(payment.amount);
     if (!amount || amount <= 0) throw new Error('المبلغ غير صحيح');
@@ -4872,6 +4906,7 @@ function linkedPaymentNote_(rawNote, otherParty, dir) {
 function registerLinkedPayment(payload, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'add');
+    hbGlOnlyGuardNew_();
     var fromParty = (payload.fromParty || '').toString().trim();
     var toParty = (payload.toParty || '').toString().trim();
     if (!fromParty || !toParty) throw new Error('الطرفان مطلوبان');
@@ -4916,6 +4951,7 @@ function registerLinkedPayment(payload, token) {
 function registerPaymentsBatch(direction, rows, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'add');
+    hbGlOnlyGuardNew_();
     if (!rows || rows.length === 0) throw new Error('لا توجد دفعات لتسجيلها');
     var sh = ensurePaymentsSheet_();
     var now = new Date();
@@ -4958,6 +4994,7 @@ function registerPaymentsBatch(direction, rows, token) {
 function registerManualEntry(partyName, date, type, amount, note, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'add');
+    hbGlOnlyGuardNew_();
     if (!partyName) throw new Error('اسم الطرف مطلوب');
     var amt = parseAmountLoose_(amount);
     if (!amt || amt <= 0) throw new Error('المبلغ غير صحيح');
@@ -5068,6 +5105,7 @@ function updatePayment(id, fields, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'edit');
     var sh = ensurePaymentsSheet_();
+    hbGlOnlyGuardRow_(sh, id);
     var rowIdx = findPaymentRowById_(sh, id);
     if (rowIdx === -1) throw new Error('الدفعة غير موجودة (ربما حُذفت)');
     var current = sh.getRange(rowIdx, 1, 1, 6).getValues()[0];
@@ -5174,6 +5212,7 @@ function updateLinkedPayment(linkId, fields, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'edit');
     var sh = ensurePaymentsSheet_();
+    if (/^GL:/.test(String(linkId || ''))) throw new Error('هذه الدفعة مسجّلة من البرنامج الرئيسي — عدّلها من هناك (الحسابات العامة).');
     var rows = findPaymentRowsByLinkId_(sh, linkId);
     if (rows.length < 2) throw new Error('لم أجد طرفَي الدفعة المزدوجة (ربما حُذف أحدهما)');
     var fromParty = (fields.fromParty || '').toString().trim();
@@ -5280,6 +5319,7 @@ function deletePayment(id, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'delete');
     var sh = ensurePaymentsSheet_();
+    hbGlOnlyGuardRow_(sh, id);
     var rowIdx = findPaymentRowById_(sh, id);
     if (rowIdx === -1) throw new Error('الدفعة غير موجودة (ربما حُذفت مسبقًا)');
     var rowVals = sh.getRange(rowIdx, 1, 1, 4).getValues()[0]; // التاريخ، اسم الطرف، الاتجاه، المبلغ

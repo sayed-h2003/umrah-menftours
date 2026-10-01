@@ -4,7 +4,7 @@
 // لتتبع آخر نسخة مرفوعة، ويظهر تلقائياً في الشريط الجانبي وصفحة كشف الحساب
 // ==========================================================
 // (H4) مدموج داخل مشروع برنامج العمرة — ملفات HB_*
-var HB_APP_VERSION = "7.17.0";
+var HB_APP_VERSION = "7.17.1";
 
 // سقف عدد صفوف نتائج شاشة "كل الحجوزات" المُرسلة للمتصفح في الطلب الواحد
 var BOOKINGS_RESULT_CAP_ = 1500;
@@ -4810,7 +4810,24 @@ function parseAmountLoose_(v) {
 //   معرّف جديد لا يطابق أي مرجع سابق), legacyImported (اختياري)}
 // 🔒 (V4.241 — دمج المرحلة 1) الدفعات تُسجَّل من البرنامج الرئيسي فقط بعد تاريخ القطع (الحسابات العامة ← الخزينة/البنوك/
 // العهد/القيود/دفعات الفنادق). الدفعات القديمة قبل التاريخ تبقى قابلة للتعديل هنا؛ والنسخ العاكسة (GL:) تُعدَّل من البرنامج الرئيسي فقط
-function hbGlOnlyFrom_() { try { return typeof _glSettings_ === 'function' ? String(_glSettings_().hb_gl_only_from || '') : ''; } catch (e) { return ''; } }
+function hbGlOnlyFrom_() {
+  try {
+    if (typeof _glSettings_ === 'function') return String(_glSettings_().hb_gl_only_from || '');   // داخل مشروع العمرة (بعد H4)
+    // المشروع المستقل القديم (قبل H4): يُقرأ التاريخ من GL_Settings بملف الحسابات العامة المربوط (GL_LINK_SS_ID) — كاش 5 دقائق
+    var c = CacheService.getScriptCache(), v = c.get('hb_gl_only_from');
+    if (v !== null) return v === '-' ? '' : v;
+    v = '';
+    var id = typeof glLinkId_ === 'function' ? glLinkId_() : '';
+    if (id) {
+      var sh = SpreadsheetApp.openById(id).getSheetByName('GL_Settings');
+      if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+        if (String(r[0]).trim() === 'hb_gl_only_from') v = r[1] instanceof Date ? Utilities.formatDate(r[1], 'GMT+3', 'dd/MM/yyyy') : String(r[1] || '').trim();
+      });
+    }
+    c.put('hb_gl_only_from', v || '-', 300);
+    return v;
+  } catch (e) { return ''; }
+}
 var HB_GL_ONLY_MSG_ = 'تسجيل وتعديل الدفعات صار من البرنامج الرئيسي فقط: الحسابات العامة ← الخزينة / البنوك / العهد / القيود / 🏨 دفعات الفنادق. الدفعة تظهر هنا تلقائياً بعد حفظها هناك.';
 function hbGlOnlyGuardNew_() { var f = hbGlOnlyFrom_(); if (f) throw new Error(HB_GL_ONLY_MSG_ + ' (منذ ' + f + ')'); }
 function hbGlOnlyGuardRow_(sh, id) {

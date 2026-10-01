@@ -160,3 +160,35 @@ function hbBridgeBookingSave(authToken, glKey, bookingKey, fields) {
   } catch (e) { gl.error = e.message; }
   return { success: true, count: r.count, gl: gl };
 }
+
+/* ---------- 🏨 (V4.242 — دمج المرحلة 2) شاشات الحجوزات داخل برنامج العمرة ----------
+   الشاشات الجديدة (🏨 الفنادق: الحجوزات · الوصول والأرصدة · بيان الأرصدة) تستدعي دوال برنامج الحجوزات نفسها
+   (searchBookings / appendBookingFromForm / editBookingFields / getArrivalsByDateRange / getPartyBalancesAsOf …)
+   بجلسة حجوزات تُصدَر هنا لنفس المستخدم المطابق وبسقف صلاحيته ببرنامج العمرة — فتبقى قواعد الصلاحيات (المدينة،
+   الجانب المالي، مستوى الشاشة) والسجل والتنبيهات وحساب الأسعار مطابقة حرفياً لبرنامج الحجوزات. */
+function hbBridgeSession(authToken) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'admin') && !_sessionHasPerm_(session, 'hotels.view')) throw new Error('لا تملك صلاحية «حجوزات الفنادق»');
+  hbProgramSS_();
+  var user = _hbBridgeUser_(session), cap = user.ssoCap || 'admin';
+  var minutes = getSessionDurationMinutes(), token = Utilities.getUuid(), sessions = readSessions_();
+  sessions[token] = { username: user.username, expiresAt: Date.now() + minutes * 60000, cap: cap };
+  writeSessions_(sessions);
+  var cities = user.bookingCityScope && user.bookingCityScope !== 'all' ? [user.bookingCityScope] : ['مكة', 'المدينة'];
+  return safeReturn_({ success: true, token: token, minutes: minutes, cities: cities,
+    user: { username: user.username, name: user.displayName || user.username, permissions: user.permissions || {}, financeLevel: user.financeLevel || '', admin: user.role === 'admin' || cap === 'admin',
+      showCost: hasFinanceLevel_(user, 'cost'), showSale: hasFinanceLevel_(user, 'sale') } });
+}
+// بعد إضافة/تعديل حجز من الشاشات الجديدة: تحديث قيود الحجوزات بالحسابات العامة فوراً (التعديل على حجز مقيَّد
+// ينتظر الاعتماد كالمعتاد). بلا ربط بالحسابات ⇒ لا شيء.
+function hbBridgeGlRefresh(authToken) {
+  var session = requireAuth_(authToken);
+  if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return { success: true, skipped: true };
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    _GL_HB_MEMO_ = null; _GL_ACC_MEMO_ = null;
+    var a = _glAutoRun_(session.username, false, { onlyRx: /^AUTO:HB:/ });
+    return { success: true, created: a.created, updated: a.updated, voided: a.voided, pending: a.pending };
+  } catch (e) { return { success: false, error: e.message }; }
+  finally { lock.releaseLock(); }
+}
