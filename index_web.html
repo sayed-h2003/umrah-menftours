@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.255 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.256 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.255)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.256)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.255</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.256</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -3324,6 +3324,8 @@ input[type="date"]:not(:focus):not(:valid) {
             <span class="ksep"></span>
             <button class="kbtn" onclick="printTripManifest()">🖨️ طباعة / PDF</button>
             <button class="kbtn" onclick="_exportPilgrimsExcel()" title="تصدير كشف المعتمرين إلى ملف إكسيل">📊 تصدير إكسيل</button>
+            <button class="kbtn" onclick="fltExportExcel(false)" title="كشف طيران بنفس تنسيق ملف الحجز (المحدد فقط لو حددت معتمرين، وإلا كل الرحلة)">✈️ كشف طيران</button>
+            <button class="kbtn" onclick="fltCmpDlg()" title="رفع برنت الطيران (صورة/PDF/نص) ومقارنته بأسماء الرحلة">🔍 مطابقة البرنت</button>
             <select id="kashfSelectByClient" class="kbtn" style="appearance:auto;" onchange="_selectPilgrimsByClient(this.value); this.value='';" title="تحديد كل معتمري عميل معيّن دفعة واحدة (مثلاً لطباعة كشف كل عميل على حدة)">
               <option value="">👥 تحديد حسب العميل...</option>
             </select>
@@ -3359,6 +3361,7 @@ input[type="date"]:not(:focus):not(:valid) {
           <div id="kashfBulkBar" class="d-none align-items-center flex-wrap gap-2 mb-2 p-2 rounded-3" style="background:#eff6ff; border:1px solid #93c5fd;">
             <b class="small">المحدد: <span id="kashfBulkCount">0</span> معتمر</b>
             <button class="btn btn-success btn-sm py-0" onclick="printTripManifest(true)">🖨️ طباعة المحدد فقط</button>
+            <button class="btn btn-info btn-sm py-0" onclick="fltExportExcel(true)">✈️ كشف طيران للمحدد</button>
             <button class="btn btn-primary btn-sm py-0" onclick="_bulkTransferKashf()">⇄ نقل مجمع لرحلة</button>
             <button class="btn btn-outline-danger btn-sm py-0" onclick="_bulkDeleteKashf()">🗑️ حذف مجمع من الكشف</button>
             <button class="btn btn-outline-secondary btn-sm py-0" onclick="_toggleKashfSelectAll(false)">إلغاء التحديد</button>
@@ -7677,7 +7680,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.255";
+var CLIENT_APP_VERSION = "4.256";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -17540,6 +17543,268 @@ function _exportPilgrimsExcel() {
   showToast('📊 تم تصدير ' + pilgrims.length + ' معتمر إلى إكسيل');
 }
 
+/* ============================================================================
+   ✈️ (V4.256) كشف الطيران (إكسيل بنفس تنسيق ملف الحجز) + مطابقة برنت الطيران مع أسماء الرحلة
+   ============================================================================ */
+var FLT_MON_ = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+function fltTitle_(type) { return { 'ذكر': 'MR', 'أنثى': 'MRS', 'طفل': 'CHD', 'رضيع': 'INF' }[type] || ''; }
+function fltParts_(latin) {
+  var w0 = String(latin || '').toUpperCase().replace(/['\-.]/g, '').replace(/[^A-Z\s]/g, ' ').split(/\s+/).filter(Boolean), w = [];
+  // الأسماء المركّبة كما تُكتب بالتذاكر: ABD ELRAZEK ⇒ ABDELRAZEK · ABO/ABU/EL/AL + الكلمة التالية
+  for (var i = 0; i < w0.length; i++) { if (/^(ABD|ABDEL|ABDUL|ABO|ABOU|ABU|EL|AL)$/.test(w0[i]) && i + 1 < w0.length) { w.push(w0[i] + w0[i + 1]); i++; } else w.push(w0[i]); }
+  if (!w.length) return null;
+  if (w.length === 1) return { last: w[0], first: w[0], middle: '', all: w };
+  return { last: w[w.length - 1], first: w[0], middle: w.length >= 3 ? w[1] : '', all: w };
+}
+function fltGender_(p) {
+  if (p.type === 'ذكر') return 'M'; if (p.type === 'أنثى') return 'F';
+  var s = (p.mahramRel || '') + ' ' + (p.notes || '');
+  if (/ابنة|بنت|أخت|زوجة|حفيدة/.test(s)) return 'F'; if (/ابن|أخ|زوج|حفيد/.test(s)) return 'M';
+  return '';
+}
+function fltDmy_(s) {   // dd/mm/yyyy ⇒ 05OCT26
+  var m = String(s || '').trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  return m ? ('0' + m[1]).slice(-2) + FLT_MON_[+m[2] - 1] + m[3].slice(2) : '';
+}
+function fltCarrier_(t) {
+  var f = String((t && (t.arrivalFlight || t.departureFlight)) || '').toUpperCase().replace(/\s+/g, '');
+  var m = f.match(/^([A-Z0-9]{2})\d/); if (m) return m[1];
+  var a = String((t && t.airline) || '');
+  var map = [[/سعود|saudia/i, 'SV'], [/مصر|egypt/i, 'MS'], [/ناس|nas/i, 'XY'], [/أديل|اديل|adeal/i, 'F3'], [/النيل|nile/i, 'NP'], [/كايرو|cairo/i, 'SM'], [/العربية|arabia/i, 'G9'], [/فلاي ?دبي|flydubai/i, 'FZ']];
+  for (var i = 0; i < map.length; i++) if (map[i][0].test(a)) return map[i][1];
+  return 'SV';
+}
+// خط السير: القاهرة - جدة - المدينة - جدة - القاهرة (من منفذي الوصول والمغادرة + المدينة لو بالرحلة سكن مدينة)
+function fltRoute_(t) {
+  var sp = function (v) { return String(v || '').split(/\s*→\s*|\s*←\s*|\s*⟶\s*|\s+-\s+|\s*\/\s*|\s+—\s+|\s+–\s+/).map(function (x) { return x.replace(/مطار/g, '').replace(/\s+/g, ' ').trim(); }).filter(Boolean); };
+  var a = sp(t && t.arrivalPort), d = sp(t && t.departurePort);
+  if (a.length === 1) a.unshift('القاهرة'); if (!a.length) a = ['القاهرة'];
+  if (d.length === 1) d.push('القاهرة'); if (!d.length) d = ['القاهرة'];
+  var mid = [], all = a.concat(d).join(' ');
+  if (t && t.madinahHotel && !/مدين/.test(all)) mid.push('المدينة');
+  var pts = a.concat(mid, d), out = [];
+  pts.forEach(function (p) { p = p.replace(/^جده$/, 'جدة'); if (out[out.length - 1] !== p) out.push(p); });
+  return out.join(' - ');
+}
+function fltDm_(s) { var m = String(s || '').match(/^(\d{1,2})[\/\-.](\d{1,2})/); return m ? (+m[1]) + '-' + (+m[2]) : ''; }
+// يُرجع المعتمرين: من الكشف المفتوح (بتعديلاته غير المحفوظة) لو هي نفس الرحلة، وإلا من الخادم
+function fltPilgrims_(tripName, onlySel, cb) {
+  if (tripName === window.currentTripName && document.querySelector('#pilgrimsTableBody .pilgrim-row')) {
+    var list = _collectPilgrimsFromTable(); if (onlySel) list = list.filter(function (p) { return p.selected; });
+    return cb(list);
+  }
+  google.script.run.withSuccessHandler(function (r) { cb(r || []); }).withFailureHandler(function (e) { _showPopup((e && e.message) || String(e), 'error'); }).getTripPilgrims(window.authToken, tripName);
+}
+// 📊 كشف الطيران — نفس أعمدة وتنسيق ملف الحجز (export)
+function fltExportExcel(onlySel) {
+  var t = window._currentTripData; if (!t) return _showPopup('افتح رحلة أولاً', 'warning');
+  if (typeof ExcelJS === 'undefined') return _showPopup('مكتبة الإكسيل غير محمَّلة — أعد تحميل الصفحة', 'error');
+  var sel = document.querySelectorAll('#pilgrimsTableBody .p-bulk:checked').length;
+  fltPilgrims_(t.name, onlySel || sel > 0, function (list) {
+    if (!list.length) return _showPopup('لا يوجد معتمرون', 'warning');
+    var noLat = list.filter(function (p) { return !fltParts_(p.latinName); });
+    var run = function () { fltBuildExcel_(t, list.filter(function (p) { return fltParts_(p.latinName); })); };
+    if (noLat.length) askConfirm_('⚠️ ' + noLat.length + ' معتمر بلا اسم إنجليزي ولن يظهروا في كشف الطيران:\n' + noLat.slice(0, 15).map(function (p) { return '• ' + p.name; }).join('\n') + '\n\nمتابعة؟', run);
+    else run();
+  });
+}
+function fltBuildExcel_(t, list) {
+  if (!list.length) return _showPopup('لا يوجد معتمر باسم إنجليزي', 'warning');
+  var cc = fltCarrier_(t), wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('export');
+  var W = { 1: 16.625, 2: 13.375, 3: 8.375, 4: 13.375, 5: 16.625, 6: 16.625, 7: 16.625, 8: 10, 25: 33.375, 30: 75 };
+  for (var c = 1; c <= 30; c++) ws.getColumn(c).width = W[c] || 3.375;
+  var thin = { style: 'thin', color: { auto: true } }, box = { top: thin, left: thin, bottom: thin, right: thin };
+  var hdrFont = { name: 'Calibri', size: 11, color: { argb: 'FFFFFFFF' } }, hdrFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+  var dataFont = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
+  var r1 = ws.getRow(1); r1.height = 36; r1.getCell(1).value = 'PNR '; r1.getCell(1).font = { name: 'Calibri', size: 28, bold: true, color: { argb: 'FF000000' } };
+  r1.getCell(2).font = { name: 'Calibri', size: 20, bold: true, color: { argb: 'FF000000' } }; r1.getCell(3).value = ' ';
+  var hdr = { 1: 'Passport Number', 2: 'Date of birth', 3: 'Gender', 4: 'Date of expired', 5: 'Last Name', 6: 'First Name', 7: 'Middle Name', 8: 'PAX in PNR', 25: 'Groups Entry', 30: 'CTO entry' };
+  var r2 = ws.getRow(2); r2.height = 15.75;
+  for (c = 1; c <= 30; c++) { var cl = r2.getCell(c); if (hdr[c]) { cl.value = hdr[c]; cl.font = hdrFont; cl.fill = hdrFill; cl.border = box; } else cl.value = ' '; }
+  var cnt = { ADT: 0, CHD: 0, INF: 0 };
+  list.forEach(function (p, i) {
+    var n = fltParts_(p.latinName), ti = fltTitle_(p.type) || 'MR', g = fltGender_(p), dob = fltDmy_(p.birthDate), exp = fltDmy_(p.expiryDate);
+    cnt[ti === 'CHD' ? 'CHD' : ti === 'INF' ? 'INF' : 'ADT']++;
+    var vals = { 1: String(p.passport || '').toUpperCase(), 2: dob, 3: g, 4: exp, 5: n.last, 6: n.first, 7: n.middle, 8: String(i + 1),
+      25: 'NM1' + n.last + '/' + n.first + (n.middle ? ' ' + n.middle : '') + ' ' + ti,
+      30: 'SRDOCS' + cc + 'HK1-P-EGY-' + String(p.passport || '').toUpperCase() + '/EGY-' + dob.toLowerCase() + '/' + g + (ti === 'INF' ? 'I' : '') + '/' + exp.toLowerCase() + '/' + n.last + '/' + n.first + n.middle + '/P' + (i + 1) };
+    var row = ws.getRow(i + 3); row.height = 15.75;
+    for (var c2 = 1; c2 <= 30; c2++) { var x = row.getCell(c2); if (vals[c2] !== undefined) { x.value = vals[c2]; x.font = dataFont; x.border = box; } else x.value = ' '; }
+  });
+  var parts = [t.name, cnt.ADT + ' كبار'];
+  if (cnt.CHD) parts.push(cnt.CHD + ' أطفال'); if (cnt.INF) parts.push(cnt.INF + ' رضع');
+  parts.push('ذهاب ' + fltDm_(t.departDate) + ' عودة ' + fltDm_(t.returnDate)); parts.push(fltRoute_(t));
+  var fname = parts.join(' ').replace(/[\\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim() + '.xlsx';
+  wb.xlsx.writeBuffer().then(function (buf) {
+    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = fname; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    showToast('✈️ كشف الطيران: ' + list.length + ' اسم — ' + fname);
+    var noG = list.filter(function (p) { return !fltGender_(p); });
+    if (noG.length) _showPopup('⚠️ ' + noG.length + ' طفل/رضيع بلا نوع (ذكر/أنثى) — عمود Gender فارغ لهم، أكمله بالملف قبل الإرسال:\n' + noG.map(function (p) { return '• ' + p.name; }).join('\n'), 'warning');
+    window.__fltLastName = fname;
+  });
+}
+
+/* ---------- 🔍 مطابقة برنت الطيران ---------- */
+// قراءة نص البرنت الملصوق (Amadeus/Sabre): "12.ELGENDI/SAFAA MOHAMED MRS" — أكثر من اسم بالسطر
+function fltParseText_(txt) {
+  var s = String(txt || '').toUpperCase().replace(/\r/g, ''), out = [], seen = {};
+  var pnr = (s.match(/RP\/[A-Z0-9]+\/[A-Z0-9]+\s+[A-Z]{2}\/[A-Z]{2}\s+\S+\s+([A-Z0-9]{6})\b/) || s.match(/\b(?:PNR|RECORD LOCATOR|RLOC)[:\s]+([A-Z0-9]{6})\b/) || [])[1] || '';
+  s.split(/(?=(?:^|\s)\d{1,3}\.[A-Z])/m).forEach(function (chunk) {
+    var m = chunk.trim().match(/^(\d{1,3})\.([A-Z][A-Z' \-]*?)\/([A-Z][A-Z' \-()\/0-9]*)/); if (!m) return;
+    var given = m[3].replace(/\(.*$/, '').trim(), paren = (m[3].match(/\(([^)]*)\)/) || [])[1] || '';
+    given = given.split(/\s{2,}/)[0].trim();
+    var w = given.split(/\s+/), title = '';
+    if (/^(MR|MRS|MS|MISS|MSTR|CHD|INF)$/.test(w[w.length - 1])) title = w.pop();
+    if (/CHD/.test(paren)) title = 'CHD'; if (/^INF/.test(paren)) title = title || 'INF';
+    var n = +m[1]; if (seen[n]) return; seen[n] = 1;
+    out.push({ n: n, last: m[2].trim(), given: w.join(' '), title: title });
+  });
+  return { pnr: pnr, pax: out.sort(function (a, b) { return a.n - b.n; }) };
+}
+function fltLev_(a, b) {
+  if (a === b) return 0; var m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  var p = [], c, i, j; for (j = 0; j <= n; j++) p[j] = j;
+  for (i = 1; i <= m; i++) { c = [i]; for (j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1)); p = c; }
+  return p[n];
+}
+function fltSim_(a, b) { a = a.replace(/[^A-Z]/g, ''); b = b.replace(/[^A-Z]/g, ''); var L = Math.max(a.length, b.length) || 1; return 1 - fltLev_(a, b) / L; }
+function fltTitleEq_(a, b) { var n = function (x) { return x === 'MS' ? 'MRS' : x === 'MISS' || x === 'MSTR' ? 'CHD' : x; }; return !a || !b || n(a) === n(b); }
+// المقارنة: تطابق تام ⇒ صيغة مقبولة (نفس الكلمات من الجواز) ⇒ أقرب اسم (فرق حروف) ⇒ الباقي ناقص/زائد
+function fltCompare_(pilgrims, pax) {
+  var T = [], noLat = [];
+  pilgrims.forEach(function (p) {
+    var n = fltParts_(p.latinName); if (!n) { noLat.push(p); return; }
+    T.push({ p: p, n: n, title: fltTitle_(p.type), exp: n.last + '/' + n.first + (n.middle ? ' ' + n.middle : ''), used: false });
+  });
+  var P = pax.map(function (x) { return { x: x, key: x.last + '/' + x.given, used: false }; }), rows = [];
+  var K = function (s) { return String(s).replace(/[^A-Z]/g, ''); };
+  var link = function (t, pp, kind) { t.used = pp.used = true; rows.push({ kind: kind, t: t, pp: pp, titleBad: !fltTitleEq_(pp.x.title, t.title) }); };
+  P.forEach(function (pp) { if (pp.used) return; var t = T.filter(function (t) { return !t.used && K(t.exp) === K(pp.key); })[0]; if (t) link(t, pp, 'ok'); });
+  P.forEach(function (pp) {
+    if (pp.used) return; var g = pp.x.given.split(/\s+/).filter(Boolean);
+    var t = T.filter(function (t) { return !t.used && t.n.last === pp.x.last && g[0] === t.n.first && g.every(function (w) { return t.n.all.indexOf(w) >= 0; }); })[0];
+    if (t) link(t, pp, 'variant');
+  });
+  var cand = [];
+  P.forEach(function (pp, i) { if (pp.used) return; T.forEach(function (t, j) { if (t.used) return;
+    var s = Math.max(fltSim_(pp.key, t.exp), fltSim_(pp.x.given + pp.x.last, t.n.all.join(''))); if (s >= 0.7) cand.push({ i: i, j: j, s: s }); }); });
+  cand.sort(function (a, b) { return b.s - a.s; }).forEach(function (c) { var pp = P[c.i], t = T[c.j]; if (!pp.used && !t.used) link(t, pp, 'fix'); });
+  T.forEach(function (t) { if (!t.used) rows.push({ kind: 'missing', t: t }); });
+  P.forEach(function (pp) { if (!pp.used) rows.push({ kind: 'extra', pp: pp }); });
+  var dup = {}; pax.forEach(function (x) { var k = K(x.last + x.given); dup[k] = (dup[k] || 0) + 1; });
+  return { rows: rows, noLat: noLat, dups: pax.filter(function (x) { return dup[K(x.last + x.given)] > 1; }), tripN: T.length + noLat.length, printN: pax.length };
+}
+function fltCmpDlg() {
+  var trips = (window.tripsCache || []).map(function (t) { return t.name; }).filter(Boolean), cur = window.currentTripName || '';
+  var h = '<div dir="rtl" id="fltDlg"><div class="row g-2 align-items-end">' +
+    '<div class="col-md-5"><label class="small fw-bold">الرحلة</label><input id="fltTrip" class="form-control form-control-sm" list="fltTripDL" value="' + escapeHtml_(cur) + '" placeholder="اختر الرحلة"><datalist id="fltTripDL">' + trips.map(function (n) { return '<option value="' + escapeHtml_(n) + '">'; }).join('') + '</datalist></div>' +
+    '<div class="col-md-7"><label class="small fw-bold">صورة أو PDF للبرنت (يمكن أكثر من صفحة)</label><input id="fltFile" type="file" accept="image/*,application/pdf" multiple class="form-control form-control-sm"></div>' +
+    '<div class="col-12"><label class="small fw-bold">أو الصق نص البرنت هنا (أسرع وأدق — بدون ذكاء اصطناعي)</label><textarea id="fltText" rows="4" class="form-control form-control-sm" dir="ltr" style="font-family:monospace;font-size:12px;" placeholder="1.ABDALLA/MARIAM HAMDI MRS   2.ABDELRAHMAN/SOUZAN MOHAMED MRS ..."></textarea></div></div>' +
+    '<div class="text-end mt-2"><button class="btn btn-primary btn-sm fw-bold" id="fltGo" onclick="fltRun_(this)">🔍 مطابقة</button></div><div id="fltOut" class="mt-2"></div></div>';
+  if (typeof glDlg === 'function') glDlg('✈️ مطابقة برنت الطيران مع أسماء الرحلة', h, 1050);
+}
+function fltRun_(btn) {
+  var trip = (document.getElementById('fltTrip').value || '').trim(), txt = document.getElementById('fltText').value, files = Array.prototype.slice.call(document.getElementById('fltFile').files || []);
+  var out = document.getElementById('fltOut');
+  if (!trip) return _showPopup('اختر الرحلة', 'warning');
+  if (!txt.trim() && !files.length) return _showPopup('ارفع صورة/PDF البرنت أو الصق نصه', 'warning');
+  btn.disabled = true; out.innerHTML = '<div class="text-muted small py-3 text-center">⏳ جارٍ قراءة البرنت…</div>';
+  var done = function (pr) {
+    fltPilgrims_(trip, false, function (pil) {
+      btn.disabled = false;
+      if (!pr.pax.length) { out.innerHTML = '<div class="alert alert-warning py-2 small">لم أجد أسماء في البرنت — تأكد من وضوح الصورة أو الصق النص.</div>'; return; }
+      FLT = { trip: trip, pnr: pr.pnr, pax: pr.pax, res: fltCompare_(pil, pr.pax) };
+      fltDraw_();
+    });
+  };
+  if (txt.trim()) return done(fltParseText_(txt));
+  var acc = { pnr: '', pax: [] }, i = 0;
+  var next = function () {
+    if (i >= files.length) { acc.pax.sort(function (a, b) { return a.n - b.n; }); return done(acc); }
+    var f = files[i++], rd = new FileReader();
+    rd.onload = function () {
+      google.script.run.withSuccessHandler(function (r) {
+        if (!r || !r.success) { btn.disabled = false; out.innerHTML = '<div class="alert alert-danger py-2 small">' + escapeHtml_((r && r.error) || 'تعذّرت القراءة') + '</div>'; return; }
+        acc.pnr = acc.pnr || r.pnr; var have = {}; acc.pax.forEach(function (p) { have[p.n + '|' + p.last + p.given] = 1; });
+        r.pax.forEach(function (p) { if (!have[p.n + '|' + p.last + p.given]) acc.pax.push(p); }); next();
+      }).withFailureHandler(function (e) { btn.disabled = false; out.innerHTML = '<div class="alert alert-danger py-2 small">' + escapeHtml_((e && e.message) || String(e)) + '</div>'; })
+        .flightPrintExtract(window.authToken, String(rd.result).split(',')[1], f.type || 'image/jpeg');
+    };
+    rd.readAsDataURL(f);
+  };
+  next();
+}
+function fltLine_(x) { return x.n + '.' + x.last + '/' + x.given + (x.title ? ' ' + x.title : ''); }
+function fltSummaryText_() {
+  var R = FLT.res, rows = R.rows, L = [];
+  var by = function (k) { return rows.filter(function (r) { return r.kind === k; }); };
+  var ok = by('ok').length + by('variant').length, fix = by('fix'), mis = by('missing'), ext = by('extra'), tb = rows.filter(function (r) { return r.titleBad; });
+  L.push('✈️ مطابقة برنت الطيران — ' + FLT.trip + (FLT.pnr ? ' — PNR ' + FLT.pnr : ''));
+  L.push('عدد الرحلة: ' + R.tripN + ' · عدد البرنت: ' + R.printN + ' · مطابق: ' + ok + ' · يُعدّل: ' + fix.length + ' · ناقص بالبرنت: ' + mis.length + ' · زائد بالبرنت: ' + ext.length);
+  if (fix.length) { L.push('', '✏️ يُعدّل في البرنت (' + fix.length + '):'); fix.forEach(function (r) { L.push('  ' + fltLine_(r.pp.x) + '  ⟵ الصحيح: ' + r.t.exp + ' ' + (r.t.title || r.pp.x.title) + '  (' + r.t.p.name + ')'); }); }
+  if (tb.length) { L.push('', '⚠️ لقب مختلف (' + tb.length + '):'); tb.forEach(function (r) { L.push('  ' + fltLine_(r.pp.x) + '  ⟵ اللقب الصحيح: ' + r.t.title + ' (' + (r.t.p.type || '') + ')'); }); }
+  if (mis.length) { L.push('', '❌ بالرحلة وغير موجود بالبرنت (' + mis.length + '):'); mis.forEach(function (r) { L.push('  ' + r.t.exp + ' ' + r.t.title + '  (' + r.t.p.name + (r.t.p.passport ? ' — ' + r.t.p.passport : '') + ')'); }); }
+  if (ext.length) { L.push('', '➕ بالبرنت وغير موجود بالرحلة (' + ext.length + '):'); ext.forEach(function (r) { L.push('  ' + fltLine_(r.pp.x)); }); }
+  if (R.dups.length) { L.push('', '🔁 مكرر بالبرنت:'); R.dups.forEach(function (x) { L.push('  ' + fltLine_(x)); }); }
+  if (R.noLat.length) { L.push('', '⚠️ بالرحلة بلا اسم إنجليزي (لم يُقارَن) (' + R.noLat.length + '):'); R.noLat.forEach(function (p) { L.push('  ' + p.name); }); }
+  if (!fix.length && !mis.length && !ext.length && !tb.length) L.push('', '✅ البرنت مطابق تماماً لأسماء الرحلة');
+  return L.join('\n');
+}
+var FLT_KIND_ = { ok: ['✅ مطابق', '#dcfce7', '#166534'], variant: ['✅ مقبول (صيغة أخرى من الجواز)', '#ecfdf5', '#047857'], fix: ['✏️ يُعدّل بالبرنت', '#fef3c7', '#92400e'], missing: ['❌ غير موجود بالبرنت', '#fee2e2', '#991b1b'], extra: ['➕ غير موجود بالرحلة', '#e0e7ff', '#3730a3'] };
+function fltTableHtml_() {
+  var E = escapeHtml_, ord = { fix: 0, missing: 1, extra: 2, variant: 3, ok: 4 };
+  var rows = FLT.res.rows.slice().sort(function (a, b) { return (ord[a.kind] - ord[b.kind]) || (((a.pp || {}).x || {}).n || 999) - (((b.pp || {}).x || {}).n || 999); });
+  return '<table class="flt-t" style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#0f2557;color:#fff;"><th style="padding:5px;">#</th><th>الحالة</th><th>بالبرنت</th><th>الصحيح من الرحلة</th><th>اسم المعتمر</th><th>الجواز</th></tr></thead><tbody>' +
+    rows.map(function (r) {
+      var k = FLT_KIND_[r.kind], x = r.pp && r.pp.x, t = r.t;
+      return '<tr style="background:' + k[1] + ';"><td style="padding:4px;border:1px solid #e5e7eb;text-align:center;">' + (x ? x.n : '—') + '</td>' +
+        '<td style="border:1px solid #e5e7eb;color:' + k[2] + ';font-weight:700;white-space:nowrap;padding:4px;">' + k[0] + (r.titleBad ? '<br><span style="color:#b45309;">⚠️ اللقب</span>' : '') + '</td>' +
+        '<td dir="ltr" style="border:1px solid #e5e7eb;font-family:monospace;padding:4px;">' + (x ? E(x.last + '/' + x.given + (x.title ? ' ' + x.title : '')) : '—') + '</td>' +
+        '<td dir="ltr" style="border:1px solid #e5e7eb;font-family:monospace;padding:4px;font-weight:700;">' + (t ? E(t.exp + ' ' + t.title) : '—') + '</td>' +
+        '<td style="border:1px solid #e5e7eb;padding:4px;">' + (t ? E(t.p.name) : '') + '</td><td dir="ltr" style="border:1px solid #e5e7eb;padding:4px;">' + (t ? E(t.p.passport || '') : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+function fltDraw_() {
+  var out = document.getElementById('fltOut'); if (!out) return;
+  var R = FLT.res, c = function (k) { return R.rows.filter(function (r) { return r.kind === k; }).length; };
+  var card = function (lbl, n, bg, fg) { return '<div style="background:' + bg + ';color:' + fg + ';border-radius:8px;padding:6px 10px;text-align:center;min-width:92px;"><div style="font-size:18px;font-weight:800;">' + n + '</div><div style="font-size:11px;">' + lbl + '</div></div>'; };
+  out.innerHTML = '<div class="d-flex flex-wrap gap-2 mb-2">' + card('بالرحلة', R.tripN, '#f1f5f9', '#0f172a') + card('بالبرنت', R.printN, '#f1f5f9', '#0f172a') +
+    card('مطابق', c('ok') + c('variant'), '#dcfce7', '#166534') + card('يُعدّل', c('fix'), '#fef3c7', '#92400e') + card('ناقص بالبرنت', c('missing'), '#fee2e2', '#991b1b') +
+    card('زائد بالبرنت', c('extra'), '#e0e7ff', '#3730a3') + card('لقب مختلف', R.rows.filter(function (r) { return r.titleBad; }).length, '#fff7ed', '#b45309') + '</div>' +
+    '<div class="d-flex flex-wrap gap-1 mb-2"><button class="btn btn-sm btn-outline-secondary" onclick="fltCopy_()">📋 نسخ الملخص</button><button class="btn btn-sm btn-outline-success" onclick="window.open(\'https://wa.me/?text=\'+encodeURIComponent(fltSummaryText_()),\'_blank\')">💬 واتساب</button>' +
+    '<button class="btn btn-sm btn-outline-dark" onclick="fltOutput_(\'print\',this)">🖨️ طباعة</button><button class="btn btn-sm btn-success" onclick="fltOutput_(\'pdf\',this)">📄 PDF</button><button class="btn btn-sm" style="background:#7c3aed;color:#fff;" onclick="fltOutput_(\'image\',this)">🖼️ صورة HD</button></div>' +
+    (R.noLat.length ? '<div class="alert alert-warning py-1 small">⚠️ ' + R.noLat.length + ' معتمر بالرحلة بلا اسم إنجليزي — لم يُقارَنوا: ' + R.noLat.slice(0, 8).map(function (p) { return escapeHtml_(p.name); }).join('، ') + '</div>' : '') +
+    (R.dups.length ? '<div class="alert alert-warning py-1 small">🔁 أسماء مكررة بالبرنت: ' + R.dups.map(function (x) { return escapeHtml_(fltLine_(x)); }).join(' · ') + '</div>' : '') +
+    '<div style="max-height:55vh;overflow:auto;">' + fltTableHtml_() + '</div>';
+}
+function fltCopy_() {
+  var t = fltSummaryText_();
+  try { navigator.clipboard.writeText(t).then(function () { showToast('📋 نُسخ الملخص'); }, function () { prompt('انسخ الملخص:', t); }); } catch (e) { prompt('انسخ الملخص:', t); }
+}
+function fltDoc_() {
+  var E = escapeHtml_, s = fltSummaryText_().split('\n');
+  return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><title>مطابقة برنت الطيران — ' + E(FLT.trip) + '</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet"><style>@page{size:A4;margin:10mm;}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;}body{font-family:Cairo,Tahoma,sans-serif;margin:0;color:#0f172a;}' +
+    '.hd{background:#0f2557;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:8px;}.hd b{font-size:17px;}.sm{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;white-space:pre-wrap;}</style></head><body><div id="rptRoot">' +
+    '<div class="hd"><b>✈️ مطابقة برنت الطيران</b><div>' + E(FLT.trip) + (FLT.pnr ? ' — PNR ' + E(FLT.pnr) : '') + ' — ' + E(typeof glToday === 'function' ? glToday() : new Date().toLocaleDateString()) + '</div></div>' +
+    '<div class="sm">' + E(s.slice(1, 2).join('\n')) + '</div>' + fltTableHtml_() + '</div></body></html>';
+}
+function fltOutput_(kind, btn) {
+  if (!FLT.res) return;
+  var doc = fltDoc_(), fn = 'مطابقة برنت ' + FLT.trip;
+  if (kind === 'image') return exportReportAsImageFHD(function () { return doc; }, fn, btn);
+  if (kind === 'print') { var w = window.open('', '_blank'); if (!w) return _showPopup('اسمح بالنوافذ المنبثقة', 'warning'); w.document.open(); w.document.write(doc.replace('</body>', '<script>window.onload=function(){setTimeout(function(){window.print();},500);};<\/script></body>')); w.document.close(); return; }
+  var modalEl = document.getElementById('shareBookingModal'), body = document.getElementById('shareBookingModalBody');
+  if (!modalEl || !body || !window.bootstrap) return _showPopup('نافذة المشاركة غير متاحة', 'error');
+  if (typeof glDlgClose === 'function') glDlgClose();
+  body.innerHTML = '<div class="text-center p-4">⏳ جارٍ تجهيز ملف PDF…</div>';
+  var inst = new bootstrap.Modal(modalEl); inst.show();
+  google.script.run.withSuccessHandler(function (res) {
+    _renderShareSheet_({ modalEl: modalEl, modalBody: body, modalInstance: inst, res: res, icon: '✈️', shareText: 'مطابقة برنت الطيران — ' + FLT.trip, cleanupOnHide: true, modalTitle: '📤 مشاركة المطابقة', hideWaLink: true });
+  }).withFailureHandler(function (e) { body.innerHTML = '<div class="text-center text-danger p-4">❌ ' + escapeHtml_((e && e.message) || String(e)) + '</div>'; }).flightCmpPdf(window.authToken, doc, fn);
+}
 function printTripManifest(onlySelected) {
   var t = window._currentTripData;
   if (!t) { alert('لا توجد بيانات رحلة'); return; }

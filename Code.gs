@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.255";
+var APP_VERSION = "4.256";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -25863,4 +25863,53 @@ function syncTripAccountsBg(authToken, trips) {
     try { _syncTripAccounts_(authToken, t, session.username); done++; } catch (e) { Logger.log('syncTripAccountsBg ' + t + ': ' + e); }
   });
   return { success: true, synced: done };
+}
+
+/* ============================================================================
+   ✈️ (V4.256) مطابقة برنت الطيران مع أسماء الرحلة + كشف الطيران (إكسيل)
+   • flightPrintExtract: صورة/PDF برنت (Amadeus/Sabre…) ⇒ الذكاء الاصطناعي يفرّغ الأسماء كما هي (اللقب/الاسم + اللقب MR/MRS/CHD/INF)
+     — ولو المستخدم لصق النص مباشرة تتم القراءة بالواجهة بلا ذكاء اصطناعي.
+   • المقارنة والتقرير وملف الإكسيل كلها بالواجهة؛ الخادم لـ PDF فقط.
+   ============================================================================ */
+function flightPrintExtract(authToken, base64, mimeType) {
+  requireAuth_(authToken);
+  var KEYS = _geminiKeys_();
+  if (!KEYS.length) return { success: false, error: 'مفتاح Gemini غير مُعدّ — أضفه من شاشة الإعدادات، أو الصق نص البرنت بدل الصورة' };
+  if (!base64) return { success: false, error: 'لا يوجد ملف' };
+  var prompt = 'This is an airline reservation (PNR) screen print, e.g. Amadeus/Sabre/Galileo, possibly several pages. ' +
+    'Extract EVERY passenger name element exactly as printed, in order. Names look like "12.ELGENDI/SAFAA MOHAMED MRS" (number.SURNAME/GIVEN NAMES TITLE). ' +
+    'Also extract the PNR record locator if visible, and flight segments. Respond with pure JSON only, no markdown: ' +
+    '{"pnr":"<record locator or empty>","pax":[{"n":<number>,"last":"<SURNAME>","given":"<GIVEN NAMES without title>","title":"<MR|MRS|MS|MISS|MSTR|CHD|INF or empty>"}],' +
+    '"segments":["<segment line as printed>"]}. Keep spelling EXACTLY as printed (do not correct). Ignore lines that are not passenger names.';
+  var payload = { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType || 'image/jpeg', data: String(base64).replace(/^data:[^,]*,/, '') } }] }],
+    generationConfig: { temperature: 0 } };
+  var MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'], res = null, lastErr = '', wait = 0;
+  outer: for (var k = 0; k < KEYS.length; k++) for (var m = 0; m < MODELS.length; m++) {
+    var r = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[m] + ':generateContent?key=' + KEYS[k],
+      { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    var code = r.getResponseCode(), j = null; try { j = JSON.parse(r.getContentText()); } catch (e) {}
+    if (code === 200 && j && j.candidates && j.candidates[0] && j.candidates[0].content) { res = j; break outer; }
+    lastErr = (j && j.error && j.error.message) || ('HTTP ' + code);
+    var rm = String(lastErr).match(/retry in ([0-9.]+)s/i); if (rm) wait = Math.max(wait, Math.ceil(+rm[1]));
+    if (code !== 429 && code !== 503 && code !== 500) break outer;
+  }
+  if (!res) return wait ? { success: false, quotaWait: wait, error: 'الذكاء الاصطناعي مشغول — أعد المحاولة بعد ' + wait + ' ثانية' } : { success: false, error: 'الذكاء الاصطناعي: ' + lastErr };
+  var txt = String(res.candidates[0].content.parts.map(function (p) { return p.text || ''; }).join('')).replace(/```json|```/g, '');
+  var mm = txt.match(/\{[\s\S]*\}/); if (!mm) return { success: false, error: 'رد غير مفهوم — جرّب صورة أوضح أو الصق النص' };
+  var d; try { d = JSON.parse(mm[0]); } catch (e2) { return { success: false, error: 'رد غير مفهوم — جرّب صورة أوضح أو الصق النص' }; }
+  var pax = (d.pax || []).map(function (p, i) {
+    return { n: +p.n || (i + 1), last: String(p.last || '').toUpperCase().trim(), given: String(p.given || '').toUpperCase().trim(), title: String(p.title || '').toUpperCase().trim() };
+  }).filter(function (p) { return p.last || p.given; });
+  return { success: true, pnr: String(d.pnr || ''), pax: pax, segments: d.segments || [] };
+}
+function flightCmpPdf(authToken, htmlDoc, fileName) {
+  requireAuth_(authToken);
+  var folder = getDriveFolder_('TEMP');
+  fileName = String(fileName || 'مطابقة برنت الطيران').replace(/[\\/:*?"<>|]/g, '-').trim();
+  var pdfBlob = Utilities.newBlob(htmlDoc, 'text/html', fileName + '.html').getAs('application/pdf');
+  pdfBlob.setName(fileName + '.pdf');
+  var file = folder.createFile(pdfBlob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  return { success: true, fileId: file.getId(), downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
+    pdfBase64: Utilities.base64Encode(pdfBlob.getBytes()), fileName: fileName };
 }
