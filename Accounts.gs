@@ -399,6 +399,28 @@ function glSaveSettings(authToken, s) {
   logChange_(session.username, 'تعديل إعدادات الحسابات العامة', 'GL:settings', '-', '-', JSON.stringify(s));
   return { success: true, settings: _glSettingsOut_(), rates: _glRates_() };
 }
+// 🔗 (V4.251) دمج الملاحظات الظاهرة مع وسوم الربط ⟦alias:…⟧ — تُحفظ وسوم الفئات الأخرى كما هي، وتُستبدل وسوم الرحلات بالقائمة الجديدة
+function _glAccNotesMerge_(oldNotes, newNotes, tripLinks) {
+  var re = /⟦alias:([^|⟧]*)\|([^⟧]+)⟧/g, keep = [];
+  String(oldNotes || '').replace(re, function (m, k) { if (!(Array.isArray(tripLinks) && k === 'trip')) keep.push(m); return m; });
+  var vis = _glStr_(String(newNotes || '').replace(re, ''));
+  if (!Array.isArray(tripLinks)) String(newNotes || '').replace(re, function (m) { if (keep.indexOf(m) < 0) keep.push(m); return m; });
+  var seen = {};
+  (tripLinks || []).forEach(function (n) { n = _glStr_(n); var k = _glNorm_(n); if (n && !seen[k]) { seen[k] = 1; keep.push('⟦alias:trip|' + n + '⟧'); } });
+  return _glStr_(vis + (keep.length ? ' ' + keep.join('') : ''));
+}
+// رحلة واحدة ⇐ حساب واحد: نزيل نفس الرحلة من وسوم أي حساب آخر
+function _glAccTripUnlinkOthers_(selfCode, tripLinks) {
+  if (!Array.isArray(tripLinks) || !tripLinks.length) return;
+  var want = {}; tripLinks.forEach(function (n) { want[_glNorm_(n)] = 1; });
+  var sh = _glSheet_('accounts');
+  _glAccounts_().list.forEach(function (x) {
+    if (x.code === selfCode || String(x.notes || '').indexOf('⟦alias:trip|') < 0) return;
+    var nn = String(x.notes).replace(/⟦alias:trip\|([^⟧]+)⟧/g, function (m, n) { return want[_glNorm_(n)] ? '' : m; });
+    if (nn !== x.notes) sh.getRange(x._row, 10).setValue(_glStr_(nn));
+  });
+  _GL_ACC_MEMO_ = null;
+}
 function glSaveAccount(authToken, a) {
   a = a || {};
   var isEdit = !!_glStr_(a.code) && !!_glAccounts_().map[_glStr_(a.code)] && a.isEdit;
@@ -413,12 +435,14 @@ function glSaveAccount(authToken, a) {
       var sh = _glSheet_('accounts');
       sh.getRange(acc._row, 2).setValue(_glStr_(a.name));
       sh.getRange(acc._row, 6, 1, 5).setValues([[a.currency ? _glCur_(a.currency) : '', _glStr_(a.kind || acc.kind), _glStr_(a.link !== undefined ? a.link : acc.link),
-        a.active === false ? 'لا' : 'نعم', _glStr_(a.notes)]]);
+        a.active === false ? 'لا' : 'نعم', _glAccNotesMerge_(acc.notes, a.notes, a.tripLinks)]]);
       _GL_ACC_MEMO_ = null;
+      _glAccTripUnlinkOthers_(acc.code, a.tripLinks);
       logChange_(session.username, 'تعديل حساب بالدليل', 'GL:' + acc.code, 'اسم الحساب', old, a.name);
       return { success: true, account: _glAccounts_().map[acc.code] };
     }
-    var created = _glCreateAccount_({ parent: _glStr_(a.parent), name: a.name, isGroup: !!a.isGroup, currency: a.currency, kind: a.kind, link: a.link, notes: a.notes }, session.username);
+    var created = _glCreateAccount_({ parent: _glStr_(a.parent), name: a.name, isGroup: !!a.isGroup, currency: a.currency, kind: a.kind, link: a.link, notes: _glAccNotesMerge_('', a.notes, a.tripLinks) }, session.username);
+    _glAccTripUnlinkOthers_(created.code, a.tripLinks);
     logChange_(session.username, 'إضافة حساب بالدليل', 'GL:' + created.code, '-', '-', created.code + ' — ' + created.name);
     return { success: true, account: created };
   } finally { lock.releaseLock(); }
@@ -1025,7 +1049,9 @@ var GL_VCH_BRAND_DEF_ = {
   vch_name_ar: 'شركة منف للسياحة الدولية', vch_name_en: 'Menf International Tours',
   vch_tagline: 'رحلات حج وعمرة - تذاكر سفر - برامج سياحية', vch_address: '32 شارع الفلكي - باب اللوق - القاهرة',
   vch_phone: '+002 02 27926054', vch_email: 'mt@menftours.net', vch_logo_company: '',
-  vch_note: 'لا يعتد بهذا الإيصال بعد انتهاء الرحلة أو بعد مرور 30 يوماً من تاريخ الإيصال'
+  vch_note: 'لا يعتد بهذا الإيصال بعد انتهاء الرحلة أو بعد مرور 30 يوماً من تاريخ الإيصال',
+  // 🏢 (V4.251) شركات إضافية لإصدار الكشوف — JSON: [{id,name_ar,name_en,tagline,address,phone,email,logo_company,logo_file}]
+  vch_companies: '[]'
 };
 function _glSettingsOut_() { var o = JSON.parse(JSON.stringify(_glSettings_())); o.vchBrand = _glVchBrand_(); return o; }
 function _glVchBrand_() {
@@ -2001,10 +2027,12 @@ function _glAutoRoles_(user, dry) {
 // حسابات الأطراف (عميل/وكيل/مورد نقل/شركة رسوم غرفة) — تُنشأ الناقصة دفعة واحدة
 function _glPartyResolver_(roles, user) {
   var accs = _glAccounts_(), byLink = {}, pending = [], pendKeys = [], taken = {}, madeNames = [];
+  accs.list.forEach(function (a) { if (a.link && !a.isGroup) byLink[a.kind + '|' + _glNorm_(a.link)] = a.code; });
+  // (V4.223) روابط الحسابات المدموجة فيه ⟦alias:الفئة|الاسم⟧ — لا يُعاد فتح الحساب المحذوف بالمزامنة
+  // (V4.251) تُطبَّق بعد الروابط لتتغلب عليها: ربط أكثر من رحلة بحساب محاسبي واحد ⟦alias:trip|اسم الرحلة⟧
   accs.list.forEach(function (a) {
-    if (a.link && !a.isGroup) byLink[a.kind + '|' + _glNorm_(a.link)] = a.code;
-    // (V4.223) روابط الحسابات المدموجة فيه ⟦alias:الفئة|الاسم⟧ — لا يُعاد فتح الحساب المحذوف بالمزامنة
-    String(a.notes || '').replace(/⟦alias:([^|⟧]*)\|([^⟧]+)⟧/g, function (m, k, n) { if (!a.isGroup) byLink[k + '|' + _glNorm_(n)] = a.code; return m; });
+    if (a.isGroup) return;
+    String(a.notes || '').replace(/⟦alias:([^|⟧]*)\|([^⟧]+)⟧/g, function (m, k, n) { byLink[k + '|' + _glNorm_(n)] = a.code; return m; });
   });
   var parentOf = { client: '1201', agent: '2101', supplier: '2102', roomfee: roles.roomGroup, hbrev: roles.hb_revgrp, trip: _glTripGroup_() };
   var typeOf = { client: 'ASSET', agent: 'LIAB', supplier: 'LIAB', roomfee: 'ASSET', hbrev: 'REV', trip: 'REV' };
@@ -2701,11 +2729,27 @@ function glAttachDelete(authToken, fileId) {
   return { success: true };
 }
 // شعار الشركة لرأس الكشوف المطبوعة (نفس شعار السندات)
-function glVchLogo(authToken) {
+function glVchLogo(authToken, coId) {
   _glPerm_(authToken, 'view');
-  var b = _glVchBrand_(), logo = '';
-  try { logo = typeof getCompanyLogoBase64 === 'function' ? getCompanyLogoBase64(b.vch_logo_company || '') : ''; } catch (e) {}
+  var b = _glVchBrand_(), logo = '', lc = b.vch_logo_company || '', lf = '';
+  if (_glStr_(coId)) {   // (V4.251) شركة إصدار أخرى: شعار مرفوع (ملف درايف) أو شعار شركة من إعدادات الإشعارات
+    var co = []; try { co = JSON.parse(b.vch_companies || '[]') || []; } catch (eJ) {}
+    var c = co.filter(function (x) { return x && String(x.id) === String(coId); })[0];
+    if (c) { lc = _glStr_(c.logo_company); lf = _glStr_(c.logo_file); }
+  }
+  if (lf) try { var bl = DriveApp.getFileById(lf).getBlob(); logo = 'data:' + bl.getContentType() + ';base64,' + Utilities.base64Encode(bl.getBytes()); } catch (eF) {}
+  if (!logo) try { logo = typeof getCompanyLogoBase64 === 'function' ? getCompanyLogoBase64(lc) : ''; } catch (e) {}
   return { success: true, logo: logo };
+}
+// رفع شعار شركة إصدار (صورة) — يُحفظ بمجلد مرفقات الحسابات ويعود بمعرّف الملف
+function glVchCoLogoUpload(authToken, name, mime, b64) {
+  var session = _glAdminPerm_(authToken);
+  if (!/^image\//.test(_glStr_(mime))) throw new Error('الشعار يجب أن يكون صورة');
+  var bytes = Utilities.base64Decode(String(b64 || '').replace(/^data:[^,]*,/, ''));
+  if (bytes.length > 1.5 * 1024 * 1024) throw new Error('حجم الشعار أكبر من 1.5 ميجا');
+  var f = getDriveFolder_('GLATT').createFile(Utilities.newBlob(bytes, mime, 'شعار — ' + (_glStr_(name) || 'شركة')));
+  logChange_(session.username, 'رفع شعار شركة إصدار', 'GL:settings', 'شعار', '-', _glStr_(name));
+  return { success: true, fileId: f.getId() };
 }
 
 
