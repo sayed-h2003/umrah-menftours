@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.254 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.255 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.254)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.255)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.254</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.255</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1601,71 +1601,77 @@ input[type="date"]:not(:focus):not(:valid) {
 </nav>
 
 <!-- ============ الشاشة الجانبية للتنقل (تعمل على الكمبيوتر والموبايل معاً) ============ -->
+<style id="side-groups-css">
+  #appSidebar .side-grp { font-size:11.5px; font-weight:800; color:#94a3b8; letter-spacing:.3px; padding:10px 12px 2px; border-top:1px solid rgba(148,163,184,.25); margin-top:4px; }
+  #appSidebar .side-grp.first { border-top:0; margin-top:0; padding-top:0; }
+  #appSidebar .side-sub { font-size:13px; padding-inline-start:34px !important; opacity:.85; }
+  #appSidebar .side-sub i { width:16px; opacity:.7; }
+</style>
 <div id="appSidebar" class="app-sidebar">
-  <div class="d-flex flex-column gap-2 p-3">
-
+  <!-- 🧭 (V4.255) القائمة مقسَّمة على مجالات العمل الثلاثة + الإدارة — كل مجال يختفي لو لا صلاحية لأي شاشة فيه -->
+  <div class="d-flex flex-column gap-1 p-3">
+    <div class="side-grp g-umrah">🕋 رحلات العمرة</div>
     <a id="link-trips-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('trips'); closeAppSidebarOnMobile();">
       <i class="fas fa-suitcase-rolling me-2 text-info"></i> الرحلات
     </a>
-
     <a id="link-registry-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('registry'); closeAppSidebarOnMobile();">
       <i class="fas fa-address-book me-2 text-info"></i> سجل عام المعتمرين
     </a>
-
     <a id="link-entry-side" class="nav-link smart-action active px-3 py-2 rounded" onclick="switchPage('entry'); closeAppSidebarOnMobile();">
       <i class="fas fa-plane-departure me-2 text-info"></i> إشعار الوصول
     </a>
-
-    <a id="link-search-side" class="nav-link smart-action px-3 py-2 rounded" onclick="switchPage('search'); closeAppSidebarOnMobile();">
-      <i class="fas fa-search me-2 text-info"></i> الفرز والبحث
-    </a>
-
-    <a id="link-transportAccounts-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('transportAccounts'); closeAppSidebarOnMobile();">
-      <i class="fas fa-bus me-2 text-warning"></i> حسابات النقل السعودي
-    </a>
-
-    <a id="link-accounts-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('accounts'); closeAppSidebarOnMobile();">
-      <i class="fas fa-sack-dollar me-2 text-warning"></i> حسابات العملاء
-    </a>
-
-    <!-- 📑 (V4.54) بيان اتفاقيات الإعاشة — بطلب صريح -->
-    <a id="link-cateringContracts-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('cateringContracts'); closeAppSidebarOnMobile();">
-      <i class="fas fa-file-contract me-2 text-warning"></i> اتفاقيات الإعاشة
-    </a>
-
     <!-- 🏛️ (V4.106) مراجعة ملفات الوزارة -->
     <a id="link-ministry-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('ministry'); closeAppSidebarOnMobile();">
       <i class="fas fa-landmark me-2 text-warning"></i> مراجعة ملفات الوزارة
     </a>
-
-    <!-- 📒 (V4.205) الحسابات العامة (الدفتر العام) -->
-    <a id="link-gl-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('gl'); closeAppSidebarOnMobile();">
-      <i class="fas fa-book me-2 text-warning"></i> الحسابات العامة <span id="glNavBadge" class="badge rounded-pill bg-danger ms-1" style="display:none;font-size:10px;" title="تغييرات قيود بانتظار الاعتماد"></span>
+    <!-- 🛂 (V4.131) متابعة التأشيرات والوكلاء -->
+    <a id="link-visas-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('visas'); closeAppSidebarOnMobile();">
+      <i class="fas fa-passport me-2 text-warning"></i> متابعة التأشيرات والوكلاء
     </a>
-
+    <!-- 📑 (V4.54) بيان اتفاقيات الإعاشة — بطلب صريح -->
+    <a id="link-cateringContracts-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('cateringContracts'); closeAppSidebarOnMobile();">
+      <i class="fas fa-file-contract me-2 text-warning"></i> اتفاقيات الإعاشة
+    </a>
+    <a id="link-transportAccounts-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('transportAccounts'); closeAppSidebarOnMobile();">
+      <i class="fas fa-bus me-2 text-warning"></i> حسابات النقل السعودي
+    </a>
+    <a id="link-accounts-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('accounts'); closeAppSidebarOnMobile();">
+      <i class="fas fa-sack-dollar me-2 text-warning"></i> حسابات العملاء
+    </a>
+    <a id="link-stats-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('stats'); closeAppSidebarOnMobile();">
+      <i class="fas fa-chart-column me-2 text-warning"></i> لوحة الإحصائيات
+    </a>
+    <div class="side-grp g-hotels">🏨 الفنادق والحجوزات</div>
     <!-- 🏨 (V4.211-H4) برنامج حجوزات الفنادق — نفس البرنامج، يفتح بتبويب جديد بدخول موحّد -->
     <!-- (V4.242) الشاشات داخل البرنامج نفسه، و«↗ برنامج الحجوزات الكامل» من داخلها لما لم يُنقل بعد -->
     <a id="link-hotels-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('hotels'); closeAppSidebarOnMobile();">
       <i class="fas fa-hotel me-2 text-warning"></i> الفنادق والحجوزات
     </a>
-
-    <!-- 🛂 (V4.131) متابعة التأشيرات والوكلاء -->
-    <a id="link-visas-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('visas'); closeAppSidebarOnMobile();">
-      <i class="fas fa-passport me-2 text-warning"></i> متابعة التأشيرات والوكلاء
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-hotels-side" onclick="sideGo_('hotels','bookings'); closeAppSidebarOnMobile();"><i class="fas fa-list me-2"></i>كل الحجوزات</a>
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-hotels-side" onclick="sideGo_('hotels','arrivals'); closeAppSidebarOnMobile();"><i class="fas fa-plane-arrival me-2"></i>متابعة الأرصدة والوصول</a>
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-hotels-side" onclick="sideGo_('hotels','statement'); closeAppSidebarOnMobile();"><i class="fas fa-file-invoice me-2"></i>كشف حساب فندقي</a>
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-hotels-side" onclick="sideGo_('hotels','clientPortal'); closeAppSidebarOnMobile();"><i class="fas fa-link me-2"></i>بوابة العملاء</a>
+    <div class="side-grp g-gl">💼 الحسابات العامة</div>
+    <!-- 📒 (V4.205) الحسابات العامة (الدفتر العام) -->
+    <a id="link-gl-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('gl'); closeAppSidebarOnMobile();">
+      <i class="fas fa-book me-2 text-warning"></i> الحسابات العامة <span id="glNavBadge" class="badge rounded-pill bg-danger ms-1" style="display:none;font-size:10px;" title="تغييرات قيود بانتظار الاعتماد"></span>
     </a>
-
-    <a id="link-stats-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('stats'); closeAppSidebarOnMobile();">
-      <i class="fas fa-chart-column me-2 text-warning"></i> لوحة الإحصائيات
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','treasury'); closeAppSidebarOnMobile();"><i class="fas fa-cash-register me-2"></i>الخزينة</a>
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','banks'); closeAppSidebarOnMobile();"><i class="fas fa-building-columns me-2"></i>البنوك</a>
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','custody'); closeAppSidebarOnMobile();"><i class="fas fa-briefcase me-2"></i>العهد</a>
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','entries'); closeAppSidebarOnMobile();"><i class="fas fa-receipt me-2"></i>القيود</a>
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','stmt'); closeAppSidebarOnMobile();"><i class="fas fa-file-lines me-2"></i>كشف حساب</a>
+    <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','reports'); closeAppSidebarOnMobile();"><i class="fas fa-chart-pie me-2"></i>التقارير والميزان</a>
+    <div class="side-grp g-admin">⚙️ الإدارة</div>
+    <a id="link-search-side" class="nav-link smart-action px-3 py-2 rounded" onclick="switchPage('search'); closeAppSidebarOnMobile();">
+      <i class="fas fa-search me-2 text-info"></i> الفرز والبحث
     </a>
-
     <a id="link-auditLog-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('auditLog'); closeAppSidebarOnMobile();">
       <i class="fas fa-history me-2 text-warning"></i> سجل التعديلات
     </a>
-
     <a id="link-users-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('users'); closeAppSidebarOnMobile();">
       <i class="fas fa-users-cog me-2 text-warning"></i> إدارة المستخدمين
     </a>
-
     <a id="link-settings-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('settings'); closeAppSidebarOnMobile();">
       <i class="fas fa-cogs me-2 text-warning"></i> الإعدادات
     </a>
@@ -5479,12 +5485,19 @@ input[type="date"]:not(:focus):not(:valid) {
     <span style="flex:1;"></span>
     <!-- 💰 (V4.226) الانتقال لحسابات عملاء العمرة (لنفس العميل لو كشفه مفتوح) -->
     <button class="btn btn-outline-light btn-sm fw-bold" id="glGoAccBtn" onclick="glGoClientAcc_()" title="شاشة حسابات عملاء العمرة — تفتح على العميل الحالي لو كشف حسابه مفتوح">💰 حسابات العملاء</button>
-    <div id="glActs" class="d-flex gap-1 flex-wrap d-none">
-      <!-- (V4.219) سندات القبض/الصرف من شاشة 🏦 الخزينة، وحركات العهد من شاشة 👜 العهد -->
-      <button class="btn btn-light btn-sm" onclick="glNew('transfer')">🔁 تحويل نقدية</button>
-      <button class="btn btn-light btn-sm" onclick="glNew('fx')">💱 تحويل عملة</button>
-      <button class="btn btn-light btn-sm" onclick="glNew('ptransfer')" title="تحويل مباشر بين أي حسابين (مثل عميل يحوّل لمورد) بمبلغ واحد">⇄ تحويل بين طرفين</button>
-      <button class="btn btn-warning btn-sm" onclick="glNew('journal')">🧾 قيد يومية</button>
+    <!-- ➕ (V4.255) كل السندات والقيود من قائمة واحدة بدل 5 أزرار -->
+    <div id="glActs" class="d-none" style="position:relative;">
+      <button class="btn btn-warning btn-sm fw-bold" onclick="glNewMenu_(event)">➕ جديد ▾</button>
+      <div id="glNewMenu" class="d-none" style="position:absolute;left:0;top:110%;z-index:1050;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.15);padding:6px;min-width:220px;display:grid;gap:2px;">
+        <button class="btn btn-sm btn-light text-start" onclick="glNewMenu_();glNew('receipt')">💵 سند قبض</button>
+        <button class="btn btn-sm btn-light text-start" onclick="glNewMenu_();glNew('payment')">💸 سند صرف</button>
+        <button class="btn btn-sm btn-light text-start" onclick="glNewMenu_();glNew('transfer')">🔁 تحويل نقدية</button>
+        <button class="btn btn-sm btn-light text-start" onclick="glNewMenu_();glNew('fx')">💱 تحويل عملة</button>
+        <button class="btn btn-sm btn-light text-start" onclick="glNewMenu_();glNew('ptransfer')" title="تحويل مباشر بين أي حسابين (مثل عميل يحوّل لمورد) بمبلغ واحد">⇄ تحويل بين طرفين</button>
+        <button class="btn btn-sm btn-light text-start" onclick="glNewMenu_();glNew('custOut')">👜 صرف عهدة</button>
+        <button class="btn btn-sm btn-light text-start" onclick="glNewMenu_();glNew('custSettle')">🧮 تسوية عهدة</button>
+        <button class="btn btn-sm btn-light text-start fw-bold" onclick="glNewMenu_();glNew('journal')">🧾 قيد يومية</button>
+      </div>
     </div>
   </div>
   <div id="glTabs">
@@ -5492,13 +5505,11 @@ input[type="date"]:not(:focus):not(:valid) {
     <span class="gl-tab" data-t="treasury" onclick="glTab('treasury')">💰 الخزينة</span>
     <span class="gl-tab" data-t="banks" onclick="glTab('banks')">🏛️ البنوك</span>
     <span class="gl-tab" data-t="custody" onclick="glTab('custody')">👜 العهد</span>
-    <span class="gl-tab" style="background:#ecfdf5;border-color:#86efac;" onclick="glNew('ptransfer')" title="تحويل مباشر بين أي حسابين بمبلغ واحد">⇄ تحويل بين طرفين</span>
     <span class="gl-tab" data-t="entries" onclick="glTab('entries')">🧾 القيود</span>
     <span class="gl-tab" data-t="stmt" onclick="glTab('stmt')">📒 كشف حساب</span>
-    <span class="gl-tab" data-t="trial" onclick="glTab('trial')">⚖️ ميزان المراجعة</span>
     <span class="gl-tab" data-t="reports" onclick="glTab('reports')">📊 التقارير</span>
-    <span class="gl-tab" data-t="auto" onclick="glTab('auto')">🤖 القيود التلقائية</span>
-    <span class="gl-tab" data-t="hotels" onclick="glTab('hotels')">🏨 الحجوزات</span>
+    <span class="gl-tab" data-t="auto" onclick="glTab('auto')">🤖 التلقائية <span id="glAutoTabBadge" class="badge rounded-pill bg-danger" style="display:none;font-size:10px;"></span></span>
+    <span class="gl-tab" data-t="hotels" onclick="glTab('hotels')">🏨 ربط الحجوزات</span>
     <span class="gl-tab" data-t="coa" onclick="glTab('coa')">🌳 دليل الحسابات</span>
     <span class="gl-tab gl-adm" data-t="settings" onclick="glTab('settings')">⚙️ الإعدادات</span>
   </div>
@@ -6928,6 +6939,27 @@ function closeAppSidebar() {
   if (backdrop) backdrop.classList.remove('show');
 }
 
+// 🧭 (V4.255) مجموعات القائمة الجانبية: الروابط الفرعية تتبع ظهور رابطها الأب، ورأس المجموعة يختفي لو كل روابطها مخفية
+function _sideGroupsSync_() {
+  var side = document.getElementById('appSidebar'); if (!side) return;
+  side.querySelectorAll('.side-sub').forEach(function (a) { var p = document.getElementById(a.getAttribute('data-parent')); a.classList.toggle('d-none', !p || p.classList.contains('d-none')); });
+  var first = true;
+  side.querySelectorAll('.side-grp').forEach(function (g) {
+    var any = false, n = g.nextElementSibling;
+    while (n && !n.classList.contains('side-grp')) { if (n.tagName === 'A' && !n.classList.contains('d-none')) any = true; n = n.nextElementSibling; }
+    g.style.display = any ? '' : 'none'; g.classList.toggle('first', any && first); if (any) first = false;
+  });
+}
+(function () {
+  var run = function () { var side = document.getElementById('appSidebar'); if (!side) return; _sideGroupsSync_();
+    try { new MutationObserver(function () { clearTimeout(window._sideGT); window._sideGT = setTimeout(_sideGroupsSync_, 30); }).observe(side, { subtree: true, attributes: true, attributeFilter: ['class'] }); } catch (e) {} };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
+})();
+function sideGo_(page, sub) {
+  if (page === 'gl') { if (typeof GL !== 'undefined') GL.tab = sub; switchPage('gl'); return; }   // glInit(true) يفتح GL.tab
+  if (page === 'hotels') { if (typeof HBX !== 'undefined') { HBX.page = sub; try { localStorage.setItem('hbx_page', sub); } catch (e) {} } switchPage('hotels'); if (typeof hbxShow === 'function') setTimeout(function () { hbxShow(sub); }, 0); return; }
+  switchPage(page);
+}
 function closeAppSidebarOnMobile() {
   // على الموبايل نغلق القائمة تلقائياً بعد اختيار شاشة، وعلى الكمبيوتر تبقى مفتوحة
   if (window.innerWidth < 992) closeAppSidebar();
@@ -7645,7 +7677,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.254";
+var CLIENT_APP_VERSION = "4.255";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45587,7 +45619,7 @@ function glRefreshData(cb) {
 function glTab(t) {
   GL.tab = t;
   // (V4.252) دفتر الأستاذ صار جزءاً من «كشف حساب» (للأقسام)، والاستيراد المجمّع داخل الإعدادات
-  var hl = { ledger: 'stmt', import: 'settings' }[t] || t;
+  var hl = { ledger: 'stmt', import: 'settings', trial: 'reports' }[t] || t;
   document.querySelectorAll('#glTabs .gl-tab').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === hl); });
   if (!GL.ready) return;
   setTimeout(function () { if (GL.tab === t) glPendingBanner_(); }, 0);
@@ -46301,6 +46333,12 @@ var GL_VOUCHERS_ = {
   ptransfer: { title: '⇄ تحويل بين طرفين', type: 'تحويل بين طرفين' }
 };
 function glNew(kind) { glEntryDlg(kind, null); }
+function glNewMenu_(ev) {
+  var m = document.getElementById('glNewMenu'); if (!m) return;
+  var show = !!ev && m.classList.contains('d-none'); m.classList.toggle('d-none', !show);
+  if (ev) ev.stopPropagation();
+  if (show && !window._glNewMenuDoc) { window._glNewMenuDoc = 1; document.addEventListener('click', function (e) { var mm = document.getElementById('glNewMenu'); if (mm && !(e.target.closest && e.target.closest('#glActs'))) mm.classList.add('d-none'); }); }
+}
 // ✏️ (V4.219) السند يُعدَّل في نموذجه (قبض/صرف/عهدة/تحويل) لو شكله يسمح — وإلا في نموذج القيد اليومي
 var GL_TYPE_KIND_ = { 'تحويل بين طرفين': 'ptransfer', 'سند قبض': 'receipt', 'سند صرف': 'payment', 'إيداع بنكي': 'bankIn', 'سحب بنكي': 'bankOut', 'صرف عهدة': 'custOut', 'تسوية عهدة': 'custSettle', 'تحويل نقدية': 'transfer' };
 function glEntryVoucherFit_(e) {
@@ -48861,6 +48899,7 @@ function glTripRebuildUI(btn, dry) {
 function glNavBadge_() {
   var b = document.getElementById('glNavBadge'); if (!b) return;
   var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
+  var t = document.getElementById('glAutoTabBadge'); if (t) { t.textContent = n || ''; t.style.display = n ? '' : 'none'; }
 }
 function glPendingBanner_() {
   var box = document.getElementById('glBody'); if (!box || !GL.pendingCount || document.getElementById('glPendBanner')) return;
@@ -49978,7 +50017,7 @@ function glRenderReports() {
   var box = document.getElementById('glBody'), r = GL._rep || 'is';
   var y = new Date().getFullYear();
   var from = GL._rFrom || GL.settings.startDate || ('01/01/' + y), to = GL._rTo || '';
-  box.innerHTML = '<div class="d-flex gap-1 flex-wrap mb-2">' + GL_REP_.map(function (x) { return '<button class="btn btn-sm ' + (r === x[0] ? 'btn-dark' : 'btn-outline-secondary') + '" onclick="GL._rep=\'' + x[0] + '\';glRenderReports()">' + x[1] + '</button>'; }).join('') + '</div>' +
+  box.innerHTML = '<div class="d-flex gap-1 flex-wrap mb-2"><button class="btn btn-sm btn-outline-primary fw-bold" onclick="glTab(\'trial\')">⚖️ ميزان المراجعة</button>' + GL_REP_.map(function (x) { return '<button class="btn btn-sm ' + (r === x[0] ? 'btn-dark' : 'btn-outline-secondary') + '" onclick="GL._rep=\'' + x[0] + '\';glRenderReports()">' + x[1] + '</button>'; }).join('') + '</div>' +
     '<div class="gl-fbar">' +
       (r === 'bs' || r === 'ag' ? '<span class="gl-lbl" style="margin:0;">في تاريخ</span><div style="width:130px;">' + glDateInput('glRTo', to || glToday()) + '</div>'
         : '<span class="gl-lbl" style="margin:0;">من</span><div style="width:130px;">' + glDateInput('glRFrom', from) + '</div><span class="gl-lbl" style="margin:0;">إلى</span><div style="width:130px;">' + glDateInput('glRTo', to) + '</div>') +
