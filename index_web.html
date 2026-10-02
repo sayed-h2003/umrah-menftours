@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.251 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.252 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.251)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.252)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.251</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.252</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5473,13 +5473,11 @@ input[type="date"]:not(:focus):not(:valid) {
     <span class="gl-tab" style="background:#ecfdf5;border-color:#86efac;" onclick="glNew('ptransfer')" title="تحويل مباشر بين أي حسابين بمبلغ واحد">⇄ تحويل بين طرفين</span>
     <span class="gl-tab" data-t="entries" onclick="glTab('entries')">🧾 القيود</span>
     <span class="gl-tab" data-t="stmt" onclick="glTab('stmt')">📒 كشف حساب</span>
-    <span class="gl-tab" data-t="ledger" onclick="glTab('ledger')">📖 دفتر الأستاذ</span>
     <span class="gl-tab" data-t="trial" onclick="glTab('trial')">⚖️ ميزان المراجعة</span>
     <span class="gl-tab" data-t="reports" onclick="glTab('reports')">📊 التقارير</span>
     <span class="gl-tab" data-t="auto" onclick="glTab('auto')">🤖 القيود التلقائية</span>
     <span class="gl-tab" data-t="hotels" onclick="glTab('hotels')">🏨 الحجوزات</span>
     <span class="gl-tab" data-t="coa" onclick="glTab('coa')">🌳 دليل الحسابات</span>
-    <span class="gl-tab gl-adm" data-t="import" onclick="glTab('import')">📥 الاستيراد المجمّع</span>
     <span class="gl-tab gl-adm" data-t="settings" onclick="glTab('settings')">⚙️ الإعدادات</span>
   </div>
   <div id="glBody"></div>
@@ -7625,7 +7623,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.251";
+var CLIENT_APP_VERSION = "4.252";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45415,7 +45413,14 @@ function openHotelsApp_() {
     _showPopup(m, 'info');
   }).hotelsHandoff(window.authToken);
 }
+// ⚡ (V4.252) نداءات القراءة فقط — أي نداء غيرها (حفظ/ترحيل/حذف/مزامنة…) يمسح كاش الكشوف بالواجهة ويُسخّن كاش الخادم
+var GL_RO_RX_ = /^gl(Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbErpOverlap|HbErpMatch|HbSeasonPreview|HbPaySplitPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|Warm)$/;
+function glDataChanged_() {
+  GL._stCache = {};
+  clearTimeout(GL._warmT); GL._warmT = setTimeout(function () { try { google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).glWarm(window.authToken); } catch (e) {} }, 400);
+}
 function glRun(fn, args, ok, fail) {
+  if (!GL_RO_RX_.test(fn)) { var ok0 = ok; ok = function (res) { glDataChanged_(); if (ok0) ok0(res); }; }
   var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
     if (fail) fail(e); else _showPopup((e && e.message) || String(e), 'error');
   });
@@ -45465,33 +45470,61 @@ function glLeaves(filter) {
 }
 
 /* ---------------------------- الإقلاع والتبويبات ---------------------------- */
+// ⚡ (V4.252) آخر بيانات الحسابات تُحفظ بالمتصفح (لكل مستخدم) ⇒ الشاشة تظهر فوراً ثم تُطابَق مع الخادم برقم الإصدار
+function glBootKey_() { return 'glBoot_' + ((window.currentUser && currentUser.username) || ''); }
+function glBootSave_(res) { try { var o = Object.assign({}, res); localStorage.setItem(glBootKey_(), JSON.stringify(o)); } catch (e) { try { localStorage.removeItem(glBootKey_()); } catch (e2) {} } }
+function glBootLoad_() { try { var o = JSON.parse(localStorage.getItem(glBootKey_()) || 'null'); return o && o.ready && o.ver && o.accounts ? o : null; } catch (e) { return null; } }
+function glApplyBoot_(res) {
+  GL.ready = true; GL.ver = res.ver || ''; GL.accounts = res.accounts || []; GL.map = {}; GL.accounts.forEach(function (a) { GL.map[a.code] = a; });
+  GL.balances = res.balances || {}; GL.settings = res.settings || {}; GL.rates = res.rates || GL.rates; GL.fxDaily = res.fxDaily || GL.fxDaily || {}; if (res.url) GL.url = res.url;
+  if (res.tripMode !== undefined) GL.tripMode = !!res.tripMode;
+}
 function glInit(keepTab) {
   var box = document.getElementById('glBody'); if (!box) return;
-  box.innerHTML = '<div class="text-center text-muted py-5">⏳ جاري تحميل الحسابات…</div>';
-  glRun('glBootstrap', [], function (res) {
+  var cached = glBootLoad_(), shown = false;
+  if (cached) {   // عرض فوري من المتصفح (الصلاحيات للعرض فقط — الخادم يتحقق من كل عملية) ثم تُصحَّح من رد الخادم
+    glApplyBoot_(cached); shown = true; GL._stCache = {}; GL.can = cached.can || {}; GL.isAdmin = !!cached.isAdmin;
+    document.querySelectorAll('#glTabs .gl-adm').forEach(function (t) { t.style.display = GL.isAdmin ? '' : 'none'; });
+    document.getElementById('glActs').classList.toggle('d-none', !GL.can.add);
+    glTab(keepTab ? GL.tab : (GL.tab || 'home'));
+  } else box.innerHTML = '<div class="text-center text-muted py-5">⏳ جاري تحميل الحسابات…</div>';
+  glRun('glBootstrap', [cached ? cached.ver : ''], function (res) {
+    if (res.same && cached) {
+      GL.isAdmin = !!res.isAdmin; GL.can = res.can || {}; GL.pendingCount = res.pendingCount || 0; glNavBadge_();
+      document.querySelectorAll('#glTabs .gl-adm').forEach(function (t) { t.style.display = GL.isAdmin ? '' : 'none'; });
+      document.getElementById('glActs').classList.toggle('d-none', !GL.can.add);
+      if (!shown) { glApplyBoot_(cached); glTab(keepTab ? GL.tab : (GL.tab || 'home')); }
+      return;
+    }
+    if (res.ready) glBootSave_(res);
+    if (shown && res.ready) {   // تغيّرت البيانات منذ آخر مرة ⇒ تحديث صامت (وإعادة رسم الشاشة الحالية لو لا توجد نافذة مفتوحة)
+      glApplyBoot_(res); GL.can = res.can || {}; GL.isAdmin = !!res.isAdmin; GL.pendingCount = res.pendingCount || 0; glNavBadge_();
+      if (!document.getElementById('glDlgOv') && /^(home|coa|trial)$/.test(GL.tab)) glTab(GL.tab);
+      return;
+    }
     GL.isAdmin = !!res.isAdmin;
     // 🔒 (V4.220) الاستيراد والإعدادات للمدير فقط — لا تظهر لغيره
     document.querySelectorAll('#glTabs .gl-adm').forEach(function (t) { t.style.display = GL.isAdmin ? '' : 'none'; });
     if (!GL.isAdmin && (GL.tab === 'import' || GL.tab === 'settings')) GL.tab = 'home';
     if (!res.ready) { GL.ready = false; glRenderSetup(); return; }
-    GL.ready = true; GL.accounts = res.accounts || []; GL.map = {}; GL.accounts.forEach(function (a) { GL.map[a.code] = a; });
-    GL.balances = res.balances || {}; GL.settings = res.settings || {}; GL.rates = res.rates || GL.rates; GL.fxDaily = res.fxDaily || GL.fxDaily || {}; GL.can = res.can || {}; GL.url = res.url;
+    glApplyBoot_(res); GL.can = res.can || {};
     GL.pendingCount = res.pendingCount || 0; GL.tripMode = !!res.tripMode; glNavBadge_();
     document.getElementById('glActs').classList.toggle('d-none', !GL.can.add);
     glTab(keepTab ? GL.tab : (GL.tab || 'home'));
   }, function (e) { box.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc(e && e.message ? e.message : e) + '</div>'; });
 }
 function glRefreshData(cb) {
-  glRun('glBootstrap', [], function (res) {
+  glRun('glBootstrap', [GL.ver || ''], function (res) {
     if (!res.ready) return;
-    GL.accounts = res.accounts || []; GL.map = {}; GL.accounts.forEach(function (a) { GL.map[a.code] = a; });
-    GL.balances = res.balances || {}; GL.settings = res.settings || {}; GL.rates = res.rates || GL.rates; GL.fxDaily = res.fxDaily || GL.fxDaily || {};
+    if (!res.same) { glApplyBoot_(res); glBootSave_(res); }
     if (cb) cb();
   });
 }
 function glTab(t) {
   GL.tab = t;
-  document.querySelectorAll('#glTabs .gl-tab').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); });
+  // (V4.252) دفتر الأستاذ صار جزءاً من «كشف حساب» (للأقسام)، والاستيراد المجمّع داخل الإعدادات
+  var hl = { ledger: 'stmt', import: 'settings' }[t] || t;
+  document.querySelectorAll('#glTabs .gl-tab').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === hl); });
   if (!GL.ready) return;
   setTimeout(function () { if (GL.tab === t) glPendingBanner_(); }, 0);
   ({ home: glRenderHome, treasury: glRenderTreasury, banks: glRenderBanks, custody: glRenderCustody, entries: glRenderEntries, ledger: glRenderLedger, stmt: glRenderStmt, trial: glRenderTrial, reports: glRenderReports, auto: glRenderAuto, hotels: glRenderHotels, coa: glRenderCoa, import: glRenderImport, settings: glRenderSettings }[t] || glRenderHome)();
@@ -46754,6 +46787,7 @@ function glLedgerAccSelectOld_(code) {
 }
 function glLoadLedger() {
   var el = document.getElementById('glLAcc'); var code = el ? glAccVal(el) : ''; if (!code) return;
+  if (GL.map[code] && !GL.map[code].isGroup) return glOpenStatement(code);   // (V4.252) حساب فرعي ⇒ كشف الحساب
   GL._ledgerCode = code; GL._lFrom = document.getElementById('glLFrom').value; GL._lTo = document.getElementById('glLTo').value;
   var box = document.getElementById('glLedgerBox'); box.innerHTML = '<div class="text-center text-muted py-4">⏳</div>';
   glRun('glLedger', [code, GL._lFrom, GL._lTo], function (res) {
@@ -47207,8 +47241,8 @@ function glRenderStmt() {
   if (code) glLoadStmt(); else glDrawStmtEmpty_();
 }
 function glStAccInput_(code, big) {
-  return '<input id="glSAcc" class="form-control gl-acc ' + (big ? 'gl-stacc-big' : 'gl-stacc') + '" autocomplete="off" data-code="' + glEsc(code || '') + '" value="' + glEsc(code ? (GL.map[code] || {}).name || code : '') + '"' +
-    ' placeholder="🔎 اكتب اسم الحساب أو كوده — عميل، مورد، وكيل، خزينة…" onchange="glLoadStmt()" onfocus="this.select()">';
+  return '<input id="glSAcc" class="form-control gl-acc ' + (big ? 'gl-stacc-big' : 'gl-stacc') + '" autocomplete="off" data-groups="1" data-code="' + glEsc(code || '') + '" value="' + glEsc(code ? (GL.map[code] || {}).name || code : '') + '"' +
+    ' placeholder="🔎 اكتب اسم الحساب أو كوده — عميل، مورد، وكيل، خزينة… أو قسم (مجموعة) لدفتره المجمّع" onchange="glLoadStmt()" onfocus="this.select()">';
 }
 function glDrawStmtEmpty_() {
   var box = document.getElementById('glStBox'); if (!box) return;
@@ -47242,13 +47276,18 @@ function glLoadStmt(keep) {
   if (box.firstChild) box.firstChild.appendChild(ov); else box.innerHTML = '<div class="text-center text-muted py-5">⏳ جارٍ تجهيز الكشف…</div>';
   // ⚡ (V4.245) الكشف يُقرأ لهذا الحساب وحده ويظهر فوراً، وبيانات الحجوزات (الفندق/التواريخ/الحجوزات بلا سعر) تُكمَّل بنداء ثانٍ
   var reqId = GL._stReq = (GL._stReq || 0) + 1, from = GL._sFrom || '', to = GL._sTo || '';
+  // ⚡ (V4.252) كشف فُتح خلال آخر دقيقتين ولم يُحفظ شيء بعده ⇒ يظهر فوراً من الذاكرة
+  var ck = code + '|' + from + '|' + to, hit = (GL._stCache || {})[ck];
+  if (hit && Date.now() - hit.t < 120000 && !hit.r.hbLater) { GL._st = hit.r; glDrawStmt(); return; }
   glRun('glStatement', [code, from, to, { fast: true }], function (res) {
     if (code !== GL._stCode || reqId !== GL._stReq) return;
     GL._st = res; glDrawStmt();
+    (GL._stCache = GL._stCache || {})[ck] = { t: Date.now(), r: res };
     if (res.hbLater) glRun('glStatementHb', [code, from, to], function (h) {
       if (GL._st !== res) return;
       res.rows.forEach(function (x) { if (x.hbKey && h.byKey[x.hbKey]) x.hb = h.byKey[x.hbKey]; });
       res.unpriced = h.unpriced || []; res.hbLater = false; glDrawStmt();
+      (GL._stCache = GL._stCache || {})[ck] = { t: Date.now(), r: res };
     }, function () {});
   }, function (e) { if (reqId === GL._stReq) box.innerHTML = '<div class="text-danger text-center py-4">' + glEsc(e.message || e) + '</div>'; });
 }
@@ -48610,6 +48649,9 @@ function glRenderSettings() {
     '<div class="gl-card mt-2" style="max-width:720px;"><b>🏢 شركات إصدار كشوف الحساب</b>' +
       '<div class="gl-note mt-1">الشركة الأساسية = بيانات السند أعلاه. أضف شركات أخرى (اسم/نشاط/عنوان/تليفون/شعار) واختر إحداها عند طباعة أو إصدار الكشف من نافذة «إخراج كشف الحساب».</div>' +
       '<div id="glVcoList"></div>' + (GL.isAdmin ? '<div class="text-end mt-2"><button class="btn btn-outline-primary btn-sm fw-bold" onclick="glVcoEdit_()">➕ شركة إصدار جديدة</button></div>' : '') + '</div>' +
+    (GL.isAdmin ? '<div class="gl-card mt-2" style="max-width:720px;"><b>🧰 أدوات</b><div class="d-flex gap-2 flex-wrap mt-2">' +
+      '<button class="btn btn-outline-secondary btn-sm" onclick="glTab(\'import\')" title="نقل بيانات الـ ERP — انتهى استخدامه ويبقى للرجوع فقط">📥 الاستيراد المجمّع (ERP)</button>' +
+      '<button class="btn btn-outline-secondary btn-sm" onclick="glCacheResetUI(this)" title="بعد تعديل شيتات الحسابات يدوياً من جوجل شيت مباشرة">🔄 تحديث بيانات الحسابات المحفوظة مؤقتاً</button></div></div>' : '') +
     '<div class="gl-card mt-2" style="max-width:720px;"><b>🔒 إقفال الفترات</b>' +
       '<div class="gl-note mt-1">أي قيد بتاريخ حتى «تاريخ الإقفال» لا يمكن تسجيله أو تعديله أو إلغاؤه — يدوياً أو من الاستيراد أو القيود التلقائية (تظهر تغييرات الشاشات في تلك الفترة كـ«محجوزة» بتبويب القيود التلقائية).' +
         (GL.settings.lockDate ? '<br>الفترات مقفلة حالياً حتى <b class="gl-latin">' + glEsc(GL.settings.lockDate) + '</b>' : '<br>لا توجد فترات مقفلة حالياً.') + '</div>' +
@@ -48624,6 +48666,11 @@ function glRenderSettings() {
   glLoadFxDaily(); glVcoList_();
 }
 // 🏢 (V4.251) شركات إصدار الكشوف: قائمة + إضافة/تعديل/حذف + رفع شعار
+function glCacheResetUI(btn) {
+  btn.disabled = true;
+  glRun('glCacheReset', [], function () { btn.disabled = false; try { localStorage.removeItem(glBootKey_()); } catch (e) {} GL.ver = ''; showToast('✅ ستُقرأ بيانات الحسابات من الشيت من جديد'); glRefreshData(); },
+    function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+}
 function glVcoList_() {
   var box = document.getElementById('glVcoList'); if (!box) return;
   var L = glVchCos_();
