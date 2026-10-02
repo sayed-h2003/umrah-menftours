@@ -39,11 +39,17 @@ def server(s):
 HB_EMBED_JS = r'''
 if (HB_EMBED) {
   try { document.documentElement.classList.add('hb-embed'); } catch (eE) {}
-  var hbPost_ = function (m) { try { window.parent.postMessage(m, '*'); } catch (eP) {} };
+  // (V4.253) Apps Script يغلّف كل صفحة بإطارين (sandbox ثم userHtml) ⇒ «الأب» المباشر ليس برنامج العمرة: الرسالة تُرسَل
+  // لكل الأسلاف حتى تصل لإطار برنامج العمرة أيّاً كان عمقه (أي إطار آخر يتجاهلها). sec يميّز إطارات الإعدادات المضمَّنة
+  var hbPost_ = window.hbPost_ = function (m) {
+    try { m.sec = HB_SEC || ''; } catch (eS) {}
+    var w = window, n = 0;
+    try { while (n < 8 && w.parent && w.parent !== w) { w = w.parent; n++; try { w.postMessage(m, '*'); } catch (eP) {} } } catch (eW) {}
+  };
   window.hbEmbedReady_ = function () { var o = document.getElementById('hbEmbedLoad'); if (o) o.remove(); hbPost_({ hbReady: 1 }); };
   window.hbEmbedFail_ = function (msg) {
     var o = document.getElementById('hbEmbedLoad'); if (!o) return;
-    o.innerHTML = '<div class="hbel-box"><b>تعذّر فتح برنامج الحجوزات</b><span>' + String(msg || '').replace(/[<>&]/g, '') + '</span><button type="button" onclick="window.parent.postMessage({hbRetry:1},\'*\')">↻ إعادة المحاولة</button></div>';
+    o.innerHTML = '<div class="hbel-box"><b>تعذّر فتح برنامج الحجوزات</b><span>' + String(msg || '').replace(/[<>&]/g, '') + '</span><button type="button" onclick="hbPost_({hbRetry:1})">↻ إعادة المحاولة</button></div>';
   };
   document.addEventListener('DOMContentLoaded', function () {
     var o = document.createElement('div'); o.id = 'hbEmbedLoad';
@@ -64,6 +70,20 @@ if (HB_EMBED) {
     var c = document.getElementById('customer');
     hbPost_({ hbPay: { kind: t.id === 'stmtAddLinkedBtn' ? 'link' : (t.id === 'stmtAddBatchBtn' ? 'multi' : 'single'), party: c ? String(c.value || '').trim() : '' } });
   }, true);
+  // (V4.253) جزء من الإعدادات مضمَّن داخل إعدادات برنامج العمرة: core = إعدادات الحجوزات · bot = تليجرام والبوت
+  if (HB_SEC) {
+    try { document.documentElement.classList.add('hb-sec'); } catch (eS) {}
+    document.addEventListener('DOMContentLoaded', function () {
+      var pg = document.getElementById('page-settings'); if (!pg) return;
+      var bot = /تليجرام/, gone = /شيتات العهدة|مدة الجلسة/;
+      Array.prototype.forEach.call(pg.querySelectorAll('details'), function (d) {
+        if (d.parentElement && d.parentElement.closest('details')) return;
+        var sm = d.querySelector('summary'), t = sm ? sm.textContent : '';
+        var show = HB_SEC === 'bot' ? bot.test(t) : (!bot.test(t) && !gone.test(t));
+        d.style.display = show ? '' : 'none';
+      });
+    });
+  }
   window.addEventListener('message', function (ev) {
     var d = ev && ev.data; if (!d) return;
     if (d.hbRefresh) { try { if (typeof currentPageKey_ === 'function' && currentPageKey_() === 'statement' && typeof refreshStatement === 'function' && typeof cacheData !== 'undefined' && cacheData) refreshStatement(); } catch (eR) {} return; }
@@ -81,7 +101,8 @@ def build():
                 "  var initialPage = (e && e.parameter && (e.parameter.hp || (e.parameter.page !== 'hotels' ? e.parameter.page : ''))) || 'statement';")
     code = must(code, "    tmpl.initialPage = initialPage;\n",
                 "    tmpl.initialPage = initialPage;\n    tmpl.ssoCode = String((e && e.parameter && e.parameter.sso) || '').replace(/[^\\w-]/g, '');\n"
-                "    tmpl.embed = (e && e.parameter && e.parameter.embed === '1') ? '1' : '';   // (V4.245) مضمَّن داخل شاشة «الفنادق» ببرنامج العمرة\n")
+                "    tmpl.embed = (e && e.parameter && e.parameter.embed === '1') ? '1' : '';   // (V4.245) مضمَّن داخل شاشة «الفنادق» ببرنامج العمرة\n"
+                "    tmpl.hbSec = String((e && e.parameter && e.parameter.hs) || '').replace(/[^a-z]/g, '');   // (V4.253) جزء من الإعدادات فقط\n")
     code = must(code, "        .setTitle('حجوزات وحسابات سكن')", "        .setTitle('حجوزات الفنادق — منف')")
     code = must(code, 'var HB_APP_VERSION = "', '// (H4) مدموج داخل مشروع برنامج العمرة — ملفات HB_*\nvar HB_APP_VERSION = "')
     out['HB_Code.gs'] = code
@@ -99,10 +120,11 @@ def build():
     # والأزرار والفلاتر كما هي؛ يُخفى شريط تنقّله فقط (التنقّل من تبويبات برنامج العمرة عبر postMessage)
     app = must(app, 'var SSO_CODE = "<?!= ssoCode ?>";', 'var SSO_CODE = "<?!= ssoCode ?>";\n'
       'var HB_EMBED = "<?!= embed ?>" === \'1\';\n'
+      'var HB_SEC = "<?!= hbSec ?>";\n'
       + HB_EMBED_JS)
     app = must(app, "  document.getElementById('page-' + key).classList.add('active');",
       "  document.getElementById('page-' + key).classList.add('active');\n"
-      "  if (typeof HB_EMBED !== 'undefined' && HB_EMBED) { try { window.parent.postMessage({ hbPage: key }, '*'); } catch (eP) {} }")
+      "  if (typeof HB_EMBED !== 'undefined' && HB_EMBED && typeof hbPost_ === 'function') { try { hbPost_({ hbPage: key }); } catch (eP) {} }")
     app = must(app, "function onAuthSuccess_(token, user, sessionMinutes) {\n  currentSessionToken = token; currentUser = user;",
       "function onAuthSuccess_(token, user, sessionMinutes) {\n  currentSessionToken = token; currentUser = user;\n"
       "  if (typeof HB_EMBED !== 'undefined' && HB_EMBED && typeof hbEmbedReady_ === 'function') setTimeout(hbEmbedReady_, 0);   // (V4.248) إخفاء «جارٍ الفتح…»")
@@ -130,6 +152,8 @@ def build():
   html.hb-embed .app-nav-row1, html.hb-embed #navUserBox, html.hb-embed #loginScreen, html.hb-embed #mobileTabs { display:none !important; }
   html.hb-embed #page-payments button[onclick*="Modal"] { display:none !important; }   /* كل المدفوعات: عرض فقط */
   html.hb-embed .app-nav { padding-top:4px !important; padding-bottom:4px !important; }
+  html.hb-sec .app-nav, html.hb-sec .hb-back-umrah { display:none !important; }
+  html.hb-sec #page-settings .shell { padding-top:4px !important; }
   #hbEmbedLoad { position:fixed; inset:0; z-index:2147483000; background:#f4f6f9; display:grid; place-items:center; font-family:'Cairo','Tajawal',Tahoma,sans-serif; direction:rtl; }
   #hbEmbedLoad .hbel-box { display:grid; gap:10px; justify-items:center; color:#1e3d59; font-weight:700; text-align:center; max-width:420px; padding:0 16px; }
   #hbEmbedLoad .hbel-box span { color:#5b6b7b; font-weight:600; }

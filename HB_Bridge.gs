@@ -222,3 +222,48 @@ function hbBotStatus() {
   Logger.log(JSON.stringify(r, null, 2));
   return r;
 }
+
+/* ---------- 👤 (V4.254) صلاحيات الفنادق من شاشة «المستخدمون» ببرنامج العمرة ----------
+   مستخدم الحجوزات = نفس اسم الدخول ببرنامج العمرة (الدخول موحّد). المدير يضبط من هنا مستوى كل شاشة حجوزات،
+   والمدينة، والجانب المالي — ويُنشأ مستخدم الحجوزات تلقائياً إن لم يكن موجوداً (بكلمة مرور عشوائية: الدخول موحّد). */
+function hbUsersMap(authToken) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'admin')) throw new Error('للمدير فقط');
+  var sh = ensureUsersSheet_(), data = sh.getDataRange().getValues(), out = {};
+  for (var i = 1; i < data.length; i++) {
+    if (!String(data[i][0] || '').trim()) continue;
+    var u = userRecordFromRow_(data[i]);
+    out[String(u.username).trim().toLowerCase()] = { username: u.username, displayName: u.displayName, role: u.role, permissions: u.permissions,
+      bookingCityScope: u.bookingCityScope, financeLevel: u.financeLevel, accountScope: u.accountScope, active: u.active };
+  }
+  return { success: true, users: out, screens: ALL_SCREENS_.map(function (k) { return [k, SCREEN_LABELS_SRV_[k] || k]; }),
+    levels: PERM_LEVELS_.map(function (k) { return [k, PERM_LEVEL_LABELS_[k]]; }), finance: FINANCE_LEVELS_.map(function (k) { return [k, FINANCE_LEVEL_LABELS_[k]]; }) };
+}
+function hbUserSaveFromMain(authToken, username, p) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'admin')) throw new Error('للمدير فقط');
+  username = String(username || '').trim(); p = p || {};
+  if (!username) throw new Error('اسم المستخدم مطلوب');
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var sh = ensureUsersSheet_(), rowIdx = findUserRow_(sh, username), created = false, saved = {};
+    if (rowIdx === -1) {
+      var salt = Utilities.getUuid();
+      sh.appendRow([username, p.displayName || username, salt, hbHashPassword_(Utilities.getUuid(), salt), 'user', '{}', true, new Date()]);
+      rowIdx = sh.getLastRow(); created = true;
+    } else { try { saved = JSON.parse(sh.getRange(rowIdx, 6).getValue() || '{}'); } catch (eJ) { saved = {}; } }
+    var perms = {}; Object.keys(saved).forEach(function (k) { perms[k] = saved[k]; });   // يحفظ uiPrefs وأي مفتاح آخر
+    ALL_SCREENS_.forEach(function (s) { var l = p.permissions && p.permissions[s]; perms[s] = PERM_LEVELS_.indexOf(l) !== -1 ? l : 'none'; });
+    perms.bookingCityScope = (p.bookingCityScope === 'مكة' || p.bookingCityScope === 'المدينة') ? p.bookingCityScope : 'all';
+    perms.financeLevel = FINANCE_LEVELS_.indexOf(p.financeLevel) !== -1 ? p.financeLevel : 'none';
+    if (!perms.accountScope) perms.accountScope = 'all';
+    var role = p.role === 'admin' ? 'admin' : 'user';
+    if (p.displayName) sh.getRange(rowIdx, 2).setValue(p.displayName);
+    sh.getRange(rowIdx, 5, 1, 3).setValues([[role, JSON.stringify(perms), p.active !== false]]);
+    invalidateUserRecordCache_(username);
+    hbLogChange_({ username: session.username, displayName: session.username }, 'المستخدمون', username,
+      (created ? 'إنشاء مستخدم حجوزات من برنامج العمرة' : 'تعديل صلاحيات الحجوزات من برنامج العمرة') + ' (' + (role === 'admin' ? 'مدير' : 'مستخدم') + ')', '', '');
+    try { logChange_(session.username, 'صلاحيات الفنادق', username, created ? 'إنشاء' : 'تعديل', '', JSON.stringify(perms).slice(0, 400)); } catch (eL) {}
+    return { success: true, created: created };
+  } finally { lock.releaseLock(); }
+}

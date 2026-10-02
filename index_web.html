@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.252 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.253 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.252)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.253)', diag);
 }, 6000);
 </script>
 
@@ -1501,7 +1501,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.252</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.253</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2449,6 +2449,28 @@ input[type="date"]:not(:focus):not(:valid) {
 
 <!-- ============ شاشة الإعدادات ============ -->
 <div id="section-settings" class="page-section container my-3">
+
+  <!-- 🏨 (V4.253) إعدادات برنامج الحجوزات + 🤖 البوت — انتقلت هنا من شاشة الفنادق (للمدير) -->
+  <div class="card shadow-sm border-0 mb-3 d-none hb-set-card" id="hbSetCard-core">
+    <div class="card-body p-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0" style="cursor:pointer;" onclick="hbSetToggle_('core')">🏨 إعدادات الفنادق والحجوزات</h5>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="hbSetToggle_('core')">فتح / إغلاق</button>
+      </div>
+      <div class="small text-muted mt-1">مصدر الحجوزات (الملف وأوراق مكة والمدينة)، قراءة التأكيدات بالذكاء الاصطناعي، الربط بالحسابات العامة، بيانات الحسابات.</div>
+      <div id="hbSetBox-core" class="d-none mt-2"></div>
+    </div>
+  </div>
+  <div class="card shadow-sm border-0 mb-3 d-none hb-set-card" id="hbSetCard-bot">
+    <div class="card-body p-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0" style="cursor:pointer;" onclick="hbSetToggle_('bot')">🤖 بوت تليجرام — الحجوزات والحسابات</h5>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="hbSetToggle_('bot')">فتح / إغلاق</button>
+      </div>
+      <div class="small text-muted mt-1">بوت واحد: مجموعة الحجوزات (التنبيهات، الأوامر، ربط الموظفين وصلاحياتهم) + مجموعة الحسابات.</div>
+      <div id="hbSetBox-bot" class="d-none mt-2"></div>
+    </div>
+  </div>
 
   <!-- الشركات والوكلاء -->
   <div class="card shadow-sm border-0 mb-3" id="svcCard-companies">
@@ -7623,7 +7645,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.252";
+var CLIENT_APP_VERSION = "4.253";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -8690,6 +8712,7 @@ function loadUsersTable() {
   google.script.run
     .withSuccessHandler(function (users) {
       renderUsersTable(users || []);
+      hbUsersLoad_(users || []);   // 🏨 (V4.254) صلاحيات الفنادق لكل مستخدم بنفس الجدول
     })
     .withFailureHandler(function (err) {
       tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">تعذر تحميل المستخدمين: ' + (err.message || err) + '</td></tr>';
@@ -8727,11 +8750,51 @@ function renderUsersTable(users) {
       '<td>' +
 '<button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="promptChangePassword(' + u.row + ', \'' + u.username + '\')">🔑 تغيير الباسورد</button>' +
 '<button type="button" class="btn btn-sm btn-outline-warning me-1" onclick=\'promptEditPermissions(' + u.row + ', ' + JSON.stringify(u.permissions || "") + ', ' + JSON.stringify(u.username || "") + ', ' + JSON.stringify(u.fullName || "") + ')\'>✏️ الصلاحيات</button>' +
+        (hasPermission('admin') ? '<button type="button" class="btn btn-sm btn-outline-info me-1" onclick=\'hbUserDlg_(' + JSON.stringify(u.username || "") + ', ' + JSON.stringify(u.fullName || "") + ')\'>🏨 الفنادق <span class="hbu-chip" data-u="' + escapeHtml_(String(u.username || '').toLowerCase()) + '"></span></button>' : '') +
         '<button type="button" class="btn btn-sm ' + toggleBtnClass + ' me-1" onclick="toggleUserActive(' + u.row + ', ' + (u.active === false) + ')">' + toggleBtnLabel + '</button>' +
         deleteBtn +
       '</td>' +
       '</tr>';
   }).join('');
+}
+
+/* 🏨 (V4.254) صلاحيات برنامج الحجوزات داخل شاشة المستخدمين — بدل شاشة «المستخدمون» المنفصلة بالفنادق */
+var HBU = null;
+function hbUsersLoad_(users) {
+  if (!hasPermission('admin')) return;
+  google.script.run.withSuccessHandler(function (r) {
+    HBU = r || null; if (!HBU) return;
+    document.querySelectorAll('.hbu-chip').forEach(function (c) {
+      var u = HBU.users[c.getAttribute('data-u')];
+      c.textContent = !u ? '— غير مفعّل' : (u.active === false ? '⛔' : (u.role === 'admin' ? '👑 مدير' : '✓ ' + HBU.screens.filter(function (k) { return u.permissions[k[0]] && u.permissions[k[0]] !== 'none'; }).length + ' شاشة'));
+      c.className = 'hbu-chip small ' + (!u ? 'text-muted' : 'text-success');
+    });
+  }).withFailureHandler(function () { HBU = null; }).hbUsersMap(window.authToken);
+}
+function hbUserDlg_(username, fullName) {
+  if (!HBU) { _showPopup('⏳ لم تُحمَّل صلاحيات الفنادق بعد — أعد المحاولة بعد لحظات (أو برنامج الحجوزات غير مركَّب)', 'warning'); return; }
+  var u = HBU.users[String(username).toLowerCase()] || { role: 'user', permissions: {}, bookingCityScope: 'all', financeLevel: 'none', active: true, _new: true };
+  var opt = function (list, v) { return list.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === v ? ' selected' : '') + '>' + escapeHtml_(x[1]) + '</option>'; }).join(''); };
+  var rows = HBU.screens.map(function (k) {
+    return '<tr><td class="small fw-bold">' + escapeHtml_(k[1]) + '</td><td><select class="form-select form-select-sm hbu-lvl" data-k="' + k[0] + '">' + opt(HBU.levels, u.permissions[k[0]] || 'none') + '</select></td></tr>';
+  }).join('');
+  var h = '<div id="hbuDlg" dir="rtl">' + (u._new ? '<div class="alert alert-info py-1 small">لا يوجد مستخدم حجوزات باسم «' + escapeHtml_(username) + '» — سيُنشأ تلقائياً عند الحفظ (الدخول موحّد من برنامج العمرة).</div>' : '') +
+    '<div class="row g-2 mb-2"><div class="col-6"><label class="small fw-bold">الدور في الحجوزات</label><select id="hbuRole" class="form-select form-select-sm">' + opt([['user', 'مستخدم (حسب الشاشات)'], ['admin', 'مدير (كل شيء)']], u.role) + '</select></div>' +
+    '<div class="col-6"><label class="small fw-bold">الحالة</label><select id="hbuActive" class="form-select form-select-sm">' + opt([['1', 'مفعّل'], ['0', 'معطّل']], u.active === false ? '0' : '1') + '</select></div>' +
+    '<div class="col-6"><label class="small fw-bold">المدينة</label><select id="hbuCity" class="form-select form-select-sm">' + opt([['all', 'مكة والمدينة'], ['مكة', 'مكة فقط'], ['المدينة', 'المدينة فقط']], u.bookingCityScope) + '</select></div>' +
+    '<div class="col-6"><label class="small fw-bold">الجانب المالي</label><select id="hbuFin" class="form-select form-select-sm">' + opt(HBU.finance, u.financeLevel) + '</select></div></div>' +
+    '<table class="table table-sm align-middle mb-2"><thead><tr><th>الشاشة</th><th style="width:45%;">المستوى</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    '<div class="small text-muted mb-2">الدخول لشاشة الفنادق نفسها يتطلب صلاحية «الفنادق» في ✏️ الصلاحيات أعلاه. المدير يملك كل الشاشات تلقائياً.</div>' +
+    '<div class="text-end"><button class="btn btn-success btn-sm fw-bold" id="hbuSave">💾 حفظ صلاحيات الفنادق</button></div></div>';
+  if (typeof glDlg === 'function') glDlg('🏨 صلاحيات الفنادق — ' + (fullName || username), h, 560);
+  document.getElementById('hbuSave').onclick = function () {
+    var btn = this, p = { role: document.getElementById('hbuRole').value, active: document.getElementById('hbuActive').value === '1', bookingCityScope: document.getElementById('hbuCity').value,
+      financeLevel: document.getElementById('hbuFin').value, displayName: fullName || username, permissions: {} };
+    document.querySelectorAll('#hbuDlg .hbu-lvl').forEach(function (sel) { p.permissions[sel.getAttribute('data-k')] = sel.value; });
+    btn.disabled = true;
+    google.script.run.withSuccessHandler(function (r) { btn.disabled = false; if (typeof glDlgClose === 'function') glDlgClose(); showToast(r && r.created ? '✅ أُنشئ مستخدم الحجوزات وحُفظت صلاحياته' : '✅ حُفظت صلاحيات الفنادق'); hbUsersLoad_(); })
+      .withFailureHandler(function (e) { btn.disabled = false; _showPopup((e && e.message) || String(e), 'error'); }).hbUserSaveFromMain(window.authToken, username, p);
+  };
 }
 
 function confirmDeleteUser(row, username) {
@@ -23255,6 +23318,7 @@ document
 
   if (page === 'settings') {
     _applySettingsScopeVisibility();
+    try { document.querySelectorAll('.hb-set-card').forEach(function (c) { c.classList.toggle('d-none', !hasPermission('admin')); }); } catch (eHS) {}
     loadSystemSettingsForm();
     loadServicesStatus();
     if (typeof refreshCleanupScheduleStatus === 'function') refreshCleanupScheduleStatus();
@@ -49042,12 +49106,13 @@ function glRenderHotels() {
    ============================================================================ */
 // (V4.248) شريط واحد: العمل اليومي ظاهر، والشاشات الإدارية داخل «⚙ إدارة» — وكل المدفوعات للعرض فقط (الدفعات من البرنامج الرئيسي)
 var HBX_PAGES_ = [['arrivals', '🛬 متابعة الأرصدة'], ['bookings', '📋 كل الحجوزات'], ['statement', '📄 كشف حساب فندقي'], ['statsReport', '📊 الإحصائيات'], ['clientPortal', '🔗 بوابة العملاء']];
-var HBX_ADMIN_ = [['users', '👤 المستخدمون'], ['settings', '⚙ الإعدادات'], ['changelog', '📜 سجل التعديلات'], ['import', '📥 استيراد الدفعات'], ['payments', '📒 كل المدفوعات (عرض)']];
+// (V4.253) «⚙ الإعدادات» انتقلت لإعدادات البرنامج الرئيسية (🏨 إعدادات الفنادق + 🤖 البوت)
+var HBX_ADMIN_ = [['@users', '👤 المستخدمون ↗ (بشاشة المستخدمين)'], ['changelog', '📜 سجل التعديلات'], ['import', '📥 استيراد الدفعات'], ['payments', '📒 كل المدفوعات (عرض)'], ['@settings', '⚙ الإعدادات ↗ (بإعدادات البرنامج)']];
 var HBX = { page: '', frame: null, loading: false, bell: 0, ready: false, menu: false };
 function hbxCanHotels_() { return typeof hasPermission === 'function' && (hasPermission('admin') || hasPermission('hotels.view')); }
 function hbxShell_() {
   var root = document.getElementById('hbxRoot'); if (!root) return false;
-  if (!HBX.page) { try { HBX.page = localStorage.getItem('hbx_page') || ''; } catch (e) {} HBX.page = HBX.page || 'arrivals'; }
+  if (!HBX.page) { try { HBX.page = localStorage.getItem('hbx_page') || ''; } catch (e) {} HBX.page = (HBX.page && !/^(settings|users)$/.test(HBX.page)) ? HBX.page : 'arrivals'; }
   if (!document.getElementById('hbxTabs')) {
     root.innerHTML = '<div class="gl-head" style="padding:6px 10px;"><h5 style="font-size:15px;">🏨 الفنادق والحجوزات</h5><span style="width:1px;height:22px;background:rgba(255,255,255,.35);"></span>' +
       '<div class="d-flex gap-1 flex-wrap align-items-center" id="hbxTabs" style="flex:1;"></div></div><div id="hbxWrap" class="mt-1" style="position:relative;"></div>';
@@ -49055,9 +49120,10 @@ function hbxShell_() {
       window._hbxMsg = 1;
       window.addEventListener('message', function (ev) {
         var d = ev && ev.data; if (!d || typeof d !== 'object') return;
+        if (d.sec) return;   // (V4.253) رسائل إطارات الإعدادات المضمَّنة — لها معالجها الخاص
         if (d.hbPage) { HBX.page = String(d.hbPage); hbxTabs(); }
         else if (d.hbBell !== undefined) { HBX.bell = +d.hbBell || 0; hbxTabs(); }
-        else if (d.hbReady) { HBX.ready = true; HBX._retried = 0; clearTimeout(HBX._wd); if (HBX.page) try { HBX.frame.contentWindow.postMessage({ hbShow: HBX.page }, '*'); } catch (eS) {} }
+        else if (d.hbReady) { HBX.ready = true; HBX._retried = 0; clearTimeout(HBX._wd); if (HBX.page && HBX.frame) hbPostDeep_(HBX.frame.contentWindow, { hbShow: HBX.page }); }
         else if (d.hbRetry) { hbxLoad(); }
         else if (d.hbPay) { hbxPay(d.hbPay); }
       });
@@ -49109,9 +49175,12 @@ function hbxTabs() {
     '<button class="btn btn-sm btn-outline-light" title="فتح برنامج الحجوزات في نافذة مستقلة" onclick="openHotelsApp_()">↗</button>';
 }
 function hbxShow(key) {
+  if (key === '@settings') { switchPage('settings'); setTimeout(function () { var b = document.getElementById('hbSetBox-core'); if (b && b.classList.contains('d-none')) hbSetToggle_('core'); var c = document.getElementById('hbSetCard-core'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300); return; }
+  if (key === '@users') { switchPage('users'); return; }
+  if (key === 'settings' || key === 'users') key = 'arrivals';
   HBX.page = key; try { localStorage.setItem('hbx_page', key); } catch (e) {}
   hbxTabs();
-  if (HBX.frame && HBX.frame.contentWindow) HBX.frame.contentWindow.postMessage({ hbShow: key }, '*'); else hbxLoad();
+  if (HBX.frame && HBX.frame.contentWindow) hbPostDeep_(HBX.frame.contentWindow, { hbShow: key }); else hbxLoad();
 }
 function hbxSize() {
   var w = document.getElementById('hbxWrap'); if (!w || !w.offsetParent) return;
@@ -49178,7 +49247,48 @@ function hbxPayOpen_(kind, code) {
   if (d && !d.value && a) d.value = (kind === 'receipt' || kind === 'bankIn' ? 'استلام من ' : 'دفع إلى ') + (a.link || a.name);
 }
 // بعد حفظ قيد من شاشة الفنادق: تحديث الكشف الفندقي المفتوح (الدفعة تُنسخ لسجل الدفعات فوراً)
-function hbxAfterSave_() { try { if (HBX.frame && HBX.frame.contentWindow && document.getElementById('section-hotels').classList.contains('active')) setTimeout(function () { HBX.frame.contentWindow.postMessage({ hbRefresh: 1 }, '*'); }, 800); } catch (e) {} }
+function hbxAfterSave_() { try { if (HBX.frame && HBX.frame.contentWindow && document.getElementById('section-hotels').classList.contains('active')) setTimeout(function () { hbPostDeep_(HBX.frame.contentWindow, { hbRefresh: 1 }); }, 800); } catch (e) {} }
+// 🏨 (V4.253) جزء من إعدادات برنامج الحجوزات مضمَّن داخل إعدادات البرنامج: core / bot
+var HBSET = {};
+function hbSetToggle_(sec) {
+  var box = document.getElementById('hbSetBox-' + sec); if (!box) return;
+  var open = box.classList.toggle('d-none') === false;
+  if (open && !HBSET[sec]) hbSetLoad_(sec);
+  if (open && sec === 'bot' && typeof glBotGroupCard_ === 'function') glBotGroupCard_();
+}
+function hbSetLoad_(sec) {
+  var box = document.getElementById('hbSetBox-' + sec); if (!box) return;
+  HBSET[sec] = { loading: true };
+  var acc = sec === 'bot' ? '<div id="glBotGroupCard" class="mb-2"></div>' : '';
+  box.innerHTML = acc + '<div id="hbSetFrame-' + sec + '" class="text-muted small py-3 text-center">⏳ جارٍ فتح الإعدادات…</div>';
+  if (!window._hbSetMsg) {
+    window._hbSetMsg = 1;
+    window.addEventListener('message', function (ev) {
+      var d = ev && ev.data; if (!d || typeof d !== 'object' || !d.sec || !HBSET[d.sec]) return;
+      if (d.hbRetry) hbSetLoad_(d.sec);
+      else if (d.hbReady) HBSET[d.sec].ready = true;
+    });
+  }
+  google.script.run.withSuccessHandler(function (r) {
+    var w = document.getElementById('hbSetFrame-' + sec); if (!w) return;
+    if (!r || !r.url) { w.innerHTML = '<span class="text-danger">تعذّر فتح إعدادات الحجوزات</span>'; HBSET[sec] = null; return; }
+    var f = document.createElement('iframe');
+    f.src = r.url + '&hp=settings&embed=1&hs=' + sec;
+    f.style.cssText = 'width:100%;height:' + Math.max(520, Math.round(window.innerHeight * 0.78)) + 'px;border:1px solid #e5e7eb;border-radius:10px;background:#f4f6f9;';
+    w.className = ''; w.innerHTML = ''; w.appendChild(f); HBSET[sec] = { frame: f };
+  }).withFailureHandler(function (e) {
+    var w = document.getElementById('hbSetFrame-' + sec); HBSET[sec] = null;
+    if (w) w.innerHTML = '<span class="text-danger">⚠️ ' + escapeHtml_((e && e.message) || String(e)) + '</span> <button class="btn btn-sm btn-outline-secondary ms-2" onclick="hbSetLoad_(\'' + sec + '\')">↻</button>';
+  }).hotelsHandoff(window.authToken);
+}
+// (V4.253) Apps Script يغلّف صفحة برنامج الحجوزات بإطارين داخل إطارنا ⇒ الرسالة تُرسَل للإطار وكل إطاراته الداخلية
+// (حتى عمق 4) فتصل لكود الحجوزات نفسه أياً كان مستواه — بدونها كانت أزرار التبويبات لا تعمل إلا بعد «تحديث»
+function hbPostDeep_(w, msg, depth) {
+  depth = depth || 0; if (!w || depth > 4) return;
+  try { w.postMessage(msg, '*'); } catch (e) {}
+  var n = 0; try { n = w.frames.length; } catch (e2) { n = 0; }
+  for (var i = 0; i < n; i++) { try { hbPostDeep_(w.frames[i], msg, depth + 1); } catch (e3) {} }
+}
 /* 💳 (V4.241 — دمج المرحلة 1) دفعات الفنادق من البرنامج الرئيسي: من هنا أو من أي شاشة (الخزينة/البنوك/العهد/القيود) —
    أي سند أو قيد على حساب طرف من أطراف الحجوزات يُنسخ تلقائياً لسجل دفعات برنامج الحجوزات (GL:…) ليبقى كشف حسابه هناك صحيحاً */
 function glHbHpayParties_() {
