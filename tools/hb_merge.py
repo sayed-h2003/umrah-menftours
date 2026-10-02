@@ -105,7 +105,7 @@ def build():
                 "    tmpl.hbSec = String((e && e.parameter && e.parameter.hs) || '').replace(/[^a-z]/g, '');   // (V4.253) جزء من الإعدادات فقط\n")
     code = must(code, "        .setTitle('حجوزات وحسابات سكن')", "        .setTitle('حجوزات الفنادق — منف')")
     code = must(code, 'var HB_APP_VERSION = "', '// (H4) مدموج داخل مشروع برنامج العمرة — ملفات HB_*\nvar HB_APP_VERSION = "')
-    # 🤖 (V4.255) بوت واحد بمجموعتين: أوامر الحسابات (glBotHandle_) تُفحص قبل أوامر الحجوزات، وطابور تنبيهات
+    # 🤖 (V4.254) بوت واحد بمجموعتين: أوامر الحسابات (glBotHandle_) تُفحص قبل أوامر الحجوزات، وطابور تنبيهات
     # الحسابات (glBotTick_) يُفرَّغ من نفس المهمة الدورية — الدالتان ببرنامج العمرة (Accounts.gs)
     code = must(code, "      try {\n        r = tgHandleMessage_(upd.message);",
                 "      try {\n        r = (typeof glBotHandle_ === 'function' && glBotHandle_(upd.message)) || tgHandleMessage_(upd.message);")

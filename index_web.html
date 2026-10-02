@@ -8712,7 +8712,7 @@ function loadUsersTable() {
   google.script.run
     .withSuccessHandler(function (users) {
       renderUsersTable(users || []);
-      hbUsersLoad_(users || []);   // 🏨 (V4.254) صلاحيات الفنادق لكل مستخدم بنفس الجدول
+      hbUsersLoad_(users || []);   // 🏨 (V4.253) صلاحيات الفنادق لكل مستخدم بنفس الجدول
     })
     .withFailureHandler(function (err) {
       tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">تعذر تحميل المستخدمين: ' + (err.message || err) + '</td></tr>';
@@ -8758,7 +8758,7 @@ function renderUsersTable(users) {
   }).join('');
 }
 
-/* 🏨 (V4.254) صلاحيات برنامج الحجوزات داخل شاشة المستخدمين — بدل شاشة «المستخدمون» المنفصلة بالفنادق */
+/* 🏨 (V4.253) صلاحيات برنامج الحجوزات داخل شاشة المستخدمين — بدل شاشة «المستخدمون» المنفصلة بالفنادق */
 var HBU = null;
 function hbUsersLoad_(users) {
   if (!hasPermission('admin')) return;
@@ -49248,7 +49248,7 @@ function hbxPayOpen_(kind, code) {
 }
 // بعد حفظ قيد من شاشة الفنادق: تحديث الكشف الفندقي المفتوح (الدفعة تُنسخ لسجل الدفعات فوراً)
 function hbxAfterSave_() { try { if (HBX.frame && HBX.frame.contentWindow && document.getElementById('section-hotels').classList.contains('active')) setTimeout(function () { hbPostDeep_(HBX.frame.contentWindow, { hbRefresh: 1 }); }, 800); } catch (e) {} }
-// 🤖 (V4.255) مجموعة الحسابات على نفس البوت: تنبيهات وأوامر الحسابات
+// 🤖 (V4.254) مجموعة الحسابات على نفس البوت: تنبيهات وأوامر الحسابات
 function glBotGroupCard_() {
   var box = document.getElementById('glBotGroupCard'); if (!box) return;
   box.innerHTML = '<div class="text-muted small">⏳ إعدادات مجموعة الحسابات…</div>';
