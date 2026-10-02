@@ -6583,7 +6583,7 @@ function tgProcessUpdate_(upd) {
     if (upd.message.text) {
       var r;
       try {
-        r = tgHandleMessage_(upd.message);
+        r = (typeof glBotHandle_ === 'function' && glBotHandle_(upd.message)) || tgHandleMessage_(upd.message);
       } catch (eMsg) {
         // عطل غير متوقَّع أثناء تنفيذ أمر نصي — كان يُسجَّل داخليًا فقط والمستخدم يرى صمتًا تامًا
         // بلا أي رد، فيظن أن البوت لا يستجيب. الآن يصله سبب العطل مباشرة في نفس المحادثة
@@ -6649,6 +6649,7 @@ function drainTelegramQueue() {
   try { tgFlushDueBookingEditBatches_(); } catch (eBatch) { Logger.log('drain/batch: ' + eBatch.message); }
   // مزامنة شيت العهد الخارجي (CustodySync.gs) — مُقيَّدة بمهلتها الخاصة، ولا تعمل أصلاً ما
   // لم يُضبَط شيت عهدة. الحارس typeof يمنع أي عطل لو لم يُلصَق ملف المزامنة في المشروع
+  try { if (typeof glBotTick_ === 'function') glBotTick_(); } catch (eGlb) { Logger.log('drain/glbot: ' + eGlb.message); }
   try { if (typeof custodySyncTick_ === 'function') custodySyncTick_(); }
   catch (eCus) { Logger.log('drain/custody: ' + eCus.message); }
   // طابور فارغ = لا شيء نفعله: لا قفل، ولا فتح ملف الشيت، ولا قراءة ورقة

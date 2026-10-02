@@ -105,6 +105,13 @@ def build():
                 "    tmpl.hbSec = String((e && e.parameter && e.parameter.hs) || '').replace(/[^a-z]/g, '');   // (V4.253) جزء من الإعدادات فقط\n")
     code = must(code, "        .setTitle('حجوزات وحسابات سكن')", "        .setTitle('حجوزات الفنادق — منف')")
     code = must(code, 'var HB_APP_VERSION = "', '// (H4) مدموج داخل مشروع برنامج العمرة — ملفات HB_*\nvar HB_APP_VERSION = "')
+    # 🤖 (V4.255) بوت واحد بمجموعتين: أوامر الحسابات (glBotHandle_) تُفحص قبل أوامر الحجوزات، وطابور تنبيهات
+    # الحسابات (glBotTick_) يُفرَّغ من نفس المهمة الدورية — الدالتان ببرنامج العمرة (Accounts.gs)
+    code = must(code, "      try {\n        r = tgHandleMessage_(upd.message);",
+                "      try {\n        r = (typeof glBotHandle_ === 'function' && glBotHandle_(upd.message)) || tgHandleMessage_(upd.message);")
+    code = must(code, "  try { if (typeof custodySyncTick_ === 'function') custodySyncTick_(); }",
+                "  try { if (typeof glBotTick_ === 'function') glBotTick_(); } catch (eGlb) { Logger.log('drain/glbot: ' + eGlb.message); }\n"
+                "  try { if (typeof custodySyncTick_ === 'function') custodySyncTick_(); }")
     out['HB_Code.gs'] = code
     out['HB_CustodySync.gs'] = server(open(os.path.join(SRC, 'CustodySync.gs'), encoding='utf-8').read())
     gl = server(open(os.path.join(SRC, 'GlLink.gs'), encoding='utf-8').read())
