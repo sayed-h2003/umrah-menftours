@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.256";
+var APP_VERSION = "4.257";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -863,10 +863,10 @@ var fileUrl = file.getUrl();
     // ===============================
     // إرسال الطلب
     // ===============================
-    var response = UrlFetchApp.fetch(url, options);
+    var response = _gemFetch_(url, options);
     if (response.getResponseCode() === 429 && TKEYS.length > 1) {
       url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + TKEYS[1];
-      response = UrlFetchApp.fetch(url, options);
+      response = _gemFetch_(url, options);
     }
 
     var jsonRes =
@@ -7870,6 +7870,12 @@ function doPost(e) {
         return;
       }
 
+      // ✈️ (V4.257) مطابقة برنت الطيران
+      if (callbackData === 'flt_start' || callbackData === 'fltq_cancel' || callbackData === 'fltpdf' || callbackData.indexOf('flttrip:') === 0) {
+        try { _tgFltOnCallback_(cq); }
+        catch (fltErr) { sendTelegramMessageDirect(chatId, "❌ <b>خطأ في مطابقة البرنت:</b>\n<code>" + fltErr.toString() + "</code>"); }
+        return;
+      }
       // 📅 (V4.109) زر «تحركات بتاريخ معيّن» — يبدأ محادثة قصيرة تنتظر التاريخ من المستخدم
       if (callbackData === 'moves_bydate') {
         try {
@@ -7986,6 +7992,14 @@ function doPost(e) {
       sendTelegramMenu(chatId);
       return;
     }
+
+    // ✈️ (V4.257) «مطابقة برنت» أو /fltcheck يبدأ المحادثة، وأي رسالة داخلها (صورة/PDF/نص/اسم رحلة) تُعالَج هنا
+    if (msg.from && (cmd === '/fltcheck' || /^مطابق[ةه]\s*(ال)?برنت$/.test(text))) {
+      try { _tgFltStart_(chatId, msg.from); } catch (fltE1) { sendTelegramMessageDirect(chatId, "❌ <code>" + fltE1.toString() + "</code>"); }
+      return;
+    }
+    try { if (_tgFltOnMessage_(msg)) return; }
+    catch (fltE2) { if (msg.from) _tgFltClear_(chatId, msg.from.id); sendTelegramMessageDirect(chatId, "❌ <b>خطأ في مطابقة البرنت:</b>\n<code>" + fltE2.toString() + "</code>"); return; }
 
     // 🔎 (V4.138) البحث المباشر بصيغة «بحث: الاسم أو رقم الجواز» — يعمل في أي وقت بلا حاجة لمحادثة
     // 🔎 (V4.140) تقبل «بحث: ...» و«بحث : ...» و«بحث ...» بلا نقطتين أيضاً — بشرط فاصل حقيقي
@@ -8123,6 +8137,9 @@ function sendTelegramMenu(chatId) {
         ],
         [
           { "text": "📑 اتفاقيات الإعاشة", "callback_data": "cc_start" }
+        ],
+        [
+          { "text": "✈️ مطابقة برنت الطيران", "callback_data": "flt_start" }
         ]
       ]
     })
@@ -8783,7 +8800,7 @@ function _tgccOcrOnly_(base64Data, mimeType, GKEYS) {
   for (var ki = 0; ki < GKEYS.length; ki++) {
     for (var mi = 0; mi < MODELS.length; mi++) {
       try {
-        var resp = UrlFetchApp.fetch(
+        var resp = _gemFetch_(
           'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki],
           { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
         var jr = JSON.parse(resp.getContentText());
@@ -8832,7 +8849,7 @@ function _tgccExtractDirect_(base64Data, mimeType, fileName) {
   for (var ki = 0; ki < GKEYS.length && !rawText && !_ccTimeUp_(); ki++) {
     for (var mi = 0; mi < MODELS.length && !_ccTimeUp_(); mi++) {
       try {
-        var resp = UrlFetchApp.fetch(
+        var resp = _gemFetch_(
           'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki],
           { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
         lastCode = resp.getResponseCode();
@@ -10116,7 +10133,7 @@ function verifyMyGeminiKey() {
     var label = (i === 0 ? 'الأساسي' : 'الاحتياطي') + ' (' + _maskKey_(keys[i]) + ')';
     try {
       var url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + keys[i];
-      var res = UrlFetchApp.fetch(url, {
+      var res = _gemFetch_(url, {
         method: 'post', contentType: 'application/json', muteHttpExceptions: true,
         payload: JSON.stringify({ contents: [{ parts: [{ text: 'ping' }] }] })
       });
@@ -11521,6 +11538,7 @@ function setTelegramBotCommands() {
   var commands = [
     { command: 'start', description: '🏠 فتح القائمة الرئيسية' },
     { command: 'menu', description: '📋 عرض قائمة الأوامر التفاعلية (تحركات/وصول/بحث)' },
+    { command: 'fltcheck', description: '✈️ مطابقة برنت الطيران مع أسماء رحلة' },
     { command: 'id', description: '🆔 عرض معرّف هذه المحادثة (للإعدادات)' }
   ];
 
@@ -16217,7 +16235,7 @@ function extractCateringContract(authToken, base64Data, mimeType, fileName) {
     for (var ki = 0; ki < GKEYS.length && !jsonRes; ki++) {
       for (var mi = 0; mi < MODELS.length; mi++) {
         var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki];
-        var resp = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json',
+        var resp = _gemFetch_(url, { method: 'post', contentType: 'application/json',
           payload: JSON.stringify(payload), muteHttpExceptions: true });
         var httpCode = resp.getResponseCode();
         try { jsonRes = JSON.parse(resp.getContentText()); } catch (pe) { jsonRes = null; }
@@ -16271,7 +16289,7 @@ function extractCateringContract(authToken, base64Data, mimeType, fileName) {
       for (var ki = 0; ki < GKEYS.length && !text; ki++) {
         for (var mi = 0; mi < MODELS.length; mi++) {
           try {
-            var resp = UrlFetchApp.fetch(
+            var resp = _gemFetch_(
               'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki],
               { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
             var jr = JSON.parse(resp.getContentText());
@@ -18128,6 +18146,10 @@ function _checkTripConflicts_(tripName, pilgrims) {
 
 function getTripPilgrims(authToken, tripName) {
   requireAuth_(authToken);
+  return _getTripPilgrimsCore_(tripName);
+}
+// (V4.257) النواة بلا فحص جلسة — يستخدمها بوت الرحلات (مطابقة البرنت) أيضاً
+function _getTripPilgrimsCore_(tripName) {
   tripName = String(tripName || "").trim();
   if (!tripName) return [];
 
@@ -20006,7 +20028,7 @@ function _extractPassportDataCore_(base64Image, mimeType) {
     for (var ki = 0; ki < GKEYS.length && !jsonRes && !fatal; ki++) {
     for (var mi = 0; mi < MODELS.length; mi++) {
       var url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODELS[mi] + ":generateContent?key=" + GKEYS[ki];
-      var response = UrlFetchApp.fetch(url, {
+      var response = _gemFetch_(url, {
         method: "post",
         contentType: "application/json",
         payload: JSON.stringify(payload),
@@ -22971,7 +22993,7 @@ function extractRoomFeeReceiptImage(authToken, base64Data, mimeType) {
   for (var ki = 0; ki < GKEYS.length && !rawText; ki++) {
     for (var mi = 0; mi < MODELS.length; mi++) {
       var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki];
-      var resp = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+      var resp = _gemFetch_(url, { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
       var httpCode = resp.getResponseCode();
       var jsonRes = null;
       try { jsonRes = JSON.parse(resp.getContentText()); } catch (pe) { jsonRes = null; }
@@ -25776,7 +25798,7 @@ function extractHousingAgreement(authToken, base64Data, mimeType, fileName) {
   var rawText = '', lastErr = '', minQuotaWait = 0;
   for (var ki = 0; ki < GKEYS.length && !rawText; ki++) {
     for (var mi = 0; mi < MODELS.length; mi++) {
-      var resp = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki],
+      var resp = _gemFetch_('https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[mi] + ':generateContent?key=' + GKEYS[ki],
         { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
       var code = resp.getResponseCode(), j = null;
       try { j = JSON.parse(resp.getContentText()); } catch (pe) {}
@@ -25873,6 +25895,9 @@ function syncTripAccountsBg(authToken, trips) {
    ============================================================================ */
 function flightPrintExtract(authToken, base64, mimeType) {
   requireAuth_(authToken);
+  return _flightAiExtract_(base64, mimeType);
+}
+function _flightAiExtract_(base64, mimeType) {
   var KEYS = _geminiKeys_();
   if (!KEYS.length) return { success: false, error: 'مفتاح Gemini غير مُعدّ — أضفه من شاشة الإعدادات، أو الصق نص البرنت بدل الصورة' };
   if (!base64) return { success: false, error: 'لا يوجد ملف' };
@@ -25885,7 +25910,7 @@ function flightPrintExtract(authToken, base64, mimeType) {
     generationConfig: { temperature: 0 } };
   var MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'], res = null, lastErr = '', wait = 0;
   outer: for (var k = 0; k < KEYS.length; k++) for (var m = 0; m < MODELS.length; m++) {
-    var r = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[m] + ':generateContent?key=' + KEYS[k],
+    var r = _gemFetch_('https://generativelanguage.googleapis.com/v1beta/models/' + MODELS[m] + ':generateContent?key=' + KEYS[k],
       { method: 'post', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
     var code = r.getResponseCode(), j = null; try { j = JSON.parse(r.getContentText()); } catch (e) {}
     if (code === 200 && j && j.candidates && j.candidates[0] && j.candidates[0].content) { res = j; break outer; }
@@ -25912,4 +25937,250 @@ function flightCmpPdf(authToken, htmlDoc, fileName) {
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return { success: true, fileId: file.getId(), downloadUrl: 'https://drive.google.com/uc?export=download&id=' + file.getId(),
     pdfBase64: Utilities.base64Encode(pdfBlob.getBytes()), fileName: fileName };
+}
+
+/* 🧠 (V4.257) جوجل تُقاعد أسماء نماذج Gemini دورياً (آخرها gemini-2.0-flash: «no longer available … use models/gemini-3.x-flash»).
+   كل نداءات Gemini بالبرنامج تمر من هنا: لو ردّ النموذج بأنه متقاعد/غير موجود يُجرَّب النموذج الذي تقترحه رسالة الخطأ نفسها
+   ثم النموذج الناجح المحفوظ (GEMINI_MODEL — مشترك مع برنامج الحجوزات) ثم بدائل عامة — والناجح يُحفظ فيُستخدم مباشرة بعد ذلك. */
+var GEM_FALLBACKS_ = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+function _gemFetch_(url, opts) {
+  var m = String(url).match(/\/models\/([^:\/?]+):/);
+  if (!m) return UrlFetchApp.fetch(url, opts);
+  var orig = decodeURIComponent(m[1]), P = PropertiesService.getScriptProperties(), C = CacheService.getScriptCache(), dead = {};
+  try { dead = JSON.parse(C.get('gem_dead') || '{}') || {}; } catch (e) {}
+  var learned = '', list = [];
+  try { learned = (P.getProperty('GEMINI_MODEL') || '').trim(); } catch (e2) {}
+  var add = function (x) { x = String(x || '').trim(); if (x && !dead[x] && list.indexOf(x) < 0) list.push(x); };
+  if (!dead[orig]) add(orig);
+  add(learned); add(C.get('gem_suggest')); GEM_FALLBACKS_.forEach(add);
+  var o = {}; for (var k in (opts || {})) o[k] = opts[k]; o.muteHttpExceptions = true;
+  var last = null;
+  for (var i = 0; i < list.length && i < 6; i++) {
+    var model = list[i], r = UrlFetchApp.fetch(String(url).replace('/models/' + m[1] + ':', '/models/' + encodeURIComponent(model) + ':'), o), code = r.getResponseCode();
+    if (code === 200) { if (model !== orig && model !== learned) try { P.setProperty('GEMINI_MODEL', model); } catch (e3) {} return r; }
+    var txt = r.getContentText() || '';
+    if ((code === 404 || code === 400) && /no longer available|not found|not supported|deprecated|retired|is not available/i.test(txt)) {
+      dead[model] = 1; try { C.put('gem_dead', JSON.stringify(dead), 21600); } catch (e4) {}
+      (txt.match(/models\/([A-Za-z0-9][A-Za-z0-9.\-]{2,60})/g) || []).forEach(function (s) {
+        s = s.replace(/^models\//, ''); if (s !== model && !dead[s] && list.indexOf(s) < 0) { list.splice(i + 1, 0, s); try { C.put('gem_suggest', s, 21600); } catch (e5) {} }
+      });
+      last = r; continue;
+    }
+    last = r; break;   // حصة/مفتاح/خطأ آخر — يتعامل معه المستدعي كما كان
+  }
+  if (last && !(opts && opts.muteHttpExceptions) && last.getResponseCode() >= 400) throw new Error('Gemini HTTP ' + last.getResponseCode() + ': ' + last.getContentText().slice(0, 300));
+  return last;
+}
+
+/* ✈️ (V4.257) قراءة البرنت بلا ذكاء اصطناعي (احتياطي): نفس آلية «من الجوازات (بدون AI)» — تحويل Drive OCR للصورة/PDF
+   إلى نص، ثم قراءة الأسماء من النص بالقواعد (12.LAST/FIRST MIDDLE MRS). */
+function _driveOcrText_(base64, mimeType, lang) {
+  var isPdf = String(mimeType || '').toLowerCase() === 'application/pdf', docId = null;
+  try {
+    var blob = Utilities.newBlob(Utilities.base64Decode(String(base64).replace(/^data:[^,]*,/, '')), mimeType || 'image/jpeg', isPdf ? 'flt_ocr.pdf' : 'flt_ocr');
+    var f = null, lastErr = null, W = [0, 4000, 8000];
+    for (var a = 0; a < W.length && !f; a++) {
+      if (W[a]) Utilities.sleep(W[a]);
+      try { f = Drive.Files.insert({ title: 'FLT_OCR_TEMP_' + Date.now() }, blob, { convert: true, ocr: true, ocrLanguage: lang || 'en' }); }
+      catch (e) { lastErr = e; if (!/rate limit|quota|limit exceeded|backend/i.test(String(e))) throw e; }
+    }
+    if (!f) throw lastErr;
+    docId = f.id; Utilities.sleep(isPdf ? 2500 : 1500);
+    var text = DocumentApp.openById(docId).getBody().getText();
+    _driveDeleteForever_(docId); docId = null;
+    return text;
+  } finally { if (docId) try { _driveDeleteForever_(docId); } catch (e2) {} }
+}
+function flightPrintOcr(authToken, base64, mimeType) {
+  requireAuth_(authToken);
+  try { return { success: true, text: _driveOcrText_(base64, mimeType, 'en') }; }
+  catch (e) { return { success: false, error: 'تعذّرت القراءة بدون ذكاء اصطناعي: ' + e.message + ' — الصق نص البرنت بدلاً من ذلك' }; }
+}
+// قراءة نص البرنت — نفس منطق الواجهة (fltParseText_) مع تسامح مع أخطاء OCR (مسافات حول النقطة والشرطة المائلة)
+function _fltParseText_(txt) {
+  var s = String(txt || '').toUpperCase().replace(/\r/g, '').replace(/(\d)\s*[.,]\s*(?=[A-Z])/g, '$1.').replace(/\s*\/\s*/g, '/');
+  var out = [], seen = {};
+  var pnr = (s.match(/RP\/[A-Z0-9]+\/[A-Z0-9]+\s+[A-Z]{2}\/[A-Z]{2}\s+\S+\s+([A-Z0-9]{6})\b/) || s.match(/\b(?:PNR|RECORD LOCATOR|RLOC)[:\s]+([A-Z0-9]{6})\b/) || [])[1] || '';
+  s.split(/(?=(?:^|\s)\d{1,3}\.[A-Z])/m).forEach(function (chunk) {
+    var m = chunk.trim().match(/^(\d{1,3})\.([A-Z][A-Z' \-]*?)\/([A-Z][A-Z' \-()\/0-9]*)/); if (!m) return;
+    var given = m[3].replace(/\(.*$/, '').trim(), paren = (m[3].match(/\(([^)]*)\)/) || [])[1] || '';
+    given = given.split(/\s{2,}/)[0].trim();
+    var w = given.split(/\s+/), title = '';
+    if (/^(MR|MRS|MS|MISS|MSTR|CHD|INF)$/.test(w[w.length - 1])) title = w.pop();
+    if (/CHD/.test(paren)) title = 'CHD'; if (/^INF/.test(paren)) title = title || 'INF';
+    var n = +m[1]; if (seen[n]) return; seen[n] = 1;
+    out.push({ n: n, last: m[2].trim(), given: w.join(' '), title: title });
+  });
+  return { pnr: pnr, pax: out.sort(function (a, b) { return a.n - b.n; }) };
+}
+// قراءة ملف البرنت: ذكاء اصطناعي أولاً ثم OCR احتياطي — {pnr, pax, via}
+function _fltReadPrintFile_(base64, mime) {
+  var r = null;
+  try { r = _flightAiExtract_(base64, mime); } catch (e) { r = { success: false, error: e.message }; }
+  if (r && r.success && r.pax && r.pax.length) return { pnr: r.pnr, pax: r.pax, via: 'ai' };
+  var t = _driveOcrText_(base64, mime, 'en'), p = _fltParseText_(t);
+  return { pnr: p.pnr, pax: p.pax, via: 'ocr', aiErr: r && r.error };
+}
+var FLT_TITLE_ = { 'ذكر': 'MR', 'أنثى': 'MRS', 'طفل': 'CHD', 'رضيع': 'INF' };
+function _fltParts_(latin) {
+  var w0 = String(latin || '').toUpperCase().replace(/['\-.]/g, '').replace(/[^A-Z\s]/g, ' ').split(/\s+/).filter(Boolean), w = [];
+  for (var i = 0; i < w0.length; i++) { if (/^(ABD|ABDEL|ABDUL|ABO|ABOU|ABU|EL|AL)$/.test(w0[i]) && i + 1 < w0.length) { w.push(w0[i] + w0[i + 1]); i++; } else w.push(w0[i]); }
+  if (!w.length) return null;
+  if (w.length === 1) return { last: w[0], first: w[0], middle: '', all: w };
+  return { last: w[w.length - 1], first: w[0], middle: w.length >= 3 ? w[1] : '', all: w };
+}
+function _fltLev_(a, b) {
+  if (a === b) return 0; var m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  var p = [], c, i, j; for (j = 0; j <= n; j++) p[j] = j;
+  for (i = 1; i <= m; i++) { c = [i]; for (j = 1; j <= n; j++) c[j] = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1)); p = c; }
+  return p[n];
+}
+function _fltSim_(a, b) { a = String(a).replace(/[^A-Z]/g, ''); b = String(b).replace(/[^A-Z]/g, ''); var L = Math.max(a.length, b.length) || 1; return 1 - _fltLev_(a, b) / L; }
+function _fltTitleEq_(a, b) { var n = function (x) { return x === 'MS' ? 'MRS' : (x === 'MISS' || x === 'MSTR') ? 'CHD' : x; }; return !a || !b || n(a) === n(b); }
+function _fltCompare_(pilgrims, pax) {
+  var T = [], noLat = [], K = function (x) { return String(x).replace(/[^A-Z]/g, ''); };
+  pilgrims.forEach(function (p) { var n = _fltParts_(p.latinName); if (!n) { noLat.push(p); return; }
+    T.push({ p: p, n: n, title: FLT_TITLE_[p.type] || '', exp: n.last + '/' + n.first + (n.middle ? ' ' + n.middle : ''), used: false }); });
+  var P = pax.map(function (x) { return { x: x, key: x.last + '/' + x.given, used: false }; }), rows = [];
+  var link = function (t, pp, kind) { t.used = pp.used = true; rows.push({ kind: kind, t: t, pp: pp, titleBad: !_fltTitleEq_(pp.x.title, t.title) }); };
+  P.forEach(function (pp) { if (pp.used) return; var t = T.filter(function (t) { return !t.used && K(t.exp) === K(pp.key); })[0]; if (t) link(t, pp, 'ok'); });
+  P.forEach(function (pp) { if (pp.used) return; var g = pp.x.given.split(/\s+/).filter(Boolean);
+    var t = T.filter(function (t) { return !t.used && t.n.last === pp.x.last && g[0] === t.n.first && g.every(function (w) { return t.n.all.indexOf(w) >= 0; }); })[0];
+    if (t) link(t, pp, 'variant'); });
+  var cand = [];
+  P.forEach(function (pp, i) { if (pp.used) return; T.forEach(function (t, j) { if (t.used) return;
+    var sc = Math.max(_fltSim_(pp.key, t.exp), _fltSim_(pp.x.given + pp.x.last, t.n.all.join(''))); if (sc >= 0.7) cand.push({ i: i, j: j, s: sc }); }); });
+  cand.sort(function (a, b) { return b.s - a.s; }).forEach(function (c) { if (!P[c.i].used && !T[c.j].used) link(T[c.j], P[c.i], 'fix'); });
+  T.forEach(function (t) { if (!t.used) rows.push({ kind: 'missing', t: t }); });
+  P.forEach(function (pp) { if (!pp.used) rows.push({ kind: 'extra', pp: pp }); });
+  var dup = {}; pax.forEach(function (x) { var k = K(x.last + x.given); dup[k] = (dup[k] || 0) + 1; });
+  return { rows: rows, noLat: noLat, dups: pax.filter(function (x) { return dup[K(x.last + x.given)] > 1; }), tripN: T.length + noLat.length, printN: pax.length };
+}
+function _fltLine_(x) { return x.n + '.' + x.last + '/' + x.given + (x.title ? ' ' + x.title : ''); }
+function _fltSummary_(trip, pnr, R, html) {
+  var E = html ? function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); } : function (v) { return String(v == null ? '' : v); };
+  var B = html ? function (v) { return '<b>' + v + '</b>'; } : function (v) { return v; };
+  var by = function (k) { return R.rows.filter(function (r) { return r.kind === k; }); };
+  var fix = by('fix'), mis = by('missing'), ext = by('extra'), tb = R.rows.filter(function (r) { return r.titleBad; }), L = [];
+  L.push('✈️ ' + B('مطابقة برنت الطيران') + ' — ' + E(trip) + (pnr ? ' — PNR ' + E(pnr) : ''));
+  L.push('عدد الرحلة: ' + R.tripN + ' · البرنت: ' + R.printN + ' · مطابق: ' + (by('ok').length + by('variant').length) + ' · يُعدّل: ' + fix.length + ' · ناقص: ' + mis.length + ' · زائد: ' + ext.length);
+  if (fix.length) { L.push('', '✏️ ' + B('يُعدّل في البرنت (' + fix.length + ')')); fix.forEach(function (r) { L.push(E(_fltLine_(r.pp.x)) + ' ⟵ ' + E(r.t.exp + ' ' + (r.t.title || r.pp.x.title))); }); }
+  if (tb.length) { L.push('', '⚠️ ' + B('لقب مختلف (' + tb.length + ')')); tb.forEach(function (r) { L.push(E(_fltLine_(r.pp.x)) + ' ⟵ ' + E(r.t.title)); }); }
+  if (mis.length) { L.push('', '❌ ' + B('بالرحلة وغير موجود بالبرنت (' + mis.length + ')')); mis.forEach(function (r) { L.push(E(r.t.exp + ' ' + r.t.title + ' (' + r.t.p.name + ')')); }); }
+  if (ext.length) { L.push('', '➕ ' + B('بالبرنت وغير موجود بالرحلة (' + ext.length + ')')); ext.forEach(function (r) { L.push(E(_fltLine_(r.pp.x))); }); }
+  if (R.dups.length) { L.push('', '🔁 ' + B('مكرر بالبرنت')); R.dups.forEach(function (x) { L.push(E(_fltLine_(x))); }); }
+  if (R.noLat.length) { L.push('', '⚠️ ' + B('بلا اسم إنجليزي بالرحلة (' + R.noLat.length + ')')); R.noLat.forEach(function (p) { L.push(E(p.name)); }); }
+  if (!fix.length && !mis.length && !ext.length && !tb.length) L.push('', '✅ البرنت مطابق تماماً لأسماء الرحلة');
+  return L.join('\n');
+}
+function _fltReportHtml_(trip, pnr, R) {
+  var E = function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var K = { ok: ['✅ مطابق', '#dcfce7'], variant: ['✅ مقبول', '#ecfdf5'], fix: ['✏️ يُعدّل', '#fef3c7'], missing: ['❌ ناقص بالبرنت', '#fee2e2'], extra: ['➕ زائد بالبرنت', '#e0e7ff'] }, ord = { fix: 0, missing: 1, extra: 2, variant: 3, ok: 4 };
+  var rows = R.rows.slice().sort(function (a, b) { return (ord[a.kind] - ord[b.kind]) || ((a.pp ? a.pp.x.n : 999) - (b.pp ? b.pp.x.n : 999)); });
+  var td = 'style="border:1px solid #cbd5e1;padding:4px;"';
+  return '<html dir="rtl"><head><meta charset="utf-8"><style>@page{size:A4;margin:10mm;}body{font-family:Arial,Tahoma,sans-serif;font-size:11px;}</style></head><body>' +
+    '<div style="background:#0f2557;color:#fff;padding:8px 12px;font-size:15px;font-weight:bold;">✈️ مطابقة برنت الطيران — ' + E(trip) + (pnr ? ' — PNR ' + E(pnr) : '') + '</div>' +
+    '<pre style="white-space:pre-wrap;font-family:Arial,Tahoma,sans-serif;background:#f8fafc;border:1px solid #e2e8f0;padding:6px;">' + E(_fltSummary_(trip, pnr, R, false).split('\n').slice(1, 2).join('\n')) + '</pre>' +
+    '<table style="width:100%;border-collapse:collapse;"><tr style="background:#0f2557;color:#fff;"><th ' + td + '>#</th><th ' + td + '>الحالة</th><th ' + td + '>بالبرنت</th><th ' + td + '>الصحيح</th><th ' + td + '>المعتمر</th><th ' + td + '>الجواز</th></tr>' +
+    rows.map(function (r) { var x = r.pp && r.pp.x, t = r.t;
+      return '<tr style="background:' + K[r.kind][1] + ';"><td ' + td + '>' + (x ? x.n : '—') + '</td><td ' + td + '>' + K[r.kind][0] + (r.titleBad ? ' ⚠️ اللقب' : '') + '</td><td ' + td + ' dir="ltr">' + (x ? E(x.last + '/' + x.given + ' ' + x.title) : '—') + '</td><td ' + td + ' dir="ltr"><b>' + (t ? E(t.exp + ' ' + t.title) : '—') + '</b></td><td ' + td + '>' + (t ? E(t.p.name) : '') + '</td><td ' + td + ' dir="ltr">' + (t ? E(t.p.passport || '') : '') + '</td></tr>'; }).join('') +
+    '</table></body></html>';
+}
+
+/* 🤖 (V4.257) بوت الرحلات: «مطابقة برنت» — يطلب البرنت (صورة/PDF/نص) ثم الرحلة (اسم أو جزء منه أو تاريخ السفر، بحث تقريبي)
+   ثم يرسل التقرير مع زر PDF. الحالة في الكاش (30 دقيقة) لكل محادثة+مستخدم. */
+function _tgFltKey_(c, u) { return 'fltq_' + c + '_' + u; }
+function _tgFltGet_(c, u) { try { return JSON.parse(CacheService.getScriptCache().get(_tgFltKey_(c, u)) || 'null'); } catch (e) { return null; } }
+function _tgFltSet_(c, u, o) { try { CacheService.getScriptCache().put(_tgFltKey_(c, u), JSON.stringify(o).slice(0, 95000), 1800); } catch (e) {} }
+function _tgFltClear_(c, u) { try { CacheService.getScriptCache().remove(_tgFltKey_(c, u)); } catch (e) {} }
+function _tgFltStart_(chatId, from) {
+  _tgFltSet_(chatId, from.id, { step: 'print' });
+  sendTelegramMessageDirect(chatId, '✈️ <b>مطابقة برنت الطيران</b>\nأرسل <b>صورة البرنت</b> أو <b>ملف PDF</b>، أو <b>الصق نص البرنت</b> مباشرة في رسالة.',
+    [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]);
+}
+function _tgFltTrips_() {
+  var sh = _getTripsSheet_(), last = sh.getLastRow(); if (last < 2) return [];
+  var C = _robustColMap_(sh, TRIPS_HEADERS_), T = _cellReader_(C, TRIPS_COL_);
+  return sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues().map(function (r) {
+    return { name: String(T(r, 'name') || '').trim(), go: _tripFormatDate_(T(r, 'departDate')), back: _tripFormatDate_(T(r, 'returnDate')) };
+  }).filter(function (t) { return t.name; });
+}
+function _tgFltFindTrips_(q) {
+  q = String(q || '').trim(); var trips = _tgFltTrips_(), nq = _normalizeArabicName_(q).toLowerCase(), out = [];
+  var dm = q.replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }).match(/^(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?:\s*[\/\-.]\s*(\d{2,4}))?$/);
+  trips.forEach(function (t) {
+    var sc = 0, nt = _normalizeArabicName_(t.name).toLowerCase();
+    if (dm) { var g = String(t.go).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (g && +g[1] === +dm[1] && +g[2] === +dm[2]) sc = 1; }
+    else if (nt === nq) sc = 2; else if (nt.indexOf(nq) >= 0) sc = 1.5;
+    else {
+      var qw = nq.split(/\s+/).filter(Boolean), hit = qw.filter(function (w) { return nt.indexOf(w) >= 0; }).length;
+      if (qw.length && hit) sc = hit / qw.length;
+      var L = Math.max(nt.length, nq.length) || 1, lv = 1 - _fltLev_(nt, nq) / L; if (lv > 0.6) sc = Math.max(sc, lv);
+    }
+    if (sc >= 0.5) out.push({ t: t, s: sc });
+  });
+  out.sort(function (a, b) { return b.s - a.s || (String(b.t.go).split('/').reverse().join('') > String(a.t.go).split('/').reverse().join('') ? 1 : -1); });
+  if (out.length && out[0].s >= 2) return [out[0].t];
+  return out.slice(0, 8).map(function (x) { return x.t; });
+}
+function _tgFltRun_(chatId, from, st, tripName) {
+  var pil = _getTripPilgrimsCore_(tripName), R = _fltCompare_(pil, st.pax || []);
+  var text = _fltSummary_(tripName, st.pnr, R, true), chunks = [], cur = '';
+  text.split('\n').forEach(function (l) { if ((cur + l).length > 3600) { chunks.push(cur); cur = ''; } cur += l + '\n'; }); if (cur) chunks.push(cur);
+  st.step = 'done'; st.trip = tripName; _tgFltSet_(chatId, from.id, st);
+  chunks.forEach(function (c, i) { sendTelegramMessageDirect(chatId, c, i === chunks.length - 1 ? [[{ text: '📄 تقرير PDF', callback_data: 'fltpdf' }, { text: '🔁 مطابقة أخرى', callback_data: 'flt_start' }]] : null); });
+}
+function _tgFltPdf_(chatId, from) {
+  var st = _tgFltGet_(chatId, from.id);
+  if (!st || !st.trip) { sendTelegramMessageDirect(chatId, '⚠️ انتهت صلاحية هذه المطابقة — ابدأ من جديد بـ «مطابقة برنت».'); return; }
+  var R = _fltCompare_(_getTripPilgrimsCore_(st.trip), st.pax || []);
+  var name = ('مطابقة برنت ' + st.trip).replace(/[\\\/:*?"<>|]/g, '-');
+  var pdf = Utilities.newBlob(_fltReportHtml_(st.trip, st.pnr, R), 'text/html', name + '.html').getAs('application/pdf').setName(name + '.pdf');
+  var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + TELEGRAM_CONFIG.token + '/sendDocument', { method: 'post', muteHttpExceptions: true,
+    payload: { chat_id: String(chatId), caption: '✈️ ' + name, document: pdf } });
+  if (res.getResponseCode() !== 200) sendTelegramMessageDirect(chatId, '❌ تعذّر إرسال PDF: ' + res.getContentText().slice(0, 200));
+}
+// رسالة أثناء محادثة المطابقة — يرجع true لو عالجها
+function _tgFltOnMessage_(msg) {
+  var chatId = msg.chat.id, from = msg.from; if (!from) return false;
+  var st = _tgFltGet_(chatId, from.id); if (!st || st.step === 'done') return false;
+  var text = String(msg.text || '').trim();
+  if (st.step === 'print') {
+    var fileId = msg.photo && msg.photo.length ? msg.photo[msg.photo.length - 1].file_id : (msg.document ? msg.document.file_id : null), pr = null;
+    if (fileId) {
+      sendTelegramMessageDirect(chatId, '⏳ جاري قراءة البرنت…');
+      var f = _tgccFetchFileBase64_(TELEGRAM_CONFIG.token, fileId);
+      if (!f) { sendTelegramMessageDirect(chatId, '❌ تعذّر تحميل الملف من تليجرام — أعد الإرسال.'); return true; }
+      try { pr = _fltReadPrintFile_(f.data, f.mime); } catch (e) { sendTelegramMessageDirect(chatId, '❌ تعذّرت القراءة: ' + e.message + '\nالصق نص البرنت بدلاً من ذلك.'); return true; }
+    } else if (text) pr = _fltParseText_(text);
+    else return true;
+    if (!pr.pax.length) { sendTelegramMessageDirect(chatId, '🚫 لم أجد أسماء ركاب في البرنت. أرسل صورة أوضح أو الصق النص.', [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]); return true; }
+    _tgFltSet_(chatId, from.id, { step: 'trip', pnr: pr.pnr, pax: pr.pax });
+    sendTelegramMessageDirect(chatId, '✅ قرأت <b>' + pr.pax.length + '</b> اسماً' + (pr.pnr ? ' (PNR <code>' + pr.pnr + '</code>)' : '') + (pr.via === 'ocr' ? ' — بدون ذكاء اصطناعي' : '') +
+      '.\n\nاكتب <b>اسم الرحلة</b> أو جزءاً منه، أو <b>تاريخ سفرها</b> مثل <code>5/10</code>.', [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]);
+    return true;
+  }
+  if (st.step === 'trip') {
+    if (!text) return true;
+    var list = _tgFltFindTrips_(text);
+    if (!list.length) { sendTelegramMessageDirect(chatId, '🔎 لا توجد رحلة تطابق «' + text + '» — اكتب جزءاً آخر من الاسم أو تاريخ السفر.', [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]); return true; }
+    if (list.length === 1) { _tgFltRun_(chatId, from, st, list[0].name); return true; }
+    st.cands = list.map(function (t) { return t.name; }); _tgFltSet_(chatId, from.id, st);
+    sendTelegramMessageDirect(chatId, '🔎 أكثر من رحلة — اختر:', list.map(function (t, i) { return [{ text: t.name + (t.go ? ' (' + t.go + ')' : ''), callback_data: 'flttrip:' + i }]; }).concat([[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]));
+    return true;
+  }
+  return false;
+}
+// أزرار المحادثة — يرجع true لو عالجها
+function _tgFltOnCallback_(cq) {
+  var d = cq.data || '', chatId = cq.message.chat.id, from = cq.from;
+  if (d === 'flt_start') { _tgFltStart_(chatId, from); return true; }
+  if (d === 'fltq_cancel') { _tgFltClear_(chatId, from.id); sendTelegramMessageDirect(chatId, '✔️ تم الإلغاء.'); return true; }
+  if (d === 'fltpdf') { _tgFltPdf_(chatId, from); return true; }
+  if (d.indexOf('flttrip:') === 0) {
+    var st = _tgFltGet_(chatId, from.id), i = parseInt(d.split(':')[1], 10);
+    if (!st || !st.cands || !st.cands[i]) { sendTelegramMessageDirect(chatId, '⚠️ انتهت صلاحية الاختيار — ابدأ من جديد.'); return true; }
+    _tgFltRun_(chatId, from, st, st.cands[i]); return true;
+  }
+  return false;
 }

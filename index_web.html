@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.256 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.257 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.256)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.257)', diag);
 }, 6000);
 </script>
 
@@ -1424,6 +1424,12 @@ input[type="date"]:not(:focus):not(:valid) {
 
 
   </style>
+<style id="th-filter-arrows">
+  /* 🔽 (V4.257) أيقونات تصفية رؤوس الأعمدة: سهم صغير بلون عنوان العمود بلا مربع (كان رمز تعبيري برتقالي داخل مربع أبيض) */
+  button.mf-thic, button.vz-thic, button.kcf-btn, button.bk-th-ico { background:none !important; border:none !important; box-shadow:none !important; color:inherit !important; opacity:.85; font-size:13px !important; padding:0 3px !important; line-height:1 !important; cursor:pointer; vertical-align:middle; }
+  button.mf-thic:hover, button.vz-thic:hover, button.kcf-btn:hover, button.bk-th-ico:hover { opacity:1; }
+  button.mf-thic.on, button.vz-thic.on, button.kcf-btn.on, button.bk-th-ico.bk-th-ico-active { color:#ffd77a !important; opacity:1; }
+</style>
 </head>
 <body>
 <script>window.__step('2️⃣ بداية \u003Cbody> — بنية الصفحة بدأت');</script>
@@ -1501,7 +1507,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.256</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.257</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6311,7 +6317,7 @@ function _tblHead_(id, cols, thClass, reorderCols, reorderSaveFn, colWMap, colWS
     if (c.nof) return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + '>' + escapeHtml_(c.label) + '</th>';
     var si = st.sort.key === c.k ? (st.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + ' title="اسحب لإعادة ترتيب الأعمدة"><div class="' + thinCls + '"><span>' + escapeHtml_(c.label) + '</span>' +
-      '<button class="' + thClass + (_cfOn_(st.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();_tblColFilter_(\'' + id + '\',event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="' + thClass + (_cfOn_(st.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();_tblColFilter_(\'' + id + '\',event,\'' + c.k + '\')">▾</button>' +
       '<button class="' + thClass + (st.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();_tblSortBy_(\'' + id + '\',\'' + c.k + '\')">' + si + '</button></div>' + rszHandle(c.k) + '</th>';
   }).join('');
 }
@@ -7680,7 +7686,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.256";
+var CLIENT_APP_VERSION = "4.257";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -12117,7 +12123,7 @@ function _trColsHead_() {
     html += '<th class="bk-th"><div class="bk-th-inner">' +
       '<span class="bk-th-label">' + escapeHtml_(c.label) + '</span>' +
       '<span class="bk-th-icons">' +
-        '<button type="button" class="bk-th-ico' + (hasFilter ? ' bk-th-ico-active' : '') + '" title="تصفية حسب ' + escapeHtml_(c.label) + '" onclick="event.stopPropagation();_trFilterToggle_(this,\'' + c.key + '\',\'' + c.label.replace(/'/g, "\\'") + '\')">🔽</button>' +
+        '<button type="button" class="bk-th-ico' + (hasFilter ? ' bk-th-ico-active' : '') + '" title="تصفية حسب ' + escapeHtml_(c.label) + '" onclick="event.stopPropagation();_trFilterToggle_(this,\'' + c.key + '\',\'' + c.label.replace(/'/g, "\\'") + '\')">▾</button>' +
         '<button type="button" class="bk-th-ico' + (active ? ' bk-th-ico-active' : '') + '" title="ترتيب حسب ' + escapeHtml_(c.label) + '" onclick="event.stopPropagation();_trSortToggle_(\'' + c.key + '\')">' + arrow + '</button>' +
       '</span></div></th>';
   });
@@ -15940,7 +15946,7 @@ function _kashfHeadInit_() {
   Object.keys(KASHF_CF_COLS_).forEach(function (k) {
     var th = ths[KASHF_CF_COLS_[k].i]; if (!th) return;
     var b = th.querySelector('.kcf-btn');
-    if (!b) { b = document.createElement('button'); b.className = 'mf-thic kcf-btn'; b.title = 'تصفية هذا العمود'; b.textContent = '🔽'; b.style.marginInlineStart = '4px';
+    if (!b) { b = document.createElement('button'); b.className = 'mf-thic kcf-btn'; b.title = 'تصفية هذا العمود'; b.textContent = '▾'; b.style.marginInlineStart = '4px';
       b.setAttribute('onclick', "event.stopPropagation();_kashfColFilter_(event,'" + k + "')"); th.appendChild(b); }
     b.classList.toggle('on', _cfOn_(cf[k]));
   });
@@ -17649,7 +17655,8 @@ function fltBuildExcel_(t, list) {
 /* ---------- 🔍 مطابقة برنت الطيران ---------- */
 // قراءة نص البرنت الملصوق (Amadeus/Sabre): "12.ELGENDI/SAFAA MOHAMED MRS" — أكثر من اسم بالسطر
 function fltParseText_(txt) {
-  var s = String(txt || '').toUpperCase().replace(/\r/g, ''), out = [], seen = {};
+  // (V4.257) تسامح مع نص OCR: «12 . NAME / GIVEN» ⇒ «12.NAME/GIVEN»
+  var s = String(txt || '').toUpperCase().replace(/\r/g, '').replace(/(\d)\s*[.,]\s*(?=[A-Z])/g, '$1.').replace(/\s*\/\s*/g, '/'), out = [], seen = {};
   var pnr = (s.match(/RP\/[A-Z0-9]+\/[A-Z0-9]+\s+[A-Z]{2}\/[A-Z]{2}\s+\S+\s+([A-Z0-9]{6})\b/) || s.match(/\b(?:PNR|RECORD LOCATOR|RLOC)[:\s]+([A-Z0-9]{6})\b/) || [])[1] || '';
   s.split(/(?=(?:^|\s)\d{1,3}\.[A-Z])/m).forEach(function (chunk) {
     var m = chunk.trim().match(/^(\d{1,3})\.([A-Z][A-Z' \-]*?)\/([A-Z][A-Z' \-()\/0-9]*)/); if (!m) return;
@@ -17698,10 +17705,14 @@ function fltCompare_(pilgrims, pax) {
 }
 function fltCmpDlg() {
   var trips = (window.tripsCache || []).map(function (t) { return t.name; }).filter(Boolean), cur = window.currentTripName || '';
+  // (V4.257) من داخل شاشة الرحلة: الرحلة معروفة — لا حاجة لاختيارها
+  var inTrip = !!(cur && document.querySelector('#pilgrimsTableBody'));
   var h = '<div dir="rtl" id="fltDlg"><div class="row g-2 align-items-end">' +
-    '<div class="col-md-5"><label class="small fw-bold">الرحلة</label><input id="fltTrip" class="form-control form-control-sm" list="fltTripDL" value="' + escapeHtml_(cur) + '" placeholder="اختر الرحلة"><datalist id="fltTripDL">' + trips.map(function (n) { return '<option value="' + escapeHtml_(n) + '">'; }).join('') + '</datalist></div>' +
-    '<div class="col-md-7"><label class="small fw-bold">صورة أو PDF للبرنت (يمكن أكثر من صفحة)</label><input id="fltFile" type="file" accept="image/*,application/pdf" multiple class="form-control form-control-sm"></div>' +
-    '<div class="col-12"><label class="small fw-bold">أو الصق نص البرنت هنا (أسرع وأدق — بدون ذكاء اصطناعي)</label><textarea id="fltText" rows="4" class="form-control form-control-sm" dir="ltr" style="font-family:monospace;font-size:12px;" placeholder="1.ABDALLA/MARIAM HAMDI MRS   2.ABDELRAHMAN/SOUZAN MOHAMED MRS ..."></textarea></div></div>' +
+    (inTrip ? '<input type="hidden" id="fltTrip" value="' + escapeHtml_(cur) + '"><div class="col-12 small">🧳 الرحلة: <b>' + escapeHtml_(cur) + '</b></div>'
+      : '<div class="col-md-5"><label class="small fw-bold">الرحلة</label><input id="fltTrip" class="form-control form-control-sm" list="fltTripDL" value="' + escapeHtml_(cur) + '" placeholder="اختر الرحلة"><datalist id="fltTripDL">' + trips.map(function (n) { return '<option value="' + escapeHtml_(n) + '">'; }).join('') + '</datalist></div>') +
+    '<div class="' + (inTrip ? 'col-12' : 'col-md-7') + '"><label class="small fw-bold">صورة أو PDF للبرنت (يمكن أكثر من صفحة)</label><input id="fltFile" type="file" accept="image/*,application/pdf" multiple class="form-control form-control-sm"></div>' +
+    '<div class="col-12"><label class="small fw-bold">أو الصق نص البرنت هنا (أسرع وأدق — بدون ذكاء اصطناعي)</label><textarea id="fltText" rows="4" class="form-control form-control-sm" dir="ltr" style="font-family:monospace;font-size:12px;" placeholder="1.ABDALLA/MARIAM HAMDI MRS   2.ABDELRAHMAN/SOUZAN MOHAMED MRS ..."></textarea></div>' +
+    '<div class="col-12"><label class="small d-flex align-items-center gap-1"><input type="checkbox" id="fltNoAi"> قراءة الصورة/PDF <b>بدون ذكاء اصطناعي</b> (تلقائياً عند تعذّر الذكاء الاصطناعي)</label></div></div>' +
     '<div class="text-end mt-2"><button class="btn btn-primary btn-sm fw-bold" id="fltGo" onclick="fltRun_(this)">🔍 مطابقة</button></div><div id="fltOut" class="mt-2"></div></div>';
   if (typeof glDlg === 'function') glDlg('✈️ مطابقة برنت الطيران مع أسماء الرحلة', h, 1050);
 }
@@ -17724,13 +17735,26 @@ function fltRun_(btn) {
   var next = function () {
     if (i >= files.length) { acc.pax.sort(function (a, b) { return a.n - b.n; }); return done(acc); }
     var f = files[i++], rd = new FileReader();
-    rd.onload = function () {
+    var merge = function (r) { acc.pnr = acc.pnr || r.pnr; var have = {}; acc.pax.forEach(function (p) { have[p.n + '|' + p.last + p.given] = 1; });
+      r.pax.forEach(function (p) { if (!have[p.n + '|' + p.last + p.given]) acc.pax.push(p); }); next(); };
+    var fail = function (msg) { btn.disabled = false; out.innerHTML = '<div class="alert alert-danger py-2 small">' + escapeHtml_(msg) + '</div>'; };
+    // (V4.257) احتياطي بلا ذكاء اصطناعي: Drive OCR ⇒ نص ⇒ نفس قارئ النص الملصوق
+    var ocr = function (b64, why) {
+      out.innerHTML = '<div class="text-muted small py-3 text-center">⏳ ' + (why ? 'تعذّر الذكاء الاصطناعي — ' : '') + 'قراءة البرنت بدون ذكاء اصطناعي…</div>';
       google.script.run.withSuccessHandler(function (r) {
-        if (!r || !r.success) { btn.disabled = false; out.innerHTML = '<div class="alert alert-danger py-2 small">' + escapeHtml_((r && r.error) || 'تعذّرت القراءة') + '</div>'; return; }
-        acc.pnr = acc.pnr || r.pnr; var have = {}; acc.pax.forEach(function (p) { have[p.n + '|' + p.last + p.given] = 1; });
-        r.pax.forEach(function (p) { if (!have[p.n + '|' + p.last + p.given]) acc.pax.push(p); }); next();
-      }).withFailureHandler(function (e) { btn.disabled = false; out.innerHTML = '<div class="alert alert-danger py-2 small">' + escapeHtml_((e && e.message) || String(e)) + '</div>'; })
-        .flightPrintExtract(window.authToken, String(rd.result).split(',')[1], f.type || 'image/jpeg');
+        if (!r || !r.success) return fail((r && r.error) || 'تعذّرت القراءة');
+        var p = fltParseText_(r.text); if (!p.pax.length) return fail('لم أجد أسماء في الصورة — الصق نص البرنت بدلاً من ذلك');
+        document.getElementById('fltText').value = r.text; merge(p);
+      }).withFailureHandler(function (e) { fail((e && e.message) || String(e)); }).flightPrintOcr(window.authToken, b64, f.type || 'image/jpeg');
+    };
+    rd.onload = function () {
+      var b64 = String(rd.result).split(',')[1];
+      if ((document.getElementById('fltNoAi') || {}).checked) return ocr(b64, false);
+      google.script.run.withSuccessHandler(function (r) {
+        if (!r || !r.success || !r.pax || !r.pax.length) return ocr(b64, true);
+        merge(r);
+      }).withFailureHandler(function () { ocr(b64, true); })
+        .flightPrintExtract(window.authToken, b64, f.type || 'image/jpeg');
     };
     rd.readAsDataURL(f);
   };
@@ -30963,7 +30987,7 @@ function selectBookingRow(id, evt) {
       html += '<th class="bk-th" style="width:' + c.width + 'px;"><div class="bk-th-inner">' +
         '<span class="bk-th-label">' + escapeHtml_(c.label) + '</span>' +
         '<span class="bk-th-icons">' +
-          '<button type="button" class="bk-th-ico' + (hasFilter ? ' bk-th-ico-active' : '') + '" title="تصفية حسب ' + escapeHtml_(c.label) + '" onclick="event.stopPropagation();_bkFilterToggle_(this,\'' + c.key + '\',\'' + c.label.replace(/'/g, "\\'") + '\')">🔽</button>' +
+          '<button type="button" class="bk-th-ico' + (hasFilter ? ' bk-th-ico-active' : '') + '" title="تصفية حسب ' + escapeHtml_(c.label) + '" onclick="event.stopPropagation();_bkFilterToggle_(this,\'' + c.key + '\',\'' + c.label.replace(/'/g, "\\'") + '\')">▾</button>' +
           '<button type="button" class="bk-th-ico' + (active ? ' bk-th-ico-active' : '') + '" title="ترتيب حسب ' + escapeHtml_(c.label) + '" onclick="event.stopPropagation();_bkSortToggle_(\'' + c.key + '\')">' + arrow + '</button>' +
         '</span></div></th>';
     });
@@ -37471,7 +37495,7 @@ function mfRender() {
     if (MF.hidden[c.k]) cls += ' mf-hide';
     var si = MF.sort.key === c.k ? (MF.sort.dir > 0 ? '▲' : '▼') : '⇅';
     var ics = c.nof ? '' :
-      '<button class="mf-thic' + (_cfOn_(MF.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="mf-thic' + (_cfOn_(MF.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">▾</button>' +
       '<button class="mf-thic' + (MF.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();mfSort(\'' + c.k + '\')">' + si + '</button>';
     h += '<th class="' + cls + '" style="' + st + '" draggable="true" data-key="' + c.k + '"' +
       ' title="' + mfEsc(c.g) + ' · ' + mfEsc(c.l) + '"' +
@@ -41033,7 +41057,7 @@ function mfRecTab(t) {
   MF_REC_COLS.forEach(function (c) {
     h += '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;"><span style="display:flex;align-items:center;gap:4px;">' +
       mfEsc(c.l) + '<button class="mf-thic' + (MF_recF[c.k] ? ' on' : '') + '" title="تصفية هذا العمود"' +
-      ' onclick="event.stopPropagation();mfRecFilter(event,\'' + c.k + '\')">🔽</button></span></th>';
+      ' onclick="event.stopPropagation();mfRecFilter(event,\'' + c.k + '\')">▾</button></span></th>';
   });
   h += '<th style="position:sticky;top:0;background:#1e3d59;color:#fff;z-index:2;width:78px;"></th></tr></thead><tbody>';
   list.forEach(function (x) {
@@ -42478,7 +42502,7 @@ function vzRender() {
     if (c.nof) return '<th' + wStyle + '>' + vzEsc(c.label) + '</th>';
     var si = VZ.sort.key === c.k ? (VZ.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + wStyle + '><div class="vz-thin"><span>' + vzEsc(c.label) + '</span>' +
-      '<button class="vz-thic' + (_cfOn_(VZ.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();vzColFilter(event,\'' + c.k + '\')">🔽</button>' +
+      '<button class="vz-thic' + (_cfOn_(VZ.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();vzColFilter(event,\'' + c.k + '\')">▾</button>' +
       '<button class="vz-thic' + (VZ.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();vzSortBy(\'' + c.k + '\')">' + si + '</button>' +
       '</div>' + rsz.replace(/\{\{K\}\}/g, c.k) + '</th>';
   }).join('');
