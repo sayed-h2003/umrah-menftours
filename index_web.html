@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.262 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.263 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.262)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.263)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.262</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.263</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.262";
+var CLIENT_APP_VERSION = "4.263";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -22905,7 +22905,7 @@ var TA_COLUMNS_ = [
   // 🧩 (V4.43) البيان: اسم المجموعة + دورة النقل حسب مطاري الاستقبال/المغادرة (السعودية فقط) + أي مقاطع إضافية
   { key: 'desc', label: 'البيان', cls: 'text-start', val: function(r) { return r.desc || '-'; }, render: function(r) { return '<span style="font-size:11px;">' + escapeHtml_(r.desc || '-') + '</span>'; } },
   { key: 'busCount', label: 'عدد الباصات', isSum: true, val: function(r) { return r.busCount; }, render: function(r) { return escapeHtml_(r.busCount); } },
-  { key: 'busPrice', label: 'سعر الباص', val: function(r) { return r.busPrice ? r.busPrice.toLocaleString('en-US') : '-'; }, render: function(r) { return escapeHtml_(r.busPrice ? r.busPrice.toLocaleString('en-US') : '-'); } },
+  { key: 'busPrice', label: 'سعر الباص', val: function(r) { return r.busPrice ? r.busPrice.toLocaleString('en-US') : '-'; }, render: function(r) { return escapeHtml_(r.busPrice ? r.busPrice.toLocaleString('en-US') : '-') + (r.priceIsDefault ? ' <span class="badge bg-info text-dark" style="font-size:9px;" title="سعر فترة تسعير النقل للوكيل بتاريخ الوصول — يتغير لو سجّلت سعراً بالإشعار">تلقائي</span>' : ''); } },
   { key: 'operationValue', label: 'القيمة', cls: 'fw-bold', isSum: true, val: function(r) { return r.operationValue ? r.operationValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'; }, render: function(r) { return escapeHtml_(r.operationValue ? r.operationValue.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}) : '-'); } },
   // ✏️ (V4.134) تعديل بيانات الصف: المورد والبيان (خاصان بهذه الشاشة فقط) وسعر الباص والقيمة (يُكتبان بالإشعار)
   { key: 'rowEdit', label: '⚙', noPrint: true, val: function() { return ''; },
@@ -42657,9 +42657,19 @@ function vzRenderActBar() {
 // 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
 // الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
 // (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
+// (V4.262) تظهر أسفل صف المجموعة نفسها (مثل معتمري ملفات الوزارة) بدل نافذة منبثقة — ضغطة ثانية تطويها
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
-  mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
+  var tr = document.querySelector('#section-visas tr.vz-row[data-id="' + id + '"]'), old = document.getElementById('vzPilRow');
+  if (old) { var was = old.getAttribute('data-for'); old.parentNode.removeChild(old); if (was === id) return; }
+  if (tr) {
+    var nr = document.createElement('tr'); nr.id = 'vzPilRow'; nr.setAttribute('data-for', id);
+    nr.innerHTML = '<td colspan="' + (tr.children.length || 12) + '" style="background:#f8fafc;padding:8px 14px;border-top:2px solid #0e7490;">' +
+      '<div class="d-flex align-items-center mb-1"><b style="color:#0e7490;">👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)) + '</b>' +
+      '<button class="vz-btn sm ms-auto" onclick="var r=document.getElementById(\'vzPilRow\');if(r)r.remove();">✖ طي</button></div>' +
+      '<div id="vzFpBox"><div class="p-2 text-center text-muted small">⏳ جاري التحميل…</div></div></td>';
+    tr.parentNode.insertBefore(nr, tr.nextSibling);
+  } else mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
     '<div id="vzFpBox"><div class="p-3 text-center text-muted small">⏳ جاري التحميل…</div></div>', '', 900);
   var trips = vzTripsOfDraft_(f);
   if (!trips.length) {
@@ -46784,7 +46794,7 @@ function glEntryDlg(kind, entry) {
       '<div class="col-md-1"><label class="gl-lbl">السعر</label><input id="glVRate" class="form-control form-control-sm gl-latin" placeholder="1" oninput="this.dataset.manual=1"></div></div></div>' +
       '<div class="gl-lbl">' + V.counterLbl + ' (يمكن التوزيع على أكثر من حساب)</div>' +
       '<div class="table-responsive"><table class="gl-tbl" id="glVLines"><thead><tr><th style="min-width:240px;">الحساب</th><th style="width:120px;">المبلغ</th><th style="min-width:160px;">البيان</th><th style="width:30px;"></th></tr></thead><tbody></tbody></table></div>' +
-      '<button class="btn btn-outline-primary btn-sm mt-1" onclick="glVAddLine()">➕ طرف آخر</button><div id="glVTot" class="gl-note mt-2"></div>';
+      '<button class="btn btn-outline-primary btn-sm mt-1" onclick="glVAddLine()">➕ طرف آخر</button><div id="glVTot" class="gl-note mt-2"></div><div id="glVSmart" class="small mt-1" style="color:#0e7490;"></div>';
   }
   var editingPosted = !!(entry && entry.id && entry.status === 'مرحّل');
   var isRP = kind === 'receipt' || kind === 'payment', isVchK = kind !== 'journal' && kind !== 'fx';
@@ -46835,6 +46845,10 @@ function glEntryDlg(kind, entry) {
     GL._ptPreset = null;
     glPtCalc();
   }
+  // ✍️ (V4.262) البيان الذكي لكل طرف يتحدّث لحظياً (البيان العام/الحسابات)
+  var dlgB = document.getElementById('glDlgBody');
+  if (dlgB && !dlgB._smartWired) { dlgB._smartWired = 1; ['input', 'change'].forEach(function (ev) { dlgB.addEventListener(ev, function (x) { var t = x.target; if (!t || !t.classList) return;
+    if (t.id === 'glEDesc' || t.classList.contains('gl-acc') || t.classList.contains('glJD') || t.classList.contains('glJC')) { clearTimeout(GL._smT); GL._smT = setTimeout(function () { if (document.getElementById('glVLines')) glVSmartPaint_(); if (document.getElementById('glJLines')) glJSmartPaint_(); if (document.getElementById('glPtPrev')) glPtCalc(); }, 120); } }); }); }
   // 📈 (V4.216) تغيير تاريخ القيد ⇒ أسعار الصرف غير المعدّلة يدوياً تتبع سعر ذلك التاريخ
   var dEl = document.getElementById('glEDate');
   if (dEl) dEl.addEventListener('change', function () {
@@ -46948,6 +46962,7 @@ function glJCalc() {
       imp ? '<b style="color:#92400e;background:#fef9c3;border-radius:6px;padding:1px 8px;">🔁 قيد بعملتين (' + GL_CUR_LBL_[imp.cur] + ' ↔ ' + GL_CUR_LBL_[imp.other] + ') — سعر التحويل الضمني <span class="gl-latin">' + imp.rate + '</span> جنيه لل' + GL_CUR_LBL_[imp.cur] + (glFxBridgeOn_() ? ' — يُوازن تلقائياً عند الحفظ عبر وسيط العملات' : ' — يُطبَّق عند الحفظ') + '</b>' :
       '<b style="color:#b91c1c;">⚠️ القيد غير متوازن' + (Object.keys(byC).length === 1 ? ' — الفرق ' + glFmt(Math.abs(byC[Object.keys(byC)[0]].d - byC[Object.keys(byC)[0]].c)) + ' ' + GL_CUR_LBL_[Object.keys(byC)[0]] : '') + '</b>') +
     (Object.keys(byC).length > 1 ? ' <span style="color:#64748b;">(' + Object.keys(byC).map(function (k) { return GL_CUR_LBL_[k] + ': ' + glFmt(byC[k].d) + ' / ' + glFmt(byC[k].c); }).join(' · ') + ')</span>' : '');
+  glJSmartPaint_();
 }
 function glVAddLine() {
   var V = GL_VOUCHERS_[GL._vk], tb = document.querySelector('#glVLines tbody'); if (!tb) return;
@@ -46959,6 +46974,24 @@ function glVAddLine() {
     '<td><input class="form-control form-control-sm glVD"></td>' +
     '<td><button class="btn btn-sm btn-link text-danger p-0" onclick="this.closest(\'tr\').remove();glVCalc()">✖</button></td>';
   tb.appendChild(tr);
+  // 💱 (V4.262) تحويل عملة تلقائي: طرف عملته ثابتة ومختلفة عن عملة السند ⇒ تُختار عملته ويُحسب مبلغه بسعر اليوم من المتبقي
+  var accI = tr.querySelector('.glVAcc');
+  if (accI) accI.addEventListener('change', function () {
+    var a = GL.map[glAccVal(accI)], lc = tr.querySelector('.glVLCur'), vc = (document.querySelector('#glDlgBody .glVCur') || {}).value || 'EGP';
+    if (!a || !lc) return;
+    if (a.currency && a.currency !== vc) {
+      lc.value = a.currency; lc.dataset.touched = '1';
+      var va = tr.querySelector('.glVA');
+      var amt = glNum((document.getElementById('glVAmt') || {}).value), nRows = document.querySelectorAll('#glVLines tbody tr').length;
+      if (va && (!glNum(va.value) || (nRows === 1 && glNum(va.value) === amt))) {   // فارغ أو مملوء تلقائياً بمبلغ السند
+        var used = 0;
+        document.querySelectorAll('#glVLines tbody tr').forEach(function (t2) { if (t2 !== tr && ((t2.querySelector('.glVLCur') || {}).value || vc) === vc) used += glNum(t2.querySelector('.glVA').value); });
+        var rest = Math.max(0, amt - used), d = glDlgDate_(), rv = vc === 'EGP' ? 1 : (glNum((document.getElementById('glVRate') || {}).value) || glRateAt(vc, d)), ro = a.currency === 'EGP' ? 1 : glRateAt(a.currency, d);
+        if (rest && ro) va.value = String(Math.round(rest * rv / ro * 100) / 100);
+      }
+      glVCalc(va);
+    } else if (a.currency === vc && lc.dataset.touched === '1') { lc.value = vc; delete lc.dataset.touched; glVCalc(); }
+  });
   glVCalc();
 }
 // ⇄ (V4.247) أسطر «تحويل بين طرفين»: مبلغ واحد بعملته — لو عملة أحد الحسابين ثابتة ومختلفة يُحسب مقابلها بالسعر
@@ -47013,10 +47046,55 @@ function glVCalc(src) {
   rows.forEach(function (tr) { var c = (tr.querySelector('.glVLCur') || {}).value || vc, v = glNum(tr.querySelector('.glVA').value); if (c === vc) sum += v; else oth[c] = (oth[c] || 0) + v; });
   if (rows.length === 1 && !src) { var c1 = rows[0].querySelector('.glVLCur'); if (c1 && c1.dataset.touched !== '1') c1.value = vc; }
   var diff = Math.round((amt - sum) * 100) / 100, ok = Object.keys(oth);
-  if (ok.length) { el.innerHTML = '💱 مبلغ السند: <b class="gl-latin">' + glFmt(amt) + '</b> ' + GL_CUR_LBL_[vc] + ' · بعملته: <b class="gl-latin">' + glFmt(sum) + '</b> · المتبقي <b class="gl-latin">' + glFmt(diff) + '</b> ' + GL_CUR_LBL_[vc] +
+  if (ok.length) { setTimeout(glVSmartPaint_, 0); el.innerHTML = '💱 مبلغ السند: <b class="gl-latin">' + glFmt(amt) + '</b> ' + GL_CUR_LBL_[vc] + ' · بعملته: <b class="gl-latin">' + glFmt(sum) + '</b> · المتبقي <b class="gl-latin">' + glFmt(diff) + '</b> ' + GL_CUR_LBL_[vc] +
     ' يقابله ' + ok.map(function (c) { return '<b class="gl-latin">' + glFmt(oth[c]) + '</b> ' + GL_CUR_LBL_[c]; }).join(' + ') + (diff > 0 && oth[ok[0]] ? ' · السعر الضمني <b class="gl-latin">' + glR2Rate(vc === 'EGP' ? diff / oth[ok[0]] : oth[ok[0]] / diff) + '</b>' : '') + ' — يُسجَّل عبر وسيط التحويل'; return; }
   el.innerHTML = 'مبلغ السند: <b class="gl-latin">' + glFmt(amt) + '</b> · الموزَّع: <b class="gl-latin">' + glFmt(sum) + '</b> · ' +
     (Math.abs(diff) < 0.01 && amt ? '<b style="color:#166534;">✅ مطابق</b>' : '<b style="color:#b91c1c;">المتبقي ' + glFmt(diff) + '</b>');
+  glVSmartPaint_();
+}
+/* ✍️ (V4.262) بيان ذكي لكل طرف — يتحدّث لحظياً مع البيان العام واختيار الحسابات، ويظهر داخل خانة بيان كل سطر (كنص إرشادي)
+   ويُستخدم عند الحفظ لأي سطر تُرك بيانه فارغاً. مثال إيداع بنكي من «محمد عبد الصمد» إلى «بنك مصر» ببيان «دفعة من حساب رحلة 5 اكتوبر»:
+   عند محمد: «دفعة من حساب رحلة 5 اكتوبر - تحويل على بنك مصر» · عند البنك: «تحويل من محمد عبد الصمد - دفعة من حساب رحلة 5 اكتوبر» */
+function glNmOf_(code) { var a = GL.map[code]; return a ? (a.link || a.name) : ''; }
+function glSideVerb_(code, into) {   // عبارة الحساب النقدي/الطرف كما تُذكر عند الطرف الآخر
+  var a = GL.map[code], n = glNmOf_(code); if (!n) return '';
+  var k = a && a.kind;
+  if (k === 'bank') return (into ? 'تحويل على ' : 'تحويل من ') + n;
+  if (k === 'safe') return (into ? (/^ال/.test(n) ? 'نقداً ب' : 'نقداً — ') : 'نقداً من ') + n;
+  if (k === 'custody') return (into ? 'إلى عهدة ' : 'من عهدة ') + n;
+  return (into ? 'إلى ' : 'من ') + n;
+}
+function glSideFrom_(names, into, mainKind) {   // عبارة الأطراف كما تُذكر عند الحساب الرئيسي
+  if (!names.length) return '';
+  var t = names.slice(0, 3).join(' + ') + (names.length > 3 ? ' …' : '');
+  if (mainKind === 'bank') return (into ? 'تحويل من ' : 'تحويل إلى ') + t;
+  if (mainKind === 'safe') return (into ? 'استلام من ' : 'دفع إلى ') + t;
+  return (into ? 'من ' : 'إلى ') + t;
+}
+function glJoinDesc_(a, b) { a = String(a || '').trim(); b = String(b || '').trim(); return a && b ? a + ' - ' + b : (a || b); }
+// السندات: [بيان الحساب الرئيسي، بيان كل طرف مقابل]
+function glVSmart_() {
+  var V = GL_VOUCHERS_[GL._vk] || {}, base = ((document.getElementById('glEDesc') || {}).value || '').trim();
+  var main = glAccVal(document.querySelector('#glDlgBody .glVMain')), into = V.mainSide === 'D', mk = (GL.map[main] || {}).kind;
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#glVLines tbody tr')), names = [];
+  rows.forEach(function (tr) { var n = glNmOf_(glAccVal(tr.querySelector('.glVAcc'))); if (n && names.indexOf(n) < 0) names.push(n); });
+  return { main: glJoinDesc_(glSideFrom_(names, into, mk), base), counter: glJoinDesc_(base, main ? glSideVerb_(main, into) : ''), rows: rows };
+}
+function glVSmartPaint_() {
+  var sm = glVSmart_();
+  sm.rows.forEach(function (tr) { var d = tr.querySelector('.glVD'); if (d) d.placeholder = sm.counter || 'بيان الطرف'; });
+  var el = document.getElementById('glVSmart'); if (el) el.innerHTML = sm.main ? '✍️ بيان الحساب الرئيسي: <b>' + glEsc(sm.main) + '</b>' + (sm.counter ? '<br>✍️ بيان الطرف المقابل (لو تُرك فارغاً): <b>' + glEsc(sm.counter) + '</b>' : '') : '';
+}
+// القيد اليومي: السطر المدين «… - من <الدائنين>» والدائن «… - إلى <المدينين>» (لو تُرك بيانه فارغاً)
+function glJSmartPaint_() {
+  var base = ((document.getElementById('glEDesc') || {}).value || '').trim(), trs = Array.prototype.slice.call(document.querySelectorAll('#glJLines tbody tr'));
+  var dn = [], cn = [];
+  trs.forEach(function (tr) { var n = glNmOf_(glAccVal(tr.querySelector('.glJAcc'))); if (!n) return; if (glNum(tr.querySelector('.glJD').value)) { if (dn.indexOf(n) < 0) dn.push(n); } else if (glNum(tr.querySelector('.glJC').value)) { if (cn.indexOf(n) < 0) cn.push(n); } });
+  trs.forEach(function (tr) {
+    var d = tr.querySelector('.glJDesc'); if (!d) return;
+    var isD = !!glNum(tr.querySelector('.glJD').value), other = isD ? cn : dn;
+    d.placeholder = glJoinDesc_(base, other.length ? (isD ? 'من ' : 'إلى ') + other.slice(0, 3).join(' + ') : '') || 'البيان';
+  });
 }
 function glFxBridgeOn_() { return GL.settings.fx_bridge !== 'لا' && GL.accounts.some(function (a) { return a.kind === 'fx' && !a.isGroup && a.active; }); }
 function glFxBridgeCode_() {
@@ -47080,6 +47158,9 @@ function glBuildEntry() {
     var bd = 0; ls.forEach(function (l) { bd += (l.debit - l.credit) * l.rate; });
     var imp = Math.abs(bd) >= 0.01 ? glJImplied_(ls) : null;   // (V4.219) آلية الـ ERP للقيد بعملتين
     if (imp) ls.forEach(function (l) { if (l.currency === imp.cur && !l.manual) l.rate = imp.rate; });
+    glJSmartPaint_();
+    var phs = Array.prototype.map.call(document.querySelectorAll('#glJLines tbody tr .glJDesc'), function (d) { return d.placeholder !== 'البيان' ? d.placeholder : ''; });
+    ls.forEach(function (l, i) { if (!l.desc && phs[i]) l.desc = phs[i]; });   // (V4.262) البيان الذكي للسطر الفارغ
     e.lines = ls.filter(function (l) { return l.account || l.debit || l.credit; }).map(function (l) { var o = Object.assign({}, l); delete o.manual; delete o._txt; return o; });
     glFxSmartDesc_(e.lines, e.desc);   // (V4.247) قيد بعملتين ⇒ «… قيمة 100,000 جنيه / 13.98»
   } else if (kind === 'ptransfer') {
@@ -47122,11 +47203,12 @@ function glBuildEntry() {
       if (cur !== 'EGP' && oc === 'EGP') rate = glR2Rate(oSum / rest);   // سند بالريال مقابل جنيه ⇒ سعر الريال الضمني
       oth.forEach(function (c) { c.rate = oRate; });
     }
-    var mainLine = { account: main, currency: cur, rate: rate, desc: e.desc };
+    var smv = glVSmart_();   // (V4.262) بيان ذكي لكل طرف
+    var mainLine = { account: main, currency: cur, rate: rate, desc: smv.main || e.desc };
     mainLine[V.mainSide === 'D' ? 'debit' : 'credit'] = amt;
     e.lines.push(mainLine);
     cl.forEach(function (c) {
-      var l = { account: c.account, currency: c.cur, rate: c.cur === cur ? rate : c.rate, desc: c.desc || e.desc };
+      var l = { account: c.account, currency: c.cur, rate: c.cur === cur ? rate : c.rate, desc: c.desc || smv.counter || e.desc };
       l[V.mainSide === 'D' ? 'credit' : 'debit'] = c.amount;
       e.lines.push(l);
     });
@@ -48340,6 +48422,8 @@ function glRenderCash(kind) {
       '<span style="flex:1;"></span>' +
       (GL.can.add ? K.acts.map(function (x) { return '<button class="btn btn-sm fw-bold ' + x[2].replace('btn-outline-primary', 'btn-light') + '" onclick="glCashNew_(\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') : '') +
       (kind === 'custody' ? '<button class="btn btn-sm btn-warning fw-bold" onclick="glCustSheetDlg(GL._cash.custody.code)" title="ربط العهدة بشيت جوجل ومزامنته">🔗 شيت العهدة</button>' : '') +
+      // 🏦 (V4.262) شيت للخزينة/البنك بنفس آلية العهد (أعمدة لكل عملة + عمود ok للمسجَّل من الشاشات)
+      (kind === 'safe' || kind === 'bank' ? '<button class="btn btn-sm btn-warning fw-bold" onclick="glCustSheetDlg(GL._cash[\'' + kind + '\'].code)" title="ربط ' + (kind === 'bank' ? 'البنك' : 'الخزينة') + ' بشيت جوجل ومزامنته ومراجعة صفوفه">🔗 شيت ' + (kind === 'bank' ? 'البنك' : 'الخزينة') + '</button>' : '') +
       (kind === 'safe' ? '<button class="btn btn-sm btn-warning fw-bold" onclick="glCpDlg()" title="دفعات شاشة حسابات العملاء المسجلة تحت التسوية — حدد خزينتها أو بنكها">💵 توجيه الدفعات</button>' : '') +
     '</div>' +
     '<div class="gl-fbar">' +
@@ -48382,7 +48466,12 @@ function glCustSheetDlg(code) {
       '</div><div class="row g-2 mt-1"><div class="col-12 small fw-bold" style="color:#0f2557;">🔤 أعمدة المزامنة (حرف العمود)</div>' +
         [['in', 'الوارد'], ['out', 'الصادر'], ['desc', 'البيان'], ['date', 'التاريخ'], ['party', 'الحساب/الطرف'], ['qaid', 'رقم القيد']].map(function (f) {
           return '<div class="col-4 col-md-2"><label class="gl-lbl">' + f[1] + '</label><input id="glCsC_' + f[0] + '" class="form-control form-control-sm gl-latin text-center" maxlength="2" style="text-transform:uppercase;" value="' + glEsc(CC[f[0]]) + '"' + (GL.isAdmin ? '' : ' disabled') + '></div>';
-        }).join('') + '<div class="col-12 small text-muted">أرقام القيود المكتوبة سابقاً في العمود F تُنقل تلقائياً لعمود القيد الجديد عند أول مزامنة (بلا مسح F).</div></div>' +
+        }).join('') + '<div class="col-12 small text-muted">أرقام القيود المكتوبة سابقاً في العمود F تُنقل تلقائياً لعمود القيد الجديد عند أول مزامنة (بلا مسح F).</div>' +
+        // 🏦 (V4.262) أعمدة اختيارية: وارد/صادر لكل عملة (العملة = عمود القيمة) + عمود ok (سُجّل من الشاشات ⇒ يُربط بقيده)
+        '<div class="col-12 small fw-bold mt-1" style="color:#0f2557;">💱 أعمدة العملات (اختياري — لشيت خزينة/بنك بأكثر من عملة؛ فارغ = غير مستخدم)</div>' +
+        [['inEGP', 'وارد جنيه'], ['outEGP', 'صادر جنيه'], ['inSAR', 'وارد ريال'], ['outSAR', 'صادر ريال'], ['inUSD', 'وارد دولار'], ['outUSD', 'صادر دولار'], ['ok', '✔ عمود ok']].map(function (f) {
+          return '<div class="col-4 col-md-1" style="min-width:92px;"><label class="gl-lbl">' + f[1] + '</label><input id="glCsC_' + f[0] + '" class="form-control form-control-sm gl-latin text-center" maxlength="2" style="text-transform:uppercase;" value="' + glEsc((c.cols || {})[f[0]] || '') + '"' + (GL.isAdmin ? '' : ' disabled') + '></div>';
+        }).join('') + '<div class="col-12 small text-muted">عمود <b>ok</b>: اكتب ok أو تم أمام صف سُجّل بالفعل من شاشات البرنامج — يُربط بقيده القائم (نفس المبلغ والعملة ±3 أيام) ويُكتب رقمه بالشيت بدل تسجيله مرتين.</div></div>' +
       '<div class="d-flex gap-2 mt-2 flex-wrap align-items-center">' +
         (GL.isAdmin ? '<button class="btn btn-primary btn-sm" onclick="glCsSave_(\'' + jc + '\',this)">💾 حفظ الربط</button>' : '') +
         (c.id ? '<a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener" href="' + glEsc(url) + '">📄 فتح الشيت</a>' +
@@ -48390,14 +48479,14 @@ function glCustSheetDlg(code) {
           (GL.isAdmin ? '<button class="btn btn-success btn-sm fw-bold" onclick="glCsRun_(\'' + jc + '\',false,this)">🔄 مزامنة الآن</button>' : '') : '') +
         (L ? '<span class="small text-muted ms-auto">آخر مزامنة <span class="gl-latin">' + glEsc(L.at) + '</span> (' + glEsc(L.by) + '): جديدة ' + L.created + ' · معدّلة ' + L.updated + ' · بانتظار الاعتماد ' + L.pending + '</span>' : '') +
       '</div><div id="glCsRes" class="mt-2"></div>';
-    glDlg('🔗 شيت العهدة — ' + glEsc(a.name) + ' <span class="gl-latin">(' + glEsc(a.code) + ')</span>' + (c.title ? ' · 📄 ' + glEsc(c.title) + ' / ' + glEsc(c.tab || '') : ''), h, 1080);
+    glDlg('🔗 شيت ' + ({ safe: 'الخزينة', bank: 'البنك' }[(GL.map[code] || {}).kind] || 'العهدة') + ' — ' + glEsc(a.name) + ' <span class="gl-latin">(' + glEsc(a.code) + ')</span>' + (c.title ? ' · 📄 ' + glEsc(c.title) + ' / ' + glEsc(c.tab || '') : ''), h, 1080);
     if (c.id) glCsRun_(code, true);
   });
 }
 function glCsSave_(code, btn) {
   var o = { url: glVal('glCsUrl'), tab: glVal('glCsTab'), startRow: glVal('glCsRow'), auto: document.getElementById('glCsAuto').checked, cols: {}, cur: (document.getElementById('glCsCur') || {}).value || 'SAR',
     every: { unit: (document.getElementById('glCsEveryU') || {}).value || 'hour', n: parseInt((document.getElementById('glCsEveryN') || {}).value, 10) || 1 } };
-  ['in', 'out', 'desc', 'date', 'party', 'qaid'].forEach(function (k) { o.cols[k] = glVal('glCsC_' + k).toUpperCase(); });
+  ['in', 'out', 'desc', 'date', 'party', 'qaid', 'inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD', 'ok'].forEach(function (k) { var el = document.getElementById('glCsC_' + k); if (el) o.cols[k] = String(el.value || '').trim().toUpperCase(); });
   btn.disabled = true;
   glRun('glCustSheetSave', [code, o], function (res) {
     showToast(res.cfg && res.cfg.id ? '🔗 رُبط «' + res.cfg.title + ' / ' + res.cfg.tab + '» — ' + (res.rows || 0) + ' صف بمبالغ' : 'فُك ربط الشيت');
@@ -48445,6 +48534,9 @@ function glCsDraw_(code) {
     }).join(''));
   };
   h += sec(r.preview ? '🆕' : '✅', r.preview ? 'ستُسجَّل عند المزامنة' : 'سُجّلت وكُتب رقم قيدها بالشيت', r.created.length, '#dcfce7', list(r.created, !r.preview));
+  // ✔ (V4.262) صفوف «ok» رُبطت بقيودها القائمة (سُجّلت من الشاشات) — بلا تسجيل مزدوج
+  h += sec('🔗', r.preview ? 'معلَّمة ok — ستُربط بقيدها القائم' : 'معلَّمة ok — رُبطت بقيدها القائم وكُتب رقمه بالشيت', (r.merged || []).length, '#e0f2fe',
+    tbl('<th>الصف</th><th>القيد القائم</th>', (r.merged || []).map(function (m) { return '<tr><td class="gl-latin">' + m.row + '</td><td><a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(m.id) + '\');return false;">' + glEsc(m.id) + '</a></td></tr>'; }).join('')));
   h += sec('✏️', r.preview ? 'تغيّرت بالشيت وسيُحدَّث قيدها' : 'حُدّث قيدها', r.updated.length, '#e0f2fe', list(r.updated, true));
   h += sec('🏨', 'دفعات برنامج الحجوزات من نفس الشيت', r.hb.length + r.hbWait.length, '#ede9fe',
     (r.hb.length ? '<div class="small mb-1">مربوطة بقيدها التلقائي' + (r.preview ? ' (سيُكتب رقمه بالشيت)' : '') + ': ' + r.hb.map(function (x) { return 'صف ' + x.row + ' ⇐ <a href="#" onclick="glShowEntry(\'' + glJs(x.id) + '\');return false;" class="gl-latin">' + glEsc(x.id) + '</a>'; }).join(' · ') + '</div>' : '') +
@@ -49286,7 +49378,10 @@ function glPendingDlg() {
   glRun('glPendingList', [], function (res) {
     GL.pendingCount = res.rows.filter(function (x) { return x.status !== 'مرفوض'; }).length; glNavBadge_();
     var can = res.canApprove, rows = res.rows;
-    var h = rows.length ? '<div class="small text-muted mb-2">كل تغيير حدث بمصدر قيد مسجَّل (بند/سعر/عدد/حذف…). «✅ اعتماد» يحدّث القيد بنفس رقمه، و«⛔ رفض» يُبقيه كما هو (ويعود التنبيه لو تغيّر المصدر مرة أخرى).</div>' +
+    var cust = (res.cust || []).length ? '<div class="alert alert-danger py-2 mb-2" style="font-size:12.5px;">👜 <b>صفوف عهدة لم تُقيَّد بعد</b> (طرف غير معروف أو بيانات ناقصة): ' +
+      res.cust.map(function (c) { return '<a href="#" class="fw-bold ms-1" onclick="glDlgClose();glCustSheetDlg(\'' + glJs(c.code) + '\');return false;">' + glEsc(c.name) + ' (' + c.n + ')</a>'; }).join(' · ') +
+      ' — اضغط اسم العهدة لاعتماد الحساب الصحيح لكل صف (أو من بوت الحسابات بتليجرام).</div>' : '';
+    var h = cust + (rows.length ? '<div class="small text-muted mb-2">كل تغيير حدث بمصدر قيد مسجَّل (بند/سعر/عدد/حذف…). «✅ اعتماد» يحدّث القيد بنفس رقمه، و«⛔ رفض» يُبقيه كما هو (ويعود التنبيه لو تغيّر المصدر مرة أخرى).</div>' +
       '<div class="table-responsive" style="max-height:60vh;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr>' + (can ? '<th><input type="checkbox" checked onchange="document.querySelectorAll(\'.glPdC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th>' : '') +
       '<th>القيد</th><th>النوع</th><th>البيان الحالي</th><th>المبلغ الحالي</th><th>بعد التغيير</th><th>المبلغ الجديد</th><th>منذ</th><th>الحالة</th></tr></thead><tbody>' +
       rows.map(function (x) {
@@ -49299,7 +49394,7 @@ function glPendingDlg() {
       }).join('') + '</tbody></table></div>' +
       (can ? '<div class="d-flex gap-2 justify-content-end mt-2"><button class="btn btn-outline-danger btn-sm" onclick="glPendingAct(false,this)">⛔ رفض المحدد</button><button class="btn btn-success btn-sm fw-bold" onclick="glPendingAct(true,this)">✅ اعتماد المحدد</button></div>'
         : '<div class="small text-muted mt-2">الاعتماد يحتاج صلاحية «✅ اعتماد تغييرات القيود».</div>')
-      : '<div class="text-center py-4" style="color:#166534;font-weight:700;">✅ لا توجد تغييرات بانتظار الاعتماد</div>';
+      : '<div class="text-center py-4" style="color:#166534;font-weight:700;">✅ لا توجد تغييرات بانتظار الاعتماد</div>');
     glDlg('🔔 تغييرات القيود بانتظار الاعتماد (' + rows.length + ')', h, 1150);
   });
 }

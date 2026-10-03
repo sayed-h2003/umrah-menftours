@@ -2949,7 +2949,10 @@ function glPendingList(authToken) {
   var rows = [];
   try { _glRowsW_('pending').forEach(function (r) { if (_glStr_(r[0])) rows.push({ key: _glStr_(r[0]), id: _glStr_(r[1]), kind: _glStr_(r[2]), oldDesc: _glStr_(r[3]), oldBase: _glNum_(r[4]),
     newDesc: _glStr_(r[5]), newBase: _glNum_(r[6]), at: _glStr_(r[8]), status: _glStr_(r[9]) || 'بانتظار', by: _glStr_(r[10]), note: _glStr_(r[11]), oldAmt: _glStr_(r[12]), newAmt: _glStr_(r[13]), diff: _glStr_(r[14]) }); }); } catch (e) {}
-  return { success: true, rows: rows, canApprove: _glCanApprove_(session) };
+  // 👜 (V4.262) صفوف شيتات العهد الناقصة (تُحدَّث مع كل مزامنة) — تظهر أعلى شاشة الاعتماد
+  var cust = [], P = PropertiesService.getScriptProperties(), accM = _glAccounts_().map;
+  try { _glCsCodes_().forEach(function (code) { var n = +(P.getProperty('GLBOT_CS_' + code) || 0); if (n) cust.push({ code: code, name: (accM[code] || {}).name || code, n: n }); }); } catch (eC) {}
+  return { success: true, rows: rows, canApprove: _glCanApprove_(session), cust: cust };
 }
 // (V4.259) أحدث التغييرات بانتظار الاعتماد بنص مقروء (البيان + المبلغ قبل/بعد + ما الذي تغيّر) — لتنبيه وأمر تليجرام
 function _glPendTop_(n) {
@@ -3321,7 +3324,7 @@ function _glCsMap_() { try { return JSON.parse(_glSettings_().custsheet_map || '
 function _glCsKey_(s) { return _glNorm_(String(s || '').replace(/^\s*ح\s*\/\s*/, '').replace(/^\s*حساب\s+/, '')); }
 function _glCsSheetId_(v) { var s = _glStr_(v), m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})/); return m ? m[1] : s; }
 function _glCsHash_(x) {
-  var s = [_glR2_(x.inAmt), _glR2_(x.outAmt), x.date, x.desc, x.hint].join('|'), h = 5381;
+  var s = [_glR2_(x.inAmt), _glR2_(x.outAmt), x.date, x.desc, x.hint].join('|') + (x.cur ? '|' + x.cur : ''), h = 5381;
   for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
   return h.toString(36);
 }
@@ -3333,24 +3336,36 @@ function _glCsOpen_(cfg) {
 }
 // (V4.226) أعمدة المزامنة قابلة للتغيير من إعدادات شيت العهدة — الافتراضي: رقم القيد بالعمود H (بدل F سابقاً)
 var GL_CS_COLS_DEF_ = { in: 'A', out: 'B', desc: 'C', date: 'D', party: 'G', qaid: 'H' };
+// 🏦 (V4.262) شيت خزينة/بنك (أو عهدة) متعدد العملات: عمودا وارد/صادر لكل عملة (العملة = عمود القيمة) + عمود «ok»
+// (الصف سُجّل من شاشات البرنامج ⇒ يُربط بقيده القائم بدل تسجيله مرتين) — كلها اختيارية (فارغ = غير مستخدم)
+var GL_CS_COLS_OPT_ = { inEGP: '', outEGP: '', inSAR: '', outSAR: '', inUSD: '', outUSD: '', ok: '' };
 function _glColIdx_(L) { L = _glStr_(L).toUpperCase(); var n = 0; for (var i = 0; i < L.length; i++) n = n * 26 + (L.charCodeAt(i) - 64); return n - 1; }
 function _glCsCols_(cfg) {
-  var c = Object.assign({}, GL_CS_COLS_DEF_, (cfg && cfg.cols) || {}), o = {};
+  var c = Object.assign({}, GL_CS_COLS_DEF_, GL_CS_COLS_OPT_, (cfg && cfg.cols) || {}), o = {};
   Object.keys(GL_CS_COLS_DEF_).forEach(function (k) { o[k] = _glColIdx_(/^[A-Z]{1,2}$/i.test(_glStr_(c[k])) ? c[k] : GL_CS_COLS_DEF_[k]); });
+  Object.keys(GL_CS_COLS_OPT_).forEach(function (k) { o[k] = /^[A-Z]{1,2}$/i.test(_glStr_(c[k])) ? _glColIdx_(c[k]) : -1; });
+  o.multi = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { return o[k] >= 0; });
   o.letters = c; return o;
 }
 function _glCsReadRows_(sh, startRow, cfg) {
   var last = sh.getLastRow(), out = [], C = _glCsCols_(cfg), OLD = 5;   // F = عمود رقم القيد القديم (ترحيل تلقائي لأرقام JE- المكتوبة فيه)
   if (last < startRow) return out;
-  var W = Math.max(C.in, C.out, C.desc, C.date, C.party, C.qaid, OLD) + 1;
+  var W = Math.max(C.in, C.out, C.desc, C.date, C.party, C.qaid, OLD, C.inEGP, C.outEGP, C.inSAR, C.outSAR, C.inUSD, C.outUSD, C.ok) + 1;
   W = Math.max(W, Math.min(26, sh.getLastColumn() || W));   // (V4.249) قراءة كل أعمدة الصف لاكتشاف صفوف «الإجمالي»
   var skipNext = false, TOT = /(^|\s)(ال)?[اإأ]جمال[يى]|المجموع/;
   sh.getRange(startRow, 1, last - startRow + 1, W).getValues().forEach(function (r, i) {
     // (V4.249) صف «الإجمالي» (مجموع الاستلام والصرف) والصف التالي له (الرصيد) لا يُقيَّدان أبداً
     if (skipNext) { skipNext = false; return; }
     if (r.some(function (v) { return typeof v === 'string' && TOT.test(v); })) { skipNext = true; return; }
-    var x = { row: startRow + i, inAmt: r[C.in] instanceof Date ? 0 : _glR2_(_glNum_(r[C.in])), outAmt: r[C.out] instanceof Date ? 0 : _glR2_(_glNum_(r[C.out])),
+    var num = function (ci) { return ci < 0 || r[ci] instanceof Date ? 0 : _glR2_(_glNum_(r[ci])); };
+    var x = { row: startRow + i, inAmt: num(C.in), outAmt: num(C.out),
       desc: _glStr_(r[C.desc]), date: _glDate_(r[C.date]), f: _glStr_(r[C.qaid]), hint: _glStr_(r[C.party]) };
+    if (C.multi) {   // (V4.262) العملة = العمود الذي فيه القيمة
+      var hit = ['EGP', 'SAR', 'USD'].filter(function (c) { return num(C['in' + c]) || num(C['out' + c]); });
+      if (hit.length) { x.cur = hit[0]; x.inAmt = num(C['in' + hit[0]]); x.outAmt = num(C['out' + hit[0]]); if (hit.length > 1) x.multiCur = hit.join('+'); }
+      else if (!x.inAmt && !x.outAmt) x.inAmt = x.outAmt = 0;
+    }
+    if (C.ok >= 0) x.ok = /^(ok|تم|نعم|yes|✓|✔|✅|x|y|1)$/i.test(_glStr_(r[C.ok]).trim());
     if (!x.f && C.qaid !== OLD && /^JE-\d{6}$/.test(_glStr_(r[OLD]))) { x.f = _glStr_(r[OLD]); x.fOld = 1; }
     if (!x.inAmt && !x.outAmt) return;
     x.hash = _glCsHash_(x);
@@ -3407,10 +3422,28 @@ function _glCsSuggest_(hint, accs, self) {
   }).filter(function (s) { return s.sc >= 2; }).sort(function (a, b) { return b.sc - a.sc; }).slice(0, 3).map(function (s) { return { code: s.code, name: s.name }; });
 }
 // قيد صف الشيت: الوارد «صرف عهدة» والمصروف «تسوية عهدة» — بعملة العهدة وسعر يوم الصف
+// ✔ (V4.262) قيد قائم على نفس الحساب يطابق صف «ok»: نفس العملة والمبلغ والاتجاه وتاريخ ±3 أيام، غير مربوط بصف آخر
+var _GL_CS_OK_IDX_ = null;
+function _glCsOkMatch_(code, x, cur, used) {
+  if (!_GL_CS_OK_IDX_ || _GL_CS_OK_IDX_.code !== code) {
+    var L = []; _glRows_('lines').forEach(function (l) { if (_glStr_(l[4]) === code && _glStr_(l[3]) === GL_ST_POSTED_) L.push(_glLineObj_(l)); });
+    _GL_CS_OK_IDX_ = { code: code, L: L };
+  }
+  var amt = x.inAmt || x.outAmt, isIn = x.inAmt > 0, k = _glDKey_(x.date), best = null, bd = 99;
+  var day = function (dk) { return Date.UTC(+dk.slice(0, 4), +dk.slice(4, 6) - 1, +dk.slice(6, 8)) / 864e5; };
+  _GL_CS_OK_IDX_.L.forEach(function (l) {
+    if (used[l.entryId] || l.currency !== cur) return;
+    var v = isIn ? l.debit : l.credit; if (Math.abs(v - amt) > 0.009) return;
+    var d = Math.abs(day(_glDKey_(l.date)) - day(k)); if (d <= 3 && d < bd) { bd = d; best = l.entryId; }
+  });
+  return best;
+}
 function _glCsEntry_(x, code, cp, cur, fx) {
   var isIn = x.inAmt > 0, amt = isIn ? x.inAmt : x.outAmt, rate = _glFxRateAt_(cur, x.date, fx).rate;
-  var desc = x.desc || (isIn ? 'استلام عهدة' : 'مصروفات عهدة') + (x.hint ? ' — ' + x.hint : '');
-  var e = { date: x.date, type: isIn ? 'صرف عهدة' : 'تسوية عهدة', desc: desc, lines: [
+  var kd = (_glAccounts_().map[code] || {}).kind;   // (V4.262) نوع القيد حسب الحساب: خزينة/بنك/عهدة
+  var T = kd === 'bank' ? ['إيداع بنكي', 'سحب بنكي', 'إيداع', 'سحب'] : kd === 'safe' ? ['سند قبض', 'سند صرف', 'استلام نقدية', 'صرف نقدية'] : ['صرف عهدة', 'تسوية عهدة', 'استلام عهدة', 'مصروفات عهدة'];
+  var desc = x.desc || (isIn ? T[2] : T[3]) + (x.hint ? ' — ' + x.hint : '');
+  var e = { date: x.date, type: isIn ? T[0] : T[1], desc: desc, lines: [
     { account: code, debit: isIn ? amt : 0, credit: isIn ? 0 : amt, currency: cur, rate: rate, desc: desc },
     { account: cp, debit: isIn ? 0 : amt, credit: isIn ? amt : 0, currency: cur, rate: rate, desc: desc + (x.hint && x.desc ? ' — ' + x.hint : '') }] };
   return { e: e, v: _glValidate_(e, {}) };
@@ -3428,9 +3461,15 @@ function glCustSheetSave(authToken, code, cfg) {
   if (!id) { _glSetSetting_('custsheet:' + a.code, ''); logChange_(session.username, 'فك ربط شيت عهدة', 'GL:' + a.code, 'شيت العهدة', '-', '-'); return { success: true, cfg: {} }; }
   var o = { id: id, tab: _glStr_(cfg.tab), startRow: Math.max(2, parseInt(cfg.startRow, 10) || 2) };
   if (cfg.cols) {
-    var cc = {}, used = {};
+    var cc = {}, used = {}, multi = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { return _glStr_(cfg.cols[k]); });
     Object.keys(GL_CS_COLS_DEF_).forEach(function (k) {
       var v = _glStr_(cfg.cols[k] || GL_CS_COLS_DEF_[k]).toUpperCase();
+      if (!/^[A-Z]{1,2}$/.test(v)) throw new Error('حرف عمود غير صالح: ' + v);
+      if (multi && (k === 'in' || k === 'out')) { cc[k] = v; return; }   // أعمدة العملات تُغني عن الوارد/الصادر العام
+      if (used[v]) throw new Error('العمود ' + v + ' مستخدم لأكثر من حقل'); used[v] = 1; cc[k] = v;
+    });
+    Object.keys(GL_CS_COLS_OPT_).forEach(function (k) {
+      var v = _glStr_(cfg.cols[k]).toUpperCase(); if (!v) return;
       if (!/^[A-Z]{1,2}$/.test(v)) throw new Error('حرف عمود غير صالح: ' + v);
       if (used[v]) throw new Error('العمود ' + v + ' مستخدم لأكثر من حقل'); used[v] = 1; cc[k] = v;
     });
@@ -3490,10 +3529,13 @@ function _glCsSync_(code, user, opts) {
   try { (_glHbRead_().pays || []).forEach(function (p) { if (p.id.indexOf('CUSTODY:' + seg + ':') === 0) hbPays[p.id] = p; }); } catch (e) {}
   var out = { success: true, account: { code: a.code, name: a.name, currency: cur }, sheet: { title: cfg.title || '', tab: S.sh.getName(), url: 'https://docs.google.com/spreadsheets/d/' + cfg.id },
     rows: rows.length, linked: 0, created: [], updated: [], hb: [], hbWait: [], pending: [], problems: [], orphans: [], preview: !!opts.preview };
-  var seen = {}, toCreate = [], toUpdate = [], nameIdx = null;
+  var seen = {}, toCreate = [], toUpdate = [], nameIdx = null, okUsed = {};
+  rows.forEach(function (y) { if (y.f) okUsed[y.f] = 1; });
   rows.forEach(function (x) {
     var base = { row: x.row, date: x.date, desc: x.desc, inAmt: x.inAmt, outAmt: x.outAmt, hint: x.hint };
-    if (x.inAmt && x.outAmt) { base.msg = 'الصف فيه مبلغ عهدة ومصروف معاً — افصلهما في صفين'; out.problems.push(base); return; }
+    if (x.cur) base.cur = x.cur;
+    if (x.multiCur) { base.msg = 'الصف فيه مبالغ بأكثر من عملة (' + x.multiCur + ') — افصلها في صفوف'; out.problems.push(base); return; }
+    if (x.inAmt && x.outAmt) { base.msg = 'الصف فيه مبلغ وارد وصادر معاً — افصلهما في صفين'; out.problems.push(base); return; }
     if (x.inAmt < 0 || x.outAmt < 0) { base.msg = 'مبلغ سالب'; out.problems.push(base); return; }
     if (x.f) {
       if (ents[x.f]) {
@@ -3512,6 +3554,13 @@ function _glCsSync_(code, user, opts) {
     if (hbAuto[hbId]) { seen[hbAuto[hbId]] = 1; toCreate.push({ x: x, linkOnly: hbAuto[hbId] }); return; }
     if (hbPays[hbId]) { base.msg = 'دفعة مسجلة ببرنامج الحجوزات (' + hbPays[hbId].party + ') — يُقيَّد عبر مزامنة الحجوزات'; out.hbWait.push(base); return; }
     if (!x.date) { base.msg = 'بلا تاريخ (العمود D)'; out.problems.push(base); return; }
+    // ✔ (V4.262) صف معلَّم «ok» = سُجّل من شاشات البرنامج ⇒ يُربط بقيده القائم على نفس الحساب (نفس العملة والمبلغ والاتجاه، ±3 أيام)
+    if (x.ok) {
+      var mm = _glCsOkMatch_(code, x, x.cur || cur, okUsed);
+      if (mm) { okUsed[mm] = 1; seen[mm] = 1; toCreate.push({ x: x, linkOnly: mm, okLink: 1 }); return; }
+      base.msg = 'معلَّم «ok» ولم يُعثر على قيده بالحساب (نفس المبلغ والعملة ±3 أيام) — امسح ok لتسجيله من الشيت، أو سجّله من الشاشات';
+      out.problems.push(base); return;
+    }
     var cp = (opts.approve && opts.approve[x.row]) || _glCsResolve_(x.hint, accs, learned, code, nameIdx || (nameIdx = _glCsNameIndex_(accs, code)));
     if (!cp) { base.sugg = _glCsSuggest_(x.hint, accs, code); out.pending.push(base); return; }
     toCreate.push({ x: x, cp: cp, approved: !!(opts.approve && opts.approve[x.row]) });
@@ -3529,7 +3578,8 @@ function _glCsSync_(code, user, opts) {
   if (opts.approve) toCreate = toCreate.filter(function (c) { return c.approved; });
   if (opts.preview) {
     out.created = toCreate.filter(function (c) { return !c.linkOnly; }).map(function (c) { return { row: c.x.row, date: c.x.date, desc: c.x.desc, inAmt: c.x.inAmt, outAmt: c.x.outAmt, hint: c.x.hint, account: c.cp }; });
-    out.hb = toCreate.filter(function (c) { return c.linkOnly; }).map(function (c) { return { row: c.x.row, id: c.linkOnly }; });
+    out.hb = toCreate.filter(function (c) { return c.linkOnly && !c.okLink; }).map(function (c) { return { row: c.x.row, id: c.linkOnly }; });
+    out.merged = toCreate.filter(function (c) { return c.okLink; }).map(function (c) { return { row: c.x.row, id: c.linkOnly, date: c.x.date, desc: c.x.desc, inAmt: c.x.inAmt, outAmt: c.x.outAmt, cur: c.x.cur || cur }; });
     out.updated = toUpdate.map(function (u) { return { row: u.x.row, id: u.id }; });
     return out;
   }
@@ -3537,8 +3587,8 @@ function _glCsSync_(code, user, opts) {
   // 1) قيود جديدة (دفعة واحدة)
   var built = [];
   toCreate.forEach(function (c) {
-    if (c.linkOnly) { fW.push({ x: c.x, id: c.linkOnly }); out.hb.push({ row: c.x.row, id: c.linkOnly }); return; }
-    try { var b = _glCsEntry_(c.x, code, c.cp, cur, fx); b.c = c; built.push(b); }
+    if (c.linkOnly) { fW.push({ x: c.x, id: c.linkOnly }); if (c.okLink) (out.merged = out.merged || []).push({ row: c.x.row, id: c.linkOnly }); else out.hb.push({ row: c.x.row, id: c.linkOnly }); return; }
+    try { var b = _glCsEntry_(c.x, code, c.cp, c.x.cur || cur, fx); b.c = c; built.push(b); }
     catch (err) { out.problems.push({ row: c.x.row, date: c.x.date, desc: c.x.desc, inAmt: c.x.inAmt, outAmt: c.x.outAmt, hint: c.x.hint, msg: err.message }); }
   });
   if (built.length) {
@@ -3566,7 +3616,7 @@ function _glCsSync_(code, user, opts) {
         var cp = _glCsResolve_(u.x.hint, accs, learned, code) || (prev ? _glStr_(prev[4]) : '');
         if (!cp) throw new Error('طرف الصف غير معروف');
         if (!u.x.date) throw new Error('بلا تاريخ (العمود D)');
-        var b = _glCsEntry_(u.x, code, cp, cur, fx), r = u.er.r;
+        var b = _glCsEntry_(u.x, code, cp, u.x.cur || cur, fx), r = u.er.r;
         var w = _glWriteEntry_(b.v, { id: u.id, seq: r[1], status: _glStr_(r[5]) || GL_ST_POSTED_, sourceKey: 'CUST:' + code, batchId: r[7], desc: b.e.desc, ref: 'cs:' + u.x.hash,
           createdBy: r[12], createdAt: r[13], row: u.er.row }, user);
         eSh.getRange(u.er.row, 1, 1, w.eRow.length).setValues([w.eRow]);

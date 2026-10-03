@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.262";
+var APP_VERSION = "4.263";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12075,7 +12075,7 @@ function _taReadRowsRaw_() {
   var idx = {};
   headers.forEach(function(h, i) { idx[h] = i; });
 
-  var result = [];
+  var result = [], _taPrices = null;
   var _ovr = _taOverrides_();   // ✏️ (V4.134) تجاوزات المورد/البيان المسجَّلة من الشاشة
 
   for (var r = 1; r < allData.length; r++) {
@@ -12095,6 +12095,16 @@ function _taReadRowsRaw_() {
 
     var busPrice = parseFloat(row[idx["سعر الباص"]]) || 0;
     var operationValue = parseFloat(row[idx["قيمة التشغيلة"]]) || 0;
+    // 💲 (V4.262) النقل «الوكيل» بلا سعر باص ⇒ سعر فترة تسعير النقل السارية لنفس الوكيل بتاريخ الوصول (شاشة متابعة
+    // الوكلاء ← أسعار النقل) — فيظهر مُسعَّراً تلقائياً بحسابات النقل السعودي وكشف الوكيل والقيد
+    var priceIsDefault = false;
+    if (!busPrice && transportCompany === "الوكيل" && supplier) {
+      if (!_taPrices) { try { _taPrices = _vzReadTransportPrices_(); } catch (eTp) { _taPrices = []; } }
+      var _arr = row[idx["تاريخ الوصول"]] instanceof Date ? Utilities.formatDate(row[idx["تاريخ الوصول"]], _tz_(), "dd/MM/yyyy") : String(row[idx["تاريخ الوصول"]] || "");
+      busPrice = _vzTransportPriceAt_(supplier, _arr, _taPrices) || 0;
+      priceIsDefault = !!busPrice;
+      if (priceIsDefault && !operationValue) operationValue = busPrice * (parseFloat(row[idx["عدد الباصات"]]) || 0);
+    }
 
     // 🧩 (V4.43) البيان: اسم المجموعة + «دورة نقل [مطار الوصول] - [مطار المغادرة]» + بيان كل مقطع إضافي
     // (إن وُجد) — وقيمة كل مقطع تُضاف لإجمالي قيمة التشغيلة — بطلب صريح
@@ -12141,6 +12151,7 @@ function _taReadRowsRaw_() {
       desc: desc, // 🧩 (V4.43) بيان كشف حساب النقل السعودي
       busCount: row[idx["عدد الباصات"]],
       busPrice: busPrice,
+      priceIsDefault: priceIsDefault,
       operationValue: operationValue,
       // 🧑‍💼 (V4.144) اسم الرحلة — يلزم لبيان دورات النقل بكشف حساب الوكيل
       tripName: idx["اسم الرحلة"] !== undefined ? String(row[idx["اسم الرحلة"]] || "") : ""
@@ -24899,7 +24910,7 @@ function _vzTransportRunsFor_(acctKey, map, preRows, prePrices) {
     return _vzFileInAcct_({ agent: r.supplier, company: r.company }, acctKey, map);
   }).map(function (r) {
     var busCount = _mfNum_(r.busCount), busPrice = _mfNum_(r.busPrice);
-    var priceIsDefault = false;
+    var priceIsDefault = !!r.priceIsDefault;
     if (!busPrice) { busPrice = _vzTransportPriceAt_(agentPart, r.arrivalDate, tPrices); priceIsDefault = !!busPrice; }
     return {
       id: r.id, date: r.arrivalDate, groupRef: 'نقل ' + r.id, entryNo: r.entryNo || '',
