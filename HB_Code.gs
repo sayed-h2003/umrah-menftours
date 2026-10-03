@@ -5098,7 +5098,8 @@ function tgPaymentEditMsg_(partyName, diffs, actor) {
   ];
   diffs.forEach(function (d) {
     lines.push('   • <b>' + tgEsc_(d.label) + '</b>');
-    lines.push('      <s>' + tgEsc_(d.oldVal) + '</s>  ⟶  <b>' + tgEsc_(d.newVal) + '</b>');
+    lines.push('      القيمة القديمة: <s>' + tgEsc_(d.oldVal) + '</s>');
+    lines.push('      القيمة الجديدة: <b>' + tgEsc_(d.newVal) + '</b>');
   });
   lines.push('━━━━━━━━━━━━━━');
   lines.push('👤 <b>بواسطة:</b> ' + tgEsc_(actor));
@@ -5207,7 +5208,8 @@ function tgLinkedPaymentEditMsg_(fromParty, toParty, diffs, actor) {
   ];
   diffs.forEach(function (d) {
     lines.push('   • <b>' + tgEsc_(d.label) + '</b>');
-    lines.push('      <s>' + tgEsc_(d.oldVal) + '</s>  ⟶  <b>' + tgEsc_(d.newVal) + '</b>');
+    lines.push('      القيمة القديمة: <s>' + tgEsc_(d.oldVal) + '</s>');
+    lines.push('      القيمة الجديدة: <b>' + tgEsc_(d.newVal) + '</b>');
   });
   lines.push('━━━━━━━━━━━━━━');
   lines.push('👤 <b>بواسطة:</b> ' + tgEsc_(actor));
@@ -9113,6 +9115,18 @@ function tgBookingEditMsg_(row, city, diffs, actor, source) {
     }
     return (v === '' || v === null || v === undefined) ? '—' : String(v);
   };
+  // 📅 (V4.259) حقول التاريخ كانت تظهر أرقاماً (رقم تسلسلي من تعديل الشيت المباشر مثل 46327) أو نصاً خاماً
+  // (2026-11-05 / Wed Nov 05 2026 …) ⇒ تُوحَّد dd/MM/yyyy
+  var fmtField = function (label, v) {
+    if (/تاريخ/.test(String(label || '')) && v !== '' && v !== null && v !== undefined && !(v && typeof v.getTime === 'function')) {
+      var t = String(v).trim(), d = null, m;
+      if (/^\d{5}(\.\d+)?$/.test(t)) { var n = parseFloat(t); if (n > 30000 && n < 80000) d = new Date(Math.round((n - 25569) * 864e5) + 12 * 36e5); }
+      else if ((m = t.match(/^(\d{4})-(\d{2})-(\d{2})/))) d = new Date(+m[1], +m[2] - 1, +m[3], 12);
+      else if (/^[A-Za-z]{3} [A-Za-z]{3} \d{1,2} \d{4}/.test(t)) d = new Date(t);
+      if (d && !isNaN(d.getTime())) return Utilities.formatDate(d, 'GMT+3', 'dd/MM/yyyy');
+    }
+    return fmtD(v);
+  };
   // حجز سبق ترحيله محاسبيًا (له رقم قيد) — تعديله لاحقًا يجعل القيد المُرحَّل مخالفًا لبيانات
   // الحجز الفعلية، وهو خطأ محاسبي صامت ما لم يُراجَع القيد يدويًا. لذلك يأخذ التنبيه هنا
   // ترويسة تحذيرية مختلفة كليًا عن تنبيه التعديل العادي حتى يُلتقط بالعين من أول نظرة
@@ -9140,8 +9154,10 @@ function tgBookingEditMsg_(row, city, diffs, actor, source) {
     '📝 <b>ما الذي تغيّر:</b>'
   ]);
   diffs.slice(0, 10).forEach(function (d) {
+    // (V4.259) «قبل/بعد» صريحة بدل السهم (اتجاهه يلتبس مع النص العربي فكان يبدو مشيراً للقيمة القديمة)
     lines.push('   • <b>' + tgEsc_(d.label) + '</b>');
-    lines.push('      <s>' + tgEsc_(fmtD(d.oldVal)) + '</s>  ⟶  <b>' + tgEsc_(fmtD(d.newVal)) + '</b>');
+    lines.push('      القيمة القديمة: <s>' + tgEsc_(fmtField(d.label, d.oldVal)) + '</s>');
+    lines.push('      القيمة الجديدة: <b>' + tgEsc_(fmtField(d.label, d.newVal)) + '</b>');
   });
   if (diffs.length > 10) lines.push('   … و' + (diffs.length - 10) + ' حقلاً آخر');
   // تغيّر حقل مالي ⇒ قيمة الحجز نفسها تغيّرت، فتغيّر معها رصيد العميل والمورد. الرقم الجديد

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.259 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.260 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.259)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.260)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.259</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.260</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4238,6 +4238,9 @@ input[type="date"]:not(:focus):not(:valid) {
             <input type="text" inputmode="decimal" lang="en" style="direction:ltr;" id="accPayRate" class="form-control form-control-sm" oninput="_numInputLatin_(this); _accFxPreview_()"></div>
           <div class="col-12"><label class="form-label small fw-bold mb-1">البيان</label>
             <input type="text" id="accPayDesc" class="form-control form-control-sm" placeholder="مثال: دفعة أولى — تحويل بنكي"></div>
+          <!-- 🏦 (V4.259) الحساب المقابل للدفعة بالحسابات العامة — بدل «نقدية تحت التسوية» -->
+          <div class="col-12" id="accPayCpWrap"><label class="form-label small fw-bold mb-1">🏦 الحساب المقابل (اختياري) <span class="text-muted fw-normal">— الخزينة/البنك/العهدة… التي دخلت فيها الدفعة</span></label>
+            <input type="text" id="accPayCp" class="form-control form-control-sm" list="accPayCpDL" autocomplete="off" placeholder="🔎 اكتب اسم الحساب — فارغ = نقدية تحت التسوية"><datalist id="accPayCpDL"></datalist></div>
         </div>
         <div id="accFxPreview" class="small fw-bold mt-2 text-primary"></div>
         <div id="accPayErr" class="text-danger small mt-2"></div>
@@ -7717,7 +7720,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.259";
+var CLIENT_APP_VERSION = "4.260";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -25958,7 +25961,7 @@ function _accRender_() {
           return '<tr' + (fx ? ' style="background:#fefce8;"' : '') + (canEdit ? ' ondblclick="_accPayEdit_(\'' + p.id + '\')" style="cursor:pointer;' + (fx ? 'background:#fefce8;' : '') + '" title="انقر مرتين للتعديل"' : '') + '>' +
             (canEdit ? '<td class="text-center"><input type="checkbox" class="acc-pay-chk" data-id="' + p.id + '"></td>' : '') +
             // 📏 (V4.45) الرقم التسلسلي والتاريخ بجوار بعضهما على سطر واحد بدل سطرين (كان بينهما <br>)
-            '<td class="text-center" style="direction:ltr;">' + (p.serial ? '<span class="text-muted" style="font-size:9px;">#' + p.serial + '</span> ' : '') + esc(p.date || '-') + '</td>' +
+            '<td class="text-center" style="direction:ltr;">' + (p.serial ? '<span class="text-muted" style="font-size:9px;">#' + p.serial + '</span> ' : '') + esc(p.date || '-') + _accPayGlChip_(p.id) + '</td>' +
             '<td class="text-start">' + (fx ? '💱 ' : '') + esc(p.desc || '-') + (fx ? ' <b>(= ' + _accFmt_(p.amount * p.rate) + ' ' + fxDst + ')</b>' : '') + '</td>' +
             '<td class="fw-bold text-center" style="direction:ltr;">' + _accFmt_(p.amount) + '</td><td class="text-center">' + _accCur_(p.currency) + '</td>' +
             '<td class="text-center text-nowrap">' +
@@ -26617,6 +26620,7 @@ function _accPayModal_(trip, type, editId) {
   document.getElementById('accPayCurrency').value = it ? (it.currency || (isFx ? 'SAR' : 'EGP')) : (isFx ? 'SAR' : 'EGP');
   document.getElementById('accPayRate').value = it ? (it.rate || '') : '';
   document.getElementById('accPayDesc').value = it ? (it.desc || '') : '';
+  var cpI = document.getElementById('accPayCp'); if (cpI) { cpI.value = ''; document.getElementById('accPayCpWrap').classList.toggle('d-none', isFx); _accCpAccLoad_(); }
   document.getElementById('accFxPreview').textContent = '';
   document.getElementById('accPayErr').textContent = '';
   if (isFx) _accFxDirChange_(true); else document.getElementById('accPayAmountLbl').textContent = 'المبلغ';
@@ -26664,6 +26668,22 @@ function _accFxPreview_() {
     ? ('= ' + _accFmt_(a * r) + ' ' + dstTxt + ' تُضاف للمستحق بال' + dstTxt + ' ويُخفَّض رصيد ال' + srcTxt + ' بمقدار ' + _accFmt_(a) + ' ' + srcTxt)
     : '';
 }
+// (V4.259) قائمة الحسابات الفرعية للحساب المقابل — تُجلب مرة واحدة بالجلسة
+function _accCpAccLoad_() {
+  var dl = document.getElementById('accPayCpDL'); if (!dl || window._accCpAccs) { if (dl && window._accCpAccs && !dl.options.length) _accCpAccFill_(); return; }
+  google.script.run.withSuccessHandler(function (r) { if (r && r.success) { window._accCpAccs = r.accounts || []; _accCpAccFill_(); } }).withFailureHandler(function () {}).accCounterAccounts(window.authToken);
+}
+function _accCpAccFill_() {
+  var dl = document.getElementById('accPayCpDL'); if (!dl) return;
+  var ord = { safe: 1, bank: 2, custody: 3, agent: 4 };
+  dl.innerHTML = (window._accCpAccs || []).slice().sort(function (a, b) { return (ord[a.kind] || 9) - (ord[b.kind] || 9); })
+    .map(function (a) { return '<option value="' + escapeHtml_(a.code + ' — ' + a.name + (a.currency && a.currency !== 'EGP' ? ' (' + a.currency + ')' : '')) + '">'; }).join('');
+}
+function _accCpCode_() {
+  var v = ((document.getElementById('accPayCp') || {}).value || '').trim(); if (!v) return '';
+  var c = v.split(' — ')[0].trim();
+  return (window._accCpAccs || []).some(function (a) { return a.code === c; }) ? c : null;
+}
 function _accPaySave_(btn) {
   var type = document.getElementById('accPayType').value;
   var editId = document.getElementById('accPayId').value || '';
@@ -26680,6 +26700,8 @@ function _accPaySave_(btn) {
     desc: document.getElementById('accPayDesc').value.trim()
   };
   if (p.amount <= 0) { document.getElementById('accPayErr').textContent = '⚠️ المبلغ غير صالح'; return; }
+  var cpCode = type === 'تحويل' ? '' : _accCpCode_();
+  if (cpCode === null) { document.getElementById('accPayErr').textContent = '⚠️ اختر الحساب المقابل من القائمة (أو اتركه فارغاً)'; return; }
   if (type === 'تحويل' && p.rate <= 0) { document.getElementById('accPayErr').textContent = '⚠️ سعر الصرف مطلوب'; return; }
   btn.disabled = true;
   google.script.run
@@ -26710,6 +26732,9 @@ function _accPaySave_(btn) {
           _accUndoPush_({ type: 'payment', before: null, after: Object.assign({}, newPay), label: 'إضافة دفعة: ' + desc });
         }
         _accRender_();
+        var pid = editId || res.id;
+        if (cpCode && pid) google.script.run.withSuccessHandler(function () { showToast('🏦 وُجِّهت الدفعة للحساب المقابل'); if (typeof glKickSoon_ === 'function') glKickSoon_(true); })
+          .withFailureHandler(function (e) { _showPopup('حُفظت الدفعة لكن تعذّر توجيهها للحساب المقابل: ' + (e.message || e), 'warning'); }).accPayCounterSet(window.authToken, pid, cpCode);
       }
       else document.getElementById('accPayErr').textContent = '❌ ' + ((res && res.error) || 'فشل الحفظ');
     })
@@ -28838,12 +28863,19 @@ function _accGenInsert_(btn) {
 var _accEditTrip = '';
 // 📘 (V4.222) رقم قيد إيرادات الرحلة بالحسابات العامة: مُزامن / تغيّر بعد القيد وينتظر الاعتماد / لم يُقيَّد بعد
 function _accGlChip_(trip) {
-  var g = _accData && _accData.gl; if (!g) return '';
+  var g = _accData && _accData.gl; if (!g || g.__tm === false) return '';
   var x = g[trip];
   if (!x) return '<span class="badge" style="background:rgba(255,255,255,.18);font-size:10.5px;" title="يُسجَّل قيد الرحلة تلقائياً خلال أقل من دقيقة من الحفظ">📘 لم يُقيَّد بعد</span> ';
   var canOpen = typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'));
   return '<span class="badge" style="background:' + (x.pending ? '#f59e0b;color:#111' : 'rgba(255,255,255,.22)') + ';font-size:10.5px;' + (canOpen ? 'cursor:pointer;' : '') + '"' +
     (canOpen ? ' onclick="_accOpenGl_(\'' + String(x.id).replace(/'/g, '') + '\')"' : '') + ' title="' + (x.pending ? 'تغيّر حساب الرحلة بعد القيد — بانتظار الاعتماد بالحسابات العامة' : 'مُرحَّل ومُزامن مع الحسابات العامة') + '">📘 قيد ' + escapeHtml_(x.id) + (x.pending ? ' ⚠️ بانتظار الاعتماد' : ' ✓') + '</span> ';
+}
+// 📘 (V4.259) رقم قيد الدفعة بالحسابات العامة بجوار تاريخها (ضغطة تفتح القيد)
+function _accPayGlChip_(pid) {
+  var g = _accData && _accData.gl, x = g && g.__pay && g.__pay[pid]; if (!x) return '';
+  var canOpen = typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'));
+  return ' <span class="badge" style="background:' + (x.pending ? '#f59e0b;color:#111' : '#e0e7ff;color:#1e3a8a') + ';font-size:9.5px;' + (canOpen ? 'cursor:pointer;' : '') + '"' +
+    (canOpen ? ' onclick="event.stopPropagation();_accOpenGl_(\'' + String(x.id).replace(/'/g, '') + '\')"' : '') + ' title="قيد الدفعة بالحسابات العامة">📘 ' + escapeHtml_(x.id) + '</span>';
 }
 function _accOpenGl_(id) {
   try { switchPage('gl'); } catch (e) {}
