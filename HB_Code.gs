@@ -6579,7 +6579,7 @@ function tgProcessUpdate_(upd) {
     tgLog_(upd.update_id, m.chat && m.chat.id, m.chat && m.chat.type, who, body, 'تجاهل — تحديث مكرر (إعادة تسليم تليجرام)');
     return;
   }
-  if (upd.callback_query) { tgHandleCallback_(upd.callback_query); tgLog_(upd.update_id, m.chat && m.chat.id, m.chat && m.chat.type, who, body, 'تم'); }
+  if (upd.callback_query) { if (!(typeof glBotCallback_ === 'function' && glBotCallback_(upd.callback_query))) tgHandleCallback_(upd.callback_query); tgLog_(upd.update_id, m.chat && m.chat.id, m.chat && m.chat.type, who, body, 'تم'); }
   else if (upd.message) {
     tgRememberChat_(upd.message);
     if (upd.message.text) {

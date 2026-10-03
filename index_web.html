@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.260 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.261 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.260)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.261)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.260</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.261</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2474,18 +2474,29 @@ input[type="date"]:not(:focus):not(:valid) {
         <h5 class="fw-bold mb-0" style="cursor:pointer;" onclick="hbSetToggle_('core')">🏨 إعدادات الفنادق والحجوزات</h5>
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="hbSetToggle_('core')">فتح / إغلاق</button>
       </div>
-      <div class="small text-muted mt-1">مصدر الحجوزات (الملف وأوراق مكة والمدينة)، قراءة التأكيدات بالذكاء الاصطناعي، الربط بالحسابات العامة، بيانات الحسابات.</div>
+      <div class="small text-muted mt-1">مصدر الحجوزات (الملف وأوراق مكة والمدينة)، الربط بالحسابات العامة، بيانات الحسابات — إعدادات تليجرام بقسم «بوت وتنبيهات الحجوزات» وحده.</div>
       <div id="hbSetBox-core" class="d-none mt-2"></div>
     </div>
   </div>
   <div class="card shadow-sm border-0 mb-3 d-none hb-set-card" id="hbSetCard-bot">
     <div class="card-body p-3">
       <div class="d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold mb-0" style="cursor:pointer;" onclick="hbSetToggle_('bot')">🤖 بوت تليجرام — الحجوزات والحسابات</h5>
+        <h5 class="fw-bold mb-0" style="cursor:pointer;" onclick="hbSetToggle_('bot')">🔔 بوت وتنبيهات الحجوزات (تليجرام)</h5>
         <button type="button" class="btn btn-sm btn-outline-primary" onclick="hbSetToggle_('bot')">فتح / إغلاق</button>
       </div>
-      <div class="small text-muted mt-1">بوت واحد: مجموعة الحجوزات (التنبيهات، الأوامر، ربط الموظفين وصلاحياتهم) + مجموعة الحسابات.</div>
+      <div class="small text-muted mt-1">مجموعة الحجوزات: توكن البوت والويب هوك، التنبيهات، الأوامر، ربط الموظفين وصلاحياتهم، قراءة التأكيدات.</div>
       <div id="hbSetBox-bot" class="d-none mt-2"></div>
+    </div>
+  </div>
+  <!-- 📒 (V4.261) تنبيهات وأوامر الحسابات منفصلة عن الحجوزات — نفس البوت أو بوت حسابات مستقل -->
+  <div class="card shadow-sm border-0 mb-3 d-none hb-set-card" id="hbSetCard-glbot">
+    <div class="card-body p-3">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0" style="cursor:pointer;" onclick="glBotCardToggle_()">📒 بوت وتنبيهات الحسابات (تليجرام)</h5>
+        <button type="button" class="btn btn-sm btn-outline-primary" onclick="glBotCardToggle_()">فتح / إغلاق</button>
+      </div>
+      <div class="small text-muted mt-1">مجموعة الحسابات: التنبيهات، قائمة الأزرار، كشوف الحسابات PDF/صورة، اعتماد التغييرات وصفوف العهد — بنفس بوت الحجوزات أو ببوت مستقل.</div>
+      <div id="glBotGroupCard" class="d-none mt-2"></div>
     </div>
   </div>
 
@@ -7720,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.260";
+var CLIENT_APP_VERSION = "4.261";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -49653,6 +49664,10 @@ function hbxPayOpen_(kind, code) {
 // بعد حفظ قيد من شاشة الفنادق: تحديث الكشف الفندقي المفتوح (الدفعة تُنسخ لسجل الدفعات فوراً)
 function hbxAfterSave_() { try { if (HBX.frame && HBX.frame.contentWindow && document.getElementById('section-hotels').classList.contains('active')) setTimeout(function () { hbPostDeep_(HBX.frame.contentWindow, { hbRefresh: 1 }); }, 800); } catch (e) {} }
 // 🤖 (V4.254) مجموعة الحسابات على نفس البوت: تنبيهات وأوامر الحسابات
+function glBotCardToggle_() {
+  var box = document.getElementById('glBotGroupCard'); if (!box) return;
+  if (box.classList.toggle('d-none') === false && !box.dataset.loaded) { box.dataset.loaded = '1'; glBotGroupCard_(); }
+}
 function glBotGroupCard_() {
   var box = document.getElementById('glBotGroupCard'); if (!box) return;
   box.innerHTML = '<div class="text-muted small">⏳ إعدادات مجموعة الحسابات…</div>';
@@ -49668,17 +49683,23 @@ function glBotGroupCard_() {
         '<div class="col-md-3"><label class="small fw-bold">رقم مجموعة الحسابات</label><input id="glbChat" class="form-control form-control-sm" dir="ltr" value="' + E(c.chatId) + '" placeholder="-100…"></div>' +
         '<div class="col-md-2"><label class="small fw-bold">حد أدنى للتنبيه (جنيه معادل)</label><input id="glbMin" type="number" class="form-control form-control-sm" value="' + (c.minAmount || 0) + '"></div>' +
         '<div class="col-md-2"><label class="small fw-bold">ساعة الملخص اليومي</label><input id="glbHr" type="number" min="0" max="23" class="form-control form-control-sm" value="' + c.dailyHour + '"></div></div>' +
+      '<div class="row g-2 align-items-end mt-1"><div class="col-md-6"><label class="small fw-bold">🤖 توكن بوت حسابات مستقل <span class="text-muted fw-normal">(اختياري — فارغ = نفس بوت الحجوزات · «-» لحذفه)</span></label>' +
+        '<input id="glbTok" class="form-control form-control-sm" dir="ltr" autocomplete="off" value="' + E(c.token || '') + '" placeholder="123456:ABC…"></div>' +
+        '<div class="col-md-6">' + (r.own ? '<span class="badge bg-info text-dark me-1">بوت مستقل</span><button class="btn btn-outline-primary btn-sm" id="glbHook">🔗 تسجيل الويب هوك للبوت المستقل</button>' : '<span class="small text-muted">يعمل الآن على نفس بوت الحجوزات</span>') + '</div></div>' +
       '<div class="mt-2"><div class="small fw-bold mb-1">🔔 التنبيهات</div><div class="d-flex flex-wrap">' + r.events.map(function (e) { return ck('glbEv_' + e[0], c.events[e[0]], E(e[1])); }).join('') + '</div></div>' +
       '<div class="mt-2"><div class="small fw-bold mb-1">⌨️ الأوامر المتاحة</div><div class="d-flex flex-wrap">' + r.cmds.filter(function (x) { return x[0] !== 'id'; }).map(function (x) { return ck('glbCm_' + x[0], c.cmds[x[0]], '<code>' + E(x[2] || x[1]) + '</code> ' + E(x[3])); }).join('') + '</div></div>' +
       '<div class="text-end mt-2"><button class="btn btn-outline-secondary btn-sm me-1" id="glbTest">📨 رسالة تجربة</button><button class="btn btn-success btn-sm fw-bold" id="glbSave">💾 حفظ</button></div></div>';
     var read = function () {
-      var o = { enabled: document.getElementById('glbEn').checked, chatId: document.getElementById('glbChat').value.trim(), minAmount: document.getElementById('glbMin').value, dailyHour: document.getElementById('glbHr').value, events: {}, cmds: {} };
+      var o = { token: document.getElementById('glbTok').value.trim(), enabled: document.getElementById('glbEn').checked, chatId: document.getElementById('glbChat').value.trim(), minAmount: document.getElementById('glbMin').value, dailyHour: document.getElementById('glbHr').value, events: {}, cmds: {} };
       r.events.forEach(function (e) { o.events[e[0]] = document.getElementById('glbEv_' + e[0]).checked; });
       r.cmds.forEach(function (x) { var el = document.getElementById('glbCm_' + x[0]); o.cmds[x[0]] = el ? el.checked : true; });
       return o;
     };
     document.getElementById('glbSave').onclick = function () { var b = this; b.disabled = true;
       google.script.run.withSuccessHandler(function () { b.disabled = false; showToast('✅ حُفظت إعدادات مجموعة الحسابات'); }).withFailureHandler(function (e) { b.disabled = false; _showPopup(e.message || e, 'error'); }).glBotSave(window.authToken, read()); };
+    var hk = document.getElementById('glbHook');
+    if (hk) hk.onclick = function () { var b = this; b.disabled = true;
+      google.script.run.withSuccessHandler(function (x) { b.disabled = false; showToast('🔗 سُجّل الويب هوك: ' + x.url); }).withFailureHandler(function (e) { b.disabled = false; _showPopup(e.message || e, 'error'); }).glBotSetWebhook(window.authToken); };
     document.getElementById('glbTest').onclick = function () { var b = this; b.disabled = true;
       google.script.run.withSuccessHandler(function () { b.disabled = false; showToast('📨 أُرسلت رسالة التجربة'); }).withFailureHandler(function (e) { b.disabled = false; _showPopup(e.message || e, 'error'); }).glBotTest(window.authToken); };
   }).withFailureHandler(function (e) { box.innerHTML = '<div class="text-danger small">⚠️ ' + escapeHtml_(e.message || e) + '</div>'; }).glBotGet(window.authToken);
@@ -49689,13 +49710,12 @@ function hbSetToggle_(sec) {
   var box = document.getElementById('hbSetBox-' + sec); if (!box) return;
   var open = box.classList.toggle('d-none') === false;
   if (open && !HBSET[sec]) hbSetLoad_(sec);
-  if (open && sec === 'bot' && typeof glBotGroupCard_ === 'function') glBotGroupCard_();
+
 }
 function hbSetLoad_(sec) {
   var box = document.getElementById('hbSetBox-' + sec); if (!box) return;
   HBSET[sec] = { loading: true };
-  var acc = sec === 'bot' ? '<div id="glBotGroupCard" class="mb-2"></div>' : '';
-  box.innerHTML = acc + '<div id="hbSetFrame-' + sec + '" class="text-muted small py-3 text-center">⏳ جارٍ فتح الإعدادات…</div>';
+  box.innerHTML = '<div id="hbSetFrame-' + sec + '" class="text-muted small py-3 text-center">⏳ جارٍ فتح الإعدادات…</div>';
   if (!window._hbSetMsg) {
     window._hbSetMsg = 1;
     window.addEventListener('message', function (ev) {

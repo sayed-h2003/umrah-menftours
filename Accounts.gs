@@ -2815,8 +2815,7 @@ function glAutoSyncCron() {
   var lock = _glLock_(); if (!lock.tryLock(30000)) return;
   try {
     var r = _glAutoRun_('مزامنة مجدولة', false); _glAutoSaveLast_(r, 'مزامنة مجدولة');
-    try { var PP = PropertiesService.getScriptProperties(), lp = +(PP.getProperty('GLBOT_PEND') || 0), np = _glPendingCount_() || 0;   // 🤖 (V4.254)
-      if (np !== lp) { PP.setProperty('GLBOT_PEND', String(np)); if (np > lp) _glBotQ_('pending', { n: np, items: _glPendTop_(Math.min(3, np - lp)).map(function (x) { return x.txt; }) }); } } catch (eBP) {}
+    _glBotPendCheck_();   // 🤖 (V4.254)
   }
   catch (e) { try { _glSetSetting_('auto_last_error', _glNow_() + ' — ' + e.message); } catch (e2) {} }
   _glUnlock_(lock);
@@ -2963,6 +2962,15 @@ function _glPendTop_(n) {
       (_glStr_(r[12]) || _glStr_(r[13]) ? '\n   💰 المبلغ القديم: ' + _glBotEsc_(_glStr_(r[12]) || '—') + ' · المبلغ الجديد: ' + _glBotEsc_(_glStr_(r[13]) || '—') : '') + (d ? '\n' + _glBotEsc_(d) : '') };
   });
 }
+// 🤖 تنبيه «تغييرات تنتظر الاعتماد» عند زيادة عددها (من المزامنة المجدولة واللحظية) — كل تغيير برسالة وأزرار
+function _glBotPendCheck_() {
+  try {
+    var PP = PropertiesService.getScriptProperties(), lp = +(PP.getProperty('GLBOT_PEND') || 0), np = _glPendingCount_() || 0;
+    if (np === lp) return;
+    PP.setProperty('GLBOT_PEND', String(np));
+    if (np > lp) { var ptop = _glPendTop_(Math.min(3, np - lp)); _glBotQ_('pending', { n: np, items: ptop.map(function (x) { return x.txt; }), keys: ptop.map(function (x) { return x.key; }) }); }
+  } catch (e) {}
+}
 function _glPendingCount_() {
   try { var c = CacheService.getScriptCache().get('gl_pend_n'); if (c !== null && c !== undefined && c !== '') return +c || 0; } catch (e0) {}
   var n = 0; try { _glRows_('pending').forEach(function (r) { if (_glStr_(r[0]) && _glStr_(r[9]) !== 'مرفوض') n++; }); } catch (e) {} return n; }
@@ -3032,6 +3040,7 @@ function _glLiveSync_(who) {
       if (changed || !cache.get('gl_last_w')) { _glAutoSaveLast_(r, 'مزامنة لحظية'); cache.put('gl_last_w', '1', 900); }
     } finally { _glUnlock_(lock); }
     if (r.created || r.updated || r.voided) logChange_(who, 'مزامنة القيود التلقائية', 'GL:auto', 'لحظية', '-', 'جديد ' + r.created + '، بانتظار الاعتماد ' + r.pending);
+    if (r.pending) _glBotPendCheck_();
     ok = true;
     return r;
   } finally {
@@ -3616,7 +3625,8 @@ function _glCsAutoAll_() {
     try {
       var r = _glCsSync_(code, 'مزامنة مجدولة', {}); res.push(code + ': ' + r.created.length + '/' + r.pending.length);
       var nPend = r.pending.length, lastN = +(P.getProperty('GLBOT_CS_' + code) || 0);   // 🤖 (V4.254) تنبيه عند ظهور صفوف ناقصة جديدة فقط
-      if (nPend !== lastN) { P.setProperty('GLBOT_CS_' + code, String(nPend)); if (nPend > lastN) _glBotQ_('custody_err', { name: (_glAccounts_().map[code] || {}).name || code, n: nPend }); }
+      if (nPend !== lastN) { P.setProperty('GLBOT_CS_' + code, String(nPend)); if (nPend > lastN) _glBotQ_('custody_err', { name: (_glAccounts_().map[code] || {}).name || code, n: nPend, code: code,
+        rows: r.pending.slice(lastN - nPend).slice(-3).map(function (x) { return { row: x.row, date: x.date, desc: String(x.desc || '').slice(0, 80), inAmt: x.inAmt, outAmt: x.outAmt, hint: String(x.hint || '').slice(0, 40), sugg: (x.sugg || []).slice(0, 3) }; }) }); }
     }
     catch (e) { res.push(code + ': ' + e.message); }
     finally { _glUnlock_(lock); }
@@ -5454,13 +5464,15 @@ function _glBotCfg_() {
   var ev = {}; GLBOT_EVENTS_.forEach(function (x) { ev[x[0]] = c.events && c.events[x[0]] !== undefined ? !!c.events[x[0]] : x[2]; });
   var cm = {}; GLBOT_CMDS_.forEach(function (x) { cm[x[0]] = c.cmds && c.cmds[x[0]] !== undefined ? !!c.cmds[x[0]] : true; });
   return { enabled: !!c.enabled, chatId: _glStr_(c.chatId), title: _glStr_(c.title), minAmount: _glNum_(c.minAmount) || 0,
-    dailyHour: c.dailyHour === undefined || c.dailyHour === '' ? 21 : Math.max(0, Math.min(23, parseInt(c.dailyHour, 10) || 0)), events: ev, cmds: cm };
+    dailyHour: c.dailyHour === undefined || c.dailyHour === '' ? 21 : Math.max(0, Math.min(23, parseInt(c.dailyHour, 10) || 0)), events: ev, cmds: cm,
+    token: _glStr_(PropertiesService.getScriptProperties().getProperty('GLBOT_TOKEN') || '') };   // (V4.261) بوت حسابات مستقل اختياري
 }
 function glBotGet(authToken) {
   _glAdminPerm_(authToken);
   var hb = {}; try { hb = typeof tgCfg_ === 'function' ? tgCfg_() : {}; } catch (e) {}
-  return { success: true, cfg: _glBotCfg_(), events: GLBOT_EVENTS_, cmds: GLBOT_CMDS_,
-    hasToken: !!(typeof tgToken_ === 'function' && tgToken_()), hbChat: _glStr_(hb.chatId), hbTitle: _glStr_(hb.chatTitle) };
+  var cfg = _glBotCfg_(), own = !!cfg.token; cfg.token = own ? '••••' + cfg.token.slice(-4) : '';
+  return { success: true, cfg: cfg, events: GLBOT_EVENTS_, cmds: GLBOT_CMDS_, own: own,
+    hasToken: own || !!(typeof tgToken_ === 'function' && tgToken_()), hbChat: _glStr_(hb.chatId), hbTitle: _glStr_(hb.chatTitle) };
 }
 function glBotSave(authToken, c) {
   var session = _glAdminPerm_(authToken);
@@ -5469,6 +5481,13 @@ function glBotSave(authToken, c) {
     dailyHour: Math.max(0, Math.min(23, parseInt(c.dailyHour, 10) || 0)), events: c.events || {}, cmds: c.cmds || {} };
   if (o.enabled && !/^-?\d+$/.test(o.chatId)) throw new Error('رقم مجموعة الحسابات غير صحيح — أضف البوت للمجموعة وأرسل فيها /glid لمعرفة الرقم');
   _glSetSetting_('bot_gl', JSON.stringify(o));
+  // (V4.261) توكن بوت حسابات مستقل (اختياري): فارغ = نفس بوت الحجوزات · «-» = حذف التوكن والعودة لبوت الحجوزات
+  var tk = _glStr_(c.token);
+  if (tk === '-') PropertiesService.getScriptProperties().deleteProperty('GLBOT_TOKEN');
+  else if (tk && tk.indexOf('••••') !== 0) {
+    if (!/^\d+:[\w-]{20,}$/.test(tk)) throw new Error('توكن البوت غير صحيح — انسخه كما هو من BotFather');
+    PropertiesService.getScriptProperties().setProperty('GLBOT_TOKEN', tk);
+  }
   logChange_(session.username, 'إعدادات بوت الحسابات', 'GL:bot', '-', '-', (o.enabled ? 'مفعّل' : 'متوقف') + ' — ' + o.chatId);
   return { success: true, cfg: _glBotCfg_() };
 }
@@ -5479,10 +5498,34 @@ function glBotTest(authToken) {
   _glBotSend_(c.chatId, '✅ <b>بوت الحسابات يعمل</b>\nهذه مجموعة الحسابات — اكتب <code>حسابات</code> لقائمة الأوامر.');
   return { success: true };
 }
-function _glBotSend_(chatId, text) {
-  if (typeof tgSendTo_ !== 'function') throw new Error('بوت برنامج الحجوزات غير مركَّب بالمشروع');
-  return tgSendTo_(chatId, text);
+// (V4.261) طبقة نداء تليجرام لبوت الحسابات: توكنه المستقل لو ضُبط، وإلا نفس بوت الحجوزات (tgApi_)
+function _glBotApi_(method, payload) {
+  var tok = _glStr_(PropertiesService.getScriptProperties().getProperty('GLBOT_TOKEN') || '');
+  if (!tok) { if (typeof tgApi_ !== 'function') throw new Error('بوت برنامج الحجوزات غير مركَّب بالمشروع'); return tgApi_(method, payload); }
+  var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + tok + '/' + method, { method: 'post', muteHttpExceptions: true, payload: payload });
+  var body = {}; try { body = JSON.parse(res.getContentText()); } catch (e) {}
+  if (res.getResponseCode() !== 200 || !body.ok) throw new Error('تليجرام(' + method + '): ' + (body.description || ('HTTP ' + res.getResponseCode())));
+  return body.result;
 }
+function _glBotSend_(chatId, text, kb) {
+  var p = { chat_id: String(chatId), text: String(text || '').slice(0, 4090), parse_mode: 'HTML', disable_web_page_preview: 'true' };
+  if (kb) p.reply_markup = JSON.stringify(kb);
+  return _glBotApi_('sendMessage', p);
+}
+function _glBotEdit_(chatId, msgId, text, kb) {
+  var p = { chat_id: String(chatId), message_id: String(msgId), text: String(text || '').slice(0, 4090), parse_mode: 'HTML', disable_web_page_preview: 'true' };
+  p.reply_markup = JSON.stringify(kb || { inline_keyboard: [] });
+  try { return _glBotApi_('editMessageText', p); } catch (e) { if (!/not modified/i.test(e.message)) throw e; }
+}
+function _glBotAns_(cbId, text, alert) { try { _glBotApi_('answerCallbackQuery', { callback_query_id: cbId, text: String(text || '').slice(0, 190), show_alert: alert ? 'true' : 'false' }); } catch (e) {} }
+function _glBotDoc_(chatId, blob, caption, kb) {
+  var p = { chat_id: String(chatId), document: blob, caption: String(caption || '').slice(0, 1000), parse_mode: 'HTML' };
+  if (kb) p.reply_markup = JSON.stringify(kb);
+  return _glBotApi_('sendDocument', p);
+}
+function _glBotPhoto_(chatId, blob, caption) { return _glBotApi_('sendPhoto', { chat_id: String(chatId), photo: blob, caption: String(caption || '').slice(0, 1000), parse_mode: 'HTML' }); }
+// زر ملوّن (حقل style بتليجرام الحديث؛ العملاء الأقدم يتجاهلونه ويبقى الرمز التعبيري يميّزه)
+function _glBtn_(t, d, st) { var b = { text: t, callback_data: d }; if (st) b.style = st; return b; }
 function _glBotEsc_(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 // طابور سريع (خصائص السكربت) — لا يُبطئ الحفظ؛ يُفرَّغ كل دقيقة
 function _glBotQ_(type, p) {
@@ -5510,7 +5553,7 @@ function _glBotFmt_(it) {
     case 'entry_edit': return '✏️ <b>تعديل قيد مرحّل</b> — ' + E(ref) + '\n💰 ' + E(p.amt) + '\n👥 ' + E(p.parties) + '\n📝 ' + E(p.desc) + '\n👤 ' + E(p.by);
     case 'entry_void': return '🗑️ <b>' + (p.deleted ? 'حذف' : 'إلغاء') + ' قيد</b> — ' + E(ref) + '\n💰 ' + E(p.amt) + '\n👥 ' + E(p.parties) + (p.reason ? '\n❓ ' + E(p.reason) : '') + '\n👤 ' + E(p.by);
     case 'custody_err': return '👜 <b>عهدة تحتاج مراجعة</b> — ' + E(p.name) + '\n' + p.n + ' صف بالشيت لم يُقيَّد (حساب غير معروف أو بيانات ناقصة) — راجعها من شاشة العهد.';
-    case 'pending': return '⏳ <b>تغييرات تنتظر الاعتماد</b>: ' + p.n + ' — من تبويب «القيود التلقائية».' + (p.items && p.items.length ? '\n━━━━━━━━━━━━\n' + p.items.join('\n') : '');
+    case 'pending': return '⏳ <b>تغييرات تنتظر الاعتماد</b>: ' + p.n + ' — من تبويب «القيود التلقائية»' + (p.keys && p.keys.length ? ' أو بالأزرار تحت كل تغيير:' : '.') + (!p.keys && p.items && p.items.length ? '\n━━━━━━━━━━━━\n' + p.items.join('\n') : '');
     case 'stmt': return '📒 <b>صدر كشف حساب</b> ' + E(p.serial) + ' — ' + E(p.name) + '\n' + E(p.balances) + '\n👤 ' + E(p.by) + ' · ' + E(p.output);
     default: return E(JSON.stringify(p));
   }
@@ -5526,7 +5569,12 @@ function glBotTick_() {
     var left = [];
     q.forEach(function (it, i) {
       if (i >= 15) { left.push(it); return; }
-      try { _glBotSend_(c.chatId, _glBotFmt_(it)); } catch (e) { if ((it.n = (it.n || 0) + 1) < 4) left.push(it); Logger.log('glBotTick_: ' + e.message); }
+      try {
+        _glBotSend_(c.chatId, _glBotFmt_(it));
+        // (V4.261) أزرار ثابتة: صفوف العهدة الجديدة باقتراحاتها، والتغييرات بانتظار الاعتماد بأزرار اعتماد/رفض/تفاصيل
+        if (it.t === 'custody_err' && it.p && it.p.code && it.p.rows) try { _glBotCsxSend_(c.chatId, it.p.code, it.p.rows); } catch (eR) {}
+        if (it.t === 'pending' && it.p && it.p.keys) it.p.keys.forEach(function (k, j) { try { _glBotSend_(c.chatId, (it.p.items || [])[j] || k, _glBotPendKb_(k)); } catch (eK) {} });
+      } catch (e) { if ((it.n = (it.n || 0) + 1) < 4) left.push(it); Logger.log('glBotTick_: ' + e.message); }
     });
     if (left.length) { var q2 = []; try { q2 = JSON.parse(P.getProperty('GLBOT_Q') || '[]') || []; } catch (e) {} P.setProperty('GLBOT_Q', JSON.stringify(left.concat(q2)).slice(0, 8500)); }
   }
@@ -5564,7 +5612,7 @@ function _glBotFindAcc_(q) {
   return accs.filter(function (a) { return _glNorm_(a.name).indexOf(n) >= 0 || _glNorm_(a.link).indexOf(n) >= 0; }).slice(0, 10);
 }
 // يُستدعى من بوت الحجوزات لكل رسالة نصية قبل أوامره — يرجع وصفاً للسجل لو عالجها، أو '' لتكمل أوامر الحجوزات
-function glBotHandle_(msg) {
+function glBotHandle_(msg, opt) {
   try {
     if (!_glSSId_()) return '';
     var text = _glStr_(msg && msg.text), chat = msg && msg.chat || {}, chatId = String(chat.id || ''), from = msg.from || {};
@@ -5572,6 +5620,18 @@ function glBotHandle_(msg) {
     var c = _glBotCfg_(), inGroup = !!(c.chatId && chatId === c.chatId), isPriv = chat.type === 'private';
     var w = text.replace(/@\w+/, '').trim(), first = w.split(/\s+/)[0], arg = w.slice(first.length).trim();
     var cmd = GLBOT_CMDS_.filter(function (x) { return first.toLowerCase() === x[1] || (inGroup && x[2] && first === x[2]); })[0];
+    // (V4.261) زر بالقائمة طلب بيانة (اسم الحساب/رقم القيد) ⇒ الرسالة التالية من نفس الشخص هي الرد
+    var askK = 'glbot_ask_' + chatId + '_' + (from.id || ''), ask = null;
+    try { ask = CacheService.getScriptCache().get(askK); } catch (eA) {}
+    if (!cmd && ask && /^csfix\|/.test(ask) && !/^\//.test(w)) {
+      try { CacheService.getScriptCache().remove(askK); } catch (eR) {}
+      var cp = ask.split('|'), wh = _glBotTgUser_(from), hits = _glBotFindAcc_(w);
+      if (!wh || !(_sessionHasPerm_(wh, 'admin') || _sessionHasPerm_(wh, 'gl.edit'))) { _glBotSend_(chatId, '⛔ يحتاج صلاحية تعديل الحسابات'); return 'بوت الحسابات: عهدة غير مصرح'; }
+      if (hits.length !== 1) { _glBotSend_(chatId, hits.length ? '🔎 أكثر من حساب — اختر:' : '🔎 لا يوجد حساب يطابق «' + _glBotEsc_(w) + '»', hits.length ? { inline_keyboard: hits.slice(0, 8).map(function (a) { return [_glBtn_(a.name.slice(0, 40), 'gl:cs:' + cp[1] + ':' + cp[2] + ':' + a.code)]; }) } : null); return 'بوت الحسابات: عهدة بحث'; }
+      _glBotSend_(chatId, _glBotCsApprove_(cp[1], +cp[2], hits[0].code, wh.username)); return 'بوت الحسابات: عهدة اعتماد';
+    }
+    if (!cmd && ask && !/^\//.test(w)) { try { CacheService.getScriptCache().remove(askK); } catch (eR) {} cmd = GLBOT_CMDS_.filter(function (x) { return x[0] === ask; })[0]; arg = w; }
+    if (!cmd && (opt && opt.own) && /^\/(start|menu)$/i.test(first)) cmd = GLBOT_CMDS_[0];
     if (!cmd) return '';
     if (cmd[0] === 'id') { _glBotSend_(chatId, '🆔 رقم هذه المحادثة: <code>' + _glBotEsc_(chatId) + '</code>\n(انسخه في إعدادات بوت الحسابات ← رقم مجموعة الحسابات)'); return 'بوت الحسابات: رقم المحادثة'; }
     if (!c.enabled) return '';
@@ -5581,12 +5641,234 @@ function glBotHandle_(msg) {
       if (!lu || !lu.active || !_glBotUserCanGl_(lu.username)) { _glBotSend_(chatId, '⛔ أوامر الحسابات لموظف مربوط بالبوت ولديه صلاحية «الحسابات العامة».'); return 'بوت الحسابات: غير مصرح'; }
     }
     if (!c.cmds[cmd[0]]) { _glBotSend_(chatId, '⛔ هذا الأمر متوقف من إعدادات بوت الحسابات.'); return 'بوت الحسابات: أمر متوقف'; }
-    _glBotSend_(chatId, _glBotRun_(cmd[0], arg, inGroup));
+    if (cmd[0] === 'help') { _glBotSend_(chatId, _glBotRun_('help', '', inGroup), _glBotMenuKb_(c)); return 'بوت الحسابات: القائمة'; }
+    if (cmd[0] === 'pending') { _glBotPendSend_(chatId, 8); return 'بوت الحسابات: الاعتماد'; }
+    var out = _glBotRun_(cmd[0], arg, inGroup), kb = null;
+    if (cmd[0] === 'stmt' && _glBotLastAcc_) kb = { inline_keyboard: [[_glBtn_('📄 كشف PDF', 'gl:sp:' + _glBotLastAcc_, 'primary'), _glBtn_('🖼️ صورة HD', 'gl:si:' + _glBotLastAcc_, 'success')]] };
+    _glBotSend_(chatId, out, kb);
     return 'بوت الحسابات: ' + cmd[0];
   } catch (e) {
     try { _glBotSend_(msg.chat.id, '⚠️ تعذّر تنفيذ أمر الحسابات: ' + _glBotEsc_(e.message)); } catch (e2) {}
     return 'بوت الحسابات: خطأ ' + e.message;
   }
+}
+var _glBotLastAcc_ = '';
+// ⌨️ (V4.261) قائمة أزرار ملوّنة لمجموعة الحسابات (مثل مجموعة الحجوزات) — كل زر = أمر
+function _glBotMenuKb_(c) {
+  c = c || _glBotCfg_();
+  var on = function (k) { return c.cmds[k] !== false; }, rows = [], row = [];
+  var add = function (b) { row.push(b); if (row.length === 2) { rows.push(row); row = []; } };
+  if (on('cash')) add(_glBtn_('💰 الخزائن والبنوك', 'gl:m:cash', 'success'));
+  if (on('custody')) add(_glBtn_('👜 العهد', 'gl:m:custody', 'success'));
+  if (on('bal')) add(_glBtn_('📊 رصيد حساب', 'gl:m:bal', 'primary'));
+  if (on('stmt')) add(_glBtn_('📒 كشف حساب PDF/صورة', 'gl:m:stmt', 'primary'));
+  if (on('pending')) add(_glBtn_('⏳ تغييرات بانتظار الاعتماد', 'gl:m:pending', 'danger'));
+  if (on('entry')) add(_glBtn_('🧾 تفاصيل قيد/سند', 'gl:m:entry'));
+  add(_glBtn_('👜 صفوف عهد ناقصة', 'gl:m:csx', 'danger'));
+  if (row.length) rows.push(row);
+  return { inline_keyboard: rows };
+}
+// تغييرات بانتظار الاعتماد — رسالة لكل تغيير بأزرار ثابتة (اعتماد/رفض/التفاصيل) تعمل في أي وقت لاحق (بلا حالة محفوظة)
+function _glPendHash_(k) { return _glHash_(String(k)).slice(0, 12); }
+function _glBotPendSend_(chatId, n) {
+  var top = _glPendTop_(n || 5), all = _glPendingCount_() || 0;
+  _glBotSend_(chatId, '⏳ بانتظار الاعتماد: <b>' + all + '</b>' + (all > top.length ? ' — أحدث ' + top.length : ''));
+  top.forEach(function (x) { _glBotSend_(chatId, x.txt, _glBotPendKb_(x.key)); });
+}
+function _glBotPendKb_(key) {
+  var h = _glPendHash_(key);
+  return { inline_keyboard: [[_glBtn_('✅ اعتماد', 'gl:ap:' + h, 'success'), _glBtn_('❌ رفض', 'gl:rj:' + h, 'danger'), _glBtn_('🔍 التفاصيل', 'gl:pd:' + h, 'primary')]] };
+}
+function _glPendByHash_(h) {
+  var hit = null; try { _glRowsW_('pending').forEach(function (r) { var k = _glStr_(r[0]); if (k && !hit && _glPendHash_(k) === h) hit = r; }); } catch (e) {}
+  return hit;
+}
+function _glBotTgUser_(from) {
+  var lu = typeof tgUserByTgId_ === 'function' ? tgUserByTgId_(from && from.id) : null;
+  if (!lu || !lu.active) return null;
+  var rec = null;
+  try {
+    var sh = getSpreadsheet_().getSheetByName('Users');
+    if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues().forEach(function (r) { if (String(r[0]).toLowerCase() === String(lu.username).toLowerCase()) rec = { username: String(r[0]), permissions: r[4], active: r[3] }; });
+  } catch (e) {}
+  if (!rec || rec.active === false || String(rec.active) === 'FALSE') return null;
+  return { username: rec.username, permissions: rec.permissions };
+}
+// 🖱️ أزرار بوت الحسابات (callback_data تبدأ بـ gl:) — يرجع true لو عالجها
+function glBotCallback_(cq) {
+  var d = String(cq && cq.data || ''); if (d.indexOf('gl:') !== 0) return false;
+  var chatId = String(cq.message && cq.message.chat && cq.message.chat.id || ''), msgId = cq.message && cq.message.message_id, from = cq.from || {};
+  try {
+    if (!_glSSId_()) { _glBotAns_(cq.id, 'الحسابات العامة غير مربوطة', true); return true; }
+    var c = _glBotCfg_(), inGroup = !!(c.chatId && chatId === c.chatId);
+    var who = _glBotTgUser_(from);
+    if (!inGroup && !(who && (_sessionHasPerm_(who, 'admin') || _sessionHasPerm_(who, 'gl.view')))) { _glBotAns_(cq.id, '⛔ لموظف مربوط بالبوت ولديه صلاحية الحسابات', true); return true; }
+    var parts = d.split(':'), act = parts[1], arg = parts.slice(2).join(':');
+    if (act === 'm') {   // أزرار القائمة
+      if (arg === 'cash' || arg === 'custody') { _glBotAns_(cq.id, ''); _glBotSend_(chatId, _glBotRun_(arg, '', inGroup)); return true; }
+      if (arg === 'pending') { _glBotAns_(cq.id, ''); _glBotPendSend_(chatId, 8); return true; }
+      if (arg === 'csx') { _glBotAns_(cq.id, ''); _glBotCsxSend_(chatId); return true; }
+      if (/^(bal|stmt|entry)$/.test(arg)) {
+        try { CacheService.getScriptCache().put('glbot_ask_' + chatId + '_' + (from.id || ''), arg, 600); } catch (eC) {}
+        _glBotAns_(cq.id, '');
+        _glBotSend_(chatId, '✍️ ' + _glBotEsc_(((from.first_name || '') + '').trim()) + '، اكتب ' + (arg === 'entry' ? 'رقم القيد أو السند (مثل REC-00012)' : 'اسم الحساب أو جزءاً منه أو كوده') + ':', { force_reply: true, selective: true });
+        return true;
+      }
+    }
+    if (act === 'sp' || act === 'si') {   // كشف حساب PDF / صورة
+      _glBotAns_(cq.id, act === 'sp' ? '📄 جارٍ تجهيز PDF…' : '🖼️ جارٍ تجهيز الصورة…');
+      var a = _glAccounts_().map[arg]; if (!a) { _glBotSend_(chatId, 'الحساب غير موجود'); return true; }
+      var pdf = _glBotStmtPdf_(a.code), cap = '📒 كشف حساب <b>' + _glBotEsc_(a.name) + '</b> — ' + Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'dd/MM/yyyy');
+      if (act === 'sp') { _glBotDoc_(chatId, pdf, cap); return true; }
+      var img = _glPdfToPng_(pdf);
+      if (img) _glBotPhoto_(chatId, img, cap); else { _glBotDoc_(chatId, pdf, cap + '\n(تعذّر تحويله لصورة الآن — أُرسل PDF)'); }
+      return true;
+    }
+    if (act === 'ap' || act === 'rj' || act === 'pd') {   // اعتماد/رفض/تفاصيل تغيير
+      var r = _glPendByHash_(arg);
+      if (!r) { _glBotAns_(cq.id, 'هذا التغيير لم يعد بانتظار الاعتماد (اعتُمد أو تغيّر مصدره)', true); try { _glBotEdit_(chatId, msgId, (cq.message.text ? _glBotEsc_(cq.message.text) : '') + '\n\n✔️ <i>لم يعد معلّقاً</i>'); } catch (eE) {} return true; }
+      var key = _glStr_(r[0]);
+      if (act === 'pd') {
+        _glBotAns_(cq.id, '');
+        _glBotSend_(chatId, '🔍 <b>تفاصيل التغيير</b>' + (r[1] ? ' — قيد ' + _glBotEsc_(_glStr_(r[1])) : '') + '\n📝 قبل: ' + _glBotEsc_(_glCleanDesc_(_glStr_(r[3])) || '—') + '\n📝 بعد: ' + _glBotEsc_(_glCleanDesc_(_glStr_(r[5])) || '—') +
+          '\n💰 المبلغ القديم: ' + _glBotEsc_(_glStr_(r[12]) || '—') + ' · الجديد: ' + _glBotEsc_(_glStr_(r[13]) || '—') + '\n━━━━━━━━━━━━\n' + _glBotEsc_(_glStr_(r[14]) || '—'), _glBotPendKb_(key));
+        return true;
+      }
+      if (!who || !_glCanApprove_(who)) { _glBotAns_(cq.id, '⛔ الاعتماد/الرفض يحتاج موظفاً مربوطاً بالبوت لديه صلاحية «اعتماد تغييرات القيود»', true); return true; }
+      if (act === 'rj') {
+        var cur = _glPendingRows_(), keep = {};
+        Object.keys(cur).forEach(function (k) { var rr = cur[k].row; if (k === key) { rr[9] = 'مرفوض'; rr[10] = who.username; rr[11] = 'من تليجرام ' + _glNow_(); } keep[k] = rr; });
+        _glPendingWrite_(keep);
+        logChange_(who.username, 'رفض تغيير قيود تلقائية', 'GL:approve', 'تليجرام', '1 تغيير', key);
+        _glBotAns_(cq.id, '❌ رُفض');
+        _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n❌ <b>رُفض</b> بواسطة ' + _glBotEsc_(who.username));
+        return true;
+      }
+      var res, lock = _glLock_(); lock.waitLock(60000);
+      try { var only = {}; only[key] = 1; res = _glAutoRun_(who.username, false, { bypass: true, onlyKeys: only }); _glAutoLogAdd_(res.createdList, 'جديد'); }
+      finally { _glUnlock_(lock); }
+      logChange_(who.username, 'اعتماد تغيير قيود تلقائية', 'GL:approve', 'تليجرام', '1 تغيير', key);
+      _glBotAns_(cq.id, res.blocked && res.blocked.length ? '⚠️ محجوز بفترة مقفلة' : '✅ اعتُمد');
+      _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n' + (res.blocked && res.blocked.length ? '⚠️ <b>لم يُعتمد</b> — القيد في فترة مقفلة' : '✅ <b>اعتُمد</b> بواسطة ' + _glBotEsc_(who.username)));
+      return true;
+    }
+    if (act === 'cs') { _glBotCsxCb_(cq, chatId, msgId, who, arg); return true; }
+    _glBotAns_(cq.id, '');
+    return true;
+  } catch (e) {
+    _glBotAns_(cq.id, '⚠️ ' + e.message, true);
+    return true;
+  }
+}
+// 📄 كشف حساب (كل الحركات من البداية) كملف PDF مرتب للإرسال من البوت
+function _glBotStmtPdf_(code) {
+  var a = _glAccounts_().map[code], ctx = _glStmtCtxFor_(code); ctx.skipHb = true;
+  var st = _glStmtCore_(code, '', '', ctx), E = _glBotEsc_, lbl = { EGP: 'جنيه', SAR: 'ريال', USD: 'دولار' };
+  var curs = GL_CURS_.filter(function (c) { return st.rows.some(function (x) { return x.currency === c; }) || Math.abs((st.closing || {})[c] || 0) >= 0.01; });
+  if (!curs.length) curs = ['EGP'];
+  var co = '', set = _glSettings_(); try { co = (JSON.parse(set.vch_companies || '[]')[0] || {}).name || ''; } catch (e) {}
+  var bal = function (v) { return _glFmtN_(Math.abs(v)) + (Math.abs(v) < 0.01 ? '' : (v > 0 ? ' مدين' : ' دائن')); };
+  var html = '<html dir="rtl"><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;font-size:10.5px;color:#0f172a;margin:18px;}h2{margin:0;color:#1e3a8a;}' +
+    '.hd{border-bottom:3px solid #c8a24a;padding-bottom:6px;margin-bottom:8px;}table{width:100%;border-collapse:collapse;margin-top:6px;}th{background:#1e3a8a;color:#fff;padding:5px;font-size:10px;}' +
+    'td{border-bottom:1px solid #e2e8f0;padding:4px;text-align:center;}td.d{text-align:right;}tr.c td{background:#f1f5f9;font-weight:bold;}.cur{margin-top:12px;font-weight:bold;color:#1e3a8a;font-size:12px;}</style></head><body>' +
+    '<div class="hd">' + (co ? '<div style="font-weight:bold;">' + E(co) + '</div>' : '') + '<h2>كشف حساب: ' + E(a.name) + '</h2><div>الكود ' + E(a.code) + ' · حتى ' + Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'dd/MM/yyyy') + '</div></div>';
+  curs.forEach(function (c) {
+    var rows = st.rows.filter(function (x) { return x.currency === c; });
+    html += '<div class="cur">العملة: ' + lbl[c] + '</div><table><tr><th>التاريخ</th><th>السند/القيد</th><th>البيان</th><th>مدين</th><th>دائن</th><th>الرصيد</th></tr>' +
+      rows.map(function (x) { return '<tr><td>' + E(x.date) + '</td><td>' + E(x.voucherNo || x.entryId) + '</td><td class="d">' + E(String(x.desc || '').slice(0, 110)) + '</td><td>' + (x.debit ? _glFmtN_(x.debit) : '') + '</td><td>' + (x.credit ? _glFmtN_(x.credit) : '') + '</td><td>' + bal(x.bal) + '</td></tr>'; }).join('') +
+      '<tr class="c"><td colspan="3">الإجمالي / الرصيد النهائي</td><td>' + _glFmtN_(st.totals ? (st.totals[c] || {}).dr || 0 : rows.reduce(function (s, x) { return s + x.debit; }, 0)) + '</td><td>' + _glFmtN_(st.totals ? (st.totals[c] || {}).cr || 0 : rows.reduce(function (s, x) { return s + x.credit; }, 0)) + '</td><td>' + bal((st.closing || {})[c] || 0) + '</td></tr></table>';
+  });
+  html += '</body></html>';
+  var name = ('كشف حساب ' + a.name).replace(/[\\/:*?"<>|]/g, '-') + '.pdf';
+  return Utilities.newBlob(html, 'text/html', 'st.html').getAs('application/pdf').setName(name);
+}
+// 🖼️ PDF ⇒ صورة عالية الدقة للصفحة الأولى (صورة المعاينة من جوجل درايف بدقة 1600px)
+function _glPdfToPng_(pdf) {
+  var f = null;
+  try {
+    f = getDriveFolder_('TEMP').createFile(pdf);
+    var tok = ScriptApp.getOAuthToken(), link = '';
+    for (var i = 0; i < 8 && !link; i++) {
+      if (i) Utilities.sleep(1500);
+      var r = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + f.getId() + '?fields=thumbnailLink', { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
+      try { link = JSON.parse(r.getContentText()).thumbnailLink || ''; } catch (e) {}
+    }
+    if (!link) return null;
+    var img = UrlFetchApp.fetch(link.replace(/=s\d+$/, '') + '=s1600', { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
+    if (img.getResponseCode() !== 200) return null;
+    return img.getBlob().setName(pdf.getName().replace(/\.pdf$/i, '') + '.png');
+  } catch (e) { Logger.log('_glPdfToPng_: ' + e.message); return null; }
+  finally { try { if (f) f.setTrashed(true); } catch (e2) {} }
+}
+// 🔗 بوت حسابات مستقل: ويب هوك خاص (?glbot=<سر>) — بلا أي محتوى بالرد (تليجرام يرفض تحويل 302)
+function glBotWebhook_(e) {
+  try {
+    var sec = PropertiesService.getScriptProperties().getProperty('GLBOT_HOOK') || '';
+    if (!sec || String(e.parameter.glbot) !== sec) return;
+    var upd = JSON.parse(e.postData.contents || '{}');
+    try { var cc = CacheService.getScriptCache(), uk = 'glbot_u_' + upd.update_id; if (upd.update_id && cc.get(uk)) return; if (upd.update_id) cc.put(uk, '1', 600); } catch (eU) {}
+    if (upd.callback_query) { if (!glBotCallback_(upd.callback_query)) _glBotAns_(upd.callback_query.id, ''); return; }
+    if (upd.message && upd.message.text) glBotHandle_(upd.message, { own: true });
+  } catch (err) { Logger.log('glBotWebhook_: ' + err.message); }
+}
+function glBotSetWebhook(authToken) {
+  _glAdminPerm_(authToken);
+  var P = PropertiesService.getScriptProperties();
+  if (!P.getProperty('GLBOT_TOKEN')) throw new Error('احفظ توكن بوت الحسابات المستقل أولاً');
+  var sec = P.getProperty('GLBOT_HOOK'); if (!sec) { sec = Utilities.getUuid().replace(/-/g, '').slice(0, 24); P.setProperty('GLBOT_HOOK', sec); }
+  var base = '';
+  try { base = typeof tgExecBase_ === 'function' ? tgExecBase_(P.getProperty(typeof TG_PROP_HOOKURL_ !== 'undefined' ? TG_PROP_HOOKURL_ : 'x') || '') : ''; } catch (e) {}
+  if (!/^https:/.test(base)) base = ScriptApp.getService().getUrl();
+  var url = base + '?glbot=' + sec;
+  _glBotApi_('setWebhook', { url: url, allowed_updates: JSON.stringify(['message', 'callback_query']), drop_pending_updates: 'true', max_connections: '5' });
+  try { _glBotApi_('setMyCommands', { commands: JSON.stringify(GLBOT_CMDS_.map(function (x) { return { command: x[1].slice(1), description: x[3].slice(0, 60) }; })) }); } catch (eC) {}
+  return { success: true, url: url.replace(sec, '•••') };
+}
+// 👜 (V4.261) صفوف شيتات العهد الناقصة (طرف غير معروف/بيانات ناقصة) بتليجرام: كل صف برسالة وأزرار الحسابات المقترحة
+// + «✏️ حساب آخر» (اكتب اسمه) — الاختيار يعتمد الصف فوراً ويكتب رقم القيد بالشيت، تماماً كشاشة العهد
+function _glCsCodes_() { var set = _glSettings_(); return Object.keys(set).filter(function (k) { return k.indexOf('custsheet:') === 0; }).map(function (k) { return k.slice(10); }); }
+function _glBotCsxSend_(chatId, onlyCode, rowsIn) {
+  var accM = _glAccounts_().map, sent = 0;
+  (onlyCode ? [onlyCode] : _glCsCodes_()).forEach(function (code) {
+    var rows = rowsIn;
+    if (!rows) { try { rows = _glCsSync_(code, 'تليجرام', { preview: true }).pending; } catch (e) { _glBotSend_(chatId, '⚠️ ' + _glBotEsc_((accM[code] || {}).name || code) + ': ' + _glBotEsc_(e.message)); return; } }
+    (rows || []).slice(0, 10).forEach(function (x) {
+      var kb = [], row = [];
+      (x.sugg || []).slice(0, 3).forEach(function (sg) { row.push(_glBtn_('✅ ' + String(sg.name).slice(0, 28), 'gl:cs:' + code + ':' + x.row + ':' + sg.code, 'success')); if (row.length === 2) { kb.push(row); row = []; } });
+      row.push(_glBtn_('✏️ حساب آخر', 'gl:cs:' + code + ':' + x.row + ':?', 'primary')); kb.push(row);
+      _glBotSend_(chatId, '👜 <b>' + _glBotEsc_((accM[code] || {}).name || code) + '</b> — صف ' + x.row + '\n📅 ' + _glBotEsc_(x.date || '—') +
+        (x.inAmt ? ' · وارد ' + _glFmtN_(x.inAmt) : '') + (x.outAmt ? ' · منصرف ' + _glFmtN_(x.outAmt) : '') + '\n📝 ' + _glBotEsc_(x.desc || '—') +
+        '\n🏷️ الطرف بالشيت: <b>' + _glBotEsc_(x.hint || '— فارغ —') + '</b>' + (x.msg ? '\n⚠️ ' + _glBotEsc_(x.msg) : '') + '\nاختر الحساب الصحيح:', { inline_keyboard: kb });
+      sent++;
+    });
+  });
+  if (!sent) _glBotSend_(chatId, '✅ لا توجد صفوف عهد ناقصة الآن.');
+}
+function _glBotCsxCb_(cq, chatId, msgId, who, arg) {
+  var p = arg.split(':'), code = p[0], row = +p[1], acc = p[2];
+  if (!who || !(_sessionHasPerm_(who, 'admin') || _sessionHasPerm_(who, 'gl.edit'))) { _glBotAns_(cq.id, '⛔ اعتماد صفوف العهدة يحتاج موظفاً مربوطاً بالبوت لديه صلاحية تعديل الحسابات', true); return; }
+  if (acc === '?') {
+    try { CacheService.getScriptCache().put('glbot_ask_' + chatId + '_' + (cq.from.id || ''), 'csfix|' + code + '|' + row, 600); } catch (e) {}
+    _glBotAns_(cq.id, '');
+    _glBotSend_(chatId, '✍️ اكتب اسم الحساب الصحيح لصف ' + row + ' (أو جزءاً منه أو كوده):', { force_reply: true, selective: true });
+    return;
+  }
+  _glBotAns_(cq.id, '⏳ جارٍ الاعتماد…');
+  var r = _glBotCsApprove_(code, row, acc, who.username);
+  _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n' + r);
+}
+function _glBotCsApprove_(code, row, acc, user) {
+  var a = _glAccounts_().map[acc]; if (!a || a.isGroup) return '⚠️ الحساب غير صالح';
+  var lock = _glLock_(); lock.waitLock(30000);
+  try {
+    var pick = {}; pick[row] = acc;
+    var out = _glCsSync_(code, user, { approve: pick });
+    var hit = (out.created || []).filter(function (x) { return +x.row === +row; })[0];
+    if (hit) return '✅ <b>قُيِّد</b> على «' + _glBotEsc_(a.name) + '» — ' + _glBotEsc_(hit.id) + ' (بواسطة ' + _glBotEsc_(user) + ')';
+    var pr = (out.problems || []).filter(function (x) { return +x.row === +row; })[0];
+    return pr ? '⚠️ ' + _glBotEsc_(pr.msg) : 'ℹ️ الصف لم يعد بانتظار الاعتماد (قُيِّد أو تغيّر)';
+  } catch (e) { return '⚠️ ' + _glBotEsc_(e.message); }
+  finally { _glUnlock_(lock); }
 }
 function _glBotUserCanGl_(username) {
   try {
@@ -5609,7 +5891,7 @@ function _glBotRun_(k, arg, inGroup) {
     var hits = _glBotFindAcc_(arg);
     if (!hits.length) return '🔎 لا يوجد حساب يطابق «' + E(arg) + '».';
     if (hits.length > 1) return '🔎 أكثر من حساب — أعد الأمر بالكود:\n' + hits.map(function (a) { return '<code>' + E(a.code) + '</code> ' + E(a.name); }).join('\n');
-    var a = hits[0];
+    var a = hits[0]; _glBotLastAcc_ = a.code;
     if (k === 'bal') return '📊 <b>' + E(a.name) + '</b> (' + E(a.code) + ')\nالرصيد: ' + _glBotBalTxt_(_glBalances_(null)[a.code]);
     var st = _glStmtCore_(a.code, '', '', (function () { var cx = _glStmtCtxFor_(a.code); cx.skipHb = true; return cx; })());
     var rows = st.rows.slice(-15), lbl = { EGP: 'ج', SAR: 'ر', USD: '$' };

@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.260";
+var APP_VERSION = "4.261";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -7840,6 +7840,8 @@ function doPost(e) {
   var chatId = null; // مُعرَّف مبكرًا حتى يكون متاحًا في catch مهما كان موضع الخطأ
   // 🏨 (V4.211-H4) بوت برنامج الحجوزات: رابط الويب هوك الخاص به يحمل سرّه في ?tghook= — يُعالَج هناك كما هو
   if (e && e.parameter && e.parameter.tghook) return hbDoPost_(e);
+  // 📒 (V4.261) بوت الحسابات المستقل (اختياري): رابط الويب هوك الخاص به يحمل سرّه في ?glbot=
+  if (e && e.parameter && e.parameter.glbot) { if (typeof glBotWebhook_ === 'function') glBotWebhook_(e); return; }
   try {
     var update = JSON.parse(e.postData.contents);
     var token = TELEGRAM_CONFIG.token;

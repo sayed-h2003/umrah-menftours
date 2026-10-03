@@ -1299,6 +1299,7 @@
   html.hb-embed #page-payments button[onclick*="Modal"] { display:none !important; }   /* كل المدفوعات: عرض فقط */
   html.hb-embed .app-nav { padding-top:4px !important; padding-bottom:4px !important; }
   html.hb-sec .app-nav, html.hb-sec .hb-back-umrah { display:none !important; }
+  html.hb-sec #page-settings details.hb-sec-off { display:none !important; }
   html.hb-sec #page-settings .shell { padding-top:4px !important; }
   #hbEmbedLoad { position:fixed; inset:0; z-index:2147483000; background:#f4f6f9; display:grid; place-items:center; font-family:'Cairo','Tajawal',Tahoma,sans-serif; direction:rtl; }
   #hbEmbedLoad .hbel-box { display:grid; gap:10px; justify-items:center; color:#1e3d59; font-weight:700; text-align:center; max-width:420px; padding:0 16px; }
@@ -3087,13 +3088,18 @@ if (HB_EMBED) {
     try { document.documentElement.classList.add('hb-sec'); } catch (eS) {}
     document.addEventListener('DOMContentLoaded', function () {
       var pg = document.getElementById('page-settings'); if (!pg) return;
-      var bot = /تليجرام/, gone = /شيتات العهدة|مدة الجلسة/;
-      Array.prototype.forEach.call(pg.querySelectorAll('details'), function (d) {
-        if (d.parentElement && d.parentElement.closest('details')) return;
-        var sm = d.querySelector('summary'), t = sm ? sm.textContent : '';
-        var show = HB_SEC === 'bot' ? bot.test(t) : (!bot.test(t) && !gone.test(t));
-        d.style.display = show ? '' : 'none';
-      });
+      // (V4.261) الإخفاء بفئة CSS ثابتة (!important) لا بـ style.display — برنامج الحجوزات يعيد إظهار أقسام «مدير فقط»
+      // بعد التحقق من الدور فكانت أقسام تليجرام تظهر مكررة داخل «إعدادات الفنادق» أيضاً
+      var bot = /تليجرام|بوت|قراءة تأكيدات/, gone = /شيتات العهدة|مدة الجلسة/;
+      var apply = function () {
+        Array.prototype.forEach.call(pg.querySelectorAll('details'), function (d) {
+          if (d.parentElement && d.parentElement.closest('details')) return;
+          var sm = d.querySelector('summary'), t = sm ? sm.textContent : '';
+          var show = HB_SEC === 'bot' ? bot.test(t) : (!bot.test(t) && !gone.test(t));
+          d.classList.toggle('hb-sec-off', !show);
+        });
+      };
+      apply(); setTimeout(apply, 1500); setTimeout(apply, 5000);
     });
   }
   window.addEventListener('message', function (ev) {
