@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.258 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.259 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.258)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.259)', diag);
 }, 6000);
 </script>
 
@@ -1505,9 +1505,13 @@ input[type="date"]:not(:focus):not(:valid) {
       <button id="sidebarToggleBtn" class="btn btn-sm btn-outline-light" type="button" onclick="toggleAppSidebar()" style="padding: 4px 10px;" title="إظهار/إخفاء القائمة">
         <i class="fas fa-bars"></i>
       </button>
+      <!-- ↩️ (V4.259) رجوع للشاشة السابقة (يتذكر آخر 30 تنقلاً بين الشاشات وتبويبات الحسابات العامة) -->
+      <button id="navBackBtn" class="btn btn-sm btn-outline-light" type="button" onclick="navBack_()" style="padding:3px 9px;display:none;font-size:12px;border-radius:999px;" title="رجوع للشاشة السابقة">
+        <i class="fas fa-arrow-right"></i> <span id="navBackLbl" class="d-none d-md-inline" style="font-size:11px;"></span>
+      </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.258</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.259</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1585,8 +1589,8 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <ul class="dropdown-menu dropdown-menu-end shadow-sm">
         <li><h6 class="dropdown-header py-1">🏠 الشاشة الرئيسية عند الفتح</h6></li>
-        <li><a class="dropdown-item small" href="#" id="homeOptEntry" onclick="_setHomeScreenPref('entry'); return false;"><span class="home-opt-check">✓</span> 📋 سجل إشعارات الوصول</a></li>
-        <li><a class="dropdown-item small" href="#" id="homeOptTrips" onclick="_setHomeScreenPref('trips'); return false;"><span class="home-opt-check">✓</span> 🧳 الرحلات</a></li>
+        <!-- 🏠 (V4.259) أي شاشة بالقائمة الجانبية (تُبنى من القائمة نفسها حسب الصلاحيات) -->
+        <li><div id="homeOptList" style="max-height:300px;overflow:auto;"></div></li>
         <li><hr class="dropdown-divider"></li>
         <li><a class="dropdown-item" href="#" onclick="showChangeMyPasswordModal(); return false;">🔑 تغيير كلمة المرور</a></li>
         <li><hr class="dropdown-divider"></li>
@@ -1625,6 +1629,10 @@ input[type="date"]:not(:focus):not(:valid) {
     </a>
     <a id="link-entry-side" class="nav-link smart-action active px-3 py-2 rounded" onclick="switchPage('entry'); closeAppSidebarOnMobile();">
       <i class="fas fa-plane-departure me-2 text-info"></i> إشعار الوصول
+    </a>
+    <!-- (V4.259) نُقلت لقسم العمرة -->
+    <a id="link-search-side" class="nav-link smart-action px-3 py-2 rounded" onclick="switchPage('search'); closeAppSidebarOnMobile();">
+      <i class="fas fa-search me-2 text-info"></i> الفرز والبحث
     </a>
     <!-- 🏛️ (V4.106) مراجعة ملفات الوزارة -->
     <a id="link-ministry-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('ministry'); closeAppSidebarOnMobile();">
@@ -1669,9 +1677,6 @@ input[type="date"]:not(:focus):not(:valid) {
     <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','stmt'); closeAppSidebarOnMobile();"><i class="fas fa-file-lines me-2"></i>كشف حساب</a>
     <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','reports'); closeAppSidebarOnMobile();"><i class="fas fa-chart-pie me-2"></i>التقارير والميزان</a>
     <div class="side-grp g-admin">⚙️ الإدارة</div>
-    <a id="link-search-side" class="nav-link smart-action px-3 py-2 rounded" onclick="switchPage('search'); closeAppSidebarOnMobile();">
-      <i class="fas fa-search me-2 text-info"></i> الفرز والبحث
-    </a>
     <a id="link-auditLog-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('auditLog'); closeAppSidebarOnMobile();">
       <i class="fas fa-history me-2 text-warning"></i> سجل التعديلات
     </a>
@@ -5493,7 +5498,9 @@ input[type="date"]:not(:focus):not(:valid) {
     <h5>📒 الحسابات العامة</h5><small style="opacity:.8;">الدفتر العام بالقيد المزدوج — جنيه / ريال / دولار</small>
     <span style="flex:1;"></span>
     <!-- 💰 (V4.226) الانتقال لحسابات عملاء العمرة (لنفس العميل لو كشفه مفتوح) -->
-    <button class="btn btn-outline-light btn-sm fw-bold" id="glGoAccBtn" onclick="glGoClientAcc_()" title="شاشة حسابات عملاء العمرة — تفتح على العميل الحالي لو كشف حسابه مفتوح">💰 حسابات العملاء</button>
+    <button class="btn btn-outline-light btn-sm fw-bold" id="glGoAccBtn" onclick="glGoClientAcc_()" title="شاشة حسابات عملاء العمرة — تفتح على العميل الحالي لو كشف حسابه مفتوح">💰 حسابات عملاء العمرة</button>
+    <!-- 🏨 (V4.259) كشوف حسابات عملاء الفنادق ببرنامج الحجوزات -->
+    <button class="btn btn-outline-light btn-sm fw-bold" id="glGoHbAccBtn" onclick="glGoHotelAcc_()" title="كشف حساب عملاء الفنادق والحجوزات">🏨 حسابات عملاء الفنادق</button>
     <!-- ➕ (V4.255) كل السندات والقيود من قائمة واحدة بدل 5 أزرار -->
     <div id="glActs" class="d-none" style="position:relative;">
       <button class="btn btn-warning btn-sm fw-bold" onclick="glNewMenu_(event)">➕ جديد ▾</button>
@@ -5515,7 +5522,7 @@ input[type="date"]:not(:focus):not(:valid) {
     <span class="gl-tab" data-t="banks" onclick="glTab('banks')">🏛️ البنوك</span>
     <span class="gl-tab" data-t="custody" onclick="glTab('custody')">👜 العهد</span>
     <span class="gl-tab" data-t="entries" onclick="glTab('entries')">🧾 القيود</span>
-    <span class="gl-tab" data-t="stmt" onclick="glTab('stmt')">📒 كشف حساب</span>
+    <span class="gl-tab" data-t="stmt" onclick="glStNew_()">📒 كشف حساب</span>
     <span class="gl-tab" data-t="reports" onclick="glTab('reports')">📊 التقارير</span>
     <span class="gl-tab" data-t="auto" onclick="glTab('auto')">🤖 التلقائية <span id="glAutoTabBadge" class="badge rounded-pill bg-danger" style="display:none;font-size:10px;"></span></span>
     <span class="gl-tab" data-t="hotels" onclick="glTab('hotels')">🏨 ربط الحجوزات</span>
@@ -6161,6 +6168,29 @@ window._ccDbg_ = function() {}; // بديل صامت لبقايا استدعاء
 </script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ar.js"></script>
+<script>
+/* 📅 (V4.259) التقويم لا يفتح تلقائياً عند فتح نموذج قيد/تعديل (كان يفتح مع أي تركيز على خانة التاريخ) —
+   يفتح فقط بالضغط على الخانة نفسها أو على أيقونة التقويم المجاورة. الكتابة اليدوية بالخانة كما هي */
+(function () {
+  if (!window.flatpickr || window.flatpickr.__clickOnly) return;
+  var orig = window.flatpickr;
+  var wrap = function (sel, cfg) {
+    cfg = Object.assign({}, cfg || {});
+    if (cfg.inline) return orig(sel, cfg);
+    var user = cfg.clickOpens; cfg.clickOpens = false;
+    var res = orig(sel, cfg);
+    if (user !== false) [].concat(res || []).forEach(function (fp) {
+      var el = fp && (fp.altInput || fp._input); if (!el || el.__fpClick) return;
+      el.__fpClick = 1;
+      el.addEventListener('click', function () { if (!el.disabled) fp.open(); });
+    });
+    return res;
+  };
+  Object.keys(orig).forEach(function (k) { wrap[k] = orig[k]; });
+  wrap.__clickOnly = true;
+  window.flatpickr = wrap;
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <!-- 🎨 (V4.123) ExcelJS — يكتب تنسيقاً فعلياً (ألوان/خطوط/حدود) داخل ملف الإكسيل، بخلاف نسخة
      SheetJS المجانية التي تتجاهل أي تنسيق عند الكتابة (Pro-only) — يُستخدم فقط لتصدير ملفات
@@ -6965,7 +6995,7 @@ function _sideGroupsSync_() {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run); else run();
 })();
 function sideGo_(page, sub) {
-  if (page === 'gl') { if (typeof GL !== 'undefined') GL.tab = sub; switchPage('gl'); return; }   // glInit(true) يفتح GL.tab
+  if (page === 'gl') { if (typeof GL !== 'undefined') { GL.tab = sub; if (sub === 'stmt') { GL._stCode = ''; GL._st = null; } } switchPage('gl'); return; }   // glInit(true) يفتح GL.tab
   if (page === 'hotels') { if (typeof HBX !== 'undefined') { HBX.page = sub; try { localStorage.setItem('hbx_page', sub); } catch (e) {} } switchPage('hotels'); if (typeof hbxShow === 'function') setTimeout(function () { hbxShow(sub); }, 0); return; }
   switchPage(page);
 }
@@ -7020,43 +7050,44 @@ function _homeScreenKey_() {
   return 'smartHomeScreen_' + u;
 }
 function _getHomeScreenPref() {
-  try {
-    var v = localStorage.getItem(_homeScreenKey_());
-    return (v === 'trips') ? 'trips' : 'entry';
-  } catch (e) { return 'entry'; }
+  try { return localStorage.getItem(_homeScreenKey_()) || 'entry'; } catch (e) { return 'entry'; }
+}
+// (V4.259) خيارات الشاشة الرئيسية = كل روابط القائمة الجانبية الظاهرة للمستخدم: صفحة ('trips') أو شاشة فرعية ('gl:treasury')
+function _homeOpts_() {
+  var out = [];
+  document.querySelectorAll('#appSidebar a.nav-link').forEach(function (a) {
+    if (a.classList.contains('d-none')) return;
+    var oc = a.getAttribute('onclick') || '', m = oc.match(/sideGo_\('(\w+)','(\w+)'\)/), k = '';
+    if (m) { var par = document.getElementById(a.getAttribute('data-parent') || ''); if (par && par.classList.contains('d-none')) return; k = m[1] + ':' + m[2]; }
+    else { var m2 = oc.match(/switchPage\('(\w+)'\)/); if (m2) k = m2[1]; }
+    if (k) out.push({ k: k, t: (a.textContent || '').replace(/\s+/g, ' ').trim(), sub: !!m });
+  });
+  return out;
 }
 function _setHomeScreenPref(val) {
-  var pref = (val === 'trips') ? 'trips' : 'entry';
-  // لا تسمح باختيار "الرحلات" لمن لا يملك صلاحيتها
-  if (pref === 'trips' && !hasPermission('trips')) {
-    alert('لا تملك صلاحية الوصول لشاشة الرحلات.');
-    return false;
-  }
-  try { localStorage.setItem(_homeScreenKey_(), pref); } catch (e) {}
+  var ok = val === 'entry' || _homeOpts_().some(function (o) { return o.k === val; });
+  if (!ok) { alert('لا تملك صلاحية الوصول لهذه الشاشة.'); return false; }
+  try { localStorage.setItem(_homeScreenKey_(), val); } catch (e) {}
   _refreshHomeScreenMenu();
-  // تطبيق فوري: انتقل للشاشة المختارة الآن
   _applyHomeScreen();
   return false;
 }
 function _applyHomeScreen() {
-  var pref = _getHomeScreenPref();
-  if (pref === 'trips' && hasPermission('trips')) {
-    if (typeof switchPage === 'function') switchPage('trips');
-  } else {
-    resetToDefaultScreen();
-  }
+  var pref = _getHomeScreenPref(), ok = pref !== 'entry' && _homeOpts_().some(function (o) { return o.k === pref; });
+  if (!ok) return resetToDefaultScreen();
+  var p = pref.split(':');
+  if (p[1] && typeof sideGo_ === 'function') sideGo_(p[0], p[1]);
+  else if (typeof switchPage === 'function') switchPage(p[0]);
 }
+document.addEventListener('show.bs.dropdown', function (e) { try { if (e.target && e.target.closest && e.target.closest('.dropdown') && e.target.closest('.dropdown').querySelector('#homeOptList')) _refreshHomeScreenMenu(); } catch (x) {} });
 function _refreshHomeScreenMenu() {
+  var box = document.getElementById('homeOptList'); if (!box) return;
   var pref = _getHomeScreenPref();
-  var optEntry = document.getElementById('homeOptEntry');
-  var optTrips = document.getElementById('homeOptTrips');
-  if (optEntry) optEntry.classList.toggle('home-opt-selected', pref === 'entry');
-  if (optTrips) {
-    // أخفِ خيار "الرحلات" لمن لا يملك صلاحيتها
-    var canTrips = hasPermission('trips');
-    optTrips.parentElement.style.display = canTrips ? '' : 'none';
-    optTrips.classList.toggle('home-opt-selected', pref === 'trips' && canTrips);
-  }
+  box.innerHTML = _homeOpts_().map(function (o) {
+    var sel = o.k === pref || (o.k === 'entry' && !_homeOpts_().some(function (x) { return x.k === pref; }));
+    return '<a class="dropdown-item small' + (sel ? ' fw-bold' : '') + '" href="#" style="' + (o.sub ? 'padding-right:28px;font-size:11.5px;' : '') + '" onclick="_setHomeScreenPref(\'' + o.k + '\'); return false;">' +
+      '<span style="display:inline-block;width:14px;color:#16a34a;font-weight:700;">' + (sel ? '✓' : '') + '</span> ' + o.t.replace(/[<>&]/g, '') + '</a>';
+  }).join('');
 }
 
 function handleLogin(e) {
@@ -7686,7 +7717,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.258";
+var CLIENT_APP_VERSION = "4.259";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -12533,7 +12564,7 @@ function _tripsRenderList_(trips) {
         };
         var bookingChipLabel = (rd.booking && t.linkedBookingId) ? ('إشعار #' + t.linkedBookingId) : 'إشعار';
         var readinessHtml = chip(rd.manifest, 'كشف') + ' ' + chip(rd.housing, 'تسكين') + ' ' +
-          chip(rd.booking, bookingChipLabel) + ' ' + chip(rd.ticket, 'تذكرة') + ' ' + _mfTripChip_(t) + ' ' + _vzTripChip_(t);
+          chip(rd.booking, bookingChipLabel) + ' ' + chip(rd.ticket || !!t.ticketUrl, '🎫 تذكرة') + ' ' + _mfTripChip_(t) + ' ' + _vzTripChip_(t);
 
         // المقاعد المشغولة = القيمة المحسوبة سيرفرياً بنفس منطق الكشف (تطابق العدد في العمود)
         var used = (t.seatsOccupied !== undefined) ? t.seatsOccupied : (t.pilgrimCount - (t.infantCount || 0));
@@ -47618,10 +47649,22 @@ function glGoClientAcc_() {
   if (a && a.link) return _accOpenByName_(a.link);
   switchPage('accounts');
 }
+function glGoHotelAcc_() {
+  var l = document.getElementById('link-hotels-side');
+  if (!l || l.classList.contains('d-none')) return _showPopup('لا تملك صلاحية شاشة الفنادق والحجوزات', 'warning');
+  sideGo_('hotels', 'statement');
+}
 function accGoGl_() {
   var back = window._accFromGl;
   switchPage('gl');
   if (back && window.GL && GL.ready) setTimeout(function () { glOpenStatement(back); }, 50);
+}
+// (V4.259) فتح «كشف حساب» من التبويب/القائمة يبدأ فارغاً حتى يُختار الحساب (لا يُحمَّل آخر حساب تلقائياً)
+function glStNew_() { GL._stCode = ''; GL._st = null; GL._stCf = {}; GL._stQ = ''; glTab('stmt'); }
+function glStRefresh_(btn) {
+  var code = GL._stCode; if (!code) return;
+  GL._stCache = {}; if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  glLoadStmt(true);
 }
 function glOpenStatement(code) { GL._stCode = code; GL._stCf = {}; GL._stQ = ''; GL._stCurs = null; GL._stRun = null; glTab('stmt'); }
 // (V4.226) لا شريط علوي منفصل: اختيار الحساب (بحث تنبؤي) والفترة داخل رأس الكشف نفسه — الافتراضي من البداية بلا تواريخ
@@ -47702,6 +47745,7 @@ function glDrawStmt() {
     pill('🔢 ' + E(a.code)) + pill('🏷️ ' + E(glStRoleLbl_(res))) + (a.parentName ? pill('📂 ' + E(a.parentName)) : '') + (a.link && a.link !== a.name ? pill('🔗 ' + E(a.link)) : '') +
     (res.pending ? pill('⏳ ' + res.pending + ' بانتظار الاعتماد', 'w') : '') + '</div></div>' +
     '<div class="gl-sthact">' + (GL.can.edit ? '<button class="gl-sthb" title="تعديل بيانات الحساب" onclick="glAccForm(null,\'' + glJs(a.code) + '\')">✏️</button>' : '') +
+    '<button class="gl-sthb" title="تحديث الكشف من الخادم (بعد تعديلات من شاشات أو أجهزة أخرى)" onclick="glStRefresh_(this)">🔄</button>' +
     '<button class="gl-sthb" title="الأعمدة والعرض" onclick="glStGear_()">⚙️</button>' +
     '<button class="gl-sthb gold" onclick="glStOutDlg()">🖨️ طباعة · PDF · صورة · Excel</button></div></div>';
   // شريط الفترة + العرض + العملات + البحث — داخل الكشف نفسه
@@ -50528,6 +50572,54 @@ function glSaveSettingsUI(btn) {
   }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
 }
 
+
+/* ↩️ (V4.259) سجل تنقل بسيط لزر «رجوع»: كل switchPage وكل تبويب بالحسابات العامة يُسجَّل، والرجوع يعيد السابق */
+(function () {
+  var ST = [], busy = false, cur = null;
+  var LBL = function (st) {
+    if (!st) return '';
+    var a = document.getElementById('link-' + st.p + '-side');
+    var t = a ? (a.textContent || '').replace(/\s+/g, ' ').trim() : st.p;
+    if (st.p === 'gl' && st.t) { var tb = document.querySelector('#glTabs .gl-tab[data-t="' + st.t + '"]'); if (tb) t = (tb.textContent || '').trim(); }
+    return t.slice(0, 22);
+  };
+  var paint = function () {
+    var b = document.getElementById('navBackBtn'); if (!b) return;
+    b.style.display = ST.length ? '' : 'none';
+    var l = document.getElementById('navBackLbl'); if (l) l.textContent = ST.length ? LBL(ST[ST.length - 1]) : '';
+  };
+  var push = function (next) {
+    if (busy) { cur = next; return; }
+    if (cur && !(cur.p === next.p && cur.t === next.t)) { ST.push(cur); if (ST.length > 30) ST.shift(); }
+    cur = next; paint();
+  };
+  if (typeof window.switchPage === 'function') {
+    var sp = window.switchPage;
+    window.switchPage = function (page) {
+      var r = sp.apply(this, arguments);
+      try { push({ p: page, t: page === 'gl' && window.GL ? GL.tab : '' }); } catch (e) {}
+      return r;
+    };
+  }
+  if (typeof window.glTab === 'function') {
+    var gt = window.glTab;
+    window.glTab = function (t) {
+      var r = gt.apply(this, arguments);
+      try { if (cur && cur.p === 'gl') push({ p: 'gl', t: t, code: t === 'stmt' && window.GL ? GL._stCode : '' }); } catch (e) {}
+      return r;
+    };
+  }
+  window.navBack_ = function () {
+    var st = ST.pop(); if (!st) return paint();
+    busy = true;
+    try {
+      if (st.p === 'gl') {
+        if (window.GL) { GL.tab = st.t || GL.tab; if (st.t === 'stmt' && st.code) GL._stCode = st.code; }
+        if (cur && cur.p === 'gl' && typeof glTab === 'function') glTab(st.t || 'home'); else switchPage('gl');
+      } else switchPage(st.p);
+    } finally { busy = false; cur = st; paint(); }
+  };
+})();
 </script>
 </body>
 </html>

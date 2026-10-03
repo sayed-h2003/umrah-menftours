@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.258";
+var APP_VERSION = "4.259";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -13340,7 +13340,7 @@ function getTripsList(authToken) {
   }
 
   // ربط الإشعارات: هل يوجد إشعار مرتبط بالرحلة (عمود اسم الرحلة) وهل عليه تذكرة مرفوعة
-  var bookingFlags = {}, ticketFlags = {}, bookingIds = {}, bookingRetDates = {}, bookingCounts = {};
+  var bookingFlags = {}, ticketFlags = {}, bookingIds = {}, bookingRetDates = {}, bookingCounts = {}, ticketById = {};
   var bSheet = getSpreadsheet_().getSheetByName("Bookings");
   if (bSheet && bSheet.getLastRow() >= 2) {
     var bLastCol = bSheet.getLastColumn();
@@ -13359,7 +13359,7 @@ function getTripsList(authToken) {
         if (!tName) return;
         bookingFlags[tName] = true;
         if (idCol !== -1 && br[idCol]) bookingIds[tName] = String(br[idCol]);
-        if (ticketCol !== -1 && String(br[ticketCol] || "").trim()) ticketFlags[tName] = true;
+        if (ticketCol !== -1 && String(br[ticketCol] || "").trim()) { ticketFlags[tName] = true; if (idCol !== -1 && br[idCol]) ticketById[String(br[idCol]).trim()] = true; }
         if (depDateCol !== -1 && br[depDateCol]) {
           var _brd = _tripFormatDate_(br[depDateCol]);
           if (_brd) bookingRetDates[tName] = _brd;
@@ -13461,7 +13461,9 @@ function getTripsList(authToken) {
         manifest: pilgrimCount > 0,
         housing: !!housingFlags[name],
         booking: !!bookingFlags[name] || !!_linked.trim(),
-        ticket: !!ticketFlags[name]
+        // 🎫 (V4.259) تذكرة/برنت مرفوع بالرحلة نفسها أو بأي إشعار مرتبط بها (بالاسم أو برقم الإشعار المرتبط)
+        ticket: !!ticketFlags[name] || !!String(T(r, 'ticketUrl') || '').trim() ||
+          String(_linked || '').split(/[,،\s]+/).some(function (x) { return x && ticketById[x.trim()]; })
       }
     });
   }
