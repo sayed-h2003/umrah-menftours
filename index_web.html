@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.257 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.258 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.257)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.258)', diag);
 }, 6000);
 </script>
 
@@ -1507,7 +1507,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.257</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.258</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7686,7 +7686,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.257";
+var CLIENT_APP_VERSION = "4.258";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -50066,6 +50066,20 @@ function glHbCashOpts(sel) {
   (H.accounts || []).forEach(function (a) { if (!a.isGroup && /^(safe|bank|custody|agent)$/.test(a.kind)) out.push([a.code, a.name, a.currency]); });
   return out.map(function (o) { return '<option value="' + glEsc(o[0]) + '" data-cur="' + glEsc(o[2]) + '"' + (o[0] === sel ? ' selected' : '') + '>' + glEsc(o[0] + ' — ' + o[1] + (o[2] ? ' (' + o[2] + ')' : '')) + '</option>'; }).join('');
 }
+// 🔁 (V4.258) الحساب المقابل للدفعة: أي حساب فرعي بالدليل (بحث تنبؤي) — لا الخزائن/البنوك فقط
+function glHbCashCell_(p, v) {
+  var a = GL.map[v.cash], r = (GL.hb.roles || {}), isSusp = r.hb_cash && v.cash === r.hb_cash.code;
+  return '<input class="form-control form-control-sm" list="glHbAccDL" style="min-width:210px;font-size:11px;' + (isSusp ? 'border-color:#f59e0b;background:#fffbeb;' : '') + '" placeholder="اختر الحساب المقابل"' +
+    ' value="' + glEsc(a ? a.code + ' — ' + a.name + (a.currency && a.currency !== 'SAR' ? ' (' + a.currency + ')' : '') : (v.cash || '')) + '" onchange="glHbCashSet_(\'' + glJs(p.id) + '\',this)">';
+}
+function glHbCashSet_(id, inp) {
+  var v = (inp.value || '').trim(), c = v.split(' — ')[0].trim(), a = GL.map[c];
+  if (v && (!a || a.isGroup)) { showToast('اختر حساباً فرعياً من القائمة', true); inp.value = ''; return; }
+  var p = GL.hb.pays.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+  glHbPaySet(id, 'cash', c);
+  var e = GL._hbPEdit[id], cur = a && a.currency;
+  if (e && cur && cur !== e.cur) { e.cur = cur; e.amount = cur === 'SAR' ? p.amount : ''; var tr = document.querySelector('#glHbPayT tr[data-id="' + CSS.escape(id) + '"]'); if (tr) tr.outerHTML = glHbPayRow(p); }
+}
 function glHbPayCur(p) { return GL._hbPEdit[p.id] || (p.rev ? { cash: p.rev.cash, cur: p.rev.cur, amount: p.rev.amount, party: p.rev.party || '' } : null); }
 // 🔁 (V4.225) حساب الطرف قابل للتغيير بالمراجعة أيضاً (بحث تنبؤي بكل حسابات الدليل الفرعية)
 function glHbPartyDL_() {
@@ -50092,8 +50106,8 @@ function glHbPayRow(p) {
     '<td class="gl-latin small">' + glEsc(p.date) + '</td><td style="text-align:right;">' + glHbPartyCell_(p, e) + '</td>' +
     '<td class="small" style="color:' + (cr ? '#166534' : '#b91c1c') + ';">' + glEsc(p.dir) + '</td><td class="gl-latin fw-bold">' + glFmt(p.amount) + '</td>' +
     '<td class="small" style="text-align:right;max-width:260px;">' + glEsc(p.note) + '</td><td class="gl-latin small">' + glEsc(p.qaid || '') + '</td><td class="gl-latin small">' + (p.entry ? '<b>' + glEsc(p.entry) + '</b>' : '—') + '</td>' +
-    (p.linkId ? '<td colspan="3" class="small text-muted">قيد واحد بين طرفي الدفعة المرتبطة</td>' :
-    '<td style="min-width:210px;"><select class="form-select form-select-sm" onchange="glHbPaySet(\'' + glJs(p.id) + '\',\'cash\',this.value,this)">' + glHbCashOpts(v.cash) + '</select>' +
+    (p.linkId ? '<td colspan="3" class="small text-muted">قيد واحد بين طرفي الدفعة المرتبطة' + (p.manualLink && GL.can.edit ? ' <button class="btn btn-link btn-sm p-0 ms-1" onclick="glHbUnlink_(\'' + glJs(p.id) + '\',this)">فك الربط</button>' : '') + '</td>' :
+    '<td style="min-width:210px;">' + glHbCashCell_(p, v) +
       (!e ? '<div class="small text-muted">مقترح: ' + glEsc(p.sug.why) + '</div>' : (p.rev && p.rev.src === 'hotel' && !GL._hbPEdit[p.id] ? '<div class="small" style="color:#0e7490;">🏨 من برنامج الحجوزات' + (p.rev.by ? ' (' + glEsc(p.rev.by) + ')' : '') + '</div>' : '')) + '</td>' +
     '<td><select class="form-select form-select-sm" style="width:72px;" onchange="glHbPaySet(\'' + glJs(p.id) + '\',\'cur\',this.value)">' + ['SAR', 'EGP', 'USD'].map(function (c) { return '<option' + (c === v.cur ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></td>' +
     '<td><input class="form-control form-control-sm gl-latin" style="width:100px;" value="' + glEsc(v.cur === 'SAR' ? '' : v.amount) + '" placeholder="' + (v.cur === 'SAR' ? '=' : 'المبلغ') + '"' + (v.cur === 'SAR' ? ' disabled' : '') + ' onchange="glHbPaySet(\'' + glJs(p.id) + '\',\'amount\',this.value)">' +
@@ -50109,18 +50123,22 @@ function glHbPaySet(id, f, v, sel) {
   var el = document.getElementById('glHbPayN'); if (el) el.textContent = '(' + Object.keys(GL._hbPEdit).length + ' تعديل غير محفوظ)';
 }
 function glHbPaysView() {
-  var H = GL.hb, box = document.getElementById('glHbBox'), q = (GL._hbPQ || '').trim(), f = GL._hbPF || 'new';
+  var H = GL.hb, box = document.getElementById('glHbBox'), q = (GL._hbPQ || '').trim(), f = GL._hbPF || 'new', ca = GL._hbPCA || '';
+  var caCnt = {}; (H.pays || []).forEach(function (p) { var k = p.linkId ? '-link' : ((glHbPayCur(p) || p.sug).cash || ''); caCnt[k] = (caCnt[k] || 0) + 1; });
   var list = (H.pays || []).filter(function (p) {
     if (f === 'new' && (p.rev || p.linkId) && !GL._hbPEdit[p.id]) return false;
     if (f === 'egp' && p.sug.cur === 'SAR') return false;
+    if (ca) { var v0 = glHbPayCur(p) || p.sug; if (ca === '-link' ? !p.linkId : (p.linkId || v0.cash !== ca)) return false; }
     return !q || (p.party + ' ' + p.note + ' ' + (p.qaid || '')).indexOf(q) >= 0;
   });
   var nNew = (H.pays || []).filter(function (p) { return !p.rev && !p.linkId; }).length;
   box.innerHTML = '<div class="gl-card"><div class="d-flex gap-2 align-items-center flex-wrap mb-1"><b>💵 مراجعة دفعات برنامج الحجوزات</b>' +
       '<select class="form-select form-select-sm" style="width:auto;" onchange="GL._hbPF=this.value;glHbPaysView()"><option value="new"' + (f === 'new' ? ' selected' : '') + '>غير المراجَع (' + nNew + ')</option><option value="egp"' + (f === 'egp' ? ' selected' : '') + '>بالجنيه/الدولار حسب الملاحظة</option><option value="all"' + (f === 'all' ? ' selected' : '') + '>الكل</option></select>' +
       '<input class="form-control form-control-sm" style="width:200px;" placeholder="بحث: طرف / ملاحظة / رقم قيد" value="' + glEsc(q) + '" oninput="GL._hbPQ=this.value;clearTimeout(GL._hbQt);GL._hbQt=setTimeout(glHbPaysView,300)">' +
+      '<select class="form-select form-select-sm" style="width:auto;max-width:230px;" title="تصفية حسب الحساب المقابل" onchange="GL._hbPCA=this.value;glHbPaysView()"><option value="">كل الحسابات المقابلة</option>' +
+        Object.keys(caCnt).map(function (k) { var a = GL.map[k]; return '<option value="' + glEsc(k) + '"' + (k === ca ? ' selected' : '') + '>' + glEsc(k === '-link' ? '🔗 دفعات مرتبطة' : (a ? a.name : (k || 'بدون'))) + ' (' + caCnt[k] + ')</option>'; }).join('') + '</select>' +
       '<span id="glHbPayN" class="small" style="color:#b45309;"></span>' +
-      (GL.can.add ? '<div class="ms-auto d-flex gap-1"><button class="btn btn-outline-primary btn-sm" onclick="glHbLinkSelected_()" title="لدفعتين منفصلتين بسجل الدفعات تمثلان تحويلاً مباشراً واحداً بين طرفين (بلا مرور على نقدية)">🔗 ربط المحدد كدفعة مرتبطة</button><button class="btn btn-outline-success btn-sm" onclick="glHbPaySave(this,\'sel\')">✔️ اعتماد المحدد كما يظهر</button><button class="btn btn-success btn-sm fw-bold" onclick="glHbPaySave(this)">💾 حفظ التعديلات</button></div>' : '') + '</div>' +
+      (GL.can.add ? '<div class="ms-auto d-flex gap-1"><button class="btn btn-outline-primary btn-sm" onclick="glHbLinkSelected_()" title="لدفعتين منفصلتين بسجل الدفعات تمثلان تحويلاً مباشراً واحداً بين طرفين (بلا مرور على نقدية)">🔗 ربط المحدد كدفعة مرتبطة</button><button class="btn btn-outline-success btn-sm" onclick="glHbPaySave(this,\'sel\')">✔️ اعتماد المحدد كما يظهر</button>' + (GL.can.del ? '<button class="btn btn-outline-danger btn-sm" onclick="glHbDeleteSelected_(this)" title="حذف الدفعات المحددة من سجل الدفعات ببرنامج الحجوزات (للمكرر)">🗑️ حذف المحدد</button>' : '') + '<button<button class="btn btn-success btn-sm fw-bold" onclick="glHbPaySave(this)">💾 حفظ التعديلات</button></div>' : '') + '</div>' +
     '<div class="gl-note">كل دفعة تُسجَّل بقيد بين الطرف والحساب النقدي المختار. غير المراجَع يُسجَّل مؤقتاً على «نقدية تحت التسوية (حجوزات الفنادق)». اختر الخزينة أو البنك أو العهدة أو «مقاصة عبر الوكلاء»، والعملة التي دُفعت بها فعلاً والمبلغ بها: الطرف يبقى بالريال كما في كشف الحساب، وفرق العملة يمر تلقائياً بحساب وسيط تحويل العملات. المقترحات مأخوذة من الملاحظة (مثل «50000 جنيه على بنك مصر»).</div>' +
     '<div class="table-responsive" style="max-height:560px;overflow:auto;"><table class="gl-tbl" id="glHbPayT"><thead><tr><th><input type="checkbox" onchange="document.querySelectorAll(\'#glHbPayT .glHbPk\').forEach(function(c){c.checked=this.checked;}.bind(this))"></th><th>التاريخ</th><th>الطرف</th><th>الاتجاه</th><th>المبلغ (ريال)</th><th>الملاحظة</th><th>قيد يدوي</th><th>قيد آلي</th><th>الحساب النقدي</th><th>العملة</th><th>المبلغ بالعملة</th></tr></thead><tbody>' +
       (list.slice(0, 500).map(glHbPayRow).join('') || '<tr><td colspan="11" class="text-muted">لا توجد دفعات</td></tr>') + '</tbody></table></div>' + glHbPartyDL_() +
@@ -50144,6 +50162,41 @@ function glHbPaySave(btn, mode) {
   btn.disabled = true;
   glRun('glHbSavePay', [rows], function (res) { showToast('✅ رُوجعت ' + res.saved + ' دفعة — تظهر بالدفتر بعد المزامنة'); glRefreshData(function () { glHbLoad(true); }); },
     function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+}
+// (V4.258) ربط/فك/حذف — رد فعل فوري وتحديث محلي بلا إعادة تحميل كاملة
+function glHbPickedIds_() { return Array.prototype.map.call(document.querySelectorAll('#glHbPayT .glHbPk:checked'), function (c) { return c.closest('tr').getAttribute('data-id'); }).filter(Boolean); }
+function glHbLinkSelected_(btn) {
+  var ids = glHbPickedIds_(), H = GL.hb;
+  if (ids.length < 2) return _showPopup('حدّد دفعتين على الأقل (علامة ✓ بأول العمود) ثم اضغط ربط', 'warning');
+  var ps = H.pays.filter(function (p) { return ids.indexOf(p.id) >= 0; });
+  var already = ps.filter(function (p) { return p.linkId; }); if (already.length) return _showPopup('دفعة محددة مرتبطة بالفعل: ' + already.map(function (p) { return p.party; }).join('، '), 'warning');
+  var sum = ps.map(function (p) { return '• ' + p.date + ' — ' + p.party + ' — ' + p.dir + ' ' + glFmt(p.amount); }).join('\n');
+  askConfirm_('ربط ' + ids.length + ' دفعات كدفعة مرتبطة واحدة (تحويل مباشر بين الأطراف بلا نقدية):\n' + sum, function () {
+    showToast('⏳ جارٍ الربط…');
+    glRun('glHbLinkPays', [ids], function (res) {
+      ps.forEach(function (p) { p.linkId = res.key; p.manualLink = true; delete GL._hbPEdit[p.id]; });
+      glHbPaysView(); showToast('🔗 رُبطت ' + res.n + ' دفعة — تُقيَّد قيداً واحداً بالمزامنة');
+    }, function (e) { _showPopup(e.message || e, 'error'); });
+  }, { title: 'دفعة مرتبطة', icon: '🔗', yesLabel: 'ربط', danger: false });
+}
+function glHbUnlink_(id, btn) {
+  var p = GL.hb.pays.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+  btn.disabled = true; btn.textContent = '⏳';
+  glRun('glHbUnlinkPay', [id], function () {
+    var key = p.linkId; GL.hb.pays.forEach(function (x) { if (x.linkId === key && x.manualLink && x.id === id) { x.linkId = ''; x.manualLink = false; } });
+    glHbPaysView(); showToast('✅ فُك ربط الدفعة');
+  }, function (e) { btn.disabled = false; btn.textContent = 'فك الربط'; _showPopup(e.message || e, 'error'); });
+}
+function glHbDeleteSelected_(btn) {
+  var ids = glHbPickedIds_(), H = GL.hb; if (!ids.length) return showToast('حدّد دفعات أولاً', true);
+  var ps = H.pays.filter(function (p) { return ids.indexOf(p.id) >= 0; });
+  askConfirm_('حذف ' + ids.length + ' دفعة نهائياً من سجل الدفعات ببرنامج الحجوزات؟\n' + ps.map(function (p) { return '• ' + p.date + ' — ' + p.party + ' — ' + glFmt(p.amount); }).join('\n') + '\nقيدها الآلي يُلغى بالمزامنة التالية.', function () {
+    btn.disabled = true; showToast('⏳ جارٍ الحذف…');
+    glRun('glHbDeletePays', [ids], function (res) {
+      btn.disabled = false; ids.forEach(function (id) { delete GL._hbPEdit[id]; });
+      showToast('🗑️ حُذفت ' + res.n + ' دفعة'); glHbLoad(true);   // أرقام الصفوف تتغير بعد الحذف ⇒ إعادة قراءة
+    }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+  }, { title: 'حذف دفعات', icon: '🗑️', yesLabel: 'حذف', danger: true });
 }
 /* ---- ربط الرحلات ---- */
 function glHbTripsView() {

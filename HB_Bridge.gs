@@ -244,7 +244,7 @@ function hbUserSaveFromMain(authToken, username, p) {
   if (!_sessionHasPerm_(session, 'admin')) throw new Error('للمدير فقط');
   username = String(username || '').trim(); p = p || {};
   if (!username) throw new Error('اسم المستخدم مطلوب');
-  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  var lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     var sh = ensureUsersSheet_(), rowIdx = findUserRow_(sh, username), created = false, saved = {};
     if (rowIdx === -1) {

@@ -9806,7 +9806,7 @@ function custodyRunSyncNow_() {
 }
 /* ---------- 🔗 (7.15.0) الربط بالحسابات العامة ---------- */
 var GLL = { linked: false, accounts: [] };
-var GLL_KIND_ = { safe: '💰 خزائن', bank: '🏦 بنوك', custody: '👤 عُهد', agent: '🛂 وكلاء', role: '⏳ حسابات وسيطة' };
+var GLL_KIND_ = { safe: '💰 خزائن', bank: '🏦 بنوك', custody: '👤 عُهد', agent: '🛂 وكلاء', role: '⏳ حسابات وسيطة', other: '📒 حسابات أخرى' };
 function glLinkLoad_(cb) {
   if (!currentSessionToken) return;
   google.script.run.withSuccessHandler(function (res) { GLL = res || { linked: false, accounts: [] }; GLL.accounts = GLL.accounts || []; if (cb) cb(); })

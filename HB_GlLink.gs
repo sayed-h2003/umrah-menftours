@@ -57,7 +57,7 @@ function glLinkSavePayMeta_(id, p, user) {
 
 // ---------- قراءة ملف الحسابات (مع كاش 10 دقائق) ----------
 function glLinkAccounts_() {
-  var cache = CacheService.getScriptCache(), hit = cache.get('gll_accs');
+  var cache = CacheService.getScriptCache(), hit = cache.get('gll_accs2');
   if (hit) { try { return JSON.parse(hit); } catch (e) {} }
   var ss = glLinkSS_(); if (!ss) return null;
   var out = [], roles = {};
@@ -69,12 +69,13 @@ function glLinkAccounts_() {
   if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues().forEach(function (r) {
     var code = String(r[0] || '').trim(), kind = String(r[6] || '').trim();
     if (!code || String(r[4]) === 'نعم' || String(r[8]) === 'لا') return;
-    if (!/^(safe|bank|custody|agent)$/.test(kind) && !roles[code]) return;
+    // (V4.258) كل الحسابات الفرعية بالدليل (لا الخزائن/البنوك فقط) — الباقي تحت «حسابات أخرى»
+    if (!/^(safe|bank|custody|agent)$/.test(kind) && !roles[code]) kind = 'other';
     out.push({ code: code, name: String(r[1] || ''), kind: roles[code] ? 'role' : kind, currency: String(r[5] || ''), role: roles[code] || '' });
   });
-  var ord = { safe: 1, bank: 2, custody: 3, agent: 4, role: 5 };
+  var ord = { safe: 1, bank: 2, custody: 3, agent: 4, role: 5, other: 6 };
   out.sort(function (a, b) { return (ord[a.kind] || 9) - (ord[b.kind] || 9) || (a.code < b.code ? -1 : 1); });
-  try { cache.put('gll_accs', JSON.stringify(out), 600); } catch (e) {}
+  try { cache.put('gll_accs2', JSON.stringify(out), 600); } catch (e) {}
   return out;
 }
 // {sourceKey: رقم القيد} لقيود الحجوزات والدفعات المرحّلة فقط (كاش 5 دقائق)
@@ -108,7 +109,7 @@ function glLinkSaveConfig(token, glId) {
   var ss = SpreadsheetApp.openById(id);
   if (!ss.getSheetByName('GL_Accounts')) throw new Error('هذا ليس ملف الحسابات العامة (لا يوجد به GL_Accounts)');
   p.setProperty('GL_LINK_SS_ID', id);
-  CacheService.getScriptCache().removeAll(['gll_accs', 'gll_ents']);
+  CacheService.getScriptCache().removeAll(['gll_accs', 'gll_accs2', 'gll_ents']);
   return { ok: true, linked: true, name: ss.getName() };
 }
 // بيانات محاسبية + رقم القيد الآلي لقائمة دفعات: ids = [معرّف...] ⇒ {id: {cash, cashName, cur, amount, je}}

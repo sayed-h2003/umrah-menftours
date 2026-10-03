@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.257";
+var APP_VERSION = "4.258";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2229,7 +2229,7 @@ if (
 // وسيلتقط الإشعار التالي هذا الرقم تلقائياً (بدون أي إعداد إضافي)
 function _nextBookingId_() {
   var lock = LockService.getScriptLock();
-  lock.waitLock(15000);
+  lock.waitLock(30000);
   try {
     var sheet = getSpreadsheet_().getSheetByName("Bookings");
     var data = sheet.getDataRange().getValues();
@@ -6287,7 +6287,8 @@ function _refreshSessionPermissions_(token, newPermissions) {
   try {
     var s = JSON.parse(raw);
     s.permissions = newPermissions;
-    cache.put('session_' + token, JSON.stringify(s), SESSION_DURATION_SECONDS);
+    cache.put('session_' + token, JSON.stringify(s), _sessTtl_());
+    _sessPersist_(token, s);
   } catch (e) {}
 }
 
@@ -6362,7 +6363,37 @@ function _clearUsersPermsValidation_(sheet) {
    تمنع استدعاء أي دالة من المتصفح مباشرة بدون تسجيل دخول فعلي
    ============================================================ */
 
-var SESSION_DURATION_SECONDS = 1800; // 30 دقيقة من عدم النشاط
+var SESSION_DURATION_SECONDS = 1800; // 30 دقيقة من عدم النشاط (حد أدنى — انظر _sessTtl_)
+// 🛡️ (V4.258) «جلسة غير صالحة أو منتهية» المتكررة: الجلسة كانت محفوظة بالكاش المؤقت فقط، والكاش يُفرَّغ مبكراً
+// تحت الضغط (خصوصاً بعد كاش الحسابات العامة الكبير) + مدة السيرفر ثابتة 30 دقيقة بينما مؤقّت الواجهة قابل للتعديل.
+// الآن: المدة = الأكبر من 30 دقيقة ومدة الجلسة المضبوطة، ونسخة احتياطية دائمة صغيرة بـ ScriptProperties
+// تُستعاد منها الجلسة لو سقطت من الكاش (تُحدَّث كل 5 دقائق نشاط على الأكثر وتُنظَّف المنتهية عند الدخول)
+var _SESS_TTL_MEMO_ = 0;
+function _sessTtl_() {
+  if (_SESS_TTL_MEMO_) return _SESS_TTL_MEMO_;
+  var m = 0; try { m = parseInt(PropertiesService.getScriptProperties().getProperty('SESSION_DURATION_MINUTES') || '0', 10) || 0; } catch (e) {}
+  return (_SESS_TTL_MEMO_ = Math.min(21600, Math.max(SESSION_DURATION_SECONDS, (m + 10) * 60)));
+}
+function _sessPersist_(token, s) {
+  try { PropertiesService.getScriptProperties().setProperty('SESS_' + token, JSON.stringify({ s: s, t: Date.now() })); } catch (e) {}
+}
+function _sessRestore_(token) {
+  try {
+    var p = PropertiesService.getScriptProperties(), raw = p.getProperty('SESS_' + token); if (!raw) return null;
+    var o = JSON.parse(raw);
+    if (!o || !o.s || Date.now() - (o.t || 0) > _sessTtl_() * 1000) { p.deleteProperty('SESS_' + token); return null; }
+    o.s._pt = o.t; return o.s;
+  } catch (e) { return null; }
+}
+function _sessPurge_() {
+  try {
+    var p = PropertiesService.getScriptProperties(), all = p.getProperties(), ttl = _sessTtl_() * 1000, now = Date.now();
+    Object.keys(all).forEach(function (k) {
+      if (k.indexOf('SESS_') !== 0) return;
+      try { var o = JSON.parse(all[k]); if (!o || now - (o.t || 0) > ttl) p.deleteProperty(k); } catch (e) { p.deleteProperty(k); }
+    });
+  } catch (e) {}
+}
 
 // ينشئ رمز جلسة عشوائي بعد نجاح تسجيل الدخول ويخزّنه مؤقتاً في Cache
 function createSession_(username, fullName, permissions) {
@@ -6374,7 +6405,10 @@ function createSession_(username, fullName, permissions) {
     permissions: permissions,
     createdAt: new Date().getTime()
   });
-  cache.put('session_' + token, sessionData, SESSION_DURATION_SECONDS);
+  _sessPurge_();
+  var o = JSON.parse(sessionData); o._pt = Date.now(); sessionData = JSON.stringify(o);
+  cache.put('session_' + token, sessionData, _sessTtl_());
+  _sessPersist_(token, o);
   return token;
 }
 
@@ -6383,7 +6417,11 @@ function validateSession_(token) {
   if (!token) return null;
   var cache = CacheService.getScriptCache();
   var sessionData = cache.get('session_' + token);
-  if (!sessionData) return null;
+  if (!sessionData) {
+    var rs = _sessRestore_(token); if (!rs) return null;
+    try { cache.put('session_' + token, JSON.stringify(rs), _sessTtl_()); } catch (e) {}
+    return rs;
+  }
   try {
     return JSON.parse(sessionData);
   } catch (e) {
@@ -6403,7 +6441,8 @@ function requireAuth_(token) {
   }
   // تجديد الجلسة تلقائياً طالما المستخدم نشط (Sliding Session)
   var cache = CacheService.getScriptCache();
-  cache.put('session_' + token, JSON.stringify(session), SESSION_DURATION_SECONDS);
+  if (!session._pt || Date.now() - session._pt > 300000) { session._pt = Date.now(); _sessPersist_(token, session); }
+  cache.put('session_' + token, JSON.stringify(session), _sessTtl_());
   _AUTH_MEMO_ = { t: token, s: session };
   return session;
 }
@@ -6428,6 +6467,7 @@ function logoutUserSession(token) {
       logChange_(session.username, "تسجيل خروج", "-", "خروج من النظام", "-", "-");
     }
     CacheService.getScriptCache().remove('session_' + token);
+    try { PropertiesService.getScriptProperties().deleteProperty('SESS_' + token); } catch (e) {}
     _onlineRemove_(token);
   }
   return { success: true };
@@ -8921,7 +8961,7 @@ function _tgccSaveOne_(contract, username) {
   if (!no) return { success: false, error: 'رقم الاتفاقية فارغ' };
   // 🔒 (V4.73) نفس قفل saveCateringContracts — يمنع تكرار الصفوف لو تزامن حفظ البوت مع حفظ الويب
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); } catch (eLock) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  try { lock.waitLock(30000); } catch (eLock) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
   try {
   var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
   var now = new Date();
@@ -13940,7 +13980,7 @@ function _accId_(prefix) {
 // 🔢 (V4.24) رقم تسلسلي تلقائي لكل دفعة جديدة — عدّاد مستمر بخصائص السكربت، لا يتكرر ولا يُعاد ترقيمه
 function _accNextPaySerial_() {
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  lock.waitLock(30000);
   try {
     var props = PropertiesService.getScriptProperties();
     var next = (parseInt(props.getProperty('ACC_PAY_SERIAL_CTR'), 10) || 0) + 1;
@@ -13956,7 +13996,7 @@ function _accNextPaySerial_() {
 function _accNextPaySerials_(n) {
   n = Math.max(1, n | 0);
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  lock.waitLock(30000);
   try {
     var props = PropertiesService.getScriptProperties();
     var first = (parseInt(props.getProperty('ACC_PAY_SERIAL_CTR'), 10) || 0) + 1;
@@ -15649,7 +15689,7 @@ function saveCateringContracts(authToken, list) {
   // 🔒 (V4.73) قفل صريح يمنع تكرار الصفوف عند نداءين متزامنين (نقرتين سريعتين، أو حفظ من الويب
   // والبوت في نفس اللحظة) — بدونه قد يقرأ كلا النداءين "غير موجود" معاً فيُضيفان صفّين مكرَّرين
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); } catch (eLock) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  try { lock.waitLock(30000); } catch (eLock) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
   try {
   var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
   var now = new Date();
@@ -21736,7 +21776,7 @@ function _mfTripsOf_(f) {
 }
 function _mfNextSeq_() {
   var lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  lock.waitLock(30000);
   try {
     var props = PropertiesService.getScriptProperties();
     var next = (parseInt(props.getProperty('MF_SEQ_CTR'), 10) || 0) + 1;
@@ -21827,7 +21867,7 @@ function getRoomFeeLedger(authToken, company) {
 function saveRoomFeeReceipt(authToken, rec) {
   var session = _mfPerm_(authToken, 'add');
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); }
+  try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
   try {
     var sh = _accSheet_(MF_REC_SHEET, MF_REC_HEADERS);
@@ -22359,7 +22399,7 @@ function saveMinistryFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _mfPerm_(authToken, isNew ? 'add' : 'edit');
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); }
+  try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
   var _lockReleased = false;
   try {
@@ -22630,7 +22670,7 @@ function bulkSetMfFileType(authToken, ids, fileType) {
   fileType = (_mfStr_(fileType) === 'فردي') ? 'فردي' : 'مجموعات';
   if (!ids.length) return { success: false, error: 'لم يُحدَّد أي ملف' };
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); }
+  try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
   try {
     var sh = _accSheet_(MF_SHEET, MF_HEADERS);
@@ -22725,7 +22765,7 @@ function saveMfQuotaTransfer(authToken, data) {
   if (fromMonth === toMonth) return { success: false, error: 'لا يمكن ترحيل حصة لنفس الشهر' };
   if (!amount || amount <= 0) return { success: false, error: 'أدخل عدداً صحيحاً أكبر من صفر' };
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); }
+  try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' }; }
   try {
     var all = _mfReadQuotaTransfers_();
@@ -23267,7 +23307,7 @@ function importMinistryFilesBatch(authToken, rows) {
   rows = Array.isArray(rows) ? rows : [];
   if (!rows.length) return { success: false, error: 'لا توجد صفوف صالحة للاستيراد' };
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); }
+  try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
   try {
     var sh = _accSheet_(MF_SHEET, MF_HEADERS);
@@ -24472,7 +24512,7 @@ function saveVisaFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
   var _vzLockReleased = false;
   try {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
@@ -24566,7 +24606,7 @@ function importVisaFilesBatch(authToken, rows) {
   rows = Array.isArray(rows) ? rows : [];
   if (!rows.length) return { success: false, error: 'لا توجد صفوف للاستيراد' };
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
     var all = _vzReadAll_();
@@ -24668,7 +24708,7 @@ function saveVisaAgentPrices(authToken, agent, periods) {
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
     var sh = _accSheet_(VZ_PRICES_SHEET, VZ_PRICES_HEADERS);
     // احذف كل فترات هذا الوكيل ثم أعد كتابتها (تحديث ذرّي بسيط)
@@ -24701,7 +24741,7 @@ function saveVisaAgentTransportPrices(authToken, agent, periods) {
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
     var sh = _accSheet_(VZ_TRANS_PRICES_SHEET, VZ_TRANS_PRICES_HEADERS);
     var all = _vzReadTransportPrices_();
@@ -24783,7 +24823,7 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
   var fromMs = from ? _mfMs_(_mfDate_(from)) : -Infinity;
   var toMs = to ? _mfMs_(_mfDate_(to)) : Infinity;
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(15000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
     var all = _vzReadAll_();
@@ -25744,7 +25784,7 @@ function saveUiPref(authToken, screenKey, prefsObj) {
   var json = '';
   try { json = JSON.stringify(prefsObj || {}); } catch (e) { return { success: false, error: 'تعذّر ترميز التفضيلات' }; }
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); }
+  try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' }; }
   try {
     var sh = _accSheet_(UI_PREFS_SHEET, UI_PREFS_HEADERS);
@@ -25845,7 +25885,7 @@ function accFixOrphanLines(authToken, client, trip, action, target) {
   if ((action === 'moveClient' || action === 'moveTrip') && !target) return { success: false, error: 'حدّد الوجهة' };
   if (action === 'moveClient' && target === client) return { success: false, error: 'اختر عميلاً آخر' };
   var lock = LockService.getScriptLock();
-  try { lock.waitLock(20000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
+  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
   try {
     var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS), pSh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
     var nI = 0, nP = 0, delRows = [];
