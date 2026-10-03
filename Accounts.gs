@@ -5181,6 +5181,68 @@ function glHbDeletePays(authToken, ids) {
     return { success: true, n: rows.length };
   } finally { _glUnlock_(lock); }
 }
+/* 🔍 (V4.262) فحص الدفعات المكررة والمتقابلة عبر «دفعات تحت التسوية» (حسابات العملاء) و«تحت التسوية — حجوزات الفنادق»
+   و«مقاصة عبر الوكلاء»: نفس المبلغ تقريباً (±1% أو 50 جنيه معادل) خلال 7 أيام.
+   • متقابلة (داخل الحساب الوسيط وخارج منه): دفعة واحدة فعلية مسجلة مرتين من طرفيها — مثل «دفعنا للمورد» ببرنامج الحجوزات
+     + «استلمنا من العميل» بحسابات العملاء لنفس التحويل ⇒ المقاصة تجعل الطرفين يقابلان بعضهما فيصفر الوسيط وتصبح الحركة
+     الفعلية تحويلاً من العميل للمورد (دفعتا حجوزات ⇒ ربط كدفعة مرتبطة بقيد واحد · دفعة عميل ⇒ توجيهها لنفس وسيط دفعة الحجوزات)
+   • مكررة (نفس الاتجاه ونفس الطرف تقريباً): تسجيل مزدوج لنفس الدفعة ⇒ حذف إحداهما */
+function glDupScan(authToken, opts) {
+  _glPerm_(authToken, 'view');
+  opts = opts || {};
+  var roles = _glAutoRoles_('', true), accs = _glAccounts_().map, fx = _glFxDailyMap_(), rates = _glRates_(), items = [];
+  var base = function (amt, cur, date) { return cur === 'EGP' ? amt : _glR2_(amt * (_glFxRateAt_(cur, date, fx).rate || rates[cur] || 1)); };
+  // 1) دفعات حسابات العملاء غير الموجَّهة (تحت التسوية)
+  try {
+    var cp = glCpList(authToken).rows;
+    cp.forEach(function (x) { if (!x.unsettled || !x.amount) return;
+      items.push({ src: 'cp', id: x.payId, entry: x.entryId, date: x.date, party: x.client, amount: Math.abs(x.amount), cur: x.currency || 'EGP', sign: x.amount > 0 ? 1 : -1,
+        susp: x.cash, desc: _glCleanDesc_(x.desc), base: base(Math.abs(x.amount), x.currency || 'EGP', x.date) }); });
+  } catch (e) {}
+  // 2) دفعات برنامج الحجوزات على «تحت التسوية» أو «مقاصة عبر الوكلاء» (غير المرتبطة)
+  if (_glHbOn_()) try {
+    var H = _glHbRead_(), rev = _glHbPayRev_(), hbOnlyK = _glHbOnlyK_();
+    H.pays.forEach(function (p) {
+      if (_glHbLinkOf_(p, rev) || GL_HB_MANUAL_DIRS_[p.dir]) return;
+      var r = rev[p.id], cash = r && r.cash && accs[r.cash] ? r.cash : roles.hb_cash;
+      if (cash !== roles.hb_cash && cash !== roles.hb_via) return;
+      var cur = (r && r.cur) || 'SAR', amt = r && r.amount && r.cur === cur && cur !== 'SAR' ? r.amount : p.amount;
+      items.push({ src: 'hb', id: p.id, date: p.date, party: p.party, amount: amt, cur: cur, sign: GL_HB_CREDIT_DIRS_[p.dir] ? 1 : -1, susp: cash,
+        desc: _glStr_(p.note) + (p.dir ? ' (' + p.dir + ')' : ''), base: base(amt, cur, p.date), via: cash === roles.hb_via });
+    });
+  } catch (e2) {}
+  var dk = function (d) { var m = String(d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) / 864e5 : 0; };
+  var nm = function (s) { return _glNorm_ ? _glNorm_(s) : String(s || ''); };
+  var toks = function (s) { return nm(s).split(/\s+/).filter(function (t) { return t.length >= 3; }); };
+  var simParty = function (a, b) { var A = toks(a.party), B = toks(b.party + ' ' + b.desc); return A.some(function (t) { return B.indexOf(t) >= 0; }) ? 1 : 0; };
+  var pairs = [];
+  items.forEach(function (a, i) { a.k = dk(a.date); });
+  for (var i = 0; i < items.length; i++) for (var j = i + 1; j < items.length; j++) {
+    var a = items[i], b = items[j]; if (a.src === 'cp' && b.src === 'cp' && a.sign === b.sign && a.id === b.id) continue;
+    var dd = Math.abs(a.k - b.k); if (dd > 7) continue;
+    var same = a.cur === b.cur ? Math.abs(a.amount - b.amount) <= Math.max(1, a.amount * 0.005) : false;
+    var close = Math.abs(a.base - b.base) <= Math.max(50, Math.max(a.base, b.base) * 0.01);
+    if (!same && !close) continue;
+    var sp = simParty(a, b) || simParty(b, a);
+    var type = a.sign !== b.sign ? 'offset' : 'dup';
+    if (type === 'dup' && !sp && !(same && dd === 0)) continue;   // مكرر = نفس الطرف (أو نفس المبلغ واليوم تماماً)
+    if (type === 'offset' && a.src === 'cp' && b.src === 'cp') continue;
+    var score = (same ? 40 : 25) + (dd === 0 ? 30 : Math.max(0, 25 - dd * 4)) + (sp ? 20 : 0) + (type === 'offset' && (a.via || b.via) ? 10 : 0);
+    pairs.push({ type: type, score: Math.min(100, score), a: a, b: b, dd: dd, diff: _glR2_(Math.abs(a.base - b.base)) });
+  }
+  pairs.sort(function (x, y) { return y.score - x.score; });
+  var used = {}, out = [];
+  pairs.forEach(function (p) { var ka = p.a.src + p.a.id, kb = p.b.src + p.b.id; if (used[ka] || used[kb]) return; used[ka] = used[kb] = 1; out.push(p); });
+  items.forEach(function (x) { delete x.k; });
+  return { success: true, pairs: out.slice(0, 300), scanned: items.length, roles: { hb_cash: roles.hb_cash, hb_via: roles.hb_via, cash: roles.cash } };
+}
+// مقاصة دفعة عميل (تحت التسوية) مع دفعة حجوزات متقابلة: توجيه دفعة العميل لنفس الحساب الوسيط لدفعة الحجوزات ⇒ يصفر
+function glDupOffsetCp(authToken, cpId, hbId) {
+  _glPerm_(authToken, 'edit');
+  var roles = _glAutoRoles_('', true), rev = _glHbPayRev_(), accs = _glAccounts_().map, r = rev[_glStr_(hbId)];
+  var susp = r && r.cash && accs[r.cash] ? r.cash : roles.hb_cash;
+  return glCpDirect(authToken, [_glStr_(cpId)], susp);
+}
 function glHbUnlinkPay(authToken, id) {
   var session = _glPerm_(authToken, 'edit');
   id = _glStr_(id); var rev = _glHbPayRev_();

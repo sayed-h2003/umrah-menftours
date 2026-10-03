@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.261 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.262 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.261)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.262)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.261</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.262</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.261";
+var CLIENT_APP_VERSION = "4.262";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -49364,7 +49364,7 @@ function glCpDlg() {
       '<div class="d-flex gap-2 align-items-center flex-wrap mb-2"><label class="small"><input type="checkbox" id="glCpAll" onchange="glCpDraw_()"> عرض الموجَّهة أيضاً</label>' +
       '<span class="text-muted small">حدِّد الحساب أمام الدفعة، علّم المربع، ثم:</span>' +
       (GL.can.edit ? '<button class="btn btn-success btn-sm fw-bold ms-auto" onclick="glCpSave_(this)">💾 حفظ توجيه المحدد</button>' +
-        '<button class="btn btn-outline-danger btn-sm" onclick="glCpDel_(this)">🗑️ حذف المحدد</button>' : '') +
+        '<button class="btn btn-outline-danger btn-sm" onclick="glCpDel_(this)">🗑️ حذف المحدد</button><button class="btn btn-outline-dark btn-sm" onclick="glDupDlg_()">🔍 المكرر والمتقابل</button>' : '') +
       '</div><div id="glCpBox"></div>';
     GL._cpRows = rows;
     glDlg('💵 توجيه دفعات العملاء (نقدية تحت التسوية)', h, 1120); glCpDraw_();
@@ -49757,12 +49757,9 @@ function glHbHpayView() {
   box.innerHTML =
     (c.hbGlOnly ? '<div class="gl-note" style="background:#ecfdf5;border-color:#86efac;">✅ <b>الدفعات من البرنامج الرئيسي فقط منذ <span class="gl-latin">' + E(c.hbGlOnly) + '</span></b> — أزرار الدفع ببرنامج الحجوزات مقفلة، وكل سند/قيد هنا على حساب طرف حجوزات يُنسخ تلقائياً لسجل دفعاته هناك (يظهر بكشف حسابه وبالبوت والبوابة).</div>'
       : '<div class="gl-note" style="background:#fff7ed;border-color:#fdba74;">⚠️ لم يُفعَّل بعد «الدفعات من البرنامج الرئيسي فقط» — حدّد تاريخ القطع بالأسفل (المدير). قبل التفعيل تبقى الدفعات تُسجَّل ببرنامج الحجوزات.</div>') +
-    '<div class="gl-card"><b>➕ تسجيل حركة لطرف حجوزات</b>' +
-      '<div class="small text-muted mb-1">يمكن أيضاً التسجيل من أي شاشة أخرى (الخزينة / البنوك / العهد / القيود) باختيار حساب الطرف — النتيجة واحدة.</div>' +
-      '<div class="d-flex gap-2 flex-wrap align-items-end"><div style="min-width:280px;flex:1;"><label class="gl-lbl">الطرف</label><select id="glHbpParty" class="form-select form-select-sm">' + opts + '</select></div>' +
-      btn('receipt', '💵 استلام (سند قبض)', 'btn-success') + btn('payment', '💸 دفع (سند صرف)', 'btn-danger') + btn('bankIn', '🏛️ إيداع بنكي') + btn('bankOut', '🏛️ سحب بنكي') + btn('custOut', '👜 من عهدة') +
-      '<button class="btn btn-sm btn-outline-dark fw-bold" onclick="glHbpTransfer()" title="مثل «الدفعة المرتبطة» ببرنامج الحجوزات: عميل يحوّل مباشرة لمورد — قيد واحد بلا خزينة">⇄ تحويل بين طرفين</button></div>' +
-      '<div id="glHbpBal" class="small mt-2"></div></div>' +
+    // (V4.262) أُلغيت بطاقة «تسجيل حركة لطرف حجوزات»: تكرار تام لـ«➕ جديد ▾» (سند قبض/صرف/إيداع/سحب/عهدة/تحويل بين طرفين)
+    // بأي شاشة باختيار حساب الطرف — والنسخ لبرنامج الحجوزات يتم تلقائياً لأي حركة على حساب طرف حجوزات
+    '<div class="gl-note mt-1">لتسجيل حركة لطرف حجوزات: <b>➕ جديد ▾</b> أعلى الحسابات العامة (سند قبض/صرف، إيداع/سحب بنكي، عهدة، تحويل بين طرفين) واختر حساب الطرف — تُنسخ تلقائياً لسجل دفعات برنامج الحجوزات.</div>' +
     '<div class="gl-card mt-2"><div class="d-flex align-items-center gap-2"><b>📋 الحركات المنسوخة لبرنامج الحجوزات</b><button class="btn btn-sm btn-outline-secondary ms-auto" onclick="glHbpList()">↻</button></div><div id="glHbpList" class="mt-1"><div class="text-muted small">⏳</div></div></div>' +
     (GL.isAdmin ? '<div class="gl-card mt-2" style="max-width:860px;border:2px solid #0e7490;"><b>🔒 تاريخ القطع: الدفعات من البرنامج الرئيسي فقط</b>' +
       '<div class="gl-note mt-1">من هذا التاريخ: ① تُقفل أزرار تسجيل/تعديل/حذف الدفعات ببرنامج الحجوزات برسالة توجّه للبرنامج الرئيسي (الدفعات الأقدم تبقى كما هي وقابلة للتعديل هناك) ② كل سند أو قيد هنا بتاريخ القطع أو بعده على حساب طرف حجوزات (عميل سكن/مورد/شارت) يُكتب نسخة منه بسجل دفعات برنامج الحجوزات ③ أي دفعة تُسجَّل هناك بعد التاريخ (بأي طريقة) لا تُقيَّد هنا — منعاً للتكرار. ' +
@@ -50234,7 +50231,7 @@ function glHbPaysView() {
       '<select class="form-select form-select-sm" style="width:auto;max-width:230px;" title="تصفية حسب الحساب المقابل" onchange="GL._hbPCA=this.value;glHbPaysView()"><option value="">كل الحسابات المقابلة</option>' +
         Object.keys(caCnt).map(function (k) { var a = GL.map[k]; return '<option value="' + glEsc(k) + '"' + (k === ca ? ' selected' : '') + '>' + glEsc(k === '-link' ? '🔗 دفعات مرتبطة' : (a ? a.name : (k || 'بدون'))) + ' (' + caCnt[k] + ')</option>'; }).join('') + '</select>' +
       '<span id="glHbPayN" class="small" style="color:#b45309;"></span>' +
-      (GL.can.add ? '<div class="ms-auto d-flex gap-1"><button class="btn btn-outline-primary btn-sm" onclick="glHbLinkSelected_()" title="لدفعتين منفصلتين بسجل الدفعات تمثلان تحويلاً مباشراً واحداً بين طرفين (بلا مرور على نقدية)">🔗 ربط المحدد كدفعة مرتبطة</button><button class="btn btn-outline-success btn-sm" onclick="glHbPaySave(this,\'sel\')">✔️ اعتماد المحدد كما يظهر</button>' + (GL.can.del ? '<button class="btn btn-outline-danger btn-sm" onclick="glHbDeleteSelected_(this)" title="حذف الدفعات المحددة من سجل الدفعات ببرنامج الحجوزات (للمكرر)">🗑️ حذف المحدد</button>' : '') + '<button<button class="btn btn-success btn-sm fw-bold" onclick="glHbPaySave(this)">💾 حفظ التعديلات</button></div>' : '') + '</div>' +
+      (GL.can.add ? '<div class="ms-auto d-flex gap-1"><button class="btn btn-outline-dark btn-sm" onclick="glDupDlg_()" title="فحص الدفعات المكررة أو المتقابلة بين «تحت التسوية» بحسابات العملاء وحجوزات الفنادق والمقاصة عبر الوكلاء">🔍 المكرر والمتقابل</button><button class="btn btn-outline-primary btn-sm" onclick="glHbLinkSelected_()" title="لدفعتين منفصلتين بسجل الدفعات تمثلان تحويلاً مباشراً واحداً بين طرفين (بلا مرور على نقدية)">🔗 ربط المحدد كدفعة مرتبطة</button><button class="btn btn-outline-success btn-sm" onclick="glHbPaySave(this,\'sel\')">✔️ اعتماد المحدد كما يظهر</button>' + (GL.can.del ? '<button class="btn btn-outline-danger btn-sm" onclick="glHbDeleteSelected_(this)" title="حذف الدفعات المحددة من سجل الدفعات ببرنامج الحجوزات (للمكرر)">🗑️ حذف المحدد</button>' : '') + '<button<button class="btn btn-success btn-sm fw-bold" onclick="glHbPaySave(this)">💾 حفظ التعديلات</button></div>' : '') + '</div>' +
     '<div class="gl-note">كل دفعة تُسجَّل بقيد بين الطرف والحساب النقدي المختار. غير المراجَع يُسجَّل مؤقتاً على «نقدية تحت التسوية (حجوزات الفنادق)». اختر الخزينة أو البنك أو العهدة أو «مقاصة عبر الوكلاء»، والعملة التي دُفعت بها فعلاً والمبلغ بها: الطرف يبقى بالريال كما في كشف الحساب، وفرق العملة يمر تلقائياً بحساب وسيط تحويل العملات. المقترحات مأخوذة من الملاحظة (مثل «50000 جنيه على بنك مصر»).</div>' +
     '<div class="table-responsive" style="max-height:560px;overflow:auto;"><table class="gl-tbl" id="glHbPayT"><thead><tr><th><input type="checkbox" onchange="document.querySelectorAll(\'#glHbPayT .glHbPk\').forEach(function(c){c.checked=this.checked;}.bind(this))"></th><th>التاريخ</th><th>الطرف</th><th>الاتجاه</th><th>المبلغ (ريال)</th><th>الملاحظة</th><th>قيد يدوي</th><th>قيد آلي</th><th>الحساب النقدي</th><th>العملة</th><th>المبلغ بالعملة</th></tr></thead><tbody>' +
       (list.slice(0, 500).map(glHbPayRow).join('') || '<tr><td colspan="11" class="text-muted">لا توجد دفعات</td></tr>') + '</tbody></table></div>' + glHbPartyDL_() +
@@ -50293,6 +50290,50 @@ function glHbDeleteSelected_(btn) {
       showToast('🗑️ حُذفت ' + res.n + ' دفعة'); glHbLoad(true);   // أرقام الصفوف تتغير بعد الحذف ⇒ إعادة قراءة
     }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
   }, { title: 'حذف دفعات', icon: '🗑️', yesLabel: 'حذف', danger: true });
+}
+/* 🔍 (V4.262) الدفعات المكررة والمتقابلة — مراجعة موحّدة ومقاصة/حذف بضغطة */
+function glDupDlg_() {
+  glDlg('🔍 الدفعات المكررة والمتقابلة', '<div id="glDupBox" class="text-muted small py-4 text-center">⏳ جارٍ الفحص…</div>', 1180);
+  glRun('glDupScan', [{}], function (res) { GL._dup = res; glDupDraw_(); }, function (e) { var b = document.getElementById('glDupBox'); if (b) b.innerHTML = '<div class="text-danger">' + glEsc(e.message || e) + '</div>'; });
+}
+function glDupDraw_() {
+  var box = document.getElementById('glDupBox'), R = GL._dup; if (!box || !R) return;
+  var E = glEsc, src = { cp: '<span class="gl-pill" style="background:#dbeafe;">👤 عملاء العمرة</span>', hb: '<span class="gl-pill" style="background:#fef3c7;">🏨 حجوزات</span>' };
+  var side = function (x) {
+    return src[x.src] + (x.via ? ' <span class="gl-pill">عبر الوكلاء</span>' : '') + '<div><b>' + E(x.party || '—') + '</b></div><div class="small">' + E(x.date) + ' · <b class="gl-latin">' + glFmt(x.amount) + '</b> ' + E(x.cur) +
+      ' · ' + (x.sign > 0 ? '<span style="color:#166534;">وارد</span>' : '<span style="color:#b91c1c;">منصرف</span>') + '</div><div class="small text-muted" style="max-width:330px;white-space:normal;">' + E(String(x.desc || '').slice(0, 120)) + '</div>';
+  };
+  var act = function (p, i) {
+    if (!GL.can.edit && !GL.can.del) return '';
+    if (p.type === 'offset') return (p.a.src === 'cp' && p.b.src === 'cp') ? '' : '<button class="btn btn-sm btn-success fw-bold" onclick="glDupDo_(' + i + ',\'off\',this)" title="الطرفان يقابلان بعضهما فيصفر الحساب الوسيط">⇄ مقاصة</button>';
+    return (GL.can.del ? '<button class="btn btn-sm btn-outline-danger mb-1" onclick="glDupDo_(' + i + ',\'da\',this)">🗑️ حذف الأول</button><br><button class="btn btn-sm btn-outline-danger" onclick="glDupDo_(' + i + ',\'db\',this)">🗑️ حذف الثاني</button>' : '');
+  };
+  box.innerHTML = '<div class="gl-note">فُحصت <b>' + R.scanned + '</b> دفعة على الحسابات الوسيطة (تحت التسوية / عبر الوكلاء). <b>متقابلة</b> = نفس المبلغ تقريباً باتجاهين خلال 7 أيام (غالباً تحويل واحد سُجّل من طرفيه) ⇒ «مقاصة» تجعل كلاً منهما يقابل الآخر فيصفر الوسيط وتظهر الحركة الحقيقية (من العميل إلى المورد مثلاً). <b>مكررة</b> = نفس الاتجاه ونفس الطرف ⇒ احذف إحداهما.</div>' +
+    (!R.pairs.length ? '<div class="text-success text-center py-3">✅ لا توجد دفعات مكررة أو متقابلة</div>' :
+    '<div class="table-responsive" style="max-height:62vh;overflow:auto;"><table class="gl-tbl"><thead><tr><th>النوع</th><th>الدفعة الأولى</th><th>الدفعة الثانية</th><th>الفرق (معادل)</th><th>التطابق</th><th></th></tr></thead><tbody>' +
+    R.pairs.map(function (p, i) {
+      return '<tr id="glDupR' + i + '"><td>' + (p.type === 'offset' ? '<b style="color:#0e7490;">⇄ متقابلة</b>' : '<b style="color:#b91c1c;">⧉ مكررة</b>') + '<div class="small text-muted">' + (p.dd ? p.dd + ' يوم' : 'نفس اليوم') + '</div></td>' +
+        '<td style="text-align:right;">' + side(p.a) + '</td><td style="text-align:right;">' + side(p.b) + '</td><td class="gl-latin">' + glFmt(p.diff) + '</td>' +
+        '<td><div class="progress" style="height:6px;width:60px;"><div class="progress-bar ' + (p.score >= 75 ? 'bg-success' : p.score >= 55 ? 'bg-warning' : 'bg-secondary') + '" style="width:' + p.score + '%"></div></div><span class="small">' + p.score + '%</span></td>' +
+        '<td>' + act(p, i) + '</td></tr>';
+    }).join('') + '</tbody></table></div>');
+}
+function glDupDo_(i, kind, btn) {
+  var p = GL._dup && GL._dup.pairs[i]; if (!p) return;
+  var done = function (msg) { var tr = document.getElementById('glDupR' + i); if (tr) { tr.style.opacity = '.45'; tr.lastChild.innerHTML = '<span class="text-success fw-bold">✔ ' + msg + '</span>'; } showToast('✅ ' + msg); GL._hbDirty = 1; };
+  var fail = function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); };
+  btn.disabled = true;
+  if (kind === 'off') {
+    var cp = p.a.src === 'cp' ? p.a : (p.b.src === 'cp' ? p.b : null), hb = p.a.src === 'hb' ? p.a : p.b;
+    if (!cp) return glRun('glHbLinkPays', [[p.a.id, p.b.id]], function () { done('رُبطتا كدفعة مرتبطة — قيد واحد بين الطرفين'); }, fail);
+    return glRun('glDupOffsetCp', [cp.id, hb.id], function () { done('مقاصة — وُجّهت دفعة العميل لوسيط دفعة الحجوزات'); }, fail);
+  }
+  var x = kind === 'da' ? p.a : p.b;
+  askConfirm_('حذف الدفعة المكررة نهائياً؟\n' + x.date + ' — ' + (x.party || '') + ' — ' + glFmt(x.amount) + ' ' + x.cur, function () {
+    if (x.src === 'hb') glRun('glHbDeletePays', [[x.id]], function () { done('حُذفت دفعة الحجوزات المكررة'); }, fail);
+    else glRun('glCpDelete', [[x.id]], function () { done('حُذفت دفعة العميل المكررة'); }, fail);
+  }, { title: 'حذف دفعة مكررة', icon: '🗑️', yesLabel: 'حذف', danger: true });
+  btn.disabled = false;
 }
 /* ---- ربط الرحلات ---- */
 function glHbTripsView() {
