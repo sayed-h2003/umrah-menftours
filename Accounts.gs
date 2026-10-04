@@ -3539,7 +3539,7 @@ function glCustSheetSave(authToken, code, cfg) {
 // preview=true ⇒ معاينة فقط بلا كتابة
 function glCustSheetSync(authToken, code, preview) {
   var session = preview ? _glPerm_(authToken, 'view') : _glAdminPerm_(authToken);
-  var lock = _glLock_(); lock.waitLock(30000);
+  var lock = _glLock_(); lock.waitLock(120000);
   try { return _glCsSync_(_glStr_(code), session.username, { preview: !!preview }); }
   finally { _glUnlock_(lock); }
 }
@@ -3572,7 +3572,7 @@ function glCsPendAll(authToken, force) {
 // اعتماد دفعة واحدة لصفوف عدة شيتات: [{code, items:[{row, account, desc?}]}] — البيان المعدَّل يحلّ محل بيان الصف بالقيد
 function glCsApproveAll(authToken, groups) {
   var session = _glPerm_(authToken, 'edit');
-  var lock = _glLock_(); lock.waitLock(60000);
+  var lock = _glLock_(); lock.waitLock(150000);
   try {
     var created = 0, problems = [], left = 0;
     (groups || []).forEach(function (g) {
@@ -3590,7 +3590,7 @@ function glCsApproveAll(authToken, groups) {
 }
 function glCustSheetApprove(authToken, code, items) {
   var session = _glPerm_(authToken, 'edit');
-  var lock = _glLock_(); lock.waitLock(30000);
+  var lock = _glLock_(); lock.waitLock(120000);
   try {
     var pick = {}; (items || []).forEach(function (it) { if (it && it.row && _glStr_(it.account)) pick[+it.row] = _glStr_(it.account); });
     if (!Object.keys(pick).length) throw new Error('اختر حساب الطرف لصف واحد على الأقل');
@@ -3603,7 +3603,7 @@ function _glCsSync_(code, user, opts) {
   var accs = _glAccounts_(), a = accs.map[code];
   if (!a || a.isGroup) throw new Error('حساب العهدة غير موجود');
   var cfg = _glCsCfg_(code); if (!cfg.id) throw new Error('لم يُربط شيت لهذه العهدة بعد');
-  var S = _glCsOpen_(cfg), rows = _glCsReadRows_(S.sh, cfg.startRow || 2, cfg), QC = _glCsCols_(cfg).qaid + 1;
+  var S = opts.pre ? opts.pre.S : _glCsOpen_(cfg), rows = opts.pre ? opts.pre.rows : _glCsReadRows_(S.sh, cfg.startRow || 2, cfg), QC = _glCsCols_(cfg).qaid + 1;   // (V4.275) القراءة المسبقة (خارج القفل) للمزامنة المجدولة
   // نقل أرقام القيود القديمة من F إلى عمود القيد الجديد (مرة واحدة، بلا مسح F)
   if (!opts.preview) rows.forEach(function (x) { if (x.fOld) try { S.sh.getRange(x.row, QC).setNumberFormat('@').setValue(x.f); } catch (e) { } });
   var learned = _glCsMap_(), cur = _glCur_(a.currency || cfg.cur || 'SAR'), fx = _glFxDailyMap_();
@@ -3774,10 +3774,21 @@ function _glCsAutoAll_() {
     if (busy) { busy = false; if (res.length) return; }   // البرنامج مشغول بحفظ مستخدم ⇒ أجّل الباقي
     // ⏳ (V4.258) «مهلة التأمين»: المزامنة المجدولة كانت تحجز القفل العام طوال قراءة كل شيتات العهد (كل دقيقة أحياناً)
     // فينتظر حفظ المستخدمين حتى تنتهي المهلة. الآن قفل قصير لكل شيت على حدة، وتتخطى الشيت لو البرنامج مشغول (تُعاد بالدورة التالية)
+    // ⚡ (V4.275) فتح الشيت الخارجي وقراءته (الجزء البطيء) **خارج** القفل: لا يتأخر حفظ/اعتماد المستخدم بسبب المزامنة المجدولة
+    // («مهلة التأمين»). ولو لم يتغيّر الشيت ولا بيانات الحسابات منذ آخر مزامنة ⇒ تُتخطى بلا قفل (وكل 10 دقائق مزامنة كاملة احتياطاً)
+    var pre = null, sig = '';
+    try {
+      var cs0 = _glCsOpen_(cfg), rows0 = _glCsReadRows_(cs0.sh, cfg.startRow || 2, cfg);
+      sig = _glHash_(JSON.stringify(rows0.map(function (y) { return [y.row, y.hash, y.f, y.ok ? 1 : 0, y.sub || 0]; }))) + '|' + _glVerFresh_();
+      pre = { S: cs0, rows: rows0 };
+    } catch (eP) { pre = null; }
+    var sigs = {}; try { sigs = JSON.parse(P.getProperty('GL_CS_SIG') || '{}') || {}; } catch (eS) {}
+    if (pre && sigs[code] && sigs[code].s === sig && now - (sigs[code].t || 0) < 600000) { last[code] = now; return; }
     var lock = _glLock_(); if (!lock.tryLock(2000)) { _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1); return; }
     last[code] = now;
     try {
-      var r = _glCsSync_(code, 'مزامنة مجدولة', {}); res.push(code + ': ' + r.created.length + '/' + r.pending.length);
+      var r = _glCsSync_(code, 'مزامنة مجدولة', pre ? { pre: pre } : {}); res.push(code + ': ' + r.created.length + '/' + r.pending.length);
+      if (pre) { sigs[code] = { s: sig, t: now }; try { P.setProperty('GL_CS_SIG', JSON.stringify(sigs)); } catch (eW) {} }
       var nPend = r.pending.length, lastN = +(P.getProperty('GLBOT_CS_' + code) || 0);   // 🤖 (V4.254) تنبيه عند ظهور صفوف ناقصة جديدة فقط
       if (nPend !== lastN) { P.setProperty('GLBOT_CS_' + code, String(nPend)); if (nPend > lastN) _glBotQ_('custody_err', { name: (_glAccounts_().map[code] || {}).name || code, n: nPend, code: code,
         rows: r.pending.slice(lastN - nPend).slice(-3).map(function (x) { return { row: x.row, date: x.date, desc: String(x.desc || '').slice(0, 80), inAmt: x.inAmt, outAmt: x.outAmt, hint: String(x.hint || '').slice(0, 40), sugg: (x.sugg || []).slice(0, 3) }; }) }); }
@@ -6232,7 +6243,7 @@ function _glBotCsAllCb_(cq, chatId, msgId, who, code) {
 }
 function _glBotCsApprove_(code, row, acc, user) {
   var a = _glAccounts_().map[acc]; if (!a || a.isGroup) return '⚠️ الحساب غير صالح';
-  var lock = _glLock_(); lock.waitLock(30000);
+  var lock = _glLock_(); lock.waitLock(90000);
   try {
     var pick = {}; pick[row] = acc;
     var out = _glCsSync_(code, user, { approve: pick });
