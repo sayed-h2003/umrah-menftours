@@ -453,7 +453,7 @@ function glBootstrap(authToken, knownVer) {
   var can = { add: _sessionHasPerm_(session, 'gl.add'), edit: _sessionHasPerm_(session, 'gl.edit'), del: _sessionHasPerm_(session, 'gl.delete'), approve: _glCanApprove_(session) };
   // ⚡ (V4.252) الواجهة عندها نفس الإصدار (من آخر تحميل أو من المتصفح) ⇒ لا شيء تغيّر: رد فوري بلا قراءة أي شيت
   if (knownVer && String(knownVer) === _glVerFresh_()) return { success: true, ready: true, same: true, ver: _GL_VER_, isAdmin: admin, can: can,
-    pendingCount: (function () { try { return _glTripMode_() ? _glPendingCount_() : 0; } catch (e) { return 0; } })() };
+    pendingCount: (function () { try { return _glTripMode_() ? _glPendingCount_() : 0; } catch (e) { return 0; } })(), csPend: _glCsPendTotal_() };
   var ver = _glVer_();
   var accs = _glAccounts_().list.map(function (a) { var c = {}; for (var k in a) if (k !== '_row') c[k] = a[k]; return c; });
   var bal = _glBalances_(null);
@@ -463,7 +463,7 @@ function glBootstrap(authToken, knownVer) {
     settings: _glSettingsOut_(), rates: _glRates_(), types: GL_TYPES_, kinds: GL_KINDS_, entryTypes: GL_ENTRY_TYPES_,
     accounts: accs, balances: bal,
     can: can,
-    pendingCount: (function () { try { return _glTripMode_() ? _glPendingCount_() : 0; } catch (e) { return 0; } })(), tripMode: (function () { try { return _glTripMode_(); } catch (e) { return false; } })()
+    csPend: _glCsPendTotal_(), pendingCount: (function () { try { return _glTripMode_() ? _glPendingCount_() : 0; } catch (e) { return 0; } })(), tripMode: (function () { try { return _glTripMode_(); } catch (e) { return false; } })()
   };
 }
 // أرصدة الحسابات الورقية المرحّلة حتى تاريخ (أو كلها): {code: {EGP, SAR, USD, base}} (الموجب = مدين)
@@ -3055,7 +3055,7 @@ function _glLiveSync_(who) {
 function _glKickStatus_(session, since) {
   var out = {};
   if (_sessionHasPerm_(session, 'gl.view')) {
-    out.pending = _glPendingCount_();
+    out.pending = _glPendingCount_(); out.csPend = _glCsPendTotal_();
     out.recent = [];
     var sk = _glStr_(since), lastAt = null;
     try { lastAt = CacheService.getScriptCache().get('gl_autolog_at'); } catch (e0) {}
@@ -3526,6 +3526,50 @@ function glCustSheetSync(authToken, code, preview) {
   finally { _glUnlock_(lock); }
 }
 // اعتماد صفوف الطرف غير المعروف: items = [{row, account}] — ويُتذكَّر اسم الطرف ⇒ حسابه للمرات القادمة
+// 👜 (V4.268) مجموع صفوف الشيتات (عهدة/خزينة/بنك) الناقصة بانتظار تحديد الطرف — من آخر مزامنة لكل شيت (بلا فتح أي شيت)
+function _glCsPendTotal_() {
+  var n = 0; try { var set = _glSettings_(); Object.keys(set).forEach(function (k) { if (k.indexOf('custsheet:') !== 0) return; try { var c = JSON.parse(set[k] || '{}'); if (c && c.id && c.last) n += +c.last.pending || 0; } catch (e) {} }); } catch (e2) {}
+  return n;
+}
+function _glCsPendBrief_() {
+  var out = [], accM = {}; try { accM = _glAccounts_().map; } catch (e0) {}
+  try { var set = _glSettings_(); Object.keys(set).forEach(function (k) { if (k.indexOf('custsheet:') !== 0) return; try { var c = JSON.parse(set[k] || '{}'), code = k.slice(10); if (c && c.id && c.last && +c.last.pending > 0) out.push({ code: code, name: (accM[code] || {}).name || code, n: +c.last.pending }); } catch (e) {} }); } catch (e2) {}
+  return out;
+}
+// يجمع الصفوف الناقصة من كل الشيتات المربوطة (معاينة بلا تسجيل) — لشاشة «استكمال واعتماد» بالحسابات العامة
+function glCsPendAll(authToken, force) {
+  var session = _glPerm_(authToken, 'view');
+  var groups = [], errs = [], t0 = Date.now(), accM = _glAccounts_().map;
+  _glCsCodes_().forEach(function (code) {
+    var cfg = _glCsCfg_(code); if (!cfg || !cfg.id) return;
+    if (!force && !(cfg.last && +cfg.last.pending > 0)) return;
+    if (Date.now() - t0 > 150000) { errs.push((accM[code] || {}).name || code); return; }
+    try {
+      var r = _glCsSync_(code, session.username, { preview: true });
+      if (r.pending && r.pending.length) groups.push({ code: code, name: (accM[code] || {}).name || code, currency: (r.account || {}).currency || '', url: (r.sheet || {}).url || '', rows: r.pending });
+    } catch (e) { errs.push(((accM[code] || {}).name || code) + ': ' + e.message); }
+  });
+  return { success: true, groups: groups, errors: errs, canApprove: _sessionHasPerm_(session, 'admin') || _sessionHasPerm_(session, 'gl.edit'), csPend: _glCsPendTotal_() };
+}
+// اعتماد دفعة واحدة لصفوف عدة شيتات: [{code, items:[{row, account, desc?}]}] — البيان المعدَّل يحلّ محل بيان الصف بالقيد
+function glCsApproveAll(authToken, groups) {
+  var session = _glPerm_(authToken, 'edit');
+  var lock = _glLock_(); lock.waitLock(60000);
+  try {
+    var created = 0, problems = [], left = 0;
+    (groups || []).forEach(function (g) {
+      var pick = {}, ov = {};
+      (g.items || []).forEach(function (it) { if (it && it.row && _glStr_(it.account)) { pick[+it.row] = _glStr_(it.account); if (_glStr_(it.desc)) ov[+it.row] = _glStr_(it.desc); } });
+      if (!Object.keys(pick).length) return;
+      try {
+        var r = _glCsSync_(_glStr_(g.code), session.username, { approve: pick, descOv: ov });
+        created += (r.created || []).length; left += (r.pending || []).length;
+        (r.problems || []).forEach(function (x) { problems.push({ code: g.code, row: x.row, msg: x.msg }); });
+      } catch (e) { problems.push({ code: g.code, row: 0, msg: e.message }); }
+    });
+    return { success: true, created: created, left: left, problems: problems, csPend: _glCsPendTotal_(), pendingCount: (function () { try { return _glPendingCount_(); } catch (e) { return 0; } })() };
+  } finally { _glUnlock_(lock); }
+}
 function glCustSheetApprove(authToken, code, items) {
   var session = _glPerm_(authToken, 'edit');
   var lock = _glLock_(); lock.waitLock(30000);
@@ -3617,6 +3661,7 @@ function _glCsSync_(code, user, opts) {
   var built = [];
   toCreate.forEach(function (c) {
     if (c.linkOnly) { fW.push({ x: c.x, id: c.linkOnly }); if (c.okLink) (out.merged = out.merged || []).push({ row: c.x.row, id: c.linkOnly }); else out.hb.push({ row: c.x.row, id: c.linkOnly }); return; }
+    if (opts.descOv && opts.descOv[c.x.row]) c.x = Object.assign({}, c.x, { desc: opts.descOv[c.x.row] });   // (V4.268) بيان معدَّل بشاشة الاستكمال
     try { var b = _glCsEntry_(c.x, code, c.cp, c.x.cur || cur, fx); b.c = c; built.push(b); }
     catch (err) { out.problems.push({ row: c.x.row, date: c.x.date, desc: c.x.desc, inAmt: c.x.inAmt, outAmt: c.x.outAmt, hint: c.x.hint, msg: err.message }); }
   });
@@ -3685,7 +3730,7 @@ function _glCsSync_(code, user, opts) {
   return out;
 }
 // المزامنة المجدولة لكل عهدة مربوطة فُعّل لها «تلقائي» — (V4.250) كلٌّ حسب تكراره (دقائق/ساعات) ولا تُكرَّر قبل موعدها
-function _glCsEveryMin_(cfg) { var e = (cfg && cfg.every) || {}, n = parseInt(e.n, 10) || 1; return e.unit === 'min' ? n : n * 60; }
+function _glCsEveryMin_(cfg) { var e = (cfg && cfg.every) || {}, n = parseInt(e.n, 10) || 1; return e.unit === 'min' ? Math.max(5, n) : n * 60; }   // (V4.268) حد أدنى 5 دقائق حتى للإعدادات القديمة
 function _glCsAutoAll_() {
   _GL_SET_MEMO_ = null;
   var set = _glSettings_(), res = [], P = PropertiesService.getScriptProperties(), last = {};
@@ -3719,6 +3764,8 @@ function _glCsAutoAll_() {
 }
 // ⏱️ (V4.250) مشغّل مستقل لمزامنة شيتات العهد بأقصر تكرار مطلوب (دقيقة/5/10/15/30 أو كل ساعة) — يُعاد ضبطه عند حفظ أي إعداد
 function glCustSheetCron() {
+  // ⚡ (V4.268) المشغّل القديم كان مضبوطاً كل دقيقة (يُعاد ضبطه فقط عند حفظ إعداد) — يُصحَّح ذاتياً مرة واحدة
+  try { var P0 = PropertiesService.getScriptProperties(); if (P0.getProperty('GL_CS_TRIG_V') !== '268') { P0.setProperty('GL_CS_TRIG_V', '268'); _glCsEnsureTrigger_(); return; } } catch (eT) {}
   try { _glCsAutoAll_(); } catch (e) { Logger.log('glCustSheetCron: ' + e.message); }   // (V4.258) القفل لكل شيت داخل _glCsAutoAll_
 }
 function _glCsEnsureTrigger_() {
@@ -5933,6 +5980,7 @@ function glBotCallback_(cq) {
       return true;
     }
     if (act === 'cs') { _glBotCsxCb_(cq, chatId, msgId, who, arg); return true; }
+    if (act === 'csall') { _glBotCsAllCb_(cq, chatId, msgId, who, arg); return true; }
     _glBotAns_(cq.id, '');
     return true;
   } catch (e) {
@@ -6012,6 +6060,7 @@ function _glBotCsxSend_(chatId, onlyCode, rowsIn) {
   (onlyCode ? [onlyCode] : _glCsCodes_()).forEach(function (code) {
     var rows = rowsIn;
     if (!rows) { try { rows = _glCsSync_(code, 'تليجرام', { preview: true }).pending; } catch (e) { _glBotSend_(chatId, '⚠️ ' + _glBotEsc_((accM[code] || {}).name || code) + ': ' + _glBotEsc_(e.message)); return; } }
+    if ((rows || []).some(function (x) { return x.sugg && x.sugg.length; })) _glBotSend_(chatId, '👜 <b>' + _glBotEsc_((accM[code] || {}).name || code) + '</b> — صفوف ناقصة بانتظار تحديد الطرف', { inline_keyboard: [[_glBtn_('✅ اعتماد كل المقترحات الأولى دفعة واحدة', 'gl:csall:' + code, 'success')]] });   // (V4.268)
     (rows || []).slice(0, 10).forEach(function (x) {
       var kb = [], row = [];
       (x.sugg || []).slice(0, 3).forEach(function (sg) { row.push(_glBtn_('✅ ' + String(sg.name).slice(0, 28), 'gl:cs:' + code + ':' + x.row + ':' + sg.code, 'success')); if (row.length === 2) { kb.push(row); row = []; } });
@@ -6036,6 +6085,20 @@ function _glBotCsxCb_(cq, chatId, msgId, who, arg) {
   _glBotAns_(cq.id, '⏳ جارٍ الاعتماد…');
   var r = _glBotCsApprove_(code, row, acc, who.username);
   _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n' + r);
+}
+// ✅ (V4.268) اعتماد أول اقتراح لكل صف ناقص بشيت واحد دفعة واحدة (الصفوف بلا اقتراح تبقى للاختيار اليدوي)
+function _glBotCsAllCb_(cq, chatId, msgId, who, code) {
+  if (!who || !(_sessionHasPerm_(who, 'admin') || _sessionHasPerm_(who, 'gl.edit'))) { _glBotAns_(cq.id, '⛔ اربط حسابك ومنحه صلاحية تعديل الحسابات — التفاصيل بالرسالة', true); _glBotLinkHelp_(chatId, true); return; }
+  _glBotAns_(cq.id, '⏳ جارٍ الاعتماد…');
+  var lock = _glLock_(); lock.waitLock(60000);
+  try {
+    var pv = _glCsSync_(code, who.username, { preview: true }), pick = {}, skipped = 0;
+    (pv.pending || []).forEach(function (x) { if (x.sugg && x.sugg.length) pick[x.row] = x.sugg[0].code; else skipped++; });
+    if (!Object.keys(pick).length) { _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\nℹ️ لا توجد اقتراحات للاعتماد — اختر الحساب لكل صف يدوياً'); return; }
+    var out = _glCsSync_(code, who.username, { approve: pick });
+    _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n✅ <b>قُيِّد ' + (out.created || []).length + ' صف</b> بأول اقتراح (بواسطة ' + _glBotEsc_(who.username) + ')' + (skipped ? '\n⏳ بقي ' + skipped + ' صف بلا اقتراح — اخترها يدوياً' : '') + ((out.problems || []).length ? '\n⚠️ ' + (out.problems || []).length + ' مشكلة' : ''));
+  } catch (e) { _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n⚠️ ' + _glBotEsc_(e.message)); }
+  finally { _glUnlock_(lock); }
 }
 function _glBotCsApprove_(code, row, acc, user) {
   var a = _glAccounts_().map[acc]; if (!a || a.isGroup) return '⚠️ الحساب غير صالح';

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.267 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.268 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.267)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.268)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.267</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.268</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.267";
+var CLIENT_APP_VERSION = "4.268";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -42657,7 +42657,7 @@ function vzRenderActBar() {
 // 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
 // الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
 // (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
-// (V4.267) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
+// (V4.268) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
   mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
@@ -45951,7 +45951,7 @@ function glInit(keepTab) {
   } else box.innerHTML = '<div class="text-center text-muted py-5">⏳ جاري تحميل الحسابات…</div>';
   glRun('glBootstrap', [cached ? cached.ver : ''], function (res) {
     if (res.same && cached) {
-      GL.isAdmin = !!res.isAdmin; GL.can = res.can || {}; GL.pendingCount = res.pendingCount || 0; glNavBadge_();
+      GL.isAdmin = !!res.isAdmin; GL.can = res.can || {}; GL.pendingCount = res.pendingCount || 0; GL.csPend = res.csPend || 0; glNavBadge_();
       document.querySelectorAll('#glTabs .gl-adm').forEach(function (t) { t.style.display = GL.isAdmin ? '' : 'none'; });
       document.getElementById('glActs').classList.toggle('d-none', !GL.can.add);
       if (!shown) { glApplyBoot_(cached); glTab(keepTab ? GL.tab : (GL.tab || 'home')); }
@@ -45959,7 +45959,7 @@ function glInit(keepTab) {
     }
     if (res.ready) glBootSave_(res);
     if (shown && res.ready) {   // تغيّرت البيانات منذ آخر مرة ⇒ تحديث صامت (وإعادة رسم الشاشة الحالية لو لا توجد نافذة مفتوحة)
-      glApplyBoot_(res); GL.can = res.can || {}; GL.isAdmin = !!res.isAdmin; GL.pendingCount = res.pendingCount || 0; glNavBadge_();
+      glApplyBoot_(res); GL.can = res.can || {}; GL.isAdmin = !!res.isAdmin; GL.pendingCount = res.pendingCount || 0; GL.csPend = res.csPend || 0; glNavBadge_();
       if (!document.getElementById('glDlgOv') && /^(home|coa|trial)$/.test(GL.tab)) glTab(GL.tab);
       return;
     }
@@ -45987,7 +45987,7 @@ function glTab(t) {
   var hl = { ledger: 'stmt', import: 'settings', trial: 'reports' }[t] || t;
   document.querySelectorAll('#glTabs .gl-tab').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === hl); });
   if (!GL.ready) return;
-  setTimeout(function () { if (GL.tab === t) glPendingBanner_(); }, 0);
+  setTimeout(function () { if (GL.tab === t) { glPendingBanner_(); glCsBanner_(); } }, 0);
   ({ home: glRenderHome, treasury: glRenderTreasury, banks: glRenderBanks, custody: glRenderCustody, entries: glRenderEntries, ledger: glRenderLedger, stmt: glRenderStmt, trial: glRenderTrial, reports: glRenderReports, auto: glRenderAuto, hotels: glRenderHotels, coa: glRenderCoa, import: glRenderImport, settings: glRenderSettings }[t] || glRenderHome)();
   glWireLiveFilters_(t);
 }
@@ -49361,6 +49361,73 @@ function glNavBadge_() {
   var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
   var t = document.getElementById('glAutoTabBadge'); if (t) { t.textContent = n || ''; t.style.display = n ? '' : 'none'; }
 }
+// 👜 (V4.268) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
+function glCsBanner_() {
+  var box = document.getElementById('glBody'), old = document.getElementById('glCsBanner'), n = (typeof GL !== 'undefined' && GL.csPend) || 0;
+  if (!n || !GL.ready) { if (old) old.remove(); return; }
+  var html = '👜 <b>' + n + '</b> صف من شيتات العهدة/الخزينة/البنوك ينتظر تحديد الطرف الآخر واعتماده <span class="text-muted small">(لم يُقيَّد بعد)</span>' +
+    '<button class="btn btn-danger btn-sm fw-bold ms-auto" onclick="glCsPendDlg()">استكمال واعتماد</button>';
+  if (old) { old.innerHTML = html; return; }
+  if (!box) return;
+  box.insertAdjacentHTML('afterbegin', '<div id="glCsBanner" class="alert alert-danger py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">' + html + '</div>');
+}
+function glCsPendDlg(force) {
+  glDlg('👜 صفوف الشيتات الناقصة — استكمال واعتماد', '<div id="glCsPBox" class="text-muted small py-4 text-center">⏳ جارٍ جلب الصفوف من الشيتات…</div>', 1180);
+  glRun('glCsPendAll', [!!force], function (res) { GL._csP = res; GL.csPend = res.csPend || 0; glCsBanner_(); glCsPendDraw_(); },
+    function (e) { var b = document.getElementById('glCsPBox'); if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc((e && e.message) || e) + '</div>'; });
+}
+function glCsPendDraw_() {
+  var R = GL._csP, box = document.getElementById('glCsPBox'); if (!R || !box) return;
+  if (!R.groups.length) { box.innerHTML = '<div class="text-center py-3" style="color:#166534;font-weight:700;">✅ لا توجد صفوف ناقصة</div>' + (R.errors && R.errors.length ? '<div class="small text-danger">' + R.errors.map(glEsc).join('<br>') + '</div>' : '') + '<div class="text-center mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="glCsPendDlg(true)">🔄 فحص كل الشيتات</button></div>'; return; }
+  var amt = function (x) { return x.inAmt ? '<b class="gl-latin" style="color:#15803d;">+' + glFmt(x.inAmt) + '</b>' : '<b class="gl-latin" style="color:#b91c1c;">−' + glFmt(x.outAmt) + '</b>'; };
+  var tot = R.groups.reduce(function (a, g) { return a + g.rows.length; }, 0);
+  var h = '<div class="d-flex align-items-center gap-2 flex-wrap mb-2"><span class="gl-pill">إجمالي الصفوف: <b>' + tot + '</b></span><span class="small text-muted">اختر الحساب (أو اضغط اقتراحاً) وعدّل البيان إن لزم، ثم «اعتماد المحدد» — كل الشيتات دفعة واحدة.</span>' +
+    '<button class="btn btn-outline-secondary btn-sm ms-auto" onclick="glCsPendDlg(true)" title="يفحص كل الشيتات المربوطة">🔄 فحص كل الشيتات</button>' +
+    '<button class="btn btn-outline-success btn-sm" onclick="glCsPickSugg_()" title="يملأ حقل الحساب بأول اقتراح للصفوف الفارغة">✨ تعبئة بأول اقتراح</button></div>';
+  R.groups.forEach(function (g) {
+    h += '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;overflow:hidden;"><div style="background:#fee2e2;padding:5px 12px;font-weight:800;font-size:12.5px;">👜 ' + glEsc(g.name) + ' (' + g.rows.length + ')' +
+      (g.url ? ' <a class="small ms-2" href="' + glEsc(g.url) + '" target="_blank" rel="noopener">فتح الشيت ↗</a>' : '') + '</div><div style="padding:6px;"><div class="table-responsive" style="max-height:320px;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" checked onchange="this.closest(\'table\').querySelectorAll(\'.glCsPk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>صف</th><th>التاريخ</th><th>المبلغ</th><th>الطرف بالشيت</th><th>البيان (قابل للتعديل)</th><th style="min-width:250px;">الحساب</th></tr></thead><tbody>' +
+      g.rows.map(function (x) {
+        return '<tr data-code="' + glEsc(g.code) + '" data-row="' + x.row + '"><td><input type="checkbox" class="glCsPk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x) + '</td>' +
+          '<td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
+          '<td><input class="form-control form-control-sm glCsDesc" value="' + glEsc(x.desc || '') + '" data-orig="' + glEsc(x.desc || '') + '" style="min-width:190px;"></td>' +
+          '<td>' + glAccInput('glCsAcc', '', '') + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
+            return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var i=this.closest(\'tr\').querySelector(\'.glCsAcc\');i.dataset.code=\'' + glJs(sg.code) + '\';i.value=\'' + glJs(sg.code + ' — ' + sg.name) + '\'">' + glEsc(sg.name) + '</button>';
+          }).join('') + '</div>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div></div></div>';
+  });
+  if (R.errors && R.errors.length) h += '<div class="small text-danger mb-1">⚠️ تعذّر فحص: ' + R.errors.map(glEsc).join(' · ') + '</div>';
+  h += R.canApprove ? '<div class="d-flex justify-content-end"><button class="btn btn-danger fw-bold" onclick="glCsApproveAll_(this)">✅ اعتماد المحدد وتسجيل قيوده</button></div>' : '<div class="small text-muted">الاعتماد لمن له صلاحية التعديل</div>';
+  box.innerHTML = h;
+}
+function glCsPickSugg_() {
+  document.querySelectorAll('#glCsPBox tr[data-row]').forEach(function (tr) {
+    var i = tr.querySelector('.glCsAcc'); if (!i || glAccVal(i)) return;
+    var b = tr.querySelector('button[onclick*="glCsAcc"]'); if (b) b.click();
+  });
+}
+function glCsApproveAll_(btn) {
+  var by = {}, n = 0, miss = 0;
+  document.querySelectorAll('#glCsPBox tr[data-row]').forEach(function (tr) {
+    if (!tr.querySelector('.glCsPk').checked) return;
+    var acc = glAccVal(tr.querySelector('.glCsAcc')); if (!acc) { miss++; return; }
+    var d = tr.querySelector('.glCsDesc'), it = { row: +tr.dataset.row, account: acc };
+    if (d && d.value.trim() && d.value !== d.dataset.orig) it.desc = d.value.trim();
+    (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push(it); n++;
+  });
+  if (!n) { _showPopup('اختر حساب الطرف لصف واحد على الأقل', 'warning'); return; }
+  var go = function () {
+    btn.disabled = true;
+    glRun('glCsApproveAll', [Object.keys(by).map(function (k) { return by[k]; })], function (res) {
+      GL.csPend = res.csPend || 0; if (typeof res.pendingCount === 'number') GL.pendingCount = res.pendingCount; glNavBadge_(); glCsBanner_();
+      showToast('✅ سُجّل ' + res.created + ' قيد' + (res.left ? ' — بقي ' + res.left + ' صف' : '') + ((res.problems || []).length ? ' · ⚠️ ' + res.problems.length + ' مشكلة' : ''));
+      if ((res.problems || []).length) _showPopup(res.problems.map(function (p) { return 'صف ' + p.row + ': ' + p.msg; }).join('\n'), 'warning');
+      glDlgClose(); glAfterChange();
+      if (res.left) glCsPendDlg();
+    }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); });
+  };
+  if (miss) askConfirm_(miss + ' صف محدد بلا حساب وسيبقى ناقصاً — متابعة اعتماد ' + n + ' صف؟', go, { title: 'اعتماد', danger: false }); else go();
+}
 function glPendingBanner_() {
   var box = document.getElementById('glBody'); if (!box || !GL.pendingCount || document.getElementById('glPendBanner')) return;
   box.insertAdjacentHTML('afterbegin', '<div id="glPendBanner" class="alert alert-warning py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">🔔 <b>' + GL.pendingCount +
@@ -49411,6 +49478,7 @@ function _glKickHandle_(r, since) {
   if (!r) return;
   try { if (r.now) localStorage.setItem('glKickSince', r.now); } catch (e) {}
   if (r.pending !== undefined && typeof GL !== 'undefined') { GL.pendingCount = r.pending; try { glNavBadge_(); } catch (e) {} }
+  if (r.csPend !== undefined && typeof GL !== 'undefined') { GL.csPend = r.csPend; try { glCsBanner_(); } catch (e) {} }
   var rec = (r.recent || []).filter(function (x) { return x.what === 'جديد'; });
   if (since && rec.length && typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'))) {
     showToast('📘 ' + rec.length + ' قيد تلقائي جديد: ' + rec.slice(0, 2).map(function (x) { return x.id + ' — ' + String(x.desc || '').slice(0, 60); }).join(' · ') + (rec.length > 2 ? ' …' : ''));
@@ -49755,7 +49823,7 @@ function glBotCardToggle_() {
   var box = document.getElementById('glBotGroupCard'); if (!box) return;
   if (box.classList.toggle('d-none') === false && !box.dataset.loaded) { box.dataset.loaded = '1'; glBotGroupCard_(); }
 }
-// 🔗 (V4.267) ربط الموظفين بالبوت: القسم موجود بقسم «بوت وتنبيهات الحجوزات» — هذا الزر يفتحه مباشرة
+// 🔗 (V4.268) ربط الموظفين بالبوت: القسم موجود بقسم «بوت وتنبيهات الحجوزات» — هذا الزر يفتحه مباشرة
 function glBotOpenLink_() {
   var c = document.getElementById('hbSetCard-bot'); if (!c) return;
   c.classList.remove('d-none');

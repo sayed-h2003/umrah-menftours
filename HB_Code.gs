@@ -8926,6 +8926,8 @@ function tgWebhookHealth_() {
 // التسجيل يدويًا. الآن أسوأ تأخير ممكن قبل عودة الاستجابة اللحظية هو دورة واحدة (دقيقة)
 function tgWebhookSelfHeal_() {
   if (tgBotMode_() !== 'webhook') return;   // وضع السحب لا يعنيه هذا الفحص إطلاقًا
+  // ⚡ (V4.268) سليم ⇒ لا نداء شبكة إلى تليجرام قبل مرور 5 دقائق (كان نداءً كل دقيقة بثوانٍ إضافية بكل دورة)
+  try { if (CacheService.getScriptCache().get('tghook_ok')) return; } catch (eOk) {}
   try {
     var health = tgWebhookHealth_();
     var expected = tgWebhookUrl_();
@@ -8937,7 +8939,7 @@ function tgWebhookSelfHeal_() {
     var mismatch = !!(health.url && health.url !== expected);
     var missing = !health.url;
     var failing = !!health.lastError;
-    if (!mismatch && !missing && !failing) return;
+    if (!mismatch && !missing && !failing) { try { CacheService.getScriptCache().put('tghook_ok', '1', 300); } catch (eP) {} return; }
     if (failing && !mismatch && !missing) {
       try {
         var c = CacheService.getScriptCache();
