@@ -3044,8 +3044,10 @@ function _glPendTop_(n) {
   try { _glRowsW_('pending').forEach(function (r) { if (_glStr_(r[0]) && _glStr_(r[9]) !== 'مرفوض') rows.push(r); }); } catch (e) {}
   rows.sort(function (a, b) { return _glAutoTsKey_(_glStr_(b[8])) > _glAutoTsKey_(_glStr_(a[8])) ? 1 : -1; });
   return rows.slice(0, n || 3).map(function (r) {
-    var d = _glStr_(r[14]).split('\n').slice(0, 5).map(function (x) { return '   ▫️ ' + x; }).join('\n');
-    return { key: _glStr_(r[0]), id: _glStr_(r[1]), txt: '• <b>' + _glBotEsc_(_glCleanDesc_(_glStr_(r[5]) || _glStr_(r[3])).slice(0, 120)) + '</b>' + (r[1] ? ' (' + _glBotEsc_(_glStr_(r[1])) + ')' : '') +
+    var d = _glStr_(r[14]).split('\n').slice(0, 10).map(function (x) { return '   ▫️ ' + x; }).join('\n');
+    var eo = null; try { var fe = _glStr_(r[1]) ? _glFindEntry_(_glStr_(r[1])) : null; if (fe) eo = _glEntryObj_(fe.r); } catch (eF) {}   // (V4.277) تاريخ القيد ونوعه
+    return { key: _glStr_(r[0]), id: _glStr_(r[1]), txt: '• <b>' + _glBotEsc_(_glCleanDesc_(_glStr_(r[5]) || _glStr_(r[3])).slice(0, 160)) + '</b>' + (r[1] ? ' (' + _glBotEsc_(_glStr_(r[1])) + ')' : '') +
+      '\n   🔄 ' + _glBotEsc_(_glStr_(r[2]) || 'تعديل') + (eo ? ' · ' + _glBotEsc_(eo.type) + ' · 📅 تاريخ القيد: <b>' + _glBotEsc_(eo.date) + '</b>' : '') + (_glStr_(r[8]) ? ' · 🕒 رُصد ' + _glBotEsc_(_glStr_(r[8])) : '') +
       (_glStr_(r[12]) || _glStr_(r[13]) ? '\n   💰 المبلغ القديم: ' + _glBotEsc_(_glStr_(r[12]) || '—') + ' · المبلغ الجديد: ' + _glBotEsc_(_glStr_(r[13]) || '—') : '') + (d ? '\n' + _glBotEsc_(d) : '') };
   });
 }
@@ -5875,23 +5877,54 @@ function _glBotQ_(type, p) {
     var P = PropertiesService.getScriptProperties(), q = [];
     try { q = JSON.parse(P.getProperty('GLBOT_Q') || '[]') || []; } catch (e) { q = []; }
     q.push({ t: type, p: p || {}, at: Date.now() }); if (q.length > 60) q = q.slice(-60);
-    P.setProperty('GLBOT_Q', JSON.stringify(q).slice(0, 8500));
+    P.setProperty('GLBOT_Q', _glBotQPack_(q));
   } catch (e) { Logger.log('_glBotQ_: ' + e.message); }
+}
+// (V4.277) حدّ خاصية السكربت ~9KB: يُقلَّص أقدم تفاصيل الأسطر ثم أقدم العناصر — بدل قصّ نص JSON (كان يُفسد الطابور كله)
+function _glBotQPack_(q) {
+  var js = JSON.stringify(q), i = 0;
+  while (js.length > 8500 && i < q.length) { if (q[i].p && q[i].p.ls && q[i].p.ls.length > 3) { q[i].p.lsN = q[i].p.lsN || q[i].p.ls.length; q[i].p.ls = q[i].p.ls.slice(0, 3); } i++; js = JSON.stringify(q); }
+  while (js.length > 8500 && q.length > 1) { q.shift(); js = JSON.stringify(q); }
+  return js.length > 8500 ? '[]' : js;
 }
 function _glBotWho_(o, session) { o.by = session && session.username || ''; return o; }
 function _glBotEntryInfo_(id, eRow, lRows) {
   var accM = _glAccounts_().map, eo = _glEntryObj_(eRow), names = [];
   (lRows || []).forEach(function (l) { var a = accM[_glStr_(l[4])]; if (a && a.kind !== 'fx') { var n = a.link || a.name; if (names.indexOf(n) < 0) names.push(n); } });
   var maxBase = 0; (lRows || []).forEach(function (l) { maxBase = Math.max(maxBase, _glNum_(l[9])); });
+  // 🧾 (V4.277) تفاصيل القيد كاملة لتنبيه تليجرام: كل سطر (الحساب، مدين/دائن، المبلغ بعملته، بيانه، الرحلة/العميل) + التاريخ ووقت التسجيل
+  var ls = [];
+  (lRows || []).forEach(function (l) {
+    var lo = _glLineObj_(l), a = accM[lo.account]; if (!lo.debit && !lo.credit) return;
+    ls.push([lo.debit ? 'م' : 'د', (a ? (a.link || a.name) : lo.account).slice(0, 40), _glR2_(lo.debit || lo.credit), lo.currency, String(_glCleanDesc_ ? _glCleanDesc_(lo.desc) : lo.desc || '').slice(0, 70),
+      String(lo.trip || lo.client || lo.agent || '').slice(0, 30), lo.currency !== 'EGP' && lo.rate ? lo.rate : '']);
+  });
   return { id: id, vno: eo.voucherNo || '', type: eo.type, date: eo.date, desc: _glCleanDesc_ ? _glCleanDesc_(eo.desc) : eo.desc, amt: _glAmtTxt_(lRows, accM),
-    parties: names.slice(0, 4).join(' ← '), base: _glR2_(eo.totalBase || maxBase) };
+    parties: names.slice(0, 4).join(' ← '), base: _glR2_(eo.totalBase || maxBase), trip: eo.trip || '', at: eo.updatedAt || eo.postedAt || eo.createdAt || '',
+    st: eo.status || '', ls: ls.slice(0, 12), lsN: ls.length };
+}
+// نص الأسطر لرسالة تليجرام
+function _glBotLinesTxt_(p) {
+  var E = _glBotEsc_, curL = { EGP: 'جنيه', SAR: 'ريال', USD: 'دولار' };
+  if (!p.ls || !p.ls.length) return '';
+  return '\n━━━━━━━━━━━━\n' + p.ls.map(function (l) {
+    return (l[0] === 'م' ? '🟢 مدين ' : '🔴 دائن ') + '<b>' + E(l[1]) + '</b>: ' + _glFmtN_(l[2]) + ' ' + (curL[l[3]] || l[3]) + (l[6] ? ' <i>(سعر ' + l[6] + ')</i>' : '') +
+      (l[5] ? ' · 🏷️ ' + E(l[5]) : '') + (l[4] ? '\n    📝 ' + E(l[4]) : '');
+  }).join('\n') + (p.lsN > p.ls.length ? '\n… و' + (p.lsN - p.ls.length) + ' سطر آخر' : '');
+}
+function _glBotHead_(p) {
+  var E = _glBotEsc_;
+  return '\n📅 تاريخ القيد: <b>' + E(p.date || '—') + '</b>' + (p.vno ? ' · 🔖 ' + E(p.vno) : '') + (p.id ? ' · 🆔 ' + E(p.id) : '') +
+    '\n💰 ' + E(p.amt) + (p.base ? ' <i>(المعادل ' + _glFmtN_(p.base) + ' جنيه)</i>' : '') +
+    '\n👥 ' + E(p.parties) + (p.trip ? '\n🧳 الرحلة: ' + E(p.trip) : '') + (p.desc ? '\n📝 ' + E(p.desc) : '');
 }
 function _glBotFmt_(it) {
   var p = it.p || {}, E = _glBotEsc_, ref = (p.vno ? p.vno + ' · ' : '') + (p.id || '');
   switch (it.t) {
-    case 'vch_new': return '🧾 <b>' + E(p.type || 'قيد') + ' جديد</b> — ' + E(ref) + '\n💰 ' + E(p.amt) + '\n👥 ' + E(p.parties) + '\n📝 ' + E(p.desc) + '\n📅 ' + E(p.date) + ' · 👤 ' + E(p.by);
-    case 'entry_edit': return '✏️ <b>تعديل قيد مرحّل</b> — ' + E(ref) + '\n💰 ' + E(p.amt) + '\n👥 ' + E(p.parties) + '\n📝 ' + E(p.desc) + '\n👤 ' + E(p.by);
-    case 'entry_void': return '🗑️ <b>' + (p.deleted ? 'حذف' : 'إلغاء') + ' قيد</b> — ' + E(ref) + '\n💰 ' + E(p.amt) + '\n👥 ' + E(p.parties) + (p.reason ? '\n❓ ' + E(p.reason) : '') + '\n👤 ' + E(p.by);
+    // (V4.277) بيانات كاملة: النوع والرقم وتاريخ القيد والمبلغ والأطراف والرحلة والبيان + كل الأسطر + المستخدم ووقت التسجيل
+    case 'vch_new': return '🧾 <b>' + E(p.type || 'قيد') + ' جديد</b>' + _glBotHead_(p) + _glBotLinesTxt_(p) + '\n━━━━━━━━━━━━\n👤 ' + E(p.by) + (p.at ? ' · 🕒 ' + E(p.at) : '');
+    case 'entry_edit': return '✏️ <b>تعديل ' + E(p.type || 'قيد') + ' مرحّل</b>' + _glBotHead_(p) + _glBotLinesTxt_(p) + '\n━━━━━━━━━━━━\n👤 ' + E(p.by) + (p.at ? ' · 🕒 ' + E(p.at) : '');
+    case 'entry_void': return '🗑️ <b>' + (p.deleted ? 'حذف' : 'إلغاء') + ' ' + E(p.type || 'قيد') + '</b>' + _glBotHead_(p) + (p.reason ? '\n❓ السبب: ' + E(p.reason) : '') + _glBotLinesTxt_(p) + '\n━━━━━━━━━━━━\n👤 ' + E(p.by) + ' · 🕒 ' + E(_glNow_());
     case 'custody_err': return '👜 <b>عهدة تحتاج مراجعة</b> — ' + E(p.name) + '\n' + p.n + ' صف بالشيت لم يُقيَّد (حساب غير معروف أو بيانات ناقصة) — راجعها من شاشة العهد.';
     case 'pending': return '⏳ <b>تغييرات تنتظر الاعتماد</b>: ' + p.n + ' — من تبويب «القيود التلقائية»' + (p.keys && p.keys.length ? ' أو بالأزرار تحت كل تغيير:' : '.') + (!p.keys && p.items && p.items.length ? '\n━━━━━━━━━━━━\n' + p.items.join('\n') : '');
     case 'stmt': return '📒 <b>صدر كشف حساب</b> ' + E(p.serial) + ' — ' + E(p.name) + '\n' + E(p.balances) + '\n👤 ' + E(p.by) + ' · ' + E(p.output);
@@ -5916,7 +5949,7 @@ function glBotTick_() {
         if (it.t === 'pending' && it.p && it.p.keys) it.p.keys.forEach(function (k, j) { try { _glBotSend_(c.chatId, (it.p.items || [])[j] || k, _glBotPendKb_(k)); } catch (eK) {} });
       } catch (e) { if ((it.n = (it.n || 0) + 1) < 4) left.push(it); Logger.log('glBotTick_: ' + e.message); }
     });
-    if (left.length) { var q2 = []; try { q2 = JSON.parse(P.getProperty('GLBOT_Q') || '[]') || []; } catch (e) {} P.setProperty('GLBOT_Q', JSON.stringify(left.concat(q2)).slice(0, 8500)); }
+    if (left.length) { var q2 = []; try { q2 = JSON.parse(P.getProperty('GLBOT_Q') || '[]') || []; } catch (e) {} P.setProperty('GLBOT_Q', _glBotQPack_(left.concat(q2))); }
   }
   // الملخص اليومي مرة واحدة في الساعة المحددة
   try {
