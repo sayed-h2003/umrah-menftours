@@ -5209,29 +5209,31 @@ function glHbLinkPays(authToken, ids) {
   var session = _glPerm_(authToken, 'edit');
   ids = (ids || []).map(_glStr_).filter(String);
   if (ids.length < 2) throw new Error('اختر دفعتين على الأقل');
-  var H = _glHbRead_(), rev = _glHbPayRev_(), by = {}; H.pays.forEach(function (p) { by[p.id] = p; });
-  ids.forEach(function (id) {
-    var p = by[id]; if (!p) throw new Error('الدفعة ' + id + ' غير موجودة');
-    if (_glHbLinkOf_(p, rev)) throw new Error('الدفعة ' + id + ' مرتبطة بالفعل');
-  });
-  var key = 'm' + Utilities.getUuid().replace(/-/g, '').slice(0, 12);
-  ids.forEach(function (id) { rev[id] = Object.assign({}, rev[id] || {}, { by: session.username, at: _glNow_(), linkGroup: key }); });
-  _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
-  logChange_(session.username, 'ربط دفعات برنامج الحجوزات يدوياً', 'GL:hb', '-', '-', ids.length + ' دفعة — ' + ids.join('، '));
-  // 🔗 (V4.264) تطبيق فوري بلا اعتماد منفصل: يُلغى قيدا الدفعتين ويُنشأ قيد واحد مرتبط الآن — كان يبقى قيدين منفصلين حتى مزامنة واعتماد لاحقين
-  var applied = _glHbApplyKeys_(session.username, ['AUTO:HBL:' + key].concat(ids.map(function (id) { return 'AUTO:HBP:' + id; })));
-  return { success: true, key: key, n: ids.length, applied: applied };
+  // 🔒 (V4.265) الكتابة + التطبيق داخل قفل واحد (waitLock): كان الكتابة بلا قفل ثم تطبيق بـ tryLock
+  // يفشل صامتاً عند انشغال الخادم ⇒ يُكتب الربط ولا يُعاد بناء القيد فتبقى الدفعتان قيدين منفصلين (أو يختفيان)
+  var lock = _glLock_(); lock.waitLock(45000);
+  try {
+    var H = _glHbRead_(), rev = _glHbPayRev_(), by = {}; H.pays.forEach(function (p) { by[p.id] = p; });
+    ids.forEach(function (id) {
+      var p = by[id]; if (!p) throw new Error('الدفعة ' + id + ' غير موجودة');
+      if (_glHbLinkOf_(p, rev)) throw new Error('الدفعة ' + id + ' مرتبطة بالفعل');
+    });
+    var key = 'm' + Utilities.getUuid().replace(/-/g, '').slice(0, 12);
+    ids.forEach(function (id) { rev[id] = Object.assign({}, rev[id] || {}, { by: session.username, at: _glNow_(), linkGroup: key }); });
+    _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
+    logChange_(session.username, 'ربط دفعات برنامج الحجوزات يدوياً', 'GL:hb', '-', '-', ids.length + ' دفعة — ' + ids.join('، '));
+    // 🔗 (V4.264) تطبيق فوري بلا اعتماد منفصل: يُلغى قيدا الدفعتين ويُنشأ قيد واحد مرتبط الآن
+    var applied = _glHbApplyKeysLocked_(session.username, ['AUTO:HBL:' + key].concat(ids.map(function (id) { return 'AUTO:HBP:' + id; })));
+    return { success: true, key: key, n: ids.length, applied: applied };
+  } finally { _glUnlock_(lock); }
 }
-// يطبّق مفاتيح قيود حجوزات بعينها فوراً (بلا اعتماد) — لربط/فك ربط الدفعات من شاشة المراجعة
-function _glHbApplyKeys_(user, keys) {
-  var lock = _glLock_(); if (!lock.tryLock(30000)) { try { CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600); } catch (e0) {} return null; }
+// يطبّق مفاتيح قيود حجوزات بعينها فوراً (بلا اعتماد) — لربط/فك ربط الدفعات من شاشة المراجعة. القفل محجوز من المستدعي
+function _glHbApplyKeysLocked_(user, keys) {
   try {
     var only = {}; keys.forEach(function (k) { only[k] = 1; });
     var r = _glAutoRun_(user, false, { bypass: true, onlyKeys: only });
-    try { CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600); } catch (eC) {}
     return { created: r.created, voided: r.voided, updated: r.updated };
-  } catch (e) { Logger.log('_glHbApplyKeys_: ' + e.message); return null; }
-  finally { _glUnlock_(lock); }
+  } catch (e) { Logger.log('_glHbApplyKeysLocked_: ' + e.message); try { CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600); } catch (e0) {} return null; }
 }
 // 🗑️ (V4.258) حذف دفعة مكررة من سجل الدفعات ببرنامج الحجوزات نفسه (من شاشة مراجعة الدفعات) — قيدها الآلي يُلغى بالمزامنة التالية
 function glHbDeletePays(authToken, ids) {
@@ -5318,15 +5320,19 @@ function glDupOffsetCp(authToken, cpId, hbId) {
 }
 function glHbUnlinkPay(authToken, id) {
   var session = _glPerm_(authToken, 'edit');
-  id = _glStr_(id); var rev = _glHbPayRev_();
-  if (!rev[id] || !rev[id].linkGroup) throw new Error('الدفعة غير مرتبطة يدوياً');
-  var grp = rev[id].linkGroup, mates = Object.keys(rev).filter(function (k) { return rev[k].linkGroup === grp; });
-  rev[id].linkGroup = ''; rev[id].by = session.username; rev[id].at = _glNow_();
-  _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
-  logChange_(session.username, 'فك ربط دفعة برنامج حجوزات', 'GL:hb', '-', '-', id);
-  // (V4.264) تطبيق فوري: يُلغى القيد المرتبط وتعود الدفعات قيوداً منفصلة الآن
-  var applied = _glHbApplyKeys_(session.username, ['AUTO:HBL:' + grp].concat(mates.map(function (k) { return 'AUTO:HBP:' + k; })));
-  return { success: true, applied: applied };
+  id = _glStr_(id);
+  var lock = _glLock_(); lock.waitLock(45000);   // 🔒 (V4.265) الكتابة + التطبيق ذرّيان داخل قفل واحد
+  try {
+    var rev = _glHbPayRev_();
+    if (!rev[id] || !rev[id].linkGroup) throw new Error('الدفعة غير مرتبطة يدوياً');
+    var grp = rev[id].linkGroup, mates = Object.keys(rev).filter(function (k) { return rev[k].linkGroup === grp; });
+    rev[id].linkGroup = ''; rev[id].by = session.username; rev[id].at = _glNow_();
+    _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
+    logChange_(session.username, 'فك ربط دفعة برنامج حجوزات', 'GL:hb', '-', '-', id);
+    // (V4.264) تطبيق فوري: يُلغى القيد المرتبط وتعود الدفعات قيوداً منفصلة الآن
+    var applied = _glHbApplyKeysLocked_(session.username, ['AUTO:HBL:' + grp].concat(mates.map(function (k) { return 'AUTO:HBP:' + k; })));
+    return { success: true, applied: applied };
+  } finally { _glUnlock_(lock); }
 }
 // تحديد رحلة حجز يدوياً: trip='' يعيد التلقائي، '-' بلا رحلة
 function glHbSaveTrip(authToken, rows) {
