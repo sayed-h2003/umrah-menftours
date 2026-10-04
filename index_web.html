@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.268 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.269 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.268)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.269)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.268</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.269</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.268";
+var CLIENT_APP_VERSION = "4.269";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -42657,7 +42657,7 @@ function vzRenderActBar() {
 // 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
 // الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
 // (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
-// (V4.268) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
+// (V4.269) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
   mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
@@ -49361,7 +49361,7 @@ function glNavBadge_() {
   var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
   var t = document.getElementById('glAutoTabBadge'); if (t) { t.textContent = n || ''; t.style.display = n ? '' : 'none'; }
 }
-// 👜 (V4.268) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
+// 👜 (V4.269) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
 function glCsBanner_() {
   var box = document.getElementById('glBody'), old = document.getElementById('glCsBanner'), n = (typeof GL !== 'undefined' && GL.csPend) || 0;
   if (!n || !GL.ready) { if (old) old.remove(); return; }
@@ -49823,14 +49823,36 @@ function glBotCardToggle_() {
   var box = document.getElementById('glBotGroupCard'); if (!box) return;
   if (box.classList.toggle('d-none') === false && !box.dataset.loaded) { box.dataset.loaded = '1'; glBotGroupCard_(); }
 }
-// 🔗 (V4.268) ربط الموظفين بالبوت: القسم موجود بقسم «بوت وتنبيهات الحجوزات» — هذا الزر يفتحه مباشرة
-function glBotOpenLink_() {
-  var c = document.getElementById('hbSetCard-bot'); if (!c) return;
-  c.classList.remove('d-none');
-  var b = document.getElementById('hbSetBox-bot'); if (b && b.classList.contains('d-none')) hbSetToggle_('bot');
-  c.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  showToast('🔗 داخل هذا القسم اضغط على شريط «ربط الموظفين بالبوت» لفتحه');
+function glBotLinksLoad_() {
+  var box = document.getElementById('glbLinks'); if (!box) return;
+  glRun('glBotLinkList', [], function (r) {
+    var E = glEsc;
+    var perm = function (f) { return f.admin ? '<span class="badge bg-dark">مدير</span>' : (f.view ? '<span class="badge bg-info text-dark">عرض</span>' + (f.edit ? ' <span class="badge bg-primary">تعديل</span>' : '') + (f.approve ? ' <span class="badge bg-success">اعتماد</span>' : '') : '<span class="badge bg-secondary">بلا صلاحية حسابات</span>'); };
+    box.innerHTML = '<div class="table-responsive"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th>الموظف</th><th>صلاحيات الحسابات</th><th>المربوط بتليجرام</th><th style="min-width:230px;">ربط جديد</th></tr></thead><tbody>' +
+      r.users.filter(function (u) { return u.active; }).map(function (u) {
+        var jl = glJs(u.username);
+        return '<tr><td style="text-align:right;"><b>' + E(u.fullName || u.username) + '</b><div class="text-muted">' + E(u.username) + '</div></td><td>' + perm(u.flags) + '</td><td style="text-align:right;">' +
+          (u.links.length ? u.links.map(function (l) { return '<div>' + (l.on ? '🟢' : '⚪') + ' ' + E(l.name || l.tgId) + ' <button class="btn btn-sm btn-link p-0" onclick="glBotLinkOp_(\'' + glJs(l.tgId) + '\',\'' + (l.on ? 'off' : 'on') + '\')">' + (l.on ? 'إيقاف' : 'تفعيل') + '</button> <button class="btn btn-sm btn-link text-danger p-0" onclick="glBotLinkOp_(\'' + glJs(l.tgId) + '\',\'del\')">فك</button></div>'; }).join('') : '<span class="text-muted">—</span>') + '</td>' +
+          '<td><div class="d-flex gap-1"><input class="form-control form-control-sm" dir="ltr" placeholder="@username" id="glbU_' + E(u.username) + '" style="min-width:110px;"><button class="btn btn-primary btn-sm" onclick="glBotLinkPend_(\'' + jl + '\')">ربط</button><button class="btn btn-outline-secondary btn-sm" onclick="glBotLinkCode_(\'' + jl + '\')">كود</button></div></td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      (r.pending.length ? '<div class="mt-2"><b>⏳ ربط معلَّق (ينتظر أول رسالة من الموظف):</b> ' + r.pending.map(function (p) { return '<span class="gl-pill">' + E(p.username) + ' ⇐ @' + E(p.raw.replace(/^@/, '')) + ' <a href="#" class="text-danger" onclick="glBotPendDel_(\'' + glJs(p.id) + '\');return false;">✖</a></span>'; }).join(' ') + '</div>' : '');
+  }, function (e) { box.innerHTML = '<div class="text-danger">⚠️ ' + glEsc((e && e.message) || e) + '</div>'; });
 }
+function glBotLinkPend_(u) {
+  var i = document.getElementById('glbU_' + u), v = i ? i.value.trim() : ''; if (!v) { _showPopup('اكتب اسم مستخدم الموظف على تليجرام', 'warning'); return; }
+  glRun('glBotLinkPend', [u, v], function () { showToast('✅ سيُربط تلقائياً عند أول رسالة من @' + v.replace(/^@/, '') + ' للبوت'); glBotLinksLoad_(); }, function (e) { _showPopup((e && e.message) || e, 'error'); });
+}
+function glBotLinkCode_(u) {
+  glRun('glBotLinkCode', [u], function (r) {
+    glDlg('🔑 كود ربط ' + glEsc(u), '<div class="text-center py-3"><div style="font-size:30px;font-weight:900;letter-spacing:6px;" class="gl-latin">' + glEsc(r.code) + '</div><div class="small text-muted mt-2">يرسله الموظف للبوت <b>في محادثة خاصة</b>: <code>/link ' + glEsc(r.code) + '</code> — صالح ' + r.minutes + ' دقيقة</div>' +
+      (r.deepLink ? '<div class="mt-2"><a href="' + glEsc(r.deepLink) + '" target="_blank" rel="noopener">رابط مباشر يفتح البوت ويرسل الكود ↗</a></div>' : '') + '</div>', 480);
+  }, function (e) { _showPopup((e && e.message) || e, 'error'); });
+}
+function glBotLinkOp_(id, op) {
+  var go = function () { glRun('glBotLinkSet', [id, op], function () { glBotLinksLoad_(); }, function (e) { _showPopup((e && e.message) || e, 'error'); }); };
+  if (op === 'del') askConfirm_('فك ربط هذا الحساب من البوت؟', go, { title: 'فك الربط', icon: '🔗', yesLabel: 'فك', danger: true }); else go();
+}
+function glBotPendDel_(id) { glRun('glBotLinkPendDel', [id], function () { glBotLinksLoad_(); }); }
 function glBotGroupCard_() {
   var box = document.getElementById('glBotGroupCard'); if (!box) return;
   box.innerHTML = '<div class="text-muted small">⏳ إعدادات مجموعة الحسابات…</div>';
@@ -49840,7 +49862,7 @@ function glBotGroupCard_() {
     box.innerHTML = '<div class="border rounded p-3" style="background:#f8fafc;"><div class="d-flex align-items-center gap-2 mb-2 flex-wrap"><b>📒 مجموعة الحسابات</b>' +
       '<span class="badge ' + (r.hasToken ? 'bg-success' : 'bg-danger') + '">' + (r.hasToken ? 'توكن البوت مضبوط' : 'لا يوجد توكن — اضبطه من قسم «الاتصال» بالأسفل') + '</span>' +
       (r.hbChat ? '<span class="badge bg-secondary">مجموعة الحجوزات: ' + E(r.hbTitle || r.hbChat) + '</span>' : '') +
-      '<button class="btn btn-outline-primary btn-sm ms-auto" onclick="glBotOpenLink_()" title="ربط موظفي البرنامج بحساباتهم على تليجرام لاعتماد القيود من الجروب">🔗 ربط الموظفين بالبوت</button></div>' +
+      '</div>' +
       '<div class="small text-muted mb-2">نفس البوت: أضفه لمجموعة الحسابات ثم أرسل فيها <code>/glid</code> ليرد برقمها، وانسخه هنا. داخل مجموعة الحسابات تعمل الأوامر بالكلمة العربية (رصيد، خزينة، كشف، قيد، عهد، اعتماد، حسابات)، وفي المحادثة الخاصة بالأمر (/glbal …) لموظف مربوط بالبوت ولديه صلاحية الحسابات.</div>' +
       '<div class="row g-2 align-items-end">' +
         '<div class="col-md-3">' + ck('glbEn', c.enabled, '<b>تفعيل</b>') + '</div>' +
@@ -49852,7 +49874,10 @@ function glBotGroupCard_() {
         '<div class="col-md-6">' + (r.own ? '<span class="badge bg-info text-dark me-1">بوت مستقل</span><button class="btn btn-outline-primary btn-sm" id="glbHook">🔗 تسجيل الويب هوك للبوت المستقل</button>' : '<span class="small text-muted">يعمل الآن على نفس بوت الحجوزات</span>') + '</div></div>' +
       '<div class="mt-2"><div class="small fw-bold mb-1">🔔 التنبيهات</div><div class="d-flex flex-wrap">' + r.events.map(function (e) { return ck('glbEv_' + e[0], c.events[e[0]], E(e[1])); }).join('') + '</div></div>' +
       '<div class="mt-2"><div class="small fw-bold mb-1">⌨️ الأوامر المتاحة</div><div class="d-flex flex-wrap">' + r.cmds.filter(function (x) { return x[0] !== 'id'; }).map(function (x) { return ck('glbCm_' + x[0], c.cmds[x[0]], '<code>' + E(x[2] || x[1]) + '</code> ' + E(x[3])); }).join('') + '</div></div>' +
-      '<div class="text-end mt-2"><button class="btn btn-outline-secondary btn-sm me-1" id="glbTest">📨 رسالة تجربة</button><button class="btn btn-success btn-sm fw-bold" id="glbSave">💾 حفظ</button></div></div>';
+      '<div class="text-end mt-2"><button class="btn btn-outline-secondary btn-sm me-1" id="glbTest">📨 رسالة تجربة</button><button class="btn btn-success btn-sm fw-bold" id="glbSave">💾 حفظ</button></div></div>' +
+      '<div class="border rounded p-3 mt-3" style="background:#f8fafc;"><div class="d-flex align-items-center gap-2 mb-1"><b>🔗 ربط موظفي البرنامج بالبوت</b><button class="btn btn-outline-secondary btn-sm ms-auto" onclick="glBotLinksLoad_()">↻ تحديث</button></div>' +
+      '<div class="small text-muted mb-2">خاص بموظفي <b>هذا البرنامج</b> وصلاحياتهم هنا (عرض / تعديل / اعتماد) — منفصل عن ربط موظفي برنامج الحجوزات القديم. اكتب اسم مستخدم الموظف على تليجرام (بدون @) ثم «ربط»: يكتمل الربط تلقائياً عند أول رسالة منه للبوت. أو «كود ربط» يرسله للبوت: <code>/link الكود</code> (صالح 30 دقيقة).</div><div id="glbLinks" class="small text-muted">⏳…</div></div>';
+    glBotLinksLoad_();
     var read = function () {
       var o = { token: document.getElementById('glbTok').value.trim(), enabled: document.getElementById('glbEn').checked, chatId: document.getElementById('glbChat').value.trim(), minAmount: document.getElementById('glbMin').value, dailyHour: document.getElementById('glbHr').value, events: {}, cmds: {} };
       r.events.forEach(function (e) { o.events[e[0]] = document.getElementById('glbEv_' + e[0]).checked; });

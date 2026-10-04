@@ -5837,6 +5837,7 @@ function glBotHandle_(msg, opt) {
     if (!_glSSId_()) return '';
     var text = _glStr_(msg && msg.text), chat = msg && msg.chat || {}, chatId = String(chat.id || ''), from = msg.from || {};
     if (!text) return '';
+    var li = _glBotLinkIncoming_(text, from, chatId); if (li) return li;   // (V4.269)
     var c = _glBotCfg_(), inGroup = !!(c.chatId && chatId === c.chatId), isPriv = chat.type === 'private';
     var w = text.replace(/@\w+/, '').trim(), first = w.split(/\s+/)[0], arg = w.slice(first.length).trim();
     var cmd = GLBOT_CMDS_.filter(function (x) { return first.toLowerCase() === x[1] || (inGroup && x[2] && first === x[2]); })[0];
@@ -5857,8 +5858,8 @@ function glBotHandle_(msg, opt) {
     if (!c.enabled) return '';
     if (!inGroup) {   // خارج مجموعة الحسابات: محادثة خاصة لموظف مربوط بالبوت ولديه صلاحية الحسابات فقط
       if (!isPriv) return '';
-      var lu = typeof tgUserByTgId_ === 'function' ? tgUserByTgId_(from.id) : null;
-      if (!lu || !lu.active || !_glBotUserCanGl_(lu.username)) { _glBotSend_(chatId, '⛔ أوامر الحسابات لموظف مربوط بالبوت ولديه صلاحية «الحسابات العامة».'); return 'بوت الحسابات: غير مصرح'; }
+      var lu = _glBotTgUser_(from);   // (V4.269) ربط البرنامج الحالي أولاً ثم ربط الحجوزات القديم
+      if (!lu || !(_sessionHasPerm_(lu, 'admin') || _sessionHasPerm_(lu, 'gl.view'))) { _glBotSend_(chatId, '⛔ أوامر الحسابات لموظف مربوط بالبوت ولديه صلاحية «الحسابات العامة».'); return 'بوت الحسابات: غير مصرح'; }
     }
     if (!c.cmds[cmd[0]]) { _glBotSend_(chatId, '⛔ هذا الأمر متوقف من إعدادات بوت الحسابات.'); return 'بوت الحسابات: أمر متوقف'; }
     if (cmd[0] === 'help') { _glBotSend_(chatId, _glBotRun_('help', '', inGroup), _glBotMenuKb_(c)); return 'بوت الحسابات: القائمة'; }
@@ -5907,10 +5908,114 @@ function _glPendByHash_(h) {
 function _glBotLinkHelp_(chatId, needApprove) {
   _glBotSend_(chatId, '🔗 <b>كيف تعتمد من تليجرام؟</b>\nلازم حساب تليجرام الخاص بك يكون <b>مربوطاً بالبوت</b>' + (needApprove ? ' وله صلاحية <b>«✅ اعتماد تغييرات القيود»</b>' : '') + ':\n' +
     '① افتح محادثة خاصة مع البوت واضغط <b>Start</b> (أو أرسل <code>/start</code>).\n' +
-    '② من البرنامج (مدير): <b>الإعدادات ← قسم «🔔 بوت وتنبيهات الحجوزات (تليجرام)» ← فتح / إغلاق ← شريط «🔗 ربط الموظفين بالبوت» (أو زر «🔗 ربط الموظفين بالبوت» بقسم بوت الحسابات)</b> → اختر اسمك وأدخِل اسم مستخدمك على تليجرام (بدون @) أو رقم موبايلك — يكتمل الربط تلقائياً أول رسالة منك. أو ولّد «كود ربط» وأرسله للبوت هكذا: <code>/link الكود</code>.' +
+    '② من البرنامج (مدير): <b>الإعدادات ← قسم «📒 بوت وتنبيهات الحسابات» ← فتح / إغلاق ← «🔗 ربط موظفي البرنامج بالبوت»</b> → أدخِل اسم مستخدمك على تليجرام (بدون @) أمام اسمك ثم «ربط» — يكتمل الربط تلقائياً أول رسالة منك للبوت. أو اضغط «كود ربط» وأرسله للبوت هكذا: <code>/link الكود</code>.' +
     (needApprove ? '\n③ تأكد أن صلاحياتك تشمل <b>«✅ اعتماد تغييرات القيود»</b> من <b>إدارة المستخدمين</b>.' : ''));
 }
+/* 🔗 (V4.269) ربط موظفي البرنامج الحالي ببوت الحسابات — مستقل عن ربط موظفي برنامج الحجوزات (صلاحيات وشاشات منفصلة)
+   • المستخدمون من جدول «Users» بالبرنامج الحالي وصلاحياتهم (gl.view / gl.edit / gl.approve / admin)
+   • التخزين بخصائص السكربت: GLBOT_LINKS {tgId:{u,name,ts,on}} · GLBOT_PEND [{id,norm,raw,u,ts}] · GLBOT_CODES {code:{u,ts}} */
+function _glBotJson_(k, d) { try { var v = PropertiesService.getScriptProperties().getProperty(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function _glBotJsonSave_(k, o) { PropertiesService.getScriptProperties().setProperty(k, JSON.stringify(o)); }
+function _glBotMainUsers_() {
+  var users = null; try { users = typeof getCachedData === 'function' ? getCachedData('users_cache') : null; } catch (e) {}
+  if (!users) { try { var sh = getSpreadsheet_().getSheetByName('Users'); users = sh && sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues().map(function (r) { return { username: String(r[0]), fullName: String(r[2] || ''), active: r[3], permissions: r[4] }; }) : []; } catch (e2) { users = []; } }
+  return users.filter(function (u) { return u && u.username; });
+}
+function _glBotMainUser_(username) {
+  var k = String(username || '').toLowerCase(), hit = null;
+  _glBotMainUsers_().forEach(function (u) { if (String(u.username).toLowerCase() === k) hit = u; });
+  return hit && hit.active !== false && String(hit.active) !== 'FALSE' ? hit : null;
+}
+function _glBotPermFlags_(u) {
+  var s = { username: u.username, permissions: u.permissions }, ad = _sessionHasPerm_(s, 'admin');
+  return { admin: ad, view: ad || _sessionHasPerm_(s, 'gl.view'), edit: ad || _sessionHasPerm_(s, 'gl.edit'), approve: ad || _sessionHasPerm_(s, 'gl.approve') };
+}
+function glBotLinkList(authToken) {
+  _glAdminPerm_(authToken);
+  var links = _glBotJson_('GLBOT_LINKS', {}), pend = _glBotJson_('GLBOT_PEND', []), bot = '';
+  try { if (!_glBotCfg_().token && typeof tgBotUsername_ === 'function') bot = tgBotUsername_(); } catch (e) {}
+  var by = {}; Object.keys(links).forEach(function (id) { var l = links[id]; (by[String(l.u).toLowerCase()] = by[String(l.u).toLowerCase()] || []).push({ tgId: id, name: l.name || '', ts: l.ts || '', on: l.on !== false }); });
+  var users = _glBotMainUsers_().map(function (u) {
+    var f = _glBotPermFlags_(u);
+    return { username: u.username, fullName: u.fullName || '', active: !(u.active === false || String(u.active) === 'FALSE'), flags: f, links: by[String(u.username).toLowerCase()] || [] };
+  });
+  return { success: true, users: users, pending: pend.map(function (r) { return { id: r.id, raw: r.raw, username: r.u, ts: r.ts }; }), bot: bot };
+}
+function glBotLinkPend(authToken, username, tgUser) {
+  var session = _glAdminPerm_(authToken);
+  username = _glStr_(username); if (!_glBotMainUser_(username)) throw new Error('مستخدم غير موجود أو غير نشط بالبرنامج');
+  var raw = _glStr_(tgUser), norm = raw.replace(/^@/, '').toLowerCase(); if (!/^[a-z0-9_]{4,}$/.test(norm)) throw new Error('اسم مستخدم تليجرام غير صالح (بدون @، حروف إنجليزية وأرقام و_)');
+  var list = _glBotJson_('GLBOT_PEND', []).filter(function (r) { return r.norm !== norm; });
+  list.push({ id: Utilities.getUuid().slice(0, 8), norm: norm, raw: raw, u: username, ts: Date.now(), by: session.username });
+  _glBotJsonSave_('GLBOT_PEND', list);
+  logChange_(session.username, 'ربط موظف ببوت الحسابات (معلَّق)', 'GL:bot', username, '-', '@' + norm);
+  return { success: true };
+}
+function glBotLinkPendDel(authToken, id) {
+  _glAdminPerm_(authToken);
+  _glBotJsonSave_('GLBOT_PEND', _glBotJson_('GLBOT_PEND', []).filter(function (r) { return r.id !== id; }));
+  return { success: true };
+}
+function glBotLinkCode(authToken, username) {
+  var session = _glAdminPerm_(authToken);
+  username = _glStr_(username); if (!_glBotMainUser_(username)) throw new Error('مستخدم غير موجود أو غير نشط بالبرنامج');
+  var codes = _glBotJson_('GLBOT_CODES', {}), now = Date.now();
+  Object.keys(codes).forEach(function (c) { if (now - codes[c].ts > 1800000) delete codes[c]; });
+  var al = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', code = 'G';
+  for (var i = 0; i < 6; i++) code += al.charAt(Math.floor(Math.random() * al.length));
+  codes[code] = { u: username, ts: now }; _glBotJsonSave_('GLBOT_CODES', codes);
+  logChange_(session.username, 'كود ربط بوت الحسابات', 'GL:bot', username, '-', '-');
+  var bot = ''; try { if (!_glBotCfg_().token && typeof tgBotUsername_ === 'function') bot = tgBotUsername_(); } catch (e) {}
+  return { success: true, code: code, minutes: 30, bot: bot, deepLink: bot ? 'https://t.me/' + bot + '?start=' + code : '' };
+}
+function glBotLinkSet(authToken, tgId, op) {
+  var session = _glAdminPerm_(authToken);
+  var links = _glBotJson_('GLBOT_LINKS', {}); tgId = _glStr_(tgId);
+  if (!links[tgId]) throw new Error('الربط غير موجود');
+  if (op === 'del') delete links[tgId]; else links[tgId].on = (op === 'on');
+  _glBotJsonSave_('GLBOT_LINKS', links);
+  logChange_(session.username, op === 'del' ? 'فك ربط موظف ببوت الحسابات' : 'تغيير حالة ربط بوت الحسابات', 'GL:bot', '-', '-', tgId + ' ' + op);
+  return { success: true };
+}
+function _glBotLinkDo_(from, u, how) {
+  var links = _glBotJson_('GLBOT_LINKS', {}), name = ((from.first_name || '') + ' ' + (from.last_name || '')).trim() || from.username || '';
+  links[String(from.id)] = { u: u.username, name: name, ts: _glNow_(), on: true }; _glBotJsonSave_('GLBOT_LINKS', links);
+  try { logChange_('بوت الحسابات', 'الإعدادات', u.username, 'ربط حساب تليجرام (' + name + ') بمستخدم البرنامج عبر ' + how, '', u.username); } catch (e) {}
+}
+// يُستدعى أول كل رسالة: ربط تلقائي باسم مستخدم تليجرام المعلَّق، أو «/link الكود» / «/start الكود» لأكواد بوت الحسابات (تبدأ بـ G).
+// يرجع نصاً فقط لو استهلك الأمر (فلا يصل لمعالج الحجوزات)، وإلا '' ليكمل المعالج الطبيعي
+function _glBotLinkIncoming_(text, from, chatId) {
+  try {
+    if (!from || !from.id) return '';
+    var links = _glBotJson_('GLBOT_LINKS', {}), mine = links[String(from.id)];
+    var m = String(text || '').trim().match(/^\/(?:link|start|glink)(?:@\w+)?\s+([A-Za-z0-9]{6,10})\s*$/i);
+    if (m) {
+      var codes = _glBotJson_('GLBOT_CODES', {}), cd = m[1].toUpperCase(), rec = codes[cd];
+      if (rec && Date.now() - rec.ts <= 1800000) {
+        var u = _glBotMainUser_(rec.u); delete codes[cd]; _glBotJsonSave_('GLBOT_CODES', codes);
+        if (!u) { _glBotSend_(chatId, '⚠️ المستخدم غير موجود أو غير نشط.'); return 'بوت الحسابات: ربط فاشل'; }
+        _glBotLinkDo_(from, u, 'كود الربط'); var f = _glBotPermFlags_(u);
+        _glBotSend_(chatId, '✅ تم ربطك بحسابات البرنامج.\n👤 ' + _glBotEsc_(u.fullName || u.username) + '\nصلاحيات الحسابات: ' + (f.admin ? 'مدير' : (f.view ? 'عرض' : 'لا يوجد') + (f.edit ? ' · تعديل' : '') + (f.approve ? ' · اعتماد' : '')) + '\nاكتب «قائمة» لعرض الأزرار.');
+        return 'بوت الحسابات: تم الربط';
+      }
+      if (rec) return '';
+    }
+    if (!mine) {
+      var uname = String(from.username || '').toLowerCase(); if (!uname) return '';
+      var pend = _glBotJson_('GLBOT_PEND', []), ix = -1;
+      pend.forEach(function (r, i) { if (ix < 0 && r.norm === uname) ix = i; });
+      if (ix < 0) return '';
+      var pu = _glBotMainUser_(pend[ix].u); var rr = pend.splice(ix, 1)[0]; _glBotJsonSave_('GLBOT_PEND', pend);
+      if (pu) { _glBotLinkDo_(from, pu, 'اسم المستخدم'); _glBotSend_(chatId, '✅ تم ربط حسابك تلقائياً بحسابات البرنامج: ' + _glBotEsc_(pu.fullName || pu.username)); }
+    }
+  } catch (e) { Logger.log('_glBotLinkIncoming_: ' + e.message); }
+  return '';
+}
 function _glBotTgUser_(from) {
+  try {   // (V4.269) ربط موظفي البرنامج الحالي أولاً (صلاحياتهم من جدول مستخدمي هذا البرنامج)
+    var ol = from && from.id ? _glBotJson_('GLBOT_LINKS', {})[String(from.id)] : null;
+    if (ol) { if (ol.on === false) return null; var mu = _glBotMainUser_(ol.u); return mu ? { username: mu.username, permissions: mu.permissions } : null; }
+  } catch (eO) {}
   var lu = typeof tgUserByTgId_ === 'function' ? tgUserByTgId_(from && from.id) : null;
   if (!lu || !lu.active) return null;
   var rec = null;
