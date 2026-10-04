@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.272 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.273 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.272)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.273)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.272</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.273</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.272";
+var CLIENT_APP_VERSION = "4.273";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -42657,7 +42657,7 @@ function vzRenderActBar() {
 // 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
 // الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
 // (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
-// (V4.272) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
+// (V4.273) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
   mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
@@ -48440,7 +48440,7 @@ function glCustSheetDlg(code) {
   glRun('glCustSheetGet', [code], function (res) {
     var c = res.cfg || {}, a = res.account, jc = glJs(code), url = c.id ? 'https://docs.google.com/spreadsheets/d/' + c.id : '';
     var L = c.last, CC = Object.assign({ in: 'A', out: 'B', desc: 'C', date: 'D', party: 'G', qaid: 'H' }, c.cols || {});
-    // (V4.272) شيت متعدد العملات: الوارد/الصادر العام غير مستخدمَين (أعمدة العملات تُغني عنهما) — لا تُعرض A/B الافتراضية
+    // (V4.273) شيت متعدد العملات: الوارد/الصادر العام غير مستخدمَين (أعمدة العملات تُغني عنهما) — لا تُعرض A/B الافتراضية
     var csMulti = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { return String((c.cols || {})[k] || '').trim(); });
     if (csMulti) { CC.in = ''; CC.out = ''; }
     var h = '<div class="gl-note" style="font-size:12px;line-height:1.9;">📋 <b>تنسيق الشيت</b> (من الصف ' + (c.startRow || 2) + '): ' +
@@ -48479,7 +48479,7 @@ function glCustSheetDlg(code) {
     if (c.id) glCsRun_(code, true);
   });
 }
-// (V4.272) أي عمود عملة مُدخَل ⇒ الوارد/الصادر العام يُفرَّغ ويتعطّل (لا يعود A/B تلقائياً)، ولو أُفرغت كلها يعودان A/B
+// (V4.273) أي عمود عملة مُدخَل ⇒ الوارد/الصادر العام يُفرَّغ ويتعطّل (لا يعود A/B تلقائياً)، ولو أُفرغت كلها يعودان A/B
 function glCsMultiSync_() {
   var any = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { var e = document.getElementById('glCsC_' + k); return e && e.value.trim(); });
   [['in', 'A'], ['out', 'B']].forEach(function (f) {
@@ -49374,7 +49374,7 @@ function glNavBadge_() {
   var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
   var t = document.getElementById('glAutoTabBadge'); if (t) { t.textContent = n || ''; t.style.display = n ? '' : 'none'; }
 }
-// 👜 (V4.272) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
+// 👜 (V4.273) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
 function glCsBanner_() {
   var box = document.getElementById('glBody'), old = document.getElementById('glCsBanner'), n = (typeof GL !== 'undefined' && GL.csPend) || 0;
   if (!n || !GL.ready) { if (old) old.remove(); return; }
@@ -49384,7 +49384,7 @@ function glCsBanner_() {
   if (!box) return;
   box.insertAdjacentHTML('afterbegin', '<div id="glCsBanner" class="alert alert-danger py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">' + html + '</div>');
 }
-// ➕ (V4.272) إضافة حساب جديد من شاشة مراجعة صفوف الشيتات بلا مغادرتها: نافذة صغيرة فوقها ثم يُختار الحساب الجديد للصف تلقائياً
+// ➕ (V4.273) إضافة حساب جديد من شاشة مراجعة صفوف الشيتات بلا مغادرتها: نافذة صغيرة فوقها ثم يُختار الحساب الجديد للصف تلقائياً
 function glCsNaBtn_() {
   return (typeof GL !== 'undefined' && GL.can && GL.can.add) ? '<button type="button" class="btn btn-outline-success btn-sm py-0 px-2" title="إضافة حساب جديد للدليل واختياره لهذا الصف" onclick="glCsNewAcc_(this)">➕</button>' : '';
 }

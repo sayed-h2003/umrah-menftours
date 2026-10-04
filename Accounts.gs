@@ -3353,22 +3353,32 @@ function _glCsReadRows_(sh, startRow, cfg) {
   if (last < startRow) return out;
   var W = Math.max(C.in, C.out, C.desc, C.date, C.party, C.qaid, OLD, C.inEGP, C.outEGP, C.inSAR, C.outSAR, C.inUSD, C.outUSD, C.ok) + 1;
   W = Math.max(W, Math.min(26, sh.getLastColumn() || W));   // (V4.249) قراءة كل أعمدة الصف لاكتشاف صفوف «الإجمالي»
-  var skipNext = false, TOT = /(^|\s)(ال)?[اإأ]جمال[يى]|المجموع/;
+  // (V4.273) صف «الإجماليات/المجموع» = نهاية الشيت: آخر صف يُزامَن هو ما قبله، وكل ما بعده (إجماليات/أرصدة/جداول أخرى) لا يُقرأ
+  var stop = false, TOT = /^\s*((ال)?[اإأ]جمال[يى](ات)?|(ال)?مجموع(ات)?)(\s|$|:|\/)/;
   sh.getRange(startRow, 1, last - startRow + 1, W).getValues().forEach(function (r, i) {
-    // (V4.249) صف «الإجمالي» (مجموع الاستلام والصرف) والصف التالي له (الرصيد) لا يُقيَّدان أبداً
-    if (skipNext) { skipNext = false; return; }
-    if (r.some(function (v) { return typeof v === 'string' && TOT.test(v); })) { skipNext = true; return; }
+    if (stop) return;
+    if (r.some(function (v) { return typeof v === 'string' && TOT.test(v); })) { stop = true; return; }
     var num = function (ci) { return ci < 0 || r[ci] instanceof Date ? 0 : _glR2_(_glNum_(r[ci])); };
+    var raw = _glStr_(r[C.qaid]);
     var x = { row: startRow + i, inAmt: num(C.in), outAmt: num(C.out),
-      desc: _glStr_(r[C.desc]), date: _glDate_(r[C.date]), f: _glStr_(r[C.qaid]), hint: _glStr_(r[C.party]) };
-    if (C.multi) {   // (V4.262) العملة = العمود الذي فيه القيمة
+      desc: _glStr_(r[C.desc]), date: _glDate_(r[C.date]), f: raw, hint: _glStr_(r[C.party]) };
+    var parts = null;
+    if (C.multi) {   // (V4.262) العملة = العمود الذي فيه القيمة — (V4.273) أكثر من عملة بالصف ⇒ يُفصل لقيد مستقل لكل عملة
       var hit = ['EGP', 'SAR', 'USD'].filter(function (c) { return num(C['in' + c]) || num(C['out' + c]); });
-      if (hit.length) { x.cur = hit[0]; x.inAmt = num(C['in' + hit[0]]); x.outAmt = num(C['out' + hit[0]]); if (hit.length > 1) x.multiCur = hit.join('+'); }
+      if (hit.length) { x.cur = hit[0]; x.inAmt = num(C['in' + hit[0]]); x.outAmt = num(C['out' + hit[0]]); if (hit.length > 1) parts = hit; }
       else if (!x.inAmt && !x.outAmt) x.inAmt = x.outAmt = 0;
     }
     if (C.ok >= 0) x.ok = /^(ok|تم|نعم|yes|✓|✔|✅|x|y|1)$/i.test(_glStr_(r[C.ok]).trim());
     if (!x.f && C.qaid !== OLD && /^JE-\d{6}$/.test(_glStr_(r[OLD]))) { x.f = _glStr_(r[OLD]); x.fOld = 1; }
     if (!x.inAmt && !x.outAmt) return;
+    if (parts) {
+      var ids = raw.indexOf('|') >= 0 ? raw.split('|').map(function (t) { t = t.trim(); return t === '-' ? '' : t; }) : [raw.trim()];
+      parts.forEach(function (c, k) {
+        var y = Object.assign({}, x, { cur: c, inAmt: num(C['in' + c]), outAmt: num(C['out' + c]), sub: k, subN: parts.length, f: ids[k] || '', fRaw: raw });
+        y.hash = _glCsHash_(y); out.push(y);
+      });
+      return;
+    }
     x.hash = _glCsHash_(x);
     out.push(x);
   });
@@ -3389,10 +3399,11 @@ function _glFuzzyWords_(s) {
 function _glFuzzyCore_(s) {
   if (!_GL_NOISE_) { _GL_NOISE_ = {}; ['شركة', 'شركه', 'مؤسسة', 'موسسة', 'مكتب', 'للسياحة', 'السياحة', 'سياحة', 'والسياحة', 'وسياحة', 'للسفر', 'السفر', 'سفر', 'والسفر', 'للرحلات', 'الرحلات', 'رحلات', 'للعمرة', 'العمرة', 'عمرة', 'والعمرة', 'للحج', 'والحج', 'السياحيه', 'السياحية', 'للخدمات', 'للتجارة', 'التجارية', 'المحدودة', 'ذمم', 'عميل', 'مورد', 'وكيل', 'للاستثمار', 'travel', 'tours', 'tourism', 'co', 'company', 'for']
     .forEach(function (n) { _glFuzzyWords_(n).forEach(function (w) { _GL_NOISE_[w] = 1; }); }); }
-  var w = _glFuzzyWords_(s), core = w.filter(function (x) { return !_GL_NOISE_[x]; });
+  var w = _glFuzzyWords_(s), core = w.filter(function (x) { return !_GL_NOISE_[x] && !/^[\d٠-٩]+$/.test(x); });   // (V4.273) الأرقام (سنة/رقم 2027) ليست جزءاً من الاسم الجوهري
   return core.length ? core : w;   // لو كل الكلمات «ضوضاء» نُبقيها كما هي
 }
 // كل كلمة بالتلميح لها كلمة مقابلة بالاسم (تطابق/بداية/فرق حرف واحد للكلمات الطويلة)
+function _glFuzzyNums_(s) { return _glFuzzyWords_(s).filter(function (x) { return /^[\d٠-٩]+$/.test(x); }).map(function (x) { return x.replace(/[٠-٩]/g, function (d) { return String(d.charCodeAt(0) - 1632); }); }); }
 function _glWordHit_(w, a) {
   if (w === a) return true;
   if (w.length >= 4 && a.length >= 4 && (a.indexOf(w) === 0 || w.indexOf(a) === 0)) return true;
@@ -3404,8 +3415,8 @@ function _glCsNameIndex_(accs, self) {
   try { _glRows_('hbmap').forEach(function (r) { var c = _glStr_(r[2]); if (c) (hb[c] = hb[c] || []).push(_glStr_(r[0])); }); } catch (e) {}
   accs.list.forEach(function (a) {
     if (a.isGroup || !a.active || a.code === self) return;
-    var keys = {}, cores = []; [a.name, a.link].concat(hb[a.code] || []).forEach(function (n) { var k = _glFuzzyKey_(n); if (k && k.length >= 2) keys[k] = 1; var w = _glFuzzyCore_(n); if (w.length) cores.push(w); });
-    idx.push({ code: a.code, keys: Object.keys(keys), cores: cores });
+    var keys = {}, cores = [], nums = []; [a.name, a.link].concat(hb[a.code] || []).forEach(function (n) { var k = _glFuzzyKey_(n); if (k && k.length >= 2) keys[k] = 1; var w = _glFuzzyCore_(n); if (w.length) { cores.push(w); nums.push(_glFuzzyNums_(n)); } });
+    idx.push({ code: a.code, keys: Object.keys(keys), cores: cores, nums: nums });
   });
   return idx;
 }
@@ -3430,6 +3441,11 @@ function _glCsResolve_(hint, accs, learned, self, idx) {
   var hw = _glFuzzyCore_(hint).filter(function (w) { return w.length >= 2; });
   if (hw.length && hw.join('').length >= 3) {
     var tk = idx.filter(function (x) { return (x.cores || []).some(function (cw) { return hw.every(function (w) { return cw.some(function (a) { return _glWordHit_(w, a); }); }); }); });
+    var hn = _glFuzzyNums_(hint);
+    if (tk.length > 1 && hn.length) {   // «برستيج 2027» ⇒ يُفضَّل الحساب الذي يحمل نفس الرقم/السنة
+      var tn = tk.filter(function (x) { return (x.nums || []).some(function (nw) { return hn.every(function (n) { return nw.indexOf(n) >= 0; }); }); });
+      if (tn.length) tk = tn;
+    }
     if (tk.length === 1) return tk[0].code;
     if (tk.length > 1) {   // الأقرب: نفس عدد الكلمات الجوهرية تماماً
       var ex2 = tk.filter(function (x) { return x.cores.some(function (cw) { return cw.length === hw.length && hw.every(function (w) { return cw.some(function (a) { return _glWordHit_(w, a); }); }); }); });
@@ -3609,7 +3625,6 @@ function _glCsSync_(code, user, opts) {
   rows.forEach(function (x) {
     var base = { row: x.row, date: x.date, desc: x.desc, inAmt: x.inAmt, outAmt: x.outAmt, hint: x.hint };
     if (x.cur) base.cur = x.cur;
-    if (x.multiCur) { base.msg = 'الصف فيه مبالغ بأكثر من عملة (' + x.multiCur + ') — افصلها في صفوف'; out.problems.push(base); return; }
     if (x.inAmt && x.outAmt) { base.msg = 'الصف فيه مبلغ وارد وصادر معاً — افصلهما في صفين'; out.problems.push(base); return; }
     if (x.inAmt < 0 || x.outAmt < 0) { base.msg = 'مبلغ سالب'; out.problems.push(base); return; }
     if (x.f) {
@@ -3626,8 +3641,9 @@ function _glCsSync_(code, user, opts) {
       base.msg = 'رقم القيد «' + x.f + '» غير موجود بالحسابات العامة — امسحه من الشيت لتسجيل الصف'; out.problems.push(base); return;
     }
     var hbId = 'CUSTODY:' + seg + ':' + x.row;
-    if (hbAuto[hbId]) { seen[hbAuto[hbId]] = 1; toCreate.push({ x: x, linkOnly: hbAuto[hbId] }); return; }
-    if (hbPays[hbId]) { base.msg = 'دفعة مسجلة ببرنامج الحجوزات (' + hbPays[hbId].party + ') — يُقيَّد عبر مزامنة الحجوزات'; out.hbWait.push(base); return; }
+    if (x.subN > 1) hbId = '';   // صف متعدد العملات لا يُربط بدفعة حجوزات واحدة
+    if (hbId && hbAuto[hbId]) { seen[hbAuto[hbId]] = 1; toCreate.push({ x: x, linkOnly: hbAuto[hbId] }); return; }
+    if (hbId && hbPays[hbId]) { base.msg = 'دفعة مسجلة ببرنامج الحجوزات (' + hbPays[hbId].party + ') — يُقيَّد عبر مزامنة الحجوزات'; out.hbWait.push(base); return; }
     if (!x.date) { base.msg = 'بلا تاريخ (العمود D)'; out.problems.push(base); return; }
     // ✔ (V4.262) صف معلَّم «ok» = سُجّل من شاشات البرنامج ⇒ يُربط بقيده القائم على نفس الحساب (نفس العملة والمبلغ والاتجاه، ±3 أيام)
     if (x.ok) {
@@ -3637,7 +3653,7 @@ function _glCsSync_(code, user, opts) {
       out.problems.push(base); return;
     }
     var cp = (opts.approve && opts.approve[x.row]) || _glCsResolve_(x.hint, accs, learned, code, nameIdx || (nameIdx = _glCsNameIndex_(accs, code)));
-    if (!cp) { base.sugg = _glCsSuggest_(x.hint, accs, code); out.pending.push(base); return; }
+    if (!cp) { if (x.sub > 0) return; if (x.subN > 1) base.desc = (base.desc || '') + ' [صف متعدد العملات — يُفصل لقيد لكل عملة]'; base.sugg = _glCsSuggest_(x.hint, accs, code); out.pending.push(base); return; }
     toCreate.push({ x: x, cp: cp, approved: !!(opts.approve && opts.approve[x.row]) });
   });
   Object.keys(mine).forEach(function (id) {
@@ -3709,13 +3725,21 @@ function _glCsSync_(code, user, opts) {
   // 3) كتابة رقم القيد في العمود F — بعد إعادة قراءة الشيت: نفس الصف لو لم يتغيّر، وإلا أول صف مطابق بلا رقم (لو أُدرجت صفوف أثناء المزامنة)
   if (fW.length) {
     var now = _glCsReadRows_(S.sh, cfg.startRow || 2, cfg), byRow = {}, byHash = {};
-    now.forEach(function (y) { byRow[y.row] = y; if (!y.f) (byHash[y.hash] = byHash[y.hash] || []).push(y); });
+    now.forEach(function (y) { byRow[y.row + ':' + (y.sub || 0)] = y; if (!y.f) (byHash[y.hash] = byHash[y.hash] || []).push(y); });
+    var wrote = {};   // صف ⇒ {y, ids[]} — الصف المفصول لعملات يُكتب فيه «JE-1 | JE-2» بترتيب العملات
     fW.forEach(function (w) {
-      var y = byRow[w.x.row];
+      var sub = w.x.sub || 0, y = byRow[w.x.row + ':' + sub];
       if (!(y && !y.f && y.hash === w.x.hash)) y = (byHash[w.x.hash] || []).filter(function (z) { return !z._used && !z.f; })[0];
       if (!y) { out.problems.push({ row: w.x.row, date: w.x.date, desc: w.x.desc, inAmt: w.x.inAmt, outAmt: w.x.outAmt, msg: 'سُجّل القيد ' + w.id + ' لكن تعذّر كتابة رقمه بالشيت (تغيّر الصف) — اكتبه يدوياً في F' }); return; }
       y._used = 1; y.f = w.id;
-      S.sh.getRange(y.row, QC).setNumberFormat('@').setValue(w.id);
+      var rec = wrote[y.row] = wrote[y.row] || { y: y, ids: [] };
+      rec.ids[y.sub || 0] = w.id;
+    });
+    Object.keys(wrote).forEach(function (k) {
+      var rec = wrote[k], y = rec.y, ids = rec.ids;
+      if (y.subN > 1) { var old = (y.fRaw || '').indexOf('|') >= 0 ? y.fRaw.split('|').map(function (t) { t = t.trim(); return t === '-' ? '' : t; }) : [(y.fRaw || '').trim()]; for (var q = 0; q < y.subN; q++) if (!ids[q]) ids[q] = old[q] || ''; }
+      var val = y.subN > 1 ? ids.slice(0, y.subN).map(function (t) { return t || '-'; }).join(' | ') : ids[0];
+      S.sh.getRange(y.row, QC).setNumberFormat('@').setValue(val);
     });
   }
   // 🏨 (V4.258) نسخ قيود العهدة على حسابات أطراف الحجوزات إلى سجل دفعات برنامج الحجوزات (مثل سندات القبض/الصرف)
