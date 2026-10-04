@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.271 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.272 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.271)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.272)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.271</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.272</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.271";
+var CLIENT_APP_VERSION = "4.272";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -42657,7 +42657,7 @@ function vzRenderActBar() {
 // 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
 // الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
 // (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
-// (V4.271) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
+// (V4.272) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
   mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
@@ -48440,7 +48440,7 @@ function glCustSheetDlg(code) {
   glRun('glCustSheetGet', [code], function (res) {
     var c = res.cfg || {}, a = res.account, jc = glJs(code), url = c.id ? 'https://docs.google.com/spreadsheets/d/' + c.id : '';
     var L = c.last, CC = Object.assign({ in: 'A', out: 'B', desc: 'C', date: 'D', party: 'G', qaid: 'H' }, c.cols || {});
-    // (V4.271) شيت متعدد العملات: الوارد/الصادر العام غير مستخدمَين (أعمدة العملات تُغني عنهما) — لا تُعرض A/B الافتراضية
+    // (V4.272) شيت متعدد العملات: الوارد/الصادر العام غير مستخدمَين (أعمدة العملات تُغني عنهما) — لا تُعرض A/B الافتراضية
     var csMulti = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { return String((c.cols || {})[k] || '').trim(); });
     if (csMulti) { CC.in = ''; CC.out = ''; }
     var h = '<div class="gl-note" style="font-size:12px;line-height:1.9;">📋 <b>تنسيق الشيت</b> (من الصف ' + (c.startRow || 2) + '): ' +
@@ -48479,7 +48479,7 @@ function glCustSheetDlg(code) {
     if (c.id) glCsRun_(code, true);
   });
 }
-// (V4.271) أي عمود عملة مُدخَل ⇒ الوارد/الصادر العام يُفرَّغ ويتعطّل (لا يعود A/B تلقائياً)، ولو أُفرغت كلها يعودان A/B
+// (V4.272) أي عمود عملة مُدخَل ⇒ الوارد/الصادر العام يُفرَّغ ويتعطّل (لا يعود A/B تلقائياً)، ولو أُفرغت كلها يعودان A/B
 function glCsMultiSync_() {
   var any = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { var e = document.getElementById('glCsC_' + k); return e && e.value.trim(); });
   [['in', 'A'], ['out', 'B']].forEach(function (f) {
@@ -48523,9 +48523,9 @@ function glCsDraw_(code) {
     h += sec('⏳', 'بانتظار الاعتماد — الطرف غير معروف: اختر الحساب ثم «اعتماد»', r.pending.length, '#fef3c7',
       tbl('<th><input type="checkbox" checked onchange="document.querySelectorAll(\'.glCsChk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>صف</th><th>التاريخ</th><th>المبلغ ' + cur + '</th><th>البيان</th><th>الطرف بالشيت (G)</th><th style="min-width:260px;">الحساب</th>',
         r.pending.map(function (x) {
-          return '<tr data-row="' + x.row + '"><td><input type="checkbox" class="glCsChk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x) + '</td>' +
+          return '<tr data-row="' + x.row + '" data-hint="' + glEsc(x.hint || '') + '" data-sg="' + glEsc((x.sugg && x.sugg[0] && x.sugg[0].code) || '') + '"><td><input type="checkbox" class="glCsChk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x) + '</td>' +
             '<td style="text-align:right;">' + glEsc(x.desc) + '</td><td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
-            '<td>' + glAccInput('glCsAcc', '', '') + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (s) {
+            '<td><div class="d-flex gap-1">' + glAccInput('glCsAcc', '', '') + glCsNaBtn_() + '</div>' + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (s) {
               return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var i=this.closest(\'tr\').querySelector(\'.glCsAcc\');i.dataset.code=\'' + glJs(s.code) + '\';i.value=\'' + glJs(s.code + ' — ' + s.name) + '\'">' + glEsc(s.name) + '</button>';
             }).join('') + '</div>' : '') + '</td></tr>';
         }).join('')) +
@@ -49374,7 +49374,7 @@ function glNavBadge_() {
   var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
   var t = document.getElementById('glAutoTabBadge'); if (t) { t.textContent = n || ''; t.style.display = n ? '' : 'none'; }
 }
-// 👜 (V4.271) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
+// 👜 (V4.272) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
 function glCsBanner_() {
   var box = document.getElementById('glBody'), old = document.getElementById('glCsBanner'), n = (typeof GL !== 'undefined' && GL.csPend) || 0;
   if (!n || !GL.ready) { if (old) old.remove(); return; }
@@ -49383,6 +49383,42 @@ function glCsBanner_() {
   if (old) { old.innerHTML = html; return; }
   if (!box) return;
   box.insertAdjacentHTML('afterbegin', '<div id="glCsBanner" class="alert alert-danger py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">' + html + '</div>');
+}
+// ➕ (V4.272) إضافة حساب جديد من شاشة مراجعة صفوف الشيتات بلا مغادرتها: نافذة صغيرة فوقها ثم يُختار الحساب الجديد للصف تلقائياً
+function glCsNaBtn_() {
+  return (typeof GL !== 'undefined' && GL.can && GL.can.add) ? '<button type="button" class="btn btn-outline-success btn-sm py-0 px-2" title="إضافة حساب جديد للدليل واختياره لهذا الصف" onclick="glCsNewAcc_(this)">➕</button>' : '';
+}
+function glCsNewAcc_(btn) {
+  var tr = btn.closest('tr'), inp = tr && tr.querySelector('.glCsAcc'); if (!inp) return;
+  var old = document.getElementById('glCsNaOv'); if (old) old.remove();
+  var groups = (GL.accounts || []).filter(function (g) { return g.isGroup && !g._virtual; }).sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
+  var sg = tr.dataset.sg && GL.map[tr.dataset.sg], defParent = (sg && sg.parent && GL.map[sg.parent] && GL.map[sg.parent].isGroup ? sg.parent : '') || GL._csNaParent || (groups[0] || {}).code || '';
+  var ov = document.createElement('div'); ov.id = 'glCsNaOv'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483300;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:12px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;width:min(520px,96vw);box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden;"><div style="background:#0f4c4c;color:#fff;padding:9px 14px;display:flex;align-items:center;"><b style="flex:1;">➕ حساب جديد</b><button class="btn btn-light btn-sm" id="glCsNaX">✕</button></div>' +
+    '<div style="padding:12px 14px;"><div class="mb-2"><label class="gl-lbl">اسم الحساب</label><input id="glCsNaName" class="form-control form-control-sm" value="' + glEsc(tr.dataset.hint || '') + '"></div>' +
+    '<div class="mb-2"><label class="gl-lbl">تحت الحساب (القسم)</label><select id="glCsNaParent" class="form-select form-select-sm">' + groups.map(function (g) {
+      var pad = new Array((g.code.length <= 1 ? 0 : g.code.length <= 2 ? 1 : g.code.length <= 4 ? 2 : 3) + 1).join('\u00A0\u00A0');
+      return '<option value="' + glEsc(g.code) + '"' + (g.code === defParent ? ' selected' : '') + '>' + pad + glEsc(g.code + ' — ' + g.name) + '</option>'; }).join('') + '</select>' +
+    '<div class="small text-muted mt-1">يأخذ الحساب فئة القسم المختار. للتفاصيل الأخرى عدّله لاحقاً من «🌳 دليل الحسابات».</div></div>' +
+    '<div class="text-end"><button class="btn btn-success btn-sm fw-bold" id="glCsNaSave">💾 إنشاء واختيار</button></div></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+  document.getElementById('glCsNaX').onclick = function () { ov.remove(); };
+  var nm = document.getElementById('glCsNaName'); if (nm) { nm.focus(); nm.select(); }
+  document.getElementById('glCsNaSave').onclick = function () {
+    var b = this, name = document.getElementById('glCsNaName').value.trim(), parent = document.getElementById('glCsNaParent').value;
+    if (!name) { _showPopup('اسم الحساب مطلوب', 'warning'); return; }
+    if (!parent) { _showPopup('اختر القسم', 'warning'); return; }
+    b.disabled = true;
+    glRun('glSaveAccount', [{ parent: parent, name: name, currency: '', kind: (GL.map[parent] || {}).kind || '', link: '', notes: '', isGroup: false, active: true }], function (res) {
+      var code = res.account.code; GL._csNaParent = parent;
+      if (!GL.map[code]) { GL.accounts.push(res.account); GL.map[code] = res.account; }   // يظهر فوراً بالبحث قبل اكتمال التحديث
+      inp.dataset.code = code; inp.value = glAccLabel(code);
+      ov.remove(); showToast('✅ أُنشئ الحساب ' + code + ' واختير للصف');
+      glRefreshData();
+    }, function (e) { b.disabled = false; _showPopup((e && e.message) || e, 'error'); });
+  };
 }
 function glCsPendDlg(force) {
   glDlg('👜 صفوف الشيتات الناقصة — استكمال واعتماد', '<div id="glCsPBox" class="text-muted small py-4 text-center">⏳ جارٍ جلب الصفوف من الشيتات…</div>', 1180);
@@ -49401,10 +49437,10 @@ function glCsPendDraw_() {
     h += '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;overflow:hidden;"><div style="background:#fee2e2;padding:5px 12px;font-weight:800;font-size:12.5px;">👜 ' + glEsc(g.name) + ' (' + g.rows.length + ')' +
       (g.url ? ' <a class="small ms-2" href="' + glEsc(g.url) + '" target="_blank" rel="noopener">فتح الشيت ↗</a>' : '') + '</div><div style="padding:6px;"><div class="table-responsive" style="max-height:320px;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" checked onchange="this.closest(\'table\').querySelectorAll(\'.glCsPk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>صف</th><th>التاريخ</th><th>المبلغ</th><th>الطرف بالشيت</th><th>البيان (قابل للتعديل)</th><th style="min-width:250px;">الحساب</th></tr></thead><tbody>' +
       g.rows.map(function (x) {
-        return '<tr data-code="' + glEsc(g.code) + '" data-row="' + x.row + '"><td><input type="checkbox" class="glCsPk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x) + '</td>' +
+        return '<tr data-code="' + glEsc(g.code) + '" data-row="' + x.row + '" data-hint="' + glEsc(x.hint || '') + '" data-sg="' + glEsc((x.sugg && x.sugg[0] && x.sugg[0].code) || '') + '"><td><input type="checkbox" class="glCsPk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x) + '</td>' +
           '<td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
           '<td><input class="form-control form-control-sm glCsDesc" value="' + glEsc(x.desc || '') + '" data-orig="' + glEsc(x.desc || '') + '" style="min-width:190px;"></td>' +
-          '<td>' + glAccInput('glCsAcc', '', '') + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
+          '<td><div class="d-flex gap-1">' + glAccInput('glCsAcc', '', '') + glCsNaBtn_() + '</div>' + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
             return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var i=this.closest(\'tr\').querySelector(\'.glCsAcc\');i.dataset.code=\'' + glJs(sg.code) + '\';i.value=\'' + glJs(sg.code + ' — ' + sg.name) + '\'">' + glEsc(sg.name) + '</button>';
           }).join('') + '</div>' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div></div></div>';
