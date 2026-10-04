@@ -3379,14 +3379,32 @@ function _glFuzzyKey_(s) {
     .replace(/[\-_.,،؛;:\/\\()\[\]{}"'«»|+*]/g, ' ');
   return t.split(/\s+/).map(function (w) { return w.length > 3 ? w.replace(/^(ال|لل)/, '') : w; }).join('');
 }
+// 🔎 (V4.267) كلمات الاسم الجوهرية: بلا «شركة/مؤسسة/للسياحة/السفر…» فيتطابق «الاقصر» و«شركة الاقصر» و«الأقصر للسياحه» مع «الاقصر للسياحة»
+var _GL_NOISE_ = null;
+function _glFuzzyWords_(s) {
+  var t = _glHbKey_(String(s || '').replace(/^\s*ح\s*\/\s*/, '').replace(/^\s*حساب\s+/, '')).toLowerCase().replace(/[\-_.,،؛;:\/\\()\[\]{}"'«»|+*]/g, ' ');
+  return t.split(/\s+/).filter(String).map(function (w) { return w.length > 3 ? w.replace(/^(ال|لل)/, '') : w; });
+}
+function _glFuzzyCore_(s) {
+  if (!_GL_NOISE_) { _GL_NOISE_ = {}; ['شركة', 'شركه', 'مؤسسة', 'موسسة', 'مكتب', 'للسياحة', 'السياحة', 'سياحة', 'والسياحة', 'وسياحة', 'للسفر', 'السفر', 'سفر', 'والسفر', 'للرحلات', 'الرحلات', 'رحلات', 'للعمرة', 'العمرة', 'عمرة', 'والعمرة', 'للحج', 'والحج', 'السياحيه', 'السياحية', 'للخدمات', 'للتجارة', 'التجارية', 'المحدودة', 'ذمم', 'عميل', 'مورد', 'وكيل', 'للاستثمار', 'travel', 'tours', 'tourism', 'co', 'company', 'for']
+    .forEach(function (n) { _glFuzzyWords_(n).forEach(function (w) { _GL_NOISE_[w] = 1; }); }); }
+  var w = _glFuzzyWords_(s), core = w.filter(function (x) { return !_GL_NOISE_[x]; });
+  return core.length ? core : w;   // لو كل الكلمات «ضوضاء» نُبقيها كما هي
+}
+// كل كلمة بالتلميح لها كلمة مقابلة بالاسم (تطابق/بداية/فرق حرف واحد للكلمات الطويلة)
+function _glWordHit_(w, a) {
+  if (w === a) return true;
+  if (w.length >= 4 && a.length >= 4 && (a.indexOf(w) === 0 || w.indexOf(a) === 0)) return true;
+  return w.length >= 5 && a.length >= 5 && Math.abs(w.length - a.length) <= 1 && _glLev_(w, a) <= 1;
+}
 // أسماء كل حساب للمطابقة: اسمه + ربطه + الأسماء المربوطة به بخريطة برنامج الحجوزات
 function _glCsNameIndex_(accs, self) {
   var idx = [], hb = {};
   try { _glRows_('hbmap').forEach(function (r) { var c = _glStr_(r[2]); if (c) (hb[c] = hb[c] || []).push(_glStr_(r[0])); }); } catch (e) {}
   accs.list.forEach(function (a) {
     if (a.isGroup || !a.active || a.code === self) return;
-    var keys = {}; [a.name, a.link].concat(hb[a.code] || []).forEach(function (n) { var k = _glFuzzyKey_(n); if (k && k.length >= 2) keys[k] = 1; });
-    idx.push({ code: a.code, keys: Object.keys(keys) });
+    var keys = {}, cores = []; [a.name, a.link].concat(hb[a.code] || []).forEach(function (n) { var k = _glFuzzyKey_(n); if (k && k.length >= 2) keys[k] = 1; var w = _glFuzzyCore_(n); if (w.length) cores.push(w); });
+    idx.push({ code: a.code, keys: Object.keys(keys), cores: cores });
   });
   return idx;
 }
@@ -3400,11 +3418,22 @@ function _glCsResolve_(hint, accs, learned, self, idx) {
   // (V4.247) مطابقة تقريبية — تُقبل فقط لو كانت النتيجة حساباً واحداً بلا لبس، وإلا يبقى الصف «ناقصاً» للمراجعة
   idx = idx || _glCsNameIndex_(accs, self);
   var f = _glFuzzyKey_(hint); if (!f || f.length < 3) return '';
+  _glFuzzyCore_(hint); if (_glFuzzyWords_(hint).every(function (w) { return _GL_NOISE_[w]; })) return '';   // كلمات عامة فقط («شركة»/«للسياحة») لا تدل على حساب
   var uniq = function (arr) { var o = {}; arr.forEach(function (x) { o[x.code] = 1; }); var c = Object.keys(o); return c.length === 1 ? c[0] : ''; };
   var eq = idx.filter(function (x) { return x.keys.indexOf(f) >= 0; }); if (eq.length) return uniq(eq);
   if (f.length >= 4) {
     var ct = idx.filter(function (x) { return x.keys.some(function (q) { return q.length >= 4 && (q.indexOf(f) >= 0 || f.indexOf(q) >= 0); }); });
     if (ct.length) return uniq(ct);
+  }
+  // (V4.267) مطابقة بالكلمات الجوهرية بلا ترتيب ولا «شركة/للسياحة…»: كل كلمات التلميح موجودة بكلمات اسم الحساب
+  var hw = _glFuzzyCore_(hint).filter(function (w) { return w.length >= 2; });
+  if (hw.length && hw.join('').length >= 3) {
+    var tk = idx.filter(function (x) { return (x.cores || []).some(function (cw) { return hw.every(function (w) { return cw.some(function (a) { return _glWordHit_(w, a); }); }); }); });
+    if (tk.length === 1) return tk[0].code;
+    if (tk.length > 1) {   // الأقرب: نفس عدد الكلمات الجوهرية تماماً
+      var ex2 = tk.filter(function (x) { return x.cores.some(function (cw) { return cw.length === hw.length && hw.every(function (w) { return cw.some(function (a) { return _glWordHit_(w, a); }); }); }); });
+      if (ex2.length === 1) return ex2[0].code;
+    }
   }
   var lim = f.length >= 8 ? 2 : (f.length >= 5 ? 1 : 0); if (!lim) return '';
   var best = 99, hits = [];
@@ -3412,14 +3441,14 @@ function _glCsResolve_(hint, accs, learned, self, idx) {
   return best <= lim ? uniq(hits) : '';
 }
 function _glCsSuggest_(hint, accs, self) {
-  var k = _glCsKey_(hint); if (!k || k.length < 3) return [];
-  var toks = k.split(' ').filter(function (t) { return t.length >= 3; });
+  var k = _glCsKey_(hint); if (!k || k.length < 2) return [];
+  var hw = _glFuzzyCore_(hint).filter(function (w) { return w.length >= 2; }); if (!hw.length) return [];
   return accs.list.filter(function (a) { return !a.isGroup && a.active && a.code !== self; }).map(function (a) {
-    var n = _glCsKey_(a.name), sc = 0;
-    if (n.indexOf(k) >= 0 || k.indexOf(n) >= 0) sc += 5;
-    toks.forEach(function (t) { if (n.indexOf(t) >= 0) sc++; });
-    return { code: a.code, name: a.name, sc: sc };
-  }).filter(function (s) { return s.sc >= 2; }).sort(function (a, b) { return b.sc - a.sc; }).slice(0, 3).map(function (s) { return { code: s.code, name: s.name }; });
+    var cw = _glFuzzyCore_(a.name), sc = 0, n = _glCsKey_(a.name);
+    hw.forEach(function (w) { if (cw.some(function (x) { return _glWordHit_(w, x); })) sc += 2; else if (w.length >= 3 && cw.some(function (x) { return x.indexOf(w) >= 0 || w.indexOf(x) >= 0; })) sc += 1; });
+    if (n.indexOf(k) >= 0 || k.indexOf(n) >= 0) sc += 2;
+    return { code: a.code, name: a.name, sc: sc, miss: Math.abs(cw.length - hw.length) };
+  }).filter(function (s) { return s.sc >= 2; }).sort(function (a, b) { return b.sc - a.sc || a.miss - b.miss; }).slice(0, 4).map(function (s) { return { code: s.code, name: s.name }; });
 }
 // قيد صف الشيت: الوارد «صرف عهدة» والمصروف «تسوية عهدة» — بعملة العهدة وسعر يوم الصف
 // ✔ (V4.262) قيد قائم على نفس الحساب يطابق صف «ok»: نفس العملة والمبلغ والاتجاه وتاريخ ±3 أيام، غير مربوط بصف آخر
@@ -5831,7 +5860,7 @@ function _glPendByHash_(h) {
 function _glBotLinkHelp_(chatId, needApprove) {
   _glBotSend_(chatId, '🔗 <b>كيف تعتمد من تليجرام؟</b>\nلازم حساب تليجرام الخاص بك يكون <b>مربوطاً بالبوت</b>' + (needApprove ? ' وله صلاحية <b>«✅ اعتماد تغييرات القيود»</b>' : '') + ':\n' +
     '① افتح محادثة خاصة مع البوت واضغط <b>Start</b> (أو أرسل <code>/start</code>).\n' +
-    '② من البرنامج (مدير): <b>الإعدادات ← 🔔 بوت وتنبيهات الحجوزات ← «🔗 ربط الموظفين بالبوت»</b> → اختر اسمك وأدخِل اسم مستخدمك على تليجرام (بدون @) أو رقم موبايلك — يكتمل الربط تلقائياً أول رسالة منك. أو ولّد «كود ربط» وأرسله للبوت هكذا: <code>/link الكود</code>.' +
+    '② من البرنامج (مدير): <b>الإعدادات ← قسم «🔔 بوت وتنبيهات الحجوزات (تليجرام)» ← فتح / إغلاق ← شريط «🔗 ربط الموظفين بالبوت» (أو زر «🔗 ربط الموظفين بالبوت» بقسم بوت الحسابات)</b> → اختر اسمك وأدخِل اسم مستخدمك على تليجرام (بدون @) أو رقم موبايلك — يكتمل الربط تلقائياً أول رسالة منك. أو ولّد «كود ربط» وأرسله للبوت هكذا: <code>/link الكود</code>.' +
     (needApprove ? '\n③ تأكد أن صلاحياتك تشمل <b>«✅ اعتماد تغييرات القيود»</b> من <b>إدارة المستخدمين</b>.' : ''));
 }
 function _glBotTgUser_(from) {
