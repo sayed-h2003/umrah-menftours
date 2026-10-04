@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.269 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.270 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.269)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.270)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.269</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.270</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.269";
+var CLIENT_APP_VERSION = "4.270";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -42657,7 +42657,7 @@ function vzRenderActBar() {
 // 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
 // الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
 // (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
-// (V4.269) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
+// (V4.270) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
   mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
@@ -48450,7 +48450,7 @@ function glCustSheetDlg(code) {
         '<div class="col-md-1"><label class="gl-lbl">أول صف</label><input id="glCsRow" class="form-control form-control-sm gl-latin" value="' + (c.startRow || 2) + '"></div>' +
         // ⏱️ (V4.250) المزامنة التلقائية كل N دقيقة أو كل N ساعة
         '<div class="col-md-3"><label class="d-flex gap-1 align-items-center small mb-1"><input type="checkbox" id="glCsAuto"' + (c.auto ? ' checked' : '') + '> 🕐 مزامنة تلقائية كل</label>' +
-          '<div class="d-flex gap-1"><input id="glCsEveryN" type="number" min="5" max="59" class="form-control form-control-sm gl-latin text-center" style="width:70px;" value="' + ((c.every && c.every.n) || 5) + '" title="أقل تكرار خلفي 5 دقائق — المزامنة اليدوية فورية">' +
+          '<div class="d-flex gap-1"><input id="glCsEveryN" type="number" min="1" max="59" class="form-control form-control-sm gl-latin text-center" style="width:70px;" value="' + ((c.every && c.every.n) || 5) + '" title="أقل تكرار خلفي دقيقة واحدة — المزامنة اليدوية فورية دائماً">' +
           '<select id="glCsEveryU" class="form-select form-select-sm"><option value="min"' + (c.every && c.every.unit === 'min' ? ' selected' : '') + '>دقيقة</option><option value="hour"' + (!c.every || c.every.unit !== 'min' ? ' selected' : '') + '>ساعة</option></select></div></div>' +
         // (V4.249) عملة قيود العهدة: الافتراضي ريال ويمكن تغييرها — حساب عهدة بعملة ثابتة يُقيَّد بعملته (تُغيَّر من تعديل الحساب)
         '<div class="col-md-2"><label class="gl-lbl">عملة العهدة</label><select id="glCsCur" class="form-select form-select-sm"' + (a.currency ? ' disabled title="عملة الحساب ثابتة بالدليل — تُغيَّر من تعديل الحساب"' : '') + '>' +
@@ -49361,7 +49361,7 @@ function glNavBadge_() {
   var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
   var t = document.getElementById('glAutoTabBadge'); if (t) { t.textContent = n || ''; t.style.display = n ? '' : 'none'; }
 }
-// 👜 (V4.269) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
+// 👜 (V4.270) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
 function glCsBanner_() {
   var box = document.getElementById('glBody'), old = document.getElementById('glCsBanner'), n = (typeof GL !== 'undefined' && GL.csPend) || 0;
   if (!n || !GL.ready) { if (old) old.remove(); return; }

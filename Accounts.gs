@@ -3508,7 +3508,7 @@ function glCustSheetSave(authToken, code, cfg) {
   o.tab = S.sh.getName(); o.title = S.ss.getName(); o.cur = _glCur_(a.currency || cfg.cur || 'SAR'); o.auto = !!cfg.auto;   // (V4.249) الافتراضي ريال ويمكن تغييره
   // ⏱️ (V4.250) تكرار المزامنة التلقائية: كل N دقيقة (1-59) أو كل N ساعة (1-24)
   var ev = cfg.every || {}, unit = ev.unit === 'min' ? 'min' : 'hour', n = parseInt(ev.n, 10) || 1;
-  if (unit === 'min') n = Math.max(5, Math.min(59, n));   // (V4.264) أقل تكرار خلفي 5 دقائق لحماية أداء البرنامج
+  if (unit === 'min') n = Math.max(1, Math.min(59, n));   // (V4.270) الحد الأدنى دقيقة واحدة
   if (unit === 'hour' && (n < 1 || n > 24)) throw new Error('عدد الساعات من 1 إلى 24');
   o.every = { unit: unit, n: n };
   o.by = session.username; o.at = _glNow_();
@@ -3730,7 +3730,7 @@ function _glCsSync_(code, user, opts) {
   return out;
 }
 // المزامنة المجدولة لكل عهدة مربوطة فُعّل لها «تلقائي» — (V4.250) كلٌّ حسب تكراره (دقائق/ساعات) ولا تُكرَّر قبل موعدها
-function _glCsEveryMin_(cfg) { var e = (cfg && cfg.every) || {}, n = parseInt(e.n, 10) || 1; return e.unit === 'min' ? Math.max(5, n) : n * 60; }   // (V4.268) حد أدنى 5 دقائق حتى للإعدادات القديمة
+function _glCsEveryMin_(cfg) { var e = (cfg && cfg.every) || {}, n = parseInt(e.n, 10) || 1; return e.unit === 'min' ? Math.max(1, n) : n * 60; }   // (V4.270) الحد الأدنى دقيقة واحدة
 function _glCsAutoAll_() {
   _GL_SET_MEMO_ = null;
   var set = _glSettings_(), res = [], P = PropertiesService.getScriptProperties(), last = {};
@@ -3765,7 +3765,7 @@ function _glCsAutoAll_() {
 // ⏱️ (V4.250) مشغّل مستقل لمزامنة شيتات العهد بأقصر تكرار مطلوب (دقيقة/5/10/15/30 أو كل ساعة) — يُعاد ضبطه عند حفظ أي إعداد
 function glCustSheetCron() {
   // ⚡ (V4.268) المشغّل القديم كان مضبوطاً كل دقيقة (يُعاد ضبطه فقط عند حفظ إعداد) — يُصحَّح ذاتياً مرة واحدة
-  try { var P0 = PropertiesService.getScriptProperties(); if (P0.getProperty('GL_CS_TRIG_V') !== '268') { P0.setProperty('GL_CS_TRIG_V', '268'); _glCsEnsureTrigger_(); return; } } catch (eT) {}
+  try { var P0 = PropertiesService.getScriptProperties(); if (P0.getProperty('GL_CS_TRIG_V') !== '270') { P0.setProperty('GL_CS_TRIG_V', '270'); _glCsEnsureTrigger_(); return; } } catch (eT) {}
   try { _glCsAutoAll_(); } catch (e) { Logger.log('glCustSheetCron: ' + e.message); }   // (V4.258) القفل لكل شيت داخل _glCsAutoAll_
 }
 function _glCsEnsureTrigger_() {
@@ -3778,10 +3778,9 @@ function _glCsEnsureTrigger_() {
   });
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'glCustSheetCron') ScriptApp.deleteTrigger(t); });
   if (!minI) return { every: 0 };
-  // ⚡ (V4.264) حد أدنى 5 دقائق للمزامنة الخلفية: فتح شيتات جوجل الخارجية كل دقيقة كان يستهلك عشرات الثواني كل مرة
-  // ويبطّئ كل البرنامج. المزامنة اليدوية («🔄 مزامنة الآن») تبقى فورية. التكرار الأسرع المسموح به خلفياً = 5 دقائق.
+  // (V4.270) الحد الأدنى للتكرار الخلفي دقيقة واحدة (خيارات المشغّل: 1 / 5 / 10 / 15 / 30 دقيقة أو كل ساعة)
   if (minI >= 60) { ScriptApp.newTrigger('glCustSheetCron').timeBased().everyHours(1).create(); return { every: 60 }; }
-  var step = [30, 15, 10, 5].filter(function (x) { return x <= minI && minI % x === 0; })[0] || 5;
+  var step = [30, 15, 10, 5, 1].filter(function (x) { return x <= minI && minI % x === 0; })[0] || 1;
   ScriptApp.newTrigger('glCustSheetCron').timeBased().everyMinutes(step).create();
   return { every: step };
 }
