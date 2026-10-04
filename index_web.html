@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.275 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.276 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.275)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.276)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.275</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.276</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.275";
+var CLIENT_APP_VERSION = "4.276";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7850,6 +7850,20 @@ var PERM_SCREENS = [
   { key: 'ministry',  label: 'مراجعة ملفات الوزارة' },
   { key: 'visas',     label: 'متابعة التأشيرات والوكلاء' },
   { key: 'gl',        label: 'الحسابات العامة (الدفتر العام)' },
+  // 🔐 (V4.276) الشاشات والنماذج الفرعية للحسابات العامة — اختيارية: لو لم يُختر أي منها تنطبق صلاحية «الحسابات العامة» على الكل
+  { key: 'gl_safe',   label: '💰 الخزينة: سند قبض/صرف/تحويل نقدية', sub: 'gl' },
+  { key: 'gl_bank',   label: '🏛️ البنوك: إيداع/سحب', sub: 'gl' },
+  { key: 'gl_cust',   label: '👜 العهد: صرف/تسوية', sub: 'gl' },
+  { key: 'gl_sheets', label: '🔗 مزامنة الشيتات واعتماد صفوفها', sub: 'gl' },
+  { key: 'gl_je',     label: '🧾 القيود اليومية وشاشة القيود', sub: 'gl' },
+  { key: 'gl_pt',     label: '⇄ التحويل بين طرفين', sub: 'gl' },
+  { key: 'gl_fx',     label: '💱 تحويل العملة', sub: 'gl' },
+  { key: 'gl_stmt',   label: '📒 كشف الحساب والكشوف', sub: 'gl' },
+  { key: 'gl_rep',    label: '📊 التقارير والميزان', sub: 'gl' },
+  { key: 'gl_auto',   label: '🤖 القيود التلقائية والاعتماد', sub: 'gl' },
+  { key: 'gl_hb',     label: '🏨 ربط الحجوزات ودفعات الفنادق', sub: 'gl' },
+  { key: 'gl_cp',     label: '💵 توجيه دفعات العملاء', sub: 'gl' },
+  { key: 'gl_coa',    label: '🌳 دليل الحسابات (حساب/قسم جديد)', sub: 'gl' },
   { key: 'hotels',    label: 'برنامج حجوزات الفنادق (الدخول الموحّد)' },
   { key: 'pricing',   label: 'تسعير الرحلات' },
   { key: 'audit',     label: 'سجل التدقيق' },
@@ -7928,19 +7942,55 @@ function hasPermission(perm) {
 /* ===============================
    🧩 مصفوفة اختيار الصلاحيات (add/edit) مع التتالي التلقائي
 ================================ */
+/* 🏨 (V4.276) شاشات برنامج الحجوزات داخل نفس مصفوفة الصلاحيات (مستويات: عرض < إضافة < تعديل < حذف) — تُحفظ في صلاحيات الفنادق */
+var _HBPM_ = { dirty: {} };
+function _hbPermRows_(prefix) {
+  if (typeof HBU === 'undefined' || !HBU || !HBU.screens || !hasPermission('admin')) return '<tr><td colspan="' + (PERM_CAPS.length + 1) + '" class="small text-muted">🏨 شاشات الفنادق والحجوزات: تُحمَّل بعد فتح شاشة المستخدمين (للمدير) — أو من زر «🏨 الفنادق» بجدول المستخدمين</td></tr>';
+  return '<tr class="table-warning"><td colspan="' + (PERM_CAPS.length + 1) + '" class="small fw-bold">🏨 الفنادق والحجوزات — صلاحيات كل شاشة <span class="fw-normal text-muted">(الدخول للفنادق نفسه بسطر «برنامج حجوزات الفنادق» أعلاه · الدور والمدينة والجانب المالي من زر «🏨 الفنادق»)</span></td></tr>' +
+    HBU.screens.map(function (k) {
+      return '<tr style="background:#fffbeb;"><td style="padding-right:22px;font-size:12px;">' + escapeHtml_(k[1]) + '</td>' + PERM_CAPS.map(function (c) {
+        return '<td class="text-center"><input type="checkbox" class="perm-hb" data-prefix="' + prefix + '" data-k="' + k[0] + '" data-cap="' + c.key + '" onchange="_hbPermCascade_(this)"></td>';
+      }).join('') + '</tr>';
+    }).join('');
+}
+function _hbPermCascade_(el) {
+  var order = ['view', 'add', 'edit', 'delete'], idx = order.indexOf(el.dataset.cap), on = el.checked, box = el.closest('table');
+  _HBPM_.dirty[el.dataset.prefix] = 1;
+  order.forEach(function (c, i) { var x = box.querySelector('.perm-hb[data-k="' + el.dataset.k + '"][data-cap="' + c + '"]'); if (!x) return; if (on && i < idx) x.checked = true; if (!on && i > idx) x.checked = false; });
+}
+function _setHbMatrix_(prefix, username) {
+  _HBPM_.dirty[prefix] = 0;
+  var box = document.getElementById(prefix === 'np' ? 'newUserPermsBox' : 'editUserPermsBox'); if (!box || typeof HBU === 'undefined' || !HBU) return;
+  var u = username ? HBU.users[String(username).toLowerCase()] : null, order = ['view', 'add', 'edit', 'delete'];
+  box.querySelectorAll('.perm-hb').forEach(function (x) {
+    var lv = u && u.permissions ? (u.permissions[x.dataset.k] || 'none') : 'none', li = order.indexOf(lv);
+    x.checked = u && u.role === 'admin' ? true : (li >= 0 && order.indexOf(x.dataset.cap) <= li);
+  });
+}
+function _saveHbMatrix_(prefix, username, fullName) {
+  if (!_HBPM_.dirty[prefix] || !username || typeof HBU === 'undefined' || !HBU || !hasPermission('admin')) return;
+  var box = document.getElementById(prefix === 'np' ? 'newUserPermsBox' : 'editUserPermsBox'); if (!box) return;
+  var u = HBU.users[String(username).toLowerCase()] || { role: 'user', bookingCityScope: 'all', financeLevel: 'none', active: true };
+  var p = { role: u.role || 'user', active: u.active !== false, bookingCityScope: u.bookingCityScope || 'all', financeLevel: u.financeLevel || 'none', displayName: fullName || u.displayName || username, permissions: {} };
+  var order = ['view', 'add', 'edit', 'delete'];
+  HBU.screens.forEach(function (k) { var lv = 'none'; order.forEach(function (c) { var x = box.querySelector('.perm-hb[data-k="' + k[0] + '"][data-cap="' + c + '"]'); if (x && x.checked) lv = c; }); p.permissions[k[0]] = lv; });
+  google.script.run.withSuccessHandler(function () { showToast('🏨 حُفظت صلاحيات شاشات الفنادق'); try { hbUsersLoad_(); } catch (e) {} })
+    .withFailureHandler(function (e) { _showPopup('تعذّر حفظ صلاحيات الفنادق: ' + ((e && e.message) || e), 'error'); }).hbUserSaveFromMain(window.authToken, username, p);
+}
 function _buildPermMatrixHtml(prefix) {
   var head = '<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-2" style="font-size:12.5px;">' +
     '<thead class="table-light"><tr><th style="min-width:150px;">الشاشة</th>' +
     PERM_CAPS.map(function(c){ return '<th class="text-center ' + c.cls + '">' + c.label + '</th>'; }).join('') +
     '</tr></thead><tbody>';
-  var rows = PERM_SCREENS.map(function(s){
+  var rows = PERM_SCREENS.map(function(s, i){
     var tds = PERM_CAPS.map(function(c){
       return '<td class="text-center"><input type="checkbox" class="perm-chk" ' +
         'id="' + prefix + '-' + s.key + '-' + c.key + '" ' +
         'data-prefix="' + prefix + '" data-screen="' + s.key + '" data-cap="' + c.key + '"></td>';
     }).join('');
-    return '<tr><td>' + s.label + '</td>' + tds + '</tr>';
-  }).join('');
+    var head = (s.sub && !(PERM_SCREENS[i - 1] || {}).sub) ? '<tr class="table-info"><td colspan="' + (PERM_CAPS.length + 1) + '" class="small fw-bold">🧾 الحسابات العامة — تخصيص الشاشات والنماذج الفرعية <span class="fw-normal text-muted">(اختياري: لو لم تختر أي سطر منها تنطبق صلاحية «الحسابات العامة» أعلاه على كل الشاشات · لو اخترت سطراً واحداً تصبح كل شاشة بصلاحيتها هنا فقط)</span></td></tr>' : '';
+    return head + '<tr' + (s.sub ? ' style="background:#f8fafc;"' : '') + '><td' + (s.sub ? ' style="padding-right:22px;font-size:12px;"' : '') + '>' + s.label + '</td>' + tds + '</tr>';
+  }).join('') + _hbPermRows_(prefix);
   var extras =
     '<div class="d-flex flex-wrap gap-3 align-items-center mt-1">' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="bookings.print" id="' + prefix + '-x-print"><label class="form-check-label small" for="' + prefix + '-x-print">🖨️ طباعة</label></div>' +
@@ -8921,6 +8971,7 @@ function submitNewUser() {
   google.script.run
     .withSuccessHandler(function (res) {
       if (res && res.success) {
+        _saveHbMatrix_('np', username, fullName);   // (V4.276)
         alert('تمت إضافة المستخدم بنجاح');
         hideAddUserForm();
         loadUsersTable();
@@ -23475,6 +23526,7 @@ function promptEditPermissions(row, currentPermsStr, username, fullName) {
   editPermsOriginalFullName = fullName || '';
   _initPermMatrix('ep');
   _setPermMatrix('ep', currentPermsStr);
+  _setHbMatrix_('ep', username);   // (V4.276)
   var lbl = document.getElementById('editPermsUserLabel');
   if (lbl) lbl.textContent = username || '';
   var nameInput = document.getElementById('editUsernameInput');
@@ -23486,6 +23538,7 @@ function promptEditPermissions(row, currentPermsStr, username, fullName) {
 
 function saveEditedPermissions() {
   var permissions = _gatherPermTokens('ep').join(',');
+  _saveHbMatrix_('ep', editPermsOriginalUsername, editPermsOriginalFullName);   // (V4.276) صلاحيات شاشات الفنادق
   var newUsername = String(((document.getElementById('editUsernameInput') || {}).value) || '').trim();
   var newFullName = String(((document.getElementById('editFullNameInput') || {}).value) || '').trim();
   var usernameChanged = newUsername && newUsername !== editPermsOriginalUsername;
@@ -42657,7 +42710,7 @@ function vzRenderActBar() {
 // 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
 // الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
 // (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
-// (V4.275) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
+// (V4.276) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
   mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
@@ -45982,6 +46035,7 @@ function glRefreshData(cb) {
   });
 }
 function glTab(t) {
+  try { glSubGate_(); if (GL_TAB_SUB_[t] && !glSubCan_(GL_TAB_SUB_[t], 'view')) t = 'home'; } catch (eSg) {}
   GL.tab = t;
   // (V4.252) دفتر الأستاذ صار جزءاً من «كشف حساب» (للأقسام)، والاستيراد المجمّع داخل الإعدادات
   var hl = { ledger: 'stmt', import: 'settings', trial: 'reports' }[t] || t;
@@ -46356,9 +46410,9 @@ function glShowEntry(id) {
       // 📎 (V4.219) مرفقات القيد: فتح/حذف ورفع مباشر
       '<div class="gl-box mt-2" style="padding:8px 10px;"><div class="d-flex align-items-center gap-2 flex-wrap"><b style="font-size:12.5px;">📎 المرفقات (' + (e.attachments || []).length + ')</b>' +
         (GL.can.add ? '<label class="btn btn-outline-secondary btn-sm mb-0">➕ إرفاق ملف<input type="file" multiple hidden accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" onchange="glAttUploadNow_(this,\'' + glJs(e.id) + '\')"></label>' : '') + '</div>' +
-        '<div class="d-flex flex-wrap gap-2 mt-1">' + ((e.attachments || []).map(function (f) {
+        '<div class="d-flex flex-wrap gap-2 mt-1">' + ((e.attachments || []).map(function (f, i) {
           return '<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid #cbd5e1;border-radius:999px;padding:2px 10px;font-size:12px;background:#fff;">' + glAttIcon_(f.mime, f.name) +
-            ' <a href="' + glEsc(f.url) + '" target="_blank" rel="noopener">' + glEsc(f.name) + '</a> <small class="text-muted">' + glEsc(f.by || '') + '</small>' +
+            ' <a href="#" onclick="glAttView(\'' + glJs(e.id) + '\',' + i + ');return false;" title="معاينة داخل البرنامج">' + glEsc(f.name) + '</a> <small class="text-muted">' + glEsc(f.by || '') + '</small>' +
             (GL.can.edit ? '<button class="btn btn-sm btn-link text-danger p-0" title="حذف المرفق" onclick="glAttDel_(\'' + glJs(f.id) + '\',function(){glShowEntry(\'' + glJs(e.id) + '\')})">✖</button>' : '') + '</span>';
         }).join('') || '<span class="small text-muted">لا توجد مرفقات</span>') + '</div></div>' +
       '<div class="d-flex gap-2 mt-3 flex-wrap">' +
@@ -46697,7 +46751,22 @@ var GL_VOUCHERS_ = {
   // ⇄ (V4.247) تحويل مباشر بين أي حسابين (مثل «الدفعة المرتبطة» ببرنامج الحجوزات): مبلغ واحد، وعملتان مختلفتان عبر الوسيط
   ptransfer: { title: '⇄ تحويل بين طرفين', type: 'تحويل بين طرفين' }
 };
-function glNew(kind) { glEntryDlg(kind, null); }
+/* 🔐 (V4.276) صلاحيات الشاشات الفرعية بالحسابات العامة — GL.can.sub من الخادم (null = بلا تخصيص ⇒ صلاحيات gl العامة) */
+var GL_KIND_SUB_ = { receipt: 'safe', payment: 'safe', transfer: 'safe', bankIn: 'bank', bankOut: 'bank', custOut: 'cust', custSettle: 'cust', ptransfer: 'pt', fx: 'fx', journal: 'je' };
+var GL_TAB_SUB_ = { treasury: 'safe', banks: 'bank', custody: 'cust', entries: 'je', stmt: 'stmt', ledger: 'stmt', reports: 'rep', trial: 'rep', auto: 'auto', hotels: 'hb', coa: 'coa' };
+function glSubCan_(sub, cap) {
+  var c = GL.can || {}, k = cap === 'delete' ? 'del' : cap;
+  if (!c.sub || !sub) return cap === 'view' ? true : !!c[k];
+  var o = c.sub[sub]; return !!(o && o[k]);
+}
+function glSubGate_() {
+  document.querySelectorAll('#glTabs .gl-tab').forEach(function (t) { var sb = GL_TAB_SUB_[t.getAttribute('data-t')]; if (sb && !t.classList.contains('gl-adm')) t.style.display = glSubCan_(sb, 'view') ? '' : 'none'; });
+  document.querySelectorAll('#glNewMenu button').forEach(function (b) { var m = String(b.getAttribute('onclick') || '').match(/glNew\('(\w+)'\)/); if (m) b.style.display = glSubCan_(GL_KIND_SUB_[m[1]] || 'je', 'add') ? '' : 'none'; });
+}
+function glNew(kind) {
+  if (!glSubCan_(GL_KIND_SUB_[kind] || 'je', 'add')) { _showPopup('لا تملك صلاحية إضافة هذا النوع من السندات/القيود', 'warning'); return; }
+  glEntryDlg(kind, null);
+}
 function glNewMenu_(ev) {
   var m = document.getElementById('glNewMenu'); if (!m) return;
   var show = !!ev && m.classList.contains('d-none'); m.classList.toggle('d-none', !show);
@@ -46998,8 +47067,11 @@ function glPtLines_(note) {
   note = String(note || '').trim(); if (/^تحويل من /.test(note)) note = '';
   var o = { from: from, to: to, amt: amt, fc: fc, tc: tc, fAmt: fAmt, tAmt: tAmt, lines: [] };
   o.desc = 'تحويل من ' + nm(fa, from) + ' إلى ' + nm(ta, to) + (note ? ' — ' + note : '');
-  o.lines.push({ account: to, debit: tAmt, currency: tc, rate: rr(tc), desc: 'تحويل من ' + nm(fa, from) + (note ? ' — ' + note : '') });
-  o.lines.push({ account: from, credit: fAmt, currency: fc, rate: rr(fc), desc: 'تحويل إلى ' + nm(ta, to) + (note ? ' — ' + note : '') });
+  // ✍️ (V4.276) بيان ذكي حسب نوع الطرف (بنك/خزينة/عهدة): عند المستلم «… - تحويل من بنك مصر» وعند المحوِّل «… - تحويل على بنك مصر / إلى عهدة …»
+  var vIn = from ? (glSideVerb_(from, false) || 'تحويل من ' + nm(fa, from)) : 'تحويل من ' + nm(fa, from), vOut = to ? (glSideVerb_(to, true) || 'تحويل إلى ' + nm(ta, to)) : 'تحويل إلى ' + nm(ta, to);
+  if (!/^تحويل/.test(vIn)) vIn = 'تحويل ' + vIn; if (!/^تحويل/.test(vOut)) vOut = 'تحويل ' + vOut;
+  o.lines.push({ account: to, debit: tAmt, currency: tc, rate: rr(tc), desc: glJoinDesc_(note, vIn) });
+  o.lines.push({ account: from, credit: fAmt, currency: fc, rate: rr(fc), desc: glJoinDesc_(note, vOut) });
   if (fc !== tc) glFxSmartDesc_(o.lines, '');
   return o;
 }
@@ -47104,16 +47176,19 @@ function glFxLines_(desc) {
   // (V4.223) بيان الـ ERP: «تحويل 13,500 جنيه الى المعادل بالريال ÷ 13.5» — سطر الوسيط «… — اسم الحساب» (يضيفه الخادم)
   var fxOp = fc === 'EGP' ? '÷ ' + glR2Rate(fa / ta) : (tc === 'EGP' ? '× ' + glR2Rate(ta / fa) : '× ' + (Math.round(ta / fa * 10000) / 10000));
   var dsc = 'تحويل ' + glFmt(fa) + ' ' + GL_CUR_LBL_[fc] + ' الى المعادل بال' + GL_CUR_LBL_[tc] + ' ' + fxOp;
+  // ✍️ (V4.276) بيان ذكي: البيان المكتوب + اسم الطرف الآخر لكل سطر (المستلم «… من بنك مصر» والمصدر «… إلى خزينة الريال»)
+  desc = String(desc || '').trim();
+  var dTo = glJoinDesc_(desc, dsc + (from ? ' — ' + glSideVerb_(from, false) : '')), dFrom = glJoinDesc_(desc, dsc + (to ? ' — ' + glSideVerb_(to, true) : ''));
   if (o.bridge) {
     var fRate = r[fc], base = fa * r[fc], tRate;
     // سعر خانتين كحد أقصى — وفرق التقريب الضئيل في المعادل يبقى في حساب الوسيط (فروق تحويل) كما في الـ ERP
     if (tc === 'EGP') { fRate = glR2Rate(ta / fa); tRate = 1; } else tRate = glR2Rate(base / ta);
-    o.lines.push({ account: to, debit: ta, currency: tc, rate: tRate, desc: dsc });
-    o.lines.push({ account: from, credit: fa, currency: fc, rate: fRate, desc: dsc });
+    o.lines.push({ account: to, debit: ta, currency: tc, rate: tRate, desc: dTo });
+    o.lines.push({ account: from, credit: fa, currency: fc, rate: fRate, desc: dFrom });
     o.preview = [{ account: to, debit: ta, currency: tc }, { account: o.bridge, credit: ta, currency: tc }, { account: o.bridge, debit: fa, currency: fc }, { account: from, credit: fa, currency: fc }];
   } else {
-    o.lines.push({ account: to, debit: ta, currency: tc, rate: r[tc], desc: dsc });
-    o.lines.push({ account: from, credit: fa, currency: fc, rate: r[fc], desc: dsc });
+    o.lines.push({ account: to, debit: ta, currency: tc, rate: r[tc], desc: dTo });
+    o.lines.push({ account: from, credit: fa, currency: fc, rate: r[fc], desc: dFrom });
     var diff = Math.round((ta * r[tc] - fa * r[fc]) * 100) / 100;
     if (Math.abs(diff) >= 0.01) o.lines.push(diff > 0 ? { account: '46', credit: diff, currency: 'EGP', rate: 1, desc: 'أرباح فروق عملة' } : { account: '53', debit: -diff, currency: 'EGP', rate: 1, desc: 'خسائر فروق عملة' });
     o.preview = o.lines;
@@ -47137,7 +47212,8 @@ function glFxCalc() {
     (o.bridge ? '<br><small>📘 آلية الـ ERP: قيد رباعي عبر «' + glEsc(glAccLabel(o.bridge)) + '» — كل عملة متوازنة داخلها وبلا فروق عملة</small>' :
       '<br><small>⚠️ لا يوجد حساب «وسيط تحويل عملات» مفعّل — الفرق بين المعادلين يُسجَّل أرباح/خسائر فروق عملة</small>');
   document.getElementById('glFxPrev').innerHTML = (o.preview && o.preview.length && o.from && o.to) ? '<table class="gl-tbl mt-1" style="font-size:12px;"><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>العملة</th></tr></thead><tbody>' +
-    o.preview.map(function (l) { return '<tr><td style="text-align:right;">' + glEsc(glAccLabel(l.account)) + '</td><td class="gl-latin">' + (l.debit ? glFmt(l.debit) : '') + '</td><td class="gl-latin">' + (l.credit ? glFmt(l.credit) : '') + '</td><td>' + GL_CUR_LBL_[l.currency] + '</td></tr>'; }).join('') + '</tbody></table>' : '';
+    o.preview.map(function (l) { return '<tr><td style="text-align:right;">' + glEsc(glAccLabel(l.account)) + '</td><td class="gl-latin">' + (l.debit ? glFmt(l.debit) : '') + '</td><td class="gl-latin">' + (l.credit ? glFmt(l.credit) : '') + '</td><td>' + GL_CUR_LBL_[l.currency] + '</td></tr>'; }).join('') + '</tbody></table>' +
+    (o.lines.length ? '<div class="small mt-1" style="color:#0f4c4c;">✍️ بيان المستلم: <b>' + glEsc(o.lines[0].desc) + '</b><br>✍️ بيان المصدر: <b>' + glEsc(o.lines[1].desc) + '</b></div>' : '') : '';   // (V4.276)
 }
 function glBuildEntry() {
   var kind = GL._vk, V = GL_VOUCHERS_[kind];
@@ -47250,12 +47326,67 @@ function glAttPick_(inp) {
   });
   inp.value = ''; glAttDraw_();
 }
+/* 👁️ (V4.276) معاينة المرفقات داخل البرنامج: نافذة منبثقة بقائمة الملفات + عرض الصورة/PDF مباشرة + السابق/التالي + تحميل */
+var GLAV = { files: [], i: 0, cache: {} };
+function glAttView(entryId, idx, files) {
+  var go = function (list) {
+    if (!list || !list.length) { _showPopup('لا توجد مرفقات لهذا القيد', 'info'); return; }
+    GLAV.files = list; GLAV.i = Math.max(0, Math.min(list.length - 1, idx || 0)); GLAV.entry = entryId; glAttViewDraw_();
+  };
+  if (files) return go(files);
+  google.script.run.withSuccessHandler(function (r) { go((r && r.files) || []); }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); }).glAttachList(window.authToken, entryId);
+}
+function glAttViewClose() { var o = document.getElementById('glAvOv'); if (o) o.remove(); document.removeEventListener('keydown', glAttViewKey_); }
+function glAttViewKey_(e) { if (e.key === 'Escape') glAttViewClose(); else if (e.key === 'ArrowLeft') glAttViewGo(1); else if (e.key === 'ArrowRight') glAttViewGo(-1); }
+function glAttViewGo(d) { var n = GLAV.files.length; if (!n) return; GLAV.i = (GLAV.i + d + n) % n; glAttViewDraw_(); }
+function glAttViewDraw_() {
+  var f = GLAV.files[GLAV.i]; if (!f) return;
+  var ov = document.getElementById('glAvOv');
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = 'glAvOv'; ov.dir = 'rtl';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483200;background:rgba(15,23,42,.78);display:flex;align-items:center;justify-content:center;padding:10px;';
+    ov.addEventListener('mousedown', function (e) { if (e.target === ov) glAttViewClose(); });
+    document.body.appendChild(ov); document.addEventListener('keydown', glAttViewKey_);
+  }
+  var n = GLAV.files.length, E = glEsc;
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;width:min(1100px,98vw);height:min(92vh,900px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.5);">' +
+    '<div style="background:linear-gradient(135deg,#1e3d59,#0f4c4c);color:#fff;padding:8px 12px;display:flex;align-items:center;gap:8px;">' +
+      '<b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + glAttIcon_(f.mime, f.name) + ' ' + E(f.name || 'مرفق') + (GLAV.entry ? ' <small style="opacity:.75" class="gl-latin">— ' + E(GLAV.entry) + '</small>' : '') + '</b>' +
+      (n > 1 ? '<button class="btn btn-light btn-sm" onclick="glAttViewGo(-1)" title="السابق">▶</button><span class="gl-latin small">' + (GLAV.i + 1) + ' / ' + n + '</span><button class="btn btn-light btn-sm" onclick="glAttViewGo(1)" title="التالي">◀</button>' : '') +
+      '<a class="btn btn-outline-light btn-sm" id="glAvDl" title="تحميل">⬇️</a><a class="btn btn-outline-light btn-sm" href="' + E(f.url || '#') + '" target="_blank" rel="noopener" title="فتح في الدرايف">↗</a>' +
+      '<button class="btn btn-light btn-sm" onclick="glAttViewClose()">✕</button></div>' +
+    '<div style="flex:1;display:flex;min-height:0;">' +
+      (n > 1 ? '<div style="width:190px;border-left:1px solid #e2e8f0;overflow:auto;background:#f8fafc;">' + GLAV.files.map(function (x, k) {
+        return '<div onclick="GLAV.i=' + k + ';glAttViewDraw_()" style="cursor:pointer;padding:8px 10px;font-size:12px;border-bottom:1px solid #e2e8f0;' + (k === GLAV.i ? 'background:#e0f2fe;font-weight:700;' : '') + '">' + glAttIcon_(x.mime, x.name) + ' ' + E(x.name || '') + '</div>';
+      }).join('') + '</div>' : '') +
+      '<div id="glAvBody" style="flex:1;display:flex;align-items:center;justify-content:center;background:#334155;overflow:auto;"><div class="text-white small">⏳ جاري تحميل المعاينة…</div></div></div></div>';
+  var show = function (d) {
+    var body = document.getElementById('glAvBody'); if (!body || GLAV.files[GLAV.i] !== f) return;
+    var dl = document.getElementById('glAvDl');
+    if (d.big || !d.b64) {
+      var m = String(f.url || '').match(/\/d\/([\w-]{20,})/) || String(f.url || '').match(/id=([\w-]{20,})/);
+      body.innerHTML = m ? '<iframe src="https://drive.google.com/file/d/' + m[1] + '/preview" style="width:100%;height:100%;border:0;background:#fff;" allow="autoplay"></iframe>' : '<a class="btn btn-light" target="_blank" href="' + E(f.url) + '">فتح الملف ↗</a>';
+      if (dl) dl.href = f.url; return;
+    }
+    var mime = d.mime || f.mime || '', bin = atob(d.b64), arr = new Uint8Array(bin.length);
+    for (var q = 0; q < bin.length; q++) arr[q] = bin.charCodeAt(q);
+    if (d._u) URL.revokeObjectURL(d._u);
+    var url = d._u = URL.createObjectURL(new Blob([arr], { type: mime }));
+    if (dl) { dl.href = url; dl.download = f.name || 'attachment'; }
+    if (/^image\//.test(mime)) body.innerHTML = '<img src="' + url + '" style="max-width:100%;max-height:100%;object-fit:contain;background:#fff;">';
+    else if (/pdf/i.test(mime)) body.innerHTML = '<iframe src="' + url + '" style="width:100%;height:100%;border:0;background:#fff;"></iframe>';
+    else body.innerHTML = '<div class="text-center text-white"><div style="font-size:44px;">📄</div><div class="mb-2">لا تتوفر معاينة لهذا النوع من الملفات</div><a class="btn btn-light btn-sm" href="' + url + '" download="' + E(f.name || 'file') + '">⬇️ تحميل</a></div>';
+  };
+  if (GLAV.cache[f.id]) return show(GLAV.cache[f.id]);
+  google.script.run.withSuccessHandler(function (d) { GLAV.cache[f.id] = d || {}; show(GLAV.cache[f.id]); })
+    .withFailureHandler(function () { GLAV.cache[f.id] = { big: true }; show(GLAV.cache[f.id]); }).glAttachData(window.authToken, f.id);
+}
 function glAttIcon_(mime, name) { return /pdf/i.test(mime || name) ? '📄' : /^image\//.test(mime || '') || /\.(png|jpe?g|gif|webp|heic)$/i.test(name || '') ? '🖼️' : '📎'; }
 function glAttDraw_() {
   var box = document.getElementById('glAttList'); if (!box) return;
   var chip = 'display:inline-flex;align-items:center;gap:6px;border:1px solid #cbd5e1;border-radius:999px;padding:2px 10px;font-size:12px;background:#fff;';
-  box.innerHTML = (GL._attHave || []).map(function (f) {
-    return '<span style="' + chip + '">' + glAttIcon_(f.mime, f.name) + ' <a href="' + glEsc(f.url) + '" target="_blank" rel="noopener">' + glEsc(f.name) + '</a>' +
+  box.innerHTML = (GL._attHave || []).map(function (f, i) {
+    return '<span style="' + chip + '">' + glAttIcon_(f.mime, f.name) + ' <a href="#" onclick="glAttView(\'\',' + i + ',GL._attHave);return false;" title="معاينة داخل البرنامج">' + glEsc(f.name) + '</a>' +
       (GL.can.edit ? '<button class="btn btn-sm btn-link text-danger p-0" title="حذف المرفق" onclick="glAttDel_(\'' + glJs(f.id) + '\')">✖</button>' : '') + '</span>';
   }).join('') + (GL._attPend || []).map(function (f, i) {
     return '<span style="' + chip + 'border-style:dashed;background:#fffbeb;" title="يُرفع بعد الحفظ">' + glAttIcon_(f.type, f.name) + ' ' + glEsc(f.name) + ' <small class="text-muted gl-latin">' + Math.max(1, Math.round(f.size / 1024)) + 'KB</small>' +
@@ -48075,7 +48206,7 @@ function glStTable_(res, M, o, mode) {
       return '<td></td>';
     }).join('');
     return '<tr' + (scr ? ' data-eid="' + E(x.entryId) + '"' : '') + (x.pending ? ' class="pend"' : '') + '>' + cells + curCells(x) +
-      (showEq ? '<td class="n eq">' + glFmt(x.balBase) + '</td>' : '') + (showAtt ? '<td>' + (x.att ? '<span class="gl-stch a" style="cursor:pointer;" onclick="event.stopPropagation();glShowEntry(\'' + glJs(x.entryId) + '\')">📎' + x.att + '</span>' : '') + '</td>' : '') + (showAct ? actCell(x) : '') + '</tr>';
+      (showEq ? '<td class="n eq">' + glFmt(x.balBase) + '</td>' : '') + (showAtt ? '<td>' + (x.att ? '<span class="gl-stch a" style="cursor:pointer;" onclick="event.stopPropagation();glAttView(\'' + glJs(x.entryId) + '\',0)" title="معاينة المرفقات">📎' + x.att + '</span>' : '') + '</td>' : '') + (showAct ? actCell(x) : '') + '</tr>';
   };
   var summary = M.group === 'summary';
   M.groups.forEach(function (g) {
@@ -48440,7 +48571,7 @@ function glCustSheetDlg(code) {
   glRun('glCustSheetGet', [code], function (res) {
     var c = res.cfg || {}, a = res.account, jc = glJs(code), url = c.id ? 'https://docs.google.com/spreadsheets/d/' + c.id : '';
     var L = c.last, CC = Object.assign({ in: 'A', out: 'B', desc: 'C', date: 'D', party: 'G', qaid: 'H' }, c.cols || {});
-    // (V4.275) شيت متعدد العملات: الوارد/الصادر العام غير مستخدمَين (أعمدة العملات تُغني عنهما) — لا تُعرض A/B الافتراضية
+    // (V4.276) شيت متعدد العملات: الوارد/الصادر العام غير مستخدمَين (أعمدة العملات تُغني عنهما) — لا تُعرض A/B الافتراضية
     var csMulti = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { return String((c.cols || {})[k] || '').trim(); });
     if (csMulti) { CC.in = ''; CC.out = ''; }
     var h = '<div class="gl-note" style="font-size:12px;line-height:1.9;">📋 <b>تنسيق الشيت</b> (من الصف ' + (c.startRow || 2) + '): ' +
@@ -48479,7 +48610,7 @@ function glCustSheetDlg(code) {
     if (c.id) glCsRun_(code, true);
   });
 }
-// (V4.275) أي عمود عملة مُدخَل ⇒ الوارد/الصادر العام يُفرَّغ ويتعطّل (لا يعود A/B تلقائياً)، ولو أُفرغت كلها يعودان A/B
+// (V4.276) أي عمود عملة مُدخَل ⇒ الوارد/الصادر العام يُفرَّغ ويتعطّل (لا يعود A/B تلقائياً)، ولو أُفرغت كلها يعودان A/B
 function glCsMultiSync_() {
   var any = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { var e = document.getElementById('glCsC_' + k); return e && e.value.trim(); });
   [['in', 'A'], ['out', 'B']].forEach(function (f) {
@@ -48511,7 +48642,7 @@ function glCsRun_(code, preview, btn) {
 function glCsDraw_(code) {
   var r = GL._csRes, box = document.getElementById('glCsRes'); if (!r || !box) return;
   var jc = glJs(code), cur = GL_CUR_LBL_[r.account.currency] || '';
-  var amt = function (x) { return x.inAmt ? '<b class="gl-latin" style="color:#15803d;">+' + glFmt(x.inAmt) + '</b>' : '<b class="gl-latin" style="color:#b91c1c;">−' + glFmt(x.outAmt) + '</b>'; };
+  var amt = function (x) { var cu = GL_CUR_LBL_[x.cur || r.account.currency] || ''; return (x.inAmt ? '<b class="gl-latin" style="color:#15803d;">+' + glFmt(x.inAmt) + '</b>' : '<b class="gl-latin" style="color:#b91c1c;">−' + glFmt(x.outAmt) + '</b>') + (cu ? ' <span class="small text-muted">' + cu + '</span>' : ''); };   // (V4.276) العملة بجوار المبلغ
   var tbl = function (head, body) { return '<div class="table-responsive" style="max-height:300px;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>'; };
   var sec = function (icon, title, n, clr, inner) { return n ? '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;overflow:hidden;"><div style="background:' + clr + ';padding:5px 12px;font-weight:800;font-size:12.5px;">' + icon + ' ' + title + ' (' + n + ')</div><div style="padding:6px;">' + inner + '</div></div>' : ''; };
   var stats = [['📄 صفوف بمبالغ', r.rows], ['🔗 مربوطة من قبل', r.linked], [(r.preview ? '🆕 ستُسجَّل' : '✅ سُجّلت'), r.created.length], [(r.preview ? '✏️ ستُحدَّث' : '✏️ حُدّثت'), r.updated.length],
@@ -48636,7 +48767,7 @@ function glDrawTreasury() {
       '<td class="gl-latin">' + glEsc(x.date) + '</td>' +
       '<td style="text-align:right;max-width:180px;overflow:hidden;text-overflow:ellipsis;color:#0f766e;font-weight:700;" title="' + glEsc(x.counter) + '">' + glEsc(x.counter || '—') + '</td>' +
       '<td style="text-align:right;max-width:260px;overflow:hidden;text-overflow:ellipsis;" title="' + glEsc(x.desc) + '">' + glEsc(x.desc || '—') + (x.auto ? ' <span title="قيد تلقائي من شاشات البرنامج">🤖</span>' : '') +
-        (x.att ? ' <span title="مستندات مرفقة — اضغط للعرض" style="cursor:pointer;font-size:11px;background:#eef2ff;border-radius:999px;padding:0 6px;" onclick="glShowEntry(\'' + glJs(x.entryId) + '\')">📎' + x.att + '</span>' : '') + '</td>' +
+        (x.att ? ' <span title="مستندات مرفقة — اضغط للعرض" style="cursor:pointer;font-size:11px;background:#eef2ff;border-radius:999px;padding:0 6px;" onclick="event.stopPropagation();glAttView(\'' + glJs(x.entryId) + '\',0)">📎' + x.att + '</span>' : '') + '</td>' +
       show.map(function (c) {
         return '<td>' + (x.currency === c ? amt(x.inAmt, '#15803d') : '<span style="color:#e2e8f0;">—</span>') + '</td><td>' + (x.currency === c ? amt(x.outAmt, '#b91c1c') : '<span style="color:#e2e8f0;">—</span>') + '</td>' +
           '<td class="gl-latin" style="font-weight:800;background:' + GL_TR_CUR_CLR_[c][2] + ';">' + glFmt(x.snap[c]) + '</td>';
@@ -49374,7 +49505,7 @@ function glNavBadge_() {
   var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
   var t = document.getElementById('glAutoTabBadge'); if (t) { t.textContent = n || ''; t.style.display = n ? '' : 'none'; }
 }
-// 👜 (V4.275) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
+// 👜 (V4.276) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
 function glCsBanner_() {
   var box = document.getElementById('glBody'), old = document.getElementById('glCsBanner'), n = (typeof GL !== 'undefined' && GL.csPend) || 0;
   if (!n || !GL.ready) { if (old) old.remove(); return; }
@@ -49384,15 +49515,23 @@ function glCsBanner_() {
   if (!box) return;
   box.insertAdjacentHTML('afterbegin', '<div id="glCsBanner" class="alert alert-danger py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">' + html + '</div>');
 }
-// ➕ (V4.275) إضافة حساب جديد من شاشة مراجعة صفوف الشيتات بلا مغادرتها: نافذة صغيرة فوقها ثم يُختار الحساب الجديد للصف تلقائياً
+// ➕ (V4.276) إضافة حساب جديد من شاشة مراجعة صفوف الشيتات بلا مغادرتها: نافذة صغيرة فوقها ثم يُختار الحساب الجديد للصف تلقائياً
 function glCsNaBtn_() {
-  return (typeof GL !== 'undefined' && GL.can && GL.can.add) ? '<button type="button" class="btn btn-outline-success btn-sm py-0 px-2" title="إضافة حساب جديد للدليل واختياره لهذا الصف" onclick="glCsNewAcc_(this)">➕</button>' : '';
+  return (typeof GL !== 'undefined' && GL.can && glSubCan_('coa', 'add')) ? '<button type="button" class="btn btn-outline-success btn-sm py-0 px-2" title="إضافة حساب جديد للدليل واختياره لهذا الصف" onclick="glCsNewAcc_(this)">➕</button>' : '';
 }
 function glCsNewAcc_(btn) {
   var tr = btn.closest('tr'), inp = tr && tr.querySelector('.glCsAcc'); if (!inp) return;
+  glQuickAcc_(inp, tr.dataset.hint || '', tr.dataset.sg || '');
+}
+// ➕ (V4.276) إنشاء حساب (أو قسم + حساب) سريع من أي نموذج بلا مغادرته، ويُختار في الحقل المطلوب تلقائياً
+function glQuickAcc_(inp, hint, sgCode) {
+  if (!inp) return;
+  var cur0 = glAccVal(inp); if (!sgCode && cur0) sgCode = cur0;
+  if (!hint && !cur0) hint = String(inp.value || '').trim();
   var old = document.getElementById('glCsNaOv'); if (old) old.remove();
   var groups = (GL.accounts || []).filter(function (g) { return g.isGroup && !g._virtual; }).sort(function (a, b) { return String(a.code).localeCompare(String(b.code)); });
-  var sg = tr.dataset.sg && GL.map[tr.dataset.sg], defParent = (sg && sg.parent && GL.map[sg.parent] && GL.map[sg.parent].isGroup ? sg.parent : '') || GL._csNaParent || (groups[0] || {}).code || '';
+  var tr = { dataset: { hint: hint || '' } };
+  var sg = sgCode && GL.map[sgCode], defParent = (sg && sg.parent && GL.map[sg.parent] && GL.map[sg.parent].isGroup ? sg.parent : '') || GL._csNaParent || (groups[0] || {}).code || '';
   var ov = document.createElement('div'); ov.id = 'glCsNaOv'; ov.dir = 'rtl';
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483300;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:12px;';
   ov.innerHTML = '<div style="background:#fff;border-radius:14px;width:min(520px,96vw);box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden;"><div style="background:#0f4c4c;color:#fff;padding:9px 14px;display:flex;align-items:center;"><b style="flex:1;">➕ حساب جديد</b><button class="btn btn-light btn-sm" id="glCsNaX">✕</button></div>' +
@@ -49408,7 +49547,7 @@ function glCsNewAcc_(btn) {
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
   document.getElementById('glCsNaX').onclick = function () { ov.remove(); };
   var nm = document.getElementById('glCsNaName'); if (nm) { nm.focus(); nm.select(); }
-  document.getElementById('glCsNaNewSec').onchange = function () {   // (V4.275) قسم جديد: القسم الأب يصير «يُنشأ القسم الجديد تحته»
+  document.getElementById('glCsNaNewSec').onchange = function () {   // (V4.276) قسم جديد: القسم الأب يصير «يُنشأ القسم الجديد تحته»
     var on = this.checked; document.getElementById('glCsNaSecBox').classList.toggle('d-none', !on);
     document.getElementById('glCsNaParentLbl').textContent = on ? 'يُنشأ القسم الجديد تحت' : 'تحت الحساب (القسم)';
     if (on) { var sn = document.getElementById('glCsNaSecName'); sn.focus(); }
@@ -49428,7 +49567,8 @@ function glCsNewAcc_(btn) {
       var code = res.account.code; GL._csNaParent = parent;
       if (!GL.map[code]) { GL.accounts.push(res.account); GL.map[code] = res.account; }   // يظهر فوراً بالبحث قبل اكتمال التحديث
       inp.dataset.code = code; inp.value = glAccLabel(code);
-      ov.remove(); showToast('✅ أُنشئ الحساب ' + code + ' واختير للصف');
+      try { inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } catch (eEv) {}   // تحديث البيان الذكي والحسابات
+      ov.remove(); showToast('✅ أُنشئ الحساب ' + code + ' واختير');
       glRefreshData();
     };
     if (!newSec) { mkAcc(parent); return; }
@@ -49439,6 +49579,28 @@ function glCsNewAcc_(btn) {
     }, fail);
   };
 }
+/* ➕ (V4.276) زر «حساب/قسم جديد» بجانب حقول الحساب في نماذج: السندات (قبض/صرف/إيداع/سحب/عهدة) والقيد اليومي والتحويل بين طرفين وتحويل العملة */
+var GL_QA_CLS_ = ['glVMain', 'glVAcc', 'glJAcc', 'glPtFrom', 'glPtTo', 'glFxFrom', 'glFxTo'];
+function glQaDecorate_(root) {
+  if (typeof GL === 'undefined' || !GL.can || !glSubCan_('coa', 'add')) return;
+  root = root || document.getElementById('glDlgBody'); if (!root) return;
+  GL_QA_CLS_.forEach(function (c) {
+    root.querySelectorAll('input.gl-acc.' + c).forEach(function (inp) {
+      if (inp.dataset.qa) return; inp.dataset.qa = '1';
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-outline-success btn-sm py-0 px-2 gl-qa-btn'; b.textContent = '➕';
+      b.title = 'حساب جديد (أو قسم جديد) واختياره هنا'; b.style.cssText = 'flex:0 0 auto;';
+      b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); glQuickAcc_(inp, '', ''); };
+      var wrap = document.createElement('div'); wrap.style.cssText = 'display:flex;gap:4px;align-items:center;';
+      inp.parentNode.insertBefore(wrap, inp); wrap.appendChild(inp); inp.style.flex = '1 1 auto'; inp.style.minWidth = '0'; wrap.appendChild(b);
+    });
+  });
+}
+(function () {
+  if (window.__glQaObs || typeof MutationObserver === 'undefined') return; window.__glQaObs = 1;
+  var t = null;
+  new MutationObserver(function () { if (t) return; t = setTimeout(function () { t = null; if (document.getElementById('glDlgBody')) glQaDecorate_(); }, 60); })
+    .observe(document.documentElement, { childList: true, subtree: true });
+})();
 function glCsPendDlg(force) {
   glDlg('👜 صفوف الشيتات الناقصة — استكمال واعتماد', '<div id="glCsPBox" class="text-muted small py-4 text-center">⏳ جارٍ جلب الصفوف من الشيتات…</div>', 1180);
   glRun('glCsPendAll', [!!force], function (res) { GL._csP = res; GL.csPend = res.csPend || 0; glCsBanner_(); glCsPendDraw_(); },
@@ -49447,7 +49609,7 @@ function glCsPendDlg(force) {
 function glCsPendDraw_() {
   var R = GL._csP, box = document.getElementById('glCsPBox'); if (!R || !box) return;
   if (!R.groups.length) { box.innerHTML = '<div class="text-center py-3" style="color:#166534;font-weight:700;">✅ لا توجد صفوف ناقصة</div>' + (R.errors && R.errors.length ? '<div class="small text-danger">' + R.errors.map(glEsc).join('<br>') + '</div>' : '') + '<div class="text-center mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="glCsPendDlg(true)">🔄 فحص كل الشيتات</button></div>'; return; }
-  var amt = function (x) { return x.inAmt ? '<b class="gl-latin" style="color:#15803d;">+' + glFmt(x.inAmt) + '</b>' : '<b class="gl-latin" style="color:#b91c1c;">−' + glFmt(x.outAmt) + '</b>'; };
+  var amt = function (x, gc) { var cu = GL_CUR_LBL_[x.cur || gc] || ''; return (x.inAmt ? '<b class="gl-latin" style="color:#15803d;">+' + glFmt(x.inAmt) + '</b>' : '<b class="gl-latin" style="color:#b91c1c;">−' + glFmt(x.outAmt) + '</b>') + (cu ? ' <span class="small text-muted">' + cu + '</span>' : ''); };   // (V4.276) العملة بجوار المبلغ
   var tot = R.groups.reduce(function (a, g) { return a + g.rows.length; }, 0);
   var h = '<div class="d-flex align-items-center gap-2 flex-wrap mb-2"><span class="gl-pill">إجمالي الصفوف: <b>' + tot + '</b></span><span class="small text-muted">اختر الحساب (أو اضغط اقتراحاً) وعدّل البيان إن لزم، ثم «اعتماد المحدد» — كل الشيتات دفعة واحدة.</span>' +
     '<button class="btn btn-outline-secondary btn-sm ms-auto" onclick="glCsPendDlg(true)" title="يفحص كل الشيتات المربوطة">🔄 فحص كل الشيتات</button>' +
@@ -49456,7 +49618,7 @@ function glCsPendDraw_() {
     h += '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;overflow:hidden;"><div style="background:#fee2e2;padding:5px 12px;font-weight:800;font-size:12.5px;">👜 ' + glEsc(g.name) + ' (' + g.rows.length + ')' +
       (g.url ? ' <a class="small ms-2" href="' + glEsc(g.url) + '" target="_blank" rel="noopener">فتح الشيت ↗</a>' : '') + '</div><div style="padding:6px;"><div class="table-responsive" style="max-height:320px;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" checked onchange="this.closest(\'table\').querySelectorAll(\'.glCsPk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>صف</th><th>التاريخ</th><th>المبلغ</th><th>الطرف بالشيت</th><th>البيان (قابل للتعديل)</th><th style="min-width:250px;">الحساب</th></tr></thead><tbody>' +
       g.rows.map(function (x) {
-        return '<tr data-code="' + glEsc(g.code) + '" data-row="' + x.row + '" data-hint="' + glEsc(x.hint || '') + '" data-sg="' + glEsc((x.sugg && x.sugg[0] && x.sugg[0].code) || '') + '"><td><input type="checkbox" class="glCsPk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x) + '</td>' +
+        return '<tr data-code="' + glEsc(g.code) + '" data-row="' + x.row + '" data-hint="' + glEsc(x.hint || '') + '" data-sg="' + glEsc((x.sugg && x.sugg[0] && x.sugg[0].code) || '') + '"><td><input type="checkbox" class="glCsPk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x, g.currency) + '</td>' +
           '<td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
           '<td><input class="form-control form-control-sm glCsDesc" value="' + glEsc(x.desc || '') + '" data-orig="' + glEsc(x.desc || '') + '" style="min-width:190px;"></td>' +
           '<td><div class="d-flex gap-1">' + glAccInput('glCsAcc', '', '') + glCsNaBtn_() + '</div>' + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {

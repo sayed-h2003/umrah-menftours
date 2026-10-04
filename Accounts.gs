@@ -115,13 +115,35 @@ var GL_SEED_COA_ = [
 var GL_ACC_FX_GAIN_ = '46', GL_ACC_FX_LOSS_ = '53', GL_ACC_OPEN_DIFF_ = '34';
 
 /* ---------------------------- أدوات عامة ---------------------------- */
-function _glPerm_(authToken, cap) {
+/* 🔐 (V4.276) صلاحيات تفصيلية لكل شاشة ونموذج فرعي بالحسابات العامة (gl_<شاشة>.<عرض|إضافة|تعديل|حذف>)
+   • توافق كامل: مستخدم بلا أي صلاحية gl_… يبقى كما كان (gl.view/add/edit/delete تشمل كل الشاشات)
+   • بمجرد منح أي صلاحية gl_… للمستخدم تصبح كل شاشة فرعية بصلاحيتها هي فقط (مع بقاء gl.view لدخول الحسابات) */
+var GL_SUBS_ = [['safe', 'الخزينة (سند قبض/صرف/تحويل نقدية)'], ['bank', 'البنوك (إيداع/سحب)'], ['cust', 'العهد (صرف/تسوية)'], ['sheets', 'مزامنة الشيتات واعتماد صفوفها'],
+  ['je', 'القيود اليومية وشاشة القيود'], ['pt', 'التحويل بين طرفين'], ['fx', 'تحويل العملة'], ['stmt', 'كشف الحساب والكشوف'], ['rep', 'التقارير والميزان'],
+  ['auto', 'القيود التلقائية والاعتماد'], ['hb', 'ربط الحجوزات ودفعات الفنادق'], ['cp', 'توجيه دفعات العملاء'], ['coa', 'دليل الحسابات (حساب/قسم)']];
+var GL_TYPE_SUB_ = { 'سند قبض': 'safe', 'سند صرف': 'safe', 'تحويل نقدية': 'safe', 'إيداع بنكي': 'bank', 'سحب بنكي': 'bank', 'صرف عهدة': 'cust', 'تسوية عهدة': 'cust',
+  'تحويل بين طرفين': 'pt', 'تحويل عملة': 'fx' };
+function _glSubOn_(session) { return /(^|,)\s*gl_[a-z]+\./i.test(String((session && session.permissions) || '')); }
+function _glHasSub_(session, sub, cap) {
+  if (_sessionHasPerm_(session, 'admin')) return true;
+  if (!sub || !_glSubOn_(session)) return _sessionHasPerm_(session, 'gl.' + cap);
+  return _sessionHasPerm_(session, 'gl.view') && _sessionHasPerm_(session, 'gl_' + sub + '.' + cap);
+}
+function _glSubOfAcc_(code) { var a = _glAccounts_().map[_glStr_(code)], k = a && a.kind; return k === 'bank' ? 'bank' : k === 'custody' ? 'cust' : k === 'safe' ? 'safe' : ''; }
+function _glSubOfType_(t) { return GL_TYPE_SUB_[_glStr_(t)] || 'je'; }
+function _glPermErr_(cap, sub) {
+  var lbl = (GL_SUBS_.filter(function (x) { return x[0] === sub; })[0] || [])[1];
+  return new Error('لا تملك صلاحية ' + ({ view: 'عرض', add: 'إضافة', edit: 'تعديل/ترحيل', delete: 'حذف/إلغاء' }[cap] || cap) + (lbl ? ' «' + lbl + '»' : ' الحسابات العامة'));
+}
+function _glPerm_(authToken, cap, sub) {
   var session = requireAuth_(authToken);
-  if (!_sessionHasPerm_(session, 'gl.' + cap)) {
-    throw new Error('لا تملك صلاحية ' + ({ view: 'عرض', add: 'إضافة', edit: 'تعديل/ترحيل', delete: 'حذف/إلغاء' }[cap] || cap) + ' الحسابات العامة');
-  }
+  if (typeof sub === 'function') { try { sub = sub(); } catch (e) { sub = ''; } }
+  if (!_glHasSub_(session, sub || '', cap)) throw _glPermErr_(cap, sub || '');
   return session;
 }
+// فحص إضافي داخل الدالة بعد معرفة نوع القيد/الحساب
+function _glSubCheck_(session, sub, cap) { if (!_glHasSub_(session, sub, cap)) throw _glPermErr_(cap, sub); }
+function glSubsList(authToken) { requireAuth_(authToken); return { success: true, subs: GL_SUBS_ }; }
 function _glIsAdmin_(session) { return _sessionHasPerm_(session, 'admin'); }
 // 🔒 (V4.220) الإعدادات والاستيراد والمزامنات الخارجية والعمليات المؤثرة جوهرياً = للمدير فقط
 function _glAdminPerm_(authToken) {
@@ -236,7 +258,57 @@ function _glTouch_(key) {
   _GL_DIRTY_ = true; _glBump_();
   try { CacheService.getScriptCache().put('gl_wip', String(Date.now()), 600); } catch (e) {}
 }
-function _glLock_() { _GL_LOCKN_++; return LockService.getScriptLock(); }
+/* 🔒 (V4.276) قفل مُسمّى مستقل للحسابات العامة — الحل الجذري لـ«مهلة التأمين»
+   كان كل البرنامج (حفظ الرحلات/الملفات/الحجوزات + الحسابات + مزامنة الشيتات) يتشارك قفل السكربت الوحيد، فأي عملية حسابات
+   طويلة (بناء القيود التلقائية، مزامنة شيت، تطبيق دفعات) تُوقف كل عمليات الحفظ في البرنامج حتى تنتهي المهلة.
+   الآن: قفل «gl» مستقل محفوظ بالكاش، يُحجز ويُفك بفحص-وتعيين ذرّي يمسك قفل السكربت **أجزاء من الثانية فقط**.
+   • نفس واجهة القفل القديم: tryLock(ms) / waitLock(ms) / releaseLock() / hasLock()
+   • متداخل (reentrant) داخل نفس التنفيذ · لا يفك إلا مالكه · ينتهي ذاتياً بعد 330 ثانية لو توقف التنفيذ فجأة
+   • لو تعذّر الكاش لأي سبب ⇒ يرجع تلقائياً لقفل السكربت كما كان */
+var _GL_NL_OWN_ = null, _GL_NL_DEPTH_ = {};
+function _glNamedLock_(name) {
+  var key = 'nl_' + name, TTL = 330;
+  if (!_GL_NL_OWN_) _GL_NL_OWN_ = Utilities.getUuid();
+  var held = false, fb = null;
+  var attempt = function () {   // فحص وتعيين ذرّي تحت قفل السكربت (لحظي)
+    var sl = LockService.getScriptLock(), had = false;
+    try { had = sl.hasLock(); } catch (e0) {}
+    if (!had && !sl.tryLock(8000)) return false;
+    try {
+      var c = CacheService.getScriptCache(), cur = c.get(key), now = Date.now();
+      if (cur) { var p = cur.split('|'); if (p[0] !== _GL_NL_OWN_ && +p[1] > now) return false; }
+      c.put(key, _GL_NL_OWN_ + '|' + (now + TTL * 1000), TTL);
+      return true;
+    } finally { if (!had) try { sl.releaseLock(); } catch (e1) {} }
+  };
+  var take = function (ms) {
+    if (_GL_NL_DEPTH_[name] > 0) { _GL_NL_DEPTH_[name]++; held = true; return true; }
+    var end = Date.now() + Math.max(0, ms || 0), wait = 150;
+    try {
+      for (;;) {
+        if (attempt()) { _GL_NL_DEPTH_[name] = 1; held = true; return true; }
+        if (Date.now() + wait > end) return false;
+        Utilities.sleep(wait); wait = Math.min(1000, Math.round(wait * 1.5));
+      }
+    } catch (eC) {   // الكاش/القفل غير متاح ⇒ قفل السكربت التقليدي
+      fb = LockService.getScriptLock(); held = fb.tryLock(Math.max(1, ms || 0)); return held;
+    }
+  };
+  return {
+    tryLock: function (ms) { return take(ms); },
+    waitLock: function (ms) { if (!take(ms)) throw new Error('البرنامج مشغول بعملية حسابات أخرى (مزامنة/اعتماد) — أعد المحاولة بعد لحظات'); },
+    hasLock: function () { return held; },
+    releaseLock: function () {
+      if (!held) return; held = false;
+      if (fb) { try { fb.releaseLock(); } catch (e) {} fb = null; return; }
+      if (--_GL_NL_DEPTH_[name] > 0) return;
+      _GL_NL_DEPTH_[name] = 0;
+      // الفك بلا قفل السكربت: لا يكتب الرمز إلا مالكه، فحذفه آمن — ولا يبقى القفل عالقاً لو كان البرنامج مشغولاً بحفظ
+      try { var c = CacheService.getScriptCache(), cur = c.get(key); if (cur && cur.split('|')[0] === _GL_NL_OWN_) c.remove(key); } catch (e3) {}
+    }
+  };
+}
+function _glLock_() { _GL_LOCKN_++; return _glNamedLock_('gl'); }
 function _glUnlock_(lock) {
   if (_GL_DIRTY_) { _glBump_(); try { CacheService.getScriptCache().remove('gl_wip'); } catch (e) {} }
   _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1);
@@ -451,6 +523,7 @@ function glBootstrap(authToken, knownVer) {
   var admin = _glIsAdmin_(session);
   if (!_glSSId_()) return { success: true, ready: false, isAdmin: admin };
   var can = { add: _sessionHasPerm_(session, 'gl.add'), edit: _sessionHasPerm_(session, 'gl.edit'), del: _sessionHasPerm_(session, 'gl.delete'), approve: _glCanApprove_(session) };
+  can.sub = _glSubOn_(session) && !_sessionHasPerm_(session, 'admin') ? (function () { var o = {}; GL_SUBS_.forEach(function (x) { o[x[0]] = { view: _glHasSub_(session, x[0], 'view'), add: _glHasSub_(session, x[0], 'add'), edit: _glHasSub_(session, x[0], 'edit'), del: _glHasSub_(session, x[0], 'delete') }; }); return o; })() : null;   // 🔐 (V4.276) صلاحيات الشاشات الفرعية
   // ⚡ (V4.252) الواجهة عندها نفس الإصدار (من آخر تحميل أو من المتصفح) ⇒ لا شيء تغيّر: رد فوري بلا قراءة أي شيت
   if (knownVer && String(knownVer) === _glVerFresh_()) return { success: true, ready: true, same: true, ver: _GL_VER_, isAdmin: admin, can: can,
     pendingCount: (function () { try { return _glTripMode_() ? _glPendingCount_() : 0; } catch (e) { return 0; } })(), csPend: _glCsPendTotal_() };
@@ -524,7 +597,7 @@ function _glAccTripUnlinkOthers_(selfCode, tripLinks) {
 function glSaveAccount(authToken, a) {
   a = a || {};
   var isEdit = !!_glStr_(a.code) && !!_glAccounts_().map[_glStr_(a.code)] && a.isEdit;
-  var session = _glPerm_(authToken, isEdit ? 'edit' : 'add');
+  var session = _glPerm_(authToken, isEdit ? 'edit' : 'add', 'coa');
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null;
@@ -548,7 +621,7 @@ function glSaveAccount(authToken, a) {
   } finally { _glUnlock_(lock); }
 }
 function glDeleteAccount(authToken, code) {
-  var session = _glPerm_(authToken, 'delete');
+  var session = _glPerm_(authToken, 'delete', 'coa');
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null;
@@ -575,7 +648,7 @@ function _glLineHash_(eRow, lines, codeMap) {
   })]));
 }
 function glMoveAccount(authToken, code, newParent) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'coa');
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     return _glMoveAccountCore_(code, newParent, session.username);
@@ -941,7 +1014,7 @@ function _glListEntryRow_(id) {   // صف بشكل glListEntries بقراءة ا
 function glSaveEntry(authToken, e, post) {
   e = e || {};
   var isEdit = !!_glStr_(e.id);
-  var session = _glPerm_(authToken, isEdit ? 'edit' : 'add');
+  var session = _glPerm_(authToken, isEdit ? 'edit' : 'add', function () { return _glSubOfType_(e.type); });   // (V4.276) صلاحية نوع السند/القيد
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
@@ -992,7 +1065,7 @@ function glSaveEntry(authToken, e, post) {
   } finally { _glUnlock_(lock); }
 }
 function glPostEntry(authToken, id) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', function () { var f0 = _glFindEntry_(_glStr_(id)); return f0 ? _glSubOfType_(f0.r[3]) : 'je'; });   // (V4.276)
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     var f = _glFindEntry_(_glStr_(id)); if (!f) throw new Error('القيد غير موجود');
@@ -1012,7 +1085,7 @@ function glPostEntry(authToken, id) {
 }
 // wantDelta: (V4.232) تُرجع دلتا الأرصدة للتحديث المحلي — يمرّرها نداء الواجهة فقط، لا حلقة glHbErpVoid الداخلية
 function glVoidEntry(authToken, id, reason, wantDelta) {
-  var session = _glPerm_(authToken, 'delete');
+  var session = _glPerm_(authToken, 'delete', function () { var f0 = _glFindEntry_(_glStr_(id)); return f0 ? _glSubOfType_(f0.r[3]) : 'je'; });   // (V4.276)
   reason = _glStr_(reason);
   if (!reason) throw new Error('سبب الإلغاء مطلوب');
   var lock = _glLock_(); lock.waitLock(30000);
@@ -1221,7 +1294,7 @@ function glGetEntry(authToken, id) {
 }
 // قائمة القيود بفلاتر: from/to/type/status/account/q/batch — الأحدث أولاً (حد 400)
 function glListEntries(authToken, f) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'je');
   f = f || {};
   var fromK = _glDKey_(_glDate_(f.from)), toK = _glDKey_(_glDate_(f.to)), q = _glNorm_(f.q || ''), acc = _glStr_(f.account);
   var byEntry = {};
@@ -1251,7 +1324,7 @@ function glListEntries(authToken, f) {
 /* ---------------------------- دفتر الأستاذ والميزان ---------------------------- */
 // دفتر الأستاذ لحساب (أو مجموعة: كل الحسابات التي يبدأ كودها بهذا الكود) بفترة
 function glLedger(authToken, code, from, to) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   code = _glStr_(code);
   var acc = _glAccounts_().map[code];
   if (!acc) throw new Error('اختر حساباً');
@@ -1489,14 +1562,14 @@ function _glStmtCore_(code, from, to, ctx) {
 }
 // opts.fast: (V4.245) سياق الحساب وحده + بيانات الحجز لاحقاً (glStatementHb) — الواجهة تطلبه هكذا
 function glStatement(authToken, code, from, to, opts) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   code = _glStr_(code);
   if (opts && opts.fast) { var c = _glStmtCtxFor_(code); c.skipHb = true; return _glStmtCore_(code, from, to, c); }
   return _glStmtCore_(code, from, to, _glStmtCtx_());
 }
 // بيانات الحجز لسطور الكشف + الحجوزات بلا سعر (نفس منطق _glStmtCore_) — تُدمج بالواجهة بعد ظهور الكشف
 function glStatementHb(authToken, code, from, to) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   code = _glStr_(code);
   var c = _glStmtCtxFor_(code), r = _glStmtCore_(code, from, to, c), byKey = {};
   r.rows.forEach(function (x) { if (x.hbKey && x.hb) byKey[x.hbKey] = x.hb; });
@@ -1504,7 +1577,7 @@ function glStatementHb(authToken, code, from, to) {
 }
 // كشوف جماعية: كل الحسابات المختارة (أو كل حسابات نوع له رصيد) بسياق قراءة واحد
 function glStatements(authToken, codes, from, to, opts) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   opts = opts || {};
   var ctx = _glStmtCtx_(), out = [], list = (codes || []).map(_glStr_);
   if (!list.length && opts.kind) {
@@ -1523,7 +1596,7 @@ function glStatements(authToken, codes, from, to, opts) {
 }
 // تقرير أعمار الديون المجمّع لكل العملاء (أو الموردين/الوكلاء)
 function glAgingReport(authToken, role, to) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   role = role === 'supplier' ? 'supplier' : 'client';
   var ctx = _glStmtCtx_(), asOf = to ? _glDate_(to) : Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'dd/MM/yyyy'), toK = to ? _glDKey_(asOf) : '', out = [];
   ctx.accs.list.forEach(function (a) {
@@ -1538,7 +1611,7 @@ function glAgingReport(authToken, role, to) {
 }
 // 🔢 رقم مسلسل لكل كشف يُصدَر (ST-yyyy-nnnn) + بصمة للتحقق (تُطبع برمز QR) + سجل التعديلات
 function glStmtIssue(authToken, info) {
-  var session = _glPerm_(authToken, 'view');
+  var session = _glPerm_(authToken, 'view', 'stmt');
   info = info || {};
   var lock = _glLock_(); lock.waitLock(30000);
   try {
@@ -1553,14 +1626,14 @@ function glStmtIssue(authToken, info) {
   } finally { _glUnlock_(lock); }
 }
 function glStmtVerify(authToken, serial) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   serial = _glStr_(serial).toUpperCase().replace(/^.*?(ST-\d{4}-\d+).*$/, '$1');
   var hit = null;
   _glRows_('stmts').forEach(function (r) { if (_glStr_(r[0]) === serial) hit = { serial: serial, at: _glStr_(r[1]), by: _glStr_(r[2]), code: _glStr_(r[3]), name: _glStr_(r[4]), from: _glStr_(r[5]), to: _glStr_(r[6]), balances: _glStr_(r[7]), output: _glStr_(r[8]), hash: _glStr_(r[9]) }; });
   return { success: true, found: !!hit, rec: hit };
 }
 function glStmtLog(authToken, code) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   code = _glStr_(code);
   var out = [];
   _glRows_('stmts').forEach(function (r) { if (!code || _glStr_(r[3]) === code) out.push({ serial: _glStr_(r[0]), at: _glStr_(r[1]), by: _glStr_(r[2]), code: _glStr_(r[3]), name: _glStr_(r[4]), from: _glStr_(r[5]), to: _glStr_(r[6]), balances: _glStr_(r[7]), output: _glStr_(r[8]), hash: _glStr_(r[9]) }); });
@@ -1568,7 +1641,7 @@ function glStmtLog(authToken, code) {
 }
 // 📄 PDF نصي من مستند الكشف المطبوع نفسه (مجلد مؤقت، مشاركة برابط) — للمشاركة/التنزيل من الواجهة
 function glStmtPdf(authToken, htmlDoc, fileName) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   var folder = getDriveFolder_('TEMP');
   fileName = String(fileName || 'كشف حساب').replace(/[\\/:*?"<>|]/g, '-').trim();
   var pdfBlob = Utilities.newBlob(htmlDoc, 'text/html', fileName + '.html').getAs('application/pdf');
@@ -1581,7 +1654,7 @@ function glStmtPdf(authToken, htmlDoc, fileName) {
    الحالي لكل عملة، وكل حركة: رقم السند/القيد، التاريخ، الحساب المقابل، البيان، وارد/صادر ورصيد تراكمي لكل عملة
    على حدة (بلا تحويل بين العملات)، مع لقطة أرصدة العملات الثلاث عند كل حركة وإجماليات الفترة. */
 function glTreasury(authToken, code, from, to) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', function () { return _glSubOfAcc_(code) || 'safe'; });
   code = _glStr_(code);
   var accs = _glAccounts_(), acc = accs.map[code];
   if (!acc || acc.isGroup) throw new Error('اختر خزينة أو بنكاً أو عهدة');
@@ -1625,7 +1698,7 @@ function glTreasury(authToken, code, from, to) {
 }
 // ميزان المراجعة: لكل حساب ورقي عليه حركة — افتتاحي (قبل from) + حركة الفترة + ختامي، بالمعادل وبكل عملة
 function glTrialBalance(authToken, from, to) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'rep');
   var fromK = _glDKey_(_glDate_(from)), toK = _glDKey_(_glDate_(to));
   var t = {};
   _glRows_('lines').forEach(function (r) {
@@ -2791,7 +2864,7 @@ function _glAutoRun_(user, dry, opts) {
   return res;
 }
 function glAutoPreview(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'auto');
   var r = _glAutoRun_('', true);
   r.success = true; r.last = _glAutoLast_(); r.cron = _glSettings_().auto_cron === 'نعم'; r.autoOpen = _glSettings_().auto_open !== 'لا';
   _GL_ACC_MEMO_ = null;
@@ -2858,6 +2931,17 @@ function _glAttachMap_() {
   var out = {};
   try { _glRows_('attach').forEach(function (r) { var id = _glStr_(r[0]); if (id) (out[id] = out[id] || []).push({ id: _glStr_(r[1]), name: _glStr_(r[2]), mime: _glStr_(r[3]), url: _glStr_(r[4]), by: _glStr_(r[5]), at: _glStr_(r[6]) }); }); } catch (e) {}
   return out;
+}
+// 👁️ (V4.276) محتوى مرفق لمعاينته داخل البرنامج (صورة/PDF) — بلا حاجة لمشاركة ملف الدرايف مع المستخدم
+function glAttachData(authToken, fileId) {
+  _glPerm_(authToken, 'view');
+  fileId = _glStr_(fileId); var hit = null;
+  _glRows_('attach').forEach(function (r) { if (_glStr_(r[1]) === fileId) hit = r; });
+  if (!hit) throw new Error('المرفق غير موجود');
+  var f = DriveApp.getFileById(fileId), size = f.getSize();
+  if (size > 12 * 1024 * 1024) return { success: true, big: true, url: f.getUrl(), name: _glStr_(hit[2]), mime: f.getMimeType() };
+  var b = f.getBlob();
+  return { success: true, name: _glStr_(hit[2]) || f.getName(), mime: b.getContentType() || _glStr_(hit[3]), b64: Utilities.base64Encode(b.getBytes()), url: f.getUrl() };
 }
 function glAttachList(authToken, entryId) { _glPerm_(authToken, 'view'); return { success: true, files: _glAttachMap_()[_glStr_(entryId)] || [] }; }
 function glAttachDelete(authToken, fileId) {
@@ -2945,7 +3029,7 @@ function _glLinesDiff_(eRow, oldRows, newLines, accM, hdr) {
   return out.slice(0, 14).join('\n');
 }
 function glPendingList(authToken) {
-  var session = _glPerm_(authToken, 'view');
+  var session = _glPerm_(authToken, 'view', 'auto');
   var rows = [];
   try { _glRowsW_('pending').forEach(function (r) { if (_glStr_(r[0])) rows.push({ key: _glStr_(r[0]), id: _glStr_(r[1]), kind: _glStr_(r[2]), oldDesc: _glStr_(r[3]), oldBase: _glNum_(r[4]),
     newDesc: _glStr_(r[5]), newBase: _glNum_(r[6]), at: _glStr_(r[8]), status: _glStr_(r[9]) || 'بانتظار', by: _glStr_(r[10]), note: _glStr_(r[11]), oldAmt: _glStr_(r[12]), newAmt: _glStr_(r[13]), diff: _glStr_(r[14]) }); }); } catch (e) {}
@@ -3069,7 +3153,7 @@ function _glAutoTsKey_(s) { var m = String(s || '').match(/(\d{2})\/(\d{2})\/(\d
 
 // 💵 توجيه دفعات العملاء: الدفعات المسجلة بشاشة حسابات العملاء تذهب لـ«نقدية تحت التسوية» حتى يُحدَّد حسابها النقدي
 function glCpList(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'cp');
   var roles = _glAutoRoles_('', true), cash = roles.cash, dir = _glCpDirMap_(), accs = _glAccounts_().map, out = [];
   var ents = _glRows_('entries'), lines = {};
   _glRows_('lines').forEach(function (l) { (lines[_glStr_(l[0])] = lines[_glStr_(l[0])] || []).push(l); });
@@ -3090,7 +3174,7 @@ function glCpList(authToken) {
 }
 // (V4.229) توجيه صريح: أي حساب ورقي غير تجميعي (وليس النقديات فقط) — يُترك للبناء تحديد اتجاه القيد
 function glCpDirect(authToken, payIds, code) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'cp');
   code = _glStr_(code); var a = _glAccounts_().map[code];
   if (!a || a.isGroup) throw new Error('اختر حساباً ورقياً صالحاً');
   var ids = (payIds || []).map(_glStr_).filter(String); if (!ids.length) throw new Error('اختر دفعة واحدة على الأقل');
@@ -3140,7 +3224,7 @@ function _glCpDirWrite_(rows) {
 function _glCpPending_() { try { return _glTripMode_() ? _glPendingCount_() : 0; } catch (e) { return 0; } }
 // (V4.229) توجيه مجمّع لكل دفعة على حدة لأي حساب: items=[{payId, code}] — code فارغ = إلغاء التوجيه (يعود لنقدية تحت التسوية)
 function glCpApply(authToken, items) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'cp');
   items = (items || []).map(function (it) { return { payId: _glStr_(it && it.payId), code: _glStr_(it && it.code) }; }).filter(function (it) { return it.payId; });
   if (!items.length) throw new Error('اختر دفعة واحدة على الأقل');
   var accMap = _glAccounts_().map;
@@ -3166,7 +3250,7 @@ function glCpApply(authToken, items) {
 }
 // (V4.229) حذف دفعات عملاء (قد تكون مكررة) من شاشة التوجيه — يُحذف السجل بشاشة حسابات العملاء ويُلغى قيدها التلقائي
 function glCpDelete(authToken, payIds) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'cp');
   var ids = (payIds || []).map(_glStr_).filter(String); if (!ids.length) throw new Error('اختر دفعة واحدة على الأقل');
   var idset = {}; ids.forEach(function (id) { idset[id] = 1; });
   var lock = _glLock_(); lock.waitLock(60000);
@@ -3495,7 +3579,7 @@ function _glCsEntry_(x, code, cp, cur, fx) {
   return { e: e, v: _glValidate_(e, {}) };
 }
 function glCustSheetGet(authToken, code) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'sheets');
   var a = _glAccounts_().map[_glStr_(code)]; if (!a || a.isGroup) throw new Error('اختر عهدة');
   return { success: true, cfg: _glCsCfg_(a.code), account: { code: a.code, name: a.name, currency: a.currency || '' } };
 }
@@ -3538,7 +3622,7 @@ function glCustSheetSave(authToken, code, cfg) {
 }
 // preview=true ⇒ معاينة فقط بلا كتابة
 function glCustSheetSync(authToken, code, preview) {
-  var session = preview ? _glPerm_(authToken, 'view') : _glAdminPerm_(authToken);
+  var session = preview ? _glPerm_(authToken, 'view', 'sheets') : _glAdminPerm_(authToken);
   var lock = _glLock_(); lock.waitLock(120000);
   try { return _glCsSync_(_glStr_(code), session.username, { preview: !!preview }); }
   finally { _glUnlock_(lock); }
@@ -3556,7 +3640,7 @@ function _glCsPendBrief_() {
 }
 // يجمع الصفوف الناقصة من كل الشيتات المربوطة (معاينة بلا تسجيل) — لشاشة «استكمال واعتماد» بالحسابات العامة
 function glCsPendAll(authToken, force) {
-  var session = _glPerm_(authToken, 'view');
+  var session = _glPerm_(authToken, 'view', 'sheets');
   var groups = [], errs = [], t0 = Date.now(), accM = _glAccounts_().map;
   _glCsCodes_().forEach(function (code) {
     var cfg = _glCsCfg_(code); if (!cfg || !cfg.id) return;
@@ -3571,7 +3655,7 @@ function glCsPendAll(authToken, force) {
 }
 // اعتماد دفعة واحدة لصفوف عدة شيتات: [{code, items:[{row, account, desc?}]}] — البيان المعدَّل يحلّ محل بيان الصف بالقيد
 function glCsApproveAll(authToken, groups) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'sheets');
   var lock = _glLock_(); lock.waitLock(150000);
   try {
     var created = 0, problems = [], left = 0;
@@ -3589,7 +3673,7 @@ function glCsApproveAll(authToken, groups) {
   } finally { _glUnlock_(lock); }
 }
 function glCustSheetApprove(authToken, code, items) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'sheets');
   var lock = _glLock_(); lock.waitLock(120000);
   try {
     var pick = {}; (items || []).forEach(function (it) { if (it && it.row && _glStr_(it.account)) pick[+it.row] = _glStr_(it.account); });
@@ -3903,7 +3987,7 @@ function glFxRateAt(authToken, date) {
 }
 // تقرير المطابقة: رصيد كل عميل ووكيل وشركة رسوم غرفة كما تحسبه الشاشة ↔ رصيد حسابه بالدفتر
 function glAutoReconcile(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'auto');
   _GL_ACC_MEMO_ = null;
   var accs = _glAccounts_(), bal = _glBalances_(null), byLink = {};
   // (V4.208) أسطر قيود حجوزات الفنادق تُستبعد هنا — لها مطابقتها الخاصة بتبويب «🏨 الحجوزات»
@@ -4047,7 +4131,7 @@ function _glLineMatch_(l, f) {
 }
 // قائمة الدخل لفترة (بلا قيود الإقفال): لكل حساب إيراد/مصروف صافيه بالمعادل وبعملاته
 function glIncomeStatement(authToken, from, to, f) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'rep');
   f = f || {};
   var fromK = _glDKey_(_glDate_(from)), toK = _glDKey_(_glDate_(to)), acc = {}, tags = { trips: {}, companies: {} };
   _glPostedLines_().forEach(function (l) {
@@ -4065,7 +4149,7 @@ function glIncomeStatement(authToken, from, to, f) {
 }
 // المركز المالي في تاريخ: أرصدة الأصول والخصوم وحقوق الملكية + صافي الربح غير المقفَل
 function glBalanceSheet(authToken, asOf) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'rep');
   var toK = _glDKey_(_glDate_(asOf)), acc = {}, pl = 0;
   _glPostedLines_().forEach(function (l) {
     if (toK && l._k > toK) return;
@@ -4085,7 +4169,7 @@ function glBalanceSheet(authToken, asOf) {
 }
 // الربحية حسب الرحلة/الشركة/العميل: إيرادات (4 بلا فروق العملة) وتكاليف مباشرة (51) وأخرى (باقي 5)
 function glProfitability(authToken, from, to, by) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'rep');
   by = { trip: 'trip', company: 'company', client: 'client' }[by] || 'trip';
   var fromK = _glDKey_(_glDate_(from)), toK = _glDKey_(_glDate_(to)), g = {}, discAcc = _glSettings_().auto_acc_disc || '4199';
   _glPostedLines_().forEach(function (l) {
@@ -4109,7 +4193,7 @@ function glProfitability(authToken, from, to, by) {
 }
 // أعمار الديون (الأقدم فالأقدم) لكل حساب طرف ولكل عملة
 function glAging(authToken, asOf, kind) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'stmt');
   kind = kind === 'agent' ? 'agent' : 'client';
   var toK = _glDKey_(_glDate_(asOf)) || _glDKey_(_glDate_(new Date()));
   var asD = new Date(+toK.slice(0, 4), +toK.slice(4, 6) - 1, +toK.slice(6, 8));
@@ -4156,7 +4240,7 @@ function glAging(authToken, asOf, kind) {
 // التدفق النقدي وحركة الخزائن: لكل حساب نقدي (خزينة/بنك/عهدة) افتتاحي ووارد ومنصرف وختامي بعملته،
 // وتصنيف صافي التدفق حسب الطرف المقابل (بالمعادل)
 function glCashFlow(authToken, from, to) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'rep');
   var fromK = _glDKey_(_glDate_(from)), toK = _glDKey_(_glDate_(to)), accs = _glAccounts_().map;
   var isCash = function (code) { var a = accs[code]; return !!a && !a.isGroup && (a.kind === 'safe' || a.kind === 'bank' || a.kind === 'custody'); };
   var box = {}, byEntry = {};
@@ -4621,7 +4705,7 @@ function _glSrcOf_(r) {
   return '';
 }
 function glHbErpOverlap(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   var ents = {}; _glRows_('entries').forEach(function (r) { if (_glStr_(r[5]) !== GL_ST_VOID_) ents[_glStr_(r[0])] = r; });
   var accs = _glAccounts_().map, by = {};
   _glRows_('lines').forEach(function (l) {
@@ -4837,14 +4921,14 @@ function glHbMirrorResync(authToken) {
 }
 // (V4.248) حساب طرف برنامج الحجوزات بالاسم (لأزرار الدفعة داخل كشفه الفندقي) — عبر خريطة الأسماء
 function glHbPartyCode(authToken, name) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   var m = _glHbMap_()[_glHbKey_(name)], accs = _glAccounts_().map;
   var code = m && m.code && accs[m.code] && !accs[m.code].isGroup && !/^(رحلة|تجاهل)$/.test(m.type) ? m.code : '';
   return { success: true, name: _glStr_(name), code: code, type: m ? m.type : '' };
 }
 // قائمة القيود المنسوخة لبرنامج الحجوزات (لتبويب «💳 دفعات الفنادق»)
 function glHbMirrorList(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   var m = {}; _glRows_('hbmir').forEach(function (r) { var id = _glStr_(r[0]); if (id) m[id] = { n: _glNum_(r[1]), at: _glStr_(r[2]) }; });
   var ids = Object.keys(m), out = [];
   if (ids.length) {
@@ -4930,7 +5014,7 @@ function _glHbPaySplitScan_(authToken, payFrom) {
   return { fromK: fromK, hbPays: hbPays, erpAfter: erpAfter, erpRestore: erpRestore };
 }
 function glHbPaySplitPreview(authToken, payFrom) {
-  var session = _glPerm_(authToken, 'view');
+  var session = _glPerm_(authToken, 'view', 'hb');
   var S = _glHbPaySplitScan_(authToken, payFrom), pol = _glHbPayPolicy_();
   return { success: true, payFrom: _glDate_(payFrom), current: pol.from, keep: Object.keys(pol.keep),
     hbPays: S.hbPays.slice(0, 1500), hbMatched: S.hbPays.filter(function (x) { return x.matched; }).length, hbUnmatched: S.hbPays.filter(function (x) { return !x.matched; }).length,
@@ -4981,7 +5065,7 @@ function glHbPaySplitApply(authToken, o) {
      الدفعة: نفس حساب الطرف + نفس المبلغ والعملة والاتجاه + تاريخ ±3 أيام (ويُرفض لو تعددت المرشحات أو سبق استخدام قيد الـ ERP)
    ثم «حذف المطابق» (للمدير) يحذف قيود الـ ERP المطابقة فتبقى قيود الحجوزات وحدها — القيود غير المطابقة تُعرض لمراجعتها يدوياً. */
 function glHbErpMatch(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   _GL_HB_MEMO_ = null;
   var H = _glHbRead_(), ents = {}, hbEnt = {}, erpList = [], lines = {};
   _glRows_('lines').forEach(function (l) { (lines[_glStr_(l[0])] = lines[_glStr_(l[0])] || []).push(l); });
@@ -5076,7 +5160,7 @@ function _glHbRevFromErp_(list, user) {
    يقرأ شيت الـ ERP الأصلي (Journal_Entries) ويطابق كل دفعة (نفس حساب الطرف بالريال + نفس المبلغ والاتجاه ± 3 أيام)
    ثم يأخذ المبلغ الفعلي بعملة الخزينة/البنك — التطبيق يحتفظ بالريال والجنيه المسجلين ويعدّل سعر الصرف فقط. */
 function glHbFxFix(authToken, url, apply, payIds) {
-  var session = apply ? _glAdminPerm_(authToken) : _glPerm_(authToken, 'view');
+  var session = apply ? _glAdminPerm_(authToken) : _glPerm_(authToken, 'view', 'hb');
   url = _glStr_(url) || _glSettings_().erp_url || '';
   if (!url) throw new Error('أدخل رابط شيت الـ ERP الأصلي');
   var ss = _glErpOpen_(url);
@@ -5181,7 +5265,7 @@ function glHbErpMatchApply(authToken, items) {
 }
 function _glHbKeepMap_() { var o = {}; try { _glRows_('hbkeep').forEach(function (r) { var k = _glStr_(r[0]); if (k) o[k] = _glStr_(r[1]); }); } catch (e) { } return o; }
 function glHbKeepList(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   var ents = {}; _glRows_('entries').forEach(function (r) { ents[_glStr_(r[0])] = r; });
   var out = [];
   try { _glRows_('hbkeep').forEach(function (r) { var k = _glStr_(r[0]); if (!k) return; var e = ents[_glStr_(r[1])]; out.push({ key: k, erp: _glStr_(r[1]), erpDesc: e ? _glStr_(e[4]) : '(قيد الـ ERP غير موجود)', erpDate: e ? _glDate_(e[2]) : '', hbDesc: _glStr_(r[2]), by: _glStr_(r[3]), at: _glStr_(r[4]) }); }); } catch (e) { }
@@ -5200,7 +5284,7 @@ function glHbKeepUndo(authToken, keys) {
   return { success: true, restored: rows.length - keep.length };
 }
 function glHbState(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; _GL_HB_MEMO_ = null;
   var c = _glHbCfg_();
   var res = { success: true, on: !!c.ssId, cfg: c, types: Object.keys(GL_HB_TYPES_).map(function (t) { return { v: t, label: GL_HB_TYPES_[t].label, parent: GL_HB_TYPES_[t].parent }; }) };
@@ -5288,7 +5372,7 @@ function _glHbWriteAll_(key, rows) {
 }
 // مراجعة الدفعات: [{id, cash, cur, amount, rate}] — cash فارغ يحذف المراجعة (ترجع لتحت التسوية)
 function glHbSavePay(authToken, rows) {
-  var session = _glPerm_(authToken, 'add');
+  var session = _glPerm_(authToken, 'add', 'hb');
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
@@ -5318,7 +5402,7 @@ function glHbSavePay(authToken, rows) {
 // على أي حساب نقدي — لحالة دفعتين منفصلتين بسجل الدفعات (برنامج الحجوزات لا يدعم ربطهما هناك) تمثلان نفس التحويل
 // الواحد فعلياً (مثلاً: استلمنا من مورد أ + دفعنا لمورد ب بنفس المبلغ تقريباً = تحويل مباشر بينهما)
 function glHbLinkPays(authToken, ids) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'hb');
   ids = (ids || []).map(_glStr_).filter(String);
   if (ids.length < 2) throw new Error('اختر دفعتين على الأقل');
   // 🔒 (V4.265) الكتابة + التطبيق داخل قفل واحد (waitLock): كان الكتابة بلا قفل ثم تطبيق بـ tryLock
@@ -5349,7 +5433,7 @@ function _glHbApplyKeysLocked_(user, keys) {
 }
 // 🗑️ (V4.258) حذف دفعة مكررة من سجل الدفعات ببرنامج الحجوزات نفسه (من شاشة مراجعة الدفعات) — قيدها الآلي يُلغى بالمزامنة التالية
 function glHbDeletePays(authToken, ids) {
-  var session = _glPerm_(authToken, 'delete');
+  var session = _glPerm_(authToken, 'delete', 'hb');
   ids = (ids || []).map(_glStr_).filter(String); if (!ids.length) throw new Error('اختر دفعة على الأقل');
   var lock = _glLock_(); lock.waitLock(30000);
   try {
@@ -5375,7 +5459,7 @@ function glHbDeletePays(authToken, ids) {
      الفعلية تحويلاً من العميل للمورد (دفعتا حجوزات ⇒ ربط كدفعة مرتبطة بقيد واحد · دفعة عميل ⇒ توجيهها لنفس وسيط دفعة الحجوزات)
    • مكررة (نفس الاتجاه ونفس الطرف تقريباً): تسجيل مزدوج لنفس الدفعة ⇒ حذف إحداهما */
 function glDupScan(authToken, opts) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   opts = opts || {};
   var roles = _glAutoRoles_('', true), accs = _glAccounts_().map, fx = _glFxDailyMap_(), rates = _glRates_(), items = [];
   var base = function (amt, cur, date) { return cur === 'EGP' ? amt : _glR2_(amt * (_glFxRateAt_(cur, date, fx).rate || rates[cur] || 1)); };
@@ -5425,13 +5509,13 @@ function glDupScan(authToken, opts) {
 }
 // مقاصة دفعة عميل (تحت التسوية) مع دفعة حجوزات متقابلة: توجيه دفعة العميل لنفس الحساب الوسيط لدفعة الحجوزات ⇒ يصفر
 function glDupOffsetCp(authToken, cpId, hbId) {
-  _glPerm_(authToken, 'edit');
+  _glPerm_(authToken, 'edit', 'hb');
   var roles = _glAutoRoles_('', true), rev = _glHbPayRev_(), accs = _glAccounts_().map, r = rev[_glStr_(hbId)];
   var susp = r && r.cash && accs[r.cash] ? r.cash : roles.hb_cash;
   return glCpDirect(authToken, [_glStr_(cpId)], susp);
 }
 function glHbUnlinkPay(authToken, id) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'hb');
   id = _glStr_(id);
   var lock = _glLock_(); lock.waitLock(45000);   // 🔒 (V4.265) الكتابة + التطبيق ذرّيان داخل قفل واحد
   try {
@@ -5448,7 +5532,7 @@ function glHbUnlinkPay(authToken, id) {
 }
 // تحديد رحلة حجز يدوياً: trip='' يعيد التلقائي، '-' بلا رحلة
 function glHbSaveTrip(authToken, rows) {
-  var session = _glPerm_(authToken, 'add');
+  var session = _glPerm_(authToken, 'add', 'hb');
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     var ov = {}, now = _glNow_(), meta = {};
@@ -5461,7 +5545,7 @@ function glHbSaveTrip(authToken, rows) {
 }
 // المطابقة: رصيد كل طرف بمنطق كشف الحساب ببرنامج الحجوزات ↔ رصيد حسابه من قيود الحجوزات بالدفتر (بالريال)
 function glHbReconcile(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; _GL_HB_MEMO_ = null;
   var cashIn = {};
   var H = _glHbRead_(), P = _glHbParties_(H), map = _glHbMap_(), bal = _glHbLineBal_(true, cashIn), all = _glHbLineBal_(false), accs = _glAccounts_().map, roles = _glAutoRoles_('', true);
@@ -5508,7 +5592,7 @@ function _glHbSeasonPlan_(date) {
   }
   return { date: d, rows: rows, total: tot, target: tgt, targetName: tgt ? (accs.map[tgt] || {}).name : '⚠️ «إيرادات السكن» حساب تجميعي بلا حساب فرعي — أضف حساباً فرعياً تحته أولاً' };
 }
-function glHbSeasonPreview(authToken, date) { _glPerm_(authToken, 'view'); _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; var r = _glHbSeasonPlan_(date); r.success = true; return r; }
+function glHbSeasonPreview(authToken, date) { _glPerm_(authToken, 'view', 'hb'); _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; var r = _glHbSeasonPlan_(date); r.success = true; return r; }
 function glHbSeasonClose(authToken, date) {
   var session = _glAdminPerm_(authToken);
   var lock = _glLock_(); lock.waitLock(30000);
@@ -5552,7 +5636,7 @@ function _glHbRoomsN_(b) { return (b.rooms || []).reduce(function (a, n) { retur
 function _glHbCap_(b) { var r = b.rooms || []; return (r[0] || 0) * 2 + (r[1] || 0) * 3 + (r[2] || 0) * 4 + (r[3] || 0) * 5; }
 
 function glHbTripHousing(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; _GL_HB_MEMO_ = null;
   var H = _glHbRead_(), map = _glHbMap_(), ov = _glHbTripOv_(), ctx = _glHbTripCtx_(), accs = _glAccounts_().map, ents = _glHbEntryIds_();
   var T = {};
@@ -5596,7 +5680,7 @@ function _glHbCharterRows_() {
   }).filter(function (c) { return c.id && c.name; });
 }
 function glHbCharters(authToken) {
-  _glPerm_(authToken, 'view');
+  _glPerm_(authToken, 'view', 'hb');
   _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; _GL_HB_MEMO_ = null;
   var H = _glHbRead_(), P = _glHbParties_(H), map = _glHbMap_(), bal = _glHbLineBal_(true), accs = _glAccounts_().map, rates = _glRates_();
   var contracts = _glHbCharterRows_(), names = {};
@@ -5663,7 +5747,7 @@ function glHbSaveCharter(authToken, c) {
   } finally { _glUnlock_(lock); }
 }
 function glHbDeleteCharter(authToken, id) {
-  var session = _glPerm_(authToken, 'delete');
+  var session = _glPerm_(authToken, 'delete', 'hb');
   var r = _glHbCharterRows_().filter(function (x) { return x.id === _glStr_(id); })[0];
   if (!r) throw new Error('العقد غير موجود');
   _glSheet_('hbchar').deleteRow(r._row);
@@ -5672,7 +5756,7 @@ function glHbDeleteCharter(authToken, id) {
 }
 // تسوية شارت: المدفوع للشارت ولم يُستهلك بحجوزات (غرف غير مستغلة) يُحمَّل تكلفةً نهاية العقد — قيد يومية مرحّل
 function glHbCharterSettle(authToken, code, date, amount, note) {
-  var session = _glPerm_(authToken, 'edit');
+  var session = _glPerm_(authToken, 'edit', 'hb');
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;

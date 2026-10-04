@@ -159,8 +159,8 @@ function hbBridgeBookingSave(authToken, glKey, bookingKey, fields) {
   var gl = { updated: 0, pending: 0 };
   try {
     _GL_HB_MEMO_ = null; _GL_ACC_MEMO_ = null;
-    var lock = LockService.getScriptLock(); lock.waitLock(30000);
-    try { var a = _glAutoRun_(session.username, false, { onlyKeys: ['AUTO:HB:' + glKey] }); gl = { updated: a.updated, pending: a.pending, created: a.created }; } finally { lock.releaseLock(); }
+    var lock = _glLock_(); lock.waitLock(90000);   // (V4.276) قفل الحسابات المستقل بدل قفل السكربت العام
+    try { var a = _glAutoRun_(session.username, false, { onlyKeys: ['AUTO:HB:' + glKey] }); gl = { updated: a.updated, pending: a.pending, created: a.created }; } finally { _glUnlock_(lock); }
   } catch (e) { gl.error = e.message; }
   return { success: true, count: r.count, gl: gl };
 }
@@ -188,13 +188,14 @@ function hbBridgeSession(authToken) {
 function hbBridgeGlRefresh(authToken) {
   var session = requireAuth_(authToken);
   if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return { success: true, skipped: true };
-  var lock = LockService.getScriptLock(); lock.waitLock(30000);
+  var lock = _glLock_();   // (V4.276) قفل الحسابات المستقل — لا يوقف حفظ باقي البرنامج
+  if (!lock.tryLock(90000)) { try { CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600); } catch (eD) {} return { success: true, deferred: true }; }
   try {
     _GL_HB_MEMO_ = null; _GL_ACC_MEMO_ = null;
     var a = _glAutoRun_(session.username, false, { onlyRx: /^AUTO:HB:/ });
     return { success: true, created: a.created, updated: a.updated, voided: a.voided, pending: a.pending };
   } catch (e) { return { success: false, error: e.message }; }
-  finally { lock.releaseLock(); }
+  finally { _glUnlock_(lock); }
 }
 
 /* ---------- 🤖 (V4.244) رابط ويب هوك بوت الحجوزات ----------
