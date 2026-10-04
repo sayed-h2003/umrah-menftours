@@ -5938,8 +5938,8 @@ function _glBotLinkHelp_(chatId, needApprove) {
 }
 /* 🔗 (V4.269) ربط موظفي البرنامج الحالي ببوت الحسابات — مستقل عن ربط موظفي برنامج الحجوزات (صلاحيات وشاشات منفصلة)
    • المستخدمون من جدول «Users» بالبرنامج الحالي وصلاحياتهم (gl.view / gl.edit / gl.approve / admin)
-   • التخزين بخصائص السكربت: GLBOT_LINKS {tgId:{u,name,ts,on}} · GLBOT_PEND [{id,norm,raw,u,ts}] · GLBOT_CODES {code:{u,ts}} */
-function _glBotJson_(k, d) { try { var v = PropertiesService.getScriptProperties().getProperty(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+   • التخزين بخصائص السكربت: GLBOT_LINKS {tgId:{u,name,ts,on}} · GLBOT_LPEND [{id,norm,raw,u,ts}] · GLBOT_CODES {code:{u,ts}} */
+function _glBotJson_(k, d) { try { var v = PropertiesService.getScriptProperties().getProperty(k), o = v ? JSON.parse(v) : d; return (Array.isArray(d) !== Array.isArray(o) || (o === null)) ? d : o; } catch (e) { return d; } }   // (V4.274) يرجع الافتراضي لو النوع المخزَّن غير المتوقع
 function _glBotJsonSave_(k, o) { PropertiesService.getScriptProperties().setProperty(k, JSON.stringify(o)); }
 function _glBotMainUsers_() {
   var users = null; try { users = typeof getCachedData === 'function' ? getCachedData('users_cache') : null; } catch (e) {}
@@ -5957,7 +5957,7 @@ function _glBotPermFlags_(u) {
 }
 function glBotLinkList(authToken) {
   _glAdminPerm_(authToken);
-  var links = _glBotJson_('GLBOT_LINKS', {}), pend = _glBotJson_('GLBOT_PEND', []), bot = '';
+  var links = _glBotJson_('GLBOT_LINKS', {}), pend = _glBotJson_('GLBOT_LPEND', []), bot = '';
   try { if (!_glBotCfg_().token && typeof tgBotUsername_ === 'function') bot = tgBotUsername_(); } catch (e) {}
   var by = {}; Object.keys(links).forEach(function (id) { var l = links[id]; (by[String(l.u).toLowerCase()] = by[String(l.u).toLowerCase()] || []).push({ tgId: id, name: l.name || '', ts: l.ts || '', on: l.on !== false }); });
   var users = _glBotMainUsers_().map(function (u) {
@@ -5970,15 +5970,15 @@ function glBotLinkPend(authToken, username, tgUser) {
   var session = _glAdminPerm_(authToken);
   username = _glStr_(username); if (!_glBotMainUser_(username)) throw new Error('مستخدم غير موجود أو غير نشط بالبرنامج');
   var raw = _glStr_(tgUser), norm = raw.replace(/^@/, '').toLowerCase(); if (!/^[a-z0-9_]{4,}$/.test(norm)) throw new Error('اسم مستخدم تليجرام غير صالح (بدون @، حروف إنجليزية وأرقام و_)');
-  var list = _glBotJson_('GLBOT_PEND', []).filter(function (r) { return r.norm !== norm; });
+  var list = _glBotJson_('GLBOT_LPEND', []).filter(function (r) { return r.norm !== norm; });
   list.push({ id: Utilities.getUuid().slice(0, 8), norm: norm, raw: raw, u: username, ts: Date.now(), by: session.username });
-  _glBotJsonSave_('GLBOT_PEND', list);
+  _glBotJsonSave_('GLBOT_LPEND', list);
   logChange_(session.username, 'ربط موظف ببوت الحسابات (معلَّق)', 'GL:bot', username, '-', '@' + norm);
   return { success: true };
 }
 function glBotLinkPendDel(authToken, id) {
   _glAdminPerm_(authToken);
-  _glBotJsonSave_('GLBOT_PEND', _glBotJson_('GLBOT_PEND', []).filter(function (r) { return r.id !== id; }));
+  _glBotJsonSave_('GLBOT_LPEND', _glBotJson_('GLBOT_LPEND', []).filter(function (r) { return r.id !== id; }));
   return { success: true };
 }
 function glBotLinkCode(authToken, username) {
@@ -6027,10 +6027,10 @@ function _glBotLinkIncoming_(text, from, chatId) {
     }
     if (!mine) {
       var uname = String(from.username || '').toLowerCase(); if (!uname) return '';
-      var pend = _glBotJson_('GLBOT_PEND', []), ix = -1;
+      var pend = _glBotJson_('GLBOT_LPEND', []), ix = -1;
       pend.forEach(function (r, i) { if (ix < 0 && r.norm === uname) ix = i; });
       if (ix < 0) return '';
-      var pu = _glBotMainUser_(pend[ix].u); var rr = pend.splice(ix, 1)[0]; _glBotJsonSave_('GLBOT_PEND', pend);
+      var pu = _glBotMainUser_(pend[ix].u); var rr = pend.splice(ix, 1)[0]; _glBotJsonSave_('GLBOT_LPEND', pend);
       if (pu) { _glBotLinkDo_(from, pu, 'اسم المستخدم'); _glBotSend_(chatId, '✅ تم ربط حسابك تلقائياً بحسابات البرنامج: ' + _glBotEsc_(pu.fullName || pu.username)); }
     }
   } catch (e) { Logger.log('_glBotLinkIncoming_: ' + e.message); }
