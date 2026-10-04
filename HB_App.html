@@ -3739,10 +3739,12 @@ function onAuthSuccess_(token, user, sessionMinutes) {
   document.getElementById('navUserName').textContent = user.displayName + (user.role === 'admin' ? ' (مدير)' : '');
   applyNavPermissions_();
   if (!appStarted_) { appStarted_ = true; startApp_(); }
-  scheduleSessionRefresh_();
-  startPresence_();
-  startIdleWatch_();
+  // ⚡ (V4.264) مضمَّن داخل برنامج العمرة ⇒ لا نبضات خاصة بالحجوزات: الجلسة والمتصلون والخمول يديرها البرنامج
+  // الرئيسي بنبضة واحدة موحّدة (appPulse). كان كل إطار حجوزات مدمج (شاشة الفنادق + إعدادات ×2) يرسل
+  // presencePing/checkSession/getPortalPendingCount مستقلاً فتتضاعف نداءات الخادم 3-4 مرات وتبطئ كل شيء.
+  if (!_hbEmbedded_()) { scheduleSessionRefresh_(); startPresence_(); startIdleWatch_(); }
 }
+function _hbEmbedded_() { try { return typeof HB_EMBED !== 'undefined' && HB_EMBED; } catch (e) { return false; } }
 
 // "users" و"import" (استيراد/مزامنة الدفعات القديمة) وصولهما محكوم بالدور فقط (مدير)،
 // وليسا صلاحية عادية قابلة للتفعيل لمستخدم بعينه — نفس القيد مطبَّق على الخادم أيضًا
@@ -4185,13 +4187,15 @@ function startApp_() {
   loadPartyList();
   loadHotelList();
   wireGlobalQuickStatsBar_();
-  loadGlobalQuickStats_();
-  // جرس طلبات بوابة العملاء بالشريط العلوي — تحديث فوري ثم دوري كل دقيقة
-  cpRefreshBell_();
-  if (!window.__cpBellTimer) window.__cpBellTimer = setInterval(function () {
-    if (document.hidden) return;   // نفس منطق الجلسة: لا نداءات خلف تبويب مخفي
+  if (!_hbEmbedded_()) loadGlobalQuickStats_();   // (V4.264) إحصائيات علوية للحجوزات لا تُجلب داخل العمرة
+  // جرس طلبات بوابة العملاء بالشريط العلوي — تحديث فوري ثم دوري كل دقيقة (لا داخل العمرة)
+  if (!_hbEmbedded_()) {
     cpRefreshBell_();
-  }, 180000);
+    if (!window.__cpBellTimer) window.__cpBellTimer = setInterval(function () {
+      if (document.hidden) return;   // نفس منطق الجلسة: لا نداءات خلف تبويب مخفي
+      cpRefreshBell_();
+    }, 180000);
+  }
 
   var wanted = ['statement','bookings','arrivals','payments','import','settings','users','statsReport','clientPortal','changelog'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';
   if (isScreenAllowed_(wanted)) {

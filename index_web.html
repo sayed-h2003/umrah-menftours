@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.263 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.264 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.263)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.264)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.263</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.264</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.263";
+var CLIENT_APP_VERSION = "4.264";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -48458,7 +48458,7 @@ function glCustSheetDlg(code) {
         '<div class="col-md-1"><label class="gl-lbl">أول صف</label><input id="glCsRow" class="form-control form-control-sm gl-latin" value="' + (c.startRow || 2) + '"></div>' +
         // ⏱️ (V4.250) المزامنة التلقائية كل N دقيقة أو كل N ساعة
         '<div class="col-md-3"><label class="d-flex gap-1 align-items-center small mb-1"><input type="checkbox" id="glCsAuto"' + (c.auto ? ' checked' : '') + '> 🕐 مزامنة تلقائية كل</label>' +
-          '<div class="d-flex gap-1"><input id="glCsEveryN" type="number" min="1" max="59" class="form-control form-control-sm gl-latin text-center" style="width:70px;" value="' + ((c.every && c.every.n) || 1) + '">' +
+          '<div class="d-flex gap-1"><input id="glCsEveryN" type="number" min="5" max="59" class="form-control form-control-sm gl-latin text-center" style="width:70px;" value="' + ((c.every && c.every.n) || 5) + '" title="أقل تكرار خلفي 5 دقائق — المزامنة اليدوية فورية">' +
           '<select id="glCsEveryU" class="form-select form-select-sm"><option value="min"' + (c.every && c.every.unit === 'min' ? ' selected' : '') + '>دقيقة</option><option value="hour"' + (!c.every || c.every.unit !== 'min' ? ' selected' : '') + '>ساعة</option></select></div></div>' +
         // (V4.249) عملة قيود العهدة: الافتراضي ريال ويمكن تغييرها — حساب عهدة بعملة ثابتة يُقيَّد بعملته (تُغيَّر من تعديل الحساب)
         '<div class="col-md-2"><label class="gl-lbl">عملة العهدة</label><select id="glCsCur" class="form-select form-select-sm"' + (a.currency ? ' disabled title="عملة الحساب ثابتة بالدليل — تُغيَّر من تعديل الحساب"' : '') + '>' +
@@ -50363,7 +50363,8 @@ function glHbLinkSelected_(btn) {
     showToast('⏳ جارٍ الربط…');
     glRun('glHbLinkPays', [ids], function (res) {
       ps.forEach(function (p) { p.linkId = res.key; p.manualLink = true; delete GL._hbPEdit[p.id]; });
-      glHbPaysView(); showToast('🔗 رُبطت ' + res.n + ' دفعة — تُقيَّد قيداً واحداً بالمزامنة');
+      try { glDataChanged_(); } catch (e) {}   // (V4.264) تُقيَّد قيداً واحداً فوراً — فرّغ ذاكرة الكشف
+      glHbPaysView(); showToast('🔗 رُبطت ' + res.n + ' دفعة — صارت قيداً واحداً مباشرة');
     }, function (e) { _showPopup(e.message || e, 'error'); });
   }, { title: 'دفعة مرتبطة', icon: '🔗', yesLabel: 'ربط', danger: false });
 }
@@ -50372,6 +50373,7 @@ function glHbUnlink_(id, btn) {
   btn.disabled = true; btn.textContent = '⏳';
   glRun('glHbUnlinkPay', [id], function () {
     var key = p.linkId; GL.hb.pays.forEach(function (x) { if (x.linkId === key && x.manualLink && x.id === id) { x.linkId = ''; x.manualLink = false; } });
+    try { glDataChanged_(); } catch (e) {}
     glHbPaysView(); showToast('✅ فُك ربط الدفعة');
   }, function (e) { btn.disabled = false; btn.textContent = 'فك الربط'; _showPopup(e.message || e, 'error'); });
 }

@@ -3479,7 +3479,7 @@ function glCustSheetSave(authToken, code, cfg) {
   o.tab = S.sh.getName(); o.title = S.ss.getName(); o.cur = _glCur_(a.currency || cfg.cur || 'SAR'); o.auto = !!cfg.auto;   // (V4.249) الافتراضي ريال ويمكن تغييره
   // ⏱️ (V4.250) تكرار المزامنة التلقائية: كل N دقيقة (1-59) أو كل N ساعة (1-24)
   var ev = cfg.every || {}, unit = ev.unit === 'min' ? 'min' : 'hour', n = parseInt(ev.n, 10) || 1;
-  if (unit === 'min' && (n < 1 || n > 59)) throw new Error('عدد الدقائق من 1 إلى 59');
+  if (unit === 'min') n = Math.max(5, Math.min(59, n));   // (V4.264) أقل تكرار خلفي 5 دقائق لحماية أداء البرنامج
   if (unit === 'hour' && (n < 1 || n > 24)) throw new Error('عدد الساعات من 1 إلى 24');
   o.every = { unit: unit, n: n };
   o.by = session.username; o.at = _glNow_();
@@ -3661,13 +3661,17 @@ function _glCsAutoAll_() {
   _GL_SET_MEMO_ = null;
   var set = _glSettings_(), res = [], P = PropertiesService.getScriptProperties(), last = {};
   try { last = JSON.parse(P.getProperty('GL_CS_LAST_AUTO') || '{}') || {}; } catch (e) {}
-  var now = Date.now();
-  Object.keys(set).forEach(function (k) {
-    if (k.indexOf('custsheet:') !== 0) return;
-    var cfg; try { cfg = JSON.parse(set[k] || '{}'); } catch (e) { return; }
+  var now = Date.now(), t0 = now, BUDGET = 90000;   // ⚡ (V4.264) ميزانية زمنية: لا تتجاوز الدورة الواحدة 90 ثانية (تُكمَل بالدورة التالية)
+  // أقدم الشيتات المستحقة أولاً (دوران عادل)، وشيت واحد مستحق فقط لكل دورة لو كان البرنامج مشغولاً بعملية مستخدم
+  var busy = false; try { busy = !!CacheService.getScriptCache().get('gl_live_busy'); } catch (eB) {}
+  var codes = Object.keys(set).filter(function (k) { return k.indexOf('custsheet:') === 0; }).map(function (k) { return { k: k, code: k.slice(10) }; })
+    .sort(function (a, b) { return (last[a.code] || 0) - (last[b.code] || 0); });
+  codes.forEach(function (it) {
+    if (Date.now() - t0 > BUDGET) return;   // نفدت الميزانية ⇒ البقية بالدورة القادمة
+    var k = it.k, code = it.code, cfg; try { cfg = JSON.parse(set[k] || '{}'); } catch (e) { return; }
     if (!cfg || !cfg.id || !cfg.auto) return;
-    var code = k.slice(10);
     if (last[code] && now - last[code] < _glCsEveryMin_(cfg) * 60000 - 45000) return;   // لم يحن موعدها (هامش 45 ثانية لتذبذب المشغّل)
+    if (busy) { busy = false; if (res.length) return; }   // البرنامج مشغول بحفظ مستخدم ⇒ أجّل الباقي
     // ⏳ (V4.258) «مهلة التأمين»: المزامنة المجدولة كانت تحجز القفل العام طوال قراءة كل شيتات العهد (كل دقيقة أحياناً)
     // فينتظر حفظ المستخدمين حتى تنتهي المهلة. الآن قفل قصير لكل شيت على حدة، وتتخطى الشيت لو البرنامج مشغول (تُعاد بالدورة التالية)
     var lock = _glLock_(); if (!lock.tryLock(2000)) { _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1); return; }
@@ -3698,8 +3702,10 @@ function _glCsEnsureTrigger_() {
   });
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'glCustSheetCron') ScriptApp.deleteTrigger(t); });
   if (!minI) return { every: 0 };
+  // ⚡ (V4.264) حد أدنى 5 دقائق للمزامنة الخلفية: فتح شيتات جوجل الخارجية كل دقيقة كان يستهلك عشرات الثواني كل مرة
+  // ويبطّئ كل البرنامج. المزامنة اليدوية («🔄 مزامنة الآن») تبقى فورية. التكرار الأسرع المسموح به خلفياً = 5 دقائق.
   if (minI >= 60) { ScriptApp.newTrigger('glCustSheetCron').timeBased().everyHours(1).create(); return { every: 60 }; }
-  var step = [30, 15, 10, 5, 1].filter(function (x) { return x <= minI && minI % x === 0; })[0] || 1;
+  var step = [30, 15, 10, 5].filter(function (x) { return x <= minI && minI % x === 0; })[0] || 5;
   ScriptApp.newTrigger('glCustSheetCron').timeBased().everyMinutes(step).create();
   return { every: step };
 }
@@ -5178,14 +5184,18 @@ function glHbSavePay(authToken, rows) {
     var accs = _glAccounts_().map, rev = _glHbPayRev_(), now = _glNow_(), n = 0;
     (rows || []).forEach(function (x) {
       var id = _glStr_(x.id); if (!id) return;
+      var lg = (rev[id] && rev[id].linkGroup) || '';   // 🔗 (V4.264) لا يمس «حفظ/اعتماد الدفعات» الربط اليدوي — كان يُمسح فتعود الدفعتان قيدين منفصلين على تحت التسوية
       var party = _glStr_(x.party);
       if (party) { var pa = accs[party]; if (!pa || pa.isGroup) throw new Error('حساب الطرف ' + party + ' غير صالح'); }
-      if (!_glStr_(x.cash) && !party) { delete rev[id]; n++; return; }
+      if (!_glStr_(x.cash) && !party) {
+        if (lg) { rev[id] = Object.assign({}, rev[id], { by: session.username, at: now }); n++; return; }   // دفعة مرتبطة: أبقِها كما هي
+        delete rev[id]; n++; return;
+      }
       var a = _glStr_(x.cash) ? accs[x.cash] : null;
       if (_glStr_(x.cash) && (!a || a.isGroup)) throw new Error('الحساب النقدي ' + x.cash + ' غير صالح');
       var cur = _glCur_(x.cur || (a && a.currency) || 'SAR');
       if (a && a.currency && a.currency !== cur) throw new Error('عملة الحساب «' + a.name + '» هي ' + a.currency);
-      rev[id] = { cash: _glStr_(x.cash), cur: cur, amount: _glR2_(_glNum_(x.amount)), rate: _glNum_(x.rate), by: session.username, at: now, party: party }; n++;
+      rev[id] = { cash: _glStr_(x.cash), cur: cur, amount: _glR2_(_glNum_(x.amount)), rate: _glNum_(x.rate), by: session.username, at: now, party: party, linkGroup: lg }; n++;
     });
     _glHbWriteAll_('hbpay', Object.keys(rev).map(function (id) { var r = rev[id]; return [id, r.cash, r.cur, r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
     logChange_(session.username, 'مراجعة دفعات برنامج الحجوزات', 'GL:hb', '-', '-', n + ' دفعة');
@@ -5208,7 +5218,20 @@ function glHbLinkPays(authToken, ids) {
   ids.forEach(function (id) { rev[id] = Object.assign({}, rev[id] || {}, { by: session.username, at: _glNow_(), linkGroup: key }); });
   _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
   logChange_(session.username, 'ربط دفعات برنامج الحجوزات يدوياً', 'GL:hb', '-', '-', ids.length + ' دفعة — ' + ids.join('، '));
-  return { success: true, key: key, n: ids.length };
+  // 🔗 (V4.264) تطبيق فوري بلا اعتماد منفصل: يُلغى قيدا الدفعتين ويُنشأ قيد واحد مرتبط الآن — كان يبقى قيدين منفصلين حتى مزامنة واعتماد لاحقين
+  var applied = _glHbApplyKeys_(session.username, ['AUTO:HBL:' + key].concat(ids.map(function (id) { return 'AUTO:HBP:' + id; })));
+  return { success: true, key: key, n: ids.length, applied: applied };
+}
+// يطبّق مفاتيح قيود حجوزات بعينها فوراً (بلا اعتماد) — لربط/فك ربط الدفعات من شاشة المراجعة
+function _glHbApplyKeys_(user, keys) {
+  var lock = _glLock_(); if (!lock.tryLock(30000)) { try { CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600); } catch (e0) {} return null; }
+  try {
+    var only = {}; keys.forEach(function (k) { only[k] = 1; });
+    var r = _glAutoRun_(user, false, { bypass: true, onlyKeys: only });
+    try { CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600); } catch (eC) {}
+    return { created: r.created, voided: r.voided, updated: r.updated };
+  } catch (e) { Logger.log('_glHbApplyKeys_: ' + e.message); return null; }
+  finally { _glUnlock_(lock); }
 }
 // 🗑️ (V4.258) حذف دفعة مكررة من سجل الدفعات ببرنامج الحجوزات نفسه (من شاشة مراجعة الدفعات) — قيدها الآلي يُلغى بالمزامنة التالية
 function glHbDeletePays(authToken, ids) {
@@ -5297,10 +5320,13 @@ function glHbUnlinkPay(authToken, id) {
   var session = _glPerm_(authToken, 'edit');
   id = _glStr_(id); var rev = _glHbPayRev_();
   if (!rev[id] || !rev[id].linkGroup) throw new Error('الدفعة غير مرتبطة يدوياً');
+  var grp = rev[id].linkGroup, mates = Object.keys(rev).filter(function (k) { return rev[k].linkGroup === grp; });
   rev[id].linkGroup = ''; rev[id].by = session.username; rev[id].at = _glNow_();
   _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
   logChange_(session.username, 'فك ربط دفعة برنامج حجوزات', 'GL:hb', '-', '-', id);
-  return { success: true };
+  // (V4.264) تطبيق فوري: يُلغى القيد المرتبط وتعود الدفعات قيوداً منفصلة الآن
+  var applied = _glHbApplyKeys_(session.username, ['AUTO:HBL:' + grp].concat(mates.map(function (k) { return 'AUTO:HBP:' + k; })));
+  return { success: true, applied: applied };
 }
 // تحديد رحلة حجز يدوياً: trip='' يعيد التلقائي، '-' بلا رحلة
 function glHbSaveTrip(authToken, rows) {
@@ -5795,6 +5821,13 @@ function _glPendByHash_(h) {
   var hit = null; try { _glRowsW_('pending').forEach(function (r) { var k = _glStr_(r[0]); if (k && !hit && _glPendHash_(k) === h) hit = r; }); } catch (e) {}
   return hit;
 }
+// 🔗 (V4.264) شرح ربط الموظف بالبوت ومنحه صلاحية الاعتماد — يُرسَل كرسالة كاملة للمحادثة (التنبيه المنبثق قصير)
+function _glBotLinkHelp_(chatId, needApprove) {
+  _glBotSend_(chatId, '🔗 <b>كيف تعتمد من تليجرام؟</b>\nلازم حساب تليجرام الخاص بك يكون <b>مربوطاً بالبوت</b>' + (needApprove ? ' وله صلاحية <b>«✅ اعتماد تغييرات القيود»</b>' : '') + ':\n' +
+    '① افتح محادثة خاصة مع البوت واضغط <b>Start</b> (أو أرسل <code>/start</code>).\n' +
+    '② من البرنامج (مدير): <b>الإعدادات ← 🔔 بوت وتنبيهات الحجوزات ← «🔗 ربط الموظفين بالبوت»</b> → اختر اسمك وأدخِل اسم مستخدمك على تليجرام (بدون @) أو رقم موبايلك — يكتمل الربط تلقائياً أول رسالة منك. أو ولّد «كود ربط» وأرسله للبوت هكذا: <code>/link الكود</code>.' +
+    (needApprove ? '\n③ تأكد أن صلاحياتك تشمل <b>«✅ اعتماد تغييرات القيود»</b> من <b>إدارة المستخدمين</b>.' : ''));
+}
 function _glBotTgUser_(from) {
   var lu = typeof tgUserByTgId_ === 'function' ? tgUserByTgId_(from && from.id) : null;
   if (!lu || !lu.active) return null;
@@ -5814,7 +5847,7 @@ function glBotCallback_(cq) {
     if (!_glSSId_()) { _glBotAns_(cq.id, 'الحسابات العامة غير مربوطة', true); return true; }
     var c = _glBotCfg_(), inGroup = !!(c.chatId && chatId === c.chatId);
     var who = _glBotTgUser_(from);
-    if (!inGroup && !(who && (_sessionHasPerm_(who, 'admin') || _sessionHasPerm_(who, 'gl.view')))) { _glBotAns_(cq.id, '⛔ لموظف مربوط بالبوت ولديه صلاحية الحسابات', true); return true; }
+    if (!inGroup && !(who && (_sessionHasPerm_(who, 'admin') || _sessionHasPerm_(who, 'gl.view')))) { _glBotAns_(cq.id, '⛔ اربط حسابك بالبوت أولاً — التفاصيل بالرسالة', true); _glBotLinkHelp_(chatId, false); return true; }
     var parts = d.split(':'), act = parts[1], arg = parts.slice(2).join(':');
     if (act === 'm') {   // أزرار القائمة
       if (arg === 'cash' || arg === 'custody') { _glBotAns_(cq.id, ''); _glBotSend_(chatId, _glBotRun_(arg, '', inGroup)); return true; }
@@ -5846,7 +5879,7 @@ function glBotCallback_(cq) {
           '\n💰 المبلغ القديم: ' + _glBotEsc_(_glStr_(r[12]) || '—') + ' · الجديد: ' + _glBotEsc_(_glStr_(r[13]) || '—') + '\n━━━━━━━━━━━━\n' + _glBotEsc_(_glStr_(r[14]) || '—'), _glBotPendKb_(key));
         return true;
       }
-      if (!who || !_glCanApprove_(who)) { _glBotAns_(cq.id, '⛔ الاعتماد/الرفض يحتاج موظفاً مربوطاً بالبوت لديه صلاحية «اعتماد تغييرات القيود»', true); return true; }
+      if (!who || !_glCanApprove_(who)) { _glBotAns_(cq.id, '⛔ اربط حسابك ومنحه صلاحية الاعتماد — التفاصيل بالرسالة', true); _glBotLinkHelp_(chatId, true); return true; }
       if (act === 'rj') {
         var cur = _glPendingRows_(), keep = {};
         Object.keys(cur).forEach(function (k) { var rr = cur[k].row; if (k === key) { rr[9] = 'مرفوض'; rr[10] = who.username; rr[11] = 'من تليجرام ' + _glNow_(); } keep[k] = rr; });
@@ -5958,7 +5991,7 @@ function _glBotCsxSend_(chatId, onlyCode, rowsIn) {
 }
 function _glBotCsxCb_(cq, chatId, msgId, who, arg) {
   var p = arg.split(':'), code = p[0], row = +p[1], acc = p[2];
-  if (!who || !(_sessionHasPerm_(who, 'admin') || _sessionHasPerm_(who, 'gl.edit'))) { _glBotAns_(cq.id, '⛔ اعتماد صفوف العهدة يحتاج موظفاً مربوطاً بالبوت لديه صلاحية تعديل الحسابات', true); return; }
+  if (!who || !(_sessionHasPerm_(who, 'admin') || _sessionHasPerm_(who, 'gl.edit'))) { _glBotAns_(cq.id, '⛔ اربط حسابك ومنحه صلاحية تعديل الحسابات — التفاصيل بالرسالة', true); _glBotLinkHelp_(chatId, true); return; }
   if (acc === '?') {
     try { CacheService.getScriptCache().put('glbot_ask_' + chatId + '_' + (cq.from.id || ''), 'csfix|' + code + '|' + row, 600); } catch (e) {}
     _glBotAns_(cq.id, '');
