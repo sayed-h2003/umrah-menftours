@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.270 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.271 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.270)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.271)', diag);
 }, 6000);
 </script>
 
@@ -1511,7 +1511,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.270</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.271</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7731,7 +7731,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.270";
+var CLIENT_APP_VERSION = "4.271";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -42657,7 +42657,7 @@ function vzRenderActBar() {
 // 🐛 (V4.166) كانت تجلب معتمري الرحلة الأساسية فقط عبر tripName — فلا يظهر شيء من الرحلات
 // الإضافية رغم اختيار معتمرين منها فعلياً بنافذة الاختيار. الآن تجلب من كل الرحلات المرتبطة
 // (نفس منطق vzTripsOfDraft_/vzPullPilgrims بالضبط)، وتعرض بيانات أوسع قابلة للطباعة الاحترافية.
-// (V4.270) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
+// (V4.271) نافذة منبثقة كما كانت + شريط سفلي بعدد المختارين من الإجمالي (مثل ملفات الوزارة)
 function vzShowGroupPilgrims(id) {
   var f = vzGet(id); if (!f) return;
   mfModal('👥 معتمرو المجموعة ' + (f.ref ? vzEsc(f.ref) : ('#' + f.seq)),
@@ -48440,8 +48440,11 @@ function glCustSheetDlg(code) {
   glRun('glCustSheetGet', [code], function (res) {
     var c = res.cfg || {}, a = res.account, jc = glJs(code), url = c.id ? 'https://docs.google.com/spreadsheets/d/' + c.id : '';
     var L = c.last, CC = Object.assign({ in: 'A', out: 'B', desc: 'C', date: 'D', party: 'G', qaid: 'H' }, c.cols || {});
+    // (V4.271) شيت متعدد العملات: الوارد/الصادر العام غير مستخدمَين (أعمدة العملات تُغني عنهما) — لا تُعرض A/B الافتراضية
+    var csMulti = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { return String((c.cols || {})[k] || '').trim(); });
+    if (csMulti) { CC.in = ''; CC.out = ''; }
     var h = '<div class="gl-note" style="font-size:12px;line-height:1.9;">📋 <b>تنسيق الشيت</b> (من الصف ' + (c.startRow || 2) + '): ' +
-      '<b>' + CC.in + '</b> العهدة (وارد) · <b>' + CC.out + '</b> المصروفات (صادر) · <b>' + CC.desc + '</b> البيان · <b>' + CC.date + '</b> التاريخ · <b>' + CC.qaid + '</b> القيد (يكتبه البرنامج) · ' +
+      (csMulti ? '<b>أعمدة العملات</b> (وارد/صادر لكل عملة — الأعمدة العامة غير مستخدمة)' : '<b>' + CC.in + '</b> العهدة (وارد) · <b>' + CC.out + '</b> المصروفات (صادر)') + ' · <b>' + CC.desc + '</b> البيان · <b>' + CC.date + '</b> التاريخ · <b>' + CC.qaid + '</b> القيد (يكتبه البرنامج) · ' +
       '<b>' + CC.party + '</b> الحساب / الطرف — مثل «حجوزات مكة» أو «ح/ مبيعات بدر الماسة 1448هـ» (اسم حساب بالدليل أو كوده). الأعمدة قابلة للتغيير أدناه.<br>' +
       '✅ الصف بطرف معروف يُقيَّد ويُكتب رقم قيده في ' + CC.qaid + ' · ⏳ الطرف غير المعروف ينتظر اعتمادك هنا ثم يُتذكَّر · ✏️ تعديل صف بعد قيده يحدّث القيد · 🏨 دفعات الحجوزات من نفس الشيت تُربط بقيدها ولا تتكرر.</div>' +
       '<div class="row g-2 align-items-end">' +
@@ -48457,12 +48460,12 @@ function glCustSheetDlg(code) {
           ['SAR', 'EGP', 'USD'].map(function (k) { return '<option value="' + k + '"' + ((a.currency || c.cur || 'SAR') === k ? ' selected' : '') + '>' + GL_CUR_LBL_[k] + '</option>'; }).join('') + '</select></div>' +
       '</div><div class="row g-2 mt-1"><div class="col-12 small fw-bold" style="color:#0f2557;">🔤 أعمدة المزامنة (حرف العمود)</div>' +
         [['in', 'الوارد'], ['out', 'الصادر'], ['desc', 'البيان'], ['date', 'التاريخ'], ['party', 'الحساب/الطرف'], ['qaid', 'رقم القيد']].map(function (f) {
-          return '<div class="col-4 col-md-2"><label class="gl-lbl">' + f[1] + '</label><input id="glCsC_' + f[0] + '" class="form-control form-control-sm gl-latin text-center" maxlength="2" style="text-transform:uppercase;" value="' + glEsc(CC[f[0]]) + '"' + (GL.isAdmin ? '' : ' disabled') + '></div>';
+          return '<div class="col-4 col-md-2"><label class="gl-lbl">' + f[1] + '</label><input id="glCsC_' + f[0] + '" class="form-control form-control-sm gl-latin text-center" maxlength="2" style="text-transform:uppercase;" value="' + glEsc(CC[f[0]]) + '"' + ((f[0] === 'in' || f[0] === 'out') && csMulti ? ' placeholder="—" title="غير مستخدم: أعمدة العملات بالأسفل تُغني عنه"' : '') + (GL.isAdmin ? '' : ' disabled') + '></div>';
         }).join('') + '<div class="col-12 small text-muted">أرقام القيود المكتوبة سابقاً في العمود F تُنقل تلقائياً لعمود القيد الجديد عند أول مزامنة (بلا مسح F).</div>' +
         // 🏦 (V4.262) أعمدة اختيارية: وارد/صادر لكل عملة (العملة = عمود القيمة) + عمود ok (سُجّل من الشاشات ⇒ يُربط بقيده)
         '<div class="col-12 small fw-bold mt-1" style="color:#0f2557;">💱 أعمدة العملات (اختياري — لشيت خزينة/بنك بأكثر من عملة؛ فارغ = غير مستخدم)</div>' +
         [['inEGP', 'وارد جنيه'], ['outEGP', 'صادر جنيه'], ['inSAR', 'وارد ريال'], ['outSAR', 'صادر ريال'], ['inUSD', 'وارد دولار'], ['outUSD', 'صادر دولار'], ['ok', '✔ عمود ok']].map(function (f) {
-          return '<div class="col-4 col-md-1" style="min-width:92px;"><label class="gl-lbl">' + f[1] + '</label><input id="glCsC_' + f[0] + '" class="form-control form-control-sm gl-latin text-center" maxlength="2" style="text-transform:uppercase;" value="' + glEsc((c.cols || {})[f[0]] || '') + '"' + (GL.isAdmin ? '' : ' disabled') + '></div>';
+          return '<div class="col-4 col-md-1" style="min-width:92px;"><label class="gl-lbl">' + f[1] + '</label><input id="glCsC_' + f[0] + '" class="form-control form-control-sm gl-latin text-center" maxlength="2" style="text-transform:uppercase;" oninput="glCsMultiSync_()" value="' + glEsc((c.cols || {})[f[0]] || '') + '"' + (GL.isAdmin ? '' : ' disabled') + '></div>';
         }).join('') + '<div class="col-12 small text-muted">عمود <b>ok</b>: اكتب ok أو تم أمام صف سُجّل بالفعل من شاشات البرنامج — يُربط بقيده القائم (نفس المبلغ والعملة ±3 أيام) ويُكتب رقمه بالشيت بدل تسجيله مرتين.</div></div>' +
       '<div class="d-flex gap-2 mt-2 flex-wrap align-items-center">' +
         (GL.isAdmin ? '<button class="btn btn-primary btn-sm" onclick="glCsSave_(\'' + jc + '\',this)">💾 حفظ الربط</button>' : '') +
@@ -48472,7 +48475,17 @@ function glCustSheetDlg(code) {
         (L ? '<span class="small text-muted ms-auto">آخر مزامنة <span class="gl-latin">' + glEsc(L.at) + '</span> (' + glEsc(L.by) + '): جديدة ' + L.created + ' · معدّلة ' + L.updated + ' · بانتظار الاعتماد ' + L.pending + '</span>' : '') +
       '</div><div id="glCsRes" class="mt-2"></div>';
     glDlg('🔗 شيت ' + ({ safe: 'الخزينة', bank: 'البنك' }[(GL.map[code] || {}).kind] || 'العهدة') + ' — ' + glEsc(a.name) + ' <span class="gl-latin">(' + glEsc(a.code) + ')</span>' + (c.title ? ' · 📄 ' + glEsc(c.title) + ' / ' + glEsc(c.tab || '') : ''), h, 1080);
+    glCsMultiSync_();
     if (c.id) glCsRun_(code, true);
+  });
+}
+// (V4.271) أي عمود عملة مُدخَل ⇒ الوارد/الصادر العام يُفرَّغ ويتعطّل (لا يعود A/B تلقائياً)، ولو أُفرغت كلها يعودان A/B
+function glCsMultiSync_() {
+  var any = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { var e = document.getElementById('glCsC_' + k); return e && e.value.trim(); });
+  [['in', 'A'], ['out', 'B']].forEach(function (f) {
+    var e = document.getElementById('glCsC_' + f[0]); if (!e) return;
+    if (any) { e.value = ''; e.placeholder = '—'; e.readOnly = true; e.style.background = '#f1f5f9'; }
+    else { e.readOnly = false; e.style.background = ''; if (!e.value) e.value = f[1]; }
   });
 }
 function glCsSave_(code, btn) {
@@ -49361,7 +49374,7 @@ function glNavBadge_() {
   var n = GL.pendingCount || 0; b.textContent = n ? '🔔 ' + n : ''; b.style.display = n ? '' : 'none';
   var t = document.getElementById('glAutoTabBadge'); if (t) { t.textContent = n || ''; t.style.display = n ? '' : 'none'; }
 }
-// 👜 (V4.270) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
+// 👜 (V4.271) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
 function glCsBanner_() {
   var box = document.getElementById('glBody'), old = document.getElementById('glCsBanner'), n = (typeof GL !== 'undefined' && GL.csPend) || 0;
   if (!n || !GL.ready) { if (old) old.remove(); return; }

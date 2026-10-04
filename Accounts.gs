@@ -3345,6 +3345,7 @@ function _glCsCols_(cfg) {
   Object.keys(GL_CS_COLS_DEF_).forEach(function (k) { o[k] = _glColIdx_(/^[A-Z]{1,2}$/i.test(_glStr_(c[k])) ? c[k] : GL_CS_COLS_DEF_[k]); });
   Object.keys(GL_CS_COLS_OPT_).forEach(function (k) { o[k] = /^[A-Z]{1,2}$/i.test(_glStr_(c[k])) ? _glColIdx_(c[k]) : -1; });
   o.multi = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { return o[k] >= 0; });
+  if (o.multi) { o.in = -1; o.out = -1; }   // (V4.271) أعمدة العملات تُغني عن الوارد/الصادر العام — لا يُقرأ عمود عام (A/B الافتراضيان) ولا يتداخل معها
   o.letters = c; return o;
 }
 function _glCsReadRows_(sh, startRow, cfg) {
@@ -3492,6 +3493,7 @@ function glCustSheetSave(authToken, code, cfg) {
   if (cfg.cols) {
     var cc = {}, used = {}, multi = ['inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD'].some(function (k) { return _glStr_(cfg.cols[k]); });
     Object.keys(GL_CS_COLS_DEF_).forEach(function (k) {
+      if (multi && (k === 'in' || k === 'out')) { cc[k] = ''; return; }   // (V4.271) تُحفظ فارغة — كان يعود A/B تلقائياً
       var v = _glStr_(cfg.cols[k] || GL_CS_COLS_DEF_[k]).toUpperCase();
       if (!/^[A-Z]{1,2}$/.test(v)) throw new Error('حرف عمود غير صالح: ' + v);
       if (multi && (k === 'in' || k === 'out')) { cc[k] = v; return; }   // أعمدة العملات تُغني عن الوارد/الصادر العام
