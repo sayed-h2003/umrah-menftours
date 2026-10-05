@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.281 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.282 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.281)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.282)', diag);
 }, 6000);
 </script>
 
@@ -1530,7 +1530,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.281</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.282</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7750,7 +7750,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.281";
+var CLIENT_APP_VERSION = "4.282";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -7761,9 +7761,16 @@ var CLIENT_APP_VERSION = "4.281";
 // هذه الدالة تعرض بانر أحمر ثابت أعلى الشاشة + تطبع تفاصيل كاملة في Console، وتُستدعى من:
 //  1) كل withFailureHandler في استدعاءات تحميل الشاشة الرئيسية.
 //  2) window.onerror و unhandledrejection كشبكة أمان عامة لأي خطأ غير متوقع في أي مكان آخر.
+// (V4.282) stage==='خطأ عام في الصفحة' يعني: خطأ JS غير متوقع رصدته الشبكة العامة (window.onerror)
+// وليس فشل نداء تحميل بيانات متعمَّد (تلك لها اسم مرحلة صريح مثل «تحميل جدول الحجوزات»). هذا النوع
+// العام قد يأتي من مكتبة خارجية (bootstrap/flatpickr/xlsx…) أو من استدعاء خلفي عابر لا يمنع عرض
+// البيانات فعلياً — فتحذيره السابق «⛔ تعذّر تحميل» كان مرعباً ومُضلِّلاً رغم أن الشاشة تعمل بشكل
+// طبيعي، وكان يبقى عالقاً أعلى الشاشة للأبد بلا أي زر إغلاق. الآن: بانر أهدأ قابل للإغلاق لهذا النوع
+// العام تحديداً، وتحذير البوب أب المزعج محصور في فشل تحميل متعمَّد فقط (نداءات تحميل الشاشة الرئيسية)
 function _showAppLoadError(stage, err) {
   try {
     var msg = (err && (err.message || err.toString && err.toString())) || String(err || 'خطأ غير معروف');
+    var isGeneric = (stage === 'خطأ عام في الصفحة' || stage === 'وعد (Promise) مرفوض دون معالجة');
     console.error('❌ [_showAppLoadError] المرحلة: ' + stage + ' — التفاصيل:', err);
 
     var bar = document.getElementById('_appFatalErrorBar');
@@ -7771,14 +7778,29 @@ function _showAppLoadError(stage, err) {
       bar = document.createElement('div');
       bar.id = '_appFatalErrorBar';
       bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:2147483647;' +
-        'background:#b91c1c;color:#fff;padding:10px 16px;font-size:13px;font-weight:700;' +
+        'padding:10px 42px 10px 16px;font-size:13px;font-weight:700;' +
         'text-align:center;direction:rtl;box-shadow:0 2px 10px rgba(0,0,0,.35);white-space:pre-line;';
+      var xBtn = document.createElement('span');
+      xBtn.textContent = '✕';
+      xBtn.title = 'إغلاق';
+      xBtn.style.cssText = 'position:absolute;left:14px;top:8px;cursor:pointer;font-weight:900;opacity:.85;padding:2px 6px;';
+      xBtn.onclick = function () { bar.remove(); };
+      bar.appendChild(xBtn);
+      var txt = document.createElement('span');
+      txt.id = '_appFatalErrorBarTxt';
+      bar.appendChild(txt);
       document.body.appendChild(bar);
     }
-    bar.textContent = '⛔ تعذّر تحميل (' + stage + '): ' + msg + '  —  إصدار الواجهة: ' + CLIENT_APP_VERSION;
+    // بانر أحمر فاقع لفشل تحميل متعمَّد (خطير فعلاً)، وبانر كهرماني أهدأ للخطأ العام (قد لا يؤثر على البيانات المعروضة)
+    bar.style.background = isGeneric ? '#92400e' : '#b91c1c';
+    bar.style.color = '#fff';
+    var txtEl = document.getElementById('_appFatalErrorBarTxt');
+    var label = isGeneric ? '⚠️ رُصد خطأ برمجي في الخلفية' : '⛔ تعذّر تحميل';
+    if (txtEl) txtEl.textContent = label + ' (' + stage + '): ' + msg + '  —  إصدار الواجهة: ' + CLIENT_APP_VERSION;
 
-    // 🔔 إشعار مرة واحدة فقط بالبوب أب حتى لا تتكرر النافذة مع كل استدعاء فاشل
-    if (!window._appLoadErrorPopupShown) {
+    // 🔔 إشعار بالبوب أب فقط لفشل تحميل متعمَّد (نداء تحميل شاشة رئيسية فشل فعلياً) — مرة واحدة لكل جلسة.
+    // الخطأ العام لا يفتح بوب أب إطلاقاً: غالباً لا يمنع عرض البيانات، والبانر القابل للإغلاق كافٍ لتنبيه المستخدم
+    if (!isGeneric && !window._appLoadErrorPopupShown) {
       window._appLoadErrorPopupShown = true;
       if (typeof _showPopup === 'function') {
         _showPopup('تعذّر تحميل بيانات الشاشة الرئيسية (' + stage + ')\n' + msg, 'error', 'خطأ في تحميل البيانات');
