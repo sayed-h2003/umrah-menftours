@@ -3570,6 +3570,20 @@ function _glCsOkMatch_(code, x, cur, used) {
   });
   return best;
 }
+// (V4.284) هل يطابق اسم الطرف بالشيت (hint) طرفَ القيد المطابق؟ — إشارة ثانية تجعل الربط التلقائي شبه مؤكَّد.
+// يقارن الاسم المُطبَّع (بلا تشكيل/مسافات) مع أطراف سطور القيد غير النقدية (عميل/وكيل أو اسم الحساب) بالاحتواء.
+function _glCsPartyMatch_(hint, entId) {
+  var h = _glCashDupPartyKey_(hint); if (!h || h.length < 4) return false;
+  var accM = _glAccounts_().map, hit = false;
+  _glLinesOf_(entId).map(_glLineObj_).forEach(function (l) {
+    if (hit) return; var a = accM[l.account];
+    if (a && /^(safe|bank|custody)$/.test(a.kind)) return;   // تخطّى سطر النقدية
+    [l.client, l.agent, a ? (a.link || a.name) : ''].forEach(function (n) {
+      var k = _glCashDupPartyKey_(n); if (k && k.length >= 4 && (k === h || k.indexOf(h) >= 0 || h.indexOf(k) >= 0)) hit = true;
+    });
+  });
+  return hit;
+}
 function _glCsEntry_(x, code, cp, cur, fx) {
   var isIn = x.inAmt > 0, amt = isIn ? x.inAmt : x.outAmt, rate = _glFxRateAt_(cur, x.date, fx).rate;
   var kd = (_glAccounts_().map[code] || {}).kind;   // (V4.262) نوع القيد حسب الحساب: خزينة/بنك/عهدة
@@ -3610,6 +3624,7 @@ function glCustSheetSave(authToken, code, cfg) {
   }
   var S = _glCsOpen_(o);
   o.tab = S.sh.getName(); o.title = S.ss.getName(); o.cur = _glCur_(a.currency || cfg.cur || 'SAR'); o.auto = !!cfg.auto;   // (V4.249) الافتراضي ريال ويمكن تغييره
+  o.dupAutoLink = cfg.dupAutoLink !== false;   // (V4.284) ربط تلقائي صامت للصف المطابق لقيد قائم بنفس الطرف (افتراضي مُفعّل) — يقلّل زحمة الاعتمادات
   // ⏱️ (V4.250) تكرار المزامنة التلقائية: كل N دقيقة (1-59) أو كل N ساعة (1-24)
   var ev = cfg.every || {}, unit = ev.unit === 'min' ? 'min' : 'hour', n = parseInt(ev.n, 10) || 1;
   if (unit === 'min') n = Math.max(1, Math.min(59, n));   // (V4.270) الحد الأدنى دقيقة واحدة
@@ -3998,7 +4013,13 @@ function _glCsSync_(code, user, opts) {
     if (!(opts.force && opts.force[x.row])) {
       var dm = _glCsOkMatch_(code, x, x.cur || cur, okUsed);
       if (dm && ents[dm] && _glStr_(ents[dm].r[6]) !== 'CUST:' + code && _glStr_(ents[dm].r[5]) === GL_ST_POSTED_) {
-        okUsed[dm] = 1; base.dup = _glCsDupInfo_(ents[dm].r); base.sugg = _glCsSuggest_(x.hint, accs, code); out.pending.push(base); return;
+        okUsed[dm] = 1;
+        // ⚡ (V4.284) تطابق قوي (نفس الطرف أيضاً) ⇒ ربط تلقائي صامت بالقيد القائم بلا انتظار اعتماد — يقلّل «زحمة الاعتمادات
+        // المتكررة». يُكتب رقم القيد القائم بالشيت فلا يتكرر، ويُسجَّل في سجل التعديلات. يُعطَّل بـ cfg.dupAutoLink=false.
+        if (cfg.dupAutoLink !== false && _glCsPartyMatch_(x.hint, dm)) {
+          seen[dm] = 1; toCreate.push({ x: x, linkOnly: dm, okLink: 1, autoDup: 1 }); out.autoLinked = (out.autoLinked || 0) + 1; return;
+        }
+        base.dup = _glCsDupInfo_(ents[dm].r); base.sugg = _glCsSuggest_(x.hint, accs, code); out.pending.push(base); return;
       }
     }
     var cp = (opts.approve && opts.approve[x.row]) || _glCsResolve_(x.hint, accs, learned, code, nameIdx || (nameIdx = _glCsNameIndex_(accs, code)));
@@ -4108,11 +4129,12 @@ function _glCsSync_(code, user, opts) {
     try { mOpt.parties = _glHbMirrorParties_(); } catch (eP) {}
     out.created.concat(out.updated).forEach(function (c) { try { var mr = _glHbMirrorSync_(c.id, mOpt); if (mr && mr.written) c.hbMirror = mr.written; } catch (eM) { Logger.log('cs hb mirror: ' + eM.message); } });
   }
-  var n = out.created.length + out.updated.length + out.hb.length;
-  cfg.last = { at: _glNow_(), by: user, created: out.created.length, updated: out.updated.length, pending: out.pending.length, problems: out.problems.length };
+  var n = out.created.length + out.updated.length + out.hb.length + (out.autoLinked || 0);
+  cfg.last = { at: _glNow_(), by: user, created: out.created.length, updated: out.updated.length, pending: out.pending.length, problems: out.problems.length, autoLinked: out.autoLinked || 0 };
   _glSetSetting_('custsheet:' + code, JSON.stringify(cfg));
   if (n) logChange_(user, opts.approve ? 'اعتماد صفوف شيت عهدة' : 'مزامنة شيت عهدة', 'GL:' + code, 'شيت العهدة', '-',
-    'جديدة ' + out.created.length + ' · معدّلة ' + out.updated.length + ' · مربوطة بالحجوزات ' + out.hb.length + ' · بانتظار الاعتماد ' + out.pending.length);
+    'جديدة ' + out.created.length + ' · معدّلة ' + out.updated.length + ' · مربوطة بالحجوزات ' + out.hb.length +
+    (out.autoLinked ? ' · رُبطت تلقائياً كمكرر ' + out.autoLinked : '') + ' · بانتظار الاعتماد ' + out.pending.length);
   return out;
 }
 // المزامنة المجدولة لكل عهدة مربوطة فُعّل لها «تلقائي» — (V4.250) كلٌّ حسب تكراره (دقائق/ساعات) ولا تُكرَّر قبل موعدها

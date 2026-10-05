@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.283 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.284 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.283)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.284)', diag);
 }, 6000);
 </script>
 
@@ -48787,6 +48787,8 @@ function glCustSheetDlg(code) {
         // (V4.249) عملة قيود العهدة: الافتراضي ريال ويمكن تغييرها — حساب عهدة بعملة ثابتة يُقيَّد بعملته (تُغيَّر من تعديل الحساب)
         '<div class="col-md-2"><label class="gl-lbl">عملة العهدة</label><select id="glCsCur" class="form-select form-select-sm"' + (a.currency ? ' disabled title="عملة الحساب ثابتة بالدليل — تُغيَّر من تعديل الحساب"' : '') + '>' +
           ['SAR', 'EGP', 'USD'].map(function (k) { return '<option value="' + k + '"' + ((a.currency || c.cur || 'SAR') === k ? ' selected' : '') + '>' + GL_CUR_LBL_[k] + '</option>'; }).join('') + '</select></div>' +
+        // ⚡ (V4.284) ربط تلقائي صامت للصف المطابق لقيد قائم بنفس الطرف (يقلّل زحمة الاعتمادات المتكررة) — افتراضي مُفعّل
+        '<div class="col-md-4"><label class="d-flex gap-1 align-items-start small mt-4" title="إذا طابق صفٌ قيداً مسجَّلاً مسبقاً بنفس الحساب والمبلغ والعملة والاتجاه (±3 أيام) وبنفس الطرف، يُربط الصف بذلك القيد تلقائياً بلا انتظار اعتماد ولا تكرار. المطابقات الغامضة (طرف مختلف) تبقى للمراجعة."><input type="checkbox" id="glCsDupAuto"' + (c.dupAutoLink !== false ? ' checked' : '') + '> <span>🔁 ربط المكرر تلقائياً (نفس الطرف) بلا اعتماد — <span class="text-muted">يقلّل زحمة الاعتمادات</span></span></label></div>' +
       '</div><div class="row g-2 mt-1"><div class="col-12 small fw-bold" style="color:#0f2557;">🔤 أعمدة المزامنة (حرف العمود)</div>' +
         [['in', 'الوارد'], ['out', 'الصادر'], ['desc', 'البيان'], ['date', 'التاريخ'], ['party', 'الحساب/الطرف'], ['qaid', 'رقم القيد']].map(function (f) {
           return '<div class="col-4 col-md-2"><label class="gl-lbl">' + f[1] + '</label><input id="glCsC_' + f[0] + '" class="form-control form-control-sm gl-latin text-center" maxlength="2" style="text-transform:uppercase;" value="' + glEsc(CC[f[0]]) + '"' + ((f[0] === 'in' || f[0] === 'out') && csMulti ? ' placeholder="—" title="غير مستخدم: أعمدة العملات بالأسفل تُغني عنه"' : '') + (GL.isAdmin ? '' : ' disabled') + '></div>';
@@ -48820,6 +48822,7 @@ function glCsMultiSync_() {
 }
 function glCsSave_(code, btn) {
   var o = { url: glVal('glCsUrl'), tab: glVal('glCsTab'), startRow: glVal('glCsRow'), auto: document.getElementById('glCsAuto').checked, cols: {}, cur: (document.getElementById('glCsCur') || {}).value || 'SAR',
+    dupAutoLink: !document.getElementById('glCsDupAuto') || document.getElementById('glCsDupAuto').checked,   // (V4.284) ربط المكرر تلقائياً (افتراضي مُفعّل)
     every: { unit: (document.getElementById('glCsEveryU') || {}).value || 'hour', n: parseInt((document.getElementById('glCsEveryN') || {}).value, 10) || 1 } };
   ['in', 'out', 'desc', 'date', 'party', 'qaid', 'inEGP', 'outEGP', 'inSAR', 'outSAR', 'inUSD', 'outUSD', 'ok'].forEach(function (k) { var el = document.getElementById('glCsC_' + k); if (el) o.cols[k] = String(el.value || '').trim().toUpperCase(); });
   btn.disabled = true;
