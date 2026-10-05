@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.288 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.287 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.288)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.287)', diag);
 }, 6000);
 </script>
 
@@ -1448,19 +1448,21 @@ input[type="date"]:not(:focus):not(:valid) {
 .gl-dup-filt{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .gl-dup-k{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:4px 10px;cursor:pointer}
 .gl-dup-sum{font-size:12.5px;color:#334155;margin-bottom:8px}
-.gl-dup-wrap{max-height:58vh;overflow:auto;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
-.gl-dup-rt{width:100%;font-size:12.5px;margin:0;color:#0f172a}
-.gl-dup-rt thead th{position:sticky;top:0;z-index:1;background:#1e3d59;color:#fff;font-weight:800;padding:8px;white-space:nowrap;text-align:center}
-.gl-dup-rt td{padding:6px 8px;vertical-align:middle;border-top:1px solid #eef2f7;text-align:center}
-.gl-dup-rt tbody tr:nth-child(even){background:#f8fafc}
-.gl-dup-rt tbody tr:hover{background:#fff7ed}
-.gl-dup-nw{white-space:nowrap}
-.gl-dup-keepc{background:rgba(22,163,74,.08)}
-.gl-dup-voidc{background:rgba(220,38,38,.05);text-align:right!important;white-space:nowrap}
-.gl-dup-rt .glDupKeep{min-width:170px;font-size:12px;padding:2px 26px 2px 6px}
-.gl-dup-tag{font-size:10.5px;font-weight:800;border-radius:999px;padding:1px 7px}
-.gl-dup-badge{font-size:11px;font-weight:800;border-radius:999px;padding:2px 8px}
-.gl-dup-chip{font-size:12px;margin-inline-start:4px}
+.gl-dup-wrap{display:flex;flex-direction:column;gap:10px;max-height:58vh;overflow:auto}
+.gl-dup-card{flex:0 0 auto;background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.gl-dup-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#fafafa;border-bottom:1px solid #eef2f7}
+.gl-dup-sel{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#b91c1c}
+.gl-dup-amt{font-weight:900;font-size:15px}
+.gl-dup-acc{font-size:12.5px;font-weight:700;color:#0f172a}
+.gl-dup-badge{font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;margin-inline-start:auto}
+.gl-dup-chip{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;margin-inline-start:6px}
+.gl-dup-why{font-size:12px;color:#92400e;background:#fffbeb;padding:6px 12px;border-bottom:1px solid #fef3c7}
+.gl-dup-tbl{width:100%;font-size:12px;margin:0}
+.gl-dup-tbl td{padding:7px 10px;vertical-align:top;border-top:1px solid #f1f5f9}
+.gl-dup-keeprow{background:#f0fdf4}
+.gl-dup-keep{display:inline-flex;align-items:center;gap:4px;font-weight:800;color:#15803d;white-space:nowrap}
+.gl-dup-void{font-weight:800;color:#b91c1c;white-space:nowrap}
+.gl-dup-lock{font-weight:800;color:#15803d;white-space:nowrap}
 </style>
 <style id="th-filter-arrows">
   /* 🔽 (V4.257) أيقونات تصفية رؤوس الأعمدة: سهم صغير بلون عنوان العمود بلا مربع (كان رمز تعبيري برتقالي داخل مربع أبيض) */
@@ -7769,7 +7771,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.288";
+var CLIENT_APP_VERSION = "4.287";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -49892,59 +49894,52 @@ function glCashDupDraw_() {
   var sc = R.scanned, scTxt = sc ? '<div class="gl-dup-sum">🔎 فُحصت <b>' + glFmt(sc.lines) + '</b> حركة نقدية مرحّلة في <b>' + sc.accounts + '</b> حساب (خزائن ' + (sc.byKind.safe || 0) + ' · بنوك ' + (sc.byKind.bank || 0) + ' · عهد ' + (sc.byKind.custody || 0) + ') — نافذة ' + R.window + ' يوم</div>' : '';
   if (!R.clusters.length) { box.innerHTML = bar + scTxt + '<div class="text-center py-4" style="color:#166534;font-weight:800;font-size:15px;">✅ لا توجد حركات مكررة مرشّحة بهذه المعايير</div>' +
     (sc && !sc.lines ? '<div class="text-center small text-danger">لم تُوجد حركات نقدية مرحّلة على حسابات بفئة خزينة/بنك/عهدة — تأكد من فئة الحسابات بدليل الحسابات.</div>' : '<div class="text-center small text-muted">جرّب توسيع «نافذة الأيام» أو إلغاء «مصادر مختلفة فقط».</div>'); return; }
-  var srcName = { auto: 'تلقائي', manual: 'يدوي', erp: 'ERP', sheet: 'شيت' };
-  var srcTag = function (m) {
-    var st = { auto: ['#065f46', '#d1fae5'], manual: ['#1e3a8a', '#dbeafe'], erp: ['#6b21a8', '#f3e8ff'], sheet: ['#9a3412', '#ffedd5'] }[m.srcKind] || ['#475569', '#f1f5f9'];
-    return '<span class="gl-dup-tag" style="color:' + st[0] + ';background:' + st[1] + ';" title="' + E(m.src) + '">' + E(srcName[m.srcKind] || m.srcKind || '—') + '</span>';
+  var badge = function (c) {
+    var lvl = c.score >= 85 ? ['#991b1b', '#fee2e2', 'مطابقة قوية'] : c.score >= 70 ? ['#9a3412', '#ffedd5', 'محتملة'] : ['#475569', '#f1f5f9', 'ضعيفة'];
+    return '<span class="gl-dup-badge" style="color:' + lvl[0] + ';background:' + lvl[1] + ';">' + lvl[2] + ' · ' + c.score + '%</span>' +
+      (c.cross ? '<span class="gl-dup-chip" style="color:#1e3a8a;background:#dbeafe;">مصادر مختلفة</span>' : '') +
+      (c.sameParty ? '<span class="gl-dup-chip" style="color:#065f46;background:#d1fae5;">نفس الطرف</span>' : '') +
+      (c.span ? '<span class="gl-dup-chip" style="color:#334155;background:#f1f5f9;">فرق ' + c.span + ' يوم</span>' : '');
   };
-  var entLink = function (m) { return '<a href="#" class="gl-latin fw-bold" onclick="glShowEntry(\'' + glJs(m.id) + '\');return false;" title="' + E(m.date + ' · ' + m.type + ' — ' + String(m.desc || '').slice(0, 140)) + '">' + E(m.id) + '</a>' + (m.vno ? ' <span class="gl-latin text-muted" style="font-size:10.5px;">' + E(m.vno) + '</span>' : ''); };
-  var rows = R.clusters.map(function (c, i) {
+  var memRow = function (c, m, idx, hasAuto) {
+    var isAuto = m.srcKind === 'auto';
+    var keepName = 'gldk_' + idx;
+    // عمود القرار: راديو «إبقاء» (مقفل على التلقائي إن وُجد)، ومن عداه يُلغى
+    var pick = isAuto
+      ? '<span class="gl-dup-lock">🔒 يبقى (تلقائي)</span>'
+      : (hasAuto ? '<span class="gl-dup-void">✖ يُلغى</span>'
+        : '<label class="gl-dup-keep"><input type="radio" name="' + keepName + '" value="' + E(m.id) + '"' + (m.isKeep ? ' checked' : '') + '> إبقاء</label>');
+    return '<tr class="' + (m.isKeep ? 'gl-dup-keeprow' : '') + '"><td>' + pick + '</td>' +
+      '<td style="text-align:right;"><a href="#" class="gl-latin fw-bold" onclick="glShowEntry(\'' + glJs(m.id) + '\');return false;">' + E(m.id) + '</a>' + (m.vno ? ' <span class="gl-latin small">' + E(m.vno) + '</span>' : '') +
+      '<div class="small"><span class="gl-latin">' + E(m.date) + '</span> · ' + E(m.type) + '</div>' +
+      '<div class="small" style="color:#0e7490;">' + E(m.src) + '</div>' +
+      (m.party ? '<div class="small text-muted">الطرف: ' + E(m.party) + '</div>' : '') +
+      '<div class="small text-muted" style="white-space:normal;max-width:360px;">' + E(String(m.desc || '').slice(0, 120)) + '</div></td></tr>';
+  };
+  var cards = R.clusters.map(function (c, i) {
     var hasAuto = c.members.some(function (m) { return m.srcKind === 'auto'; });
-    var keepM = c.members.filter(function (m) { return m.isKeep; })[0] || c.members[0];
-    var keepCell = (hasAuto || !R.canEdit) ? '<span class="gl-dup-nw">' + (hasAuto ? '🔒 ' : '') + entLink(keepM) + ' ' + srcTag(keepM) + '</span>'
-      : '<select class="form-select form-select-sm glDupKeep gl-latin" onchange="glCashDupRowSync_(' + i + ')">' + c.members.map(function (m) {
-        return '<option value="' + E(m.id) + '"' + (m.isKeep ? ' selected' : '') + '>' + E(m.id) + ' · ' + E(srcName[m.srcKind] || m.srcKind) + (m.vno ? ' ' + E(m.vno) : '') + '</option>'; }).join('') + '</select>';
-    var lvl = c.score >= 85 ? ['#991b1b', '#fee2e2', 'قوية'] : c.score >= 70 ? ['#9a3412', '#ffedd5', 'محتملة'] : ['#475569', '#f1f5f9', 'ضعيفة'];
-    return '<tr data-i="' + i + '" title="' + E(c.why) + '">' +
-      '<td><input type="checkbox" class="glDupPick"' + (R.canEdit ? ' checked' : ' disabled') + '></td>' +
-      '<td class="gl-latin text-muted">' + (i + 1) + '</td>' +
-      '<td class="gl-latin gl-dup-nw">' + E(keepM.date) + (c.span ? ' <span class="text-muted" style="font-size:10.5px;">±' + c.span + ' يوم</span>' : '') + '</td>' +
-      '<td class="gl-dup-nw" style="text-align:right;">' + (kindLbl[c.kind] || '').split(' ')[0] + ' ' + E(c.accName) + '</td>' +
-      '<td class="gl-latin gl-dup-nw" style="font-weight:900;color:' + (c.dir === 'D' ? '#15803d' : '#b91c1c') + ';">' + (c.dir === 'D' ? '+' : '−') + glFmt(c.amt) + ' <span style="font-weight:600;font-size:11px;">' + cur(c.cur) + '</span></td>' +
-      '<td style="text-align:right;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + E(c.party || '') + '">' + E(c.party || '—') + '</td>' +
-      '<td class="gl-dup-keepc">' + keepCell + '</td>' +
-      '<td class="gl-dup-voidc" id="glDupV' + i + '"></td>' +
-      '<td class="gl-dup-nw"><span class="gl-dup-badge" style="color:' + lvl[0] + ';background:' + lvl[1] + ';">' + lvl[2] + ' ' + c.score + '%</span>' +
-      (c.cross ? '<span class="gl-dup-chip" title="مصادر مختلفة">🔀</span>' : '') + (c.sameParty ? '<span class="gl-dup-chip" title="نفس الطرف">👤</span>' : '') + '</td></tr>';
+    return '<div class="gl-dup-card" data-i="' + i + '">' +
+      '<div class="gl-dup-head"><label class="gl-dup-sel"><input type="checkbox" class="glDupPick" checked> معالجة</label>' +
+      '<span class="gl-dup-amt" style="color:' + (c.dir === 'D' ? '#15803d' : '#b91c1c') + ';">' + (c.dir === 'D' ? '+' : '−') + glFmt(c.amt) + ' ' + cur(c.cur) + '</span>' +
+      '<span class="gl-dup-acc">' + (kindLbl[c.kind] || '') + ' · ' + E(c.accName) + '</span>' + badge(c) + '</div>' +
+      '<div class="gl-dup-why">💡 ' + E(c.why) + '</div>' +
+      '<table class="gl-tbl gl-dup-tbl"><tbody>' + c.members.map(function (m, j) { return memRow(c, m, i, hasAuto); }).join('') + '</tbody></table>' +
+      '</div>';
   }).join('');
   box.innerHTML = bar + scTxt +
-    '<div class="gl-dup-sum">عُثر على <b>' + R.clusters.length + '</b> مجموعة مرشَّحة · «يُبقى» النسخة الباقية و«يُلغى» ما سيُلغى (التلقائي 🔒 لا يُحذف — يُعاد إنشاؤه من مصدره) · مرّر على الصف لرؤية السبب وعلى رقم القيد لرؤية بيانه</div>' +
-    '<div class="gl-dup-wrap"><table class="gl-tbl gl-dup-rt"><thead><tr>' +
-    '<th><input type="checkbox"' + (R.canEdit ? ' checked' : ' disabled') + ' onchange="var v=this.checked;document.querySelectorAll(\'#glDupBox .glDupPick\').forEach(function(c){c.checked=v})" title="تحديد/إلغاء الكل"></th>' +
-    '<th>#</th><th>التاريخ</th><th>الحساب</th><th>المبلغ</th><th>الطرف</th><th>✅ يُبقى</th><th>✖ يُلغى</th><th>الثقة</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    (R.canEdit ? '<div class="d-flex justify-content-end gap-2 mt-2 gl-dup-foot"><button class="btn btn-danger fw-bold" onclick="glCashDupApply_(this)">✅ تطبيق القرار على الصفوف المحددة</button></div>'
+    '<div class="gl-dup-sum">عُثر على <b>' + R.clusters.length + '</b> مجموعة مرشَّحة · النسخة الخضراء تُبقى والباقي يُلغى (التلقائي لا يُحذف — يُعاد إنشاؤه من مصدره)</div>' +
+    '<div class="gl-dup-wrap">' + cards + '</div>' +
+    (R.canEdit ? '<div class="d-flex justify-content-end gap-2 mt-2 gl-dup-foot"><button class="btn btn-outline-secondary btn-sm" onclick="document.querySelectorAll(\'.glDupPick\').forEach(function(c){c.checked=false})">إلغاء تحديد الكل</button><button class="btn btn-danger fw-bold" onclick="glCashDupApply_(this)">✅ تطبيق القرار على المجموعات المحددة</button></div>'
       : '<div class="small text-muted mt-2">التطبيق لمن له صلاحية تعديل الخزينة/البنوك/العهد</div>');
-  R.clusters.forEach(function (c, i) { glCashDupRowSync_(i); });
-}
-// قرار الصف: النسخة الباقية (التلقائي إن وُجد، وإلا المختارة من القائمة) والباقي يُلغى
-function glCashDupKeepOf_(i) {
-  var c = GL._dupR.clusters[i], auto = c.members.filter(function (m) { return m.srcKind === 'auto'; })[0];
-  if (auto) return auto.id;
-  var sel = document.querySelector('#glDupBox tr[data-i="' + i + '"] .glDupKeep');
-  return sel ? sel.value : c.keep;
-}
-function glCashDupRowSync_(i) {
-  var c = GL._dupR.clusters[i], td = document.getElementById('glDupV' + i); if (!td) return;
-  var keep = glCashDupKeepOf_(i), E = glEsc, nm = { manual: 'يدوي', erp: 'ERP', sheet: 'شيت' };
-  td.innerHTML = c.members.filter(function (m) { return m.id !== keep && m.srcKind !== 'auto'; }).map(function (m) {
-    return '<span class="gl-dup-nw"><a href="#" class="gl-latin fw-bold" style="color:#b91c1c;" onclick="glShowEntry(\'' + glJs(m.id) + '\');return false;" title="' + E(m.date + ' · ' + m.type + ' — ' + String(m.desc || '').slice(0, 140)) + '">' + E(m.id) + '</a> <span class="text-muted" style="font-size:10.5px;">' + E(nm[m.srcKind] || m.srcKind) + (m.vno ? ' ' + E(m.vno) : '') + '</span></span>';
-  }).join('<span class="text-muted"> · </span>') || '<span class="text-muted">—</span>';
 }
 function glCashDupApply_(btn) {
   var R = GL._dupR, items = [];
-  document.querySelectorAll('#glDupBox tr[data-i]').forEach(function (tr) {
-    if (!tr.querySelector('.glDupPick').checked) return;
-    var i = +tr.dataset.i, c = R.clusters[i], keep = glCashDupKeepOf_(i);
+  document.querySelectorAll('#glDupBox .gl-dup-card').forEach(function (card) {
+    if (!card.querySelector('.glDupPick').checked) return;
+    var c = R.clusters[+card.dataset.i], hasAuto = c.members.some(function (m) { return m.srcKind === 'auto'; });
+    var keep;
+    if (hasAuto) keep = c.members.filter(function (m) { return m.srcKind === 'auto'; })[0].id;
+    else { var r = card.querySelector('input[type="radio"]:checked'); keep = r ? r.value : c.keep; }
     var voids = c.members.filter(function (m) { return m.id !== keep && m.srcKind !== 'auto'; }).map(function (m) { return m.id; });
     if (voids.length) items.push({ keep: keep, voids: voids });
   });
