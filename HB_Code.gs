@@ -4,7 +4,7 @@
 // لتتبع آخر نسخة مرفوعة، ويظهر تلقائياً في الشريط الجانبي وصفحة كشف الحساب
 // ==========================================================
 // (H4) مدموج داخل مشروع برنامج العمرة — ملفات HB_*
-var HB_APP_VERSION = "7.17.2";
+var HB_APP_VERSION = "7.17.3";
 
 // سقف عدد صفوف نتائج شاشة "كل الحجوزات" المُرسلة للمتصفح في الطلب الواحد
 var BOOKINGS_RESULT_CAP_ = 1500;
@@ -9896,7 +9896,7 @@ function buildArrivalsClientHtml_(client, items, startDisp, endDisp) {
     totalRooms += (b.rooms || 0);
     return '<tr><td>' + (i + 1) + '</td><td>' + e(b.city) + '</td><td>' + e(b.hotel || 'بلا فندق') +
       '</td><td>' + e(b.checkIn) + '</td><td>' + e(b.checkOut) + '</td><td>' + e(b.rooms) +
-      '</td><td>' + e(b.hotelRef || b.innerRef) + '</td><td>' + e(b.status) + '</td></tr>';
+      '</td><td>' + e(b.innerRef) + '</td><td>' + e(b.status) + '</td></tr>';   // (V4.281) رقم الحجز = الرقم الداخلي فقط (لا رقم تأكيد الفندق)
   }).join('');
   var stamp = Utilities.formatDate(new Date(), 'GMT+3', 'dd/MM/yyyy HH:mm');
   return '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8"><title>كشف وصول ' + e(client) + '</title>' +

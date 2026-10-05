@@ -10778,7 +10778,7 @@ function fmtMoney2_(n) {
 
 function arrCellHtml_(b, key) {
   switch (key) {
-    case 'ref': return escapeHtml(b.innerRef || b.hotelRef || '');
+    case 'ref': return escapeHtml(b.innerRef || '');   // (V4.281) رقم الحجز = الرقم الداخلي فقط (لا رقم تأكيد الفندق) — عمود «رقم تأكيد الفندق» المنفصل يبقى لمن يريده
     case 'client': return escapeHtml(b.client || '');
     case 'supplier': return escapeHtml(b.supplier || '');
     case 'hotel': return escapeHtml(b.hotel || '');
