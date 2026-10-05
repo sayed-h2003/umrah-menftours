@@ -2278,6 +2278,22 @@ function _glPartyResolver_(roles, user) {
   get.made = function () { return madeNames; };
   return get;
 }
+// 🏷️ (V4.285) خريطة: اسم الوكيل الخام (كما يُكتب بملفات التأشيرات/متابعة الوكلاء) ⟶ اسم حساب الوكيل
+// الحالي بدليل الحسابات العامة — قد يختلف عن الاسم الخام لو أُعيد تسمية الحساب يدوياً، أو دُمجت عدة
+// أسماء وكلاء/شركات بحساب واحد (⟦alias:agent|اسم آخر⟧ بملاحظات الحساب، أو ⟦alias:agent|وكيل - شركة⟧).
+// للعرض فقط (إحصائيات) — لا تُنشئ أي حساب، وتُرجع خريطة فارغة بأمان لو الحسابات العامة غير مفعَّلة.
+function _glAgentAccNames_() {
+  var map = {};
+  try {
+    if (!_glSSId_()) return map;
+    _glAccounts_().list.forEach(function (a) {
+      if (a.isGroup || a.kind !== 'agent') return;
+      if (a.link) map[_glNorm_(a.link)] = a.name;
+      String(a.notes || '').replace(/⟦alias:agent\|([^⟧]+)⟧/g, function (m, n) { if (n) map[_glNorm_(n)] = a.name; return m; });
+    });
+  } catch (e) {}
+  return map;
+}
 /* 🧳 (V4.222) حسابات الرحلات: مجموعة «4101 إيرادات رحلات العمرة» وحساب لكل رحلة تحتها (فئة «رحلة عمرة» مربوط باسمها).
    تعمل بعد «إعادة بناء قيود الرحلات» (trip_mode) — قبلها تبقى القيود بالشكل القديم. */
 var GL_TRIP_GROUP_ = '4101';

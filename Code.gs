@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.284";
+var APP_VERSION = "4.285";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -25208,29 +25208,36 @@ function getAgentVisaStats(authToken, filters) {
     return true;
   });
 
+  // 🏷️ (V4.285) «حسب الوكيل» يُجمَّع باسم حساب الوكيل بدليل الحسابات العامة (لا اسم الوكيل الخام بالملف) —
+  // حساب مشترك يضمّ أكثر من اسم وكيل/شركة يظهر مرة واحدة باسمه الحالي بالدليل، مع تفصيل الحالات داخله
+  var agentAccNames = {}; try { agentAccNames = (typeof _glAgentAccNames_ === 'function') ? _glAgentAccNames_() : {}; } catch (eAcc) {}
   var byAgent = {}, byStatus = {}, byCompany = {}, cross = {};
   var agentsOrder = [], compsOrder = [];
   var totalVisas = 0, totalFiles = files.length, totalClients = {};
   files.forEach(function (f) {
     var n = _mfNum_(f.visaCount);
     totalVisas += n;
-    var A = f.agent || '(بلا وكيل)', S = f.status || '(بلا حالة)', C = f.company || '(بلا شركة)';
+    var rawA = f.agent || '(بلا وكيل)', A = agentAccNames[_glNorm_(f.agent)] || rawA, S = f.status || '(بلا حالة)', C = f.company || '(بلا شركة)';
     (f.breakdown || []).forEach(function (b) { if (b.name) totalClients[b.name] = 1; });
-    (byAgent[A] = byAgent[A] || { agent: A, files: 0, visas: 0 });  byAgent[A].files++;  byAgent[A].visas += n;
+    (byAgent[A] = byAgent[A] || { agent: A, files: 0, visas: 0, byStatus: {} });
+    byAgent[A].files++; byAgent[A].visas += n;
+    (byAgent[A].byStatus[S] = byAgent[A].byStatus[S] || { status: S, files: 0, visas: 0 });
+    byAgent[A].byStatus[S].files++; byAgent[A].byStatus[S].visas += n;
     (byStatus[S] = byStatus[S] || { status: S, files: 0, visas: 0 }); byStatus[S].files++; byStatus[S].visas += n;
     (byCompany[C] = byCompany[C] || { company: C, files: 0, visas: 0 }); byCompany[C].files++; byCompany[C].visas += n;
-    if (agentsOrder.indexOf(A) < 0) agentsOrder.push(A);
+    if (agentsOrder.indexOf(rawA) < 0) agentsOrder.push(rawA);
     if (compsOrder.indexOf(C) < 0) compsOrder.push(C);
-    var k = A + '|' + C;
-    (cross[k] = cross[k] || { agent: A, company: C, files: 0, visas: 0 });
+    var k = rawA + '|' + C;
+    (cross[k] = cross[k] || { agent: rawA, company: C, files: 0, visas: 0 });
     cross[k].files++; cross[k].visas += n;
   });
   agentsOrder.sort(); compsOrder.sort();
   var arr = function (m) { return Object.keys(m).map(function (k) { return m[k]; }).sort(function (a, b) { return b.visas - a.visas; }); };
+  var byAgentArr = arr(byAgent).map(function (x) { return { agent: x.agent, files: x.files, visas: x.visas, statuses: arr(x.byStatus) }; });
   return {
     success: true, totalFiles: totalFiles, totalVisas: totalVisas,
     totalClients: Object.keys(totalClients).length,
-    byAgent: arr(byAgent), byStatus: arr(byStatus), byCompany: arr(byCompany),
+    byAgent: byAgentArr, byStatus: arr(byStatus), byCompany: arr(byCompany),
     crossAgents: agentsOrder, crossCompanies: compsOrder,
     cross: Object.keys(cross).map(function (k) { return cross[k]; })
   };

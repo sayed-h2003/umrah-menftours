@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.284 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.285 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.284)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.285)', diag);
 }, 6000);
 </script>
 
@@ -7772,7 +7772,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.282";
+var CLIENT_APP_VERSION = "4.285";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -45376,6 +45376,18 @@ function vzStatsRender() {
       (rows.length ? rows.map(function (x) { return '<tr><td style="text-align:right;font-weight:700;">' + vzEsc(x[keyField] || '—') + '</td><td>' + vzL(vzFmt(x.files)) + '</td><td><b style="color:#1d4ed8;">' + vzL(vzFmt(x.visas)) + '</b></td></tr>'; }).join('') : '<tr><td colspan="3" class="text-muted" style="padding:12px;">لا بيانات في هذا النطاق</td></tr>') +
       '</tbody></table></div></div>';
   };
+  // 👤 (V4.285) حسب الوكيل = باسم حساب الوكيل (يضمّ حساباً مشتركاً لعدة أسماء/شركات إن وُجد) مع تفصيل الحالات تحت كل حساب
+  var agentTbl = function (title, rows) {
+    var body2 = !rows.length ? '<tr><td colspan="3" class="text-muted" style="padding:12px;">لا بيانات في هذا النطاق</td></tr>' :
+      rows.map(function (x) {
+        var head = '<tr style="background:#eefaf5;"><td style="text-align:right;font-weight:800;">👤 ' + vzEsc(x.agent || '—') + '</td><td><b>' + vzL(vzFmt(x.files)) + '</b></td><td><b style="color:#1d4ed8;">' + vzL(vzFmt(x.visas)) + '</b></td></tr>';
+        var subs = (x.statuses || []).map(function (s) {
+          return '<tr><td style="text-align:right;padding-right:26px;color:#4e7a6e;font-size:12px;">— ' + vzEsc(s.status || '—') + '</td><td style="font-size:12px;">' + vzL(vzFmt(s.files)) + '</td><td style="font-size:12px;color:#1d4ed8;">' + vzL(vzFmt(s.visas)) + '</td></tr>';
+        }).join('');
+        return head + subs;
+      }).join('');
+    return '<div class="vz-sec"><div class="vz-sec-h">' + title + ' <span style="font-size:10.5px;font-weight:600;color:#6b8c82;">(باسم الحساب — وتفصيل الحالات تحت كل حساب)</span></div><div style="overflow:auto;"><table class="vz-tab"><thead><tr><th style="text-align:right;">الوكيل / الحالة</th><th>عدد المجموعات</th><th>عدد التأشيرات</th></tr></thead><tbody>' + body2 + '</tbody></table></div></div>';
+  };
   var kpi = function (lbl, val, color) {
     return '<div style="flex:1;min-width:150px;background:#fff;border:1.5px solid var(--vzBorder);border-radius:12px;padding:10px 12px;">' +
       '<div style="font-size:11px;font-weight:800;color:var(--vzLbl);">' + lbl + '</div>' +
@@ -45415,7 +45427,7 @@ function vzStatsRender() {
       kpi('عدد العملاء', vzFmt(r.totalClients), '#c98a1e') +
     '</div></div>' +
     crossTbl +
-    tbl('👤 حسب الوكيل', r.byAgent || [], 'الوكيل', 'agent') +
+    agentTbl('👤 حسب الوكيل', r.byAgent || []) +
     tbl('🏷️ حسب الحالة', r.byStatus || [], 'الحالة', 'status') +
     tbl('🏢 حسب الشركة المصرية', r.byCompany || [], 'الشركة', 'company');
 }
@@ -49988,14 +50000,14 @@ function glCsApproveAll_(btn) {
   });
   if (!n) { _showPopup('اختر حساب الطرف لصف واحد على الأقل', 'warning'); return; }
   var go = function () {
-    btn.disabled = true;
+    var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…';
     glRun('glCsApproveAll', [Object.keys(by).map(function (k) { return by[k]; })], function (res) {
       GL.csPend = res.csPend || 0; if (typeof res.pendingCount === 'number') GL.pendingCount = res.pendingCount; glNavBadge_(); glCsBanner_();
       showToast('✅ سُجّل ' + res.created + ' قيد' + (res.left ? ' — بقي ' + res.left + ' صف' : '') + ((res.problems || []).length ? ' · ⚠️ ' + res.problems.length + ' مشكلة' : ''));
       if ((res.problems || []).length) _showPopup(res.problems.map(function (p) { return 'صف ' + p.row + ': ' + p.msg; }).join('\n'), 'warning');
       glDlgClose(); glAfterChange();
       if (res.left) glCsPendDlg();
-    }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); });
+    }, function (e) { btn.disabled = false; btn.innerHTML = orig; _showPopup((e && e.message) || e, 'error'); });
   };
   if (miss) askConfirm_(miss + ' صف محدد بلا حساب وسيبقى ناقصاً — متابعة اعتماد ' + n + ' صف؟', go, { title: 'اعتماد', danger: false }); else go();
 }
