@@ -3773,6 +3773,150 @@ function glCsDupResolve(authToken, items) {
     return { success: true, done: done, problems: probs };
   } finally { _glUnlock_(lock); }
 }
+
+/* ============================================================================
+   🔁🔁 (V4.283) فحص التكرار العام — عبر كل حسابات النقدية (الخزائن + البنوك + العهد) وكل المصادر
+   ----------------------------------------------------------------------------
+   يلتقط الدفعة/الحركة الواحدة حين تُسجَّل أكثر من مرة من مصادر مختلفة (سند يدوي + قيد تلقائي من
+   حسابات عملاء العمرة + صف شيت + استيراد ERP…) على نفس الحساب النقدي، بنفس (العملة + الاتجاه +
+   المبلغ) وبفارق أيام ضمن النافذة. ليس حصراً مؤكَّداً — بل مرشَّحات «قد تكون مكررة» والقرار للمستخدم.
+   التوصية تلقائياً: الإبقاء على القيد التلقائي (يُعاد إنشاؤه من مصدره ويغذّي الشاشات فلا يُحذف) وإلا
+   السند اليدوي (له رقم ومرفقات)، وإلغاء النسخ الأخرى؛ ونسخة الشيت يُعاد ربط صفها بالقيد الباقي. */
+var GL_CASHDUP_RANK_ = { auto: 4, manual: 3, erp: 2, sheet: 1 };   // أولوية «الإبقاء» عند الترشيح
+function _glCashDupPartyKey_(s) { return _glStr_(s).replace(/[ـ]/g, '').replace(/[إأآا]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim().toLowerCase(); }
+// يبني «الطرف المقابل» لقيد: أطراف السطور غير النقدية (عميل/وكيل أو اسم الحساب) — للعرض وكإشارة ثانوية بالمطابقة
+function _glCashDupCounter_(lines, cashCode, accM) {
+  var seen = {}, out = [];
+  (lines || []).forEach(function (l) {
+    if (l.account === cashCode) return;
+    var a = accM[l.account], nm = _glStr_(l.client) || _glStr_(l.agent) || (a ? _glStr_(a.link || a.name) : l.account);
+    if (nm && !seen[nm]) { seen[nm] = 1; out.push(nm); }
+  });
+  return out.join(' + ');
+}
+// opts: { window:3, kinds:['safe','bank','custody'], minAmt:0, crossOnly:false }
+function glCashDupScan(authToken, opts) {
+  var session = _glPerm_(authToken, 'view');
+  opts = opts || {};
+  var win = Math.max(0, parseInt(opts.window, 10)); if (isNaN(win)) win = 3;
+  var kinds = (opts.kinds && opts.kinds.length) ? opts.kinds : ['safe', 'bank', 'custody'];
+  var kindOk = {}; kinds.forEach(function (k) { kindOk[k === 'cust' ? 'custody' : k] = 1; });
+  var minAmt = _glNum_(opts.minAmt) || 0;
+  var accM = _glAccounts_().map, ents = {}, linesBy = {};
+  _glRows_('entries').forEach(function (r) { var id = _glStr_(r[0]); if (id && _glStr_(r[5]) === GL_ST_POSTED_) ents[id] = r; });
+  _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (ents[id] && _glStr_(l[3]) === GL_ST_POSTED_) (linesBy[id] = linesBy[id] || []).push(_glLineObj_(l)); });
+  var day = function (d) { var k = _glDKey_(d); return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : 0; };
+  var subKind = function (k) { return k === 'bank' ? 'bank' : k === 'custody' ? 'cust' : k === 'safe' ? 'safe' : ''; };
+  var buckets = {};
+  Object.keys(linesBy).forEach(function (id) {
+    var e = ents[id], sl = _glCsSrcLbl_(_glStr_(e[6])), seenSig = {};
+    linesBy[id].forEach(function (l) {
+      var a = accM[l.account]; if (!a || a.isGroup || !kindOk[a.kind]) return;
+      var amt = _glR2_(l.debit || l.credit); if (!amt || amt < minAmt) return;
+      var dir = l.debit ? 'D' : 'C', sig = l.account + '|' + l.currency + '|' + dir + '|' + amt.toFixed(2);
+      if (seenSig[sig]) return; seenSig[sig] = 1;   // نفس القيد له السطر مرتين على نفس الحساب ⇒ مرة واحدة
+      (buckets[sig] = buckets[sig] || []).push({
+        id: id, account: l.account, accName: (a.link || a.name), kind: a.kind, sub: subKind(a.kind),
+        cur: l.currency, dir: dir, amt: amt, day: day(l.date), date: _glDate_(l.date),
+        srcKind: sl.k, src: sl.l, vno: (_glStr_(e[6]).match(/^VCH:(.+)$/) || [])[1] || '',
+        type: _glStr_(e[3]), desc: _glCleanDesc_(_glStr_(e[4])),
+        party: _glCashDupCounter_(linesBy[id], l.account, accM)
+      });
+    });
+  });
+  var clusters = [];
+  Object.keys(buckets).forEach(function (sig) {
+    var arr = buckets[sig]; if (arr.length < 2) return;
+    arr.sort(function (a, b) { return a.day - b.day; });
+    var i = 0;
+    while (i < arr.length) {
+      var grp = [arr[i]], j = i + 1, lo = arr[i].day;
+      while (j < arr.length && (arr[j].day - lo) <= win) { grp.push(arr[j]); j++; }
+      i = j;
+      // أزِل تكرار نفس القيد داخل المجموعة، واشترط قيدين مختلفين على الأقل
+      var byId = {}; grp = grp.filter(function (m) { if (byId[m.id]) return false; byId[m.id] = 1; return true; });
+      if (grp.length < 2) continue;
+      // الترشيح: احتفظ بأعلى رتبة (التلقائي ثم اليدوي)، ولا تُدرِج التلقائي ضمن ما يُحذف (يُعاد إنشاؤه)
+      var keep = grp.slice().sort(function (a, b) {
+        var ra = GL_CASHDUP_RANK_[a.srcKind] || 2, rb = GL_CASHDUP_RANK_[b.srcKind] || 2;
+        if (rb !== ra) return rb - ra;
+        if (a.vno && !b.vno) return -1; if (b.vno && !a.vno) return 1;
+        if (a.day !== b.day) return a.day - b.day;
+        return a.id < b.id ? -1 : 1;
+      })[0];
+      var voids = grp.filter(function (m) { return m.id !== keep.id && m.srcKind !== 'auto'; });
+      if (!voids.length) continue;   // لا شيء يُحذف فعلياً (مثلاً تكرار تلقائي×تلقائي) — تُخطّى
+      var kinds2 = {}; grp.forEach(function (m) { kinds2[m.srcKind] = 1; });
+      var cross = Object.keys(kinds2).length > 1;
+      var pk = _glCashDupPartyKey_(grp[0].party), sameParty = !!pk && grp.every(function (m) { return _glCashDupPartyKey_(m.party) === pk; });
+      var span = grp[grp.length - 1].day - grp[0].day;
+      var score = 55 + (cross ? 25 : 0) + (sameParty ? 12 : 0) + (span === 0 ? 8 : 0);
+      if (score > 98) score = 98;
+      var why = keep.srcKind === 'auto'
+        ? 'نسخة تلقائية (من شاشات البرنامج) تُعاد إنشاؤها من مصدرها وتغذّي الشاشات — تُبقى، وتُلغى النسخ الأخرى المكرّرة'
+        : (keep.vno ? 'السند اليدوي ' + keep.vno + ' له رقم ومرفقات — يُبقى، وتُلغى النسخ المكرّرة' : 'يُبقى القيد الأقدم/الأوثق وتُلغى النسخ المكرّرة');
+      clusters.push({
+        sig: sig, account: keep.account, accName: keep.accName, kind: keep.kind, sub: keep.sub,
+        cur: keep.cur, dir: keep.dir, amt: keep.amt, span: span, cross: cross, sameParty: sameParty, score: score,
+        party: grp[0].party, keep: keep.id, voids: voids.map(function (m) { return m.id; }), why: why,
+        members: grp.map(function (m) { return { id: m.id, date: m.date, type: m.type, desc: m.desc, src: m.src, srcKind: m.srcKind, vno: m.vno, party: m.party, isKeep: m.id === keep.id, canVoid: m.srcKind !== 'auto' && m.id !== keep.id }; })
+      });
+    }
+  });
+  clusters.sort(function (a, b) { return b.score - a.score || b.amt - a.amt; });
+  if (opts.crossOnly) clusters = clusters.filter(function (c) { return c.cross; });
+  var canEdit = ['safe', 'bank', 'cust'].some(function (s) { return _glHasSub_(session, s, 'edit'); }) || _sessionHasPerm_(session, 'gl.edit') || _glIsAdmin_(session);
+  return { success: true, clusters: clusters, count: clusters.length, canEdit: canEdit, window: win };
+}
+// items: [{keep, voids:[id,...]}] — يُلغي النسخ المختارة، ويمنع إلغاء التلقائي، ويعيد ربط صف الشيت بالقيد الباقي
+function glCashDupResolve(authToken, items) {
+  var session = _glPerm_(authToken, 'view');
+  var lock = _glLock_(); lock.waitLock(120000);
+  try {
+    var done = 0, probs = [], accM = _glAccounts_().map;
+    var cashSubOf = function (id) {   // نوع صلاحية حسب حساب النقدية بالقيد (خزينة/بنك/عهدة)
+      var subs = {}; _glLinesOf_(id).map(_glLineObj_).forEach(function (l) { var a = accM[l.account]; if (a && /^(safe|bank|custody)$/.test(a.kind)) subs[_glSubOfAcc_(l.account)] = 1; });
+      return Object.keys(subs);
+    };
+    (items || []).forEach(function (it) {
+      if (!it || !it.keep || !it.voids || !it.voids.length) return;
+      var keepF = _glFindEntry_(_glStr_(it.keep));
+      if (!keepF || _glStr_(keepF.r[5]) !== GL_ST_POSTED_) { probs.push('القيد الباقي ' + it.keep + ' لم يعد قائماً — تُخطّي المجموعة'); return; }
+      it.voids.forEach(function (vid) {
+        vid = _glStr_(vid);
+        try {
+          var f = _glFindEntry_(vid); if (!f) throw new Error('غير موجود');
+          if (_glStr_(f.r[5]) === GL_ST_VOID_) { return; }
+          var sk = _glStr_(f.r[6]), sl = _glCsSrcLbl_(sk);
+          if (sl.k === 'auto') throw new Error('قيد تلقائي يُعاد إنشاؤه من مصدره — لا يُحذف (احذف النسخة اليدوية/الشيت بدلاً منه)');
+          if (_glLocked_(f.r[2])) throw new Error('في فترة مقفلة');
+          // صلاحية التعديل على نوع حساب النقدية بالقيد
+          cashSubOf(vid).forEach(function (sub) { if (sub) _glSubCheck_(session, sub, 'edit'); });
+          var sh = _glSheet_('entries');
+          sh.getRange(f.row, 6).setValue(GL_ST_VOID_);
+          sh.getRange(f.row, 17, 1, 3).setValues([[session.username, _glNow_(), 'مكرر مع ' + it.keep]]);
+          _glSetLinesStatus_([vid], GL_ST_VOID_);
+          try { _glSyncVoucherPays_(vid, session.username); } catch (eS) {}
+          // نسخة شيت ⇒ أعِد ربط صفها بالقيد الباقي حتى لا يُعاد إنشاؤها بالمزامنة
+          var mC = sk.match(/^CUST:(.+)$/);
+          if (mC) { try { _glDupRelinkSheetRow_(mC[1], vid, _glStr_(it.keep)); } catch (eR) { probs.push('تعذّر إعادة ربط صف الشيت للقيد ' + vid + ': ' + eR.message); } }
+          logChange_(session.username, 'إلغاء قيد مكرر (فحص عام)', 'GL:' + vid, 'الحالة', GL_ST_POSTED_, GL_ST_VOID_ + ' — مكرر مع ' + it.keep);
+          done++;
+        } catch (e) { probs.push(vid + ': ' + e.message); }
+      });
+    });
+    return { success: true, done: done, problems: probs };
+  } finally { _glUnlock_(lock); }
+}
+// يعيد كتابة رقم القيد بصف شيت العهدة/الخزينة الذي كان يشير للقيد الملغى ليشير للقيد الباقي
+function _glDupRelinkSheetRow_(code, oldId, newId) {
+  var cfg = _glCsCfg_(code); if (!cfg || !cfg.id) return;
+  var S = _glCsOpen_(cfg), QC = _glCsCols_(cfg).qaid + 1, rows = _glCsReadRows_(S.sh, cfg.startRow || 2, cfg), hit = null;
+  rows.forEach(function (x) { if (!hit && String(x.fRaw || x.f || '').split('|').map(function (t) { return t.trim(); }).indexOf(oldId) >= 0) hit = x; });
+  if (!hit) return;
+  var raw = String(hit.fRaw || hit.f || ''), val = raw.indexOf('|') >= 0 ? raw.split('|').map(function (t) { t = t.trim(); return t === oldId ? newId : t; }).join(' | ') : newId;
+  S.sh.getRange(hit.row, QC).setNumberFormat('@').setValue(val);
+}
 function glCustSheetApprove(authToken, code, items) {
   var session = _glPerm_(authToken, 'edit', 'sheets');
   var lock = _glLock_(); lock.waitLock(120000);
