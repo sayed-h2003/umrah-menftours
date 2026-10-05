@@ -4684,9 +4684,28 @@ function _glHbBuild_(roles, warn, party) {
   };
   var ptag = function (m, name) { var k = GL_HB_TYPES_[m.type].kind; return k === 'client' ? { client: name } : (k === 'supplier' ? { agent: name } : {}); };
   var sar = rates.SAR;
+  // 💱 (V4.280) تثبيت سعر صرف الريال لكل قيد حجز على ما سُجِّل به أول مرة: قيد الحجز بالريال لا يتغيّر
+  // مبلغه، لكن «المعادل بالجنيه» كان يُعاد حسابه بسعر الريال «الحالي» بالإعدادات، فتغيير السعر لاحقاً كان
+  // يُعيد كتابة معادل كل الحجوزات ويفتحها للاعتماد بلا سبب مالي حقيقي. الآن نقرأ سعر الصرف من القيد المرحّل
+  // القائم (إن وُجد) ونعيد استخدامه؛ الحجوزات الجديدة فقط تأخذ سعر اليوم الحالي.
+  var frozenSar = (function () {
+    var byId = {}, map = {};
+    _glRows_('entries').forEach(function (r) {
+      var sk = _glStr_(r[6]); if (sk.indexOf('AUTO:HB:') !== 0) return;
+      if (_glStr_(r[5]) !== GL_ST_POSTED_) return;   // القيود المرحّلة فقط (لا المسودة ولا الملغاة)
+      byId[_glStr_(r[0])] = sk;
+    });
+    _glRows_('lines').forEach(function (r) {
+      var sk = byId[_glStr_(r[0])]; if (!sk || map[sk]) return;
+      if (_glCur_(_glStr_(r[7])) !== 'SAR') return;
+      var rt = _glNum_(r[8]); if (rt > 0) map[sk] = rt;
+    });
+    return map;
+  })();
   H.bookings.forEach(function (b) {
     if (b.status === 'لاغي') return;
     var cm = b.client ? info(b.client) : null, sm = b.supplier ? info(b.supplier) : null;
+    var bSar = frozenSar['AUTO:HB:' + b.key] || sar;   // سعر الريال المثبَّت لهذا الحجز (أو الحالي للجديد)
     var trip = _glHbTripOf_(b, cm, ov, ctx, accs), tc = trip && ctx.trips[trip] ? ctx.trips[trip].company : '';
     // 📘 (V4.219) بيانات القيد بصيغة الـ ERP: رقم تأكيد الفندق (أو رقم الحجز الداخلي) + الفندق + من/إلى (dd/MM) + تفصيل الغرف + مدة الإقامة
     var refNum = b.hotelRef || b.inner || ('صف ' + b.row), nw = _glNightsWord_(b.nights);
@@ -4706,13 +4725,13 @@ function _glHbBuild_(roles, warn, party) {
     if (sm && sm.type !== 'رحلة' && !b.cost.hasPrice && b.cost.rooms) st.unpriced++;
     var base = { trip: trip, company: tc };
     if (hasSale) {
-      var sv = b.sale.value, l1 = L(cm.code, Math.abs(sv), sv > 0, 'SAR', sar, Object.assign({ desc: custStmt }, base, ptag(cm, b.client)));
+      var sv = b.sale.value, l1 = L(cm.code, Math.abs(sv), sv > 0, 'SAR', bSar, Object.assign({ desc: custStmt }, base, ptag(cm, b.client)));
       l1.hbParty = 1; lines.push(l1);
     }
     if (hasCost) {
-      var cv = b.cost.value, l2 = L(sm.code, Math.abs(cv), cv < 0, 'SAR', sar, Object.assign({ desc: supStmt }, base, ptag(sm, b.supplier)));
+      var cv = b.cost.value, l2 = L(sm.code, Math.abs(cv), cv < 0, 'SAR', bSar, Object.assign({ desc: supStmt }, base, ptag(sm, b.supplier)));
       l2.hbParty = 1; lines.push(l2);
-      if (!hasSale) lines.push(L(roles.cost_house, Math.abs(cv), cv > 0, 'SAR', sar, Object.assign({ desc: 'تكلفة ' + supStmt + (cm && cm.type === 'رحلة' ? '' : ' (بلا بيع مسجَّل)') }, base)));
+      if (!hasSale) lines.push(L(roles.cost_house, Math.abs(cv), cv > 0, 'SAR', bSar, Object.assign({ desc: 'تكلفة ' + supStmt + (cm && cm.type === 'رحلة' ? '' : ' (بلا بيع مسجَّل)') }, base)));
     }
     if (hasSale) {
       var mg = _glR2_(b.sale.value - (hasCost ? b.cost.value : 0));
@@ -4720,7 +4739,7 @@ function _glHbBuild_(roles, warn, party) {
       // فيفشل لو صار حساباً تجميعياً بالدليل
       var hbRevAcc = accs[roles.hb_rev], revAcc = (sm && sm.type !== 'رحلة') ? party('hbrev', sm.name || b.supplier)
         : (hbRevAcc && !hbRevAcc.isGroup ? roles.hb_rev : party('hbrev', 'بدون مورد'));
-      if (Math.abs(mg) >= 0.005) lines.push(L(revAcc, Math.abs(mg), mg < 0, 'SAR', sar, Object.assign({ client: b.client, agent: b.supplier,
+      if (Math.abs(mg) >= 0.005) lines.push(L(revAcc, Math.abs(mg), mg < 0, 'SAR', bSar, Object.assign({ client: b.client, agent: b.supplier,
         desc: !hasCost ? revStmt + ' (التكلفة غير مسعَّرة)' : mg < 0 ? 'خسارة حجز ' + refNum + ' ' + b.hotel + ' — ' + Math.abs(mg).toFixed(2) + ' SAR' : revStmt }, base)));
     }
     // ⚠️ (V4.259) قيد حجز ناقص (بلا مورد/عميل أو بلا سعر بيع/تكلفة): يُسجَّل الطرف المسعَّر فقط ويُوسم «غير مكتمل»
