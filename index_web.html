@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.288 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.289 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.288)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.289)', diag);
 }, 6000);
 </script>
 
@@ -7771,7 +7771,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.288";
+var CLIENT_APP_VERSION = "4.289";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -47214,12 +47214,15 @@ function glJImplied_(ls) {
   ls.forEach(function (l) { var c = l.currency; net[c] = (net[c] || 0) + l.debit - l.credit; bnet[c] = (bnet[c] || 0) + (l.debit - l.credit) * l.rate; if (l.manual) man[c] = 1; });
   var imb = Object.keys(net).filter(function (c) { return Math.abs(net[c]) > 0.005; });
   if (imb.length !== 2 || net[imb[0]] * net[imb[1]] >= 0) return null;
-  var cands = imb.filter(function (c) { return c !== 'EGP' && !man[c]; }).sort(function (x) { return x === 'USD' ? -1 : 1; });
+  var cands = imb.filter(function (c) { return c !== 'EGP'; });
   if (!cands.length) return null;
-  var f = cands[0], other = 0;
+  // ⚡ (V4.289) قيد قائم مُحمَّل للتعديل ⇒ سعر كل سطر أجنبي «يدوي» أصلاً (مُحمَّل من المخزَّن)، فلا يُستبعَد بسبب هذا وحده —
+  // يُفضَّل سطر غير يدوي لو وُجد (ليُقترَح له سعر)، وإلا يُستخدم السعر اليدوي القائم نفسه فقط لتأكيد أنه «قيد بعملتين» سيتوازن بالوسيط
+  var auto = cands.filter(function (c) { return !man[c]; }).sort(function (x) { return x === 'USD' ? -1 : 1; });
+  var f = (auto.length ? auto : cands.sort(function (x) { return x === 'USD' ? -1 : 1; }))[0], other = 0;
   Object.keys(bnet).forEach(function (c) { if (c !== f) other += bnet[c]; });
   var rate = glR2Rate(Math.abs(other / net[f]));   // خانتان كحد أقصى — وفرق التقريب الضئيل يمتصه وسيط العملات
-  return rate > 0 ? { cur: f, other: imb[0] === f ? imb[1] : imb[0], rate: rate } : null;
+  return rate > 0 ? { cur: f, other: imb[0] === f ? imb[1] : imb[0], rate: rate, applied: !man[f] } : null;
 }
 function glJCalc() {
   var el = document.getElementById('glJTot'); if (!el) return;
@@ -47229,7 +47232,7 @@ function glJCalc() {
   // (V4.226) الإجماليات بالعملات الفعلية (بلا معادل) — التوازن يُفحص داخلياً
   el.innerHTML = Object.keys(byC).map(function (k) { return GL_CUR_LBL_[k] + ': مدين <b class="gl-latin">' + glFmt(byC[k].d) + '</b> · دائن <b class="gl-latin">' + glFmt(byC[k].c) + '</b>'; }).join(' | ') + ' · ' +
     (Math.abs(diff) < 0.01 ? '<b style="color:#166534;">✅ متوازن</b>' :
-      imp ? '<b style="color:#92400e;background:#fef9c3;border-radius:6px;padding:1px 8px;">🔁 قيد بعملتين (' + GL_CUR_LBL_[imp.cur] + ' ↔ ' + GL_CUR_LBL_[imp.other] + ') — سعر التحويل الضمني <span class="gl-latin">' + imp.rate + '</span> جنيه لل' + GL_CUR_LBL_[imp.cur] + (glFxBridgeOn_() ? ' — يُوازن تلقائياً عند الحفظ عبر وسيط العملات' : ' — يُطبَّق عند الحفظ') + '</b>' :
+      imp ? '<b style="color:#92400e;background:#fef9c3;border-radius:6px;padding:1px 8px;">🔁 قيد بعملتين (' + GL_CUR_LBL_[imp.cur] + ' ↔ ' + GL_CUR_LBL_[imp.other] + ') — ' + (imp.applied ? 'سعر التحويل الضمني' : 'بسعر الصرف المُدخل') + ' <span class="gl-latin">' + imp.rate + '</span> جنيه لل' + GL_CUR_LBL_[imp.cur] + (glFxBridgeOn_() ? ' — يُوازن تلقائياً عند الحفظ عبر وسيط العملات' : ' — يُطبَّق عند الحفظ') + '</b>' :
       '<b style="color:#b91c1c;">⚠️ القيد غير متوازن' + (Object.keys(byC).length === 1 ? ' — الفرق ' + glFmt(Math.abs(byC[Object.keys(byC)[0]].d - byC[Object.keys(byC)[0]].c)) + ' ' + GL_CUR_LBL_[Object.keys(byC)[0]] : '') + '</b>') +
     (Object.keys(byC).length > 1 ? ' <span style="color:#64748b;">(' + Object.keys(byC).map(function (k) { return GL_CUR_LBL_[k] + ': ' + glFmt(byC[k].d) + ' / ' + glFmt(byC[k].c); }).join(' · ') + ')</span>' : '');
   glJSmartPaint_();
@@ -47435,6 +47438,10 @@ function glBuildEntry() {
     var bd = 0; ls.forEach(function (l) { bd += (l.debit - l.credit) * l.rate; });
     var imp = Math.abs(bd) >= 0.01 ? glJImplied_(ls) : null;   // (V4.219) آلية الـ ERP للقيد بعملتين
     if (imp) ls.forEach(function (l) { if (l.currency === imp.cur && !l.manual) l.rate = imp.rate; });
+    // ✍️ (V4.289) كل أسطر القيد الحقيقية بنفس البيان نصاً واحداً (نسخة عامة مكررة من خانة «البيان» ولم يُخصَّص لكل طرف)
+    // ⇒ تُفرَّغ ليحل محلها البيان الذكي لكل طرف («من …» / «إلى …») بدل تكرار نفس الجملة على الطرفين
+    var sig = ls.filter(function (l) { return l.account && (l.debit || l.credit); });
+    if (sig.length > 1 && sig[0].desc && sig.every(function (l) { return l.desc === sig[0].desc; })) sig.forEach(function (l) { l.desc = ''; });
     glJSmartPaint_();
     var phs = Array.prototype.map.call(document.querySelectorAll('#glJLines tbody tr .glJDesc'), function (d) { return d.placeholder !== 'البيان' ? d.placeholder : ''; });
     ls.forEach(function (l, i) { if (!l.desc && phs[i]) l.desc = phs[i]; });   // (V4.262) البيان الذكي للسطر الفارغ
