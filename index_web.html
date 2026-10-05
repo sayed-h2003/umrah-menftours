@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.285 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.286 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.285)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.286)', diag);
 }, 6000);
 </script>
 
@@ -1449,7 +1449,7 @@ input[type="date"]:not(:focus):not(:valid) {
 .gl-dup-k{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:4px 10px;cursor:pointer}
 .gl-dup-sum{font-size:12.5px;color:#334155;margin-bottom:8px}
 .gl-dup-wrap{display:flex;flex-direction:column;gap:10px;max-height:58vh;overflow:auto}
-.gl-dup-card{border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.gl-dup-card{background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 .gl-dup-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#fafafa;border-bottom:1px solid #eef2f7}
 .gl-dup-sel{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#b91c1c}
 .gl-dup-amt{font-weight:900;font-size:15px}
@@ -1463,7 +1463,6 @@ input[type="date"]:not(:focus):not(:valid) {
 .gl-dup-keep{display:inline-flex;align-items:center;gap:4px;font-weight:800;color:#15803d;white-space:nowrap}
 .gl-dup-void{font-weight:800;color:#b91c1c;white-space:nowrap}
 .gl-dup-lock{font-weight:800;color:#15803d;white-space:nowrap}
-@media (prefers-color-scheme:dark){.gl-dup-bar{background:#1f2329;border-color:#333}.gl-dup-note,.gl-dup-sum{color:#cbd5e1}.gl-dup-k{background:#262b33;color:#e2e8f0;border-color:#3a4150}.gl-dup-card{border-color:#333}.gl-dup-head{background:#232830;border-color:#333}.gl-dup-why{background:#3a2e0a;color:#ffe9a8;border-color:#5c4a10}.gl-dup-tbl td{border-color:#2a2f37}.gl-dup-keeprow{background:#12301e}}
 </style>
 <style id="th-filter-arrows">
   /* 🔽 (V4.257) أيقونات تصفية رؤوس الأعمدة: سهم صغير بلون عنوان العمود بلا مربع (كان رمز تعبيري برتقالي داخل مربع أبيض) */
@@ -7772,7 +7771,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.285";
+var CLIENT_APP_VERSION = "4.286";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -46138,7 +46137,7 @@ function openHotelsApp_() {
   }).hotelsHandoff(window.authToken);
 }
 // ⚡ (V4.252) نداءات القراءة فقط — أي نداء غيرها (حفظ/ترحيل/حذف/مزامنة…) يمسح كاش الكشوف بالواجهة ويُسخّن كاش الخادم
-var GL_RO_RX_ = /^gl(Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbErpOverlap|HbErpMatch|HbSeasonPreview|HbPaySplitPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|Warm)$/;
+var GL_RO_RX_ = /^gl(Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbErpOverlap|HbErpMatch|HbSeasonPreview|HbPaySplitPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm)$/;
 function glDataChanged_() {
   GL._stCache = {};
   clearTimeout(GL._warmT); GL._warmT = setTimeout(function () { try { google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).glWarm(window.authToken); } catch (e) {} }, 400);
@@ -49867,8 +49866,12 @@ function glCashDupDlg_() {
 }
 function glCashDupRescan_() {
   var box = document.getElementById('glDupBox'); if (box) box.innerHTML = '<div class="text-muted small py-4 text-center">⏳ جارٍ الفحص…</div>';
-  glRun('glCashDupScan', [GL._dupOpt], function (r) { GL._dupR = r; glCashDupDraw_(); },
-    function (e) { if (box) box.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc((e && e.message) || e) + '</div>'; });
+  glRun('glCashDupScan', [GL._dupOpt], function (r) {
+    var b = document.getElementById('glDupBox'); if (!b) return;
+    if (!r || !r.clusters) { b.innerHTML = '<div class="alert alert-warning">⚠️ لم يُرجِع الخادم نتيجة للفحص — أعد المحاولة بعد لحظات (أو اعمل Deploy للإصدار الأحدث إن لم يكن منشوراً). <button class="btn btn-sm btn-outline-secondary ms-2" onclick="glCashDupRescan_()">🔄 إعادة الفحص</button></div>'; return; }
+    GL._dupR = r;
+    try { glCashDupDraw_(); } catch (eD) { console.error(eD); b.innerHTML = '<div class="alert alert-danger">❌ تعذّر عرض نتيجة الفحص: ' + glEsc(eD.message || eD) + '</div>'; }
+  }, function (e) { var b = document.getElementById('glDupBox'); if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc((e && e.message) || e) + '</div>'; });
 }
 function glCashDupSetOpt_(k, v) { GL._dupOpt = GL._dupOpt || {}; GL._dupOpt[k] = v; glCashDupRescan_(); }
 function glCashDupToggleKind_(kind, on) {
@@ -49888,7 +49891,9 @@ function glCashDupDraw_() {
     '<label class="gl-dup-k">أقل مبلغ <input type="number" min="0" value="' + (O.minAmt || 0) + '" style="width:80px;" onchange="glCashDupSetOpt_(\'minAmt\',parseFloat(this.value)||0)"></label>' +
     '<label class="gl-dup-k"><input type="checkbox" ' + (O.crossOnly ? 'checked' : '') + ' onchange="glCashDupSetOpt_(\'crossOnly\',this.checked)"> مصادر مختلفة فقط</label>' +
     '<button class="btn btn-outline-secondary btn-sm" onclick="glCashDupRescan_()">🔄 إعادة الفحص</button></div></div>';
-  if (!R.clusters.length) { box.innerHTML = bar + '<div class="text-center py-4" style="color:#166534;font-weight:800;font-size:15px;">✅ لا توجد حركات مكررة مرشّحة بهذه المعايير</div>'; return; }
+  var sc = R.scanned, scTxt = sc ? '<div class="gl-dup-sum">🔎 فُحصت <b>' + glFmt(sc.lines) + '</b> حركة نقدية مرحّلة في <b>' + sc.accounts + '</b> حساب (خزائن ' + (sc.byKind.safe || 0) + ' · بنوك ' + (sc.byKind.bank || 0) + ' · عهد ' + (sc.byKind.custody || 0) + ') — نافذة ' + R.window + ' يوم</div>' : '';
+  if (!R.clusters.length) { box.innerHTML = bar + scTxt + '<div class="text-center py-4" style="color:#166534;font-weight:800;font-size:15px;">✅ لا توجد حركات مكررة مرشّحة بهذه المعايير</div>' +
+    (sc && !sc.lines ? '<div class="text-center small text-danger">لم تُوجد حركات نقدية مرحّلة على حسابات بفئة خزينة/بنك/عهدة — تأكد من فئة الحسابات بدليل الحسابات.</div>' : '<div class="text-center small text-muted">جرّب توسيع «نافذة الأيام» أو إلغاء «مصادر مختلفة فقط».</div>'); return; }
   var badge = function (c) {
     var lvl = c.score >= 85 ? ['#991b1b', '#fee2e2', 'مطابقة قوية'] : c.score >= 70 ? ['#9a3412', '#ffedd5', 'محتملة'] : ['#475569', '#f1f5f9', 'ضعيفة'];
     return '<span class="gl-dup-badge" style="color:' + lvl[0] + ';background:' + lvl[1] + ';">' + lvl[2] + ' · ' + c.score + '%</span>' +
@@ -49921,7 +49926,7 @@ function glCashDupDraw_() {
       '<table class="gl-tbl gl-dup-tbl"><tbody>' + c.members.map(function (m, j) { return memRow(c, m, i, hasAuto); }).join('') + '</tbody></table>' +
       '</div>';
   }).join('');
-  box.innerHTML = bar +
+  box.innerHTML = bar + scTxt +
     '<div class="gl-dup-sum">عُثر على <b>' + R.clusters.length + '</b> مجموعة مرشَّحة · النسخة الخضراء تُبقى والباقي يُلغى (التلقائي لا يُحذف — يُعاد إنشاؤه من مصدره)</div>' +
     '<div class="gl-dup-wrap">' + cards + '</div>' +
     (R.canEdit ? '<div class="d-flex justify-content-end gap-2 mt-2 gl-dup-foot"><button class="btn btn-outline-secondary btn-sm" onclick="document.querySelectorAll(\'.glDupPick\').forEach(function(c){c.checked=false})">إلغاء تحديد الكل</button><button class="btn btn-danger fw-bold" onclick="glCashDupApply_(this)">✅ تطبيق القرار على المجموعات المحددة</button></div>'

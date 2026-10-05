@@ -3838,12 +3838,13 @@ function glCashDupScan(authToken, opts) {
   _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (ents[id] && _glStr_(l[3]) === GL_ST_POSTED_) (linesBy[id] = linesBy[id] || []).push(_glLineObj_(l)); });
   var day = function (d) { var k = _glDKey_(d); return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : 0; };
   var subKind = function (k) { return k === 'bank' ? 'bank' : k === 'custody' ? 'cust' : k === 'safe' ? 'safe' : ''; };
-  var buckets = {};
+  var buckets = {}, stat = { lines: 0, accs: {}, byKind: { safe: 0, bank: 0, custody: 0 } };
   Object.keys(linesBy).forEach(function (id) {
     var e = ents[id], sl = _glCsSrcLbl_(_glStr_(e[6])), seenSig = {};
     linesBy[id].forEach(function (l) {
       var a = accM[l.account]; if (!a || a.isGroup || !kindOk[a.kind]) return;
       var amt = _glR2_(l.debit || l.credit); if (!amt || amt < minAmt) return;
+      stat.lines++; stat.accs[l.account] = 1; stat.byKind[a.kind] = (stat.byKind[a.kind] || 0) + 1;
       var dir = l.debit ? 'D' : 'C', sig = l.account + '|' + l.currency + '|' + dir + '|' + amt.toFixed(2);
       if (seenSig[sig]) return; seenSig[sig] = 1;   // نفس القيد له السطر مرتين على نفس الحساب ⇒ مرة واحدة
       (buckets[sig] = buckets[sig] || []).push({
@@ -3897,7 +3898,8 @@ function glCashDupScan(authToken, opts) {
   clusters.sort(function (a, b) { return b.score - a.score || b.amt - a.amt; });
   if (opts.crossOnly) clusters = clusters.filter(function (c) { return c.cross; });
   var canEdit = ['safe', 'bank', 'cust'].some(function (s) { return _glHasSub_(session, s, 'edit'); }) || _sessionHasPerm_(session, 'gl.edit') || _glIsAdmin_(session);
-  return { success: true, clusters: clusters, count: clusters.length, canEdit: canEdit, window: win };
+  return { success: true, clusters: clusters, count: clusters.length, canEdit: canEdit, window: win,
+    scanned: { lines: stat.lines, accounts: Object.keys(stat.accs).length, byKind: stat.byKind } };
 }
 // items: [{keep, voids:[id,...]}] — يُلغي النسخ المختارة، ويمنع إلغاء التلقائي، ويعيد ربط صف الشيت بالقيد الباقي
 function glCashDupResolve(authToken, items) {
