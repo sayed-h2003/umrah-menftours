@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.278";
+var APP_VERSION = "4.279";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -4590,9 +4590,9 @@ function getAgentByCompany(authToken, companyName) {
 function searchDynamicBookings(authToken, filters) {
   requireAuth_(authToken);
 
+  // (V4.279/S6) استخدام مقبض المصنف المُخزَّن (memo) بدل getActiveSpreadsheet() في كل نداء
   const sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
+    getSpreadsheet_()
       .getSheetByName(
         'Bookings'
       );
@@ -4600,9 +4600,12 @@ function searchDynamicBookings(authToken, filters) {
   if (!sheet)
     return [];
 
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+  if (lastRow < 2) return [];
   const data =
     sheet
-      .getDataRange()
+      .getRange(1, 1, lastRow, lastCol)
       .getValues();
 
   if (data.length < 2)

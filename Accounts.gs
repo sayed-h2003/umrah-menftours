@@ -3791,7 +3791,17 @@ function _glCsSync_(code, user, opts) {
   var cfg = _glCsCfg_(code); if (!cfg.id) throw new Error('لم يُربط شيت لهذه العهدة بعد');
   var S = opts.pre ? opts.pre.S : _glCsOpen_(cfg), rows = opts.pre ? opts.pre.rows : _glCsReadRows_(S.sh, cfg.startRow || 2, cfg), QC = _glCsCols_(cfg).qaid + 1;   // (V4.275) القراءة المسبقة (خارج القفل) للمزامنة المجدولة
   // نقل أرقام القيود القديمة من F إلى عمود القيد الجديد (مرة واحدة، بلا مسح F)
-  if (!opts.preview) rows.forEach(function (x) { if (x.fOld) try { S.sh.getRange(x.row, QC).setNumberFormat('@').setValue(x.f); } catch (e) { } });
+  // (V4.279/S4) تجميع الكتابة بسلاسل متصلة بدل خلية-خلية (غالبًا بلا أثر بعد أول ترحيل)
+  if (!opts.preview) {
+    var mg = []; rows.forEach(function (x) { if (x.fOld) mg.push({ row: x.row, val: x.f }); });
+    mg.sort(function (a, b) { return a.row - b.row; });
+    for (var mi = 0; mi < mg.length;) {
+      var ms = mg[mi].row, mj = mi, mb = [[mg[mi].val]];
+      while (mj + 1 < mg.length && mg[mj + 1].row === mg[mj].row + 1) { mj++; mb.push([mg[mj].val]); }
+      try { S.sh.getRange(ms, QC, mb.length, 1).setNumberFormat('@').setValues(mb); } catch (e) { }
+      mi = mj + 1;
+    }
+  }
   var learned = _glCsMap_(), cur = _glCur_(a.currency || cfg.cur || 'SAR'), fx = _glFxDailyMap_();
   var ents = {}, erp = {}, mine = {}, hbAuto = {};
   _glRows_('entries').forEach(function (r, i) {
@@ -3930,12 +3940,23 @@ function _glCsSync_(code, user, opts) {
       var rec = wrote[y.row] = wrote[y.row] || { y: y, ids: [] };
       rec.ids[y.sub || 0] = w.id;
     });
+    // (V4.279/S4) تجميع كتابة أرقام القيود للشيت الخارجي: كانت خلية-خلية (جولة شبكية لكل صف)؛
+    // الآن نجمع {صف، قيمة} ونكتب كل سلسلة صفوف متصلة بـ setValues واحدة (مع ضبط التنسيق نصيًا
+    // للمدى كله). الصفوف غير المتجاورة تبقى بكتل منفصلة فلا يُمسّ عمود رقم القيد لأي صف بينها
+    var qWrites = [];
     Object.keys(wrote).forEach(function (k) {
       var rec = wrote[k], y = rec.y, ids = rec.ids;
       if (y.subN > 1) { var old = (y.fRaw || '').indexOf('|') >= 0 ? y.fRaw.split('|').map(function (t) { t = t.trim(); return t === '-' ? '' : t; }) : [(y.fRaw || '').trim()]; for (var q = 0; q < y.subN; q++) if (!ids[q]) ids[q] = old[q] || ''; }
       var val = y.subN > 1 ? ids.slice(0, y.subN).map(function (t) { return t || '-'; }).join(' | ') : ids[0];
-      S.sh.getRange(y.row, QC).setNumberFormat('@').setValue(val);
+      qWrites.push({ row: y.row, val: val });
     });
+    qWrites.sort(function (a, b) { return a.row - b.row; });
+    for (var wi = 0; wi < qWrites.length;) {
+      var start = qWrites[wi].row, wj = wi, block = [[qWrites[wi].val]];
+      while (wj + 1 < qWrites.length && qWrites[wj + 1].row === qWrites[wj].row + 1) { wj++; block.push([qWrites[wj].val]); }
+      S.sh.getRange(start, QC, block.length, 1).setNumberFormat('@').setValues(block);
+      wi = wj + 1;
+    }
   }
   // 🏨 (V4.258) نسخ قيود العهدة على حسابات أطراف الحجوزات إلى سجل دفعات برنامج الحجوزات (مثل سندات القبض/الصرف)
   if (!opts.preview && (out.created.length || out.updated.length)) {

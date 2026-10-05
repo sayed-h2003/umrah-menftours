@@ -204,6 +204,36 @@ function collectCustodyRows_(configs, knownNames) {
   return { wanted: wanted, sheetsById: sheetsById };
 }
 
+// ---------- تجميع عمليات الكتابة (مساعِدات نقية قابلة للاختبار) ----------
+// (V4.279) حذف صفوف متصلة ككتلة واحدة بدل حذف صف-صف. المُدخَل أرقام صفوف مرتَّبة تنازليًا،
+// والمُخرَج [[بداية، عدد]] لكل كتلة متصلة — تُمرَّر لـ deleteRows(start, n). المعالَجة من الأعلى
+// للأسفل (الكتل تأتي بترتيب النزول) فلا تنزاح الصفوف الأدنى أثناء الحذف
+function _custodyDeleteBlocks_(rowsDesc) {
+  var blocks = [];
+  for (var i = 0; i < rowsDesc.length;) {
+    var high = rowsDesc[i], j = i;
+    while (j + 1 < rowsDesc.length && rowsDesc[j + 1] === rowsDesc[j] - 1) j++;
+    var low = rowsDesc[j];
+    blocks.push([low, high - low + 1]);
+    i = j + 1;
+  }
+  return blocks;
+}
+// (V4.279) كتابة علامة H لصفوف متصلة ككتلة setValues واحدة. المُدخَل أرقام صفوف بأي ترتيب،
+// والمُخرَج [[بداية، عدد]] لكل سلسلة متصلة تصاعديًا — لا تُكتَب إلا صفوف تحتاج علامة فعلاً
+// (الصفوف غير المتجاورة تبقى في كتل منفصلة فلا يُمسّ أي صف بينها)
+function _custodyMarkRuns_(rows) {
+  var s = rows.slice().sort(function (a, b) { return a - b; });
+  var runs = [];
+  for (var i = 0; i < s.length;) {
+    var start = s[i], j = i;
+    while (j + 1 < s.length && s[j + 1] === s[j] + 1) j++;
+    runs.push([start, s[j] - start + 1]);
+    i = j + 1;
+  }
+  return runs;
+}
+
 // ---------- المزامنة ----------
 // تُقارن ما في أوراق العهدة *المفعَّلة* بما سبق تسجيله، فتُنشئ الجديد وتُحدِّث المتغيّر وتحذف
 // الملغى — وكل عملية من الثلاث تُرسل تنبيه تليجرام (ما لم تكن التنبيهات موقوفة من الإعدادات)
@@ -218,12 +248,17 @@ function syncCustodySheets() {
       : 'لم يُضبَط أي شيت عهدة بعد (من الإعدادات ← شيت العهد الخارجي)' };
   }
   var notifyEnabled = state.notifyEnabled !== false;
+  // (V4.279/S1) القراءة البطيئة للشيتات الخارجية تتم *قبل* أخذ القفل العام — فتح openById وقراءة
+  // كل شيت عهدة بعيد (~1-3ث لكلٍّ) كان يحجز القفل فتتجمّد كل عمليات الحفظ بالبرنامج كل دقيقة. الآن
+  // القفل يُؤخَذ للحظة الكتابة المحلية فقط. تزامن دورتين نادر (كابح الدقيقتين) والكتابة المحلية
+  // تبقى مُسلسَلة بالقفل، والمقارنة بـ existing (داخل القفل) تجعل التكرار عديم الأثر (idempotent)
+  var knownNames = custodyKnownNames_();
+  var collected = collectCustodyRows_(active, knownNames);
+  var wanted = collected.wanted, sheetsById = collected.sheetsById;
+  var markRows = {};   // cfgId ⟶ [أرقام صفوف تحتاج علامة H] — تُكتب بعد تحرير القفل (شيت خارجي)
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) return { ok: true, skipped: 'مزامنة أخرى قيد التنفيذ' };
   try {
-    var knownNames = custodyKnownNames_();
-    var collected = collectCustodyRows_(active, knownNames);
-    var wanted = collected.wanted, sheetsById = collected.sheetsById;
     // (7.15.0) إصلاح حذف جماعي: الدفعات القائمة تُقارَن فقط بأوراق قُرئت فعلاً في هذه الدورة — ورقة تعذّر
     // فتحها (انقطاع/صلاحية/اسم ورقة تغيّر) كانت تُعامَل كأنها فارغة فتُحذف كل دفعاتها من سجل الدفعات
     var activeIdSegments = {};
@@ -303,8 +338,12 @@ function syncCustodySheets() {
       hbLogChange_('مزامنة العهدة', 'دفعة', 'شيت العهد', '[مزامنة شيت العهد] ⚠️ أُوقف حذف جماعي مريب لدفعات ورقة عهدة — راجع الورقة يدويًا', '', '');
     }
     orphanRows.sort(function (a, b) { return b.rowInSheet - a.rowInSheet; });
+    // (V4.279/S3) الحذف ككتل متصلة (deleteRows) بدل deleteRow صف-صف — deleteRow يُعيد الحساب
+    // في كل نداء، فحذف K صفًا كان K عملية هيكلية مكلِّفة. التنبيهات تُرسَل كما كانت لكل دفعة محذوفة
+    _custodyDeleteBlocks_(orphanRows.map(function (o) { return o.rowInSheet; })).forEach(function (blk) {
+      sh.deleteRows(blk[0], blk[1]);
+    });
     orphanRows.forEach(function (o) {
-      sh.deleteRow(o.rowInSheet);
       deleted++;
       custodyNotify_({
         partyName: (o.vals[1] || '').toString(), amount: parseFloat(o.vals[3]) || 0,
@@ -316,14 +355,14 @@ function syncCustodySheets() {
     // علامة "تم التسجيل آليًا..." في العمود H لكل صف مطابَق بنجاح (اسمه معروف وله مبلغ صالح)
     // لم تُكتب علامته من قبل — يشمل هذا صفوفًا سُجِّلت في دورات مزامنة سابقة قبل وجود هذه
     // الميزة، فتُستكمَل علاماتها تلقائيًا بلا أي إجراء يدوي. لا صلة لهذا بعدّاد created/updated
-    // أعلاه (صف بلا تغيير في قيمه يظل بحاجة للعلامة أول مرة فقط)
+    // أعلاه (صف بلا تغيير في قيمه يظل بحاجة للعلامة أول مرة فقط).
+    // (V4.279/S2) نجمع أرقام الصفوف فقط هنا، والكتابة الفعلية للشيت الخارجي تتم بعد تحرير القفل
+    // وبـ setValues مُجمّعة لكل سلسلة متصلة بدل setValue خلية-خلية (جولة شبكية لكل صف)
     Object.keys(wanted).forEach(function (id) {
       var w = wanted[id];
       if (w.existingMark === CUSTODY_MARK_TEXT_) return;
-      var srcSheet = sheetsById[w.cfgId];
-      if (!srcSheet) return;
-      try { srcSheet.getRange(w.rowNumber, 8).setValue(CUSTODY_MARK_TEXT_); }
-      catch (eMark) { Logger.log('custody mark H: ' + eMark.message); }
+      if (!sheetsById[w.cfgId]) return;
+      (markRows[w.cfgId] = markRows[w.cfgId] || []).push(w.rowNumber);
     });
 
     if (created || updated || deleted) {
@@ -332,11 +371,26 @@ function syncCustodySheets() {
       hbLogChange_('مزامنة العهدة', 'دفعة', 'شيت العهد',
         '[مزامنة شيت العهد] جديدة: ' + created + ' · معدَّلة: ' + updated + ' · محذوفة: ' + deleted, '', '');
     }
-    return { ok: true, created: created, updated: updated, deleted: deleted };
   } catch (e) {
     Logger.log('syncCustodySheets: ' + e.message);
     return { ok: false, error: e.message };
   } finally { lock.releaseLock(); }
+
+  // (V4.279/S1+S2) كتابة علامات H للشيتات الخارجية خارج القفل العام (لا تخصّ ورقة الدفعات المحلية)
+  // وبـ setValues مُجمّعة لكل سلسلة صفوف متصلة
+  try {
+    Object.keys(markRows).forEach(function (cfgId) {
+      var srcSheet = sheetsById[cfgId]; if (!srcSheet) return;
+      _custodyMarkRuns_(markRows[cfgId]).forEach(function (run) {
+        var block = [];
+        for (var k = 0; k < run[1]; k++) block.push([CUSTODY_MARK_TEXT_]);
+        try { srcSheet.getRange(run[0], 8, run[1], 1).setValues(block); }
+        catch (eMark) { Logger.log('custody mark H: ' + eMark.message); }
+      });
+    });
+  } catch (eMarks) { Logger.log('custody marks batch: ' + eMarks.message); }
+
+  return { ok: true, created: created, updated: updated, deleted: deleted };
 }
 
 // تنبيه تليجرام لكل حركة عهدة — نفس حدث "تسجيل دفعة" المستخدَم في الشاشة، فيظهر برصيد

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.278 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.279 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.278)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.279)', diag);
 }, 6000);
 </script>
 
@@ -1530,7 +1530,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.278</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.279</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7750,7 +7750,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.278";
+var CLIENT_APP_VERSION = "4.279";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -35766,6 +35766,13 @@ function executeDynamicSearch() {
     // ==========================
     // ربط التحركات بالإشعارات
     // ==========================
+    // ⚡ (V4.279/U1) فهرسة التحركات مرة واحدة O(عدد التحركات) بدل مسح allMovements لكل صف نتيجة
+    // (كان O(صفوف × تحركات) — تربيعياً على كل بحث). النتيجة لكل صف مطابقة تماماً لما كان يُنتجه الفلتر
+    const _movIndex = {};
+    allMovements.forEach(m => {
+      const id = String(m.bookingId || '');
+      (_movIndex[id] = _movIndex[id] || []).push(m);
+    });
 
     results.forEach(row => {
 
@@ -35775,13 +35782,7 @@ function executeDynamicSearch() {
         );
 
       const relatedMovements =
-
-        allMovements.filter(m =>
-
-          String(
-            m.bookingId
-          ) === bookingId
-        );
+        _movIndex[bookingId] || [];
 
       // إزالة الوصول والمغادرة الأساسية
       const extraMovements =
