@@ -4,7 +4,7 @@
 // لتتبع آخر نسخة مرفوعة، ويظهر تلقائياً في الشريط الجانبي وصفحة كشف الحساب
 // ==========================================================
 // (H4) مدموج داخل مشروع برنامج العمرة — ملفات HB_*
-var HB_APP_VERSION = "7.17.3";
+var HB_APP_VERSION = "7.17.4";
 
 // سقف عدد صفوف نتائج شاشة "كل الحجوزات" المُرسلة للمتصفح في الطلب الواحد
 var BOOKINGS_RESULT_CAP_ = 1500;
@@ -7492,30 +7492,22 @@ function tgAnswerCb_(cbId, text, alert) {
     });
   } catch (e) { Logger.log('answerCallbackQuery: ' + e.message); }
 }
-// اسم احتياطي ASCII بحت لـfilename= التقليدي — بعض عملاء/أجهزة تليجرام تتجاهل filename*=
-// (الترميز الحديث RFC 5987) وتعرض الاسم التقليدي فقط، فلو تُرك فارغًا (اسم عربي صرف) يستبدله
-// تليجرام تلقائيًا باسم عشوائي يبدو أرقامًا — نُبقي كل ما هو ASCII بالفعل (تواريخ/أرقام/فواصل)
-// ونحذف الحروف العربية فقط، فيبقى الاسم مفيدًا لا فارغًا
-function tgAsciiFallbackName_(name) {
-  var s = String(name || '');
-  var m = s.match(/\.[a-zA-Z0-9]{1,5}$/);
-  var ext = m ? m[0] : '';
-  var base = ext ? s.slice(0, s.length - ext.length) : s;
-  var safeBase = base.replace(/[^\x20-\x7E]/g, '').replace(/["\\]/g, '').replace(/\s+/g, ' ').trim();
-  return (safeBase || 'document') + ext;
+// 🏷️ (V4.290) اسم الملف العربي كاملاً داخل filename="…" نفسه (UTF-8) — تليجرام يحفظ اسماً واحداً للملف من الحقل
+// التقليدي ويتجاهل filename*، فكان الاحتياطي ASCII (بعد حذف كل الحروف العربية) هو ما يصل للجوال والواتساب والكمبيوتر.
+// لمشكلة الكمبيوتر القديمة: يُنظَّف الاسم بدل حذف العربي — حروف ويندوز الممنوعة وعلامات الاتجاه الخفية والنقاط الأخيرة
+function tgCleanFileName_(name) {
+  var s = String(name || '').replace(/[\u0000-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
+    .replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, ' ').trim();
+  var m = s.match(/\.[a-zA-Z0-9]{1,5}$/), ext = m ? m[0] : '', base = ext ? s.slice(0, -ext.length) : s;
+  base = base.replace(/[.\s-]+$/g, '').slice(0, 110).trim();
+  return (base || 'مستند') + ext;
 }
-// سطر Content-Disposition لملف مُرسَل: filename تقليدي (احتياطي ASCII) + filename*=UTF-8''
-// (RFC 5987) يحمل الاسم الحقيقي كاملاً بعربيته — العميل الحديث يقرأ الثاني، والقديم يكتفي
-// بالأول بدل اسم عشوائي. هذا بالضبط سبب ظهور أسماء ملفات "كشف حساب/كشف وصول" كأرقام فقط سابقًا:
-// الاعتماد على ترميز UrlFetchApp التلقائي لأسماء Blob لا يُرسل filename*= إطلاقًا، وتليجرام
-// يرفض صراحةً وضع بايتات UTF-8 خامة داخل filename= التقليدي فيستبدله باسم عشوائي رقمي
 function tgDocContentDisposition_(fieldName, name) {
-  var fallback = tgAsciiFallbackName_(name).replace(/"/g, "'");
-  var encoded = encodeURIComponent(name).replace(/'/g, '%27').replace(/\*/g, '%2A');
-  return 'form-data; name="' + fieldName + '"; filename="' + fallback + '"; filename*=UTF-8\'\'' + encoded;
+  return 'form-data; name="' + fieldName + '"; filename="' + tgCleanFileName_(name).replace(/["\\]/g, '') + '"';
 }
-function tgSendDoc_(chatId, blob, caption) {
-  var token = tgToken_();
+function tgSendDoc_(chatId, blob, caption, kb) { return tgSendDocTok_(tgToken_(), chatId, blob, caption, kb); }
+// إرسال ملف بمحتوى multipart مبني يدوياً (لا يعتمد على ترميز UrlFetchApp للاسم) — مشترك بين بوت الحجوزات وبوت الحسابات
+function tgSendDocTok_(token, chatId, blob, caption, kb) {
   if (!token) throw new Error('توكن البوت غير مضبوط');
   var boundary = 'menfDoc' + new Date().getTime() + Math.floor(Math.random() * 1e6);
   var CRLF = '\r\n';
@@ -7524,7 +7516,7 @@ function tgSendDoc_(chatId, blob, caption) {
     return '--' + boundary + CRLF + 'Content-Disposition: form-data; name="' + n + '"' + CRLF + CRLF + (v || '') + CRLF;
   };
   var head = field('chat_id', String(chatId)) + field('parse_mode', 'HTML') +
-    field('caption', (caption || '').slice(0, 1000)) +
+    field('caption', (caption || '').slice(0, 1000)) + (kb ? field('reply_markup', JSON.stringify(kb)) : '') +
     '--' + boundary + CRLF + 'Content-Disposition: ' + tgDocContentDisposition_('document', name) + CRLF +
     'Content-Type: ' + (blob.getContentType() || 'application/octet-stream') + CRLF + CRLF;
   var payloadBytes = Utilities.newBlob(head).getBytes()

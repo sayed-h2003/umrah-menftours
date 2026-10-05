@@ -3104,7 +3104,8 @@ if (HB_EMBED) {
   }
   window.addEventListener('message', function (ev) {
     var d = ev && ev.data; if (!d) return;
-    if (d.hbRefresh) { try { if (typeof currentPageKey_ === 'function' && currentPageKey_() === 'statement' && typeof refreshStatement === 'function' && typeof cacheData !== 'undefined' && cacheData) refreshStatement(); } catch (eR) {} return; }
+    // (V4.290) حفظ من برنامج الحسابات (دفعة/قيد) ⇒ كشف الحساب المفتوح يُحدَّث بهدوء، أو يُعلَّم ليُحدَّث عند الرجوع إليه
+    if (d.hbRefresh) { try { window.lastDataWriteTs_ = Date.now(); if (typeof stmtSoftReload_ === 'function') stmtSoftReload_(true); } catch (eR) {} return; }
     if (!d.hbShow) return;
     try { if (typeof currentUser !== 'undefined' && currentUser) showPage(String(d.hbShow)); else INITIAL_PAGE = String(d.hbShow); } catch (eM) {}
   });
@@ -3199,7 +3200,7 @@ if (HB_EMBED) {
         }
         // ختم زمني لآخر كتابة ناجحة (دفعة/حجز/قيد/تعديل...) — تقرؤه الشاشات المصغَّرة عند
         // استعادتها لتعرف أن بياناتها المعروضة صارت قديمة فتُحدِّثها بدل عرض أرصدة ما قبل التعديل
-        if (WRITE_FNS[job.fn] || /^(register|edit|delete|update|save|sync|import|rename|append|respond|refresh)/.test(job.fn)) {
+        if (WRITE_FNS[job.fn] || /^(register|edit|delete|update|save|sync|import|rename|append|respond|refresh|set|link|unlink|merge)/.test(job.fn)) {
           window.lastDataWriteTs_ = Date.now();
         }
         try { if (job.onS) job.onS(val); } catch (e) {}
@@ -3435,6 +3436,9 @@ function showPage(key, restore) {
     if (key === 'changelog') initChangelogPage();
     if (key === 'clientPortal') initClientPortalPage();
     if (key === 'statsReport') initStatsReportPage();
+  } else if (restore && key === 'statement' && (window.stmtDirty_ || (window.lastDataWriteTs_ || 0) > (window.stmtLoadedAt_ || 0))) {
+    // (V4.290) حجز/دفعة/قيد حُفظ في شاشة أخرى بعد تحميل الكشف ⇒ يُحدَّث الكشف بهدوء عند الرجوع إليه
+    setTimeout(function () { try { stmtSoftReload_(!!window.stmtDirty_); } catch (eS) {} }, 50);
   } else if (restore && key === 'arrivals' && (window.lastDataWriteTs_ || 0) > (arrState.loadedAt || 0)) {
     // استعادة متابعة الأرصدة المصغَّرة بعد تسجيل دفعة/تعديل حجز في شاشة أخرى: الأرصدة المعروضة
     // محسوبة قبل ذلك التعديل فلن تطابق كشف الحساب — نُعيد جلبها بنفس الفلاتر (بلا تصفيتها)
@@ -4501,7 +4505,7 @@ function loadData() {
   google.script.run.withSuccessHandler(function(res) {
     if (myToken !== loadDataToken) return; // نتيجة نداء سابق تجاوزه نداء أحدث — تجاهلها
     if (!res) { showToast('تم استلام رد فارغ من الخادم (على الأرجح بسبب عدة طلبات متزامنة) — أعد المحاولة'); return; }
-    cacheData = res;
+    cacheData = res; window.stmtLoadedAt_ = Date.now();
     document.getElementById('display-area').style.display = 'block';
     document.getElementById('v-cust').innerText = res.party;
     document.getElementById('v-start').innerText = res.start || "---";
@@ -5864,8 +5868,24 @@ function undoRedoEditBookingFields_(key, fieldsMap, done) {
     refreshAfterBookingEdit_(); done();
   }).withFailureHandler(function (e) { showToast('خطأ: ' + e.message); done(); }).editBookingFields(key, fieldsMap, currentSessionToken);
 }
+/* 🔄 (V4.290) تحديث هادئ لكشف الحساب المفتوح بعد أي حفظ (هنا أو من برنامج الحسابات): نفس العميل والفترة
+   والفلاتر والترتيب، بلا إخفاء الجدول، ويُحفظ موضع التمرير. serverFlush=true ⇒ يُلغى كاش الحجوزات أولاً (حفظ من خارج البرنامج) */
+function stmtSoftReload_(serverFlush) {
+  if (typeof cacheData === 'undefined' || !cacheData) return;
+  var c = document.getElementById('customer'); if (!c || !c.value) return;
+  var pg = document.getElementById('page-statement');
+  if (pg && !pg.classList.contains('active')) { window.stmtDirty_ = true; return; }   // يُحدَّث عند الرجوع للشاشة
+  window.stmtDirty_ = false;
+  var wrap = document.querySelector('#page-statement .table-responsive, #page-statement .tbl-wrap, #page-statement .table-wrap');
+  var top = wrap ? wrap.scrollTop : 0, sy = window.scrollY;
+  var go = function () {
+    lastLoadKey = null; loadData();
+    setTimeout(function () { var w2 = document.querySelector('#page-statement .table-responsive, #page-statement .tbl-wrap, #page-statement .table-wrap'); if (w2) w2.scrollTop = top; window.scrollTo(0, sy); }, 1800);
+  };
+  if (serverFlush) google.script.run.withSuccessHandler(go).withFailureHandler(go).refreshBookingsNow(currentSessionToken); else go();
+}
 function refreshAfterBookingEdit_() {
-  if (cacheData) loadData();
+  if (cacheData) { lastLoadKey = null; loadData(); }
   var pageArr = document.getElementById('page-arrivals');
   if (pageArr && pageArr.classList.contains('active') && typeof loadArrivals === 'function') loadArrivals();
   var pageBk = document.getElementById('page-bookings');
