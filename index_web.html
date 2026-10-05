@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.287 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.288 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.287)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.288)', diag);
 }, 6000);
 </script>
 
@@ -7771,7 +7771,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.287";
+var CLIENT_APP_VERSION = "4.288";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -49864,14 +49864,32 @@ function glCashDupDlg_() {
   GL._dupOpt = GL._dupOpt || { window: 3, kinds: ['safe', 'bank', 'custody'], minAmt: 0, crossOnly: false };
   glCashDupRescan_();
 }
+// 🚦 (V4.289) تمنع تداخل عدة نداءات فحص متزامنة (تبديل سريع للفلاتر) — تمنع «تجاوز الحد الأقصى لعدد مرات التنفيذ
+// المتزامن» من Google: نداء واحد في كل مرة؛ أي طلب يصل أثناء التنفيذ يُؤجَّل ليُعاد تشغيله مرة واحدة بعد عودة النداء الجاري.
 function glCashDupRescan_() {
+  if (GL._dupBusy) { GL._dupPending = true; return; }
+  GL._dupBusy = true; glCashDupLockUi_(true);
   var box = document.getElementById('glDupBox'); if (box) box.innerHTML = '<div class="text-muted small py-4 text-center">⏳ جارٍ الفحص…</div>';
+  var done = function () {
+    GL._dupBusy = false; glCashDupLockUi_(false);
+    if (GL._dupPending) { GL._dupPending = false; glCashDupRescan_(); }
+  };
   glRun('glCashDupScan', [GL._dupOpt], function (r) {
+    done();
     var b = document.getElementById('glDupBox'); if (!b) return;
     if (!r || !r.clusters) { b.innerHTML = '<div class="alert alert-warning">⚠️ لم يُرجِع الخادم نتيجة للفحص — أعد المحاولة بعد لحظات (أو اعمل Deploy للإصدار الأحدث إن لم يكن منشوراً). <button class="btn btn-sm btn-outline-secondary ms-2" onclick="glCashDupRescan_()">🔄 إعادة الفحص</button></div>'; return; }
     GL._dupR = r;
     try { glCashDupDraw_(); } catch (eD) { console.error(eD); b.innerHTML = '<div class="alert alert-danger">❌ تعذّر عرض نتيجة الفحص: ' + glEsc(eD.message || eD) + '</div>'; }
-  }, function (e) { var b = document.getElementById('glDupBox'); if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc((e && e.message) || e) + '</div>'; });
+  }, function (e) {
+    done();
+    var msg = (e && e.message) || String(e), busy = /تجاوز الحد الأقصى|simultaneous|too many/i.test(msg);
+    var b = document.getElementById('glDupBox'); if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc(msg) +
+      (busy ? '<div class="small mt-1">الخادم مشغول بعدد كبير من الطلبات المتزامنة — انتظر لحظات ثم أعد الفحص.</div>' : '') +
+      ' <button class="btn btn-sm btn-outline-secondary ms-2" onclick="glCashDupRescan_()">🔄 إعادة الفحص</button></div>';
+  });
+}
+function glCashDupLockUi_(on) {
+  document.querySelectorAll('#glDupBox .gl-dup-bar input, #glDupBox .gl-dup-bar button').forEach(function (el) { el.disabled = on; });
 }
 function glCashDupSetOpt_(k, v) { GL._dupOpt = GL._dupOpt || {}; GL._dupOpt[k] = v; glCashDupRescan_(); }
 function glCashDupToggleKind_(kind, on) {
