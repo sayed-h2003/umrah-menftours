@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.277 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.278 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.277)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.278)', diag);
 }, 6000);
 </script>
 
@@ -1423,7 +1423,26 @@ input[type="date"]:not(:focus):not(:valid) {
 
 
 
-  </style>
+  
+/* ⚙️ (V4.278) هيكل شاشة الإعدادات الجديد: مجموعات جانبية + بحث + شريط الحالة */
+.st-shell{display:flex;gap:14px;align-items:flex-start}
+.st-nav{width:230px;flex:0 0 230px;position:sticky;top:70px;background:var(--st-bg,#fff);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:8px}
+.st-nav .st-g{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;text-align:right;padding:9px 10px;border-radius:9px;font-weight:600;font-size:14px;color:inherit;cursor:pointer}
+.st-nav .st-g:hover{background:rgba(13,110,253,.07)}
+.st-nav .st-g.on{background:#0d6efd;color:#fff}
+.st-nav .st-g .st-n{margin-inline-start:auto;font-size:11px;opacity:.75}
+.st-main{flex:1;min-width:0}
+.st-top{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.st-top input{flex:1;min-width:200px}
+.st-health{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.st-health .st-h{background:var(--st-bg,#fff);border-radius:20px;padding:4px 10px;font-size:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);cursor:pointer;display:flex;gap:6px;align-items:center}
+.st-gt{font-weight:800;font-size:16px;margin:4px 2px 10px}
+.st-gd{font-size:12px;color:#6c757d;font-weight:400;margin-inline-start:6px}
+.st-dirty{position:sticky;bottom:10px;z-index:20;background:#fff3cd;border:1px solid #ffda6a;border-radius:10px;padding:8px 12px;margin-top:10px;display:flex;gap:8px;align-items:center;font-size:13px}
+.st-hit{outline:2px solid #ffc107;outline-offset:2px}
+@media (max-width:768px){.st-shell{flex-direction:column}.st-nav{position:static;width:100%;flex:none;display:flex;overflow-x:auto;gap:4px;padding:6px}.st-nav .st-g{white-space:nowrap;width:auto;font-size:13px;padding:7px 10px}.st-nav .st-g .st-n{display:none}}
+@media (prefers-color-scheme:dark){#section-settings .st-shell{--st-bg:#1f2329;color:#e6e6e6}#section-settings .st-gd{color:#9aa4ae}#section-settings .st-dirty{background:#4a3b00;border-color:#8a6d00;color:#ffe9a8}}
+</style>
 <style id="th-filter-arrows">
   /* 🔽 (V4.257) أيقونات تصفية رؤوس الأعمدة: سهم صغير بلون عنوان العمود بلا مربع (كان رمز تعبيري برتقالي داخل مربع أبيض) */
   button.mf-thic, button.vz-thic, button.kcf-btn, button.bk-th-ico { background:none !important; border:none !important; box-shadow:none !important; color:inherit !important; opacity:.85; font-size:13px !important; padding:0 3px !important; line-height:1 !important; cursor:pointer; vertical-align:middle; }
@@ -1511,7 +1530,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.277</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.278</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -2607,7 +2626,7 @@ input[type="date"]:not(:focus):not(:valid) {
   </div>
 
   <!-- الخدمات — كل خدمة بطاقة مستقلة قابلة للتوسيع -->
-  <div class="card shadow-sm border-0 mb-2">
+  <div class="card shadow-sm border-0 mb-2" id="svcHeadCard">
     <div class="card-body p-2">
       <div class="d-flex justify-content-between align-items-center px-1">
         <h5 class="fw-bold mb-0 small">⚙️ الخدمات وإعدادات النظام</h5>
@@ -7731,7 +7750,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.277";
+var CLIENT_APP_VERSION = "4.278";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -10092,6 +10111,138 @@ function buildHourOptions(selectId, selectedHour) {
 function loadSystemSettingsForm() { refreshAllServiceBadges(); }
 function loadServicesStatus() { refreshAllServiceBadges(); refreshBusPriceColumnsButton(); }
 
+// ⚙️ (V4.278) إعادة تصميم شاشة الإعدادات: تُنقل البطاقات الموجودة (بنفس معرّفاتها ومنطق حفظها) إلى 7 مجموعات
+// بقائمة جانبية + بحث فوري + شريط حالة + شريط تغييرات غير محفوظة + تذكّر آخر مجموعة. لا تغيير في منطق الإعدادات أو تخزينها.
+var ST_GROUPS_ = [
+  { k: 'general', t: '🏢 عام والشركة', d: 'الشركات والوكلاء والشعارات، الجلسة، الحقول الإلزامية، رسوم الغرفة', ids: ['svcCard-companies', 'svcCard-sessionDuration', 'svcCard-bookingsSortDefault', 'svcCard-requiredFields', 'svcCard-accPricing'] },
+  { k: 'users', t: '👥 المستخدمون والصلاحيات', d: 'المستخدمون ومصفوفة الصلاحيات (العمرة والحسابات والفنادق)', ids: ['stLink-users'] },
+  { k: 'alerts', t: '🔔 التنبيهات والبوتات', d: 'بوتات الحجوزات والحسابات والوصول، التنبيهات اليومية، الويب هوك', ids: ['svcCard-notifs', 'hbSetCard-bot', 'hbSetCard-glbot', 'svcCard-tgNoticeBot', 'svcCard-tgAlerts', 'svcCard-tgCcBot', 'svcCard-email', 'svcCard-tgDaily', 'svcCard-tgWebhook'] },
+  { k: 'hotels', t: '🏨 الفنادق والحجوزات', d: 'مصدر الحجوزات وأوراق مكة/المدينة والربط بالحسابات', ids: ['hbSetCard-core'] },
+  { k: 'gl', t: '🧾 الحسابات العامة', d: 'إعدادات الدفتر، الشيتات المربوطة، فحص التكرار', ids: ['stLink-gl'] },
+  { k: 'integ', t: '🔗 التكاملات', d: 'مجلدات Google Drive و Gemini AI', ids: ['svcCard-folders', 'svcCard-gemini'] },
+  { k: 'sys', t: '🛡️ النظام والصيانة', d: 'إعداد النظام، النسخ الاحتياطي، التنظيف، الاختبارات', ids: ['svcCard-setup', 'svcCard-autoTests'] }
+];
+var ST_ = { g: null, built: false, dirty: false };
+function _stLinkCards_() {
+  var mk = function (id, title, body) { var d = document.createElement('div'); d.id = id; d.className = 'card shadow-sm border-0 mb-2'; d.innerHTML = '<div class="card-body p-3"><div class="fw-bold mb-2" style="font-size:14px;">' + title + '</div>' + body + '</div>'; return d; };
+  return [
+    mk('stLink-users', '👥 المستخدمون والصلاحيات',
+      '<div class="small text-muted mb-2">إدارة المستخدمين ومصفوفة الصلاحيات (شاملة صلاحيات الحسابات العامة والفنادق لكل شاشة فرعية). ربط موظفي بوت الحسابات من بطاقة «بوت وتنبيهات الحسابات» بمجموعة التنبيهات.</div>' +
+      '<div class="d-flex gap-2 flex-wrap"><button type="button" class="btn btn-primary btn-sm" onclick="switchPage(\'users\')">👥 فتح شاشة المستخدمين والصلاحيات</button>' +
+      '<button type="button" class="btn btn-outline-primary btn-sm" onclick="settingsGo_(\'alerts\',\'hbSetCard-glbot\')">🤖 ربط الموظفين ببوت الحسابات</button></div>'),
+    mk('stLink-gl', '🧾 الحسابات العامة',
+      '<div class="small text-muted mb-2">إعدادات الدفتر (الشعار، وسيط التحويل، إقفال الفترات) والشيتات المربوطة (العهد/الخزينة/البنوك) وفحص التكرار مع الشاشات.</div>' +
+      '<div class="d-flex gap-2 flex-wrap"><button type="button" class="btn btn-primary btn-sm" onclick="sideGo_(\'gl\',\'settings\')">⚙️ إعدادات الحسابات العامة</button>' +
+      '<button type="button" class="btn btn-outline-warning btn-sm" onclick="settingsGlRun_(\'pend\')">📥 صفوف الشيتات المعلّقة</button>' +
+      '<button type="button" class="btn btn-outline-danger btn-sm" onclick="settingsGlRun_(\'dup\')">🔁 فحص التكرار مع الشاشات</button></div>')
+  ];
+}
+function settingsGlRun_(w) {
+  sideGo_('gl', 'home');
+  setTimeout(function () { try { if (w === 'dup' && typeof glCsDupDlg_ === 'function') glCsDupDlg_(''); else if (typeof glCsPendDlg === 'function') glCsPendDlg(true); } catch (e) { console.warn(e); } }, 900);
+}
+function settingsShell_() {
+  var sec = document.getElementById('section-settings'); if (!sec) return;
+  if (!ST_.built) {
+    ST_.built = true;
+    var shell = document.createElement('div'); shell.className = 'st-shell';
+    shell.innerHTML = '<nav class="st-nav" id="stNav"></nav><div class="st-main"><div class="st-top">' +
+      '<input id="stSearch" type="search" class="form-control form-control-sm" placeholder="🔎 ابحث في كل الإعدادات… (بوت، نسخ احتياطي، شعار، جلسة…)" oninput="settingsSearch_(this.value)">' +
+      '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="settingsHealth_(true)">🔄 تحديث الحالة</button></div>' +
+      '<div class="st-health" id="stHealth"></div><div id="stGroups"></div>' +
+      '<div class="st-dirty d-none" id="stDirty">⚠️ <span>لديك تغييرات غير محفوظة في <b id="stDirtyG"></b> — اضغط زر الحفظ داخل البطاقة.</span><button type="button" class="btn btn-sm btn-link ms-auto" onclick="settingsDirty_(false)">إخفاء</button></div></div>';
+    var links = _stLinkCards_(), box = shell.querySelector('#stGroups'), used = {};
+    ST_GROUPS_.forEach(function (g) {
+      var w = document.createElement('div'); w.className = 'st-grp d-none'; w.setAttribute('data-g', g.k);
+      w.innerHTML = '<div class="st-gt">' + g.t + '<span class="st-gd">' + g.d + '</span></div>';
+      g.ids.forEach(function (id) {
+        var el = document.getElementById(id) || links.filter(function (l) { return l.id === id; })[0];
+        if (el) { w.appendChild(el); used[id] = 1; }
+      });
+      box.appendChild(w);
+    });
+    // أي بطاقة أخرى لم تُصنَّف تذهب لمجموعة النظام حتى لا تختفي
+    var sys = box.querySelector('[data-g="sys"]');
+    Array.prototype.slice.call(sec.children).forEach(function (c) {
+      if (c === shell || !c.classList || !c.classList.contains('card')) return;
+      if (c.id === 'svcHeadCard') { c.classList.add('d-none'); c.setAttribute('data-st-hidden', '1'); return; }
+      sys.appendChild(c);
+    });
+    sec.insertBefore(shell, sec.firstChild);
+    // شريط التغييرات غير المحفوظة
+    box.addEventListener('input', function (e) { if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'search') settingsDirty_(true); });
+    box.addEventListener('change', function (e) { if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'search') settingsDirty_(true); });
+    box.addEventListener('click', function (e) { var b = e.target && e.target.closest ? e.target.closest('button') : null; if (b && /حفظ|💾|تطبيق|تفعيل/.test(b.textContent || '')) setTimeout(function () { settingsDirty_(false); }, 400); });
+  }
+  settingsNav_();
+  var last = null; try { last = localStorage.getItem('st_group'); } catch (e) {}
+  settingsGo_(ST_.g || last || 'general');
+  settingsHealth_(false);
+}
+function _stVisible_(el) { return el && !el.classList.contains('d-none') && el.getAttribute('data-st-off') !== '1'; }
+function _stGroupCards_(g) { var w = document.querySelector('#stGroups [data-g="' + g + '"]'); return w ? Array.prototype.slice.call(w.children).filter(function (c) { return c.classList.contains('card'); }) : []; }
+function settingsNav_() {
+  var nav = document.getElementById('stNav'); if (!nav) return;
+  var canUsers = (function () { var l = document.getElementById('link-users-side'); return hasPermission('admin') || hasPermission('all') || (l && !l.classList.contains('d-none')); })();
+  var canGl = (function () { var l = document.getElementById('link-gl-side'); return l && !l.classList.contains('d-none'); })();
+  var u = document.getElementById('stLink-users'); if (u) u.setAttribute('data-st-off', canUsers ? '0' : '1');
+  var gl = document.getElementById('stLink-gl'); if (gl) gl.setAttribute('data-st-off', canGl ? '0' : '1');
+  nav.innerHTML = ST_GROUPS_.map(function (g) {
+    var n = _stGroupCards_(g.k).filter(_stVisible_).length;
+    if (!n) return '';
+    return '<button type="button" class="st-g' + (ST_.g === g.k ? ' on' : '') + '" data-g="' + g.k + '" onclick="settingsGo_(\'' + g.k + '\')">' + g.t + '<span class="st-n">' + n + '</span></button>';
+  }).join('');
+}
+function settingsGo_(g, cardId) {
+  var nav = document.getElementById('stNav'); if (!nav) return;
+  var ok = nav.querySelector('[data-g="' + g + '"]'); if (!ok) { ok = nav.querySelector('.st-g'); g = ok ? ok.getAttribute('data-g') : g; }
+  ST_.g = g; try { localStorage.setItem('st_group', g); } catch (e) {}
+  var s = document.getElementById('stSearch'); if (s && s.value) { s.value = ''; settingsSearch_(''); }
+  Array.prototype.slice.call(nav.querySelectorAll('.st-g')).forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-g') === g); });
+  Array.prototype.slice.call(document.querySelectorAll('#stGroups .st-grp')).forEach(function (w) { w.classList.toggle('d-none', w.getAttribute('data-g') !== g); });
+  if (cardId) setTimeout(function () { var c = document.getElementById(cardId); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
+}
+function settingsSearch_(q) {
+  q = String(q || '').trim().toLowerCase();
+  var groups = Array.prototype.slice.call(document.querySelectorAll('#stGroups .st-grp'));
+  groups.forEach(function (w) {
+    var cards = Array.prototype.slice.call(w.children).filter(function (c) { return c.classList.contains('card'); });
+    var hits = 0;
+    cards.forEach(function (c) {
+      c.classList.remove('st-hit');
+      if (!q) { c.style.display = ''; return; }
+      var hit = _stVisible_(c) && (c.textContent || '').toLowerCase().indexOf(q) >= 0;
+      c.style.display = hit ? '' : 'none'; if (hit) { hits++; c.classList.add('st-hit'); }
+    });
+    w.classList.toggle('d-none', q ? !hits : w.getAttribute('data-g') !== ST_.g);
+  });
+  var nav = document.getElementById('stNav'); if (nav) nav.style.opacity = q ? '.5' : '';
+}
+function settingsDirty_(on) {
+  ST_.dirty = !!on; var b = document.getElementById('stDirty'); if (!b) return;
+  b.classList.toggle('d-none', !on);
+  if (on) { var g = ST_GROUPS_.filter(function (x) { return x.k === ST_.g; })[0]; var t = document.getElementById('stDirtyG'); if (t) t.textContent = g ? g.t : ''; }
+}
+function settingsHealth_(refresh) {
+  var box = document.getElementById('stHealth'); if (!box) return;
+  if (refresh && typeof refreshAllServiceBadges === 'function') refreshAllServiceBadges();
+  var items = [
+    ['tgWebhook', '🤖 البوت', 'alerts', 'svcCard-tgWebhook'], ['tgDaily', '📱 تيليجرام اليومي', 'alerts', 'svcCard-tgDaily'],
+    ['email', '📧 البريد اليومي', 'alerts', 'svcCard-email'], ['gemini', '🧠 Gemini', 'integ', 'svcCard-gemini']
+  ];
+  var draw = function () {
+    var h = items.filter(function (it) { return _stVisible_(document.getElementById(it[3]) || document.createElement('i')); }).map(function (it) {
+      var b = document.getElementById('svcBadge-' + it[0]);
+      return '<span class="st-h" onclick="settingsGo_(\'' + it[2] + '\',\'' + it[3] + '\')">' + it[1] + ' <span class="' + (b ? b.className : 'badge bg-secondary') + '">' + (b ? b.textContent : '…') + '</span></span>';
+    });
+    var bk = document.getElementById('backupStatusBadge');
+    if (bk && _stVisible_(document.getElementById('svcCard-setup') || document.createElement('i'))) h.push('<span class="st-h" onclick="settingsGo_(\'sys\',\'svcCard-setup\')">💾 النسخ الاحتياطي <span class="' + bk.className + '">' + bk.textContent + '</span></span>');
+    var pend = (typeof GL !== 'undefined' && GL && GL.csPend) || 0;
+    if (pend) h.push('<span class="st-h" onclick="settingsGlRun_(\'pend\')">📥 صفوف شيتات معلّقة <span class="badge bg-danger">' + pend + '</span></span>');
+    box.innerHTML = h.join('');
+  };
+  draw(); clearTimeout(ST_._ht); ST_._ht = setTimeout(draw, 2500); setTimeout(draw, 6000);
+}
 // 🔐 نطاق شاشة الإعدادات: صاحب «الإعدادات الأساسية» (غير admin) يرى 4 أقسام فقط،
 // وبقية أقسام الإعدادات تبقى للـ admin وحده. تُستدعى عند دخول الشاشة.
 function _applySettingsScopeVisibility() {
@@ -23738,6 +23889,7 @@ document
   if (page === 'settings') {
     _applySettingsScopeVisibility();
     try { document.querySelectorAll('.hb-set-card').forEach(function (c) { c.classList.toggle('d-none', !hasPermission('admin')); }); } catch (eHS) {}
+    try { settingsShell_(); } catch (eSS) { console.warn('settingsShell_', eSS); }
     loadSystemSettingsForm();
     loadServicesStatus();
     if (typeof refreshCleanupScheduleStatus === 'function') refreshCleanupScheduleStatus();
@@ -48602,7 +48754,8 @@ function glCustSheetDlg(code) {
         (GL.isAdmin ? '<button class="btn btn-primary btn-sm" onclick="glCsSave_(\'' + jc + '\',this)">💾 حفظ الربط</button>' : '') +
         (c.id ? '<a class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener" href="' + glEsc(url) + '">📄 فتح الشيت</a>' +
           '<button class="btn btn-outline-dark btn-sm" onclick="glCsRun_(\'' + jc + '\',true,this)">👁 معاينة بلا تسجيل</button>' +
-          (GL.isAdmin ? '<button class="btn btn-success btn-sm fw-bold" onclick="glCsRun_(\'' + jc + '\',false,this)">🔄 مزامنة الآن</button>' : '') : '') +
+          (GL.isAdmin ? '<button class="btn btn-success btn-sm fw-bold" onclick="glCsRun_(\'' + jc + '\',false,this)">🔄 مزامنة الآن</button>' : '') +
+          '<button class="btn btn-outline-warning btn-sm" onclick="glCsDupDlg_(\'' + jc + '\')" title="قيود من هذا الشيت مسجّلة أيضاً من شاشات البرنامج">🔁 فحص التكرار</button>' : '') +
         (L ? '<span class="small text-muted ms-auto">آخر مزامنة <span class="gl-latin">' + glEsc(L.at) + '</span> (' + glEsc(L.by) + '): جديدة ' + L.created + ' · معدّلة ' + L.updated + ' · بانتظار الاعتماد ' + L.pending + '</span>' : '') +
       '</div><div id="glCsRes" class="mt-2"></div>';
     glDlg('🔗 شيت ' + ({ safe: 'الخزينة', bank: 'البنك' }[(GL.map[code] || {}).kind] || 'العهدة') + ' — ' + glEsc(a.name) + ' <span class="gl-latin">(' + glEsc(a.code) + ')</span>' + (c.title ? ' · 📄 ' + glEsc(c.title) + ' / ' + glEsc(c.tab || '') : ''), h, 1080);
@@ -48656,7 +48809,8 @@ function glCsDraw_(code) {
         r.pending.map(function (x) {
           return '<tr data-row="' + x.row + '" data-hint="' + glEsc(x.hint || '') + '" data-sg="' + glEsc((x.sugg && x.sugg[0] && x.sugg[0].code) || '') + '"><td><input type="checkbox" class="glCsChk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x) + '</td>' +
             '<td style="text-align:right;">' + glEsc(x.desc) + '</td><td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
-            '<td><div class="d-flex gap-1">' + glAccInput('glCsAcc', '', '') + glCsNaBtn_() + '</div>' + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (s) {
+            '<td>' + (x.dup ? '<div class="mt-1 p-1" style="background:#fff7ed;border:1px dashed #fb923c;border-radius:8px;font-size:11.5px;">🔁 <b>قيد مطابق موجود:</b> <a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.dup.id) + '\');return false;">' + glEsc(x.dup.id) + '</a> · ' + glEsc(x.dup.src) + ' · <span class="gl-latin">' + glEsc(x.dup.date) + '</span><br>' + glEsc(String(x.dup.desc || '').slice(0, 90)) +
+            '<select class="form-select form-select-sm mt-1 glCsDupSel" data-link="' + glEsc(x.dup.id) + '"><option value="link" selected>🔗 نفس الحركة — اربط الصف بهذا القيد (موصى به، بلا تكرار)</option><option value="new">➕ حركة مختلفة — سجّلها بالحساب المختار</option></select></div>' : '') + '<div class="d-flex gap-1">' + glAccInput('glCsAcc', '', '') + glCsNaBtn_() + '</div>' + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (s) {
               return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var i=this.closest(\'tr\').querySelector(\'.glCsAcc\');i.dataset.code=\'' + glJs(s.code) + '\';i.value=\'' + glJs(s.code + ' — ' + s.name) + '\'">' + glEsc(s.name) + '</button>';
             }).join('') + '</div>' : '') + '</td></tr>';
         }).join('')) +
@@ -48693,9 +48847,11 @@ function glCsApprove_(code, btn) {
   var items = [], miss = 0;
   document.querySelectorAll('#glCsRes tr[data-row]').forEach(function (tr) {
     if (!tr.querySelector('.glCsChk').checked) return;
+    var ds = tr.querySelector('.glCsDupSel');   // (V4.278)
+    if (ds && ds.value === 'link') { items.push({ row: +tr.dataset.row, link: ds.dataset.link }); return; }
     var acc = glAccVal(tr.querySelector('.glCsAcc'));
     if (!acc) { miss++; return; }
-    items.push({ row: +tr.dataset.row, account: acc });
+    items.push({ row: +tr.dataset.row, account: acc, force: ds ? 1 : 0 });
   });
   if (!items.length) { _showPopup('اختر حساب الطرف لصف واحد على الأقل', 'warning'); return; }
   var go = function () {
@@ -49601,6 +49757,46 @@ function glQaDecorate_(root) {
   new MutationObserver(function () { if (t) return; t = setTimeout(function () { t = null; if (document.getElementById('glDlgBody')) glQaDecorate_(); }, 60); })
     .observe(document.documentElement, { childList: true, subtree: true });
 })();
+/* 🔁 (V4.278) مراجعة التكرار بين قيود الشيتات وقيود شاشات البرنامج: مطابقة + توصية + حل جماعي */
+function glCsDupDlg_(code) {
+  glDlg('🔁 تكرار الشيتات مع شاشات البرنامج', '<div id="glCsDBox" class="text-muted small py-4 text-center">⏳ جارٍ فحص ' + (code ? 'الشيت' : 'كل الشيتات') + ' ومطابقة القيود…</div>', 1200);
+  glRun('glCsDupScan', [code || ''], function (r) { GL._csD = r; glCsDupDraw_(); }, function (e) { var b = document.getElementById('glCsDBox'); if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc((e && e.message) || e) + '</div>'; });
+}
+function glCsDupDraw_() {
+  var R = GL._csD, box = document.getElementById('glCsDBox'); if (!R || !box) return;
+  var E = glEsc, cur = function (c) { return GL_CUR_LBL_[c] || c; };
+  var ent = function (x) { return '<a href="#" class="gl-latin fw-bold" onclick="glShowEntry(\'' + glJs(x.id) + '\');return false;">' + E(x.id) + '</a>' + (x.vno ? ' <span class="gl-latin small">' + E(x.vno) + '</span>' : '') + '<div class="small"><span class="gl-latin">' + E(x.date) + '</span> · ' + E(x.type) + '</div><div class="small text-muted" style="max-width:300px;white-space:normal;">' + E(String(x.desc || '').slice(0, 110)) + '</div>'; };
+  var h = '<div class="gl-note" style="font-size:12.5px;line-height:1.9;">قيد سُجّل من صف شيت (عهدة/خزينة/بنك) ويطابقه قيد مسجّل من شاشات البرنامج أو يدوياً على نفس الحساب (نفس العملة والمبلغ والاتجاه ±3 أيام).<br>' +
+    '✅ <b>التوصية دائماً: الإبقاء على قيد الشاشات</b> وإلغاء نسخة الشيت وربط صف الشيت به (يُكتب رقمه بالشيت فلا يتكرر أبداً). السبب: القيد <b>التلقائي</b> يُعاد إنشاؤه من مصدره (مثل دفعة حسابات عملاء العمرة) مع كل مزامنة ويظهر في شاشات العمرة — حذفه لا يفيد. والسند <b>اليدوي</b> له رقم وطباعة ومرفقات.<br>' +
+    '«الإبقاء على الشيت» متاح فقط لو المطابق سند/قيد يدوي (يُلغى هو).</div>';
+  if (!R.pairs.length) { box.innerHTML = h + '<div class="text-center py-3" style="color:#166534;font-weight:700;">✅ لا يوجد تكرار</div>' + (R.errors.length ? '<div class="small text-danger">' + R.errors.map(E).join('<br>') + '</div>' : ''); return; }
+  h += '<div class="table-responsive" style="max-height:60vh;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" checked onchange="document.querySelectorAll(\'.glCsDk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>الشيت / الصف</th><th>المبلغ</th><th>🧾 قيد الشيت (يُلغى)</th><th>🖥️ القيد المطابق (يبقى)</th><th>القرار</th></tr></thead><tbody>' +
+    R.pairs.map(function (p, i) {
+      return '<tr data-i="' + i + '"><td><input type="checkbox" class="glCsDk" checked></td><td style="text-align:right;">' + E(p.sheet) + (p.row ? '<div class="small text-muted">صف <span class="gl-latin">' + p.row + '</span></div>' : '') + (p.dd ? '<div class="small text-muted">فرق ' + p.dd + ' يوم</div>' : '') + '</td>' +
+        '<td><b class="gl-latin" style="color:' + (p.dir === 'D' ? '#15803d' : '#b91c1c') + ';">' + (p.dir === 'D' ? '+' : '−') + glFmt(p.amt) + '</b> ' + cur(p.cur) + '</td>' +
+        '<td style="text-align:right;">' + ent(p.mine) + '</td><td style="text-align:right;">' + ent(p.other) + '<div class="small" style="color:#0e7490;">' + E(p.other.src) + '</div></td>' +
+        '<td style="min-width:220px;"><select class="form-select form-select-sm glCsDA"><option value="keepOther" selected>✅ إبقاء قيد الشاشات وإلغاء نسخة الشيت (موصى به)</option>' + (p.canKeepSheet ? '<option value="keepSheet">إبقاء قيد الشيت وإلغاء السند اليدوي</option>' : '') + '<option value="skip">⏭️ ليست مكررة — تجاهل</option></select><div class="small text-muted mt-1">' + E(p.why) + '</div></td></tr>';
+    }).join('') + '</tbody></table></div>' +
+    (R.canEdit ? '<div class="d-flex justify-content-end mt-2"><button class="btn btn-warning fw-bold" onclick="glCsDupApply_(this)">✅ تطبيق القرار على المحدد (' + R.pairs.length + ')</button></div>' : '<div class="small text-muted">التطبيق لمن له صلاحية تعديل مزامنة الشيتات</div>') +
+    (R.errors.length ? '<div class="small text-danger mt-1">⚠️ ' + R.errors.map(E).join(' · ') + '</div>' : '');
+  box.innerHTML = h;
+}
+function glCsDupApply_(btn) {
+  var R = GL._csD, items = [];
+  document.querySelectorAll('#glCsDBox tr[data-i]').forEach(function (tr) {
+    if (!tr.querySelector('.glCsDk').checked) return; var a = tr.querySelector('.glCsDA').value; if (a === 'skip') return;
+    var p = R.pairs[+tr.dataset.i]; items.push({ code: p.code, mine: p.mine.id, other: p.other.id, action: a });
+  });
+  if (!items.length) { _showPopup('لا يوجد ما يُطبَّق', 'info'); return; }
+  askConfirm_('تطبيق القرار على ' + items.length + ' حركة مكررة؟\nيُلغى القيد المكرر (يبقى في السجل كملغى) ويُربط صف الشيت بالقيد الباقي.', function () {
+    btn.disabled = true;
+    glRun('glCsDupResolve', [items], function (r) {
+      showToast('✅ عولج ' + r.done + ' تكرار' + (r.problems.length ? ' · ⚠️ ' + r.problems.length : ''));
+      if (r.problems.length) _showPopup(r.problems.join('\n'), 'warning');
+      glAfterChange(); glCsDupDlg_('');
+    }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); });
+  }, { title: 'معالجة التكرار', icon: '🔁', yesLabel: 'تطبيق' });
+}
 function glCsPendDlg(force) {
   glDlg('👜 صفوف الشيتات الناقصة — استكمال واعتماد', '<div id="glCsPBox" class="text-muted small py-4 text-center">⏳ جارٍ جلب الصفوف من الشيتات…</div>', 1180);
   glRun('glCsPendAll', [!!force], function (res) { GL._csP = res; GL.csPend = res.csPend || 0; glCsBanner_(); glCsPendDraw_(); },
@@ -49608,12 +49804,13 @@ function glCsPendDlg(force) {
 }
 function glCsPendDraw_() {
   var R = GL._csP, box = document.getElementById('glCsPBox'); if (!R || !box) return;
-  if (!R.groups.length) { box.innerHTML = '<div class="text-center py-3" style="color:#166534;font-weight:700;">✅ لا توجد صفوف ناقصة</div>' + (R.errors && R.errors.length ? '<div class="small text-danger">' + R.errors.map(glEsc).join('<br>') + '</div>' : '') + '<div class="text-center mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="glCsPendDlg(true)">🔄 فحص كل الشيتات</button></div>'; return; }
+  if (!R.groups.length) { box.innerHTML = '<div class="text-center py-3" style="color:#166534;font-weight:700;">✅ لا توجد صفوف ناقصة</div>' + (R.errors && R.errors.length ? '<div class="small text-danger">' + R.errors.map(glEsc).join('<br>') + '</div>' : '') + '<div class="text-center mt-2"><button class="btn btn-outline-secondary btn-sm" onclick="glCsPendDlg(true)">🔄 فحص كل الشيتات</button> <button class="btn btn-outline-warning btn-sm" onclick="glCsDupDlg_(\'\')">🔁 فحص التكرار مع الشاشات</button></div>'; return; }
   var amt = function (x, gc) { var cu = GL_CUR_LBL_[x.cur || gc] || ''; return (x.inAmt ? '<b class="gl-latin" style="color:#15803d;">+' + glFmt(x.inAmt) + '</b>' : '<b class="gl-latin" style="color:#b91c1c;">−' + glFmt(x.outAmt) + '</b>') + (cu ? ' <span class="small text-muted">' + cu + '</span>' : ''); };   // (V4.277) العملة بجوار المبلغ
   var tot = R.groups.reduce(function (a, g) { return a + g.rows.length; }, 0);
   var h = '<div class="d-flex align-items-center gap-2 flex-wrap mb-2"><span class="gl-pill">إجمالي الصفوف: <b>' + tot + '</b></span><span class="small text-muted">اختر الحساب (أو اضغط اقتراحاً) وعدّل البيان إن لزم، ثم «اعتماد المحدد» — كل الشيتات دفعة واحدة.</span>' +
     '<button class="btn btn-outline-secondary btn-sm ms-auto" onclick="glCsPendDlg(true)" title="يفحص كل الشيتات المربوطة">🔄 فحص كل الشيتات</button>' +
-    '<button class="btn btn-outline-success btn-sm" onclick="glCsPickSugg_()" title="يملأ حقل الحساب بأول اقتراح للصفوف الفارغة">✨ تعبئة بأول اقتراح</button></div>';
+    '<button class="btn btn-outline-success btn-sm" onclick="glCsPickSugg_()" title="يملأ حقل الحساب بأول اقتراح للصفوف الفارغة">✨ تعبئة بأول اقتراح</button>' +
+    '<button class="btn btn-outline-warning btn-sm" onclick="glCsDupDlg_(\'\')" title="قيود سُجّلت من الشيت وهي مسجّلة أيضاً من شاشات البرنامج">🔁 فحص التكرار مع الشاشات</button></div>';
   R.groups.forEach(function (g) {
     h += '<div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;overflow:hidden;"><div style="background:#fee2e2;padding:5px 12px;font-weight:800;font-size:12.5px;">👜 ' + glEsc(g.name) + ' (' + g.rows.length + ')' +
       (g.url ? ' <a class="small ms-2" href="' + glEsc(g.url) + '" target="_blank" rel="noopener">فتح الشيت ↗</a>' : '') + '</div><div style="padding:6px;"><div class="table-responsive" style="max-height:320px;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" checked onchange="this.closest(\'table\').querySelectorAll(\'.glCsPk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>صف</th><th>التاريخ</th><th>المبلغ</th><th>الطرف بالشيت</th><th>البيان (قابل للتعديل)</th><th style="min-width:250px;">الحساب</th></tr></thead><tbody>' +
@@ -49621,7 +49818,8 @@ function glCsPendDraw_() {
         return '<tr data-code="' + glEsc(g.code) + '" data-row="' + x.row + '" data-hint="' + glEsc(x.hint || '') + '" data-sg="' + glEsc((x.sugg && x.sugg[0] && x.sugg[0].code) || '') + '"><td><input type="checkbox" class="glCsPk" checked></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x, g.currency) + '</td>' +
           '<td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
           '<td><input class="form-control form-control-sm glCsDesc" value="' + glEsc(x.desc || '') + '" data-orig="' + glEsc(x.desc || '') + '" style="min-width:190px;"></td>' +
-          '<td><div class="d-flex gap-1">' + glAccInput('glCsAcc', '', '') + glCsNaBtn_() + '</div>' + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
+          '<td>' + (x.dup ? '<div class="mt-1 p-1" style="background:#fff7ed;border:1px dashed #fb923c;border-radius:8px;font-size:11.5px;">🔁 <b>قيد مطابق موجود:</b> <a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.dup.id) + '\');return false;">' + glEsc(x.dup.id) + '</a> · ' + glEsc(x.dup.src) + ' · <span class="gl-latin">' + glEsc(x.dup.date) + '</span><br>' + glEsc(String(x.dup.desc || '').slice(0, 90)) +
+            '<select class="form-select form-select-sm mt-1 glCsDupSel" data-link="' + glEsc(x.dup.id) + '"><option value="link" selected>🔗 نفس الحركة — اربط الصف بهذا القيد (موصى به، بلا تكرار)</option><option value="new">➕ حركة مختلفة — سجّلها بالحساب المختار</option></select></div>' : '') + '<div class="d-flex gap-1">' + glAccInput('glCsAcc', '', '') + glCsNaBtn_() + '</div>' + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
             return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var i=this.closest(\'tr\').querySelector(\'.glCsAcc\');i.dataset.code=\'' + glJs(sg.code) + '\';i.value=\'' + glJs(sg.code + ' — ' + sg.name) + '\'">' + glEsc(sg.name) + '</button>';
           }).join('') + '</div>' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div></div></div>';
@@ -49640,8 +49838,10 @@ function glCsApproveAll_(btn) {
   var by = {}, n = 0, miss = 0;
   document.querySelectorAll('#glCsPBox tr[data-row]').forEach(function (tr) {
     if (!tr.querySelector('.glCsPk').checked) return;
+    var ds = tr.querySelector('.glCsDupSel');   // (V4.278) صف مطابق لقيد قائم
+    if (ds && ds.value === 'link') { (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push({ row: +tr.dataset.row, link: ds.dataset.link }); n++; return; }
     var acc = glAccVal(tr.querySelector('.glCsAcc')); if (!acc) { miss++; return; }
-    var d = tr.querySelector('.glCsDesc'), it = { row: +tr.dataset.row, account: acc };
+    var d = tr.querySelector('.glCsDesc'), it = { row: +tr.dataset.row, account: acc, force: ds ? 1 : 0 };
     if (d && d.value.trim() && d.value !== d.dataset.orig) it.desc = d.value.trim();
     (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push(it); n++;
   });
@@ -49975,7 +50175,7 @@ function hbxTabs() {
     '<button class="btn btn-sm btn-outline-light" title="فتح برنامج الحجوزات في نافذة مستقلة" onclick="openHotelsApp_()">↗</button>';
 }
 function hbxShow(key) {
-  if (key === '@settings') { switchPage('settings'); setTimeout(function () { var b = document.getElementById('hbSetBox-core'); if (b && b.classList.contains('d-none')) hbSetToggle_('core'); var c = document.getElementById('hbSetCard-core'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300); return; }
+  if (key === '@settings') { switchPage('settings'); setTimeout(function () { if (typeof settingsGo_ === 'function') settingsGo_('hotels'); var b = document.getElementById('hbSetBox-core'); if (b && b.classList.contains('d-none')) hbSetToggle_('core'); var c = document.getElementById('hbSetCard-core'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 300); return; }
   if (key === '@users') { switchPage('users'); return; }
   if (key === 'settings' || key === 'users') key = 'arrivals';
   HBX.page = key; try { localStorage.setItem('hbx_page', key); } catch (e) {}
