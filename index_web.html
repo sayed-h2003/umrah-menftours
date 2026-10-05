@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.286 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.287 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.286)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.287)', diag);
 }, 6000);
 </script>
 
@@ -1449,7 +1449,7 @@ input[type="date"]:not(:focus):not(:valid) {
 .gl-dup-k{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#334155;background:#fff;border:1px solid #e2e8f0;border-radius:999px;padding:4px 10px;cursor:pointer}
 .gl-dup-sum{font-size:12.5px;color:#334155;margin-bottom:8px}
 .gl-dup-wrap{display:flex;flex-direction:column;gap:10px;max-height:58vh;overflow:auto}
-.gl-dup-card{background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.gl-dup-card{flex:0 0 auto;background:#fff;color:#0f172a;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 .gl-dup-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:#fafafa;border-bottom:1px solid #eef2f7}
 .gl-dup-sel{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#b91c1c}
 .gl-dup-amt{font-weight:900;font-size:15px}
@@ -7771,7 +7771,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.286";
+var CLIENT_APP_VERSION = "4.287";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
