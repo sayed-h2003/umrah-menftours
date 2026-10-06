@@ -4878,6 +4878,37 @@ function _glHbTripOf_(b, cm, ov, ctx, accs) {
   if (cm.type === 'عميل عمرة') { var a = accs[cm.code]; return _glHbAutoTrip_(b, (a && a.link) || cm.name, ctx).trip; }
   return '';
 }
+// 🏨 (V4.292) حجوزات السكن الفعلية (بقيمة بيعها الحقيقية) لعميل×رحلة بعينهما — مُجمَّعة بالمدينة (مكة/المدينة)،
+// لتُستخدم بدل تقدير اتفاقية السكن ببندي «سكن مكة/سكن المدينة» بحسابات عملاء العمرة حين تتوفر حجوزات فعلية.
+// المطابقة بنفس آلية قيد الحجز الآلي بالحسابات العامة: اسم الحجز ← خريطة GL_HB_Map ← (رابط الحساب أو الاسم
+// نفسه) يُطابَق بالاسم المطبَّع مع اسم العميل بالوحدة القديمة، والرحلة بنفس محرك التحديد التلقائي/اليدوي
+// (_glHbTripOf_) — تماماً كما تُحدَّد الرحلة على القيد الآلي للحجز.
+function _glHbCityActual_(client, trip) {
+  client = _glStr_(client); trip = _glStr_(trip);
+  if (!client || !trip) return null;
+  try { if (!_glHbCfg_().ssId) return null; } catch (e0) { return null; }
+  var out = null;
+  try {
+    var H = _glHbRead_(), map = _glHbMap_(), ov = _glHbTripOv_(), ctx = _glHbTripCtx_(), accs = _glAccounts_().map;
+    var ck = _glHbKey_(client);
+    H.bookings.forEach(function (b) {
+      if (b.status === 'لاغي' || !b.client || !b.sale.hasPrice || !b.sale.value) return;
+      var m = map[_glHbKey_(b.client)];
+      if (!m || m.type !== 'عميل عمرة') return;
+      var a = m.code && accs[m.code], name = (a && a.link) || m.name;
+      if (_glHbKey_(name) !== ck) return;
+      if (_glHbTripOf_(b, m, ov, ctx, accs) !== trip) return;
+      out = out || {};
+      var c = out[b.city] || (out[b.city] = { value: 0, hotels: {}, ci: null, co: null, keys: [] });
+      c.value = _glR2_(c.value + b.sale.value);
+      if (b.hotel) c.hotels[b.hotel] = 1;
+      if (!c.ci || b.ci < c.ci) c.ci = b.ci;
+      if (!c.co || b.co > c.co) c.co = b.co;
+      c.keys.push(b.key);
+    });
+  } catch (e1) { Logger.log('_glHbCityActual_: ' + e1.message); return null; }
+  return out;
+}
 // اقتراح الحساب النقدي والعملة الفعلية من ملاحظة الدفعة
 function _glHbPaySuggest_(p, cands, roles) {
   var note = _glNorm_(p.note || ''), best = null, bs = 0;

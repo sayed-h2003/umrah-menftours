@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.291";
+var APP_VERSION = "4.292";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -15388,6 +15388,22 @@ function _accBondsDesired_(authToken, client, trip) {
       nights: nights || 0, company: company || '',
       price: (p !== null) ? p : null, fallback: fallback || 0 });
   };
+  // 🏨 (V4.292) حجز سكن فعلي مسجَّل ببرنامج الحجوزات لهذا العميل×الرحلة ← يُستبدل به تقدير اتفاقية السكن
+  // ببندي «سكن مكة/سكن المدينة» بقيمة البيع الحقيقية (بند «قيمة مباشرة» بلا عدد/سعر تقديريين)
+  var hbCity = null;
+  try { if (typeof _glHbCityActual_ === 'function') hbCity = _glHbCityActual_(client, trip); } catch (eHbC) { hbCity = null; }
+  var pushHousing = function(key, cityKey, estHotel, estCi, estCo, estRooms, estNights) {
+    var act = hbCity && hbCity[cityKey];
+    if (act && act.value) {
+      var hotelsTxt = Object.keys(act.hotels).join(' + ');
+      var suffix = hotelsTxt ? (' - ' + hotelsTxt + _accStayRange_(act.ci, act.co)) : '';
+      lines.push({ key: key, desc: key + suffix, cat: 'أخرى', currency: 'SAR', count: 1,
+        nights: 0, company: '', price: act.value, fallback: 0, isDirect: true });
+    } else {
+      var suffix2 = estHotel ? (' - ' + estHotel + _accStayRange_(estCi, estCo)) : '';
+      push(key, key + suffix2, 'أخرى', 'SAR', estRooms, estNights, '', 0);
+    }
+  };
   // 🏛️ (V4.203) رسوم الغرفة من ملفات الوزارة (المراجَعة فقط) لهذا العميل×الرحلة — عادية/VIP/مشرف/باركود.
   // لو لا ملفات مراجَعة بعد: التقدير القديم من الكشف (يُستبدل تلقائياً بالمزامنة عند تسجيل المراجعة)
   var mf = _accMfFeesAgg_(client, trip);
@@ -15414,10 +15430,8 @@ function _accBondsDesired_(authToken, client, trip) {
   if (vz.count) push('تأشيرات', vz.desc, 'كبير', 'SAR', vz.count, 0, '', 0);
   push('نقل سعودي', 'نقل سعودي', 'أخرى', 'SAR', 1, 0, '', 0);
   // 🏨 (V4.39) فترة الإقامة (دخول/خروج) تُكتب جنب اسم الفندق بطلب صريح، مثال: «ديوان المدينة من 1-8 الى 4-8»
-  var madSuffix = hz.madHotel ? (' - ' + hz.madHotel + _accStayRange_(hz.madCheckIn, hz.madCheckOut)) : '';
-  var makSuffix = hz.makHotel ? (' - ' + hz.makHotel + _accStayRange_(hz.makCheckIn, hz.makCheckOut)) : '';
-  push('سكن المدينة', 'سكن المدينة' + madSuffix, 'أخرى', 'SAR', hz.madRooms, hz.madNights, '', 0);
-  push('سكن مكة', 'سكن مكة' + makSuffix, 'أخرى', 'SAR', hz.makRooms, hz.makNights, '', 0);
+  pushHousing('سكن المدينة', 'المدينة', hz.madHotel, hz.madCheckIn, hz.madCheckOut, hz.madRooms, hz.madNights);
+  pushHousing('سكن مكة', 'مكة', hz.makHotel, hz.makCheckIn, hz.makCheckOut, hz.makRooms, hz.makNights);
   push('بدلات المشرف', 'بدلات المشرف', 'مشرف', 'SAR', 1, 0, '', 0);
   // 🧾 (V4.39) بنود شركة/ضرائب لكل معتمر بالجنيه، والإعاشة لكل معتمر بالريال — بطلب صريح
   push('شركة', 'شركة', 'كبير', 'EGP', row.total, 0, '', 0);
@@ -15545,11 +15559,13 @@ function _syncTripAccounts_(authToken, trip, username) {
             l.done = true;
             var nPrice = (l.price !== null) ? l.price : _accNum_(r[7]);
             var nVal = Math.round(l.count * nPrice * (l.nights > 0 ? l.nights : 1) * 100) / 100;
+            var nDirect = l.isDirect ? 'نعم' : 'لا';
             var changed = _accNum_(r[6]) !== l.count || _accNum_(r[7]) !== nPrice ||
-                          _accNum_(r[15]) !== (l.nights || 0) || String(r[3]) !== l.desc;
+                          _accNum_(r[15]) !== (l.nights || 0) || String(r[3]) !== l.desc ||
+                          String(r[19] || 'لا') !== nDirect;
             if (changed) {
               r[3] = l.desc; r[6] = l.count; r[7] = nPrice; r[8] = nVal;
-              r[13] = username; r[14] = now; r[15] = l.nights || '';
+              r[13] = username; r[14] = now; r[15] = l.nights || ''; r[19] = nDirect;
               updatedRows[i] = true; updated++;
             }
           } else if (!l) { toDelete[i] = true; removed++; }
@@ -15562,7 +15578,7 @@ function _syncTripAccounts_(authToken, trip, username) {
         if (l.done) return;
         var price = (l.price !== null) ? l.price : l.fallback;
         var value = Math.round(l.count * price * (l.nights > 0 ? l.nights : 1) * 100) / 100;
-        newRows.push([_accId_('I'), client, trip, l.desc, l.cat, l.currency, l.count, price, value, 'لا', '', username, now, '', '', l.nights || '', l.company || '', 'نعم', '', 'لا']);
+        newRows.push([_accId_('I'), client, trip, l.desc, l.cat, l.currency, l.count, price, value, 'لا', '', username, now, '', '', l.nights || '', l.company || '', 'نعم', '', l.isDirect ? 'نعم' : 'لا']);
         created++;
       });
     } else {
@@ -16848,9 +16864,9 @@ function accGenerateDraft(authToken, client, trip, mode) {
   // 🛂 (V4.39) معتمرو هذا العميل×الرحلة اللي ملاحظاتهم تذكر نوع تأشيرة/فيزا — تُفرَد ببند خاص (بطلب صريح)
   var visaPilgrims = _accClientPilgrimNotes_(client, trip).filter(function(p) { return _accIsVisaNote_(p.notes); });
   // ملاحظة: كل البنود المولّدة بلا أي نصوص شرح، والسعر يُترك فارغًا ليُدخل يدويًا (بطلب صريح)
-  var push = function(desc, cat, currency, count, price, nights, company, notes) {
+  var push = function(desc, cat, currency, count, price, nights, company, notes, isDirect) {
     items.push({ desc: desc, cat: cat, currency: currency, count: count, price: price || 0,
-      nights: nights || 0, company: company || '', notes: notes || '' });
+      nights: nights || 0, company: company || '', notes: notes || '', isDirect: !!isDirect });
   };
   // 📊 التفصيلة الفعلية حسب (الفندق × طبيعة التسكين) بنفس مسميات كشف الإكسل
   // 💵 (V4.15 — بطلب صريح) لو للرحلة تسعير محفوظ (شاشة تسعير الرحلة) تُملأ أسعار التوليد
@@ -16906,10 +16922,21 @@ function accGenerateDraft(authToken, client, trip, mode) {
       _supOwn.names.join('، '));
     push('نقل سعودي', 'أخرى', 'SAR', 1, pr('نقل سعودي'), 0, '');
     // 🏨 (V4.39) الفندق + فترة الإقامة (دخول/خروج) معًا بحقل الشركة، مثال: «ديوان المدينة من 1-8 الى 4-8»
-    var madStay = hz.madHotel ? (hz.madHotel + _accStayRange_(hz.madCheckIn, hz.madCheckOut)) : '';
-    var makStay = hz.makHotel ? (hz.makHotel + _accStayRange_(hz.makCheckIn, hz.makCheckOut)) : '';
-    push('سكن المدينة', 'أخرى', 'SAR', hz.madRooms, pr('سكن المدينة'), hz.madNights, madStay, '');
-    push('سكن مكة', 'أخرى', 'SAR', hz.makRooms, pr('سكن مكة'), hz.makNights, makStay, '');
+    // 🏨 (V4.292) حجز فعلي ببرنامج الحجوزات لهذا العميل×الرحلة ← قيمة بيعه الحقيقية مباشرة بدل التقدير
+    var _hbCityD = null;
+    try { if (typeof _glHbCityActual_ === 'function') _hbCityD = _glHbCityActual_(client, trip); } catch (eHbD) { _hbCityD = null; }
+    var pushHousingD = function(key, cityKey, estHotel, estCi, estCo, estRooms, estNights) {
+      var act = _hbCityD && _hbCityD[cityKey];
+      if (act && act.value) {
+        var hTxt = Object.keys(act.hotels).join(' + ');
+        push(key, 'أخرى', 'SAR', 1, act.value, 0, hTxt + _accStayRange_(act.ci, act.co), '', true);
+      } else {
+        var stay = estHotel ? (estHotel + _accStayRange_(estCi, estCo)) : '';
+        push(key, 'أخرى', 'SAR', estRooms, pr(key), estNights, stay, '');
+      }
+    };
+    pushHousingD('سكن المدينة', 'المدينة', hz.madHotel, hz.madCheckIn, hz.madCheckOut, hz.madRooms, hz.madNights);
+    pushHousingD('سكن مكة', 'مكة', hz.makHotel, hz.makCheckIn, hz.makCheckOut, hz.makRooms, hz.makNights);
     push('بدلات المشرف', 'مشرف', 'SAR', 1, pr('بدلات المشرف'), 0, '');
     // 🧾 (V4.39) شركة/ضرائب لكل معتمر بالجنيه، والإعاشة لكل معتمر بالريال — بطلب صريح
     push('شركة', 'كبير', 'EGP', row.total, pr('شركة'), 0, '');
@@ -25950,6 +25977,38 @@ function syncTripAccountsBg(authToken, trips) {
     try { _syncTripAccounts_(authToken, t, session.username); done++; } catch (e) { Logger.log('syncTripAccountsBg ' + t + ': ' + e); }
   });
   return { success: true, synced: done };
+}
+
+// 🏨 (V4.292) أداة تطبيق بأثر رجعي: تمر على كل الرحلات وتُعيد مزامنة بنود «سكن مكة/سكن المدينة» بنمط «بنود»
+// لتُستبدَل تقديرات اتفاقية السكن بقيمة بيع الحجوزات الفعلية حيثما توفّرت — بنفس محرك _syncTripAccounts_
+// الآمن (لا يلمس بنداً «معدّل» يدوياً، ولا يغيّر أي رحلة لا بنود تلقائية فيها بعد). dry=true: تقرير بلا كتابة
+function accBackfillHbHousing(authToken, dry) {
+  var session = _accPerm_(authToken, 'edit');
+  if (!_sessionHasPerm_(session, 'admin')) throw new Error('هذه الأداة للمدير فقط');
+  var trips = (getTripsList(authToken) || []).map(function (t) { return t.name; }).filter(Boolean);
+  var report = [];
+  trips.forEach(function (trip) {
+    try {
+      if (dry) {
+        // 🔍 وضع المعاينة: لا كتابة — فقط إحصاء العملاء (نمط بنود) اللي لهم حجز فعلي مطابق بهذه الرحلة
+        var mSh = _accSheet_(ACC_META_SHEET, ACC_META_HEADERS), mVals = mSh.getLastRow() >= 2 ?
+          mSh.getRange(2, 1, mSh.getLastRow() - 1, ACC_META_HEADERS.length).getValues() : [];
+        var clients = [];
+        mVals.forEach(function (r) {
+          if (String(r[1] || '').trim() !== trip || String(r[2] || '').trim() !== 'بنود') return;
+          var cl = String(r[0] || '').trim(); if (!cl) return;
+          var hb = null; try { if (typeof _glHbCityActual_ === 'function') hb = _glHbCityActual_(cl, trip); } catch (eD) { hb = null; }
+          if (hb) clients.push(cl);
+        });
+        if (clients.length) report.push({ trip: trip, clients: clients, dry: true });
+      } else {
+        var res = _syncTripAccounts_(authToken, trip, session.username);
+        if (res && (res.created || res.updated)) report.push({ trip: trip, created: res.created || 0, updated: res.updated || 0, removed: res.removed || 0 });
+      }
+    } catch (e) { Logger.log('accBackfillHbHousing ' + trip + ': ' + e.message); }
+  });
+  if (!dry) logChange_(session.username, 'تطبيق سكن الحجوزات الفعلي بأثر رجعي', 'كل الرحلات', '', trips.length + ' رحلة', report.length + ' رحلة فيها تغيير');
+  return { success: true, dry: !!dry, tripsScanned: trips.length, affected: report };
 }
 
 /* ============================================================================
