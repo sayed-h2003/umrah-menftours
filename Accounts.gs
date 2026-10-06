@@ -4297,15 +4297,22 @@ function _glFxRateAt_(cur, date, map) {
   if (best) return { rate: map[best][cur], date: map[best].date, src: map[best].src, exact: best === k };
   return { rate: _glRates_()[cur], date: '', src: 'السعر الافتراضي بالإعدادات' };
 }
-function _glFxFetchToday_(by) {
+function _glFxFetchToday_(by, src) {
   var r = _fxFetchBanqueMisr_(), today = _glDate_(new Date());
-  _glFxDailyUpsert_(today, { SAR: r.SAR ? r.SAR.sell : 0, SARbuy: r.SAR ? r.SAR.buy : 0, USD: r.USD ? r.USD.sell : 0, USDbuy: r.USD ? r.USD.buy : 0, src: 'بنك مصر' }, by);
+  _glFxDailyUpsert_(today, { SAR: r.SAR ? r.SAR.sell : 0, SARbuy: r.SAR ? r.SAR.buy : 0, USD: r.USD ? r.USD.sell : 0, USDbuy: r.USD ? r.USD.buy : 0, src: src || 'بنك مصر' }, by);
   return _glFxDailyMap_()[_glDKey_(today)];
 }
-// مشغّل يومي (يُفعَّل من الإعدادات)
+// 🕚 (V4.290) مشغّل الصباح (يُفعَّل من الإعدادات): سعر الافتتاح التقريبي — يبقى سعر اليوم مبدئياً حتى يُستبدَل بسعر الإغلاق
 function glFxDailyCron() {
   if (!_glSSId_()) return;
-  try { _glFxFetchToday_('تسجيل يومي تلقائي'); _glSetSetting_('fx_daily_err', ''); }
+  try { _glFxFetchToday_('تسجيل صباحي تلقائي', 'بنك مصر (صباحاً)'); _glSetSetting_('fx_daily_err', ''); }
+  catch (e) { try { _glSetSetting_('fx_daily_err', _glNow_() + ' — ' + e.message); } catch (e2) {} }
+}
+// 🕓 (V4.290) مشغّل الإغلاق: السعر الحقيقي الفعلي ليوم العمل هو سعر إغلاق البنك (قد يختلف عن سعر الافتتاح الصباحي
+// بالزيادة أو النقصان) — يُعاد الجلب بعد إغلاق البنك فيستبدل (upsert لنفس تاريخ اليوم) سعر الصباح ليصبح هو سعر اليوم المعتمد
+function glFxDailyCronClose() {
+  if (!_glSSId_()) return;
+  try { _glFxFetchToday_('تسجيل إغلاق تلقائي', 'بنك مصر (إغلاق)'); _glSetSetting_('fx_daily_err', ''); }
   catch (e) { try { _glSetSetting_('fx_daily_err', _glNow_() + ' — ' + e.message); } catch (e2) {} }
 }
 function glFxDaily(authToken) {
@@ -4316,7 +4323,7 @@ function glFxDaily(authToken) {
 }
 function glFxFetchNow(authToken) {
   var session = _glAdminPerm_(authToken);
-  return { success: true, row: _glFxFetchToday_(session.username) };
+  return { success: true, row: _glFxFetchToday_(session.username, 'بنك مصر (يدوي)') };
 }
 // إدخال/لصق أسعار أيام سابقة: rows = [{date, SAR, USD, SARbuy?, USDbuy?}]
 function glFxDailySave(authToken, rows) {
@@ -4330,13 +4337,18 @@ function glFxDailySave(authToken, rows) {
   logChange_(session.username, 'تسجيل أسعار صرف يومية', 'GL:fx', '-', '-', n + ' يوم');
   return { success: true, count: n };
 }
+// ⏰ (V4.290) جلبان تلقائيان يومياً: صباحاً (11) يثبّت سعراً مبدئياً، وإغلاقاً (16 — بعد إغلاق بنك مصر) يستبدله
+// بسعر الإغلاق الفعلي ليوم العمل (مثل تعامل البنوك: سعر الصباح تقريبي، وسعر الإغلاق هو المعتمد لليوم)
 function glFxDailyCronSet(authToken, on) {
   var session = requireAuth_(authToken);
   if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
-  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'glFxDailyCron') ScriptApp.deleteTrigger(t); });
-  if (on) ScriptApp.newTrigger('glFxDailyCron').timeBased().everyDays(1).atHour(11).create();
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'glFxDailyCron' || t.getHandlerFunction() === 'glFxDailyCronClose') ScriptApp.deleteTrigger(t); });
+  if (on) {
+    ScriptApp.newTrigger('glFxDailyCron').timeBased().everyDays(1).atHour(11).create();
+    ScriptApp.newTrigger('glFxDailyCronClose').timeBased().everyDays(1).atHour(16).create();
+  }
   _glSetSetting_('fx_daily_cron', on ? 'نعم' : 'لا');
-  if (on) { try { _glFxFetchToday_(session.username); } catch (e) {} }
+  if (on) { try { _glFxFetchToday_(session.username, 'بنك مصر (صباحاً)'); } catch (e) {} }
   return { success: true };
 }
 // سعر العملتين بتاريخ معيّن (لنموذج التحويل): لو اليوم غير مسجَّل بعد يُجلب من بنك مصر ويُسجَّل
