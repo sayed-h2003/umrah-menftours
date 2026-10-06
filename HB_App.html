@@ -11106,14 +11106,29 @@ function spShareNow_() {
       var file = new File([bytes], pickShareFileBase_(SP_.name, SP_.safeName) + '.pdf', { type: 'application/pdf' });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         var settled = false;
+        // 🛡️ (V4.293) كان الحارس الزمني قصيرًا (2.5 ث) بلا تتبع ظهور/اختفاء الصفحة — فيُطلِق
+        // البديل (فتح رابط Drive) وهو يتسابق مع لوحة المشاركة الحقيقية التي قد تبطئ قليلاً (جهاز
+        // أضعف/ترميز الملف)، فيفتح الفرع البديل رابط Drive فوق اللوحة المفتوحة فعلاً — وبما أن
+        // رابط Drive نفسه يتطلب حساب جوجل لعرضه، يظهر للمستخدم شاشة «اختيار حساب» بدل المشاركة
+        // المباشرة. نفس إصلاح _renderShareSheet_ بالبرنامج الرئيسي: نتابع اختفاء الصفحة طوال
+        // الانتظار (دليل أن اللوحة فُتحت فعلاً) ونمد المهلة النهائية لتكون آمنة لا عشوائية
+        var wasHidden = false;
+        var onVis = function () { if (document.hidden) wasHidden = true; };
+        document.addEventListener('visibilitychange', onVis);
+        var cleanupVis = function () { document.removeEventListener('visibilitychange', onVis); };
         navigator.share({ files: [file], title: SP_.name })
-          .then(function () { settled = true; spFinish_(300); })
+          .then(function () { settled = true; cleanupVis(); spFinish_(300); })
           .catch(function (err) {
-            if (err && err.name === 'AbortError') { settled = true; return; }
+            settled = true; cleanupVis();
+            if (err && err.name === 'AbortError') return; // المستخدم أغلق اللوحة بنفسه — لا بديل
+            if (wasHidden) return; // اللوحة فُتحت فعلاً (الصفحة اختفت لحظياً) — لا نفتح بديلاً فوقها
             spOpenFallback_('تعذّرت المشاركة المباشرة');
           });
-        // داخل إطار Apps Script قد لا تُفتح لوحة المشاركة إطلاقًا بصمت — حارس زمني للبديل
-        setTimeout(function () { if (!settled && !document.hidden) spOpenFallback_('لوحة المشاركة لم تُفتح داخل الإطار'); }, 2500);
+        // حارس زمني أخير فقط لحالة عدم استجابة navigator.share إطلاقاً (لا حل ولا رفض ولا اختفاء)
+        setTimeout(function () {
+          cleanupVis();
+          if (!settled && !wasHidden && !document.hidden) spOpenFallback_('لوحة المشاركة لم تُفتح داخل الإطار');
+        }, 8000);
         return;
       }
     }
