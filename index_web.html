@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.298 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.299 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.298)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.299)', diag);
 }, 6000);
 </script>
 
@@ -1551,7 +1551,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.282</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.299</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6605,6 +6605,7 @@ function _handleSessErr_(err) {
   if (msg.indexOf('جلسة غير صالحة') === -1 && msg.indexOf('منتهية') === -1) return false;
   if (window._sessExpiredShown) return true; // تنبيه واحد فقط مهما تعددت النداءات الفاشلة المتزامنة
   window._sessExpiredShown = true;
+  try { localStorage.removeItem('authToken'); } catch (e) {}
   try { sessionStorage.removeItem('authToken'); } catch (e) {}
   window.authToken = null;
   var ov = document.createElement('div');
@@ -6779,7 +6780,11 @@ try {
   console.log("لا يوجد مستخدم محفوظ مسبقاً أو أن المتصفح يمنع التخزين.");
 }
 try {
-  window.authToken = sessionStorage.getItem("authToken") || null;
+  // 🔄 (V4.298-fix) رمز الجلسة يُحفَظ في localStorage (يبقى بعد تحديث الصفحة داخل إطار Apps Script
+  // المعزول، بخلاف sessionStorage الذي يُفقد عند الريفريش في هذا الإطار). نقرأ القديم من
+  // sessionStorage للتوافق الانتقالي إن وُجد.
+  window.authToken = localStorage.getItem("authToken") || sessionStorage.getItem("authToken") || null;
+  if (window.authToken) { try { localStorage.setItem("authToken", window.authToken); } catch (e2) {} }
 } catch(e) {}
 
 
@@ -7216,6 +7221,8 @@ function handleLogin(e) {
         // --- التعديل الجوهري: حفظ بيانات المستخدم في الذاكرة ---
 window.currentUser = res;
 window.authToken = res.token || null;
+// 🔄 (V4.298-fix) رمز الجلسة في localStorage (يبقى بعد الريفريش داخل إطار Apps Script المعزول)
+try { localStorage.setItem('authToken', res.token || ''); } catch(e) {}
 try { sessionStorage.setItem('authToken', res.token || ''); } catch(e) {}
 try { localStorage.setItem('smartManagerUser', JSON.stringify(res)); } catch(e) {}
 // 🚀 (V4.200) نداء الإقلاع الموحّد — يُرسَل قبل أي تحميل آخر فتأخذ كل التحميلات الأولى بياناتها منه
@@ -7824,9 +7831,11 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.298";
+var CLIENT_APP_VERSION = "4.299";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
+// 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
+(function() { var b = document.getElementById('appVersionBadge'); if (b) b.textContent = 'V' + CLIENT_APP_VERSION; })();
 
 // 🩺 تشخيص الصفحة البيضاء بعد تسجيل الدخول (V3.57):
 // قبل هذا التعديل كانت استدعاءات google.script.run الأساسية (تحميل القوائم/الحجوزات/لوحة التحكم)
@@ -7920,6 +7929,7 @@ function logoutUser() {
     google.script.run.logoutUserSession(window.authToken);
   }
   try { localStorage.removeItem("smartManagerUser"); } catch(e){}
+  try { localStorage.removeItem("authToken"); } catch(e){}
   try { sessionStorage.removeItem("authToken"); } catch(e){}
   window.currentUser = null;
   window.authToken = null;
@@ -7933,18 +7943,19 @@ function logoutUser() {
   checkAuthOnLoad();
 }
 
-/* 🚪 (V4.298) الخروج عند إغلاق التبويب (لا عند تحديث الصفحة)
+/* 🚪 (V4.298) عدم الخروج عند تحديث الصفحة (Refresh)
    كان الخروج التلقائي مربوطاً بـ beforeunload/pagehide — وهما يُطلقان عند الـRefresh أيضاً — فكان
-   تحديث الصفحة يمسح رمز الجلسة ويطرد المستخدم لشاشة الدخول. الآن نعتمد على السلوك الطبيعي لـ
-   sessionStorage: رمز الجلسة (authToken) محفوظ فيه فيبقى بعد الـRefresh (نفس التبويب) ويُمحى تلقائياً
-   عند إغلاق التبويب/المتصفح ⇒ إعادة الفتح تتطلب دخولاً جديداً، بينما التحديث يُبقي المستخدم بالبرنامج.
-   الأمان على الخادم محفوظ عبر مؤقّت انتهاء الجلسة (idle timeout)، ويبقى زر «تسجيل الخروج» اليدوي
-   (logoutUser) ينهي الجلسة على الخادم فوراً. نُبقي الدالة معرّفة (دون ربطها بالتفريغ) لأي استدعاء يدوي. */
+   تحديث الصفحة يطرد المستخدم لشاشة الدخول. أُزيل هذا الربط. وتبيّن أيضاً أن sessionStorage لا يبقى
+   بعد الـRefresh داخل إطار Apps Script المعزول (sandbox iframe)، لذا نُقل رمز الجلسة (authToken) إلى
+   localStorage — كما currentUser أصلاً — فيبقى بعد الـRefresh. الأمان محفوظ عبر مؤقّت انتهاء الجلسة
+   على الخادم (idle timeout) وزر «تسجيل الخروج» اليدوي (logoutUser) الذي ينهي الجلسة فوراً.
+   نُبقي الدالة معرّفة (دون ربطها بالتفريغ) لأي استدعاء يدوي محتمل. */
 var _autoLogoutDone = false;
 function _autoLogoutOnUnload() {
   if (_autoLogoutDone) return;
   _autoLogoutDone = true;
   try { if (window.authToken) google.script.run.logoutUserSession(window.authToken); } catch (e) {}
+  try { localStorage.removeItem("authToken"); } catch (e) {}
   try { sessionStorage.removeItem("authToken"); } catch (e) {}
   try { localStorage.removeItem("smartManagerUser"); } catch (e) {}
 }
