@@ -1324,28 +1324,36 @@ function glListEntries(authToken, f) {
   _glPerm_(authToken, 'view', 'je');
   f = f || {};
   var fromK = _glDKey_(_glDate_(f.from)), toK = _glDKey_(_glDate_(f.to)), q = _glNorm_(f.q || ''), acc = _glStr_(f.account);
+  // ⚡ (V4.301) فهرسة الأسطر الخام حسب القيد (بلا بناء كائنات)
   var byEntry = {};
-  var linesAll = _glRows_('lines');
-  linesAll.forEach(function (r) { var id = _glStr_(r[0]); (byEntry[id] = byEntry[id] || []).push(r); });
-  var out = [];
+  _glRows_('lines').forEach(function (r) { var id = _glStr_(r[0]); (byEntry[id] = byEntry[id] || []).push(r); });
+  // ⚡ (V4.301) الترشيح والترتيب على الصفوف الخام فقط — كان يُبنى كائن كامل لكل قيد و«كائن سطر» لكل سطر (مع تنسيق
+  // تاريخ لكل سطر) لكل القيود المطابقة ثم يُرتَّب الكل ثم يُقتطع 400 فقط (هدر O(كل الأسطر) حتى لو المعروض 400).
+  // الآن: ترشيح/ترتيب خفيف على الخام، ثم بناء الكائنات الكاملة (وتنسيق تواريخ الأسطر) لأول 400 المعروضة فقط.
+  var picked = [];
   _glRows_('entries').forEach(function (r) {
-    var e = _glEntryObj_(r), k = _glDKey_(e.date);
+    var k = _glDKey_(_glDate_(r[2]));
     if (fromK && k < fromK) return; if (toK && k > toK) return;
-    if (f.type && e.type !== f.type) return;
-    if (f.status && e.status !== f.status) return;
-    if (f.batch && e.batchId !== f.batch) return;
-    var ls = (byEntry[e.id] || []).map(_glLineObj_).sort(function (a, b) { return a.lineNo - b.lineNo; });
-    if (acc && !ls.some(function (l) { return l.account.indexOf(acc) === 0; })) return;
+    if (f.type && _glStr_(r[3]) !== f.type) return;
+    if (f.status && _glStr_(r[5]) !== f.status) return;
+    if (f.batch && _glStr_(r[7]) !== f.batch) return;
+    var rawLs = byEntry[_glStr_(r[0])] || [];
+    if (acc && !rawLs.some(function (l) { return _glStr_(l[4]).indexOf(acc) === 0; })) return;
     if (q) {
-      var hay = _glNorm_([e.id, e.voucherNo, e.desc, e.ref, e.type, e.trip, e.company].concat(ls.map(function (l) { return l.desc + ' ' + l.client + ' ' + l.agent + ' ' + l.trip; })).join(' '));
+      var hay = _glNorm_([_glStr_(r[0]), (_glStr_(r[6]).match(/^VCH:(.+)$/) || [])[1] || '', _glStr_(r[4]), _glStr_(r[9]), _glStr_(r[3]), _glStr_(r[10]), _glStr_(r[11])]
+        .concat(rawLs.map(function (l) { return _glStr_(l[15]) + ' ' + _glStr_(l[13]) + ' ' + _glStr_(l[14]) + ' ' + _glStr_(l[11]); })).join(' '));
       if (hay.indexOf(q) < 0) return;
     }
-    e.lines = ls; e._k = k;
-    out.push(e);
+    picked.push({ r: r, k: k, seq: +r[1] || 0, ls: rawLs });
   });
-  out.sort(function (a, b) { return a._k < b._k ? 1 : (a._k > b._k ? -1 : (b.seq - a.seq)); });
-  var total = out.length;
-  return { success: true, total: total, entries: out.slice(0, 400) };
+  picked.sort(function (a, b) { return a.k < b.k ? 1 : (a.k > b.k ? -1 : (b.seq - a.seq)); });
+  var total = picked.length;
+  var out = picked.slice(0, 400).map(function (p) {
+    var e = _glEntryObj_(p.r); e._k = p.k;
+    e.lines = p.ls.map(_glLineObj_).sort(function (a, b) { return a.lineNo - b.lineNo; });
+    return e;
+  });
+  return { success: true, total: total, entries: out };
 }
 
 /* ---------------------------- دفتر الأستاذ والميزان ---------------------------- */
