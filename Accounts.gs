@@ -1629,6 +1629,43 @@ function glStatements(authToken, codes, from, to, opts) {
   });
   return { success: true, list: out };
 }
+/* ============================================================
+   🔁 (V4.302) مطابقة كشوف الشاشات (السكن/العمرة) مع كشف الحساب العام
+   الهدف: مقارنة رصيد كل طرف في كشف الشاشة برصيده في الحساب العام، وإظهار الفروق
+   (دفعة/حركة موجودة بأحد الكشفين دون الآخر) لإضافة الناقص للعام أو حذف المكرر مجمّعاً.
+   ============================================================ */
+// فرق الأيام بين مفتاحَي تاريخ yyyymmdd (موجب لو الأول أحدث)
+function _glReconDayDiff_(k1, k2) {
+  var s1 = String(k1), s2 = String(k2);
+  if (!/^\d{8}$/.test(s1) || !/^\d{8}$/.test(s2)) return 1e9;
+  var d1 = Date.UTC(+s1.slice(0, 4), +s1.slice(4, 6) - 1, +s1.slice(6, 8));
+  var d2 = Date.UTC(+s2.slice(0, 4), +s2.slice(4, 6) - 1, +s2.slice(6, 8));
+  return Math.round((d1 - d2) / 86400000);
+}
+// نواة المطابقة النقية: prog/gl مصفوفتا حركات [{k:'yyyymmdd', amt: مبلغ بإشارة (+مدين/−دائن), id, ...}]
+// بنفس العملة (يُرشِّح المتصل العملة). تُطابق بالإشارة + المبلغ (±tol) + التاريخ (±days، الأقرب أولاً).
+// تُعيد {matched:[{p,g}], onlyP:[شاشة بلا مقابل ⇒ ناقص بالعام], onlyG:[عام بلا مقابل ⇒ زائد/مكرر]}.
+function _glReconMatch_(prog, gl, opts) {
+  opts = opts || {};
+  var days = opts.days == null ? 3 : opts.days, tol = opts.tol == null ? 0.5 : opts.tol;
+  var G = (gl || []).map(function (g, i) { return { g: g, i: i }; }), usedG = {}, matched = [], onlyP = [];
+  (prog || []).forEach(function (p) {
+    var best = -1, bestScore = Infinity;
+    for (var j = 0; j < G.length; j++) {
+      if (usedG[j]) continue;
+      var g = G[j].g;
+      if ((p.amt < 0) !== (g.amt < 0)) continue;
+      var da = Math.abs(Math.abs(p.amt) - Math.abs(g.amt)); if (da > tol) continue;
+      var dd = Math.abs(_glReconDayDiff_(p.k, g.k)); if (dd > days) continue;
+      var score = dd * 1e6 + da;
+      if (score < bestScore) { bestScore = score; best = j; }
+    }
+    if (best >= 0) { usedG[best] = 1; matched.push({ p: p, g: G[best].g }); }
+    else onlyP.push(p);
+  });
+  var onlyG = []; G.forEach(function (x, j) { if (!usedG[j]) onlyG.push(x.g); });
+  return { matched: matched, onlyP: onlyP, onlyG: onlyG };
+}
 // تقرير أعمار الديون المجمّع لكل العملاء (أو الموردين/الوكلاء)
 function glAgingReport(authToken, role, to) {
   _glPerm_(authToken, 'view', 'stmt');
