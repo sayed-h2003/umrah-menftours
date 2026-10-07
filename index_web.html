@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.295 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.296 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.295)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.296)', diag);
 }, 6000);
 </script>
 
@@ -7771,7 +7771,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.295";
+var CLIENT_APP_VERSION = "4.296";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -9671,26 +9671,27 @@ function testTgCcRun(btn) {
     .testTgCateringBot(window.authToken);
 }
 
-function loadTgBotCfg() {
+function loadTgBotCfg(preCompanies, preCfg) {   // ⚡ (V4.296/U2) إمكان تمرير الشركات والإعدادات مسبقاً من نداء الإعدادات المجمّع
   var area = document.getElementById('tgbnGroupsArea');
   if (!area) return;
   area.innerHTML = '<div class="text-muted small">⏳ جاري التحميل...</div>';
-
-  // أولاً: الشركات المسجلة، ثم الإعدادات المحفوظة
+  var errHtml = function(err) { area.innerHTML = '<div class="text-danger small">❌ ' + escapeHtml_(err.message || err) + '</div>'; };
+  // الخطوة الثانية: الإعدادات المحفوظة (بعد توفّر الشركات)
+  var withCfg = function() {
+    var fill = function(res) {
+      if (!res || !res.success) { area.innerHTML = '<div class="text-danger small">تعذر تحميل الإعدادات</div>'; return; }
+      _tgbnFillForm_(res.cfg);
+    };
+    if (preCfg !== undefined && preCfg !== null) { fill(preCfg); return; }
+    google.script.run.withSuccessHandler(fill).withFailureHandler(errHtml).getTgNoticeConfig(window.authToken);
+  };
+  // الخطوة الأولى: الشركات المسجلة
+  if (preCompanies !== undefined && preCompanies !== null) {
+    _tgbnCompanies = (preCompanies && preCompanies.companies) ? preCompanies.companies : []; withCfg(); return;
+  }
   google.script.run.withSuccessHandler(function(dd) {
-    _tgbnCompanies = (dd && dd.companies) ? dd.companies : [];
-    google.script.run
-      .withSuccessHandler(function(res) {
-        if (!res || !res.success) { area.innerHTML = '<div class="text-danger small">تعذر تحميل الإعدادات</div>'; return; }
-        _tgbnFillForm_(res.cfg);
-      })
-      .withFailureHandler(function(err) {
-        area.innerHTML = '<div class="text-danger small">❌ ' + escapeHtml_(err.message || err) + '</div>';
-      })
-      .getTgNoticeConfig(window.authToken);
-  }).withFailureHandler(function(err) {
-    area.innerHTML = '<div class="text-danger small">❌ ' + escapeHtml_(err.message || err) + '</div>';
-  }).loadDropdownsData(window.authToken);
+    _tgbnCompanies = (dd && dd.companies) ? dd.companies : []; withCfg();
+  }).withFailureHandler(errHtml).loadDropdownsData(window.authToken);
 }
 
 function _tgbnFillForm_(cfg) {
@@ -9824,12 +9825,10 @@ function testTgBotRun(btn) {
 /* ============================================================
    📣 (V4.18) تنبيهات تليجرام لتحركات الغد — تعدُّد جروبات، كلٌّ بشركاته أو «كل الشركات»
    ============================================================ */
-function loadTgAlertCfg() {
+function loadTgAlertCfg(preCompanies, preGroups) {   // ⚡ (V4.296/U2) إمكان تمرير الشركات والجروبات مسبقاً من نداء الإعدادات المجمّع
   var area = document.getElementById('tgAlertGroupsArea');
   if (!area) return;
-  var go = function() {
-    google.script.run
-      .withSuccessHandler(function(res) {
+  var render = function(res) {
         if (!res || !res.success) { area.innerHTML = '<div class="text-danger small">تعذر تحميل الإعدادات</div>'; return; }
         area.innerHTML = '';
         (res.groups || []).forEach(function(g) { _tgAlertAddGroupRow_(g); });
@@ -9842,10 +9841,15 @@ function loadTgAlertCfg() {
           if ((res.groups || []).length) { badge.textContent = (res.groups || []).length + ' جروب'; badge.className = 'badge rounded-pill bg-success small'; }
           else { badge.textContent = 'جروب واحد (قديم)'; badge.className = 'badge rounded-pill bg-secondary small'; }
         }
-      })
+      };
+  var go = function() {
+    if (preGroups !== undefined && preGroups !== null) { render(preGroups); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+    google.script.run
+      .withSuccessHandler(render)
       .withFailureHandler(function(err) { area.innerHTML = '<div class="text-danger small">❌ ' + escapeHtml_(err.message || err) + '</div>'; })
       .getTgAlertGroups(window.authToken);
   };
+  if (preCompanies !== undefined && preCompanies !== null) { _tgbnCompanies = (preCompanies && preCompanies.companies) ? preCompanies.companies : (_tgbnCompanies || []); go(); return; }
   if (_tgbnCompanies) { go(); return; }
   google.script.run.withSuccessHandler(function(dd) { _tgbnCompanies = (dd && dd.companies) ? dd.companies : []; go(); })
     .withFailureHandler(function() { _tgbnCompanies = []; go(); })
@@ -9942,12 +9946,11 @@ function _accRfRowHtml_(p) {
     '<button class="btn btn-outline-danger btn-sm" onclick="this.closest(\'.acc-rf-row\').remove()">🗑️</button></div>';
 }
 
-function loadAccPricingCfg() {
+function loadAccPricingCfg(pre) {
   var rows = document.getElementById('accRfRows');
   if (!rows) return;
   rows.innerHTML = '<div class="text-muted small">⏳ جاري التحميل...</div>';
-  google.script.run
-    .withSuccessHandler(function(res) {
+  var render = function(res) {
       var cfg = (res && res.cfg) || {};
       var periods = cfg.roomFeePeriods || [];
       rows.innerHTML = periods.length ? periods.map(_accRfRowHtml_).join('') : _accRfRowHtml_({});
@@ -9963,7 +9966,10 @@ function loadAccPricingCfg() {
         badge.textContent = periods.length ? periods.length + ' فترة' : 'بلا فترات';
         badge.className = 'badge rounded-pill ' + (periods.length ? 'bg-primary' : 'bg-secondary') + ' small';
       }
-    })
+    };
+  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+  google.script.run
+    .withSuccessHandler(render)
     .withFailureHandler(function(err) {
       rows.innerHTML = '<div class="text-danger small">❌ ' + escapeHtml_(err.message || String(err)) + '</div>';
     })
@@ -10064,13 +10070,12 @@ function saveRequiredFieldsSelection(btn) {
     .saveRequiredFieldsConfig(window.authToken, selected);
 }
 
-function refreshAllServiceBadges() {
+function refreshAllServiceBadges(pre) {
   ['email','tgDaily','tgWebhook','gemini'].forEach(function(k) {
     var b = document.getElementById('svcBadge-' + k);
     if (b) { b.textContent = '⏳'; b.className = 'badge rounded-pill bg-secondary small'; }
   });
-  google.script.run
-    .withSuccessHandler(function(s) {
+  var render = function(s) {
       _servicesCache = s;
       if (!s) return;
       function setBadge(k, active, onLabel, offLabel) {
@@ -10087,7 +10092,10 @@ function refreshAllServiceBadges() {
         var body = document.getElementById('svcBody-' + k);
         if (body && !body.classList.contains('d-none')) populateServicePanel(k, s);
       });
-    })
+    };
+  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+  google.script.run
+    .withSuccessHandler(render)
     .withFailureHandler(function(err) { console.warn('getServicesStatus:', err); })
     .getServicesStatus(window.authToken);
 }
@@ -10304,11 +10312,10 @@ function _applySettingsScopeVisibility() {
 
 // يفحص حالة عمودي سعر الباص/قيمة التشغيلة ويحدّث شكل الزر ليعكسها فعليًا
 // (بدل ما يفضل بشكل ثابت "إضافة" حتى لو كانت الأعمدة مضافة بالفعل)
-function refreshBusPriceColumnsButton() {
+function refreshBusPriceColumnsButton(pre) {
   var btn = document.getElementById('btnAddBusPriceColumns');
   if (!btn) return;
-  google.script.run
-    .withSuccessHandler(function(res) {
+  var render = function(res) {
       if (res && res.exists) {
         btn.className = 'btn btn-success btn-sm w-100 text-start disabled';
         btn.innerHTML = '✅ أعمدة سعر الباص مضافة بالفعل';
@@ -10320,7 +10327,10 @@ function refreshBusPriceColumnsButton() {
         btn.setAttribute('title', 'يضيف عمودي سعر الباص وقيمة التشغيلة لشيت Bookings لو مش موجودين');
         btn.onclick = function(){ runAdminAction('addBusPriceColumns', btn); };
       }
-    })
+    };
+  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+  google.script.run
+    .withSuccessHandler(render)
     .withFailureHandler(function() { /* تجاهل بصمت — الزر يفضل بحالته الافتراضية */ })
     .checkBusPriceColumnsExist(window.authToken);
 }
@@ -10715,14 +10725,16 @@ function _toggleCleanupWeekday() {
   var w = document.getElementById('cleanupWeekdayWrap');
   if (w) w.classList.toggle('d-none', document.getElementById('cleanupFreq').value !== 'weekly');
 }
-function refreshCleanupScheduleStatus() {
+function refreshCleanupScheduleStatus(pre) {
   var badge = document.getElementById('cleanupSchedStatus');
   if (!badge) return;
+  var render = function(st) {
+    badge.textContent = (st && st.label) || 'غير مُفعَّل';
+    badge.className = 'badge ' + (st && st.active ? 'bg-success' : 'bg-secondary');
+  };
+  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
   google.script.run
-    .withSuccessHandler(function(st) {
-      badge.textContent = (st && st.label) || 'غير مُفعَّل';
-      badge.className = 'badge ' + (st && st.active ? 'bg-success' : 'bg-secondary');
-    })
+    .withSuccessHandler(render)
     .withFailureHandler(function() { badge.textContent = '—'; })
     .getTempCleanupStatus(window.authToken);
 }
@@ -11293,7 +11305,7 @@ function _regColRaw(k, r) {
     default: return '';
   }
 }
-// ⚡ (V4.295/U5) كبح فلتر السجل العام: كان كل ضغطة مفتاح تعيد ترشيح كل الصفوف (تطبيع عربي لكل صف) وإعادة رسم
+// ⚡ (V4.296/U5) كبح فلتر السجل العام: كان كل ضغطة مفتاح تعيد ترشيح كل الصفوف (تطبيع عربي لكل صف) وإعادة رسم
 // الجدول كاملًا فورًا — على سجل كبير يُحسّ تأخر الكتابة. نكبح الرسم ~220ms فيُنفَّذ مرة واحدة بعد توقف الكتابة.
 var _regFilterDebTimer_ = null;
 function renderRegistryTableDebounced() {
@@ -23925,7 +23937,9 @@ document
     // إعادة إظهار سجل الإشعارات (قد يكون أُخفي في وضع الرحلة)
     var _logCard = document.getElementById('bookingsLogCard');
     if (_logCard && !(window._tripMode && window._tripMode.active)) _logCard.classList.remove('d-none');
-    loadBookingsTable();
+    // ⚡ (V4.296/U4) إعادة استخدام الكاش المحمَّل بالفعل (رسم فوري) بدل جلب كامل عند كل تنقّل — نفس نمط
+    // زر الأرشيف وشرط السطر 31188؛ وزر «🔄 تحديث السجلات» يبقى للجلب الكامل عند الحاجة
+    if ((localBookingsCache || []).length) _bkRenderSections_(); else loadBookingsTable();
     loadSmartDashboard();
     refreshBookingTripDropdown();
   }
@@ -23942,13 +23956,22 @@ document
     _applySettingsScopeVisibility();
     try { document.querySelectorAll('.hb-set-card').forEach(function (c) { c.classList.toggle('d-none', !hasPermission('admin')); }); } catch (eHS) {}
     try { settingsShell_(); } catch (eSS) { console.warn('settingsShell_', eSS); }
-    loadSystemSettingsForm();
-    loadServicesStatus();
-    if (typeof refreshCleanupScheduleStatus === 'function') refreshCleanupScheduleStatus();
-    if (typeof refreshBackupStatus === 'function') refreshBackupStatus();
-    if (typeof loadTgBotCfg === 'function') loadTgBotCfg();
-    if (typeof loadTgAlertCfg === 'function') loadTgAlertCfg();
-    if (typeof loadAccPricingCfg === 'function') loadAccPricingCfg();
+    // ⚡ (V4.296/U2) نداء خادم واحد يجلب كل إعدادات الشاشة بدل ~٨ نداءات متتالية (Apps Script يُسلسلها فتتجمّد الشاشة
+    // عدة ثوانٍ عند فتحها). كل loader يقبل بياناته مسبقاً؛ وإن فشل التجميع أو غابت شريحة ما ⇒ يجلبها بنفسه كالسابق.
+    var _applySettingsBoot = function(b) {
+      b = b || {};
+      refreshAllServiceBadges(b.services);
+      if (typeof refreshBusPriceColumnsButton === 'function') refreshBusPriceColumnsButton(b.busCols);
+      if (typeof refreshCleanupScheduleStatus === 'function') refreshCleanupScheduleStatus(b.cleanup);
+      if (typeof refreshBackupStatus === 'function') refreshBackupStatus(b.backup);
+      if (typeof loadTgBotCfg === 'function') loadTgBotCfg(b.dropdowns, b.tgNotice);
+      if (typeof loadTgAlertCfg === 'function') loadTgAlertCfg(b.dropdowns, b.tgAlert);
+      if (typeof loadAccPricingCfg === 'function') loadAccPricingCfg(b.accPricing);
+    };
+    google.script.run
+      .withSuccessHandler(_applySettingsBoot)
+      .withFailureHandler(function(){ _applySettingsBoot(null); })
+      .settingsScreenBootstrap(window.authToken);
   }
 
   if (page === 'auditLog') {
@@ -23980,7 +24003,8 @@ document
   }
 
   if (page === 'transportAccounts') {
-    loadBookingsTable();
+    // ⚡ (V4.296/U4) إعادة استخدام كاش الحجوزات المحمَّل بدل جلب كامل عند كل دخول للشاشة
+    if ((localBookingsCache || []).length) _bkRenderSections_(); else loadBookingsTable();
     loadTransportAccountsData();
   }
 
@@ -24407,8 +24431,9 @@ function _backupApplyStatus_(st) {
   var link = document.getElementById('backupFolderLink');
   if (link && st.folderUrl) { link.href = st.folderUrl; link.classList.remove('d-none'); }
 }
-function refreshBackupStatus() {
+function refreshBackupStatus(pre) {
   if (!hasPermission('all')) return;
+  if (pre !== undefined && pre !== null) { _backupApplyStatus_(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
   google.script.run
     .withSuccessHandler(_backupApplyStatus_)
     .withFailureHandler(function() {})
@@ -46491,7 +46516,7 @@ function glEntFiltered_() {
   }
   return list;
 }
-// ⚡ (V4.295/U7) كبح فلتر عمود القيود النصي (يحتوي): كان كل ضغطة مفتاح تعيد رسم جدول القيود كاملًا فورًا.
+// ⚡ (V4.296/U7) كبح فلتر عمود القيود النصي (يحتوي): كان كل ضغطة مفتاح تعيد رسم جدول القيود كاملًا فورًا.
 // نكبح الرسم ~180ms فيُنفَّذ مرة بعد توقف الكتابة (نافذة الفلتر عنصر منفصل فيبقى التركيز بحقل الكتابة).
 var _glEntDrawDeb_ = null;
 function glDrawEntriesDeb_() { clearTimeout(_glEntDrawDeb_); _glEntDrawDeb_ = setTimeout(glDrawEntries, 180); }

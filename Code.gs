@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.295";
+var APP_VERSION = "4.296";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -10800,6 +10800,23 @@ function _bkPilgrimNamesRows_(visaGroupRefs) {
    📞 يُستدعى من: refreshAllServiceBadges() في index_web.html
    يفحص حياً: Triggers البريد/تيليجرام، Webhook تيليجرام (عبر استعلام حي لـ getWebhookInfo)، مفتاح Gemini
    ============================================================ */
+// ⚡ (V4.296/U2) تجميع كل نداءات شاشة الإعدادات في نداء خادم واحد بدل ~٨ نداءات متتالية (Apps Script يُسلسلها
+// لكل مستخدم فتتجمّد الشاشة عدة ثوانٍ عند فتحها). كل جزء مُغلَّف بـ try/catch فإن فشل أحدها (صلاحية/خطأ) يعود null
+// فترجع الواجهة لجلبه بمفرده كالسابق — فأسوأ حالة = السلوك القديم تمامًا، بلا أي كسر.
+function settingsScreenBootstrap(authToken) {
+  requireAuth_(authToken);
+  var out = {};
+  var tryGet = function (k, fn) { try { out[k] = fn(); } catch (e) { out[k] = null; } };
+  tryGet('services', function () { return getServicesStatus(authToken); });
+  tryGet('busCols', function () { return (typeof checkBusPriceColumnsExist === 'function') ? checkBusPriceColumnsExist(authToken) : null; });
+  tryGet('cleanup', function () { return (typeof getTempCleanupStatus === 'function') ? getTempCleanupStatus(authToken) : null; });
+  tryGet('backup', function () { return (typeof getBackupStatus === 'function') ? getBackupStatus(authToken) : null; });
+  tryGet('dropdowns', function () { return (typeof loadDropdownsData === 'function') ? loadDropdownsData(authToken) : null; });
+  tryGet('tgNotice', function () { return (typeof getTgNoticeConfig === 'function') ? getTgNoticeConfig(authToken) : null; });
+  tryGet('tgAlert', function () { return (typeof getTgAlertGroups === 'function') ? getTgAlertGroups(authToken) : null; });
+  tryGet('accPricing', function () { return (typeof getAccPricing === 'function') ? getAccPricing(authToken) : null; });
+  return out;
+}
 function getServicesStatus(authToken) {
   var session = requireSettingsBasicPermission_(authToken);
   var props = PropertiesService.getScriptProperties();
