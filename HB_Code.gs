@@ -5797,6 +5797,72 @@ function getUnifiedStatement_(partyName, start, end) {
   }
 }
 
+/* ============================================================
+   🔁 (V4.302) مطابقة كشوف السكن مع الحساب العام
+   القائمة: رصيد كل طرف سكن في كشف الشاشة مقابل رصيده في الحساب العام والفرق.
+   التفاصيل: مطابقة حركات الدفعات/اليدوي (الأكثر اختلافاً) عبر _glReconMatch_ لإظهار
+   الناقص في العام (لإضافته) والزائد/المكرر في العام (لحذفه). حجوزات الحجز تُستبعد من
+   التفاصيل لأنها تُزامَن تلقائياً للعام. قراءة فقط — التطبيق المجمّع بنداء منفصل.
+   ============================================================ */
+// إشارة حركة دفعة السكن (موجب=مدين، سالب=دائن) — مطابقة لاصطلاح دفتر الأرصدة buildBalanceLedger_
+function _hbPaySigned_(dir, amt) { return (dir === 'استلمنا منه' || dir === 'دائن يدوي') ? -amt : amt; }
+function getHbRecon(token, onlyDiff) {
+  requirePermission_(token, 'statement', 'view');
+  var profiles = getAllAccountProfiles_();
+  var data = getSourceRowsCached_(), pays = getPaymentsRowsCached_();
+  var ledger = buildBalanceLedger_({ data: data, payments: pays, profiles: profiles });
+  var todayTs = (function () { var d = new Date(); d.setHours(23, 59, 59, 999); return d.getTime(); })();
+  var out = [], t0 = Date.now();
+  Object.keys(profiles).forEach(function (name) {
+    if (Date.now() - t0 > 240000) return;   // حارس زمني: لا تتجاوز ٤ دقائق (البقية بتصفية أضيق)
+    var p = profiles[name];
+    if (p.type === 'آخر') return;            // «آخر» ليست حساب سكن
+    var screenBal = _hbR2_(ledger.balanceAsOf(name, todayTs) || 0);
+    var code = p.code || '', glBal = null, cur = '';
+    if (code) {
+      try {
+        var st = glStatement(token, code, '', '', { fast: true });
+        cur = (st.account && st.account.currency) || '';
+        glBal = _hbR2_(cur && st.closing ? (st.closing[cur] || 0) : (st.closingBase || 0));
+      } catch (e) { glBal = null; }
+    }
+    var diff = (glBal === null) ? null : _hbR2_(screenBal - glBal);
+    if (onlyDiff && diff !== null && Math.abs(diff) < 0.5) return;
+    if (onlyDiff && diff === null && !code) { /* بلا كود وبلا فرق محسوب: أظهره دائماً فهو غير مربوط */ }
+    out.push({ name: name, code: code, cur: cur, role: p.role || '', screenBal: screenBal, glBal: glBal, diff: diff, noCode: !code });
+  });
+  out.sort(function (a, b) { return Math.abs(b.diff || 0) - Math.abs(a.diff || 0) || (a.name < b.name ? -1 : 1); });
+  return safeReturn_({ success: true, rows: out });
+}
+function _hbR2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+function getHbReconDetail(token, name) {
+  requirePermission_(token, 'statement', 'view');
+  name = String(name || '').trim();
+  var p = getAllAccountProfiles_()[name] || {}, code = p.code || '';
+  var pays = getPaymentsRowsCached_(), partyNorm = normalizeName_(name), prog = [];
+  pays.forEach(function (r) {
+    if (normalizeName_(r[1]) !== partyNorm) return;
+    var dir = String(r[2] || ''), amt = parseFloat(r[3]) || 0; if (!amt) return;
+    var dt = r[0] instanceof Date ? new Date(r[0].getTime()) : new Date(r[0]); if (isNaN(dt.getTime())) return;
+    prog.push({ k: Utilities.formatDate(dt, 'GMT+3', 'yyyyMMdd'), amt: _hbPaySigned_(dir, amt),
+      paymentId: r[7] || '', dir: dir, note: String(r[4] || ''), dateDisp: Utilities.formatDate(dt, 'GMT+3', 'dd/MM/yyyy'), amtAbs: Math.abs(amt) });
+  });
+  var glMoves = [], cur = '', glErr = '';
+  if (code) try {
+    var st = glStatement(token, code, '', '', { fast: true });
+    cur = (st.account && st.account.currency) || '';
+    (st.rows || []).forEach(function (x) {
+      if (x.src === 'HB') return;                      // سطر حجز تلقائي ⇒ يُطابَق تلقائياً، لا يدخل الفروق
+      if (cur && x.currency !== cur) return;
+      var signed = _hbR2_((x.debit || 0) - (x.credit || 0)); if (!signed) return;
+      glMoves.push({ k: _glDKey_(x.date), amt: signed, entryId: x.entryId, lineNo: x.lineNo,
+        desc: String(x.desc || x.entryDesc || ''), auto: !!x.auto, src: x.src || '', dateDisp: x.date, amtAbs: Math.abs(signed) });
+    });
+  } catch (e) { glErr = e.message || String(e); }
+  var m = _glReconMatch_(prog, glMoves, { days: 5, tol: 0.5 });
+  return safeReturn_({ success: true, name: name, code: code, cur: cur, glErr: glErr,
+    onlyScreen: m.onlyP, onlyGl: m.onlyG, matchedN: m.matched.length });
+}
 
 // ==========================================================
 // تنبيهات تليجرام — المرحلة أ: محرّك الطابور والإرسال
