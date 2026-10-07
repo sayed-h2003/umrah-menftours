@@ -261,10 +261,13 @@ function hbHashPassword_(password, salt) {
 }
 
 function findUserRow_(sh, username) {
-  var data = sh.getDataRange().getValues();
+  // ⚡ (V4.295/S9) قراءة العمود A فقط بدل كل الأعمدة — تُستدعى من checkSession وكل تسجيل دخول عند فوات الكاش،
+  // فقراءة الورقة كاملة (كل الأعمدة) لإيجاد صف واحد باسم المستخدم جولة شبكية أثقل بلا داعٍ
+  var last = sh.getLastRow(); if (last < 1) return -1;
+  var col = sh.getRange(1, 1, last, 1).getValues();
   var norm = (username || '').toString().trim().toLowerCase();
-  for (var i = 1; i < data.length; i++) {
-    if ((data[i][0] || '').toString().trim().toLowerCase() === norm) return i + 1; // 1-based لاستخدامه مباشرة مع getRange
+  for (var i = 1; i < col.length; i++) {
+    if ((col[i][0] || '').toString().trim().toLowerCase() === norm) return i + 1; // 1-based لاستخدامه مباشرة مع getRange
   }
   return -1;
 }

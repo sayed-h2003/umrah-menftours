@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.294";
+var APP_VERSION = "4.295";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22030,7 +22030,8 @@ function bulkSaveMinistrySupervisors(authToken, rows) {
   var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
   var list = _mfReadSupervisors_();
   var byName = {}; list.forEach(function(x) { byName[x.name] = x; });
-  var added = [], updated = [], skipped = [];
+  // ⚡ (V4.295/S7) المشرفون الجدد يُجمَّعون ويُكتبون بـ setValues واحدة بدل appendRow لكل صف (جولة شبكية لكل مشرف)
+  var added = [], updated = [], skipped = [], newRows = [], newIdx = {};
   rows.forEach(function(r) {
     var name = _mfStr_(r && r.name), home = _mfStr_(r && r.home);
     if (!name || !home) { skipped.push(name || '(بلا اسم)'); return; }
@@ -22040,15 +22041,16 @@ function bulkSaveMinistrySupervisors(authToken, rows) {
       _mfStr_(r.mobile), _mfStr_(r.notes),
       old ? old.createdBy : session.username, old ? old.createdAt : _mfStamp_(),
       session.username, _mfStamp_() ];
-    if (old) {
+    if (newIdx[name] !== undefined) {   // اسم جديد مكرَّر بنفس الدفعة ⇒ يُحدَّث الصف المعلَّق (لا يُضاف مرتين)
+      newRows[newIdx[name]] = row;
+    } else if (old) {
       sh.getRange(old._row, 1, 1, MF_SUP_HEADERS.length).setValues([row]);
       updated.push(name);
     } else {
-      sh.appendRow(row);
-      added.push(name);
-      byName[name] = { name: name, _row: sh.getLastRow() }; // منع تكرار نفس الاسم مرتين بنفس الدفعة
+      newIdx[name] = newRows.length; newRows.push(row); added.push(name);
     }
   });
+  if (newRows.length) sh.getRange(sh.getLastRow() + 1, 1, newRows.length, MF_SUP_HEADERS.length).setValues(newRows);
   if (added.length || updated.length) {
     logChange_(session.username, 'تسجيل مجمَّع لمشرفين', added.concat(updated).join('، '),
       '-', '-', 'أُضيف ' + added.length + ' وحُدِّث ' + updated.length);

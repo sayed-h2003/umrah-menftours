@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.294 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.295 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.294)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.295)', diag);
 }, 6000);
 </script>
 
@@ -3834,20 +3834,20 @@ input[type="date"]:not(:focus):not(:valid) {
 
       <!-- سطر الفلاتر الديناميكي — تصفية لحظية بنظام البحث التنبئي -->
       <div class="row g-2 mb-2 p-2 pilgrims-toolbar mx-0 flex-md-nowrap">
-        <div class="col-md-3"><input id="regFilterName" list="regNamesDatalist" class="form-control form-control-sm" placeholder="🔎 بحث بالاسم..." oninput="renderRegistryTable()"></div>
-        <div class="col-md-2"><input id="regFilterPassport" list="regPassportsDatalist" class="form-control form-control-sm" placeholder="🛂 رقم الجواز..." oninput="renderRegistryTable()"></div>
-        <div class="col-md-3"><input id="regFilterTrip" list="regTripsDatalist" class="form-control form-control-sm" placeholder="🧳 اسم الرحلة..." oninput="renderRegistryTable()"></div>
-        <div class="col-md-2"><input id="regFilterClient" list="regClientsDatalist" class="form-control form-control-sm" placeholder="👤 اسم العميل..." oninput="renderRegistryTable()"></div>
+        <div class="col-md-3"><input id="regFilterName" list="regNamesDatalist" class="form-control form-control-sm" placeholder="🔎 بحث بالاسم..." oninput="renderRegistryTableDebounced()"></div>
+        <div class="col-md-2"><input id="regFilterPassport" list="regPassportsDatalist" class="form-control form-control-sm" placeholder="🛂 رقم الجواز..." oninput="renderRegistryTableDebounced()"></div>
+        <div class="col-md-3"><input id="regFilterTrip" list="regTripsDatalist" class="form-control form-control-sm" placeholder="🧳 اسم الرحلة..." oninput="renderRegistryTableDebounced()"></div>
+        <div class="col-md-2"><input id="regFilterClient" list="regClientsDatalist" class="form-control form-control-sm" placeholder="👤 اسم العميل..." oninput="renderRegistryTableDebounced()"></div>
         <div class="col-md-2">
           <div class="input-group input-group-sm">
-            <input type="text" id="regFilterDate" class="form-control form-control-sm" dir="ltr" placeholder="تاريخ السفر dd/mm/yyyy" oninput="renderRegistryTable()" onchange="renderRegistryTable()">
+            <input type="text" id="regFilterDate" class="form-control form-control-sm" dir="ltr" placeholder="تاريخ السفر dd/mm/yyyy" oninput="renderRegistryTableDebounced()" onchange="renderRegistryTable()">
           </div>
         </div>
       </div>
       <!-- 🔗 (V4.120) تصفية إضافية بالربط: رقم ملف مراجعة الوزارة ورقم الإشعار -->
       <div class="row g-2 mb-2 p-2 pilgrims-toolbar mx-0 flex-md-nowrap">
-        <div class="col-md-3"><input id="regFilterMfFile" class="form-control form-control-sm" dir="ltr" placeholder="🏛️ رقم ملف الوزارة..." oninput="renderRegistryTable()"></div>
-        <div class="col-md-3"><input id="regFilterBooking" class="form-control form-control-sm" dir="ltr" placeholder="📄 رقم الإشعار..." oninput="renderRegistryTable()"></div>
+        <div class="col-md-3"><input id="regFilterMfFile" class="form-control form-control-sm" dir="ltr" placeholder="🏛️ رقم ملف الوزارة..." oninput="renderRegistryTableDebounced()"></div>
+        <div class="col-md-3"><input id="regFilterBooking" class="form-control form-control-sm" dir="ltr" placeholder="📄 رقم الإشعار..." oninput="renderRegistryTableDebounced()"></div>
         <div class="col-md-6 d-flex align-items-center"><span class="text-muted small">تُطابَق عبر رحلات المعتمر — يظهر بجوار كل رحلة رقم إشعارها ورقم ملف الوزارة الخاص بها.</span></div>
       </div>
       <datalist id="regNamesDatalist"></datalist>
@@ -7771,7 +7771,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.294";
+var CLIENT_APP_VERSION = "4.295";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -11293,9 +11293,17 @@ function _regColRaw(k, r) {
     default: return '';
   }
 }
+// ⚡ (V4.295/U5) كبح فلتر السجل العام: كان كل ضغطة مفتاح تعيد ترشيح كل الصفوف (تطبيع عربي لكل صف) وإعادة رسم
+// الجدول كاملًا فورًا — على سجل كبير يُحسّ تأخر الكتابة. نكبح الرسم ~220ms فيُنفَّذ مرة واحدة بعد توقف الكتابة.
+var _regFilterDebTimer_ = null;
+function renderRegistryTableDebounced() {
+  clearTimeout(_regFilterDebTimer_);
+  _regFilterDebTimer_ = setTimeout(renderRegistryTable, 220);
+}
 function renderRegistryTable() {
   var tbody = document.getElementById('registryTableBody');
   if (!tbody) return;
+  clearTimeout(_regFilterDebTimer_);   // لو استُدعيت مباشرة (تحديث/تبديل) نلغي أي كبح معلّق
   _tblRefresh_('regTable', renderRegistryTable);
   var headRow = document.getElementById('regTableHeadRow');
   if (headRow) headRow.innerHTML =
@@ -46483,7 +46491,12 @@ function glEntFiltered_() {
   }
   return list;
 }
+// ⚡ (V4.295/U7) كبح فلتر عمود القيود النصي (يحتوي): كان كل ضغطة مفتاح تعيد رسم جدول القيود كاملًا فورًا.
+// نكبح الرسم ~180ms فيُنفَّذ مرة بعد توقف الكتابة (نافذة الفلتر عنصر منفصل فيبقى التركيز بحقل الكتابة).
+var _glEntDrawDeb_ = null;
+function glDrawEntriesDeb_() { clearTimeout(_glEntDrawDeb_); _glEntDrawDeb_ = setTimeout(glDrawEntries, 180); }
 function glDrawEntries() {
+  clearTimeout(_glEntDrawDeb_);
   var box = document.getElementById('glEntList'); if (!box) return;
   glDrawEntChips_();
   var all = GL._entries || [];
@@ -46531,7 +46544,7 @@ function glEntFilterPop(ev, k) {
       return '<label style="display:flex;gap:6px;align-items:center;padding:3px 2px;cursor:pointer;"><input type="checkbox" value="' + glEsc(v) + '"' + (sel.indexOf(v) >= 0 ? ' checked' : '') + ' onchange="glEntPick(\'' + k + '\')"> ' + glEsc(v) + '</label>';
     }).join('');
   } else {
-    p.innerHTML = '<b style="font-size:11.5px;color:#64748b;">تصفية: ' + col.l + ' (يحتوي)</b><input id="glEntFpIn" class="form-control form-control-sm mt-1" value="' + glEsc(typeof cf[k] === 'string' ? cf[k] : '') + '" oninput="GL._ecf[\'' + k + '\']=this.value;glDrawEntries();" placeholder="اكتب للتصفية…">';
+    p.innerHTML = '<b style="font-size:11.5px;color:#64748b;">تصفية: ' + col.l + ' (يحتوي)</b><input id="glEntFpIn" class="form-control form-control-sm mt-1" value="' + glEsc(typeof cf[k] === 'string' ? cf[k] : '') + '" oninput="GL._ecf[\'' + k + '\']=this.value;glDrawEntriesDeb_();" placeholder="اكتب للتصفية…">';
   }
   document.body.appendChild(p);
   var r = ev.target.getBoundingClientRect();
