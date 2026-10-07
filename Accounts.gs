@@ -4193,7 +4193,19 @@ function _glCsSync_(code, user, opts) {
   if (!opts.preview && (out.created.length || out.updated.length)) {
     var mOpt = { notify: true, by: 'شيت العهدة — ' + ((accs.map[code] || {}).name || code) };
     try { mOpt.parties = _glHbMirrorParties_(); } catch (eP) {}
-    out.created.concat(out.updated).forEach(function (c) { try { var mr = _glHbMirrorSync_(c.id, mOpt); if (mr && mr.written) c.hbMirror = mr.written; } catch (eM) { Logger.log('cs hb mirror: ' + eM.message); } });
+    // ⚡ (V4.294) جذر «البرنامج مشغول/مهلة التأمين»: كان كل قيد بالحلقة يفتح ملف الحجوزات الخارجي من جديد
+    // (SpreadsheetApp.openById ~١-٣ث لكل صف) ويعيد بناء خريطة الصرف، فيُمسَك قفل الحسابات عشرات الثواني عند
+    // اعتماد/مزامنة عدة صفوف عهدة ⇒ تفشل أي عملية حسابات أخرى (البوت/الاعتماد/المزامنة). الآن: فتح الملف وبناء
+    // خريطة الصرف مرة واحدة لكل الحلقة، وتمرير isNew للقيود المنشأة للتوّ (تتخطّى قراءة عمود H) ⇒ القفل يُمسَك
+    // لحظة الكتابة المحلية فقط تقريباً.
+    try { var _hbMC = _glHbCfg_(); if (_hbMC.ssId) mOpt.ss = SpreadsheetApp.openById(_hbMC.ssId); } catch (eSS) {}
+    try { mOpt.fx = _glFxDailyMap_(); } catch (eFx) {}
+    var _runMir = function (c, isNew) {
+      try { var mr = _glHbMirrorSync_(c.id, isNew ? Object.assign({ isNew: true }, mOpt) : mOpt); if (mr && mr.written) c.hbMirror = mr.written; }
+      catch (eM) { Logger.log('cs hb mirror: ' + eM.message); }
+    };
+    out.created.forEach(function (c) { _runMir(c, true); });   // قيود منشأة للتوّ ⇒ isNew
+    out.updated.forEach(function (c) { _runMir(c, false); });   // قيود مُعدَّلة ⇒ قد يكون لها صفوف سابقة
   }
   var n = out.created.length + out.updated.length + out.hb.length + (out.autoLinked || 0);
   cfg.last = { at: _glNow_(), by: user, created: out.created.length, updated: out.updated.length, pending: out.pending.length, problems: out.problems.length, autoLinked: out.autoLinked || 0 };
@@ -5266,7 +5278,10 @@ function _glHbMirrorSync_(entryId, opt) {
   var c = _glHbCfg_(); if (!c.ssId) return null;
   var ss = opt.ss || SpreadsheetApp.openById(c.ssId), sh = ss.getSheetByName(c.pay); if (!sh) return null;
   var pre = 'GL:' + id + ':', last = sh.getLastRow(), have = [];
-  if (last >= 2) sh.getRange(2, 8, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(pre) === 0) have.push(i + 2); });
+  // ⚡ (V4.294) قيد منشأ للتوّ (opt.isNew): معرّفه تسلسلي جديد لم يُنسَخ قطّ ⇒ لا صفوف «GL:id:» سابقة له بشيت
+  // الدفعات، فنتخطّى قراءة عمود H كاملاً. كانت هذه القراءة جولة شبكية لكل قيد عند اعتماد/مزامنة عدة صفوف عهدة،
+  // فيُمسَك قفل الحسابات طويلاً ⇒ «البرنامج مشغول/مهلة التأمين». لا يُمرَّر isNew إلا لقيد أنشأته هذه المزامنة.
+  if (!opt.isNew && last >= 2) sh.getRange(2, 8, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(pre) === 0) have.push(i + 2); });
   var n = Math.min(have.length, want.length), oldVals = [];
   if (opt.notify && have.length) oldVals = have.map(function (r) { return sh.getRange(r, 1, 1, 10).getValues()[0]; });   // (V4.247) للمقارنة في تنبيه التعديل/الحذف
   for (var i = 0; i < n; i++) sh.getRange(have[i], 1, 1, 10).setValues([want[i]]);
