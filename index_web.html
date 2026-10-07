@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.296 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.297 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.296)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.297)', diag);
 }, 6000);
 </script>
 
@@ -7771,7 +7771,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.296";
+var CLIENT_APP_VERSION = "4.297";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 
@@ -9671,7 +9671,7 @@ function testTgCcRun(btn) {
     .testTgCateringBot(window.authToken);
 }
 
-function loadTgBotCfg(preCompanies, preCfg) {   // ⚡ (V4.296/U2) إمكان تمرير الشركات والإعدادات مسبقاً من نداء الإعدادات المجمّع
+function loadTgBotCfg(preCompanies, preCfg) {   // ⚡ (V4.297/U2) إمكان تمرير الشركات والإعدادات مسبقاً من نداء الإعدادات المجمّع
   var area = document.getElementById('tgbnGroupsArea');
   if (!area) return;
   area.innerHTML = '<div class="text-muted small">⏳ جاري التحميل...</div>';
@@ -9825,7 +9825,7 @@ function testTgBotRun(btn) {
 /* ============================================================
    📣 (V4.18) تنبيهات تليجرام لتحركات الغد — تعدُّد جروبات، كلٌّ بشركاته أو «كل الشركات»
    ============================================================ */
-function loadTgAlertCfg(preCompanies, preGroups) {   // ⚡ (V4.296/U2) إمكان تمرير الشركات والجروبات مسبقاً من نداء الإعدادات المجمّع
+function loadTgAlertCfg(preCompanies, preGroups) {   // ⚡ (V4.297/U2) إمكان تمرير الشركات والجروبات مسبقاً من نداء الإعدادات المجمّع
   var area = document.getElementById('tgAlertGroupsArea');
   if (!area) return;
   var render = function(res) {
@@ -9843,7 +9843,7 @@ function loadTgAlertCfg(preCompanies, preGroups) {   // ⚡ (V4.296/U2) إمكا
         }
       };
   var go = function() {
-    if (preGroups !== undefined && preGroups !== null) { render(preGroups); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+    if (preGroups !== undefined && preGroups !== null) { render(preGroups); return; }   // ⚡ (V4.297/U2) من نداء الإعدادات المجمّع
     google.script.run
       .withSuccessHandler(render)
       .withFailureHandler(function(err) { area.innerHTML = '<div class="text-danger small">❌ ' + escapeHtml_(err.message || err) + '</div>'; })
@@ -9967,7 +9967,7 @@ function loadAccPricingCfg(pre) {
         badge.className = 'badge rounded-pill ' + (periods.length ? 'bg-primary' : 'bg-secondary') + ' small';
       }
     };
-  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.297/U2) من نداء الإعدادات المجمّع
   google.script.run
     .withSuccessHandler(render)
     .withFailureHandler(function(err) {
@@ -10093,7 +10093,7 @@ function refreshAllServiceBadges(pre) {
         if (body && !body.classList.contains('d-none')) populateServicePanel(k, s);
       });
     };
-  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.297/U2) من نداء الإعدادات المجمّع
   google.script.run
     .withSuccessHandler(render)
     .withFailureHandler(function(err) { console.warn('getServicesStatus:', err); })
@@ -10328,7 +10328,7 @@ function refreshBusPriceColumnsButton(pre) {
         btn.onclick = function(){ runAdminAction('addBusPriceColumns', btn); };
       }
     };
-  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.297/U2) من نداء الإعدادات المجمّع
   google.script.run
     .withSuccessHandler(render)
     .withFailureHandler(function() { /* تجاهل بصمت — الزر يفضل بحالته الافتراضية */ })
@@ -10732,7 +10732,7 @@ function refreshCleanupScheduleStatus(pre) {
     badge.textContent = (st && st.label) || 'غير مُفعَّل';
     badge.className = 'badge ' + (st && st.active ? 'bg-success' : 'bg-secondary');
   };
-  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+  if (pre !== undefined && pre !== null) { render(pre); return; }   // ⚡ (V4.297/U2) من نداء الإعدادات المجمّع
   google.script.run
     .withSuccessHandler(render)
     .withFailureHandler(function() { badge.textContent = '—'; })
@@ -11305,7 +11305,7 @@ function _regColRaw(k, r) {
     default: return '';
   }
 }
-// ⚡ (V4.296/U5) كبح فلتر السجل العام: كان كل ضغطة مفتاح تعيد ترشيح كل الصفوف (تطبيع عربي لكل صف) وإعادة رسم
+// ⚡ (V4.297/U5) كبح فلتر السجل العام: كان كل ضغطة مفتاح تعيد ترشيح كل الصفوف (تطبيع عربي لكل صف) وإعادة رسم
 // الجدول كاملًا فورًا — على سجل كبير يُحسّ تأخر الكتابة. نكبح الرسم ~220ms فيُنفَّذ مرة واحدة بعد توقف الكتابة.
 var _regFilterDebTimer_ = null;
 function renderRegistryTableDebounced() {
@@ -23937,7 +23937,7 @@ document
     // إعادة إظهار سجل الإشعارات (قد يكون أُخفي في وضع الرحلة)
     var _logCard = document.getElementById('bookingsLogCard');
     if (_logCard && !(window._tripMode && window._tripMode.active)) _logCard.classList.remove('d-none');
-    // ⚡ (V4.296/U4) إعادة استخدام الكاش المحمَّل بالفعل (رسم فوري) بدل جلب كامل عند كل تنقّل — نفس نمط
+    // ⚡ (V4.297/U4) إعادة استخدام الكاش المحمَّل بالفعل (رسم فوري) بدل جلب كامل عند كل تنقّل — نفس نمط
     // زر الأرشيف وشرط السطر 31188؛ وزر «🔄 تحديث السجلات» يبقى للجلب الكامل عند الحاجة
     if ((localBookingsCache || []).length) _bkRenderSections_(); else loadBookingsTable();
     loadSmartDashboard();
@@ -23956,7 +23956,7 @@ document
     _applySettingsScopeVisibility();
     try { document.querySelectorAll('.hb-set-card').forEach(function (c) { c.classList.toggle('d-none', !hasPermission('admin')); }); } catch (eHS) {}
     try { settingsShell_(); } catch (eSS) { console.warn('settingsShell_', eSS); }
-    // ⚡ (V4.296/U2) نداء خادم واحد يجلب كل إعدادات الشاشة بدل ~٨ نداءات متتالية (Apps Script يُسلسلها فتتجمّد الشاشة
+    // ⚡ (V4.297/U2) نداء خادم واحد يجلب كل إعدادات الشاشة بدل ~٨ نداءات متتالية (Apps Script يُسلسلها فتتجمّد الشاشة
     // عدة ثوانٍ عند فتحها). كل loader يقبل بياناته مسبقاً؛ وإن فشل التجميع أو غابت شريحة ما ⇒ يجلبها بنفسه كالسابق.
     var _applySettingsBoot = function(b) {
       b = b || {};
@@ -24003,7 +24003,7 @@ document
   }
 
   if (page === 'transportAccounts') {
-    // ⚡ (V4.296/U4) إعادة استخدام كاش الحجوزات المحمَّل بدل جلب كامل عند كل دخول للشاشة
+    // ⚡ (V4.297/U4) إعادة استخدام كاش الحجوزات المحمَّل بدل جلب كامل عند كل دخول للشاشة
     if ((localBookingsCache || []).length) _bkRenderSections_(); else loadBookingsTable();
     loadTransportAccountsData();
   }
@@ -24433,7 +24433,7 @@ function _backupApplyStatus_(st) {
 }
 function refreshBackupStatus(pre) {
   if (!hasPermission('all')) return;
-  if (pre !== undefined && pre !== null) { _backupApplyStatus_(pre); return; }   // ⚡ (V4.296/U2) من نداء الإعدادات المجمّع
+  if (pre !== undefined && pre !== null) { _backupApplyStatus_(pre); return; }   // ⚡ (V4.297/U2) من نداء الإعدادات المجمّع
   google.script.run
     .withSuccessHandler(_backupApplyStatus_)
     .withFailureHandler(function() {})
@@ -46516,7 +46516,7 @@ function glEntFiltered_() {
   }
   return list;
 }
-// ⚡ (V4.296/U7) كبح فلتر عمود القيود النصي (يحتوي): كان كل ضغطة مفتاح تعيد رسم جدول القيود كاملًا فورًا.
+// ⚡ (V4.297/U7) كبح فلتر عمود القيود النصي (يحتوي): كان كل ضغطة مفتاح تعيد رسم جدول القيود كاملًا فورًا.
 // نكبح الرسم ~180ms فيُنفَّذ مرة بعد توقف الكتابة (نافذة الفلتر عنصر منفصل فيبقى التركيز بحقل الكتابة).
 var _glEntDrawDeb_ = null;
 function glDrawEntriesDeb_() { clearTimeout(_glEntDrawDeb_); _glEntDrawDeb_ = setTimeout(glDrawEntries, 180); }

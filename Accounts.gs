@@ -3035,8 +3035,20 @@ function _glDescDiff_(a, b) {
   var cut = function (L) { var t = L.slice(0, 4).join('، '); return (t.length > 140 ? t.slice(0, 140) + '…' : t) + (L.length > 4 ? ' …' : ''); };
   return 'قبل: «' + (rem.length ? cut(rem) : '—') + '» ← بعد: «' + (add.length ? cut(add) : '—') + '»';
 }
+// 📅 (V4.297) استخراج نطاق التواريخ من بيان القيد (مثل «من 14/10 إلى 25/10») لعرض تغيّر التواريخ وحده بدل البيان كاملاً
+function _glDatesOf_(s) {
+  s = _glCleanDesc_(s || '');
+  var m = s.match(/من\s*\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\s*(?:إلى|الى|-|–|—)\s*\d{1,2}\/\d{1,2}(?:\/\d{2,4})?/);
+  if (m) return m[0].replace(/\s+/g, ' ').replace('الى', 'إلى').trim();
+  var all = s.match(/\d{1,2}\/\d{1,2}(?:\/\d{2,4})?/g);
+  return all ? all.join('، ') : '';
+}
 function _glLinesDiff_(eRow, oldRows, newLines, accM, hdr) {
   if (!newLines) return 'إلغاء القيد (المصدر حُذف)';
+  // 🔎 (V4.297) القيود التلقائية (الحجوزات…) بيانها نصّ مُولَّد من البنود، فمقارنته رمزاً برمز تُحدث تشتتاً بصرياً.
+  // لها: نكتفي بالتغيّرات الجوهرية (المبالغ = سعر البيع/التكلفة، والتواريخ، والرحلة/العميل/المورد)؛ القيود اليدوية
+  // تبقى بمقارنة البيان الكاملة كالسابق لأن بيانها مكتوب يدوياً وقد يكون جوهرياً.
+  var isAuto = /^AUTO:/.test(_glStr_(eRow[6]));
   var nm = function (c) { var a = accM[c]; return a ? a.name : c; }, cl = { EGP: 'جنيه', SAR: 'ريال', USD: 'دولار' };
   var num = function (x) { return x === '' || x == null ? 0 : _glNum_(x); };
   var O = oldRows.map(function (l) { return { acc: _glStr_(l[4]), d: num(l[5]), c: num(l[6]), cur: _glStr_(l[7]), rate: _glNum_(l[8]), trip: _glStr_(l[11]), co: _glStr_(l[12]), client: _glStr_(l[13]), agent: _glStr_(l[14]), desc: _glStr_(l[15]) }; });
@@ -3062,9 +3074,18 @@ function _glLinesDiff_(eRow, oldRows, newLines, accM, hdr) {
     [['trip', 'الرحلة'], ['client', 'العميل'], ['agent', 'الوكيل/المورد'], ['co', 'الشركة']].forEach(function (f) {
       if (_glStr_(o[f[0]]) !== _glStr_(n[f[0]])) out.push(a + ' — ' + f[1] + ': «' + (o[f[0]] || '—') + '» ← «' + (n[f[0]] || '—') + '»');
     });
-    if (_glCleanDesc_(o.desc) !== _glCleanDesc_(n.desc)) { var dd = _glDescDiff_(o.desc, n.desc); if (dd && !seenDD[dd]) { seenDD[dd] = 1; out.push(a + ' — ' + dd); } else if (!dd && key(o) === key(n)) out.push(a + ' — بيان السطر تغيّر'); }
+    if (_glCleanDesc_(o.desc) !== _glCleanDesc_(n.desc)) {
+      // 🔎 (V4.297) للقيود التلقائية: نعرض تغيّر التواريخ وحده (البيان نصّ مُولَّد؛ تغيّر السعر/التكلفة يظهره فرق المبلغ أعلاه)،
+      // دون المقارنة الرمزية الطويلة لبيان الحجز التي كانت تُحدث زحمة بصرية. القيود اليدوية تبقى بالمقارنة الكاملة.
+      var od = _glDatesOf_(o.desc), nd = _glDatesOf_(n.desc);
+      if (od !== nd && (od || nd)) { var dl = 'التواريخ: ' + (od || '—') + ' ← ' + (nd || '—'); if (!seenDD[dl]) { seenDD[dl] = 1; out.push(dl); } }
+      if (!isAuto) { var dd = _glDescDiff_(o.desc, n.desc); if (dd && !seenDD[dd]) { seenDD[dd] = 1; out.push(a + ' — ' + dd); } else if (!dd && key(o) === key(n)) out.push(a + ' — بيان السطر تغيّر'); }
+    }
   });
-  if (hdr && hdr.desc && _glCleanDesc_(eRow[4]) !== _glCleanDesc_(hdr.desc)) { var hd = _glDescDiff_(eRow[4], hdr.desc); if (hd && !seenDD[hd]) out.unshift('البيان — ' + hd); }
+  if (hdr && hdr.desc && _glCleanDesc_(eRow[4]) !== _glCleanDesc_(hdr.desc)) {
+    if (!isAuto) { var hd = _glDescDiff_(eRow[4], hdr.desc); if (hd && !seenDD[hd]) out.unshift('البيان — ' + hd); }
+    else { var ohd = _glDatesOf_(eRow[4]), nhd = _glDatesOf_(hdr.desc); if (ohd !== nhd && (ohd || nhd)) { var hl = 'التواريخ: ' + (ohd || '—') + ' ← ' + (nhd || '—'); if (!seenDD[hl]) out.unshift(hl); } }
+  }
   if (!out.length) out.push('تغيير بترتيب الأسطر أو بأسطر الوسيط فقط');
   return out.slice(0, 14).join('\n');
 }
