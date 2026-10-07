@@ -175,10 +175,14 @@ function _glDate_(v) {
   if (m) return ('0' + m[1]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/' + m[3];
   m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
   if (m) return ('0' + m[3]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/' + m[1];
+  // 🗓️ (V4.300) سنة من رقمين (مثل 7/10/26) ⇒ تُفسَّر 20yy بدل أن تُرفَض فارغة
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})$/);
+  if (m) return ('0' + m[1]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/20' + m[3];
   return '';
 }
 function _glDKey_(d) { var m = String(d || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? (m[3] + m[2] + m[1]) : ''; }   // yyyymmdd للمقارنة والترتيب
 function _glNow_() { return Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'dd/MM/yyyy HH:mm:ss'); }
+function _glToday_() { return Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'dd/MM/yyyy'); }
 function _glNorm_(s) {
   return (typeof _normalizeArabicName_ === 'function' ? _normalizeArabicName_(s) : String(s || '')).toLowerCase()
     .replace(/[ؤ]/g, 'و').replace(/[ئ]/g, 'ي').replace(/\s+/g, ' ').trim();
@@ -3514,8 +3518,15 @@ function _glCsReadRows_(sh, startRow, cfg) {
     if (r.some(function (v) { return typeof v === 'string' && TOT.test(v); })) { stop = true; return; }
     var num = function (ci) { return ci < 0 || r[ci] instanceof Date ? 0 : _glR2_(_glNum_(r[ci])); };
     var raw = _glStr_(r[C.qaid]);
+    // 🗓️ (V4.300) تاريخ صف العهدة: سنة غير منطقية (خطأ إدخال بالشيت مثل 0202/202 — أقل من 2000) تُعتبر خطأ كتابة في
+    // السنة فقط، فنُصحِّح السنة إلى السنة الحالية مع إبقاء اليوم/الشهر كما بالشيت (07/10/0202 ⇒ 07/10/2026) — فيُسجَّل
+    // الصف كقيد جديد بتاريخه الصحيح بدل رفضه بـ«تاريخ قبل بداية الحسابات»، مع ملاحظة شفافة قصيرة بالبيان. ثابت (لا يتغيّر يومياً).
+    var _dte = _glDate_(r[C.date]), _ym = _dte.match(/^(\d{2}\/\d{2})\/(\d{4})$/), _badDate = '';
+    if (_ym && parseInt(_ym[2], 10) < 2000) { _badDate = _dte; _dte = _ym[1] + '/' + Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'yyyy'); }
     var x = { row: startRow + i, inAmt: num(C.in), outAmt: num(C.out),
-      desc: _glStr_(r[C.desc]), date: _glDate_(r[C.date]), f: raw, hint: _glStr_(r[C.party]) };
+      desc: _glStr_(r[C.desc]) + (_badDate ? ' [صُحِّحت سنة التاريخ من «' + _badDate + '»]' : ''),
+      date: _dte, f: raw, hint: _glStr_(r[C.party]) };
+    if (_badDate) x.badDate = _badDate;
     var parts = null;
     if (C.multi) {   // (V4.262) العملة = العمود الذي فيه القيمة — (V4.273) أكثر من عملة بالصف ⇒ يُفصل لقيد مستقل لكل عملة
       var hit = ['EGP', 'SAR', 'USD'].filter(function (c) { return num(C['in' + c]) || num(C['out' + c]); });
@@ -4284,7 +4295,18 @@ function _glCsAutoAll_() {
 function glCustSheetCron() {
   // ⚡ (V4.268) المشغّل القديم كان مضبوطاً كل دقيقة (يُعاد ضبطه فقط عند حفظ إعداد) — يُصحَّح ذاتياً مرة واحدة
   try { var P0 = PropertiesService.getScriptProperties(); if (P0.getProperty('GL_CS_TRIG_V') !== '270') { P0.setProperty('GL_CS_TRIG_V', '270'); _glCsEnsureTrigger_(); return; } } catch (eT) {}
+  // 🧱 (V4.300) حارس عدم-التداخل: كانت دورات المزامنة المجدولة تتكدّس فوق بعضها (دورة تستغرق دقائق والمشغّل كل دقيقة)
+  // فتُشبع حصة Apps Script وتُبطّئ كل الشاشات وتُفشل الحفظ بـ«مهلة التأمين». الآن: نبضة في Properties — لو دورة سابقة
+  // ما زالت تعمل (نبضتها خلال آخر ٥ دقائق) تُتخطى هذه الدورة تماماً، فلا تكدّس. تُحدَّث النبضة بالبداية وتُمحى بالنهاية.
+  var PH = null;
+  try {
+    PH = PropertiesService.getScriptProperties();
+    var hb = +(PH.getProperty('GL_CS_CRON_HB') || 0);
+    if (hb && Date.now() - hb < 300000) return;   // دورة سابقة قيد التنفيذ ⇒ تخطَّ
+    PH.setProperty('GL_CS_CRON_HB', String(Date.now()));
+  } catch (eH) { PH = null; }
   try { _glCsAutoAll_(); } catch (e) { Logger.log('glCustSheetCron: ' + e.message); }   // (V4.258) القفل لكل شيت داخل _glCsAutoAll_
+  finally { try { if (PH) PH.deleteProperty('GL_CS_CRON_HB'); } catch (eF) {} }
 }
 function _glCsEnsureTrigger_() {
   var set = _glSettings_(), minI = 0;
