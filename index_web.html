@@ -29584,9 +29584,15 @@ function _accPrintAllPickGo_(mode) {
   _accPrint_('all', null, mode || undefined, sel, merge, summaryOnly, showSettlement);
 }
 
+// 🏷️ (V4.305) سطر «خصم» بقيمة صفر (المتاح دائماً بنمط «برنامج» ولم يُستخدم) لا يظهر بالكشف المطبوع ولا يؤثر
+function _accPrintData_(d) {
+  if (!d || !d.items) return d;
+  var items = d.items.filter(function(i) { return !(i.isDiscount && !(Math.abs(Number(i.value) || 0) > 0.004)); });
+  return items.length === d.items.length ? d : Object.assign({}, d, { items: items });
+}
 function _accPrint_(scope, tripOnly, mode, tripFilter, merge, summaryOnly, showSettlement, btn) {
   if (!_accHasAny_()) { alert('⚠️ حمّل حساب عميل أولًا'); return; }
-  var d = _accData, esc = escapeHtml_;
+  var d = _accPrintData_(_accData), esc = escapeHtml_;
   var trips = scope === 'trip' ? d.trips.filter(function(r) { return r.trip === tripOnly; }) : d.trips;
   // ✅ (V4.17) اختيار الرحلات التي تظهر بالكشف الشامل — لو مُرِّرت قائمة، غيرها يُستبعد كليًا
   if (scope === 'all' && Array.isArray(tripFilter)) {

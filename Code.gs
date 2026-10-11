@@ -14537,7 +14537,9 @@ function saveAccItem(authToken, item) {
         var _changed = String(_r[3]) !== String(item.desc) || _accNum_(_r[6]) !== count ||
                        _accNum_(_r[7]) !== price || String(_r[5] || 'EGP') !== currency ||
                        _accNum_(_r[15]) !== nights;
-        if (String(_r[17]) === 'نعم' && _changed) sh.getRange(i + 2, 18).setValue('معدّل');
+        // 🏷️ (V4.305) سطر «خصم» الثابت: كتابة خصم الفرد (السعر وحده) لا تُفقده مزامنة العدد — السعر لا تلمسه المزامنة أصلاً
+        var _onlyPrice = String(_r[3]) === String(item.desc) && _accNum_(_r[6]) === count && String(_r[5] || 'EGP') === currency && _accNum_(_r[15]) === nights;
+        if (String(_r[17]) === 'نعم' && _changed && !(_onlyPrice && _accIsProgDisc_(_r))) sh.getRange(i + 2, 18).setValue('معدّل');
         // 🔁 حافظ على علامة ربط ترحيل الرصيد ⟦cf:...⟧ إن وُجدت بالبيان الأصلي حتى لو عُدِّل البيان الظاهر
         var _oldD = String(_r[3] || ''); var _cfM = _oldD.match(/⟦(?:cf|src):[^⟧]+⟧/i);
         var _newD = String(item.desc || '');
@@ -14578,12 +14580,14 @@ function saveAccItemsBulk(authToken, client, trip, itemsArr, asAuto) {
     var currency = (item.currency === 'SAR') ? 'SAR' : 'EGP';
     var isDisc = item.cat === 'خصم';
     var newId = _accId_('I');
-    rows.push([newId, client, trip, item.desc, item.cat || '', currency, count, price, value, isDisc ? 'نعم' : 'لا', item.notes || '', session.username, now, '', '', nights || '', item.company || '', (asAuto === true && !isDisc) ? 'نعم' : '', (item.order !== undefined && item.order !== null) ? item.order : '', item.isDirect === true ? 'نعم' : 'لا']);
+    // 🏷️ (V4.305) سطر «خصم» الثابت (نمط برنامج) يُحفظ تلقائياً كبقية المولَّد كي يتبع عدده الكشف؛ بقية سطور الخصم المولَّدة يدوية كما كانت
+    var isAuto = asAuto === true && (!isDisc || String(item.desc || '').trim() === ACC_PROG_DISC_);
+    rows.push([newId, client, trip, item.desc, item.cat || '', currency, count, price, value, isDisc ? 'نعم' : 'لا', item.notes || '', session.username, now, '', '', nights || '', item.company || '', isAuto ? 'نعم' : '', (item.order !== undefined && item.order !== null) ? item.order : '', item.isDirect === true ? 'نعم' : 'لا']);
     // 🚀 (V4.89) نُرجع id/value لكل بند جديد — يسمح للواجهة بتحديث محلي فوري بدل إعادة تحميل الحساب كاملاً
     // ⚡ (V4.199) البند كاملاً بنفس شكل getClientAccount — كي يُضاف محلياً من أي مسار (توليد البنود أيضاً)
     created.push({ id: newId, value: value, isDiscount: isDisc, trip: trip, desc: String(item.desc), cat: item.cat || '', currency: currency,
       count: count, price: price, notes: item.notes || '', nights: nights, company: item.company || '',
-      auto: (asAuto === true && !isDisc) ? 'نعم' : '', order: _accNum_(item.order), isDirect: item.isDirect === true });
+      auto: isAuto ? 'نعم' : '', order: _accNum_(item.order), isDirect: item.isDirect === true });
     n++;
   });
   if (!rows.length) return { success: false, error: 'لا توجد بنود صالحة' };
@@ -15371,6 +15375,11 @@ function insertClientUnlinkedFees(authToken, client, list) {
   return { success: true, count: rows.length, skipped: skipped, created: created };
 }
 
+// 🏷️ (V4.305) بند «خصم» ثابت بكل حساب بنمط «برنامج» (لكل رحلة): بعدد كل أفراد العميل بالرحلة وبقيمة صفر حتى يكتب
+// المستخدم خصم الفرد أو يتركه — السعر قرار المستخدم ولا تلمسه المزامنة أبداً، والعدد يتبع الكشف تلقائياً. وهو صفر لا يظهر
+// بالكشوف المطبوعة ولا ببيان الحساب ولا يؤثر على الرصيد.
+var ACC_PROG_DISC_ = 'خصم';
+function _accIsProgDisc_(r) { return String(r[3] || '').trim() === ACC_PROG_DISC_ && String(r[9] || '') === 'نعم'; }
 // مفتاح المطابقة الموحّد لبند «بنود»: البيانات الديناميكية (تذاكر بخط السير، سكن بالفندق) تُرجَع لمفتاحها الثابت
 function _accBondKey_(desc) {
   desc = String(desc || '').trim();
@@ -15534,6 +15543,9 @@ function _syncTripAccounts_(authToken, trip, username) {
         desired[g.desc] = { count: g.count, price: _accPriceFor_(tripPricing, g), cat: g.cat, done: false };
         order.push(g.desc);
       });
+      // 🏷️ (V4.305) سطر «خصم» ثابت بعدد كل أفراد العميل — price=null: السعر (خصم الفرد) قرار المستخدم ولا يُلمس
+      var discN = 0; breakdown.forEach(function(g) { discN += g.count || 0; });
+      if (discN > 0 && !desired[ACC_PROG_DISC_]) { desired[ACC_PROG_DISC_] = { count: discN, price: null, cat: 'خصم', disc: true, done: false }; order.push(ACC_PROG_DISC_); }
       idxs.forEach(function(i) {
         var r = itemVals[i];
         var desc = String(r[3] || ''), flag = String(r[17] || '');
@@ -15542,13 +15554,14 @@ function _syncTripAccounts_(authToken, trip, username) {
           var d = desired[desc];
           if (d) {
             d.done = true;
-            if (_accNum_(r[6]) !== d.count || _accNum_(r[7]) !== d.price) {
-              var value = Math.round(d.count * d.price * 100) / 100;
-              r[6] = d.count; r[7] = d.price; r[8] = value;
+            var dPrice = d.price === null ? _accNum_(r[7]) : d.price;
+            if (_accNum_(r[6]) !== d.count || _accNum_(r[7]) !== dPrice) {
+              var value = Math.round(d.count * dPrice * 100) / 100;
+              r[6] = d.count; r[7] = dPrice; r[8] = value;
               r[13] = username; r[14] = now;
               updatedRows[i] = true; updated++;
             }
-          } else { toDelete[i] = true; removed++; }
+          } else if (!(_accIsProgDisc_(r) && _accNum_(r[8]))) { toDelete[i] = true; removed++; }   // (V4.305) خصم كتبه المستخدم لا يُحذف تلقائياً
         } else if (desired[desc]) {
           desired[desc].done = true;
         }
@@ -15556,8 +15569,9 @@ function _syncTripAccounts_(authToken, trip, username) {
       order.forEach(function(desc) {
         var d = desired[desc];
         if (d.done) return;
-        var value = Math.round(d.count * d.price * 100) / 100;
-        newRows.push([_accId_('I'), client, trip, desc, d.cat, 'EGP', d.count, d.price, value, 'لا', '', username, now, '', '', '', '', 'نعم', '', 'لا']);
+        var dPrice = d.price === null ? 0 : d.price;
+        var value = Math.round(d.count * dPrice * 100) / 100;
+        newRows.push([_accId_('I'), client, trip, desc, d.cat, 'EGP', d.count, dPrice, value, d.disc ? 'نعم' : 'لا', '', username, now, '', '', '', '', 'نعم', '', 'لا']);
         created++;
       });
     } else if (mode === 'بنود') {
@@ -15591,7 +15605,7 @@ function _syncTripAccounts_(authToken, trip, username) {
               r[13] = username; r[14] = now; r[15] = l.nights || ''; r[19] = nDirect;
               updatedRows[i] = true; updated++;
             }
-          } else if (!l) { toDelete[i] = true; removed++; }
+          } else if (!l && !(_accIsProgDisc_(r) && _accNum_(r[8]))) { toDelete[i] = true; removed++; }   // (V4.305) خصم كتبه المستخدم لا يُحذف تلقائياً
         } else if (l) {
           l.done = true;
         }
@@ -16653,7 +16667,8 @@ function _accOrderStatementItems_(items) {
 // 🔀 (V4.90) الفاصل بين كل بند والتالي: «+» دائمًا، إلا لو التالي بند خصم فيكون «−» بدلاً منه — بلا
 // فاصل مزدوج (كان يظهر «+ −خصم» معًا وهو خطأ)؛ أول بند بلا فاصل أصلاً
 function _accTripStatement_(rawItems) {
-    var items = _accOrderStatementItems_(rawItems);
+    // 🏷️ (V4.305) خصم بقيمة صفر (سطر «خصم» الثابت غير المستخدم) لا يظهر ببيان الحساب — كان سيُقرأ «− خصم 5 جنيه»
+    var items = _accOrderStatementItems_((rawItems || []).filter(function(it) { return !(it.isDiscount && !_accNum_(it.value)); }));
     if (!items.length) return '';
     var out = '';
     items.forEach(function(it, idx) {
@@ -16986,6 +17001,10 @@ function accGenerateDraft(authToken, client, trip, mode) {
       if (row.children) push('برنامج الرحلة - أطفال', 'طفل بسرير', 'EGP', row.children, 0, 0, '');
       if (row.infants) push('برنامج الرحلة - رضع', 'رضيع', 'EGP', row.infants, 0, 0, '');
     }
+    // 🏷️ (V4.305) سطر «خصم» ثابت بعدد كل أفراد العميل بالرحلة — بقيمة صفر يكتب المستخدم خصم الفرد أو يتركه
+    var _discN = 0; breakdown.forEach(function(g) { _discN += g.count || 0; });
+    if (!_discN) _discN = row.total || 0;
+    if (_discN) push(ACC_PROG_DISC_, 'خصم', 'EGP', _discN, 0, 0, '');
     // 🛂 (V4.39) نمط «برنامج»: العدد يبقى كما هو، ويُضاف سطر «خصم تأشيرة» إضافي بالجنيه لكل معتمر بملاحظة تأشيرة خاصة
     visaPilgrims.forEach(function(p) {
       push('خصم تأشيرة - ' + p.name + ' (' + p.notes + ')', 'خصم', 'EGP', 1, 0, 0, '');
@@ -17026,7 +17045,8 @@ function updateAccItemsBulk(authToken, client, trip, itemsArr) {
       var _changed = String(_r[3]) !== String(item.desc) || _accNum_(_r[6]) !== count ||
                      _accNum_(_r[7]) !== price || String(_r[5] || 'EGP') !== currency ||
                      _accNum_(_r[15]) !== nights;
-      if (_changed) sh.getRange(rowIdx, 18).setValue('معدّل');
+      var _onlyPrice2 = String(_r[3]) === String(item.desc) && _accNum_(_r[6]) === count && String(_r[5] || 'EGP') === currency && _accNum_(_r[15]) === nights;
+      if (_changed && !(_onlyPrice2 && _accIsProgDisc_(_r))) sh.getRange(rowIdx, 18).setValue('معدّل');   // (V4.305) خصم الفرد وحده لا يُفقد سطر الخصم الثابت مزامنته
     }
     // 🔁 حافظ على علامة ربط ترحيل الرصيد ⟦cf:...⟧ إن وُجدت بالبيان الأصلي حتى لو عُدِّل البيان الظاهر
     var _oldD2 = _r ? String(_r[3] || '') : ''; var _cfM2 = _oldD2.match(/⟦(?:cf|src):[^⟧]+⟧/i);
