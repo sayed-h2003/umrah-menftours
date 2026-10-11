@@ -1,11 +1,15 @@
 // 🔄 الشبكة أولاً دائماً (مع الكاش احتياطياً عند انقطاع الإنترنت فقط) — كي لا تُعرَض أبداً نسخة قديمة من
 // صفحة التطبيق بعد أي تحديث. لا نتدخل إطلاقاً في طلبات جوجل (البرنامج نفسه يعمل من هناك).
-const CACHE_NAME = 'umrah-v3';
-const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.ico'];
+const CACHE_NAME = 'umrah-v4';   // رُفِع (v3⇒v4) لإجبار تحديث الغلاف فوراً بعد السماح بالتكبير بإصبعين وتحسينات الموبايل
+// الشعار ضمن الغلاف كي تظهر شاشة التحميل بالشعار حتى بلا إنترنت
+const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.ico',
+  '%D9%84%D9%88%D8%AC%D9%88%20%D8%A7%D8%B4%D8%B9%D8%A7%D8%B1%D8%A7%D8%AA%20%D8%B1%D8%AD%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D8%B9%D9%85%D8%B1%D8%A9.png'];
 
 self.addEventListener('install', e => {
-  // تخزين الغلاف مسبقاً كي تظهر شاشة التحميل ورسالة «لا يوجد اتصال» حتى بدون إنترنت
-  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(SHELL)).catch(() => {}).then(() => self.skipWaiting()));
+  // تخزين الغلاف مسبقاً، كلٌّ على حدة كي لا يُفشِل عنصرٌ واحد تخزين الباقي
+  e.waitUntil(caches.open(CACHE_NAME)
+    .then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {}))))
+    .catch(() => {}).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
