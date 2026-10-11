@@ -3318,9 +3318,14 @@ function glPendingApprove(authToken, keys) {
   if (!Object.keys(only).length) throw new Error('اختر تغييراً واحداً على الأقل');
   var lock = _glLock_(); lock.waitLock(60000);
   try {
-    var r = _glAutoRun_(session.username, false, { bypass: true, onlyKeys: only });
-    _glAutoLogAdd_(r.createdList, 'جديد');
-    logChange_(session.username, 'اعتماد تغيير قيود تلقائية', 'GL:approve', 'القيود', Object.keys(only).length + ' تغيير', 'معدّل ' + r.updated + '، ملغى ' + r.voided + (r.blocked.length ? '، محجوز بفترة مقفلة ' + r.blocked.length : ''));
+    // 💱 (V4.306) تغييرات «تحويل عملة» (CCY:) ليست تعديلاً على قيد قائم تُعاد بنايته من المصدر — القيد مسجَّل بالفعل
+    // بمبلغه المستنتج، فاعتمادها لا يفعل شيئاً سوى إزالتها من القائمة (مراجعة فقط)؛ الباقي كالمعتاد عبر _glAutoRun_
+    var ccyKeys = Object.keys(only).filter(function (k) { return /^CCY:/.test(k); });
+    var autoKeys = {}; Object.keys(only).forEach(function (k) { if (!/^CCY:/.test(k)) autoKeys[k] = 1; });
+    var r = { updated: 0, voided: 0, created: 0, blocked: [], createdList: [] };
+    if (Object.keys(autoKeys).length) { r = _glAutoRun_(session.username, false, { bypass: true, onlyKeys: autoKeys }); _glAutoLogAdd_(r.createdList, 'جديد'); }
+    if (ccyKeys.length) _glPendingDrop_(ccyKeys);
+    logChange_(session.username, 'اعتماد تغيير قيود تلقائية', 'GL:approve', 'القيود', Object.keys(only).length + ' تغيير', 'معدّل ' + r.updated + '، ملغى ' + r.voided + (ccyKeys.length ? '، مراجعة عملة ' + ccyKeys.length : '') + (r.blocked.length ? '، محجوز بفترة مقفلة ' + r.blocked.length : ''));
     return { success: true, updated: r.updated, voided: r.voided, created: r.created, blocked: r.blocked, pending: _glPendingCount_() };
   } finally { _glUnlock_(lock); }
 }
@@ -3937,6 +3942,21 @@ function _glDefCurMap_() {
   });
   return (_GL_DEFCUR_MEMO_ = { cur: cur, hb: hb });
 }
+// 💱 (V4.306) قيد عهدة/خزينة/بنك سُجِّل تلقائياً بمبلغ طرف مقابل مستنتَج (بعملة مختلفة عن الشيت): يدخل تبويب «⏳ تغييرات
+// تنتظر الاعتماد» (نفس قائمة GL_Pending التي تستخدمها AUTO:TRIP/CI/HB) للمراجعة — بلا حجب تسجيله. اعتماده لاحقاً لا يُعيد
+// بناء شيء (القيد مسجَّل بالفعل بصيغته الصحيحة)؛ فقط يُزال من القائمة. idempotent: لا يُكرَّر لو استُدعيت أكثر من مرة لنفس القيد.
+function _glCcyPendQueue_(id, v, e, ccy) {
+  try {
+    var cur = _glPendingRows_(), key = 'CCY:' + id; if (cur[key]) return;
+    var map = {}; Object.keys(cur).forEach(function (k) { map[k] = cur[k].row; });
+    var lbl = { EGP: 'جنيه', SAR: 'ريال', USD: 'دولار' };
+    var srcTxt = { desc: 'من البيان', rate: 'بسعر الصرف المكتوب بالبيان', fx: 'بسعر صرف تاريخ الحركة' }[ccy.src] || 'بسعر صرف تاريخ الحركة';
+    map[key] = [key, id, 'تحويل عملة', '', 0, _glCleanDesc_(e.desc), v.totalBase, 'ccy:' + id, _glNow_(), 'بانتظار', '', '', '',
+      _glFmtN_(ccy.amt) + ' ' + (lbl[ccy.cur] || ccy.cur),
+      '🔸 مبلغ الطرف المقابل استُنتج تلقائياً (' + srcTxt + ') ومُقرَّب لأقرب رقم صحيح — راجعه، أو افتح القيد وعدّله يدوياً'];
+    _glPendingWrite_(map);
+  } catch (eQ) { Logger.log('_glCcyPendQueue_: ' + eQ.message); }
+}
 function glCustSheetGet(authToken, code) {
   _glPerm_(authToken, 'view', 'sheets');
   var a = _glAccounts_().map[_glStr_(code)]; if (!a || a.isGroup) throw new Error('اختر عهدة');
@@ -4314,7 +4334,6 @@ function _glCsSync_(code, user, opts) {
   var ccAnn = function (b, x) {
     var rc = x.cur || cur, am = x.inAmt || x.outAmt;
     (b.sugg || []).forEach(function (sg) { var d = dcOf(sg.code); if (d && d !== rc) sg.cc = _glCcyGuess_(x.desc, am, rc, d, x.date, fx); });
-    if (b.preAcc) { var dp = dcOf(b.preAcc); if (dp && dp !== rc) b.ccy = _glCcyGuess_(x.desc, am, rc, dp, x.date, fx); }
     return b;
   };
   var ents = {}, erp = {}, mine = {}, hbAuto = {};
@@ -4386,20 +4405,19 @@ function _glCsSync_(code, user, opts) {
       base.preAcc = feeAcc; base.sugg = feeAcc ? [{ code: feeAcc, name: accs.map[feeAcc].name }] : []; out.pending.push(base); return;
     }
     if (!cp) { if (x.sub > 0 && !x.isFee) return; if (x.subN > 1) base.desc = (base.desc || '') + ' [صف متعدد العملات — يُفصل لقيد لكل عملة]'; base.sugg = _glCsSuggest_(x.hint, accs, code); out.pending.push(ccAnn(base, x)); return; }
-    // 💱 (V4.305) الطرف عملته الافتراضية غير عملة الصف (مثل عميل فندقي بالريال وصف خزينة بالجنيه): لا تحويل تلقائي — ينتظر
-    // اعتماد المستخدم لمبلغ الطرف بعملته (مقترح من البيان أو بسعر اليوم). اعتماد بلا تحديد (أزرار تليجرام) ⇒ يُطبَّق الاقتراح نفسه
+    // 💱 (V4.306) الطرف عملته الافتراضية غير عملة الصف (مثل عميل فندقي بالريال وصف خزينة بالجنيه): يُسجَّل تلقائياً بالمبلغ
+    // المستنتج من البيان (مقرَّباً لأقرب رقم صحيح)، وإلا بسعر صرف تاريخ الحركة عبر وسيط تحويل العملات — بلا انتظار اختيار
+    // المستخدم. القيد يدخل مع إنشائه تبويب «⏳ تغييرات تنتظر الاعتماد» (كبقية القيود التلقائية) للمراجعة فقط، بلا حجب التسجيل.
+    // اختيارك الصريح لمبلغ/عملة الطرف من شاشة الاستكمال (اعتماد بـccy محدَّد) يبقى يتقدّم على الاستنتاج التلقائي.
     var multi = x.subN > 1;   // صف متعدد العملات (يُفصل لقيد لكل عملة) يبقى بعملة كل جزء كما كان — لتخصيصه استخدم «📝 قيد»
     var appr = !!(opts.approve && opts.approve[rk]), rowCur = x.cur || cur, ccy = appr && !multi && opts.ccy && opts.ccy[rk] ? opts.ccy[rk] : null;
     var dc0 = x.isFee || multi ? '' : dcOf(cp);
+    var ccyGuessed = false;
     if (dc0 && dc0 !== rowCur && !ccy) {
-      if (!appr) {
-        base.preAcc = cp; base.why = 'cur';
-        base.sugg = [{ code: cp, name: (accs.map[cp] || {}).name || cp }].concat(_glCsSuggest_(x.hint, accs, code).filter(function (sg) { return sg.code !== cp; })).slice(0, 4);
-        out.pending.push(ccAnn(base, x)); return;
-      }
-      var g0 = _glCcyGuess_(x.desc, x.inAmt || x.outAmt, rowCur, dc0, x.date, fx); ccy = { cur: dc0, amt: g0.amt, src: g0.src };
+      var g0 = _glCcyGuess_(x.desc, x.inAmt || x.outAmt, rowCur, dc0, x.date, fx);
+      ccy = { cur: dc0, amt: Math.round(g0.amt), src: g0.src }; ccyGuessed = true;
     }
-    toCreate.push({ x: x, cp: cp, approved: appr, ccy: ccy });
+    toCreate.push({ x: x, cp: cp, approved: appr, ccy: ccy, ccyGuessed: ccyGuessed });
   });
   Object.keys(mine).forEach(function (id) {
     if (seen[id]) return; var r = ents[id].r; if (_glStr_(r[5]) === GL_ST_VOID_) return;
@@ -4437,6 +4455,7 @@ function _glCsSync_(code, user, opts) {
       eRows.push(w.eRow); lRows = lRows.concat(w.lRows);
       fW.push({ x: b.c.x, id: id });
       out.created.push({ row: b.c.x.row, id: id, date: b.c.x.date, desc: b.e.desc, inAmt: b.c.x.inAmt, outAmt: b.c.x.outAmt, account: b.c.cp, cc: b.cc || null, ccSrc: (b.c.ccy && b.c.ccy.src) || '' });
+      if (b.c.ccyGuessed) _glCcyPendQueue_(id, b.v, b.e, b.c.ccy);   // (V4.306) للمراجعة بتبويب «⏳ تغييرات تنتظر الاعتماد»
       if (b.c.approved && b.c.x.hint && !b.c.x.isFee) learned[_glCsKey_(b.c.x.hint)] = b.c.cp;
     });
     eSh.getRange(eSh.getLastRow() + 1, 1, eRows.length, eRows[0].length).setValues(eRows);
@@ -4571,7 +4590,7 @@ function _glCsAutoAll_() {
       if (pre) { sigs[code] = { s: sig, t: now }; try { P.setProperty('GL_CS_SIG', JSON.stringify(sigs)); } catch (eW) {} }
       var nPend = r.pending.length, lastN = +(P.getProperty('GLBOT_CS_' + code) || 0);   // 🤖 (V4.254) تنبيه عند ظهور صفوف ناقصة جديدة فقط
       if (nPend !== lastN) { P.setProperty('GLBOT_CS_' + code, String(nPend)); if (nPend > lastN) _glBotQ_('custody_err', { name: (_glAccounts_().map[code] || {}).name || code, n: nPend, code: code,
-        rows: r.pending.slice(lastN - nPend).slice(-3).map(function (x) { return { row: x.row, date: x.date, desc: String(x.desc || '').slice(0, 80), inAmt: x.inAmt, outAmt: x.outAmt, cur: x.cur || (r.account || {}).currency || '', hint: String(x.hint || '').slice(0, 40), msg: x.msg ? String(x.msg).slice(0, 120) : '', why: x.why || '', sugg: (x.sugg || []).slice(0, 3) }; }) }); }
+        rows: r.pending.slice(lastN - nPend).slice(-3).map(function (x) { return { row: x.row, date: x.date, desc: String(x.desc || '').slice(0, 80), inAmt: x.inAmt, outAmt: x.outAmt, cur: x.cur || (r.account || {}).currency || '', hint: String(x.hint || '').slice(0, 40), msg: x.msg ? String(x.msg).slice(0, 120) : '', sugg: (x.sugg || []).slice(0, 3) }; }) }); }
     }
     catch (e) { res.push(code + ': ' + e.message); }
     finally { _glUnlock_(lock); }
@@ -7027,9 +7046,12 @@ function glBotCallback_(cq) {
         _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n❌ <b>رُفض</b> بواسطة ' + _glBotEsc_(who.username));
         return true;
       }
-      var res, lock = _glLock_(); lock.waitLock(60000);
-      try { var only = {}; only[key] = 1; res = _glAutoRun_(who.username, false, { bypass: true, onlyKeys: only }); _glAutoLogAdd_(res.createdList, 'جديد'); }
-      finally { _glUnlock_(lock); }
+      var res = { blocked: [] }, lock = _glLock_(); lock.waitLock(60000);
+      try {
+        // 💱 (V4.306) تغيير «تحويل عملة»: القيد مسجَّل بالفعل بمبلغه المستنتج — الاعتماد هنا مراجعة فقط، يزيله من القائمة
+        if (/^CCY:/.test(key)) _glPendingDrop_([key]);
+        else { var only = {}; only[key] = 1; res = _glAutoRun_(who.username, false, { bypass: true, onlyKeys: only }); _glAutoLogAdd_(res.createdList, 'جديد'); }
+      } finally { _glUnlock_(lock); }
       logChange_(who.username, 'اعتماد تغيير قيود تلقائية', 'GL:approve', 'تليجرام', '1 تغيير', key);
       _glBotAns_(cq.id, res.blocked && res.blocked.length ? '⚠️ محجوز بفترة مقفلة' : '✅ اعتُمد');
       _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n' + (res.blocked && res.blocked.length ? '⚠️ <b>لم يُعتمد</b> — القيد في فترة مقفلة' : '✅ <b>اعتُمد</b> بواسطة ' + _glBotEsc_(who.username)));
@@ -7123,7 +7145,6 @@ function _glBotCsxRowMsg_(code, x, accM, opt) {
   var txt = '👜 <b>' + E(nm) + '</b> — صف ' + x.row + (opt.alert ? ' جديد بالشيت ينتظر تحديد الطرف' : '') +
     '\n📅 ' + E(x.date || '—') + (x.inAmt ? ' · وارد ' + _glFmtN_(x.inAmt) : '') + (x.outAmt ? ' · منصرف ' + _glFmtN_(x.outAmt) : '') + (cu ? ' ' + cu : '') +
     '\n📝 ' + E(x.desc || '—') + '\n🏷️ الطرف بالشيت: <b>' + E(x.hint || '— فارغ —') + '</b>' + (x.msg ? '\n⚠️ ' + E(x.msg) : '') +
-    (x.why === 'cur' ? '\n💱 الحساب معروف لكن عملته غير عملة الشيت — لا تحويل تلقائي: الاعتماد بالزر يسجّل المقابل الموضّح عليه (للتعديل افتح شاشة الاستكمال)' : '') +
     (opt.total > 1 ? '\n⏳ إجمالي الصفوف الناقصة بهذا الشيت: <b>' + opt.total + '</b>' : '') + '\nاختر الحساب الصحيح:';
   return { text: txt, kb: { inline_keyboard: kb } };
 }

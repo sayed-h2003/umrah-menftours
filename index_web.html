@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.305 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.306 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.305)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.306)', diag);
 }, 6000);
 </script>
 
@@ -1551,7 +1551,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.305</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.306</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7832,7 +7832,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.305";
+var CLIENT_APP_VERSION = "4.306";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -50615,7 +50615,7 @@ function glCsApproveAll_(btn) {
 function glPendingBanner_() {
   var box = document.getElementById('glBody'); if (!box || !GL.pendingCount || document.getElementById('glPendBanner')) return;
   box.insertAdjacentHTML('afterbegin', '<div id="glPendBanner" class="alert alert-warning py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">🔔 <b>' + GL.pendingCount +
-    '</b> تغيير على قيود مسجَّلة ينتظر الاعتماد (تعديل مصدرها بالشاشات بعد القيد).<button class="btn btn-warning btn-sm fw-bold ms-auto" onclick="glPendingDlg()">مراجعة واعتماد</button></div>');
+    '</b> تغيير ينتظر الاعتماد (تعديل مصدر قيد مسجَّل، أو مبلغ طرف مقابل 💱 مستنتَج تلقائياً).<button class="btn btn-warning btn-sm fw-bold ms-auto" onclick="glPendingDlg()">مراجعة واعتماد</button></div>');
 }
 function glPendingDlg() {
   glRun('glPendingList', [], function (res) {
@@ -50624,13 +50624,13 @@ function glPendingDlg() {
     var cust = (res.cust || []).length ? '<div class="alert alert-danger py-2 mb-2" style="font-size:12.5px;">👜 <b>صفوف عهدة لم تُقيَّد بعد</b> (طرف غير معروف أو بيانات ناقصة): ' +
       res.cust.map(function (c) { return '<a href="#" class="fw-bold ms-1" onclick="glDlgClose();glCustSheetDlg(\'' + glJs(c.code) + '\');return false;">' + glEsc(c.name) + ' (' + c.n + ')</a>'; }).join(' · ') +
       ' — اضغط اسم العهدة لاعتماد الحساب الصحيح لكل صف (أو من بوت الحسابات بتليجرام).</div>' : '';
-    var h = cust + (rows.length ? '<div class="small text-muted mb-2">كل تغيير حدث بمصدر قيد مسجَّل (بند/سعر/عدد/حذف…). «✅ اعتماد» يحدّث القيد بنفس رقمه، و«⛔ رفض» يُبقيه كما هو (ويعود التنبيه لو تغيّر المصدر مرة أخرى).</div>' +
+    var h = cust + (rows.length ? '<div class="small text-muted mb-2">كل تغيير حدث بمصدر قيد مسجَّل (بند/سعر/عدد/حذف…)، أو قيد عهدة/خزينة/بنك سُجِّل تلقائياً بمبلغ طرف مقابل مستنتَج 💱 ويحتاج مراجعتك. «✅ اعتماد» يحدّث القيد بنفس رقمه (أو يُقرّ المبلغ المستنتج دون تعديله)، و«⛔ رفض» يُبقيه كما هو (ويعود التنبيه لو تغيّر المصدر مرة أخرى).</div>' +
       '<div class="table-responsive" style="max-height:60vh;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr>' + (can ? '<th><input type="checkbox" checked onchange="document.querySelectorAll(\'.glPdC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th>' : '') +
       '<th>القيد</th><th>النوع</th><th>البيان الحالي</th><th>المبلغ الحالي</th><th>بعد التغيير</th><th>المبلغ الجديد</th><th>منذ</th><th>الحالة</th></tr></thead><tbody>' +
       rows.map(function (x) {
         var d = _glR2_c(x.newBase - x.oldBase);
         return '<tr data-eid="' + glEsc(x.id) + '"' + (x.status === 'مرفوض' ? ' style="opacity:.55;"' : '') + '>' + (can ? '<td><input type="checkbox" class="glPdC" value="' + glEsc(x.key) + '"' + (x.status === 'مرفوض' ? '' : ' checked') + '></td>' : '') +
-          '<td><a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.id) + '\');return false;">' + glEsc(x.id) + '</a></td><td>' + (x.kind === 'إلغاء' ? '<b class="text-danger">⛔ إلغاء</b>' : '✏️ تعديل') + '</td>' +
+          '<td><a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.id) + '\');return false;">' + glEsc(x.id) + '</a></td><td>' + (x.kind === 'إلغاء' ? '<b class="text-danger">⛔ إلغاء</b>' : x.kind === 'تحويل عملة' ? '<b style="color:#9a3412;">💱 تحويل عملة</b>' : '✏️ تعديل') + '</td>' +
           '<td style="text-align:right;max-width:260px;">' + glEsc(x.oldDesc) + '</td><td class="gl-latin" style="white-space:nowrap;">' + glEsc(x.oldAmt || glFmt(x.oldBase)) + '</td>' +
           '<td style="text-align:right;max-width:300px;">' + glEsc(x.newDesc) + (x.diff ? '<div style="margin-top:4px;padding:4px 7px;border-radius:7px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:11px;line-height:1.7;">🔍 ' + glPendDiffHtml_(x.diff) + '</div>' : '') + '</td><td class="gl-latin" style="white-space:nowrap;font-weight:800;color:' + (d > 0 ? '#166534' : d < 0 ? '#b91c1c' : 'inherit') + ';">' + glEsc(x.kind === 'إلغاء' ? '0' : (x.newAmt || glFmt(x.newBase))) + '</td>' +
           '<td class="gl-latin" style="font-size:10.5px;">' + glEsc(x.at) + '</td><td>' + (x.status === 'مرفوض' ? '⛔ مرفوض — ' + glEsc(x.by) : '⏳ بانتظار') + '</td></tr>';
