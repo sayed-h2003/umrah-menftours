@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.302";
+var APP_VERSION = "4.303";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22459,6 +22459,14 @@ function _mfDatesIssues_(f) {
   if (iv.length === 2 && iv[0][0] < iv[1][1] && iv[1][0] < iv[0][1]) out.push('تعارض بين فترتي السكن: المدينة ومكة متداخلتان — الدخول لإحداهما يجب أن يكون في يوم الخروج من الأخرى أو بعده');
   return out;
 }
+// 🏛️ (V4.303) الاعتماد التلقائي لملف الوزارة عند تسجيل «تاريخ المراجعة» لأول مرة: ملف جديد بتاريخ، أو ملف لم يكن له تاريخ
+// فأُضيف. يحدث عند هذا الانتقال فقط (بلا عمود حالة إضافي)، فأي تغيير يدوي لاحق للحالة (اعتماد/إلغاء اعتماد) أو أي حفظ لاحق
+// والتاريخ مسجَّل من قبل لا يمسّ الحالة — أي أن قرار المستخدم اليدوي هو الغالب. كالاعتماد التلقائي بسبب رقم القيد: مسموح بلا
+// صلاحية «اعتماد» (الحارس اليدوي أدناه يفحص data.approved الصريح فقط). يُعيد القيمة الجديدة لـ f.approved.
+function _mfAutoApproveOnReview_(f, old, isNew) {
+  if (_mfStr_(f && f.reviewDate) && (isNew || !_mfStr_(old && old.reviewDate))) f.approved = true;
+  return !!(f && f.approved);
+}
 function saveMinistryFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _mfPerm_(authToken, isNew ? 'add' : 'edit');
@@ -22544,6 +22552,8 @@ function saveMinistryFile(authToken, data) {
     }
     // 🧾 (V4.111) الملف الذي له رقم قيد مسجَّل يُعتبر معتمداً تلقائياً
     if (_mfStr_(f.ref)) f.approved = true;
+    // 🏛️ (V4.303) اعتماد تلقائي بمجرد تسجيل تاريخ المراجعة لأول مرة (يُحترم بعدها أي قرار يدوي للمستخدم)
+    _mfAutoApproveOnReview_(f, old, isNew);
     // 🧑‍✈️ (V4.111) المشرف الذي يطابق اسمه الوكيل السعودي نوعه «استقبال» تلقائياً
     var agentNm = _mfStr_(f.agent);
     if (agentNm) {
