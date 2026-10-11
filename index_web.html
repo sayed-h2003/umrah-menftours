@@ -50632,7 +50632,7 @@ function glPendingDlg() {
         return '<tr data-eid="' + glEsc(x.id) + '"' + (x.status === 'مرفوض' ? ' style="opacity:.55;"' : '') + '>' + (can ? '<td><input type="checkbox" class="glPdC" value="' + glEsc(x.key) + '"' + (x.status === 'مرفوض' ? '' : ' checked') + '></td>' : '') +
           '<td><a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.id) + '\');return false;">' + glEsc(x.id) + '</a></td><td>' + (x.kind === 'إلغاء' ? '<b class="text-danger">⛔ إلغاء</b>' : '✏️ تعديل') + '</td>' +
           '<td style="text-align:right;max-width:260px;">' + glEsc(x.oldDesc) + '</td><td class="gl-latin" style="white-space:nowrap;">' + glEsc(x.oldAmt || glFmt(x.oldBase)) + '</td>' +
-          '<td style="text-align:right;max-width:300px;">' + glEsc(x.newDesc) + (x.diff ? '<div style="margin-top:4px;padding:4px 7px;border-radius:7px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:11px;line-height:1.7;white-space:pre-line;">🔍 ' + glEsc(x.diff) + '</div>' : '') + '</td><td class="gl-latin" style="white-space:nowrap;font-weight:800;color:' + (d > 0 ? '#166534' : d < 0 ? '#b91c1c' : 'inherit') + ';">' + glEsc(x.kind === 'إلغاء' ? '0' : (x.newAmt || glFmt(x.newBase))) + '</td>' +
+          '<td style="text-align:right;max-width:300px;">' + glEsc(x.newDesc) + (x.diff ? '<div style="margin-top:4px;padding:4px 7px;border-radius:7px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:11px;line-height:1.7;">🔍 ' + glPendDiffHtml_(x.diff) + '</div>' : '') + '</td><td class="gl-latin" style="white-space:nowrap;font-weight:800;color:' + (d > 0 ? '#166534' : d < 0 ? '#b91c1c' : 'inherit') + ';">' + glEsc(x.kind === 'إلغاء' ? '0' : (x.newAmt || glFmt(x.newBase))) + '</td>' +
           '<td class="gl-latin" style="font-size:10.5px;">' + glEsc(x.at) + '</td><td>' + (x.status === 'مرفوض' ? '⛔ مرفوض — ' + glEsc(x.by) : '⏳ بانتظار') + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
       (can ? '<div class="d-flex gap-2 justify-content-end mt-2"><button class="btn btn-outline-danger btn-sm" onclick="glPendingAct(false,this)">⛔ رفض المحدد</button><button class="btn btn-success btn-sm fw-bold" onclick="glPendingAct(true,this)">✅ اعتماد المحدد</button></div>'
@@ -50642,6 +50642,10 @@ function glPendingDlg() {
   });
 }
 function _glR2_c(n) { return Math.round((+n || 0) * 100) / 100; }
+// 🔎 (V4.305) «ما الذي تغيّر بالمصدر» (أسطر 🔸: غرف/أسعار/تكلفة/تواريخ/ليالي/عميل/مورد — أو بنود حساب العمرة) بارزة، وبقية التفاصيل عادية
+function glPendDiffHtml_(t) {
+  return String(t || '').split('\n').map(function (l) { return /^🔸/.test(l) ? '<b style="color:#7c2d12;">' + glEsc(l) + '</b>' : glEsc(l); }).join('<br>');
+}
 function glPendingAct(approve, btn) {
   var keys = Array.prototype.map.call(document.querySelectorAll('.glPdC:checked'), function (c) { return c.value; });
   if (!keys.length) return _showPopup('حدد تغييراً واحداً على الأقل', 'warning');

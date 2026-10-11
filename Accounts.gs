@@ -2780,13 +2780,13 @@ function _glAutoApply_(built, user, dry, opts) {
   var pend = approval ? _glPendingRows_() : {}, newPend = {}, oldLines = null, accM = _glAccounts_().map;
   var newDate = '', newType = '';
   var oldOf = function (id) { if (!oldLines) { oldLines = {}; _glRows_('lines').forEach(function (l) { (oldLines[_glStr_(l[0])] = oldLines[_glStr_(l[0])] || []).push(l); }); } return oldLines[id] || []; };
-  var queue = function (k, ix, kind, newDesc, newBase, hash, newLines) {   // تغيير ينتظر الاعتماد (الرفض السابق لنفس البصمة يبقى مرفوضاً)
+  var queue = function (k, ix, kind, newDesc, newBase, hash, newLines, hint) {   // تغيير ينتظر الاعتماد (الرفض السابق لنفس البصمة يبقى مرفوضاً)
     var r = eRows[ix], old = pend[k];
     if (old && _glStr_(old.row[9]) === 'مرفوض' && _glStr_(old.row[7]) === hash) { newPend[k] = old.row; return; }
     if (!oldLines) { oldLines = {}; _glRows_('lines').forEach(function (l) { (oldLines[_glStr_(l[0])] = oldLines[_glStr_(l[0])] || []).push(l); }); }
     newPend[k] = [k, _glStr_(r[0]), kind, _glStr_(r[4]), _glNum_(r[8]), newDesc, newBase, hash, old && _glStr_(old.row[7]) === hash ? old.row[8] : _glNow_(), 'بانتظار', '', '',
       _glAmtTxt_(oldLines[_glStr_(r[0])] || [], accM), newLines ? _glAmtTxt_(newLines, accM) : '0',
-      _glLinesDiff_(r, oldLines[_glStr_(r[0])] || [], newLines, accM, { date: newLines && newDate, type: newType, desc: newLines && newDesc })];
+      _glLinesDiff_(r, oldLines[_glStr_(r[0])] || [], newLines, accM, { date: newLines && newDate, type: newType, desc: newLines && newDesc, hint: hint || '' })];
     res.pending++;
   };
   // (V4.223) تغيّر شكلي فقط (بيان سطر الوسيط بين العملات — مثلاً بعد دمج/إعادة تسمية حساب) يُحدَّث بلا انتظار اعتماد
@@ -2830,7 +2830,13 @@ function _glAutoApply_(built, user, dry, opts) {
     var r = eRows[existing[k]];
     if (_glStr_(r[5]) === GL_ST_VOID_) return;
     if (_glLocked_(r[2])) { res.blocked.push({ key: k, date: _glDate_(r[2]), desc: _glStr_(r[4]), why: 'حُذف مصدره بعد إقفال الفترة' }); return; }
-    if (approval) { queue(k, existing[k], 'إلغاء', 'حُذف مصدره من شاشات البرنامج', 0, 'void'); return; }
+    if (approval) {
+      // 🔎 (V4.305) إلغاء قيد حساب عميل لأن العميل نُقل لرحلة أخرى (قيدها الجديد أُنشئ بنفس المزامنة) ⇒ يُذكر ذلك صراحة
+      var vh = '', mT = k.match(/^AUTO:(?:TRIP|CI):(.*)\|([^|]*)$/);
+      if (mT) { var to = creates.filter(function (c) { return c.e.key.indexOf('AUTO:TRIP:' + mT[1] + '|') === 0 || c.e.key.indexOf('AUTO:CI:' + mT[1] + '|') === 0; }).map(function (c) { return c.e.key.split('|').pop(); }).filter(function (t) { return t && t !== mT[2]; });
+        if (to.length) vh = '🔸 الرحلة: ' + mT[2] + ' ← ' + to.join('، ') + ' (نُقل العميل لرحلة أخرى)'; }
+      queue(k, existing[k], 'إلغاء', 'حُذف مصدره من شاشات البرنامج', 0, 'void', null, vh); return;
+    }
     voids.push(existing[k]); res.voided++;
     if (res.samples.voided.length < 30) res.samples.voided.push({ id: _glStr_(r[0]), date: _glDate_(r[2]), desc: _glStr_(r[4]), base: _glNum_(r[8]), amt: _glAmtTxt_(oldOf(_glStr_(r[0])), accM) });
   });
@@ -3094,8 +3100,126 @@ function _glDatesOf_(s) {
   var all = s.match(/\d{1,2}\/\d{1,2}(?:\/\d{2,4})?/g);
   return all ? all.join('، ') : '';
 }
+/* 🔎 (V4.305) «ما الذي تغيّر بالمصدر» لتغيير قيد تلقائي بانتظار الاعتماد (الشاشة وتنبيه تليجرام): يُقرأ من نص أسطر القيد القديم
+   والجديد — وكلاهما مولَّد من المصدر نفسه بصيغة ثابتة — فيعمل فوراً مع القيود القائمة بلا تخزين إضافي:
+   • حجز سكن (AUTO:HB): الفندق/الحجز، تاريخ الدخول والخروج، الليالي، عدد الغرف لكل نوع، سعر البيع والتكلفة لكل نوع، العميل والمورد، والإجماليات.
+   • حساب عميل عمرة (AUTO:TRIP / AUTO:CI): كل بند بالإضافة والحذف والتعديل (العدد/الليالي/السعر) — وطبيعة التسكين والكبار/الأطفال/الرضع
+     والخصم بنودٌ بذاتها؛ وتغيّر الرحلة يظهر في تنبيه الإلغاء («نُقل لرحلة …»). */
+function _glHbLineRole_(d) {
+  d = _glCleanDesc_(d);
+  if (/^(ايراد|إيراد|خسارة) حجز /.test(d)) return 'rev';
+  if (/^تكلفة حجز /.test(d)) return 'costh';
+  if (/^حجز /.test(d)) return / — العميل: /.test(d) ? 'sup' : 'cli';
+  return '';
+}
+function _glHbStmtParse_(d) {
+  d = _glCleanDesc_(d).replace(/^تكلفة /, '');
+  var m = d.match(/^حجز (.+?) من (\d{2}\/\d{2}) إلى (\d{2}\/\d{2})(?: \((.*?)\))? لمدة \(([\d.]+)\)/);
+  if (!m) return null;
+  var rooms = {}, re = /([\d.]+) (\S+) × ([\d.]+) ريال/g, x;
+  while ((x = re.exec(m[4] || ''))) rooms[x[2]] = { n: +x[1], p: +x[3] };
+  return { refHotel: m[1], ci: m[2], co: m[3], rooms: rooms, priced: !!m[4], nights: +m[5] };
+}
+function _glSrcDiffHb_(O, N, accM) {
+  var nm = function (c) { var a = accM[c]; return a ? (a.link || a.name) : c; };
+  var pick = function (L, role) { return L.filter(function (l) { return _glHbLineRole_(l.desc) === role; })[0] || null; };
+  var oC = pick(O, 'cli'), nC = pick(N, 'cli'), oS = pick(O, 'sup'), nS = pick(N, 'sup'), out = [];
+  var oP = _glHbStmtParse_((oC || oS || {}).desc), nP = _glHbStmtParse_((nC || nS || {}).desc);
+  if (!oP || !nP) return out;
+  if (oP.refHotel !== nP.refHotel) out.push('الحجز/الفندق: ' + oP.refHotel + ' ← ' + nP.refHotel);
+  if (oP.ci !== nP.ci) out.push('تاريخ الدخول: ' + oP.ci + ' ← ' + nP.ci);
+  if (oP.co !== nP.co) out.push('تاريخ الخروج: ' + oP.co + ' ← ' + nP.co);
+  if (oP.nights !== nP.nights) out.push('عدد الليالي: ' + oP.nights + ' ← ' + nP.nights);
+  var oSa = oC ? _glHbStmtParse_(oC.desc) : null, nSa = nC ? _glHbStmtParse_(nC.desc) : null, oCo = oS ? _glHbStmtParse_(oS.desc) : null, nCo = nS ? _glHbStmtParse_(nS.desc) : null;
+  var rOf = function (a, b) { return (a && a.priced ? a.rooms : null) || (b && b.priced ? b.rooms : null) || {}; };
+  var oR = rOf(oSa, oCo), nR = rOf(nSa, nCo), types = {};
+  Object.keys(oR).concat(Object.keys(nR)).forEach(function (t) { types[t] = 1; });
+  Object.keys(types).forEach(function (t) { var a = (oR[t] || {}).n || 0, b = (nR[t] || {}).n || 0; if (a !== b) out.push('عدد الغرف (' + t + '): ' + a + ' ← ' + b); });
+  var prices = function (lbl, a, b) {
+    if (!a || !b || !a.priced || !b.priced) return;
+    Object.keys(b.rooms).forEach(function (t) { if (a.rooms[t] && a.rooms[t].p !== b.rooms[t].p) out.push(lbl + ' (' + t + '): ' + _glFmtN_(a.rooms[t].p) + ' ← ' + _glFmtN_(b.rooms[t].p) + ' ريال'); });
+  };
+  prices('سعر البيع', oSa, nSa); prices('التكلفة', oCo, nCo);
+  if (oC && nC && oC.acc !== nC.acc) out.push('العميل: ' + nm(oC.acc) + ' ← ' + nm(nC.acc));
+  else if (!oC && nC) out.push('➕ سُعِّر البيع للعميل ' + nm(nC.acc)); else if (oC && !nC) out.push('➖ أُزيل سعر البيع (' + nm(oC.acc) + ')');
+  if (oS && nS && oS.acc !== nS.acc) out.push('المورد: ' + nm(oS.acc) + ' ← ' + nm(nS.acc));
+  else if (!oS && nS) out.push('➕ سُعِّرت التكلفة للمورد ' + nm(nS.acc)); else if (oS && !nS) out.push('➖ أُزيلت التكلفة (' + nm(oS.acc) + ')');
+  var v = function (l) { return l ? _glR2_(l.d || l.c) : 0; };
+  if (oC && nC && v(oC) !== v(nC)) out.push('إجمالي البيع: ' + _glFmtN_(v(oC)) + ' ← ' + _glFmtN_(v(nC)) + ' ريال');
+  if (oS && nS && v(oS) !== v(nS)) out.push('إجمالي التكلفة: ' + _glFmtN_(v(oS)) + ' ← ' + _glFmtN_(v(nS)) + ' ريال');
+  return out;
+}
+// بنود بيان حساب الرحلة «وصف العدد [× الليالي ليلة] [× السعر] العملة» مفصولة بـ « + » أو « − » (الخصم)
+function _glTripStmtItems_(stmt) {
+  var out = [];
+  String(stmt || '').split(/(?<=(?:جنيه|ريال)) (?=[+−] )/).forEach(function (p, i) {
+    var t = p.replace(/^[+−] /, '').trim(); if (!t) return;
+    var m = t.match(/^(.*?) (\d+(?:\.\d+)?)(?: × (\d+(?:\.\d+)?) ليلة)?(?: × (\d+(?:\.\d+)?))? (جنيه|ريال)$/);
+    out.push(m ? { d: m[1], n: +m[2], ni: m[3] ? +m[3] : 0, p: m[4] !== undefined ? +m[4] : null, cur: m[5], txt: t } : { d: t, txt: t });
+  });
+  return out;
+}
+function _glItemsDiff_(A, B, fmtQty) {
+  var out = [], used = {};
+  var qty = function (x) { return x.txt.slice(x.d.length).trim(); };
+  A.forEach(function (a) {
+    var j = -1; B.forEach(function (b, k) { if (j < 0 && !used[k] && b.d === a.d) j = k; });
+    if (j < 0) { out.push('➖ حُذف بند: ' + a.txt); return; }
+    used[j] = 1; var b = B[j];
+    if (a.txt === b.txt) return;
+    var bits = [];
+    if (a.p !== null && a.p !== undefined && b.p !== null && b.p !== undefined && a.n !== undefined && b.n !== undefined) {
+      if (a.n !== b.n) bits.push('العدد ' + a.n + ' ← ' + b.n);
+      if ((a.ni || 0) !== (b.ni || 0)) bits.push('الليالي ' + (a.ni || 0) + ' ← ' + (b.ni || 0));
+      if (a.p !== b.p) bits.push('السعر ' + _glFmtN_(a.p) + ' ← ' + _glFmtN_(b.p) + ' ' + b.cur);
+      if (a.cur !== b.cur) bits.push('العملة ' + a.cur + ' ← ' + b.cur);
+    }
+    out.push(a.d + ': ' + (bits.length ? bits.join(' · ') : qty(a) + ' ← ' + qty(b)));
+  });
+  B.forEach(function (b, k) { if (!used[k]) out.push('➕ بند جديد: ' + b.txt); });
+  return out;
+}
+function _glSrcDiffTrip_(key, O, N) {
+  var k = key.replace(/^AUTO:TRIP:/, ''), i = k.lastIndexOf('|'), trip = i >= 0 ? k.slice(i + 1) : '', client = i >= 0 ? k.slice(0, i) : k;
+  var stmtOf = function (L) {
+    var hit = '';
+    L.forEach(function (l) {
+      if (hit) return; var d = _glCleanDesc_(l.desc);
+      [trip, client].forEach(function (pre) { if (!hit && pre && d.indexOf(pre + ' (') === 0 && /\)$/.test(d)) hit = d.slice(pre.length + 2, -1); });
+    });
+    return hit;
+  };
+  var a = stmtOf(O), b = stmtOf(N);
+  if (!a || !b || a === b) return [];
+  return _glItemsDiff_(_glTripStmtItems_(a), _glTripStmtItems_(b));
+}
+function _glSrcDiffCi_(O, N, accM) {
+  var items = function (L) {
+    return L.filter(function (l) { var a = accM[l.acc]; return !/^بنود حساب /.test(_glCleanDesc_(l.desc)) && !(a && a.kind === 'fx'); }).map(function (l) {
+      var d = _glCleanDesc_(l.desc) || 'بند', v = _glR2_(l.d || l.c), lbl = { EGP: 'جنيه', SAR: 'ريال', USD: 'دولار' }[l.cur] || l.cur;
+      return { d: d, txt: d + ' ' + _glFmtN_(v) + ' ' + lbl, n: v, p: null, cur: l.cur };
+    });
+  };
+  return _glItemsDiff_(items(O), items(N));
+}
+function _glSrcDiff_(key, oldRows, newLines, accM) {
+  key = _glStr_(key);
+  var O = (oldRows || []).map(function (l) { return { acc: _glStr_(l[4]), d: _glNum_(l[5]), c: _glNum_(l[6]), cur: _glStr_(l[7]), desc: _glStr_(l[15]) }; });
+  var N = (newLines || []).map(function (l) { return { acc: l.account, d: +l.debit || 0, c: +l.credit || 0, cur: l.currency, desc: _glStr_(l.desc) }; });
+  try {
+    if (/^AUTO:HB:/.test(key)) return _glSrcDiffHb_(O, N, accM);
+    if (/^AUTO:TRIP:/.test(key)) return _glSrcDiffTrip_(key, O, N);
+    if (/^AUTO:CI:/.test(key)) return _glSrcDiffCi_(O, N, accM);
+  } catch (e) { Logger.log('_glSrcDiff_: ' + e.message); }
+  return [];
+}
 function _glLinesDiff_(eRow, oldRows, newLines, accM, hdr) {
-  if (!newLines) return 'إلغاء القيد (المصدر حُذف)';
+  if (!newLines) {
+    var vk = _glStr_(eRow[6]);   // (V4.305) سبب الإلغاء بلغة المصدر
+    if (/^AUTO:HB:/.test(vk)) return 'إلغاء القيد — الحجز صار «لاغي» أو حُذف من برنامج الحجوزات' + (hdr && hdr.hint ? '\n' + hdr.hint : '');
+    if (/^AUTO:(TRIP|CI):/.test(vk)) return 'إلغاء القيد — لم يعد للعميل بنود بهذه الرحلة' + (hdr && hdr.hint ? '\n' + hdr.hint : ' (حُذفت بنوده أو نُقل لرحلة أخرى)');
+    return 'إلغاء القيد (المصدر حُذف)';
+  }
   // 🔎 (V4.297) القيود التلقائية (الحجوزات…) بيانها نصّ مُولَّد من البنود، فمقارنته رمزاً برمز تُحدث تشتتاً بصرياً.
   // لها: نكتفي بالتغيّرات الجوهرية (المبالغ = سعر البيع/التكلفة، والتواريخ، والرحلة/العميل/المورد)؛ القيود اليدوية
   // تبقى بمقارنة البيان الكاملة كالسابق لأن بيانها مكتوب يدوياً وقد يكون جوهرياً.
@@ -3137,8 +3261,19 @@ function _glLinesDiff_(eRow, oldRows, newLines, accM, hdr) {
     if (!isAuto) { var hd = _glDescDiff_(eRow[4], hdr.desc); if (hd && !seenDD[hd]) out.unshift('البيان — ' + hd); }
     else { var ohd = _glDatesOf_(eRow[4]), nhd = _glDatesOf_(hdr.desc); if (ohd !== nhd && (ohd || nhd)) { var hl = 'التواريخ: ' + (ohd || '—') + ' ← ' + (nhd || '—'); if (!seenDD[hl]) out.unshift(hl); } }
   }
+  // 🔎 (V4.305) ما تغيّر بالمصدر أولاً (🔸)، ثم من الأثر المحاسبي ما لا يكرّره فقط: الرحلة المرتبطة وسعر الصرف (المبالغ ظاهرة بعمودَي المبلغ)
+  var src = isAuto ? _glSrcDiff_(_glStr_(eRow[6]), oldRows, newLines, accM) : [];
+  if (src.length) {
+    var keep = [], tripSeen = {};
+    out.forEach(function (x) {
+      var tm = x.match(/ — الرحلة: «(.*)» ← «(.*)»$/);
+      if (tm) { var tl = 'الرحلة المرتبطة: ' + (tm[1] || '—') + ' ← ' + (tm[2] || '—'); if (!tripSeen[tl]) { tripSeen[tl] = 1; keep.push(tl); } return; }
+      if (/ — سعر الصرف: /.test(x)) keep.push(x);
+    });
+    out = src.map(function (x) { return '🔸 ' + x; }).concat(keep);
+  }
   if (!out.length) out.push('تغيير بترتيب الأسطر أو بأسطر الوسيط فقط');
-  return out.slice(0, 14).join('\n');
+  return out.slice(0, 18).join('\n');
 }
 function glPendingList(authToken) {
   var session = _glPerm_(authToken, 'view', 'auto');
@@ -3156,7 +3291,7 @@ function _glPendTop_(n) {
   try { _glRowsW_('pending').forEach(function (r) { if (_glStr_(r[0]) && _glStr_(r[9]) !== 'مرفوض') rows.push(r); }); } catch (e) {}
   rows.sort(function (a, b) { return _glAutoTsKey_(_glStr_(b[8])) > _glAutoTsKey_(_glStr_(a[8])) ? 1 : -1; });
   return rows.slice(0, n || 3).map(function (r) {
-    var d = _glStr_(r[14]).split('\n').slice(0, 10).map(function (x) { return '   ▫️ ' + x; }).join('\n');
+    var d = _glStr_(r[14]).split('\n').slice(0, 14).map(function (x) { return '   ' + (/^🔸/.test(x) ? '' : '▫️ ') + x; }).join('\n');   // (V4.305) ما تغيّر بالمصدر (🔸) كاملاً
     var eo = null; try { var fe = _glStr_(r[1]) ? _glFindEntry_(_glStr_(r[1])) : null; if (fe) eo = _glEntryObj_(fe.r); } catch (eF) {}   // (V4.277) تاريخ القيد ونوعه
     return { key: _glStr_(r[0]), id: _glStr_(r[1]), txt: '• <b>' + _glBotEsc_(_glCleanDesc_(_glStr_(r[5]) || _glStr_(r[3])).slice(0, 160)) + '</b>' + (r[1] ? ' (' + _glBotEsc_(_glStr_(r[1])) + ')' : '') +
       '\n   🔄 ' + _glBotEsc_(_glStr_(r[2]) || 'تعديل') + (eo ? ' · ' + _glBotEsc_(eo.type) + ' · 📅 تاريخ القيد: <b>' + _glBotEsc_(eo.date) + '</b>' : '') + (_glStr_(r[8]) ? ' · 🕒 رُصد ' + _glBotEsc_(_glStr_(r[8])) : '') +
