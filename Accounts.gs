@@ -3167,7 +3167,7 @@ function _glBotPendCheck_() {
     var PP = PropertiesService.getScriptProperties(), lp = +(PP.getProperty('GLBOT_PEND') || 0), np = _glPendingCount_() || 0;
     if (np === lp) return;
     PP.setProperty('GLBOT_PEND', String(np));
-    if (np > lp) { var ptop = _glPendTop_(Math.min(3, np - lp)); _glBotQ_('pending', { n: np, items: ptop.map(function (x) { return x.txt; }), keys: ptop.map(function (x) { return x.key; }) }); }
+    if (np > lp) { var ptop = _glPendTop_(Math.min(3, np - lp)); _glBotQ_('pending', { n: np, more: Math.max(0, np - lp - ptop.length), items: ptop.map(function (x) { return x.txt; }), keys: ptop.map(function (x) { return x.key; }) }); }
   } catch (e) {}
 }
 function _glPendingCount_() {
@@ -4328,7 +4328,7 @@ function _glCsAutoAll_() {
       if (pre) { sigs[code] = { s: sig, t: now }; try { P.setProperty('GL_CS_SIG', JSON.stringify(sigs)); } catch (eW) {} }
       var nPend = r.pending.length, lastN = +(P.getProperty('GLBOT_CS_' + code) || 0);   // 🤖 (V4.254) تنبيه عند ظهور صفوف ناقصة جديدة فقط
       if (nPend !== lastN) { P.setProperty('GLBOT_CS_' + code, String(nPend)); if (nPend > lastN) _glBotQ_('custody_err', { name: (_glAccounts_().map[code] || {}).name || code, n: nPend, code: code,
-        rows: r.pending.slice(lastN - nPend).slice(-3).map(function (x) { return { row: x.row, date: x.date, desc: String(x.desc || '').slice(0, 80), inAmt: x.inAmt, outAmt: x.outAmt, hint: String(x.hint || '').slice(0, 40), sugg: (x.sugg || []).slice(0, 3) }; }) }); }
+        rows: r.pending.slice(lastN - nPend).slice(-3).map(function (x) { return { row: x.row, date: x.date, desc: String(x.desc || '').slice(0, 80), inAmt: x.inAmt, outAmt: x.outAmt, cur: x.cur || (r.account || {}).currency || '', hint: String(x.hint || '').slice(0, 40), msg: x.msg ? String(x.msg).slice(0, 120) : '', sugg: (x.sugg || []).slice(0, 3) }; }) }); }
     }
     catch (e) { res.push(code + ': ' + e.message); }
     finally { _glUnlock_(lock); }
@@ -6485,10 +6485,12 @@ function glBotTick_() {
     q.forEach(function (it, i) {
       if (i >= 15) { left.push(it); return; }
       try {
-        _glBotSend_(c.chatId, _glBotFmt_(it));
-        // (V4.261) أزرار ثابتة: صفوف العهدة الجديدة باقتراحاتها، والتغييرات بانتظار الاعتماد بأزرار اعتماد/رفض/تفاصيل
-        if (it.t === 'custody_err' && it.p && it.p.code && it.p.rows) try { _glBotCsxSend_(c.chatId, it.p.code, it.p.rows); } catch (eR) {}
-        if (it.t === 'pending' && it.p && it.p.keys) it.p.keys.forEach(function (k, j) { try { _glBotSend_(c.chatId, (it.p.items || [])[j] || k, _glBotPendKb_(k)); } catch (eK) {} });
+        // 🔔 (V4.305) تنبيه واحد لكل عملية: كان صف الشيت الناقص يصل برسالتين («عهدة تحتاج مراجعة» ثم رسالة الصف بأزراره)
+        // وتغيّر القيد بانتظار الاعتماد كذلك (عنوان عام ثم رسالة التغيير) — الآن رسالة واحدة لكل صف/تغيير تحمل العنوان والتفاصيل
+        // والأزرار معاً. ما يُرسَل يُزال من العنصر أولاً بأول، فلو فشل الإرسال بالمنتصف تُعاد المحاولة للباقي فقط (بلا تكرار).
+        if (it.t === 'custody_err' && it.p && it.p.code && it.p.rows && it.p.rows.length) _glBotCsxAlert_(c.chatId, it.p);
+        else if (it.t === 'pending' && it.p && it.p.keys && it.p.keys.length) _glBotPendAlert_(c.chatId, it.p);
+        else _glBotSend_(c.chatId, _glBotFmt_(it));
       } catch (e) { if ((it.n = (it.n || 0) + 1) < 4) left.push(it); Logger.log('glBotTick_: ' + e.message); }
     });
     if (left.length) { var q2 = []; try { q2 = JSON.parse(P.getProperty('GLBOT_Q') || '[]') || []; } catch (e) {} P.setProperty('GLBOT_Q', _glBotQPack_(left.concat(q2))); }
@@ -6860,6 +6862,38 @@ function glBotSetWebhook(authToken) {
 // 👜 (V4.261) صفوف شيتات العهد الناقصة (طرف غير معروف/بيانات ناقصة) بتليجرام: كل صف برسالة وأزرار الحسابات المقترحة
 // + «✏️ حساب آخر» (اكتب اسمه) — الاختيار يعتمد الصف فوراً ويكتب رقم القيد بالشيت، تماماً كشاشة العهد
 function _glCsCodes_() { var set = _glSettings_(); return Object.keys(set).filter(function (k) { return k.indexOf('custsheet:') === 0; }).map(function (k) { return k.slice(10); }); }
+// 👜 (V4.305) نص صف شيت ناقص وأزراره (رسالة واحدة): العنوان + التاريخ والمبلغ بعملته + البيان + الطرف بالشيت + اقتراحات الحساب
+function _glBotCsxRowMsg_(code, x, accM, opt) {
+  opt = opt || {};
+  var E = _glBotEsc_, curL = { EGP: 'جنيه', SAR: 'ريال', USD: 'دولار' }, cu = curL[x.cur] || '', nm = (accM[code] || {}).name || code;
+  var kb = [], row = [];
+  (x.sugg || []).slice(0, 3).forEach(function (sg) { row.push(_glBtn_('✅ ' + String(sg.name).slice(0, 28), 'gl:cs:' + code + ':' + x.row + ':' + sg.code, 'success')); if (row.length === 2) { kb.push(row); row = []; } });
+  row.push(_glBtn_('✏️ حساب آخر', 'gl:cs:' + code + ':' + x.row + ':?', 'primary')); kb.push(row);
+  if (opt.bulk) kb.push([_glBtn_('✅ اعتماد أول اقتراح لكل الصفوف الناقصة بالشيت (' + opt.bulk + ')', 'gl:csall:' + code, 'success')]);
+  var txt = '👜 <b>' + E(nm) + '</b> — صف ' + x.row + (opt.alert ? ' جديد بالشيت ينتظر تحديد الطرف' : '') +
+    '\n📅 ' + E(x.date || '—') + (x.inAmt ? ' · وارد ' + _glFmtN_(x.inAmt) : '') + (x.outAmt ? ' · منصرف ' + _glFmtN_(x.outAmt) : '') + (cu ? ' ' + cu : '') +
+    '\n📝 ' + E(x.desc || '—') + '\n🏷️ الطرف بالشيت: <b>' + E(x.hint || '— فارغ —') + '</b>' + (x.msg ? '\n⚠️ ' + E(x.msg) : '') +
+    (opt.total > 1 ? '\n⏳ إجمالي الصفوف الناقصة بهذا الشيت: <b>' + opt.total + '</b>' : '') + '\nاختر الحساب الصحيح:';
+  return { text: txt, kb: { inline_keyboard: kb } };
+}
+// تنبيه صفوف ناقصة جديدة: رسالة واحدة لكل صف (العنوان مدمج)، وزر «اعتماد كل المقترحات» بآخر رسالة فقط لو بالشيت أكثر من صف
+function _glBotCsxAlert_(chatId, p) {
+  var accM = _glAccounts_().map, total = +p.n || p.rows.length, anySg = p.rows.some(function (x) { return x.sugg && x.sugg.length; });
+  while (p.rows.length) {
+    var last = p.rows.length === 1, m = _glBotCsxRowMsg_(p.code, p.rows[0], accM, { alert: true, total: total, bulk: last && total > 1 && anySg ? total : 0 });
+    _glBotSend_(chatId, m.text, m.kb);
+    p.rows.shift();
+  }
+}
+// تنبيه تغييرات بانتظار الاعتماد: رسالة واحدة لكل تغيير (عنوانه + تفاصيله + أزرار اعتماد/رفض/تفاصيل)
+function _glBotPendAlert_(chatId, p) {
+  while (p.keys.length) {
+    var k = p.keys[0], txt = (p.items || [])[0] || _glBotEsc_(k), more = p.keys.length === 1 ? (+p.more || 0) : 0;
+    _glBotSend_(chatId, '⏳ <b>تغيير على قيد مسجَّل ينتظر الاعتماد</b>' + (p.n > 1 ? ' (الإجمالي بانتظار الاعتماد: ' + p.n + ')' : '') + '\n' + txt +
+      (more ? '\n━━━━━━━━━━━━\n… و' + more + ' تغيير آخر — من تبويب «القيود التلقائية»' : ''), _glBotPendKb_(k));
+    p.keys.shift(); if (p.items) p.items.shift();
+  }
+}
 function _glBotCsxSend_(chatId, onlyCode, rowsIn) {
   var accM = _glAccounts_().map, sent = 0;
   (onlyCode ? [onlyCode] : _glCsCodes_()).forEach(function (code) {
@@ -6867,12 +6901,8 @@ function _glBotCsxSend_(chatId, onlyCode, rowsIn) {
     if (!rows) { try { rows = _glCsSync_(code, 'تليجرام', { preview: true }).pending; } catch (e) { _glBotSend_(chatId, '⚠️ ' + _glBotEsc_((accM[code] || {}).name || code) + ': ' + _glBotEsc_(e.message)); return; } }
     if ((rows || []).some(function (x) { return x.sugg && x.sugg.length; })) _glBotSend_(chatId, '👜 <b>' + _glBotEsc_((accM[code] || {}).name || code) + '</b> — صفوف ناقصة بانتظار تحديد الطرف', { inline_keyboard: [[_glBtn_('✅ اعتماد كل المقترحات الأولى دفعة واحدة', 'gl:csall:' + code, 'success')]] });   // (V4.268)
     (rows || []).slice(0, 10).forEach(function (x) {
-      var kb = [], row = [];
-      (x.sugg || []).slice(0, 3).forEach(function (sg) { row.push(_glBtn_('✅ ' + String(sg.name).slice(0, 28), 'gl:cs:' + code + ':' + x.row + ':' + sg.code, 'success')); if (row.length === 2) { kb.push(row); row = []; } });
-      row.push(_glBtn_('✏️ حساب آخر', 'gl:cs:' + code + ':' + x.row + ':?', 'primary')); kb.push(row);
-      _glBotSend_(chatId, '👜 <b>' + _glBotEsc_((accM[code] || {}).name || code) + '</b> — صف ' + x.row + '\n📅 ' + _glBotEsc_(x.date || '—') +
-        (x.inAmt ? ' · وارد ' + _glFmtN_(x.inAmt) : '') + (x.outAmt ? ' · منصرف ' + _glFmtN_(x.outAmt) : '') + '\n📝 ' + _glBotEsc_(x.desc || '—') +
-        '\n🏷️ الطرف بالشيت: <b>' + _glBotEsc_(x.hint || '— فارغ —') + '</b>' + (x.msg ? '\n⚠️ ' + _glBotEsc_(x.msg) : '') + '\nاختر الحساب الصحيح:', { inline_keyboard: kb });
+      var m = _glBotCsxRowMsg_(code, x, accM, {});
+      _glBotSend_(chatId, m.text, m.kb);
       sent++;
     });
   });
