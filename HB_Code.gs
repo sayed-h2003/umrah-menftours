@@ -5807,7 +5807,10 @@ function getUnifiedStatement_(partyName, start, end) {
 // إشارة حركة دفعة السكن (موجب=مدين، سالب=دائن) — مطابقة لاصطلاح دفتر الأرصدة buildBalanceLedger_
 function _hbPaySigned_(dir, amt) { return (dir === 'استلمنا منه' || dir === 'دائن يدوي') ? -amt : amt; }
 function getHbRecon(token, onlyDiff) {
-  requirePermission_(token, 'statement', 'view');
+  // ⚡ (V4.308) كانت تتحقق من جلسة برنامج الحجوزات القديمة (ACTIVE_SESSIONS) لا جلسة البرنامج الرئيسي التي يحملها
+  // المتصفح (session_<token>) ⇒ ترمي «انتهت صلاحية الجلسة» دائماً رغم أن بقية الشاشات تعمل. نستخدم نفس تحقق
+  // كشف الحساب الذي تستدعيه هذه الدالة داخلياً (glStatement بصلاحية stmt)
+  _glPerm_(token, 'view', 'stmt');
   var profiles = getAllAccountProfiles_();
   var data = getSourceRowsCached_(), pays = getPaymentsRowsCached_();
   var ledger = buildBalanceLedger_({ data: data, payments: pays, profiles: profiles });
@@ -5836,7 +5839,7 @@ function getHbRecon(token, onlyDiff) {
 }
 function _hbR2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
 function getHbReconDetail(token, name) {
-  requirePermission_(token, 'statement', 'view');
+  _glPerm_(token, 'view', 'stmt');   // (V4.308) نفس إصلاح getHbRecon — جلسة البرنامج الرئيسي لا جلسة الحجوزات القديمة
   name = String(name || '').trim();
   var p = getAllAccountProfiles_()[name] || {}, code = p.code || '';
   var pays = getPaymentsRowsCached_(), partyNorm = normalizeName_(name), prog = [];

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.307 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.308 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.307)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.308)', diag);
 }, 6000);
 </script>
 
@@ -1552,7 +1552,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.307</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.308</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7840,7 +7840,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.307";
+var CLIENT_APP_VERSION = "4.308";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -51998,10 +51998,27 @@ function glRenderRecon() {
       '<h6 class="fw-bold mb-0" style="color:#1e3d59;">🔁 مطابقة كشوف السكن مع الحساب العام</h6>' +
       '<div class="form-check form-switch ms-2 mb-0"><input class="form-check-input" type="checkbox" id="glRcOnlyDiff" checked onchange="glReconLoad()"><label class="form-check-label small" for="glRcOnlyDiff">إظهار الفروق فقط</label></div>' +
       '<button class="btn btn-sm btn-primary" onclick="glReconLoad()">↻ تحديث المقارنة</button>' +
+      (GL.isAdmin ? '<button class="btn btn-sm btn-outline-success" onclick="glCpResync(this)" title="إعادة نسخ كل سندات القبض/الصرف/الإيداع/السحب المرحّلة على حسابات العملاء إلى «حسابات عملاء العمرة» — آمن ولا يُكرِّر، ويبلّغ عن أخطاء اسم الربط">🔁 إعادة مزامنة دفعات العملاء</button>' : '') +
     '</div>' +
     '<div class="text-muted small mb-2">يقارن رصيد كل طرف سكن في كشف الشاشة برصيده في الحساب العام. اضغط أي سطر لعرض الحركات (الدفعات غالباً) الموجودة بأحد الكشفين دون الآخر.</div>' +
     '<div id="glReconBox"><div class="text-center text-muted py-4">⏳</div></div>';
   glReconLoad();
+}
+// 💵 (V4.308) إصلاح بضغطة واحدة: يعيد مزامنة دفعات الحسابات العامة إلى حسابات عملاء العمرة ويبلّغ عن أخطاء اسم الربط
+function glCpResync(btn) {
+  var o = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳…';
+  glRun('glCpMirrorResync', [], function (res) {
+    btn.disabled = false; btn.innerHTML = o;
+    var msg = '✅ أُعيدت مزامنة ' + (res.done || 0) + ' سند قبض/صرف على حسابات العملاء.';
+    if (res.mismatches && res.mismatches.length) {
+      msg += '\n\n⚠️ حسابات اسم ربطها لا يطابق أي عميل له بنود — دفعاتها قد تُسجَّل باسم مختلف فلا تظهر تحت العميل المتوقَّع:\n' +
+        res.mismatches.map(function (m) { return '• ' + m.name + ' ← «مرتبط بـ»: ' + m.link; }).join('\n') +
+        '\n\nصحّح «مرتبط بـ» لهذه الحسابات ليطابق اسم العميل تماماً ثم أعد المزامنة.';
+    }
+    if (res.timedOut) msg += '\n\n(توقّفت عند حد الوقت — اضغط الزر مرة أخرى لإكمال الباقي.)';
+    _showPopup(msg, (res.mismatches && res.mismatches.length) ? 'warning' : 'success', 'إعادة مزامنة دفعات العملاء');
+    glReconLoad();
+  }, function (e) { btn.disabled = false; btn.innerHTML = o; _showPopup((e && e.message) || e, 'error'); });
 }
 function glReconLoad() {
   var el = document.getElementById('glRcOnlyDiff'), only = !el || el.checked;
