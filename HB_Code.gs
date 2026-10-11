@@ -6725,7 +6725,10 @@ function drainTelegramQueue() {
   catch (eCus) { Logger.log('drain/custody: ' + eCus.message); }
   // طابور فارغ = لا شيء نفعله: لا قفل، ولا فتح ملف الشيت، ولا قراءة ورقة
   if (!tgQueueShouldScan_()) return { ok: true, sent: 0, reason: 'الطابور فارغ' };
-  var lock = LockService.getScriptLock();
+  // ⚡ (V4.307) قفل مُسمّى خاص بالطابور بدل قفل السكربت العام: الإرسال هنا يحسب أرصدة/كشوفاً ويرسل لتليجرام (15-34 ثانية
+  // بسجلات التنفيذ) وكان يحجز قفل السكربت طوال ذلك ⇒ يتعطل كل حفظ بالبرنامج (وقفل الحسابات نفسه يمر لحظياً بقفل السكربت)
+  // فيفشل بـ«مهلة التأمين». المطلوب هنا فقط ألا يعمل تفريغان للطابور معاً — والإضافة للطابور (إلحاق صف) لا تتعارض معه
+  var lock = (typeof _glNamedLock_ === 'function') ? _glNamedLock_('tgq') : LockService.getScriptLock();
   if (!lock.tryLock(5000)) return { ok: true, skipped: 'قفل مشغول' };
   try {
     var cfg = tgCfg_();

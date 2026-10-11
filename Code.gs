@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.306";
+var APP_VERSION = "4.307";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -15043,6 +15043,22 @@ function getTripPricing(authToken, trip) {
   trip = String(trip || '').trim();
   if (!trip) throw new Error('اسم الرحلة مطلوب');
   return { success: true, pricing: _accTripPricing_(trip) };
+}
+
+// 📋 (V4.307) الرحلات التي لها تسعير محفوظ — لنسخ تسعير رحلة من رحلة أخرى في نافذة «تسعير الرحلة»
+function listTripPricings(authToken) {
+  _pricingPerm_(authToken, 'view');
+  var sh = _accSheet_(ACC_TRIP_PRICES_SHEET, ACC_TRIP_PRICES_HEADERS), out = [];
+  if (sh.getLastRow() < 2) return { success: true, trips: out };
+  sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().forEach(function (r) {
+    var t = String(r[0] || '').trim(); if (!t) return;
+    var p = null; try { p = JSON.parse(String(r[1] || '')); } catch (e) { return; }
+    if (!p) return;
+    var hs = Object.keys(p.hotels || {});
+    if (!hs.length && !_accNum_(p.child) && !_accNum_(p.infant)) return;
+    out.push({ trip: t, levels: hs.length, applied: !!p.applied });
+  });
+  return { success: true, trips: out };
 }
 
 // سعر مجموعة تفصيلة واحدة حسب قائمة أسعار الرحلة — مفاتيح الفندق: سنجل/دابل/ثلاثي/عادي

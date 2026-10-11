@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.306 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.307 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.306)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.307)', diag);
 }, 6000);
 </script>
 
@@ -1463,6 +1463,7 @@ input[type="date"]:not(:focus):not(:valid) {
 .gl-dup-keep{display:inline-flex;align-items:center;gap:4px;font-weight:800;color:#15803d;white-space:nowrap}
 .gl-dup-void{font-weight:800;color:#b91c1c;white-space:nowrap}
 .gl-dup-lock{font-weight:800;color:#15803d;white-space:nowrap}
+#glVLines tr.gl-vmn td { background:#f1f5f9; }
 </style>
 <style id="th-filter-arrows">
   /* 🔽 (V4.257) أيقونات تصفية رؤوس الأعمدة: سهم صغير بلون عنوان العمود بلا مربع (كان رمز تعبيري برتقالي داخل مربع أبيض) */
@@ -1551,7 +1552,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.306</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.307</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4217,7 +4218,14 @@ input[type="date"]:not(:focus):not(:valid) {
             <tbody id="tpPricRows"></tbody>
           </table>
         </div>
-        <button class="btn btn-outline-secondary btn-sm mb-2" onclick="_tpPricAddRow_()">➕ إضافة مستوى غير موجود بالكشف</button>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+          <button class="btn btn-outline-secondary btn-sm" onclick="_tpPricAddRow_()">➕ إضافة مستوى غير موجود بالكشف</button>
+          <!-- 📋 (V4.307) نسخ تسعير رحلة أخرى إلى النموذج (للمراجعة ثم الحفظ) -->
+          <div class="d-flex gap-1 align-items-center ms-auto" style="min-width:260px;">
+            <select id="tpPricCopySrc" class="form-select form-select-sm" style="max-width:240px;"><option value="">📋 نسخ التسعير من رحلة…</option></select>
+            <button class="btn btn-outline-primary btn-sm text-nowrap" onclick="_tpPricCopy_(this)">نسخ</button>
+          </div>
+        </div>
         <div class="row g-2">
           <div class="col-6"><label class="form-label small fw-bold mb-1">👶 سعر الطفل (بدون سكن)</label>
             <input type="text" inputmode="decimal" lang="en" style="direction:ltr;" id="tpPricChild" class="form-control form-control-sm" oninput="_numInputLatin_(this)"></div>
@@ -7832,7 +7840,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.306";
+var CLIENT_APP_VERSION = "4.307";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -15869,6 +15877,52 @@ function _tpPricRowHtml_(hotel, prices, manual) {
     '</tr>';
 }
 
+// 📋 (V4.307) قائمة الرحلات المسعَّرة (عدا الرحلة المفتوحة) لنسخ تسعيرها
+function _tpPricCopyList_(trip) {
+  var sel = document.getElementById('tpPricCopySrc'); if (!sel) return;
+  sel.innerHTML = '<option value="">📋 نسخ التسعير من رحلة…</option>';
+  google.script.run.withSuccessHandler(function (res) {
+    var ts = ((res && res.trips) || []).filter(function (x) { return x.trip !== trip; });
+    var order = {}; (window.tripsCache || []).forEach(function (t, i) { if (t && t.name && order[t.name] === undefined) order[t.name] = i; });
+    ts.sort(function (a, b) { var oa = order[a.trip], ob = order[b.trip]; if (oa !== undefined && ob !== undefined) return oa - ob; if (oa !== undefined) return -1; if (ob !== undefined) return 1; return a.trip.localeCompare(b.trip, 'ar'); });
+    sel.innerHTML = '<option value="">📋 نسخ التسعير من رحلة…</option>' + ts.map(function (x) {
+      return '<option value="' + escapeHtml_(x.trip) + '">' + escapeHtml_(x.trip) + ' (' + x.levels + ' مستوى' + (x.applied ? ' · مفعَّل' : '') + ')</option>'; }).join('');
+    if (!ts.length) sel.innerHTML = '<option value="">لا توجد رحلات أخرى مسعَّرة</option>';
+  }).withFailureHandler(function () {}).listTripPricings(window.authToken);
+}
+// يملأ النموذج بأسعار الرحلة المختارة: مستويات الكشف الحالية تأخذ سعر نفس المستوى إن وُجد، ومستويات الرحلة المصدر
+// غير الموجودة تُضاف أسطراً — ولا يُحفظ شيء حتى تضغط «حفظ» (مراجعة أولاً)
+function _tpPricCopy_(btn) {
+  var sel = document.getElementById('tpPricCopySrc'), src = sel && sel.value, errEl = document.getElementById('tpPricErr');
+  if (!src) { errEl.textContent = '⚠️ اختر الرحلة التي تريد نسخ تسعيرها'; return; }
+  errEl.textContent = '';
+  var old = btn.textContent; btn.disabled = true; btn.textContent = '⏳';
+  google.script.run.withSuccessHandler(function (res) {
+    btn.disabled = false; btn.textContent = old;
+    var p = res && res.pricing; if (!p) { errEl.textContent = '⚠️ لا يوجد تسعير محفوظ لرحلة «' + src + '»'; return; }
+    _tpPricFill_(p);
+    var st = document.getElementById('tpPricStatus');
+    if (st) st.insertAdjacentHTML('beforeend', '<div class="text-primary mt-1">📋 نُسخت أسعار رحلة «' + escapeHtml_(src) + '» — راجعها ثم اضغط «حفظ» (لم يُحفظ شيء بعد)</div>');
+  }).withFailureHandler(function (err) {
+    btn.disabled = false; btn.textContent = old;
+    if (typeof _handleSessErr_ === 'function' && _handleSessErr_(err)) return;
+    errEl.textContent = '❌ ' + (err.message || err);
+  }).getTripPricing(window.authToken, src);
+}
+function _tpPricFill_(p) {
+  var hs = (p && p.hotels) || {}, body = document.getElementById('tpPricRows'), have = {};
+  body.querySelectorAll('.tp-pr-row').forEach(function (tr) {
+    var h = (tr.querySelector('.tp-pr-hotel').value || '').trim(), pr = hs[h] || {};
+    var hasAny = ['سنجل', 'دابل', 'ثلاثي', 'عادي'].some(function (k) { return (tr.querySelector('.tp-pr-' + k).value || '').trim(); });
+    if (!h && !hasAny && !hs['']) { tr.remove(); return; }   // سطر فارغ بلا اسم ⇒ يحل محله ما يُنسخ
+    have[h] = 1;
+    ['سنجل', 'دابل', 'ثلاثي', 'عادي'].forEach(function (k) { tr.querySelector('.tp-pr-' + k).value = pr[k] || ''; });
+  });
+  Object.keys(hs).sort(function (a, b) { return a.localeCompare(b, 'ar'); }).forEach(function (h) { if (!have[h]) body.insertAdjacentHTML('beforeend', _tpPricRowHtml_(h, hs[h], false)); });
+  if (!body.querySelector('.tp-pr-row')) body.innerHTML = _tpPricRowHtml_('', null, true);
+  document.getElementById('tpPricChild').value = (p && p.child) || '';
+  document.getElementById('tpPricInfant').value = (p && p.infant) || '';
+}
 function _tpPricAddRow_() {
   document.getElementById('tpPricRows').insertAdjacentHTML('beforeend', _tpPricRowHtml_('', null, true));
 }
@@ -15894,6 +15948,7 @@ function openTripPricingModal(tripNameOverride) {
     }
   }
   new bootstrap.Modal(document.getElementById('tripPricingModal')).show();
+  _tpPricCopyList_(trip);   // 📋 (V4.307)
 
   google.script.run
     .withSuccessHandler(function(res) {
@@ -46252,11 +46307,22 @@ function glDataChanged_() {
   clearTimeout(GL._warmT); GL._warmT = setTimeout(function () { try { google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).glWarm(window.authToken); } catch (e) {} }, 400);
 }
 function glRun(fn, args, ok, fail) {
-  if (!GL_RO_RX_.test(fn)) { var ok0 = ok; ok = function (res) { glDataChanged_(); if (ok0) ok0(res); }; }
+  if (!GL_RO_RX_.test(fn)) { var ok0 = ok; ok = function (res) { glDataChanged_(); if (res && res.mirQ) glMirFlushSoon_(); if (ok0) ok0(res); }; }
   var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
     if (fail) fail(e); else _showPopup((e && e.message) || String(e), 'error');
   });
   r[fn].apply(r, [window.authToken].concat(args || []));
+}
+// ⚡ (V4.307) النسخ لكشف برنامج الحجوزات يُنفَّذ بنداء خلفي بعد ظهور نتيجة الحفظ/الاعتماد (خارج قفل الحسابات) — لا ينتظره المستخدم
+var _glMirT_ = null;
+function glMirFlushSoon_() {
+  clearTimeout(_glMirT_);
+  _glMirT_ = setTimeout(function () {
+    try {
+      google.script.run.withSuccessHandler(function (r) { if (r && r.left) glMirFlushSoon_(); })
+        .withFailureHandler(function () {}).glMirFlush(window.authToken);
+    } catch (e) {}
+  }, 400);
 }
 // (V4.226) رصيد بالعملات الفعلية «12,500 جنيه مدين · 8,000 ريال دائن» — بديل المعادل في كل الشاشات
 function glCurBal_(o) { var out = ['EGP', 'SAR', 'USD'].filter(function (c) { return o && Math.abs(o[c] || 0) >= 0.01; }).map(function (c) { return glFmt(Math.abs(o[c])) + ' ' + GL_CUR_LBL_[c] + ' ' + (o[c] > 0 ? 'مدين' : 'دائن'); }); return out.join(' · ') || '0'; }
@@ -46554,12 +46620,19 @@ function glLoadEntries() {
   GL._ef = { q: g('glEfQ'), from: g('glEfFrom'), to: g('glEfTo'), type: g('glEfType'), status: g('glEfSt') };
   var box = document.getElementById('glEntList'); if (!box) return;
   box.innerHTML = '<div class="text-center text-muted py-4">⏳ جاري التحميل…</div>';
+  // ⚡ (V4.307) دمج الطلبات المتتالية: كان كل حفظ/تحديث لحظي يطلق تحميلاً جديداً للقائمة والسابق ما زال جارياً (١٣ نداءً خلال
+  // ١٥ ثانية بسجلات التنفيذ، ٤-٧ ثوانٍ لكل منها) فتتزاحم على الخادم. الآن طلب واحد جارٍ بحد أقصى + طلب أخير واحد بعده بأحدث فلتر
+  if (GL._efBusy && Date.now() - GL._efBusy < 90000) { GL._efAgain = true; return; }
+  GL._efBusy = Date.now();
   var seq = GL._efSeq = (GL._efSeq || 0) + 1;
+  var again = function () { GL._efBusy = false; if (GL._efAgain) { GL._efAgain = false; glLoadEntries(); return true; } return false; };
   glRun('glListEntries', [GL._ef], function (res) {
+    if (again()) return;
     if (seq !== GL._efSeq) return;   // نتيجة طلب أقدم وصلت متأخرة
+    var bx = document.getElementById('glEntList'); if (!bx) return;
     GL._entries = res.entries || []; GL._entTotal = res.total;
     glDrawEntries();
-  }, function (e) { box.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc(e.message || e) + '</div>'; });
+  }, function (e) { if (again()) return; var bx = document.getElementById('glEntList'); if (bx) bx.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc(e.message || e) + '</div>'; });
 }
 /* 🧾 (V4.217) جدول القيود: ترتيب وتصفية من رؤوس الأعمدة (⇅ / ⏷)، سطر بالفلاتر المطبقة مع ✕ لكل فلتر و«مسح الكل»،
    وأزرار سجل التعديلات 📜 والحذف 🗑️ لكل قيد — كل ذلك لحظياً على القيود المحمّلة بلا إعادة طلب. */
@@ -47147,8 +47220,13 @@ function glEntryVoucherFit_(e) {
   }
   var V = GL_VOUCHERS_[k], side = V.mainSide === 'D' ? 'debit' : 'credit', other = side === 'debit' ? 'credit' : 'debit';
   var mains = ls.filter(function (l) { return l[side] > 0; }), cs = ls.filter(function (l) { return l[other] > 0; });
-  if (mains.length !== 1 || !cs.length) return null;
-  return { kind: k, side: side, other: other, main: mains[0], counters: cs };
+  if (!mains.length || !cs.length) return null;
+  // ✚ (V4.307) أكثر من سطر بجانب الحساب الرئيسي ⇒ الرئيسي هو المطابق لنوع السند (خزينة/بنك…) والباقي «أسطر إضافية»
+  var mk = V.main ? V.main.split(',') : [], mi = 0;
+  if (mains.length > 1 && mk.length) mains.some(function (l, i) { var a = GL.map[l.account]; if (a && mk.indexOf(a.kind) >= 0) { mi = i; return true; } return false; });
+  var cur0 = mains[mi].currency;
+  if (mains.some(function (l) { return l.currency !== cur0; })) return null;   // أسطر إضافية بعملة أخرى ⇒ نموذج القيد اليومي
+  return { kind: k, side: side, other: other, main: mains[mi], counters: cs, extras: mains.filter(function (l, i) { return i !== mi; }) };
 }
 function glEditEntry(id) { glRun('glGetEntry', [id], function (res) { var f = glEntryVoucherFit_(res.entry); glEntryDlg(f ? f.kind : 'journal', res.entry); }); }
 // ✏️ (V4.219) القيد المرحّل يُعدَّل لمن له صلاحية التعديل، والتلقائي للمدير فقط (لا الملغى ولا قيد الإقفال ولا الفترة المقفلة)
@@ -47219,9 +47297,11 @@ function glEntryDlg(kind, entry) {
       // 🏦 (V4.290) تاريخ الاستحقاق للإيداع البنكي: الافتراضي = تاريخ الإيداع، ويُحدِّد متى يدخل المبلغ «الرصيد المتاح»
       (kind === 'bankIn' ? '<div class="col-md-3"><label class="gl-lbl" title="المبلغ يُعتبر معلّقاً حتى هذا التاريخ ثم يدخل الرصيد المتاح">⏳ تاريخ الاستحقاق</label>' + glDateInput('glVDue', e.due || e.date || glToday()) + '</div>' : '') +
       '</div></div>' +
-      '<div class="gl-lbl">' + V.counterLbl + ' (يمكن التوزيع على أكثر من حساب)</div>' +
-      '<div class="table-responsive"><table class="gl-tbl" id="glVLines"><thead><tr><th style="min-width:240px;">الحساب</th><th style="width:120px;">المبلغ</th><th style="min-width:160px;">البيان</th><th style="width:30px;"></th></tr></thead><tbody></tbody></table></div>' +
-      '<button class="btn btn-outline-primary btn-sm mt-1" onclick="glVAddLine()">➕ طرف آخر</button><div id="glVTot" class="gl-note mt-2"></div><div id="glVSmart" class="small mt-1" style="color:#0e7490;"></div>';
+      '<div class="gl-lbl">' + V.counterLbl + ' (يمكن التوزيع على أكثر من حساب — ✚ ويمكن إضافة أسطر على الجانبين المدين والدائن معاً)</div>' +
+      '<div class="table-responsive"><table class="gl-tbl" id="glVLines"><thead><tr><th style="min-width:240px;">الحساب</th><th style="width:82px;">الجانب</th><th style="width:120px;">المبلغ</th><th style="min-width:160px;">البيان</th><th style="width:30px;"></th></tr></thead><tbody></tbody></table></div>' +
+      '<div class="d-flex gap-2 flex-wrap mt-1"><button class="btn btn-outline-primary btn-sm" onclick="glVAddLine()">➕ طرف آخر (' + (V.mainSide === 'D' ? 'دائن' : 'مدين') + ')</button>' +
+      '<button class="btn btn-outline-secondary btn-sm" onclick="glVAddLine(\'mn\')" title="حساب إضافي بجانب ' + (V.mainSide === 'D' ? 'المدين' : 'الدائن') + ' مع الحساب الرئيسي (مثل: عهدتان تُسوَّيان معاً، أو خصم/عمولة تُضاف للمبلغ)">➕ سطر ' + (V.mainSide === 'D' ? 'مدين' : 'دائن') + ' إضافي</button></div>' +
+      '<div id="glVTot" class="gl-note mt-2"></div><div id="glVSmart" class="small mt-1" style="color:#0e7490;"></div>';
   }
   var editingPosted = !!(entry && entry.id && entry.status === 'مرحّل');
   var isRP = kind === 'receipt' || kind === 'payment', isVchK = kind !== 'journal' && kind !== 'fx';
@@ -47319,6 +47399,13 @@ function glEntryDlg(kind, entry) {
         var lc = tr.querySelector('.glVLCur'); if (lc) { lc.value = l.currency; lc.dataset.touched = '1'; }
         tr.querySelector('.glVA').value = l[fit.other]; tr.querySelector('.glVD').value = l.desc && l.desc !== e.desc ? l.desc : '';
       });
+      (fit.extras || []).forEach(function (l) {   // ✚ (V4.307) الأسطر الإضافية بجانب الحساب الرئيسي
+        glVAddLine('mn');
+        var tr = tb.lastElementChild, ai = tr.querySelector('.glVAcc');
+        ai.dataset.code = l.account; ai.value = glAccLabel(l.account);
+        var lc = tr.querySelector('.glVLCur'); if (lc) { lc.value = l.currency; lc.dataset.touched = '1'; }
+        tr.querySelector('.glVA').value = l[fit.side]; tr.querySelector('.glVD').value = l.desc && l.desc !== e.desc ? l.desc : '';
+      });
       glVCalc(true);
     }
   }
@@ -47400,10 +47487,19 @@ function glJCalc() {
     (Object.keys(byC).length > 1 ? ' <span style="color:#64748b;">(' + Object.keys(byC).map(function (k) { return GL_CUR_LBL_[k] + ': ' + glFmt(byC[k].d) + ' / ' + glFmt(byC[k].c); }).join(' · ') + ')</span>' : '');
   glJSmartPaint_();
 }
-function glVAddLine() {
+/* ✚ (V4.307) أسطر على الجانبين: كل سطر له «الجانب» — الافتراضي جانب الطرف المقابل، و«سطر إضافي» بجانب الحساب الرئيسي
+   (مثال تسوية عهدة: دائن عهدة أحمد 1000 + دائن عهدة محمود 500 ⇐ مدين مصروفات 1500). التوازن: مبلغ السند + الأسطر الإضافية
+   بجانبه = مجموع أسطر الطرف المقابل */
+function glVSideOpts_(V, side) {
+  var cpL = V.mainSide === 'D' ? 'دائن' : 'مدين', mnL = V.mainSide === 'D' ? 'مدين' : 'دائن';
+  return '<select class="form-select form-select-sm glVSide" style="width:78px;" title="جانب السطر بالقيد" onchange="this.closest(\'tr\').classList.toggle(\'gl-vmn\', this.value===\'mn\');glVCalc(this)">' +
+    '<option value="cp"' + (side !== 'mn' ? ' selected' : '') + '>' + cpL + '</option><option value="mn"' + (side === 'mn' ? ' selected' : '') + '>' + mnL + '</option></select>';
+}
+function glVRowSign_(tr) { var s = tr && tr.querySelector('.glVSide'); return s && s.value === 'mn' ? -1 : 1; }
+function glVAddLine(side) {
   var V = GL_VOUCHERS_[GL._vk], tb = document.querySelector('#glVLines tbody'); if (!tb) return;
-  var tr = document.createElement('tr');
-  tr.innerHTML = '<td>' + glAccInput('glVAcc', V.counterFilter || '', '') + '</td>' +
+  var tr = document.createElement('tr'); if (side === 'mn') tr.className = 'gl-vmn';
+  tr.innerHTML = '<td>' + glAccInput('glVAcc', side === 'mn' ? (V.main || '') : (V.counterFilter || ''), '') + '</td><td>' + glVSideOpts_(V, side) + '</td>' +
     '<td><div class="d-flex gap-1"><input class="form-control form-control-sm gl-latin glVA" oninput="glVCalc(this)">' +
       '<select class="form-select form-select-sm glVLCur" style="width:78px;" title="عملة الطرف (مختلفة عن السند ⇒ عبر وسيط التحويل)" onchange="this.dataset.touched=1;glVCalc(this)">' +
       ['EGP', 'SAR', 'USD'].map(function (c) { return '<option value="' + c + '"' + (c === ((document.querySelector('#glDlgBody .glVCur') || {}).value || 'EGP') ? ' selected' : '') + '>' + GL_CUR_LBL_[c] + '</option>'; }).join('') + '</select></div></td>' +
@@ -47423,7 +47519,7 @@ function glVAddLine() {
       var amt = glNum((document.getElementById('glVAmt') || {}).value), nRows = document.querySelectorAll('#glVLines tbody tr').length;
       if (va && (!glNum(va.value) || (nRows === 1 && glNum(va.value) === amt))) {   // فارغ أو مملوء تلقائياً بمبلغ السند
         var used = 0;
-        document.querySelectorAll('#glVLines tbody tr').forEach(function (t2) { if (t2 !== tr && ((t2.querySelector('.glVLCur') || {}).value || vc) === vc) used += glNum(t2.querySelector('.glVA').value); });
+        document.querySelectorAll('#glVLines tbody tr').forEach(function (t2) { if (t2 !== tr && ((t2.querySelector('.glVLCur') || {}).value || vc) === vc) used += glNum(t2.querySelector('.glVA').value) * glVRowSign_(t2); });
         var rest = Math.max(0, amt - used), d = glDlgDate_(), rv = vc === 'EGP' ? 1 : (glNum((document.getElementById('glVRate') || {}).value) || glRateAt(vc, d)), ro = ac === 'EGP' ? 1 : glRateAt(ac, d);
         if (rest && ro) {   // (V4.305) مبلغ مكتوب بالبيان بعملة الطرف (أو سعر صرف مكتوب) يتقدّم على سعر اليوم
           var dsc = ((document.getElementById('glEDesc') || {}).value || '') + ' ' + ((tr.querySelector('.glVD') || {}).value || '');
@@ -47491,14 +47587,14 @@ function glVCalc(src) {
   var rows = document.querySelectorAll('#glVLines tbody tr');
   // سطر واحد: يأخذ المبلغ كاملاً تلقائياً
   var vc0 = (document.querySelector('#glDlgBody .glVCur') || {}).value || 'EGP', rc0 = rows.length === 1 ? rows[0].querySelector('.glVLCur') : null;
-  if (rows.length === 1 && !src && (!rc0 || rc0.dataset.touched !== '1' || rc0.value === vc0)) rows[0].querySelector('.glVA').value = amt || '';
-  var vc = (document.querySelector('#glDlgBody .glVCur') || {}).value || 'EGP', sum = 0, oth = {};
-  rows.forEach(function (tr) { var c = (tr.querySelector('.glVLCur') || {}).value || vc, v = glNum(tr.querySelector('.glVA').value); if (c === vc) sum += v; else oth[c] = (oth[c] || 0) + v; });
+  if (rows.length === 1 && !src && glVRowSign_(rows[0]) > 0 && (!rc0 || rc0.dataset.touched !== '1' || rc0.value === vc0)) rows[0].querySelector('.glVA').value = amt || '';
+  var vc = (document.querySelector('#glDlgBody .glVCur') || {}).value || 'EGP', sum = 0, oth = {}, mnSum = 0;
+  rows.forEach(function (tr) { var c = (tr.querySelector('.glVLCur') || {}).value || vc, sg = glVRowSign_(tr), v = glNum(tr.querySelector('.glVA').value) * sg; if (sg < 0) mnSum -= v; if (c === vc) sum += v; else oth[c] = (oth[c] || 0) + v; });
   if (rows.length === 1 && !src) { var c1 = rows[0].querySelector('.glVLCur'); if (c1 && c1.dataset.touched !== '1') c1.value = vc; }
   var diff = Math.round((amt - sum) * 100) / 100, ok = Object.keys(oth);
   if (ok.length) { setTimeout(glVSmartPaint_, 0); el.innerHTML = '💱 مبلغ السند: <b class="gl-latin">' + glFmt(amt) + '</b> ' + GL_CUR_LBL_[vc] + ' · بعملته: <b class="gl-latin">' + glFmt(sum) + '</b> · المتبقي <b class="gl-latin">' + glFmt(diff) + '</b> ' + GL_CUR_LBL_[vc] +
     ' يقابله ' + ok.map(function (c) { return '<b class="gl-latin">' + glFmt(oth[c]) + '</b> ' + GL_CUR_LBL_[c]; }).join(' + ') + (diff > 0 && oth[ok[0]] ? ' · السعر الضمني <b class="gl-latin">' + glR2Rate(vc === 'EGP' ? diff / oth[ok[0]] : oth[ok[0]] / diff) + '</b>' : '') + ' — يُسجَّل عبر وسيط التحويل'; return; }
-  el.innerHTML = 'مبلغ السند: <b class="gl-latin">' + glFmt(amt) + '</b> · الموزَّع: <b class="gl-latin">' + glFmt(sum) + '</b> · ' +
+  el.innerHTML = 'مبلغ السند: <b class="gl-latin">' + glFmt(amt) + '</b>' + (mnSum ? ' + أسطر إضافية بجانبه <b class="gl-latin">' + glFmt(mnSum) + '</b>' : '') + ' · الموزَّع: <b class="gl-latin">' + glFmt(sum + mnSum) + '</b> · ' +
     (Math.abs(diff) < 0.01 && amt ? '<b style="color:#166534;">✅ مطابق</b>' : '<b style="color:#b91c1c;">المتبقي ' + glFmt(diff) + '</b>');
   glVSmartPaint_();
 }
@@ -47527,7 +47623,7 @@ function glVSmart_() {
   var V = GL_VOUCHERS_[GL._vk] || {}, base = ((document.getElementById('glEDesc') || {}).value || '').trim();
   var main = glAccVal(document.querySelector('#glDlgBody .glVMain')), into = V.mainSide === 'D', mk = (GL.map[main] || {}).kind;
   var rows = Array.prototype.slice.call(document.querySelectorAll('#glVLines tbody tr')), names = [];
-  rows.forEach(function (tr) { var n = glNmOf_(glAccVal(tr.querySelector('.glVAcc'))); if (n && names.indexOf(n) < 0) names.push(n); });
+  rows.forEach(function (tr) { if (glVRowSign_(tr) < 0) return; var n = glNmOf_(glAccVal(tr.querySelector('.glVAcc'))); if (n && names.indexOf(n) < 0) names.push(n); });
   return { main: glJoinDesc_(glSideFrom_(names, into, mk), base), counter: glJoinDesc_(base, main ? glSideVerb_(main, into) : ''), rows: rows };
 }
 function glVSmartPaint_() {
@@ -47645,13 +47741,16 @@ function glBuildEntry() {
       var a = glAccVal(tr.querySelector('.glVAcc')), v = glNum(tr.querySelector('.glVA').value), cs = tr.querySelector('.glVLCur');
       if (!a && !v) return;
       if (!a) throw new Error('حساب غير معروف: «' + tr.querySelector('.glVAcc').value + '»');
-      cl.push({ account: a, amount: v, cur: cs ? cs.value : cur, desc: tr.querySelector('.glVD').value.trim() });
+      var mn = glVRowSign_(tr) < 0;
+      if (mn && cs && cs.value !== cur) throw new Error('السطر الإضافي بجانب الحساب الرئيسي يكون بعملة السند (' + GL_CUR_LBL_[cur] + ') — أو استخدم «قيد يومية» للعملات المختلفة');
+      cl.push({ account: a, amount: v, cur: cs ? cs.value : cur, desc: tr.querySelector('.glVD').value.trim(), mn: mn });
     });
-    if (!cl.length) throw new Error('أضف الطرف المقابل');
+    if (!cl.some(function (c) { return !c.mn; })) throw new Error('أضف الطرف المقابل');
     // 💱 (V4.247) طرف بعملة غير عملة السند ⇒ يُسجَّل بعملته عبر «وسيط تحويل العملات» (سعره ضمني من مبلغي العملتين)
     var same = cl.filter(function (c) { return c.cur === cur; }), oth = cl.filter(function (c) { return c.cur !== cur; });
-    same.forEach(function (c) { sum += c.amount; });
-    if (!oth.length && Math.abs(sum - amt) > 0.009) throw new Error('مجموع الأطراف (' + glFmt(sum) + ') لا يساوي مبلغ السند (' + glFmt(amt) + ')');
+    var mnTot = 0; same.forEach(function (c) { if (c.mn) mnTot += c.amount; else sum += c.amount; });
+    sum = Math.round((sum - mnTot) * 100) / 100;   // ✚ (V4.307) الأسطر الإضافية بجانب الحساب الرئيسي تُضاف لمبلغه
+    if (!oth.length && Math.abs(sum - amt) > 0.009) throw new Error('مجموع الأطراف (' + glFmt(sum + mnTot) + ') لا يساوي مبلغ السند' + (mnTot ? ' + الأسطر الإضافية بجانبه' : '') + ' (' + glFmt(amt + mnTot) + ')');
     if (oth.length) {
       if (oth.some(function (c) { return c.cur !== oth[0].cur; })) throw new Error('الأطراف بعملة مختلفة عن السند يجب أن تكون بعملة واحدة');
       var rest = Math.round((amt - sum) * 100) / 100, oSum = 0; oth.forEach(function (c) { oSum += c.amount; });
@@ -47666,8 +47765,8 @@ function glBuildEntry() {
     mainLine[V.mainSide === 'D' ? 'debit' : 'credit'] = amt;
     e.lines.push(mainLine);
     cl.forEach(function (c) {
-      var l = { account: c.account, currency: c.cur, rate: c.cur === cur ? rate : c.rate, desc: c.desc || smv.counter || e.desc };
-      l[V.mainSide === 'D' ? 'credit' : 'debit'] = c.amount;
+      var l = { account: c.account, currency: c.cur, rate: c.cur === cur ? rate : c.rate, desc: c.desc || (c.mn ? smv.main : smv.counter) || e.desc };
+      l[(V.mainSide === 'D') !== !!c.mn ? 'credit' : 'debit'] = c.amount;
       e.lines.push(l);
     });
     if (oth.length) glFxSmartDesc_(e.lines, e.desc);
@@ -47680,7 +47779,7 @@ function glBuildEntry() {
 // 🏨 (V4.246) نتيجة النسخ لبرنامج الحجوزات بعد حفظ قيد على حساب طرف حجوزات: تأكيد، أو سبب عدم النسخ (بدل الصمت)
 function glHbMirrorNote_(res) {
   var m = res && res.hbMirror; if (!m) return;
-  if (m.written) setTimeout(function () { showToast('🏨 نُسخت لكشف الحساب ببرنامج الحجوزات (' + m.written + ' سطر) + تنبيه تليجرام'); }, 1200);
+  if (m.written) setTimeout(function () { showToast('🏨 تُنسخ لكشف الحساب ببرنامج الحجوزات (' + m.written + ' سطر) + تنبيه تليجرام'); }, 1200);
   // (V4.305) قد يُنسخ طرف ويُستبعد آخر بغير الريال (لا تحويل تلقائي لكشف الفندق) ⇒ التنبيه يظهر حتى مع النسخ الجزئي
   if (m.why) _showPopup('القيد على حساب ' + (m.names || []).join(' و ') + ' (طرف ببرنامج الحجوزات) لكنه لم يُنسخ لكشف حسابه هناك:\n' + m.why, 'warning', 'برنامج الحجوزات');
 }

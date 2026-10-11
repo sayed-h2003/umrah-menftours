@@ -1059,7 +1059,7 @@ function glSaveEntry(authToken, e, post) {
       var _due = e.due !== undefined ? _glDueSet_(_glStr_(f.r[0]), e.due, v.date, session.username) : undefined, _sr = _glRowToListEntry_(w.eRow, w.lRows);
       if (_due !== undefined) _sr.due = _due;
       return { success: true, id: _glStr_(f.r[0]), status: status, voucherNo: (sk.match(/^VCH:(.+)$/) || [])[1] || '', due: _due,
-        balancesDelta: _delta, pendingCount: _glCpPending_(), savedRow: _sr, hbMirror: _GL_HB_MIRROR_LAST_ };
+        balancesDelta: _delta, pendingCount: _glCpPending_(), savedRow: _sr, hbMirror: _GL_HB_MIRROR_LAST_, mirQ: _GL_MIRQ_N_ };
     }
     var seq = _glNextEntrySeq_(1), id = _glEntryId_(seq);
     var vno = (GL_VCH_PREFIX_[v.type] && !_glStr_(e.sourceKey)) ? _glNextVoucherNo_(v.type) : '';
@@ -1074,7 +1074,7 @@ function glSaveEntry(authToken, e, post) {
     var _due2 = e.due !== undefined ? _glDueSet_(id, e.due, v.date, session.username) : undefined, _sr2 = _glRowToListEntry_(w2.eRow, w2.lRows);
     if (_due2 !== undefined) _sr2.due = _due2;
     return { success: true, id: id, status: status, voucherNo: vno, due: _due2,
-      balancesDelta: _delta2, pendingCount: _glCpPending_(), savedRow: _sr2, hbMirror: _GL_HB_MIRROR_LAST_ };
+      balancesDelta: _delta2, pendingCount: _glCpPending_(), savedRow: _sr2, hbMirror: _GL_HB_MIRROR_LAST_, mirQ: _GL_MIRQ_N_ };
   } finally { _glUnlock_(lock); }
 }
 function glPostEntry(authToken, id) {
@@ -1093,7 +1093,7 @@ function glPostEntry(authToken, id) {
     _glSyncVoucherPays_(_glStr_(id), session.username);
     try { var _pf = _glFindEntry_(_glStr_(id)); if (_pf) _glBotQ_('vch_new', _glBotWho_(_glBotEntryInfo_(_glStr_(id), _pf.r, _glLinesOf_(_glStr_(id))), session)); } catch (eB) {}   // 🤖 (V4.254)
     return { success: true, id: _glStr_(id), balancesDelta: _glLineDelta_(_glLinesOf_(_glStr_(id)), 1, {}),
-      pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)), hbMirror: _GL_HB_MIRROR_LAST_ };   // ⚡ (V4.232) دلتا محلية
+      pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)), hbMirror: _GL_HB_MIRROR_LAST_, mirQ: _GL_MIRQ_N_ };   // ⚡ (V4.232) دلتا محلية
   } finally { _glUnlock_(lock); }
 }
 // wantDelta: (V4.232) تُرجع دلتا الأرصدة للتحديث المحلي — يمرّرها نداء الواجهة فقط، لا حلقة glHbErpVoid الداخلية
@@ -1124,7 +1124,7 @@ function glVoidEntry(authToken, id, reason, wantDelta) {
     _glSyncVoucherPays_(_glStr_(id), session.username);
     if (!wantDelta) return { success: true };   // حلقة glHbErpVoid الداخلية — بلا دلتا
     return { success: true, id: _glStr_(id), balancesDelta: _glLineDelta_(_voidLines, -1, {}),
-      pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)) };
+      pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)), mirQ: _GL_MIRQ_N_ };
   } finally { _glUnlock_(lock); }
 }
 // 🗑️ (V4.217) حذف قيد نهائياً (للمدير): المسودة/المرحّل/الملغى اليدوي أو المستورد — لا القيود التلقائية (تُدار من
@@ -1144,7 +1144,7 @@ function glDeleteEntry(authToken, id) {
     _glSheet_('entries').deleteRow(f.row);
     _glSyncVoucherPays_(_glStr_(id), session.username);   // (V4.222) تُحذف الدفعة المقابلة بحسابات العملاء
     logChange_(session.username, 'حذف قيد نهائياً', 'GL:' + id, _glStr_(f.r[3]) + ' — ' + _glStr_(f.r[5]), _glStr_(f.r[4]) + ' — ' + _glNum_(f.r[8]) + ' ج', '-');
-    return { success: true, deleted: true, removedId: _glStr_(id), balancesDelta: _glLineDelta_(_delLines, -1, {}), pendingCount: _glCpPending_() };
+    return { success: true, deleted: true, removedId: _glStr_(id), balancesDelta: _glLineDelta_(_delLines, -1, {}), pendingCount: _glCpPending_(), mirQ: _GL_MIRQ_N_ };
   } finally { _glUnlock_(lock); }
 }
 // 📜 (V4.217) سجل تعديلات قيد (إنشاء/تعديل/ترحيل/إلغاء/حذف) من سجل التعديلات العام
@@ -2911,6 +2911,22 @@ function _glAutoBuiltOk_(built) {
     return !e._pv || !e._pv.v || e._pv.v.lines.every(function (l) { var a = m[l.account]; return a && !a.isGroup && a.active; });
   });
 }
+/* ⚡ (V4.307) «اعتماد التغييرات» كان يعيد بناء كل القيود التلقائية (قراءة كل الشاشات + ملف الحجوزات الخارجي، 20-60 ثانية)
+   **داخل قفل الحسابات** لمجرد اعتماد تغيير أو اثنين ⇒ يتجمد الحفظ بكل الشاشات حتى ينتهي. الآن البناء الثقيل خارج القفل
+   (نفس نهج المزامنة اللحظية V4.236)، وداخل القفل فقط التحقق من صلاحية ما بُني ثم كتابة الفرق (ثوانٍ). */
+function _glAutoPreBuild_(user) {
+  try {
+    _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
+    var b = _glAutoBuild_(user, false);
+    if ((b.roles._new || []).length) return null;   // أدوار تحتاج إنشاء حسابات ⇒ البناء داخل القفل كما كان
+    _glAutoPrep_(b); return b;
+  } catch (e) { return null; }
+}
+// داخل القفل: يستخدم ما بُني خارج القفل لو ما زال صالحاً، وإلا يبني من جديد
+function _glAutoRunPre_(user, built, opts) {
+  if (built && !_glAutoBuiltOk_(built)) { built = null; _GL_ACC_MEMO_ = null; }
+  return _glAutoRun_(user, false, Object.assign({}, opts || {}, built ? { built: built } : {}));
+}
 function _glPendSame_(a, b) {
   var ka = Object.keys(a), kb = Object.keys(b); if (ka.length !== kb.length) return false;
   var W = GL_SHEETS_.pending.headers.length, cell = function (x) { return x instanceof Date ? x.getTime() : _glStr_(x); };
@@ -2982,14 +2998,16 @@ function glAutoSync(authToken) {
 // مُشغِّل مجدول (كل ساعة) — يُفعَّل من تبويب القيود التلقائية؛ يعمل بصلاحية صاحب السكربت
 function glAutoSyncCron() {
   if (!_glSSId_() || _glSettings_().auto_cron !== 'نعم') return;
+  var _pre = _glAutoPreBuild_('مزامنة مجدولة');   // ⚡ (V4.307) البناء (20-45 ثانية) خارج القفل — القفل للكتابة فقط
   var lock = _glLock_(); if (!lock.tryLock(30000)) return;
   try {
-    var r = _glAutoRun_('مزامنة مجدولة', false); _glAutoSaveLast_(r, 'مزامنة مجدولة');
+    var r = _glAutoRunPre_('مزامنة مجدولة', _pre); _glAutoSaveLast_(r, 'مزامنة مجدولة');
     _glBotPendCheck_();   // 🤖 (V4.254)
   }
   catch (e) { try { _glSetSetting_('auto_last_error', _glNow_() + ' — ' + e.message); } catch (e2) {} }
   _glUnlock_(lock);
-  try { _glCsAutoAll_(); } catch (e3) {}   // (V4.219) شيتات العهد المربوطة بخيار «تلقائي» — (V4.258) بقفل مستقل لكل شيت
+  // (V4.219) شيتات العهد المربوطة بخيار «تلقائي» — ⚡ (V4.307) عبر حارس عدم-التداخل (كانت تعمل بالتوازي مع مشغّلها المستقل)
+  try { glCustSheetCron(); } catch (e3) {}
 }
 function _glAutoSaveLast_(r, user) {
   _glSetSetting_('auto_last', JSON.stringify({ at: _glNow_(), by: user, created: r.created, updated: r.updated, voided: r.voided, same: r.same,
@@ -3316,6 +3334,7 @@ function glPendingApprove(authToken, keys) {
   if (!_glCanApprove_(session)) throw new Error('اعتماد تغييرات القيود يحتاج صلاحية «✅ اعتماد تغييرات القيود»');
   var only = {}; (keys || []).forEach(function (k) { if (_glStr_(k)) only[_glStr_(k)] = 1; });
   if (!Object.keys(only).length) throw new Error('اختر تغييراً واحداً على الأقل');
+  var _pre = Object.keys(only).some(function (k) { return !/^CCY:/.test(k); }) ? _glAutoPreBuild_(session.username) : null;   // ⚡ (V4.307) خارج القفل
   var lock = _glLock_(); lock.waitLock(60000);
   try {
     // 💱 (V4.306) تغييرات «تحويل عملة» (CCY:) ليست تعديلاً على قيد قائم تُعاد بنايته من المصدر — القيد مسجَّل بالفعل
@@ -3323,7 +3342,7 @@ function glPendingApprove(authToken, keys) {
     var ccyKeys = Object.keys(only).filter(function (k) { return /^CCY:/.test(k); });
     var autoKeys = {}; Object.keys(only).forEach(function (k) { if (!/^CCY:/.test(k)) autoKeys[k] = 1; });
     var r = { updated: 0, voided: 0, created: 0, blocked: [], createdList: [] };
-    if (Object.keys(autoKeys).length) { r = _glAutoRun_(session.username, false, { bypass: true, onlyKeys: autoKeys }); _glAutoLogAdd_(r.createdList, 'جديد'); }
+    if (Object.keys(autoKeys).length) { r = _glAutoRunPre_(session.username, _pre, { bypass: true, onlyKeys: autoKeys }); _glAutoLogAdd_(r.createdList, 'جديد'); }
     if (ccyKeys.length) _glPendingDrop_(ccyKeys);
     logChange_(session.username, 'اعتماد تغيير قيود تلقائية', 'GL:approve', 'القيود', Object.keys(only).length + ' تغيير', 'معدّل ' + r.updated + '، ملغى ' + r.voided + (ccyKeys.length ? '، مراجعة عملة ' + ccyKeys.length : '') + (r.blocked.length ? '، محجوز بفترة مقفلة ' + r.blocked.length : ''));
     return { success: true, updated: r.updated, voided: r.voided, created: r.created, blocked: r.blocked, pending: _glPendingCount_() };
@@ -3534,7 +3553,12 @@ function glCpDelete(authToken, payIds) {
 function _glSyncVoucherPays_(entryId, user) {
   _GL_HB_MIRROR_LAST_ = null;
   try {   // (V4.241) نسخة بسجل دفعات الحجوزات — (V4.246) والنتيجة/سبب عدم النسخ تُعاد للواجهة
-    var mr = _glHbMirrorSync_(entryId, { notify: true, by: _glHbStaffName_(user) });
+    var mr = null;
+    if (_GL_LOCKN_ > 0) {   // ⚡ (V4.307) داخل قفل الحسابات ⇒ معاينة محلية للتنبيه + طابور للنسخ الفعلي خارج القفل
+      var pk = _glHbMirrorPeek_(_glStr_(entryId));
+      if (pk && pk.need && !_glMirQ_(entryId, { notify: true, by: _glHbStaffName_(user) })) mr = _glHbMirrorSync_(entryId, { notify: true, by: _glHbStaffName_(user) });
+      else if (pk) mr = { written: pk.written, skipped: pk.skipped, queued: pk.need };
+    } else mr = _glHbMirrorSync_(entryId, { notify: true, by: _glHbStaffName_(user) });
     if (mr && mr.written) _GL_HB_MIRROR_LAST_ = { written: mr.written };
     else { var wy = _glHbMirrorWhy_(_glStr_(entryId)); if (wy) _GL_HB_MIRROR_LAST_ = wy; }
     // 💱 (V4.305) سطر طرف حجوزات بغير الريال لا يُنسخ لكشف الفندق (لا تحويل تلقائي) ⇒ تنبيه للمستخدم ليحدّد مبلغه بالريال
@@ -3557,7 +3581,10 @@ function _glSyncVoucherPays_(entryId, user) {
       });
     }
     var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS), last = sh.getLastRow(), rowsIdx = [];
-    if (last >= 2) sh.getRange(2, 9, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(tag) >= 0) rowsIdx.push(i + 2); });
+    // ⚡ (V4.307) بحث على الخادم (TextFinder) بدل نقل عمود البيان كاملاً مع كل حفظ قيد
+    var tf = null; try { if (last >= 2) tf = sh.getRange(2, 9, last - 1, 1).createTextFinder(tag).matchCase(true).findAll().map(function (h) { return h.getRow(); }).sort(function (a, b) { return a - b; }); } catch (eTf) { tf = null; }
+    if (tf) rowsIdx = tf;
+    else if (last >= 2) sh.getRange(2, 9, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(tag) >= 0) rowsIdx.push(i + 2); });
     // تحديث في المكان لنفس العدد (يحافظ على المعرّف والتخصيص)، والزائد يُضاف والناقص يُحذف
     var ids = [];
     rowsIdx.forEach(function (rw, k) {
@@ -4056,7 +4083,7 @@ function glCsApproveAll(authToken, groups) {
         (r.warns || []).forEach(function (x) { warns.push({ code: g.code, row: x.row, msg: x.msg }); });
       } catch (e) { problems.push({ code: g.code, row: 0, msg: e.message }); }
     });
-    return { success: true, created: created, left: left, problems: problems, warns: warns, csPend: _glCsPendTotal_(), pendingCount: (function () { try { return _glPendingCount_(); } catch (e) { return 0; } })() };
+    return { success: true, created: created, left: left, problems: problems, warns: warns, csPend: _glCsPendTotal_(), mirQ: _GL_MIRQ_N_, pendingCount: (function () { try { return _glPendingCount_(); } catch (e) { return 0; } })() };
   } finally { _glUnlock_(lock); }
 }
 // 🔁 (V4.278) وصف القيد المطابق (مصدره) لعرضه بالمراجعة
@@ -4308,6 +4335,14 @@ function glCustSheetApprove(authToken, code, items) {
     return _glCsSync_(_glStr_(code), session.username, { approve: pick, link: lnk, force: frc, ccy: cc });   // (V4.278 / V4.305 مبلغ وعملة الطرف المقابل)
   } finally { _glUnlock_(lock); }
 }
+function _glHbCustPays_() {
+  var ck = _glCK_('hbcustpays'), got = null;
+  try { got = _glCGet_(ck); } catch (e0) {}
+  if (got && got.list) return got.list;
+  var list = (_glHbRead_().pays || []).filter(function (p) { return /^CUSTODY:/.test(p.id); });
+  try { _glCPut_(ck, { list: list }, 1800); } catch (e1) {}
+  return list;
+}
 function _glCsSync_(code, user, opts) {
   opts = opts || {};
   _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
@@ -4346,7 +4381,9 @@ function _glCsSync_(code, user, opts) {
   });
   // دفعات برنامج الحجوزات المأخوذة من نفس الشيت (معرّفها CUSTODY:<آخر 10 من معرّف الملف>:<الصف>)
   var hbPays = {}, seg = String(cfg.id).slice(-10);
-  try { (_glHbRead_().pays || []).forEach(function (p) { if (p.id.indexOf('CUSTODY:' + seg + ':') === 0) hbPays[p.id] = p; }); } catch (e) {}
+  // ⚡ (V4.307) كانت تقرأ ملف الحجوزات الخارجي كاملاً (الحجوزات + الدفعات) مع **كل** مزامنة شيت عهدة داخل القفل، وكل دقيقة.
+  // المطلوب فقط دفعات «CUSTODY:» القديمة (سجّلها برنامج الحجوزات قبل إيقاف مزامنة العهد هناك ⇒ لا تتغيّر تقريباً) ⇒ كاش 30 دقيقة
+  try { _glHbCustPays_().forEach(function (p) { if (p.id.indexOf('CUSTODY:' + seg + ':') === 0) hbPays[p.id] = p; }); } catch (e) {}
   var out = { success: true, account: { code: a.code, name: a.name, currency: cur }, sheet: { title: cfg.title || '', tab: S.sh.getName(), url: 'https://docs.google.com/spreadsheets/d/' + cfg.id },
     rows: rows.length, linked: 0, created: [], updated: [], hb: [], hbWait: [], pending: [], problems: [], orphans: [], preview: !!opts.preview };
   var seen = {}, toCreate = [], toUpdate = [], nameIdx = null, okUsed = {};
@@ -4535,17 +4572,24 @@ function _glCsSync_(code, user, opts) {
     // اعتماد/مزامنة عدة صفوف عهدة ⇒ تفشل أي عملية حسابات أخرى (البوت/الاعتماد/المزامنة). الآن: فتح الملف وبناء
     // خريطة الصرف مرة واحدة لكل الحلقة، وتمرير isNew للقيود المنشأة للتوّ (تتخطّى قراءة عمود H) ⇒ القفل يُمسَك
     // لحظة الكتابة المحلية فقط تقريباً.
-    try { var _hbMC = _glHbCfg_(); if (_hbMC.ssId) mOpt.ss = SpreadsheetApp.openById(_hbMC.ssId); } catch (eSS) {}
+    // ⚡ (V4.307) ولا يُفتح ملف الحجوزات هنا أصلاً: معاينة محلية للتنبيه + طابور ينفَّذ خارج قفل الحسابات (_glMirFlush_)
     try { mOpt.fx = _glFxDailyMap_(); } catch (eFx) {}
     var _runMir = function (c, isNew) {
       try {
-        var mr = _glHbMirrorSync_(c.id, isNew ? Object.assign({ isNew: true }, mOpt) : mOpt); if (mr && mr.written) c.hbMirror = mr.written;
+        var mr = null;
+        if (_GL_LOCKN_ > 0) {
+          var pk = _glHbMirrorPeek_(c.id, mOpt.parties, mOpt.fx);
+          if (pk && pk.need && !_glMirQ_(c.id, { notify: true, by: mOpt.by, isNew: !!isNew })) mr = _glHbMirrorSync_(c.id, isNew ? Object.assign({ isNew: true }, mOpt) : mOpt);
+          else mr = pk;
+        } else mr = _glHbMirrorSync_(c.id, isNew ? Object.assign({ isNew: true }, mOpt) : mOpt);
+        if (mr && mr.written) c.hbMirror = mr.written;
         if (mr && mr.skipped && mr.skipped.length) (out.warns = out.warns || []).push({ row: c.row, msg: 'لم يُنسخ لكشف الفندق (' + mr.skipped.join('، ') + '): مبلغ الطرف ليس بالريال ولا تحويل تلقائي — عدّل القيد ' + c.id + ' بمبلغ الطرف بالريال' });
       } catch (eM) { Logger.log('cs hb mirror: ' + eM.message); }
     };
     out.created.forEach(function (c) { _runMir(c, true); });   // قيود منشأة للتوّ ⇒ isNew
     out.updated.forEach(function (c) { _runMir(c, false); });   // قيود مُعدَّلة ⇒ قد يكون لها صفوف سابقة
   }
+  if (_GL_MIRQ_N_) out.mirQ = _GL_MIRQ_N_;
   var n = out.created.length + out.updated.length + out.hb.length + (out.autoLinked || 0);
   cfg.last = { at: _glNow_(), by: user, created: out.created.length, updated: out.updated.length, pending: out.pending.length, problems: out.problems.length, autoLinked: out.autoLinked || 0 };
   _glSetSetting_('custsheet:' + code, JSON.stringify(cfg));
@@ -4578,7 +4622,10 @@ function _glCsAutoAll_() {
     var pre = null, sig = '';
     try {
       var cs0 = _glCsOpen_(cfg), rows0 = _glCsReadRows_(cs0.sh, cfg.startRow || 2, cfg);
-      sig = _glHash_(JSON.stringify(rows0.map(function (y) { return [y.row, y.hash, y.f, y.ok ? 1 : 0, y.sub || 0]; }))) + '|' + _glVerFresh_();
+      // ⚡ (V4.307) البصمة = محتوى الشيت فقط. كانت تتضمن رقم إصدار دفتر الحسابات كله ⇒ أي حفظ لأي قيد بأي شاشة (وكتابة المزامنة
+      // نفسها) يُبطل بصمات كل الشيتات ⇒ مزامنة كاملة لكل الشيتات داخل القفل كل دقيقة (30-260 ثانية بسجلات التنفيذ) ⇒ «مهلة التأمين»
+      // عند الحفظ. تغييرات الدفتر التي تخص الشيت (حذف/إلغاء قيد صف) تلتقطها المزامنة الكاملة الاحتياطية كل 10 دقائق كما كانت
+      sig = _glHash_(JSON.stringify(rows0.map(function (y) { return [y.row, y.hash, y.f, y.ok ? 1 : 0, y.sub || 0]; })));
       pre = { S: cs0, rows: rows0 };
     } catch (eP) { pre = null; }
     var sigs = {}; try { sigs = JSON.parse(P.getProperty('GL_CS_SIG') || '{}') || {}; } catch (eS) {}
@@ -4613,6 +4660,7 @@ function glCustSheetCron() {
     PH.setProperty('GL_CS_CRON_HB', String(Date.now()));
   } catch (eH) { PH = null; }
   try { _glCsAutoAll_(); } catch (e) { Logger.log('glCustSheetCron: ' + e.message); }   // (V4.258) القفل لكل شيت داخل _glCsAutoAll_
+  try { _glMirFlush_(60000); } catch (eQ) { Logger.log('mirror flush: ' + eQ.message); }   // ⚡ (V4.307) طابور النسخ لكشف الحجوزات (احتياطاً)
   finally { try { if (PH) PH.deleteProperty('GL_CS_CRON_HB'); } catch (eF) {} }
 }
 function _glCsEnsureTrigger_() {
@@ -5622,6 +5670,67 @@ function _glHbMirrorWhy_(id) {
     else if (e.sourceKey && !/^(VCH|CUST):/.test(e.sourceKey)) why = 'قيد تلقائي/مستورد لا يُنسخ';
     return why ? { names: names, why: why } : null;
   } catch (x) { return null; }
+}
+/* ⚡ (V4.307) الحل الجذري لبطء «تعديل قيد / اعتماد صفوف الشيت / اعتماد التغييرات»: نسخ القيد لكشف برنامج الحجوزات
+   كان يتم **داخل قفل الحسابات**: فتح ملف الحجوزات الخارجي (SpreadsheetApp.openById) + قراءة عمود المعرّفات كاملاً +
+   الكتابة + تنبيه تليجرام — ثوانٍ لكل قيد، وعشرات الثواني عند اعتماد عدة صفوف، فتنتظر كل عمليات الحفظ الأخرى
+   وتفشل بـ«البرنامج مشغول/مهلة التأمين». الآن: داخل القفل يُحسب فقط (محلياً من ملف الحسابات) ما سيُنسخ وما يُستبعد
+   لعملته — للتنبيه الفوري كما كان — ويُضاف القيد لطابور صغير (Script Properties)، ثم يُنفَّذ النسخ الفعلي **خارج القفل**:
+   فوراً بنداء خلفي من الواجهة بعد ظهور النتيجة للمستخدم، أو بالمزامنة المجدولة التالية احتياطاً. قفل مستقل «hbmir»
+   يمنع تنفيذين متوازيين للطابور (فلا تتكرر الصفوف بكشف الحجوزات). */
+var _GL_MIRQ_N_ = 0;
+function _glMirQ_(id, o) {
+  try {
+    PropertiesService.getScriptProperties().setProperty('GLMQ_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+      JSON.stringify(Object.assign({ id: _glStr_(id) }, o || {})));
+    _GL_MIRQ_N_++; return true;
+  } catch (e) { return false; }
+}
+// ما سيُنسخ لقيد (بلا فتح ملف الحجوزات): null ⇒ لا تاريخ قطع/لا شيء للنسخ ولا نسخة سابقة
+function _glHbMirrorPeek_(id, parties, fx) {
+  var cutK = _glHbOnlyK_(); if (!cutK) return null;
+  var was = _glFindRows_('hbmir', id), wasRow = false;
+  if (was === null) wasRow = _glRows_('hbmir').some(function (r) { return _glStr_(r[0]) === id; }); else wasRow = was.length > 0;
+  var rows = _glHbMirrorRows_(id, cutK, parties, fx, null, wasRow);
+  if (!rows.length && !wasRow) return (rows.skipped || []).length ? { written: 0, skipped: rows.skipped, was: false, need: false } : null;
+  return { written: rows.length, skipped: wasRow ? [] : (rows.skipped || []), was: wasRow, need: true };
+}
+// تنفيذ طابور النسخ (خارج قفل الحسابات) — ميزانية زمنية، والباقي للنداء التالي
+function _glMirFlush_(budgetMs) {
+  var P = PropertiesService.getScriptProperties();
+  var list = function () { var all = P.getProperties(); return { all: all, keys: Object.keys(all).filter(function (k) { return k.indexOf('GLMQ_') === 0; }).sort() }; };
+  var L = list(); if (!L.keys.length) return { done: 0, left: 0 };
+  var lk = _glNamedLock_('hbmir'); if (!lk.tryLock(1500)) return { busy: true, left: L.keys.length };
+  var t0 = Date.now(), done = 0, written = 0, left = 0;
+  try {
+    L = list();
+    var by = {}, order = [];
+    L.keys.forEach(function (k) {
+      var o = null; try { o = JSON.parse(L.all[k]); } catch (e) {}
+      if (!o || !o.id) { try { P.deleteProperty(k); } catch (e2) {} return; }
+      var g = by[o.id]; if (!g) { g = by[o.id] = { id: o.id, keys: [], notify: false, isNew: true, by: '' }; order.push(o.id); }
+      g.keys.push(k); g.notify = g.notify || !!o.notify; g.isNew = g.isNew && !!o.isNew; if (o.by) g.by = o.by;
+    });
+    var opt = {};
+    try { opt.parties = _glHbMirrorParties_(); } catch (eP) {}
+    try { opt.fx = _glFxDailyMap_(); } catch (eF) {}
+    try { var c = _glHbCfg_(); if (c.ssId) opt.ss = SpreadsheetApp.openById(c.ssId); } catch (eS) {}
+    order.forEach(function (id) {
+      var g = by[id];
+      if (Date.now() - t0 > (budgetMs || 60000)) { left++; return; }
+      g.keys.forEach(function (k) { try { P.deleteProperty(k); } catch (eD) {} });   // قبل التنفيذ: لا إعادة لا نهائية لقيد معطوب
+      try {
+        var r = _glHbMirrorSync_(id, Object.assign({ notify: g.notify, by: g.by, isNew: g.isNew }, opt));
+        done++; if (r && r.written) written += r.written;
+      } catch (eM) { Logger.log('mirror flush ' + id + ': ' + eM.message); }
+    });
+  } finally { lk.releaseLock(); }
+  return { done: done, written: written, left: left };
+}
+// نداء الواجهة الخلفي بعد الحفظ/الاعتماد (لا ينتظره المستخدم)
+function glMirFlush(authToken) {
+  requireAuth_(authToken);
+  return Object.assign({ success: true }, _glMirFlush_(90000));
 }
 function _glHbMirrorSync_(entryId, opt) {
   opt = opt || {};
@@ -7046,11 +7155,12 @@ function glBotCallback_(cq) {
         _glBotEdit_(chatId, msgId, _glBotEsc_(cq.message.text || '') + '\n\n❌ <b>رُفض</b> بواسطة ' + _glBotEsc_(who.username));
         return true;
       }
+      var _pre = /^CCY:/.test(key) ? null : _glAutoPreBuild_(who.username);   // ⚡ (V4.307) البناء الثقيل خارج القفل
       var res = { blocked: [] }, lock = _glLock_(); lock.waitLock(60000);
       try {
         // 💱 (V4.306) تغيير «تحويل عملة»: القيد مسجَّل بالفعل بمبلغه المستنتج — الاعتماد هنا مراجعة فقط، يزيله من القائمة
         if (/^CCY:/.test(key)) _glPendingDrop_([key]);
-        else { var only = {}; only[key] = 1; res = _glAutoRun_(who.username, false, { bypass: true, onlyKeys: only }); _glAutoLogAdd_(res.createdList, 'جديد'); }
+        else { var only = {}; only[key] = 1; res = _glAutoRunPre_(who.username, _pre, { bypass: true, onlyKeys: only }); _glAutoLogAdd_(res.createdList, 'جديد'); }
       } finally { _glUnlock_(lock); }
       logChange_(who.username, 'اعتماد تغيير قيود تلقائية', 'GL:approve', 'تليجرام', '1 تغيير', key);
       _glBotAns_(cq.id, res.blocked && res.blocked.length ? '⚠️ محجوز بفترة مقفلة' : '✅ اعتُمد');
