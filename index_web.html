@@ -38160,7 +38160,7 @@ function mfBkCardTrips_(ci) {
   return vzBkTrips_(root ? root.querySelector('[data-key="tripName"]').value : c.tripName, root ? root.querySelector('[data-key="extra"]').value : c.extra);
 }
 function mfBkTripChanged_(ci) {
-  var c = MF._bk.cards[ci]; c.list = null; c.used = null;
+  var c = MF._bk.cards[ci]; c.list = null; c.used = null; c.req = (c.req || 0) + 1; c.loading = false;   // أي رد قديم جارٍ يُتجاهَل
   if (mfBkCardTrips_(ci).length) mfBkLoad_([ci]); else { mfBkSum_(ci); mfBkRenderPick_(ci); }
 }
 function mfBkToggle_(ci) {
@@ -38262,14 +38262,17 @@ function mfBkPickClient_(ci, gi) {
 }
 // ✅ للبطاقات المُحمَّلة بلا اختيار: تحديد كل من ليس مسجَّلاً بملف آخر (نفس الاختيار الافتراضي بالنموذج المنفرد)
 function mfBkSelAllCards_() {
-  var n = 0, pend = 0;
+  var n = 0, pend = 0, counted = 0;
   MF._bk.cards.forEach(function (c, ci) {
     if (!c.list) { if (mfBkCardTrips_(ci).length) pend++; return; }
     if (Object.keys(c.sel).length) return;
-    var taken = {}; MF._bk.cards.forEach(function (o, j) { if (j !== ci) Object.keys(o.sel || {}).forEach(function (k) { if (k.indexOf('idx:') !== 0) taken[k] = 1; }); });
-    c.list.forEach(function (p, i) { var k = mfPickKey(p, i); if (!c.used[k] && !taken[k]) c.sel[k] = true; }); c.selDirty = true; n++; mfBkRenderPick_(ci);
+    if (mfNum(c.f.pilgrims) > 0) { counted++; return; }   // نفس النموذج المنفرد: التحديد التلقائي فقط لملف بلا عدد مسجَّل
+    var taken = {}, got = 0; MF._bk.cards.forEach(function (o, j) { if (j !== ci) Object.keys(o.sel || {}).forEach(function (k) { if (k.indexOf('idx:') !== 0) taken[k] = 1; }); });
+    c.list.forEach(function (p, i) { var k = mfPickKey(p, i); if (!c.used[k] && !taken[k]) { c.sel[k] = true; got++; } });
+    if (got) { c.selDirty = true; n++; } mfBkRenderPick_(ci);
   });
-  _showPopup('✅ حُدِّد المعتمرون في ' + n + ' بطاقة' + (pend ? ' — ' + pend + ' بطاقة لم تُحمَّل قائمتها بعد (اضغط «تحميل معتمري كل البطاقات» أولاً)' : ''), pend ? 'warning' : 'success');
+  _showPopup('✅ حُدِّد المعتمرون في ' + n + ' بطاقة' + (counted ? ' — تُركت ' + counted + ' بطاقة لها عدد معتمرين مسجَّل (حدّد أسماءها يدوياً بـ«تحديد الكل»)' : '') +
+    (pend ? ' — ' + pend + ' بطاقة لم تُحمَّل قائمتها بعد (اضغط «تحميل معتمري كل البطاقات» أولاً)' : ''), pend ? 'warning' : 'success');
 }
 // حمولة البطاقة — نفس mfTripPickApply (البنود/العدد/اسم العميل) ونفس mfDraftTrip لملف قائم
 function mfBkBuild_(ci) {
@@ -38286,7 +38289,9 @@ function mfBkBuild_(ci) {
     if (main && !label) label = main;
   }
   var keys = mfBkSelKeys_(c);
-  if (keys && (c.selDirty || tripsChanged)) {
+  // البنود/العدد/اسم العميل تُعاد بناؤها فقط بعد اختيار صريح للأسماء (كزر «اعتماد الأسماء» بالنموذج المنفرد) —
+  // تغيير الرحلة وحده يطبّق قواعد mfDraftTrip أعلاه فقط ولا يمسّ البنود والعدد المسجَّلين
+  if (keys && c.selDirty) {
     var perClient = {}, order = [];
     c.list.forEach(function (p, i) { var k = mfPickKey(p, i); if (!c.sel[k] || mfPickIsInfant(p)) return; var cl = mfPickClientOf(p); if (!(cl in perClient)) { perClient[cl] = 0; order.push(cl); } perClient[cl]++; });
     var manual = (f.breakdown || []).filter(function (b) { return !b.isTrip && order.indexOf(mfStr(b.name)) < 0 && mfStr(b.name) !== main; });
@@ -42983,7 +42988,7 @@ function vzBkCardTrips_(ci) {
   return vzBkTrips_(tn, ex);
 }
 function vzBkTripChanged_(ci) {
-  var c = VZ._bk.cards[ci]; c.list = null; c.other = {};
+  var c = VZ._bk.cards[ci]; c.list = null; c.other = {}; c.req = (c.req || 0) + 1; c.loading = false;   // أي رد قديم جارٍ يُتجاهَل
   if (vzBkCardTrips_(ci).length) vzBkLoad_([ci]); else { vzBkSum_(ci); vzBkRenderPick_(ci); }
 }
 function vzBkToggle_(ci) {
@@ -43108,8 +43113,9 @@ function vzBkSelAllCards_() {
     if (!c.list) { if (vzBkCardTrips_(ci).length) pend++; return; }
     if (Object.keys(c.sel).length) return;
     var other = vzOtherGroupsIdx_(c.id);
-    c.list.forEach(function (p, i) { var pass = mfStr(p.passport || p.passportNo); if (pass && (other[pass] || vzBkInOtherCard_(ci, p))) { skipped++; return; } c.sel[vzPickKey(p, i)] = true; });
-    c.selDirty = true; n++; vzBkRenderPick_(ci);
+    var got = 0;
+    c.list.forEach(function (p, i) { var pass = mfStr(p.passport || p.passportNo); if (pass && (other[pass] || vzBkInOtherCard_(ci, p))) { skipped++; return; } c.sel[vzPickKey(p, i)] = true; got++; });
+    if (got) { c.selDirty = true; n++; } vzBkRenderPick_(ci);
   });
   _showPopup('✅ حُدِّد المعتمرون في ' + n + ' بطاقة' + (skipped ? ' — تُرك ' + skipped + ' مسجَّلاً بمجموعة أو بطاقة أخرى' : '') +
     (pend ? ' — ' + pend + ' بطاقة لم تُحمَّل قائمتها بعد (اضغط «تحميل معتمري كل البطاقات» أولاً)' : ''), pend ? 'warning' : 'success');
