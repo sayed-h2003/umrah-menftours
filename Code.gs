@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.312";
+var APP_VERSION = "4.313";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22749,6 +22749,30 @@ function saveMinistryFile(authToken, data) {
     return ret;
   } finally { if (!_lockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
 }
+/* ✏️ (V4.312) تعديل جماعي لعدة ملفات مراجعة وزارة دفعة واحدة — نفس أسلوب saveVisaFilesBulk: تستدعي
+   saveMinistryFile الحقيقية لكل ملف، بعد دمج الحقول المعدَّلة فقط فوق قيمته الكاملة الحالية (لا فقدان
+   لحقل لم يُعدَّل). حقول آمنة محدودة فقط (لا تلمس المعتمرين/المرافقين/التواريخ المرتبطة بحساب الرسوم
+   والمخالصة، تفادياً لتعقيد قواعد الاحتساب التلقائي) — مطابقة تماماً لاختيار الحقول بالتعديل الجماعي
+   بمجموعات التأشيرات. items: [{id, fileNo?, ref?, company?, agent?, reviewDate?, notes?}] */
+function saveMinistryFilesBulk(authToken, items) {
+  _mfPerm_(authToken, 'edit');
+  var all = _mfReadAll_(), results = [], okN = 0;
+  var editable = ['fileNo', 'ref', 'company', 'agent', 'reviewDate', 'notes'];
+  (items || []).forEach(function (it) {
+    var id = _mfStr_(it && it.id); if (!id) return;
+    try {
+      var old = all.filter(function (x) { return x.id === id; })[0];
+      if (!old) throw new Error('الملف غير موجود');
+      var data = Object.assign({}, old);
+      editable.forEach(function (k) { if (it[k] !== undefined) data[k] = it[k]; });
+      data._manualType = !!old.manualType;   // 🏛️ (V4.233) يبقى التحكم اليدوي لنوع المراجعة كما يفعل نموذج التعديل المنفرد
+      var r = saveMinistryFile(authToken, data);
+      if (!r || !r.success) throw new Error((r && r.error) || 'فشل الحفظ');
+      okN++; results.push({ id: id, success: true, file: r.file, balances: r.balances, others: r.others, syncTrips: r.syncTrips });
+    } catch (e) { results.push({ id: id, success: false, error: e.message }); }
+  });
+  return { success: true, done: okN, total: (items || []).length, results: results };
+}
 // 🔍 (V4.171/V4.173) فحص الملفات المرشَّحة لتكون «فردي»: عدد معتمريها من 1 إلى 9، ومشرفوها إما
 // بدون مشرف حقيقي (فارغ) أو المشرف هو الوكيل نفسه فقط (مقارنة بعد تطبيع الاسم — تتجاهل اختلاف
 // رسم الياء وغيره، فـ"المشرف = الوكيل" تُحسب حتى لو اختلف رسم الاسم قليلاً) — يعرضها للمستخدم
@@ -23032,6 +23056,23 @@ function deleteMinistryFile(authToken, id) {
   logChange_(session.username, 'حذف ملف مراجعة وزارة', 'MF:' + hit.id, '-',
     (hit.fileNo ? 'ملف رقم ' + hit.fileNo : 'بدون رقم') + ' — ' + hit.clientLabel, '-');
   return { success: true };
+}
+// 🗑️ (V4.312) حذف جماعي لعدة ملفات مراجعة وزارة دفعة واحدة — يحذف الصفوف من الأسفل للأعلى كي لا
+// يختل ترقيم الصفوف الباقية أثناء الحذف المتتابع (نفس أسلوب deleteVisaFilesBatch)
+function deleteMinistryFilesBatch(authToken, ids) {
+  var session = _mfPerm_(authToken, 'delete');
+  ids = (Array.isArray(ids) ? ids : []).map(_mfStr_).filter(Boolean);
+  if (!ids.length) return { success: false, error: 'لم تُحدَّد أي ملفات' };
+  var sh = _accSheet_(MF_SHEET, MF_HEADERS);
+  var all = _mfReadAll_();
+  var hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+  hits.forEach(function (hit) {
+    sh.deleteRow(hit._row);
+    logChange_(session.username, 'حذف ملف مراجعة وزارة (جماعي)', 'MF:' + hit.id, '-',
+      (hit.fileNo ? 'ملف رقم ' + hit.fileNo : 'بدون رقم') + ' — ' + hit.clientLabel, '-');
+  });
+  _mfClearBootstrapCache_();
+  return { success: true, count: hits.length, removedIds: hits.map(function (h) { return h.id; }) };
 }
 
 // سجل تعديلات ملف واحد

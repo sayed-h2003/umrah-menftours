@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.312 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.313 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.312)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.313)', diag);
 }, 6000);
 </script>
 
@@ -1552,7 +1552,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.312</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.313</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5164,6 +5164,7 @@ input[type="date"]:not(:focus):not(:valid) {
     <div class="d-flex align-items-center gap-2 flex-wrap mb-2" id="mfApplied"></div>
     <div class="d-flex align-items-center gap-1 flex-wrap mb-2" id="mfSecToggles"></div>
     <div id="mfActBarBox"></div>
+    <div class="d-flex align-items-center gap-2 flex-wrap" id="mfBulkBarBox"></div>
   </div>
 
   <div class="card border-0 shadow-sm" style="border-radius:13px; overflow:hidden;">
@@ -7840,7 +7841,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.312";
+var CLIENT_APP_VERSION = "4.313";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -37439,7 +37440,8 @@ var MF = {
   files: [], receipts: [], sups: [], companies: [], trips: [], clients: [],
   balances: {}, cfg: {}, can: {}, today: '', loaded: false,
   hidden: {}, colFilters: {}, facets: {}, sort: { key: 'seq', dir: 1 },
-  selId: null, openId: null, editRowId: null
+  selId: null, openId: null, editRowId: null,
+  sel: {}   // ✏️ (V4.312) تحديد متعدد للتعديل/الحذف الجماعي — منفصل عن selId (التحديد المنفرد للتفاصيل)
 };
 
 /* ---------- أدوات ---------- */
@@ -37682,7 +37684,7 @@ function mfBalanceOf(company) {
 
 /* ---------- تعريف الأعمدة ---------- */
 var MF_COLS = [
-  { k: 'act',    g: 'بيانات الملف',      l: '⚙',                     w: 78,  nof: 1 },
+  { k: 'act',    g: 'بيانات الملف',      l: '⚙',                     w: 100, nof: 1 },
   { k: 'seq',    g: 'بيانات الملف',      l: 'م',                      w: 46 },
   { k: 'approved', g: 'بيانات الملف',    l: 'معتمد',                  w: 48 },
   { k: 'fileNo', g: 'بيانات الملف',      l: 'رقم الملف',              w: 62,  edit: 'text' },
@@ -37770,7 +37772,9 @@ function mfRaw(k, f) {
 function mfCell(col, f) {
   var k = col.k, c = f._c || (f._c = mfCalc(f));
   if (k === 'act') {
-    var b = '<button class="mf-rowbtn" title="سجل التعديلات" onclick="event.stopPropagation();mfHistory(\'' + f.id + '\')">📜</button>';
+    var b = (MF.can.edit || MF.can.del) ? ('<input type="checkbox" class="mf-sel-chk" title="تحديد للتعديل/الحذف الجماعي" ' +
+      (MF.sel[f.id] ? 'checked' : '') + ' onclick="event.stopPropagation();" onchange="mfSelToggle(\'' + f.id + '\', this.checked);">') : '';
+    b += '<button class="mf-rowbtn" title="سجل التعديلات" onclick="event.stopPropagation();mfHistory(\'' + f.id + '\')">📜</button>';
     if (MF.can.edit) b += ' <button class="mf-rowbtn" title="تعديل الملف (نموذج كامل)" onclick="event.stopPropagation();mfEditFile(\'' + f.id + '\')">✏️</button>';
     if (MF.can.del) b += ' <button class="mf-rowbtn" title="حذف الملف" style="color:#dc2626;" onclick="event.stopPropagation();mfDeleteFile(\'' + f.id + '\')">🗑️</button>';
     return b;
@@ -38072,7 +38076,110 @@ function mfRender() {
     if (!inList || MF._lastQ !== q) { MF._lastQ = q; mfSelect(list[0].id, true); }
   } else if (!q) { MF._lastQ = ''; }
   mfRenderActBar();
+  mfRenderSelBar_();
   mfAttachTips();
+}
+// ✏️ (V4.312) تحديد متعدد للتعديل/الحذف الجماعي — نفس أسلوب شريط التحديد بمجموعات التأشيرات (vzRenderSelBar_)
+function mfSelToggle(id, on) { if (on) MF.sel[id] = true; else delete MF.sel[id]; mfRenderSelBar_(); }
+function mfRenderSelBar_() {
+  var box = document.getElementById('mfBulkBarBox'); if (!box) return;
+  var ids = Object.keys(MF.sel);
+  box.innerHTML = !ids.length ? '' :
+    ((MF.can.edit ? '<button class="mf-btn sm" style="background:#1e40af;color:#fff;" onclick="mfBulkEditOpen_()">✏️ تعديل جماعي (' + ids.length + ')</button>' : '') +
+     (MF.can.del ? '<button class="mf-btn sm dgr" onclick="mfBulkDelSelected()">🗑️ حذف المحدَّد (' + ids.length + ')</button>' : ''));
+}
+function mfBulkDelSelected() {
+  var ids = Object.keys(MF.sel);
+  if (!ids.length) return;
+  showElegantConfirm({ icon: '🗑️', title: 'حذف جماعي', message: 'حذف ' + ids.length + ' ملف مراجعة وزارة محدَّد؟ لا يمكن التراجع عن هذا.', buttons: [
+    { label: 'حذف', class: 'btn-danger', onClick: function () {
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الحذف', 'error'); return; }
+          var rm = {}; (res.removedIds || []).forEach(function (id) { rm[id] = 1; });
+          MF.files = MF.files.filter(function (x) { return !rm[x.id]; });
+          MF.sel = {}; _showPopup('حُذفت ' + res.count + ' ملف', 'success'); mfRender();
+        })
+        .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+        .deleteMinistryFilesBatch(window.authToken, ids);
+    } }, { label: 'إلغاء', class: 'btn-secondary', onClick: function () {} }] });
+}
+function mfBulkEditOpen_() {
+  var ids = Object.keys(MF.sel);
+  if (ids.length < 2) { alert('⚠️ حدِّد ملفين فأكثر لاستخدام التعديل المجمّع'); return; }
+  var rows = ids.map(function (id) { return mfGet(id); }).filter(Boolean);
+  if (!rows.length) return;
+  var esc = escapeHtml_;
+  document.querySelectorAll('.mf-bulk-edit-backdrop').forEach(function (el) { el.remove(); });
+  var backdrop = document.createElement('div');
+  backdrop.className = 'mf-bulk-edit-backdrop';
+  backdrop.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding:40px 12px;overflow-y:auto;';
+  backdrop.addEventListener('click', function (ev) { if (ev.target === backdrop) backdrop.remove(); });
+  var panel = document.createElement('div');
+  panel.style.cssText = 'background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:18px;max-width:720px;width:100%;';
+  panel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+
+  var cardsHtml = rows.map(function (r, ri) {
+    var mkFld = function (key, label) {
+      return '<div class="cc-fld" data-fld="' + key + '"><label>' + esc(label) + '</label>' +
+        '<input data-ridx="' + ri + '" data-key="' + key + '" value="' + esc(String(r[key] || '')) + '"></div>';
+    };
+    return '<div class="p-2 mb-2 rounded" style="background:#f7faf9;border:1px solid #dfe6e8;" data-bulk-card="' + ri + '" data-file-id="' + esc(r.id) + '">' +
+      '<div class="fw-bold mb-2" style="color:#0b3838;font-size:13px;">✏️ ملف رقم ' + esc(r.fileNo || ('#' + r.seq)) + '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">' +
+        mkFld('fileNo', 'رقم الملف') +
+        mkFld('ref', 'رقم القيد') +
+        mkFld('company', 'الشركة المصرية') +
+        mkFld('agent', 'الوكيل السعودي') +
+        mkFld('reviewDate', 'تاريخ المراجعة') +
+        mkFld('notes', 'ملاحظات') +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  panel.innerHTML =
+    '<div class="d-flex justify-content-between align-items-center mb-3">' +
+      '<div class="fw-bold" style="color:#0b3838;font-size:15px;">✏️ تعديل مجمّع — ' + rows.length + ' ملف محدَّد</div>' +
+      '<span style="cursor:pointer;color:#b3261e;font-size:22px;line-height:1;" onclick="this.closest(\'.mf-bulk-edit-backdrop\').remove()">×</span>' +
+    '</div>' +
+    '<div id="mfBulkEditFldsWrap">' + cardsHtml + '</div>' +
+    '<div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">' +
+      '<button class="btn btn-outline-secondary btn-sm" onclick="this.closest(\'.mf-bulk-edit-backdrop\').remove()">✖ إلغاء</button>' +
+      '<button class="btn btn-sm fw-bold" style="background:#1e40af;color:#fff;" onclick="mfBulkEditSave_(this)">💾 حفظ الكل (' + rows.length + ')</button>' +
+    '</div>';
+  backdrop.appendChild(panel);
+  document.body.appendChild(backdrop);
+}
+function mfBulkEditSave_(btn) {
+  var wrap = document.getElementById('mfBulkEditFldsWrap');
+  var cards = wrap.querySelectorAll('[data-bulk-card]');
+  var batch = [];
+  cards.forEach(function (card) {
+    var ridx = card.getAttribute('data-bulk-card');
+    var vals = { id: card.getAttribute('data-file-id') };
+    card.querySelectorAll('input[data-ridx="' + ridx + '"][data-key]').forEach(function (inp) {
+      vals[inp.getAttribute('data-key')] = inp.value.trim();
+    });
+    batch.push(vals);
+  });
+  if (!batch.length) return;
+  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…';
+  google.script.run
+    .withSuccessHandler(function (res) {
+      btn.disabled = false; btn.innerHTML = orig;
+      if (!res || !res.success) { alert('❌ ' + ((res && res.error) || 'فشل الحفظ')); return; }
+      (res.results || []).forEach(function (r) { if (r.success) mfApplySaved(r, { silent: true }); });
+      var fails = (res.results || []).filter(function (r) { return !r.success; });
+      document.querySelectorAll('.mf-bulk-edit-backdrop').forEach(function (el) { el.remove(); });
+      MF.sel = {}; mfRenderSelBar_();
+      if (fails.length) {
+        alert('✅ حُفظت ' + res.done + ' من ' + res.total + '\n❌ فشلت: ' + fails.map(function (f) { return f.error; }).join('، '));
+      } else {
+        _showPopup('✅ حُفظت ' + res.done + ' ملف', 'success');
+      }
+    })
+    .withFailureHandler(function (err) { btn.disabled = false; btn.innerHTML = orig; alert('❌ ' + (err.message || err)); })
+    .saveMinistryFilesBulk(window.authToken, batch);
 }
 
 /* ---------- (V4.111) أقسام الشاشة القابلة للطي ---------- */
