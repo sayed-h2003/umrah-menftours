@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.311";
+var APP_VERSION = "4.312";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -24721,6 +24721,29 @@ function saveVisaFile(authToken, data) {
     try { if (_vzHasFinance_(session)) _vzBal = _vzBalancesForAgents_([f.agent].concat(old ? [old.agent] : [])); } catch (eB) {}
     return { success: true, file: f, syncTrips: _vzSync || [], agentBalances: _vzBal };
   } finally { if (!_vzLockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
+}
+/* ✏️ (V4.312) تعديل جماعي لعدة مجموعات تأشيرات دفعة واحدة: يستدعي saveVisaFile الحقيقية لكل مجموعة — فيحصل
+   على نفس كل التحقق والمزامنات الجانبية بالضبط (مزامنة السكن، أرصدة الوكلاء، بند التأشيرات بحسابات العملاء،
+   سجل التعديلات) بلا أي إعادة تنفيذ لها، وبلا خطر فقدان حقل لم يُعدَّل (تُقرأ القيمة الحالية الكاملة لكل مجموعة
+   أولاً ويُدمَج معها الحقول المعدَّلة فقط) — فقط داخل نداء خادم واحد بدل فتح/حفظ كل مجموعة على حدة من الواجهة.
+   items: [{id, status?, payStatus?, date?, company?, agent?, entryNo?, notes?}] */
+function saveVisaFilesBulk(authToken, items) {
+  _vzPerm_(authToken, 'edit');
+  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS), results = [], okN = 0;
+  var editable = ['status', 'payStatus', 'date', 'company', 'agent', 'entryNo', 'notes'];
+  (items || []).forEach(function (it) {
+    var id = _mfStr_(it && it.id); if (!id) return;
+    try {
+      var old = _vzReadOne_(sh, id);
+      if (!old) throw new Error('المجموعة غير موجودة');
+      var data = Object.assign({}, old);
+      editable.forEach(function (k) { if (it[k] !== undefined) data[k] = it[k]; });
+      var r = saveVisaFile(authToken, data);
+      if (!r || !r.success) throw new Error((r && r.error) || 'فشل الحفظ');
+      okN++; results.push({ id: id, success: true, file: r.file, syncTrips: r.syncTrips, agentBalances: r.agentBalances });
+    } catch (e) { results.push({ id: id, success: false, error: e.message }); }
+  });
+  return { success: true, done: okN, total: (items || []).length, results: results };
 }
 
 /* 📥 (V4.134) استيراد المجموعات القديمة دفعةً واحدة بعد معاينتها وتعديلها بالشاشة.
