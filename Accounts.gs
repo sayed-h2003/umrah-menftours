@@ -3565,37 +3565,43 @@ function _glSyncVoucherPays_(entryId, user) {
     if (mr && mr.skipped && mr.skipped.length) _GL_HB_MIRROR_LAST_ = Object.assign(_GL_HB_MIRROR_LAST_ || {}, { names: mr.skipped,
       why: 'كشف حساب الفندق بالريال ولا يُحوَّل إليه أي مبلغ تلقائياً: سطر «' + mr.skipped.join('» و«') + '» بعملة غير الريال فلم يُنسخ لكشفه ببرنامج الحجوزات — عدّل القيد واجعل مبلغ هذا الطرف بالريال (اختر «ريال» بجوار مبلغه واكتب المبلغ المتفق عليه)' });
   } catch (eM) { try { Logger.log('hb mirror: ' + eM.message); } catch (e0) {} }
-  try {
-    entryId = _glStr_(entryId); if (!entryId) return;
-    var tag = '⟦src:gl-' + entryId + '⟧', want = [], f = _glFindEntry_(entryId);
-    // (V4.240) إيداع/سحب البنك مثل سند القبض/الصرف بالنسبة لدفعات العملاء (بلا رقم إيصال)
-    if (f && _glStr_(f.r[5]) === GL_ST_POSTED_ && /^(سند قبض|سند صرف|إيداع بنكي|سحب بنكي)$/.test(_glStr_(f.r[3]))) {
-      var e = _glEntryFull_(entryId), accs = _glAccounts_().map, isRec = e.type === 'سند قبض' || e.type === 'إيداع بنكي';
-      var tripsOf = {};
-      try { var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS); if (iSh.getLastRow() > 1) iSh.getRange(2, 2, iSh.getLastRow() - 1, 2).getValues().forEach(function (r) { tripsOf[_glStr_(r[0]) + '|' + _glStr_(r[1])] = 1; }); } catch (e1) {}
-      e.lines.forEach(function (l) {
-        var a = accs[l.account]; if (!a || a.kind !== 'client' || !a.link) return;
-        var amt = _glR2_(isRec ? (l.credit - l.debit) : -(l.debit - l.credit)); if (!amt) return;
-        var trip = _glStr_(l.trip || e.trip); if (!trip || !tripsOf[a.link + '|' + trip]) trip = 'عام';
-        want.push([a.link, trip, 'دفعة', e.date, amt, l.currency === 'SAR' ? 'SAR' : 'EGP', '', (e.voucherNo ? 'إيصال ' + e.voucherNo + ' — ' : '') + (l.desc || e.desc || '') + ' ' + tag]);
-      });
-    }
-    var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS), last = sh.getLastRow(), rowsIdx = [];
-    // ⚡ (V4.307) بحث على الخادم (TextFinder) بدل نقل عمود البيان كاملاً مع كل حفظ قيد
-    var tf = null; try { if (last >= 2) tf = sh.getRange(2, 9, last - 1, 1).createTextFinder(tag).matchCase(true).findAll().map(function (h) { return h.getRow(); }).sort(function (a, b) { return a - b; }); } catch (eTf) { tf = null; }
-    if (tf) rowsIdx = tf;
-    else if (last >= 2) sh.getRange(2, 9, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(tag) >= 0) rowsIdx.push(i + 2); });
-    // تحديث في المكان لنفس العدد (يحافظ على المعرّف والتخصيص)، والزائد يُضاف والناقص يُحذف
-    var ids = [];
-    rowsIdx.forEach(function (rw, k) {
-      if (k < want.length) { var w = want[k]; sh.getRange(rw, 2, 1, 8).setValues([[w[0], w[1] === 'عام' ? sh.getRange(rw, 3).getValue() || 'عام' : w[1], w[2], w[3], w[4], w[5], w[6], w[7]]]); }
+  try { _glCpSyncVoucher_(entryId, user); } catch (err) { Logger.log('voucher→payments ' + entryId + ': ' + err.message); }
+}
+// 💰 نسخ سند قبض/صرف/إيداع/سحب على حساب عميل عمرة إلى «حسابات عملاء العمرة» (ACC_PAY_SHEET) — مستخرجة من
+// _glSyncVoucherPays_ (V4.309) لاستدعائها أيضاً من مزامنة شيتات العهد/الخزينة/البنوك (_glCsSync_)، التي لم تكن
+// تستدعيها إطلاقاً فلا تظهر دفعاتها هناك تلقائياً رغم ظهورها بكشف الحساب العام
+function _glCpSyncVoucher_(entryId, user) {
+  entryId = _glStr_(entryId); if (!entryId) return;
+  var tag = '⟦src:gl-' + entryId + '⟧', want = [], f = _glFindEntry_(entryId);
+  // (V4.240) إيداع/سحب البنك مثل سند القبض/الصرف بالنسبة لدفعات العملاء (بلا رقم إيصال)
+  if (f && _glStr_(f.r[5]) === GL_ST_POSTED_ && /^(سند قبض|سند صرف|إيداع بنكي|سحب بنكي)$/.test(_glStr_(f.r[3]))) {
+    var e = _glEntryFull_(entryId), accs = _glAccounts_().map, isRec = e.type === 'سند قبض' || e.type === 'إيداع بنكي';
+    e.lines.forEach(function (l) {
+      var a = accs[l.account]; if (!a || a.kind !== 'client' || !a.link) return;
+      var amt = _glR2_(isRec ? (l.credit - l.debit) : -(l.debit - l.credit)); if (!amt) return;
+      // 🐛 (V4.309) إصلاح: كانت الرحلة المحدَّدة صراحةً بالقيد تُستبدَل بـ«عام» ما لم يكن للعميل «بند» مسجَّل سلفاً
+      // بنفس اسم الرحلة بالضبط — فحتى بعد تحديد الرحلة يدوياً بالقيد لا تظهر الدفعة تحتها. الآن تُؤخَذ الرحلة المحدَّدة
+      // بالقيد كما هي (بلا شرط وجود بند مسبق) — تماماً كتسجيل الدفعة المباشر من شاشة حسابات العملاء (saveAccPayment)
+      var trip = _glStr_(l.trip || e.trip) || 'عام';
+      want.push([a.link, trip, 'دفعة', e.date, amt, l.currency === 'SAR' ? 'SAR' : 'EGP', '', (e.voucherNo ? 'إيصال ' + e.voucherNo + ' — ' : '') + (l.desc || e.desc || '') + ' ' + tag]);
     });
-    for (var k = rowsIdx.length - 1; k >= want.length; k--) sh.deleteRow(rowsIdx[k]);
-    for (var j = rowsIdx.length; j < want.length; j++) {
-      var w = want[j];
-      sh.appendRow([_accId_('P'), w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], user || 'الحسابات العامة', new Date(), _accNextPaySerial_()]);
-    }
-  } catch (err) { Logger.log('voucher→payments ' + entryId + ': ' + err.message); }
+  }
+  var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS), last = sh.getLastRow(), rowsIdx = [];
+  // ⚡ (V4.307) بحث على الخادم (TextFinder) بدل نقل عمود البيان كاملاً مع كل حفظ قيد
+  var tf = null; try { if (last >= 2) tf = sh.getRange(2, 9, last - 1, 1).createTextFinder(tag).matchCase(true).findAll().map(function (h) { return h.getRow(); }).sort(function (a, b) { return a - b; }); } catch (eTf) { tf = null; }
+  if (tf) rowsIdx = tf;
+  else if (last >= 2) sh.getRange(2, 9, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(tag) >= 0) rowsIdx.push(i + 2); });
+  // تحديث في المكان لنفس العدد (يحافظ على المعرّف والتخصيص)، والزائد يُضاف والناقص يُحذف
+  rowsIdx.forEach(function (rw, k) {
+    if (k < want.length) { var w = want[k]; sh.getRange(rw, 2, 1, 8).setValues([[w[0], w[1] === 'عام' ? sh.getRange(rw, 3).getValue() || 'عام' : w[1], w[2], w[3], w[4], w[5], w[6], w[7]]]); }
+  });
+  for (var k = rowsIdx.length - 1; k >= want.length; k--) sh.deleteRow(rowsIdx[k]);
+  for (var j = rowsIdx.length; j < want.length; j++) {
+    var w = want[j];
+    sh.appendRow([_accId_('P'), w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], user || 'الحسابات العامة', new Date(), _accNextPaySerial_()]);
+    // (V4.309) تسجيل ارتباط العميل بالرحلة — مثل saveAccPayment تماماً — حتى تظهر الرحلة بقوائمه ولا تُعامَل كأنها بلا حساب
+    if (w[1] !== 'عام') try { _accEnsureMeta_(null, w[0], w[1], user || 'الحسابات العامة'); } catch (eEm) {}
+  }
 }
 
 // 📘 رقم قيد الرحلة لكل رحلة بحساب العميل (لشاشة حسابات العملاء)
@@ -4504,7 +4510,7 @@ function _glCsSync_(code, user, opts) {
   if (built.length) {
     var first = _glNextEntrySeq_(built.length), eRows = [], lRows = [], ccyQ = [];
     built.forEach(function (b, i) {
-      var id = _glEntryId_(first + i);
+      var id = b.id = _glEntryId_(first + i);
       var w = _glWriteEntry_(b.v, { id: id, seq: first + i, status: GL_ST_POSTED_, sourceKey: 'CUST:' + code, desc: b.e.desc, ref: 'cs:' + b.c.x.hash }, user);
       eRows.push(w.eRow); lRows = lRows.concat(w.lRows);
       fW.push({ x: b.c.x, id: id });
@@ -4515,6 +4521,10 @@ function _glCsSync_(code, user, opts) {
     eSh.getRange(eSh.getLastRow() + 1, 1, eRows.length, eRows[0].length).setValues(eRows);
     lSh.getRange(lSh.getLastRow() + 1, 1, lRows.length, lRows[0].length).setValues(lRows);
     _glCcyPendQueueMany_(ccyQ);   // (V4.306) للمراجعة بتبويب «⏳ تغييرات تنتظر الاعتماد» — ⚡ (V4.308) كتابة واحدة
+    // 🐛 (V4.309) إصلاح: قيود مُنشأة تلقائياً من شيت عهدة/خزينة/بنك على حساب عميل عمرة لم تكن تُنسخ أبداً إلى
+    // «حسابات عملاء العمرة» (لا تستدعي هذه الدالة إطلاقاً) فتظهر بكشف الحساب العام فقط لا بشاشة دفعات العميل.
+    // تُستدعى فقط لحسابات الخزينة/البنك (نوع القيد الناتج سند قبض/صرف أو إيداع/سحب بنكي يطابق الشرط داخل الدالة)
+    if (/^(bank|safe)$/.test(a.kind || '')) built.forEach(function (b) { try { _glCpSyncVoucher_(b.id, user); } catch (eCp) { Logger.log('cs cp sync: ' + eCp.message); } });
     if (built.some(function (b) { return b.c.approved; })) _glSetSetting_('custsheet_map', JSON.stringify(learned));
   }
   // 2) صفوف تغيّرت بعد قيدها ⇒ تحديث القيد في مكانه (الطرف: من الشيت لو معروف وإلا طرف القيد الحالي)
@@ -4548,6 +4558,8 @@ function _glCsSync_(code, user, opts) {
       _glDeleteLinesOf_(done.map(function (d) { return d.id; }));
       var nl = []; done.forEach(function (d) { nl = nl.concat(d.lRows); });
       lSh.getRange(lSh.getLastRow() + 1, 1, nl.length, nl[0].length).setValues(nl);
+      // (V4.309) نفس إصلاح القيود المُنشأة — صف تغيّر مبلغه/بيانه بالشيت يُحدِّث دفعته المقابلة بشاشة حسابات العملاء
+      if (/^(bank|safe)$/.test(a.kind || '')) done.forEach(function (d) { try { _glCpSyncVoucher_(d.id, user); } catch (eCp) { Logger.log('cs cp sync: ' + eCp.message); } });
     }
   }
   // 3) كتابة رقم القيد في العمود F — بعد إعادة قراءة الشيت: نفس الصف لو لم يتغيّر، وإلا أول صف مطابق بلا رقم (لو أُدرجت صفوف أثناء المزامنة)
