@@ -1084,7 +1084,11 @@ function glSaveEntry(authToken, e, post) {
    سلامة التوازن المحاسبي ببطاقة مصغَّرة): البيان، المرجع، الرحلة، الشركة. (لا تاريخ استحقاق هنا عمداً —
    glListEntries لا يُرجعه أصلاً فالبطاقة ستُظهره فارغاً دوماً، وحفظ قيمة فارغة كان سيمحو أي تاريخ استحقاق
    مسجَّل سابقاً صامتاً؛ تعديله يبقى من نافذة القيد المنفردة التي تقرأه فعلاً أولاً)
-   items: [{id, desc?, ref?, trip?, company?}] */
+   items: [{id, desc?, ref?, trip?, company?, lines?:[{lineNo, account}]}]
+   ✏️ (V4.315) lines: تغيير «الحساب المقابل» فقط — حساب السطر المحدَّد برقمه، والمبالغ والعملات كما هي تماماً.
+   السطر الذي تغيّر حسابه يُفرَّغ عميله/وكيله المشتقَّين ليُعاد اشتقاقهما من الحساب الجديد (_glValidate_ يُبقي القيمة
+   القديمة لو مُرِّرت). سطر بعملة أجنبية يُمرَّر بسعره الفعلي المحفوظ (المعادل ÷ المبلغ، exact) — وإلا أعاد _glValidate_
+   حساب المعادل بالسعر المقرَّب لخانتين فيتغيّر معادل قيد لم يُلمَس مبلغه (قيود التحويل/الحجوزات المحفوظة بمعادل دقيق) */
 function glSaveEntriesBulk(authToken, items) {
   var results = [], okN = 0;
   var editable = ['desc', 'ref', 'trip', 'company'];
@@ -1093,13 +1097,33 @@ function glSaveEntriesBulk(authToken, items) {
     try {
       var old = _glEntryFull_(id);
       if (!old) throw new Error('القيد غير موجود');
-      var e = { id: id, date: old.date, type: old.type, desc: old.desc, ref: old.ref, trip: old.trip, company: old.company, lines: old.lines };
-      editable.forEach(function (k) { if (it[k] !== undefined) e[k] = it[k]; });
+      if (/^AUTO:/.test(_glStr_(old.sourceKey))) throw new Error('قيد تلقائي — يُعدَّل من مصدره بشاشات البرنامج');
+      var chg = {}, changed = false;
+      (it.lines || []).forEach(function (x) { var n = +(x && x.lineNo), c = _glStr_(x && x.account); if (n && c) chg[n] = c; });
+      var lines = old.lines.map(function (l) {
+        var o = { account: l.account, debit: l.debit, credit: l.credit, currency: l.currency, rate: l.rate,
+          trip: l.trip, company: l.company, client: l.client, agent: l.agent, desc: l.desc };
+        var amt = _glNum_(l.debit) + _glNum_(l.credit), bAmt = _glNum_(l.bDebit) + _glNum_(l.bCredit);
+        if (l.currency !== 'EGP' && amt && bAmt) { o.rate = bAmt / amt; o.exact = 1; }
+        if (chg[l.lineNo] && chg[l.lineNo] !== l.account) { o.account = chg[l.lineNo]; o.client = ''; o.agent = ''; changed = true; }
+        return o;
+      });
+      var e = { id: id, date: old.date, type: old.type, desc: old.desc, ref: old.ref, trip: old.trip, company: old.company, lines: lines };
+      editable.forEach(function (k) { if (it[k] !== undefined && _glStr_(it[k]) !== _glStr_(old[k])) { e[k] = it[k]; changed = true; } });
+      if (!changed) { okN++; results.push({ id: id, success: true, unchanged: true }); return; }
       var r = glSaveEntry(authToken, e, old.status === GL_ST_POSTED_);
       okN++; results.push({ id: id, success: true, result: r });
     } catch (eErr) { results.push({ id: id, success: false, error: eErr.message }); }
   });
-  return { success: true, done: okN, total: (items || []).length, results: results };
+  // ⚡ نسخ كشف الحجوزات مؤجَّل لطابور خارج القفل — glRun يُفرغه فقط لو رجع mirQ بالمستوى الأعلى
+  return { success: true, done: okN, total: (items || []).length, results: results, mirQ: _GL_MIRQ_N_ };
+}
+// 📥 (V4.315) قراءة عدة قيود كاملة (بسطورها) بنداء واحد — لبطاقات تعديل الحساب المقابل من كشف الحساب/الخزن/البنوك/العهد
+function glGetEntriesBulk(authToken, ids) {
+  _glPerm_(authToken, 'view');
+  var out = [];
+  (ids || []).forEach(function (id) { var e = _glEntryFull_(_glStr_(id)); if (e) out.push(e); });
+  return { success: true, entries: out };
 }
 function glPostEntry(authToken, id) {
   var session = _glPerm_(authToken, 'edit', function () { var f0 = _glFindEntry_(_glStr_(id)); return f0 ? _glSubOfType_(f0.r[3]) : 'je'; });   // (V4.276)
@@ -3632,7 +3656,9 @@ function _glCpSyncVoucher_(entryId, user) {
   else if (last >= 2) sh.getRange(2, 9, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(tag) >= 0) rowsIdx.push(i + 2); });
   // تحديث في المكان لنفس العدد (يحافظ على المعرّف والتخصيص)، والزائد يُضاف والناقص يُحذف
   rowsIdx.forEach(function (rw, k) {
-    if (k < want.length) { var w = want[k]; sh.getRange(rw, 2, 1, 8).setValues([[w[0], w[1] === 'عام' ? sh.getRange(rw, 3).getValue() || 'عام' : w[1], w[2], w[3], w[4], w[5], w[6], w[7]]]); }
+    // 🐛 (V4.315) الرحلة القديمة تُحفظ فقط لو العميل نفسه — تغيير الحساب المقابل لعميل آخر كان ينقل رحلة الأول للثاني
+    if (k < want.length) { var w = want[k], cur = sh.getRange(rw, 2, 1, 2).getValues()[0];
+      sh.getRange(rw, 2, 1, 8).setValues([[w[0], w[1] === 'عام' ? ((_glStr_(cur[0]) === w[0] && _glStr_(cur[1])) || 'عام') : w[1], w[2], w[3], w[4], w[5], w[6], w[7]]]); }
   });
   for (var k = rowsIdx.length - 1; k >= want.length; k--) sh.deleteRow(rowsIdx[k]);
   for (var j = rowsIdx.length; j < want.length; j++) {
@@ -5974,7 +6000,8 @@ function _glCpSyncVouchersBatch_(items, accs, user) {
         if (k >= want.length) return;
         var w = want[k];
         // (V4.309) دفعة عُدِّلت رحلتها يدوياً من شاشة حسابات العملاء — لا تُستبدَل بـ«عام» لمجرد أن القيد فقد رحلته
-        var trip2 = w[1] === 'عام' ? (_glStr_(data[rw - 2][2]) || 'عام') : w[1];
+        // (V4.315) …لكن فقط لو العميل نفسه — لا تُنقَل رحلة عميل سابق لعميل جديد بعد تغيير الحساب المقابل
+        var trip2 = w[1] === 'عام' ? ((_glStr_(data[rw - 2][1]) === w[0] && _glStr_(data[rw - 2][2])) || 'عام') : w[1];
         updates.push({ row: rw, vals: [w[0], trip2, w[2], w[3], w[4], w[5], w[6], w[7]] }); updated++;
       });
       for (var k = rowsIdx.length - 1; k >= want.length; k--) deleteRows.push(rowsIdx[k]);
