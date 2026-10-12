@@ -5821,7 +5821,9 @@ function getHbRecon(token, onlyDiff) {
     var p = profiles[name];
     if (p.type === 'آخر') return;            // «آخر» ليست حساب سكن
     var screenBal = _hbR2_(ledger.balanceAsOf(name, todayTs) || 0);
-    var code = p.code || '', glBal = null, cur = '';
+    // 🔗 (V4.310) المصدر الفعلي المعتمَد (خريطة الأسماء / حقل «مرتبط بـ») يتقدَّم على الحقل اليدوي القديم — يصلح
+    // «غير مربوط بحساب عام» الوهمية للحسابات المربوطة فعلاً وتعمل عليها الدفعات بنجاح
+    var code = (_glHbCodeOf_(name).code) || p.code || '', glBal = null, cur = '';
     if (code) {
       try {
         var st = glStatement(token, code, '', '', { fast: true });
@@ -5841,7 +5843,7 @@ function _hbR2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
 function getHbReconDetail(token, name) {
   _glPerm_(token, 'view', 'stmt');   // (V4.308) نفس إصلاح getHbRecon — جلسة البرنامج الرئيسي لا جلسة الحجوزات القديمة
   name = String(name || '').trim();
-  var p = getAllAccountProfiles_()[name] || {}, code = p.code || '';
+  var p = getAllAccountProfiles_()[name] || {}, code = (_glHbCodeOf_(name).code) || p.code || '';   // (V4.310) نفس إصلاح getHbRecon
   var pays = getPaymentsRowsCached_(), partyNorm = normalizeName_(name), prog = [];
   pays.forEach(function (r) {
     if (normalizeName_(r[1]) !== partyNorm) return;

@@ -5246,9 +5246,13 @@ function _glHbParties_(H) {
   return P;
 }
 // اقتراح نوع الاسم وحسابه (للمراجعة قبل الحفظ)
+// 🎯 (V4.310) حارس التعادل: اقتراح الربط التلقائي يُستخدَم أحياناً باعتماد جماعي بلا مراجعة لكل سطر («✔️ اعتماد
+// المقترح لكل غير المربوط» بشاشة خريطة الحسابات) — فلو تعادلت أكثر من مطابقة لا يُختار أحدها صامتاً (قد يُسجَّل
+// المال بحساب طرف آخر خطأً)، بل يبقى الاقتراح بلا كود فيضطر المدير لاختياره يدوياً لهذا الاسم تحديداً
 function _glHbSuggest_(p, pr, accs) {
   var n = p.name, nk = _glNorm_(n), type;
-  var umrah = accs.list.filter(function (a) { return !a.isGroup && a.kind === 'client' && a.code.indexOf('1201') === 0 && a.link && _glNorm_(a.link) === nk; })[0];
+  var umrahList = accs.list.filter(function (a) { return !a.isGroup && a.kind === 'client' && a.code.indexOf('1201') === 0 && a.link && _glNorm_(a.link) === nk; });
+  var umrah = umrahList.length === 1 ? umrahList[0] : null;   // تعادل بين أكثر من حساب بنفس الاسم ⇒ غامض
   if (/(^|\s)رحل[ةه](\s|$)/.test(n)) type = 'رحلة';
   else if (/عهد[ةه]/.test(n)) type = 'عهدة';
   else if (/شارت|شارتر|charter/i.test(n)) type = 'شارت';
@@ -5260,16 +5264,17 @@ function _glHbSuggest_(p, pr, accs) {
   if (type === 'عميل عمرة' && umrah) code = umrah.code;
   else if (type === 'عهدة') {
     var toks = nk.split(' ').filter(function (t) { return t.length >= 3 && !/^(عهده|عهدة|مكه|مكة|المدينه|المدينة)$/.test(t); });
-    var best = null, bs = 0;
+    var best = null, bs = 0, tied = false;
     accs.list.forEach(function (a) {
       if (a.isGroup || a.kind !== 'custody') return;
       var an = _glNorm_(a.name), sc = 0; toks.forEach(function (t) { if (an.indexOf(t) >= 0) sc++; });
-      if (sc > bs) { bs = sc; best = a; }
+      if (sc > bs) { bs = sc; best = a; tied = false; }
+      else if (sc > 0 && sc === bs && best && a.code !== best.code) tied = true;   // (V4.310) تعادل حقيقي بين حسابين مختلفين
     });
-    if (best) code = best.code;
+    if (best && !tied) code = best.code;
   } else if (T.parent) {
-    var ex = accs.list.filter(function (a) { return !a.isGroup && a.code.indexOf(T.parent) === 0 && ((a.link && _glNorm_(a.link) === nk) || _glNorm_(a.name) === nk); })[0];
-    if (ex) code = ex.code;
+    var ex = accs.list.filter(function (a) { return !a.isGroup && a.code.indexOf(T.parent) === 0 && ((a.link && _glNorm_(a.link) === nk) || _glNorm_(a.name) === nk); });
+    if (ex.length === 1) code = ex[0].code;   // (V4.310) أكثر من مطابقة ⇒ غامض، لا يُختار أحدها صامتاً
   }
   return { type: type, code: code };
 }
@@ -5858,36 +5863,140 @@ function glHbMirrorResync(authToken) {
 /* 💵 (V4.308) إعادة مزامنة دفعات العملاء — إصلاح بضغطة واحدة لأي سند قبض/صرف/إيداع/سحب مرحّل على حساب عميل لم يظهر
    في «حسابات عملاء العمرة». آمن ومتكرر بلا أي تكرار بفضل علامة ⟦src:gl-ID⟧ (يُحدِّث الصف في مكانه أو يُنشئه). ويبلّغ عن
    الحسابات التي اسم ربطها لا يطابق أي عميل له بنود — وهو السبب الأشيع لتسجيل الدفعة باسم مختلف فلا تظهر تحت العميل المتوقَّع. */
+/* ⚡ (V4.310) الحل الجذري لبطء «إعادة مزامنة دفعات العملاء»: كانت كل مزامنة لسند واحد (عبر _glSyncVoucherPays_ ←
+   _glCpSyncVoucher_) تبحث (TextFinder) من جديد بشيتي القيود/السطور (مرتين فعلياً — مرة هنا ومرة داخل _glEntryFull_)
+   ثم تمسح عمود البيان **كاملاً** بشيت «حسابات عملاء العمرة» — نحو ١٠-١٤ نداء خدمة شيت حقيقي لكل سند (يفسّر توقّف
+   سجل المستخدم عند ٤٢ سنداً فقط بعد مهلة ٢٤٠ ثانية). الآن: القيود والسطور مُحمَّلة أصلاً بالذاكرة (بلا أي بحث)،
+   وشيت حسابات عملاء العمرة يُقرأ **مرة واحدة** كاملاً، وكل المطابقة والحساب يتم بالذاكرة، ثم تُكتب الفروق بعدد
+   قليل جداً من النداءات (كتل متجاورة محدَّثة + حذف مجمَّع + إلحاق كل الصفوف الجديدة دفعة واحدة) — بصرف النظر عن
+   عدد السندات، فلم تعد هناك حاجة لمهلة زمنية داخلية ولا لتكرار الضغط لإكمال الباقي.
+   ⚠️ لم تعد تمسّ نسخ دفعات الفنادق/الحجوزات إطلاقاً (كانت تستدعيها ضمنياً عبر _glSyncVoucherPays_) — لها أداتها
+   المستقلة «🔁 إعادة النسخ» بتبويب 💳 دفعات الفنادق (glHbMirrorResync)؛ هذا الزر لحسابات عملاء العمرة فقط كاسمه
+   بالضبط، فلا تتكرر تنبيهات تليجرام الحجوزات عند إعادة مزامنة إدارية لا علاقة لها بها. */
 function glCpMirrorResync(authToken) {
   var session = requireAuth_(authToken);
   if (!_glIsAdmin_(session)) throw new Error('إعادة مزامنة دفعات العملاء للمدير فقط');
   var lock = _glLock_(); lock.waitLock(150000);
   try {
-    var accs = _glAccounts_().map, done = 0, t0 = Date.now(), timedOut = false, mismatches = [], seenCode = {};
+    var accs = _glAccounts_().map, mismatches = [], seenCode = {};
     // أسماء العملاء المسجَّلين (لهم بنود) — لكشف أخطاء اسم الربط
     var clientSet = {};
     try { var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS); if (iSh.getLastRow() > 1) iSh.getRange(2, 2, iSh.getLastRow() - 1, 1).getValues().forEach(function (r) { var n = _glStr_(r[0]); if (n) clientSet[n] = 1; }); } catch (e0) {}
+    // السطور: فهرس واحد بالذاكرة (بدل بحث TextFinder مستقل لكل سند)
+    var linesByEntry = {};
+    _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (id) (linesByEntry[id] = linesByEntry[id] || []).push(l); });
+    // القيود المرشَّحة (مرحّلة + سند قبض/صرف/إيداع/سحب) مع أسطرها من الفهرس — بلا أي بحث حي بعد هذه النقطة
+    var items = [];
     _glRows_('entries').forEach(function (r) {
-      if (timedOut || Date.now() - t0 > 240000) { timedOut = true; return; }
       var id = _glStr_(r[0]); if (!id) return;
       if (_glStr_(r[5]) !== GL_ST_POSTED_) return;
       if (!/^(سند قبض|سند صرف|إيداع بنكي|سحب بنكي)$/.test(_glStr_(r[3]))) return;
-      try { _glSyncVoucherPays_(id, session.username); done++; } catch (eS) {}
-      _glLinesOf_(id).forEach(function (l) {
+      var lines = linesByEntry[id] || [];
+      items.push({ id: id, r: r, lines: lines });
+      lines.forEach(function (l) {
         var a = accs[_glStr_(l[4])]; if (!a || a.kind !== 'client' || !a.link || seenCode[a.code]) return;
         if (!clientSet[a.link]) { seenCode[a.code] = 1; mismatches.push({ id: id, code: a.code, name: a.name, link: a.link }); }
       });
     });
-    logChange_(session.username, 'إعادة مزامنة دفعات العملاء', 'GL:cp', '-', '-', 'سندات ' + done + (mismatches.length ? ' · ربط غير مطابق ' + mismatches.length : '') + (timedOut ? ' · (توقّف عند حد الوقت — أعِد التشغيل للباقي)' : ''));
-    return { success: true, done: done, mismatches: mismatches.slice(0, 100), timedOut: timedOut };
+    var r2 = _glCpSyncVouchersBatch_(items, accs, session.username);
+    logChange_(session.username, 'إعادة مزامنة دفعات العملاء', 'GL:cp', '-', '-',
+      'سندات ' + items.length + ' · جديدة ' + r2.created + ' · محدَّثة ' + r2.updated + (r2.deleted ? ' · محذوفة ' + r2.deleted : '') + (mismatches.length ? ' · ربط غير مطابق ' + mismatches.length : ''));
+    return { success: true, done: items.length, created: r2.created, updated: r2.updated, deleted: r2.deleted, mismatches: mismatches.slice(0, 100), timedOut: false };
   } finally { _glUnlock_(lock); }
 }
-// (V4.248) حساب طرف برنامج الحجوزات بالاسم (لأزرار الدفعة داخل كشفه الفندقي) — عبر خريطة الأسماء
+// ⚡ (V4.310) الكتابة الفعلية لحسابات عملاء العمرة لعدة سندات دفعة واحدة — نفس حساب المبلغ/العملة/الرحلة ونفس
+// حماية «لا تُستبدَل رحلة عُدِّلت يدوياً بـ”عام“» الموجودة في _glCpSyncVoucher_ تماماً، لكن بقراءة/كتابة
+// ACC_PAY_SHEET و ACC_META_SHEET **مرة واحدة** بدل نداء مستقل لكل سند
+function _glCpSyncVouchersBatch_(items, accs, user) {
+  var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS), last = sh.getLastRow(), W = ACC_PAY_HEADERS.length;
+  var data = last >= 2 ? sh.getRange(2, 1, last - 1, W).getValues() : [];
+  // فهرس العلامة ⟦src:gl-ID⟧ ⇒ أرقام الصفوف (من عمود البيان — العمود التاسع) بدل TextFinder مستقل لكل سند
+  var tagIndex = {}, tagRx = /⟦src:gl-([^⟧]+)⟧/;
+  data.forEach(function (row, i) {
+    var m = tagRx.exec(_glStr_(row[8])); if (!m) return;
+    (tagIndex[m[1]] = tagIndex[m[1]] || []).push(i + 2);
+  });
+  var updates = [], deleteRows = [], creates = [], newMetaPairs = {}, created = 0, updated = 0;
+  // مفاتيح الارتباط الموجودة سلفاً بشيت الميتا — تُقرأ مرة واحدة بدل مرة لكل صف جديد
+  var metaSh = _accSheet_(ACC_META_SHEET, ACC_META_HEADERS), metaLast = metaSh.getLastRow(), haveMeta = {};
+  if (metaLast >= 2) metaSh.getRange(2, 1, metaLast - 1, 2).getValues().forEach(function (r) { haveMeta[_glStr_(r[0]) + '|' + _glStr_(r[1])] = 1; });
+
+  items.forEach(function (it) {
+    try {
+      var e = _glEntryObj_(it.r), isRec = e.type === 'سند قبض' || e.type === 'إيداع بنكي', want = [];
+      it.lines.map(_glLineObj_).forEach(function (l) {
+        var a = accs[l.account]; if (!a || a.kind !== 'client' || !a.link) return;
+        var amt = _glR2_(isRec ? (l.credit - l.debit) : -(l.debit - l.credit)); if (!amt) return;
+        var trip = _glStr_(l.trip || e.trip) || 'عام';
+        want.push([a.link, trip, 'دفعة', e.date, amt, l.currency === 'SAR' ? 'SAR' : 'EGP', '', (e.voucherNo ? 'إيصال ' + e.voucherNo + ' — ' : '') + (l.desc || e.desc || '') + ' ⟦src:gl-' + it.id + '⟧']);
+      });
+      var rowsIdx = (tagIndex[it.id] || []).slice().sort(function (a, b) { return a - b; });
+      rowsIdx.forEach(function (rw, k) {
+        if (k >= want.length) return;
+        var w = want[k];
+        // (V4.309) دفعة عُدِّلت رحلتها يدوياً من شاشة حسابات العملاء — لا تُستبدَل بـ«عام» لمجرد أن القيد فقد رحلته
+        var trip2 = w[1] === 'عام' ? (_glStr_(data[rw - 2][2]) || 'عام') : w[1];
+        updates.push({ row: rw, vals: [w[0], trip2, w[2], w[3], w[4], w[5], w[6], w[7]] }); updated++;
+      });
+      for (var k = rowsIdx.length - 1; k >= want.length; k--) deleteRows.push(rowsIdx[k]);
+      for (var j = rowsIdx.length; j < want.length; j++) {
+        var w2 = want[j];
+        creates.push([null, w2[0], w2[1], w2[2], w2[3], w2[4], w2[5], w2[6], w2[7], user || 'الحسابات العامة', new Date(), null]);
+        created++;
+        if (w2[1] !== 'عام') newMetaPairs[w2[0] + '|' + w2[1]] = w2;
+      }
+    } catch (eIt) { Logger.log('cp batch ' + it.id + ': ' + eIt.message); }
+  });
+
+  // تطبيق التحديثات: كتل صفوف متجاورة بنداء setValues واحد لكل كتلة
+  updates.sort(function (a, b) { return a.row - b.row; });
+  for (var ui = 0; ui < updates.length;) {
+    var start = updates[ui].row, uj = ui, block = [updates[ui].vals];
+    while (uj + 1 < updates.length && updates[uj + 1].row === updates[uj].row + 1) { uj++; block.push(updates[uj].vals); }
+    sh.getRange(start, 2, block.length, 8).setValues(block);
+    ui = uj + 1;
+  }
+  // تطبيق الحذف: كتل من الأسفل للأعلى حتى لا تتزحزح أرقام الصفوف المتبقية أثناء الحذف (مثل _glDeleteLinesOf_)
+  _glRowBlocks_(deleteRows.map(function (r) { return { row: r }; })).forEach(function (b) { sh.deleteRows(b[0], b[1]); });
+  // الإلحاق: دفعة واحدة لكل الصفوف الجديدة بنطاق تسلسلي واحد محجوز (بدل قفل+خاصية لكل صف)
+  if (creates.length) {
+    var firstSerial = _accNextPaySerials_(creates.length);
+    creates.forEach(function (c, i) { c[0] = _accId_('P'); c[11] = firstSerial + i; });
+    sh.getRange(sh.getLastRow() + 1, 1, creates.length, W).setValues(creates);
+  }
+  // ربط العملاء الجدد بالرحلات — مرة واحدة لكل زوج (عميل، رحلة) فريد لم يكن مسجَّلاً، لا لكل صف
+  Object.keys(newMetaPairs).forEach(function (k) {
+    if (haveMeta[k]) return;
+    var w = newMetaPairs[k];
+    try { _accEnsureMeta_(null, w[0], w[1], user || 'الحسابات العامة'); haveMeta[k] = 1; } catch (eEm) {}
+  });
+  return { created: created, updated: updated, deleted: deleteRows.length };
+}
+/* 🔗 (V4.310) الحلّ الموحَّد لإيجاد حساب دفتر الأستاذ لاسم طرف حجوزات (فندق/مورد/عميل) — الحل الجذري لمشكلة
+   «غير مربوط بحساب عام» الوهمية بشاشة مطابقة الكشوف: كانت تتحقق فقط من حقل «كود الحساب» القديم بشاشة «بيانات
+   الحساب» (مُصمَّم أصلاً كمُعرِّف تسلسلي لاسم ملف PDF لا كود حساب) — بينما الربط الفعلي الذي تعمل عليه كل الدفعات
+   فعلاً (التسجيل من الخزينة/البنك/العهدة/القيد الذي ينسخ بنجاح لكشف الفندق) مصدره «خريطة الأسماء» (hbmap). الآن
+   كل نقاط القراءة تستخدم هذا المصدر أولاً، وتتراجع لحقل «مرتبط بـ» بشاشة تعديل الحساب لو لم يوجد بخريطة الأسماء،
+   وأخيراً للحقل اليدوي القديم فقط حين لا يوجد أي ربط حقيقي إطلاقاً — فلا ينكسر أي حساب يعمل اليوم. */
+function _glHbCodeOf_(name) {
+  name = _glStr_(name); if (!name) return { code: '', type: '', src: '' };
+  var accs = _glAccounts_();
+  try {
+    var m = _glHbMap_()[_glHbKey_(name)];
+    if (m && m.code && accs.map[m.code] && !accs.map[m.code].isGroup && !/^(رحلة|تجاهل)$/.test(m.type)) return { code: m.code, type: m.type, src: 'hbmap' };
+  } catch (e) {}
+  try {
+    var k = _glHbKey_(name);
+    var a = accs.list.filter(function (x) { return !x.isGroup && x.link && _glHbKey_(x.link) === k; })[0];
+    if (a) return { code: a.code, type: '', src: 'link' };
+  } catch (e2) {}
+  return { code: '', type: '', src: '' };
+}
+// (V4.248) حساب طرف برنامج الحجوزات بالاسم (لأزرار الدفعة داخل كشفه الفندقي) — (V4.310) عبر المحلّل الموحَّد أعلاه
 function glHbPartyCode(authToken, name) {
   _glPerm_(authToken, 'view', 'hb');
-  var m = _glHbMap_()[_glHbKey_(name)], accs = _glAccounts_().map;
-  var code = m && m.code && accs[m.code] && !accs[m.code].isGroup && !/^(رحلة|تجاهل)$/.test(m.type) ? m.code : '';
-  return { success: true, name: _glStr_(name), code: code, type: m ? m.type : '' };
+  var r = _glHbCodeOf_(name);
+  return { success: true, name: _glStr_(name), code: r.code, type: r.type };
 }
 // قائمة القيود المنسوخة لبرنامج الحجوزات (لتبويب «💳 دفعات الفنادق»)
 function glHbMirrorList(authToken) {

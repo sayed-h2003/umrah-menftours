@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.309";
+var APP_VERSION = "4.310";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -5481,24 +5481,9 @@ function exportToProfessionalExcelV4(authToken, data) {
 
     SpreadsheetApp.flush();
 
-    // ==============================
-    // رابط التحميل
-    // ==============================
-
-    const url =
-
-      'https://docs.google.com/spreadsheets/d/' +
-
-      ss.getId() +
-
-      '/export?format=xlsx';
-
-    // حذف بعد الإنشاء
-    file.setTrashed(
-      true
-    );
-
-    return url;
+    // 🐛 (V4.310) كانت تُنشئ الرابط ثم تحذف الملف فوراً (trashed) دون أي مشاركة (setSharing) — فيفتح الرابط
+    // صفحة جوجل درايف تطلب صلاحية وصول بدل تنزيل/مشاركة الملف مباشرة على الموبايل
+    return _glShareExportedSheet_(ss, file, fileName);
 
   }
 
@@ -5817,6 +5802,13 @@ selectedCols.forEach(
     const xlsxFile =
       folder.createFile(blob);
 
+    // 🐛 (V4.310) لم تكن تُشارَك إطلاقاً (الاستثناء الوحيد بين كل createFile بالملف) — الرابط كان يفتح صفحة
+    // جوجل درايف تطلب صلاحية وصول بدل التنزيل/المشاركة مباشرة
+    xlsxFile.setSharing(
+      DriveApp.Access.ANYONE_WITH_LINK,
+      DriveApp.Permission.VIEW
+    );
+
     const downloadUrl =
       'https://drive.google.com/uc?export=download&id='
       +
@@ -5829,7 +5821,9 @@ selectedCols.forEach(
       success:true,
       url:downloadUrl,
       fileId:
-        xlsxFile.getId()
+        xlsxFile.getId(),
+      b64: Utilities.base64Encode(blob.getBytes()),
+      fileName: fileName
     };
 
   } catch(err){
@@ -19207,8 +19201,8 @@ function generatePilgrimsTemplate(authToken, tripName) {
   DriveApp.getRootFolder().removeFile(file);
   SpreadsheetApp.flush();
 
-  var url = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx';
-  return url;
+  // 🐛 (V4.310) لم تكن تُشارَك إطلاقاً (ولا حتى تُحذَف) ⇒ رابط يطلب صلاحية وصول على الموبايل
+  return _glShareExportedSheet_(ss, file, 'قالب_كشف_المعتمرين');
 }
 
 // 📥 (V4.58) قالب «صفا» — نفس ترتيب الأعمدة الرسمي لبرنامج صفا لاستيراد بيانات المعتمرين
@@ -19233,7 +19227,19 @@ function generatePilgrimsTemplateSafa(authToken) {
   var folder = getDriveFolder_('EXPORTS');
   folder.addFile(file); DriveApp.getRootFolder().removeFile(file);
   SpreadsheetApp.flush();
-  return 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx';
+  // 🐛 (V4.310) نفس إصلاح generatePilgrimsTemplate — لم تكن تُشارَك إطلاقاً
+  return _glShareExportedSheet_(ss, file, 'قالب_صفا_للمعتمرين');
+}
+// 🔗📊 (V4.310) مساعد مشترك: مشاركة شيت مُصدَّر بالرابط لأي شخص (وإلا يطلب الزائر صلاحية وصول من مالكه)
+// + جلب محتواه كـxlsx (base64) للمشاركة المباشرة على الموبايل، ثم حذفه (يبقى صالحاً للعارض رغم الحذف من سلة مالكه)
+function _glShareExportedSheet_(ss, file, fileName) {
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var url = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx';
+  var b64 = '';
+  try { b64 = Utilities.base64Encode(UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } }).getBlob().getBytes()); }
+  catch (eB) { Logger.log('_glShareExportedSheet_ b64: ' + eB); }
+  try { file.setTrashed(true); } catch (eT) {}
+  return { success: true, url: url, fileId: ss.getId(), b64: b64, fileName: fileName };
 }
 
 // يستقبل ملف إكسيل معبأ (base64) ويحوّله لصفوف معتمرين ويرجعها للواجهة للمراجعة قبل الحفظ
