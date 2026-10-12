@@ -5817,9 +5817,9 @@ function getHbRecon(token, onlyDiff) {
   var todayTs = (function () { var d = new Date(); d.setHours(23, 59, 59, 999); return d.getTime(); })();
   var out = [], t0 = Date.now(), skipped = 0;
   Object.keys(profiles).forEach(function (name) {
-    if (Date.now() - t0 > 240000) { skipped++; return; }   // حارس زمني: لا تتجاوز ٤ دقائق — (V4.318) ويُبلَّغ بعدد المتروك بدل إخفائه
     var p = profiles[name];
     if (p.type === 'آخر') return;            // «آخر» ليست حساب سكن
+    if (Date.now() - t0 > 240000) { skipped++; return; }   // حارس زمني: لا تتجاوز ٤ دقائق — (V4.318) ويُبلَّغ بعدد المتروك بدل إخفائه
     var screenBal = _hbR2_(ledger.balanceAsOf(name, todayTs) || 0);
     // 🔗 (V4.310) المصدر الفعلي المعتمَد (خريطة الأسماء / حقل «مرتبط بـ») يتقدَّم على الحقل اليدوي القديم — يصلح
     // «غير مربوط بحساب عام» الوهمية للحسابات المربوطة فعلاً وتعمل عليها الدفعات بنجاح

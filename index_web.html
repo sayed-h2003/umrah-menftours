@@ -46984,6 +46984,7 @@ function glInit(keepTab) {
     if (res.same && cached) {
       GL.isAdmin = !!res.isAdmin; GL.can = res.can || {}; GL.pendingCount = res.pendingCount || 0; GL.csPend = res.csPend || 0; glNavBadge_();
       document.querySelectorAll('#glTabs .gl-adm').forEach(function (t) { t.style.display = GL.isAdmin ? '' : 'none'; });
+      if (typeof glSubGate_ === 'function') glSubGate_();   // (V4.318) تبويب «المطابقة» لم يعد gl-adm — يُعاد حسابه بتغيّر الصلاحيات
       document.getElementById('glActs').classList.toggle('d-none', !GL.can.add);
       if (!shown) { glApplyBoot_(cached); glTab(keepTab ? GL.tab : (GL.tab || 'home')); }
       return;
@@ -52829,7 +52830,8 @@ function glHbCharterSettleUI(code, prepaid, name) {
 /* ---- المطابقة ---- */
 function glHbRecView() {
   var box = document.getElementById('glHbBox');
-  if (!GL._hbRec) { box.innerHTML = '<div class="gl-card text-muted">⏳ جاري المطابقة…</div>'; return glRun('glHbReconcile', [], function (res) { GL._hbRec = res; glHbRecView(); }, function (e) { box.innerHTML = '<div class="gl-card" style="color:#b91c1c;">' + glEsc(e.message || e) + '</div>'; }); }
+  if (!GL._hbRec) { box.innerHTML = '<div class="gl-card text-muted">⏳ جاري المطابقة…</div>'; var here_ = function () { return GL.tab === 'recon' && GL._rcMode === 'sync' && document.getElementById('glHbBox'); };   // (V4.318) ردّ متأخر بعد مغادرة القسم لا يكتب فوق شاشة أخرى
+    return glRun('glHbReconcile', [], function (res) { if (!here_()) return; GL._hbRec = res; glHbRecView(); }, function (e) { var b = here_(); if (b) b.innerHTML = '<div class="gl-card" style="color:#b91c1c;">' + glEsc(e.message || e) + '</div>'; }); }
   var R = GL._hbRec, only = GL._hbRecOnly !== false, rows = R.rows.filter(function (x) { return !only || !x.ok; }), nBad = R.rows.filter(function (x) { return !x.ok; }).length;
   var c = function (v) { return Math.abs(v || 0) < 0.005 ? '<span style="color:#cbd5e1;">—</span>' : glFmt(v); };
   GL._hbRec = null;   // كل فتح للتبويب يعيد المطابقة من جديد
@@ -52927,8 +52929,9 @@ function glReconLoad() {
 function glReconRender_(res) {
   var box = document.getElementById('glReconBox'); if (!box) return;
   var rows = (res && res.rows) || [];
-  if (!rows.length) { box.innerHTML = '<div class="alert alert-success">✅ لا توجد فروق — كل كشوف السكن مطابقة للحساب العام.</div>'; return; }
-  var h = (res.timedOut ? '<div class="alert alert-warning py-1 small">⏱️ توقّفت المقارنة عند حد الوقت — لم تُفحَص ' + (res.skipped || 0) + ' أطراف. فعّل «إظهار الفروق فقط» أو أعد التحديث.</div>' : '') +
+  var tw = (res && res.timedOut) ? '<div class="alert alert-warning py-1 small">⏱️ توقّفت المقارنة عند حد الوقت (٤ دقائق) — لم تُفحَص ' + (res.skipped || 0) + ' أطراف، فالنتيجة ناقصة. للتحقق من طرف بعينه افتح كشف حسابه.</div>' : '';
+  if (!rows.length) { box.innerHTML = tw + (tw ? '<div class="alert alert-info py-1 small">لا فروق بين الأطراف التي فُحصت.</div>' : '<div class="alert alert-success">✅ لا توجد فروق — كل كشوف السكن مطابقة للحساب العام.</div>'); return; }
+  var h = tw +
     '<div class="small text-muted mb-1">عدد الأطراف: ' + rows.length + '</div>' +
     '<table class="table table-sm table-bordered align-middle" style="font-size:12.5px;"><thead class="table-light"><tr>' +
     '<th>الطرف</th><th>العملة</th><th>رصيد كشف الشاشة</th><th>رصيد الحساب العام</th><th>الفرق</th><th style="width:28px;"></th></tr></thead><tbody>';
