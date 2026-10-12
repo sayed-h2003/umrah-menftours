@@ -5815,9 +5815,9 @@ function getHbRecon(token, onlyDiff) {
   var data = getSourceRowsCached_(), pays = getPaymentsRowsCached_();
   var ledger = buildBalanceLedger_({ data: data, payments: pays, profiles: profiles });
   var todayTs = (function () { var d = new Date(); d.setHours(23, 59, 59, 999); return d.getTime(); })();
-  var out = [], t0 = Date.now();
+  var out = [], t0 = Date.now(), skipped = 0;
   Object.keys(profiles).forEach(function (name) {
-    if (Date.now() - t0 > 240000) return;   // حارس زمني: لا تتجاوز ٤ دقائق (البقية بتصفية أضيق)
+    if (Date.now() - t0 > 240000) { skipped++; return; }   // حارس زمني: لا تتجاوز ٤ دقائق — (V4.318) ويُبلَّغ بعدد المتروك بدل إخفائه
     var p = profiles[name];
     if (p.type === 'آخر') return;            // «آخر» ليست حساب سكن
     var screenBal = _hbR2_(ledger.balanceAsOf(name, todayTs) || 0);
@@ -5837,7 +5837,7 @@ function getHbRecon(token, onlyDiff) {
     out.push({ name: name, code: code, cur: cur, role: p.role || '', screenBal: screenBal, glBal: glBal, diff: diff, noCode: !code });
   });
   out.sort(function (a, b) { return Math.abs(b.diff || 0) - Math.abs(a.diff || 0) || (a.name < b.name ? -1 : 1); });
-  return safeReturn_({ success: true, rows: out });
+  return safeReturn_({ success: true, rows: out, timedOut: skipped > 0, skipped: skipped });
 }
 function _hbR2_(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
 function getHbReconDetail(token, name) {

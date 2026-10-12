@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.317 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.318 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.317)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.318)', diag);
 }, 6000);
 </script>
 
@@ -1552,7 +1552,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.317</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.318</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -5590,7 +5590,7 @@ input[type="date"]:not(:focus):not(:valid) {
     <span class="gl-tab" data-t="auto" onclick="glTab('auto')">🤖 التلقائية <span id="glAutoTabBadge" class="badge rounded-pill bg-danger" style="display:none;font-size:10px;"></span></span>
     <span class="gl-tab" data-t="hotels" onclick="glTab('hotels')">🏨 ربط الحجوزات</span>
     <span class="gl-tab" data-t="coa" onclick="glTab('coa')">🌳 دليل الحسابات</span>
-    <span class="gl-tab gl-adm" data-t="recon" onclick="glTab('recon')">🔁 مطابقة الكشوف</span>
+    <span class="gl-tab" data-t="recon" onclick="glTab('recon')">⚖️ المطابقة</span>
     <span class="gl-tab gl-adm" data-t="settings" onclick="glTab('settings')">⚙️ الإعدادات</span>
   </div>
   <div id="glBody"></div>
@@ -7841,7 +7841,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.317";
+var CLIENT_APP_VERSION = "4.318";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -47013,7 +47013,7 @@ function glRefreshData(cb) {
   });
 }
 function glTab(t) {
-  try { glSubGate_(); if (GL_TAB_SUB_[t] && !glSubCan_(GL_TAB_SUB_[t], 'view')) t = 'home'; } catch (eSg) {}
+  try { glSubGate_(); if (GL_TAB_SUB_[t] && !glSubCan_(GL_TAB_SUB_[t], 'view')) t = 'home'; if (t === 'recon') { var rcc = glReconCan_(); if (!rcc.stmt && !rcc.sync) t = 'home'; } } catch (eSg) {}
   GL.tab = t;
   try { if (typeof _saveCurScreen_ === 'function') _saveCurScreen_(); } catch (eSS) {}   // 🔄 (V4.298) استعادة التبويب بعد الريفريش
   // (V4.252) دفتر الأستاذ صار جزءاً من «كشف حساب» (للأقسام)، والاستيراد المجمّع داخل الإعدادات
@@ -48062,8 +48062,10 @@ function glSubCan_(sub, cap) {
   if (!c.sub || !sub) return cap === 'view' ? true : !!c[k];
   var o = c.sub[sub]; return !!(o && o[k]);
 }
+function glReconCan_() { return { stmt: !!GL.isAdmin, sync: !!GL.isAdmin || glSubCan_('hb', 'view') }; }   // (V4.318) نفس صلاحيات الشاشتين السابقتين
 function glSubGate_() {
   document.querySelectorAll('#glTabs .gl-tab').forEach(function (t) { var sb = GL_TAB_SUB_[t.getAttribute('data-t')]; if (sb && !t.classList.contains('gl-adm')) t.style.display = glSubCan_(sb, 'view') ? '' : 'none'; });
+  var rc = document.querySelector('#glTabs .gl-tab[data-t="recon"]'), rcc = glReconCan_(); if (rc) rc.style.display = (rcc.stmt || rcc.sync) ? '' : 'none';
   document.querySelectorAll('#glNewMenu button').forEach(function (b) { var m = String(b.getAttribute('onclick') || '').match(/glNew\('(\w+)'\)/); if (m) b.style.display = glSubCan_(GL_KIND_SUB_[m[1]] || 'je', 'add') ? '' : 'none'; });
 }
 function glNew(kind) {
@@ -51814,7 +51816,7 @@ function glAutoRecDraw() {
 }
 
 /* ---------------------------- 🏨 (V4.208) ربط برنامج حجوزات الفنادق ---------------------------- */
-var GL_HB_SUB_ = [['setup', '🔗 الربط والمزامنة'], ['hpay', '💳 دفعات الفنادق'], ['map', '🗂️ خريطة الحسابات'], ['pays', '💵 مراجعة الدفعات'], ['trips', '🧳 ربط الرحلات'], ['housing', '🛏️ سكن الرحلات'], ['charters', '📜 عقود الشارت'], ['rec', '⚖️ المطابقة']];
+var GL_HB_SUB_ = [['setup', '🔗 الربط والمزامنة'], ['hpay', '💳 دفعات الفنادق'], ['map', '🗂️ خريطة الحسابات'], ['pays', '💵 مراجعة الدفعات'], ['trips', '🧳 ربط الرحلات'], ['housing', '🛏️ سكن الرحلات'], ['charters', '📜 عقود الشارت'], ['rec', '⚖️ المطابقة ↗']];
 function glRenderHotels() {
   var box = document.getElementById('glBody'), sub = GL._hbSub || 'setup', H = GL.hb;
   box.innerHTML = '<div class="gl-card"><div class="d-flex align-items-center gap-2 flex-wrap"><b style="font-size:15px;">🏨 ربط برنامج حجوزات الفنادق بالدفتر</b><span class="gl-st" style="background:#ecfeff;color:#0e7490;">المرحلة H1</span>' +
@@ -51823,6 +51825,8 @@ function glRenderHotels() {
     '<div class="gl-note mt-2 mb-0">برنامج الحجوزات يبقى كما هو تماماً (كشف الحساب والتأكيدات وبيان الأرصدة وتليجرام والبوابة) — هنا فقط تُحوَّل حجوزاته ودفعاته لقيود مزدوجة بالدفتر بآلية الـ ERP: من ح/ العميل (البيع) — إلى ح/ المورد (التكلفة) — إلى ح/ «إيرادات حجوزات — المورد» (الفرق = هامش ربح الحجز)، ولكل مورد حساب إيراد يُرحَّل لإيرادات السكن نهاية الموسم. رحلات الشركة بالتكلفة: من ح/ تكلفة السكن (بوسم الرحلة) إلى ح/ المورد. والدفعات على الخزينة أو البنك أو العهدة أو الوكيل بعملتها الفعلية. رقم القيد اليدوي يبقى كما هو ويُضاف بجانبه رقم القيد الآلي JE.</div></div>' +
     '<div id="glHbBox" class="mt-2"></div>';
   if (!H) { document.getElementById('glHbBox').innerHTML = '<div class="gl-card text-muted">⏳ جاري قراءة برنامج الحجوزات…</div>'; return glHbLoad(false); }
+  // (V4.318) «المطابقة» صارت شاشة واحدة موحَّدة بتبويب «⚖️ المطابقة» الرئيسي — الزر هنا ينقل لقسم «سلامة المزامنة» بها
+  if (sub === 'rec') { GL._hbSub = GL._hbSubPrev || 'setup'; GL._rcMode = 'sync'; return glTab('recon'); }
   if (!H.on && sub !== 'setup') GL._hbSub = sub = 'setup';
   if (sub === 'housing' && GL._hbSubPrev !== 'housing') GL._hbHous = null;
   if (sub === 'charters' && GL._hbSubPrev !== 'charters') GL._hbCh = null;
@@ -52869,16 +52873,31 @@ function glRenderReports() {
 /* 🔁 (V4.302) مطابقة كشوف السكن مع الحساب العام — شاشة واحدة: رصيد كل طرف بكشف الشاشة مقابل
    الحساب العام والفرق، وبالضغط على السطر يتوسّع لعرض الحركات الموجودة بأحدهما دون الآخر. (قراءة) */
 var _glReconData_ = null;
+/* ⚖️ (V4.318) شاشة مطابقة واحدة بدل شاشتين كانتا تقارنان «رصيد طرف الحجوزات مقابل الدفتر» بطريقتين: هنا قسمان واضحان
+   لكلٍّ منهما سؤاله — (1) هل كشف حساب العميل ببرنامج الحجوزات = حسابه الكامل بالدفتر؟ (2) هل سُجِّلت كل أحداث الحجوزات
+   بقيودها التلقائية؟ — بنفس صلاحيات الشاشتين السابقتين (الأول للمدير، الثاني لمن له صلاحية الحجوزات) */
+var GL_RC_MODES_ = [['stmt', '📄 كشف العميل مقابل الحساب العام'], ['sync', '🔄 سلامة مزامنة الحجوزات']];
 function glRenderRecon() {
-  var box = document.getElementById('glBody');
-  box.innerHTML =
+  var box = document.getElementById('glBody'), can = glReconCan_();
+  var mode = GL._rcMode || (can.stmt ? 'stmt' : 'sync');
+  if (mode === 'stmt' && !can.stmt) mode = 'sync'; if (mode === 'sync' && !can.sync) mode = 'stmt';
+  GL._rcMode = mode;
+  var seg = GL_RC_MODES_.filter(function (m) { return can[m[0]]; }).map(function (m) {
+    return '<button class="btn btn-sm ' + (mode === m[0] ? 'btn-dark' : 'btn-outline-secondary') + '" onclick="GL._rcMode=\'' + m[0] + '\';glRenderRecon()">' + m[1] + '</button>'; }).join('');
+  var head = '<div class="d-flex align-items-center gap-2 flex-wrap mb-2"><h6 class="fw-bold mb-0" style="color:#1e3d59;">⚖️ المطابقة</h6><div class="d-flex gap-1 flex-wrap">' + seg + '</div></div>';
+  if (mode === 'sync') {
+    box.innerHTML = head + '<div class="gl-note">يتحقق أن <b>كل أحداث برنامج الحجوزات سُجِّلت بقيودها التلقائية</b> بالدفتر (رصيد البرنامج مقابل قيود الحجوزات وحدها). ' +
+      'قد يختلف رقمه عن قسم «كشف العميل» بطبيعته لأنه لا يشمل القيود والسندات اليدوية.</div><div id="glHbBox"></div>';
+    return glHbRecView();
+  }
+  box.innerHTML = head +
     '<div class="d-flex align-items-center gap-2 flex-wrap mb-2">' +
-      '<h6 class="fw-bold mb-0" style="color:#1e3d59;">🔁 مطابقة كشوف السكن مع الحساب العام</h6>' +
-      '<div class="form-check form-switch ms-2 mb-0"><input class="form-check-input" type="checkbox" id="glRcOnlyDiff" checked onchange="glReconLoad()"><label class="form-check-label small" for="glRcOnlyDiff">إظهار الفروق فقط</label></div>' +
+      '<div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="glRcOnlyDiff" checked onchange="glReconLoad()"><label class="form-check-label small" for="glRcOnlyDiff">إظهار الفروق فقط</label></div>' +
       '<button class="btn btn-sm btn-primary" onclick="glReconLoad()">↻ تحديث المقارنة</button>' +
+      '<button class="btn btn-sm btn-outline-dark" onclick="glPrintBox(\'glReconBox\',\'مطابقة كشوف العملاء مع الحساب العام\')">🖨️</button>' +
       (GL.isAdmin ? '<button class="btn btn-sm btn-outline-success" onclick="glCpResync(this)" title="إعادة نسخ كل سندات القبض/الصرف/الإيداع/السحب المرحّلة على حسابات العملاء إلى «حسابات عملاء العمرة» — آمن ولا يُكرِّر، ويبلّغ عن أخطاء اسم الربط">🔁 إعادة مزامنة دفعات العملاء</button>' : '') +
     '</div>' +
-    '<div class="text-muted small mb-2">يقارن رصيد كل طرف سكن في كشف الشاشة برصيده في الحساب العام. اضغط أي سطر لعرض الحركات (الدفعات غالباً) الموجودة بأحد الكشفين دون الآخر.</div>' +
+    '<div class="gl-note">يقارن <b>رصيد كل طرف بكشف حسابه ببرنامج الحجوزات</b> (كما يراه العميل) برصيد <b>حسابه الكامل</b> بالحساب العام. اضغط أي سطر لعرض الحركات الموجودة بأحد الكشفين دون الآخر، و📒 لفتح كشف الحساب.</div>' +
     '<div id="glReconBox"><div class="text-center text-muted py-4">⏳</div></div>';
   glReconLoad();
 }
@@ -52909,13 +52928,15 @@ function glReconRender_(res) {
   var box = document.getElementById('glReconBox'); if (!box) return;
   var rows = (res && res.rows) || [];
   if (!rows.length) { box.innerHTML = '<div class="alert alert-success">✅ لا توجد فروق — كل كشوف السكن مطابقة للحساب العام.</div>'; return; }
-  var h = '<div class="small text-muted mb-1">عدد الأطراف: ' + rows.length + '</div>' +
+  var h = (res.timedOut ? '<div class="alert alert-warning py-1 small">⏱️ توقّفت المقارنة عند حد الوقت — لم تُفحَص ' + (res.skipped || 0) + ' أطراف. فعّل «إظهار الفروق فقط» أو أعد التحديث.</div>' : '') +
+    '<div class="small text-muted mb-1">عدد الأطراف: ' + rows.length + '</div>' +
     '<table class="table table-sm table-bordered align-middle" style="font-size:12.5px;"><thead class="table-light"><tr>' +
     '<th>الطرف</th><th>العملة</th><th>رصيد كشف الشاشة</th><th>رصيد الحساب العام</th><th>الفرق</th><th style="width:28px;"></th></tr></thead><tbody>';
   rows.forEach(function (r, i) {
     var diff = r.diff, dcol = diff == null ? '#64748b' : (Math.abs(diff) < 0.5 ? '#16a34a' : '#dc2626');
     h += '<tr' + (r.code ? ' style="cursor:pointer;" onclick="glReconToggle_(' + i + ')"' : '') + '>' +
-      '<td class="fw-bold">' + glEsc(r.name) + (r.noCode ? ' <span class="badge bg-warning text-dark" style="font-size:9px;">غير مربوط بحساب عام</span>' : '') + '</td>' +
+      '<td class="fw-bold">' + glEsc(r.name) + (r.noCode ? ' <span class="badge bg-warning text-dark" style="font-size:9px;">غير مربوط بحساب عام</span>' : '') +
+        (r.code ? ' <a href="#" title="فتح كشف الحساب العام" onclick="event.stopPropagation();glOpenLedger(\'' + glJs(r.code) + '\');return false;" style="text-decoration:none;">📒</a>' : '') + '</td>' +
       '<td>' + glEsc(r.cur || '') + '</td>' +
       '<td>' + glFmt(r.screenBal) + '</td>' +
       '<td>' + (r.glBal == null ? '—' : glFmt(r.glBal)) + '</td>' +
@@ -52952,8 +52973,7 @@ function glReconDetRender_(i, d) {
     '<div class="row g-2">' +
       '<div class="col-md-6"><div class="fw-bold text-danger small mb-1">⬇ بكشف الشاشة وغير مسجّلة بالحساب العام (' + only.length + ') — تحتاج إضافة للعام</div>' + tbl(only, 'note') + '</div>' +
       '<div class="col-md-6"><div class="fw-bold small mb-1" style="color:#b45309;">⬆ بالحساب العام وغير موجودة بكشف الشاشة (' + onlyG.length + ') — قد تكون مكررة</div>' + tbl(onlyG, 'desc', function (x) { return x.entryId ? ' <span class="text-muted">[' + glEsc(x.entryId) + ']</span>' : ''; }) + '</div>' +
-    '</div>' +
-    '<div class="small text-muted mt-2">ℹ️ الإضافة/الحذف المجمّع (مع اختيار الحساب المقابل بالبحث التنبّؤي) سيُضاف بعد تأكيدك أن الفروق الظاهرة صحيحة على بياناتك.</div>';
+    '</div>';
 }
 // صفوف شجرية: كل حساب (تجميعي أو فرعي) تحت البادئة = مجموع قيم الحسابات الفرعية التي يبدأ كودها بكوده
 function glTreeRows(vals, prefixes, maxDepth) {
