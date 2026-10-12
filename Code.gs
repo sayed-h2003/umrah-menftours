@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.316";
+var APP_VERSION = "4.317";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22777,14 +22777,19 @@ function saveMinistryFile(authToken, data) {
 function saveMinistryFilesBulk(authToken, items) {
   _mfPerm_(authToken, 'edit');
   var all = _mfReadAll_(), results = [], okN = 0;
-  var editable = ['fileNo', 'ref', 'company', 'agent', 'reviewDate', 'notes'];
+  // (V4.317) + ربط الرحلات والمعتمرين: الواجهة تبني البنود/العدد/اسم العميل كما يفعل mfTripPickApply بالنموذج المنفرد
+  var editable = ['fileNo', 'ref', 'company', 'agent', 'reviewDate', 'notes',
+    'tripName', 'extraTrips', 'selected', 'breakdown', 'pilgrims', 'clientLabel'];
   (items || []).forEach(function (it) {
     var id = _mfStr_(it && it.id); if (!id) return;
     try {
       var old = all.filter(function (x) { return x.id === id; })[0];
       if (!old) throw new Error('الملف غير موجود');
+      if (it.selected !== undefined && !Array.isArray(it.selected)) throw new Error('قائمة المعتمرين غير صالحة');
+      if (it.breakdown !== undefined && !Array.isArray(it.breakdown)) throw new Error('بنود العميل غير صالحة');
       var data = Object.assign({}, old);
       editable.forEach(function (k) { if (it[k] !== undefined) data[k] = it[k]; });
+      if (it.selected) data.selected = it.selected.map(function (k) { return _mfStr_(k); }).filter(Boolean);
       data._manualType = !!old.manualType;   // 🏛️ (V4.233) يبقى التحكم اليدوي لنوع المراجعة كما يفعل نموذج التعديل المنفرد
       var r = saveMinistryFile(authToken, data);
       if (!r || !r.success) throw new Error((r && r.error) || 'فشل الحفظ');
