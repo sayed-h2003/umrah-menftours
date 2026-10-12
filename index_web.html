@@ -47056,7 +47056,7 @@ function glCtrSave_(btn) {
       else if (a.active === false) errs.push('«' + a.name + '» موقوف');
       else if (a.currency && a.currency !== cur) errs.push('«' + a.name + '» عملته ' + (GL_CUR_LBL_[a.currency] || a.currency) + ' والسطر ' + (GL_CUR_LBL_[cur] || cur));
       else if (anchor && code === anchor) errs.push('لا يكون الحساب المقابل هو نفسه الحساب الأساسي');
-      else lines.push({ lineNo: +inp.getAttribute('data-line'), account: code });
+      else lines.push({ lineNo: +inp.getAttribute('data-line'), from: orig, account: code });
     });
     var eb = card.querySelector('[data-ctr-err]'); if (eb) eb.textContent = errs.join(' · ');
     card.style.borderColor = errs.length ? '#dc2626' : '#dfe6e8';
@@ -49016,6 +49016,7 @@ function glStRunOn_(curs) { return GL._stRun === null || GL._stRun === undefined
 function glStTogRun_() { var o = glStOpts_(GL._st); GL._stRun = !o.run; glDrawStmt(); }
 function glDrawStmt() {
   var res = GL._st, box = document.getElementById('glStBox'); if (!res || !box) return;
+  if (GL._stSelCode !== res.account.code) { GL._stSel = {}; GL._stSelCode = res.account.code; }   // (V4.315) التحديد خاص بالحساب المعروض
   var a = res.account, o = glStOpts_(res), M = glStModel_(res, o), E = glEsc;
   var pill = function (t, cls, tip) { return '<span class="gl-stp ' + (cls || '') + '"' + (tip ? ' title="' + E(tip) + '"' : '') + '>' + t + '</span>'; };
   var custom = GL._stCustom || (GL._sTo && GL._sTo !== '') || (GL._sFrom && GL._sFrom !== GL.settings.startDate && !/^01\//.test(GL._sFrom));

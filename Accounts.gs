@@ -1098,8 +1098,14 @@ function glSaveEntriesBulk(authToken, items) {
       var old = _glEntryFull_(id);
       if (!old) throw new Error('القيد غير موجود');
       if (/^AUTO:/.test(_glStr_(old.sourceKey))) throw new Error('قيد تلقائي — يُعدَّل من مصدره بشاشات البرنامج');
-      var chg = {}, changed = false;
-      (it.lines || []).forEach(function (x) { var n = +(x && x.lineNo), c = _glStr_(x && x.account); if (n && c) chg[n] = c; });
+      var chg = {}, from = {}, changed = false;
+      (it.lines || []).forEach(function (x) { var n = +(x && x.lineNo), c = _glStr_(x && x.account); if (n && c) { chg[n] = c; from[n] = _glStr_(x.from); } });
+      // 🛡️ البطاقة قد تكون قديمة (القيد عُدِّل/أُعيد ترقيم أسطره منذ فتحها) — رقم السطر وحده قد يشير الآن لسطر آخر
+      // (مثلاً سطر الخزينة)، فيُشترط أن يكون حساب السطر الحالي هو نفسه الذي رآه المستخدم
+      Object.keys(chg).forEach(function (n) {
+        var cur = old.lines.filter(function (l) { return +l.lineNo === +n; })[0];
+        if (!cur || (from[n] && cur.account !== from[n])) throw new Error('القيد تغيّر منذ فتح البطاقة — أعد تحميل الشاشة ثم أعد المحاولة');
+      });
       var lines = old.lines.map(function (l) {
         var o = { account: l.account, debit: l.debit, credit: l.credit, currency: l.currency, rate: l.rate,
           trip: l.trip, company: l.company, client: l.client, agent: l.agent, desc: l.desc };
@@ -3633,6 +3639,14 @@ function _glSyncVoucherPays_(entryId, user) {
 // 💰 نسخ سند قبض/صرف/إيداع/سحب على حساب عميل عمرة إلى «حسابات عملاء العمرة» (ACC_PAY_SHEET) — مستخرجة من
 // _glSyncVoucherPays_ (V4.309) لاستدعائها أيضاً من مزامنة شيتات العهد/الخزينة/البنوك (_glCsSync_)، التي لم تكن
 // تستدعيها إطلاقاً فلا تظهر دفعاتها هناك تلقائياً رغم ظهورها بكشف الحساب العام
+// (V4.315) مطابقة صفوف دفعات قيد قائمة (rows:[{row,client}]) بالدفعات المطلوبة (want:[[client,…]]): نفس العميل أولاً،
+// ثم أي صف متبقٍّ — يُرجع assign (صف أو null لكل مطلوب) وunused (صفوف تُحذف)
+function _glCpPair_(rows, want) {
+  var used = {}, assign = want.map(function () { return null; });
+  want.forEach(function (w, k) { for (var i = 0; i < rows.length; i++) if (!used[i] && rows[i].client === w[0]) { used[i] = 1; assign[k] = rows[i]; return; } });
+  want.forEach(function (w, k) { if (assign[k]) return; for (var i = 0; i < rows.length; i++) if (!used[i]) { used[i] = 1; assign[k] = rows[i]; return; } });
+  return { assign: assign, unused: rows.filter(function (r, i) { return !used[i]; }) };
+}
 function _glCpSyncVoucher_(entryId, user) {
   entryId = _glStr_(entryId); if (!entryId) return;
   var tag = '⟦src:gl-' + entryId + '⟧', want = [], f = _glFindEntry_(entryId);
@@ -3654,15 +3668,17 @@ function _glCpSyncVoucher_(entryId, user) {
   var tf = null; try { if (last >= 2) tf = sh.getRange(2, 9, last - 1, 1).createTextFinder(tag).matchCase(true).findAll().map(function (h) { return h.getRow(); }).sort(function (a, b) { return a - b; }); } catch (eTf) { tf = null; }
   if (tf) rowsIdx = tf;
   else if (last >= 2) sh.getRange(2, 9, last - 1, 1).getValues().forEach(function (r, i) { if (String(r[0]).indexOf(tag) >= 0) rowsIdx.push(i + 2); });
-  // تحديث في المكان لنفس العدد (يحافظ على المعرّف والتخصيص)، والزائد يُضاف والناقص يُحذف
-  rowsIdx.forEach(function (rw, k) {
-    // 🐛 (V4.315) الرحلة القديمة تُحفظ فقط لو العميل نفسه — تغيير الحساب المقابل لعميل آخر كان ينقل رحلة الأول للثاني
-    if (k < want.length) { var w = want[k], cur = sh.getRange(rw, 2, 1, 2).getValues()[0];
-      sh.getRange(rw, 2, 1, 8).setValues([[w[0], w[1] === 'عام' ? ((_glStr_(cur[0]) === w[0] && _glStr_(cur[1])) || 'عام') : w[1], w[2], w[3], w[4], w[5], w[6], w[7]]]); }
+  // تحديث في المكان (يحافظ على المعرّف والتخصيص)، والزائد يُضاف والناقص يُحذف — 🐛 (V4.315) المطابقة بالعميل أولاً لا بالترتيب:
+  // سند بعدة عملاء تغيّر أحد أطرافه كان يُكتب فوق دفعة عميل آخر (فتضيع رحلتها المعدَّلة يدوياً ومعرّفها)
+  var cur = rowsIdx.map(function (rw) { var v = sh.getRange(rw, 2, 1, 2).getValues()[0]; return { row: rw, client: _glStr_(v[0]), trip: _glStr_(v[1]) }; });
+  var pr = _glCpPair_(cur, want), toAdd = [];
+  want.forEach(function (w, k) {
+    var o = pr.assign[k]; if (!o) { toAdd.push(w); return; }
+    sh.getRange(o.row, 2, 1, 8).setValues([[w[0], w[1] === 'عام' ? ((o.client === w[0] && o.trip) || 'عام') : w[1], w[2], w[3], w[4], w[5], w[6], w[7]]]);
   });
-  for (var k = rowsIdx.length - 1; k >= want.length; k--) sh.deleteRow(rowsIdx[k]);
-  for (var j = rowsIdx.length; j < want.length; j++) {
-    var w = want[j];
+  pr.unused.map(function (o) { return o.row; }).sort(function (a, b) { return b - a; }).forEach(function (rw) { sh.deleteRow(rw); });
+  for (var j = 0; j < toAdd.length; j++) {
+    var w = toAdd[j];
     sh.appendRow([_accId_('P'), w[0], w[1], w[2], w[3], w[4], w[5], w[6], w[7], user || 'الحسابات العامة', new Date(), _accNextPaySerial_()]);
     // (V4.309) تسجيل ارتباط العميل بالرحلة — مثل saveAccPayment تماماً — حتى تظهر الرحلة بقوائمه ولا تُعامَل كأنها بلا حساب
     if (w[1] !== 'عام') try { _accEnsureMeta_(null, w[0], w[1], user || 'الحسابات العامة'); } catch (eEm) {}
@@ -5996,17 +6012,18 @@ function _glCpSyncVouchersBatch_(items, accs, user) {
         want.push([a.link, trip, 'دفعة', e.date, amt, l.currency === 'SAR' ? 'SAR' : 'EGP', '', (e.voucherNo ? 'إيصال ' + e.voucherNo + ' — ' : '') + (l.desc || e.desc || '') + ' ⟦src:gl-' + it.id + '⟧']);
       });
       var rowsIdx = (tagIndex[it.id] || []).slice().sort(function (a, b) { return a - b; });
-      rowsIdx.forEach(function (rw, k) {
-        if (k >= want.length) return;
-        var w = want[k];
+      // (V4.315) مطابقة الصفوف بالعميل أولاً لا بالترتيب (نفس _glCpSyncVoucher_)
+      var pr = _glCpPair_(rowsIdx.map(function (rw) { return { row: rw, client: _glStr_(data[rw - 2][1]), trip: _glStr_(data[rw - 2][2]) }; }), want), adds = [];
+      want.forEach(function (w, k) {
+        var o = pr.assign[k]; if (!o) { adds.push(w); return; }
         // (V4.309) دفعة عُدِّلت رحلتها يدوياً من شاشة حسابات العملاء — لا تُستبدَل بـ«عام» لمجرد أن القيد فقد رحلته
         // (V4.315) …لكن فقط لو العميل نفسه — لا تُنقَل رحلة عميل سابق لعميل جديد بعد تغيير الحساب المقابل
-        var trip2 = w[1] === 'عام' ? ((_glStr_(data[rw - 2][1]) === w[0] && _glStr_(data[rw - 2][2])) || 'عام') : w[1];
-        updates.push({ row: rw, vals: [w[0], trip2, w[2], w[3], w[4], w[5], w[6], w[7]] }); updated++;
+        var trip2 = w[1] === 'عام' ? ((o.client === w[0] && o.trip) || 'عام') : w[1];
+        updates.push({ row: o.row, vals: [w[0], trip2, w[2], w[3], w[4], w[5], w[6], w[7]] }); updated++;
       });
-      for (var k = rowsIdx.length - 1; k >= want.length; k--) deleteRows.push(rowsIdx[k]);
-      for (var j = rowsIdx.length; j < want.length; j++) {
-        var w2 = want[j];
+      pr.unused.forEach(function (o) { deleteRows.push(o.row); });
+      for (var j = 0; j < adds.length; j++) {
+        var w2 = adds[j];
         creates.push([null, w2[0], w2[1], w2[2], w2[3], w2[4], w2[5], w2[6], w2[7], user || 'الحسابات العامة', new Date(), null]);
         created++;
         if (w2[1] !== 'عام') newMetaPairs[w2[0] + '|' + w2[1]] = w2;
