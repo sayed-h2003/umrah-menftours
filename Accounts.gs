@@ -1077,6 +1077,30 @@ function glSaveEntry(authToken, e, post) {
       balancesDelta: _delta2, pendingCount: _glCpPending_(), savedRow: _sr2, hbMirror: _GL_HB_MIRROR_LAST_, mirQ: _GL_MIRQ_N_ };
   } finally { _glUnlock_(lock); }
 }
+/* ✏️ (V4.314) تعديل جماعي لعدة قيود دفعة واحدة — نفس فلسفة saveVisaFilesBulk/saveMinistryFilesBulk: تستدعي
+   glSaveEntry الحقيقية لكل قيد، فتحصل على كل حراسات السلامة المحاسبية بالضبط (قيد ملغى/تلقائي بلا صلاحية
+   مدير/قيد إقفال/فترة مقفلة) بلا أي تخطٍّ أو إعادة تنفيذ لها — فشل قيد واحد بهذه الحراسات يُقرَّر له وحده
+   ولا يوقف حفظ الباقي. حقول رأس القيد الآمنة فقط (لا تلمس lines[] ولا المبالغ إطلاقاً، تفادياً لمخاطر
+   سلامة التوازن المحاسبي ببطاقة مصغَّرة): البيان، المرجع، الرحلة، الشركة. (لا تاريخ استحقاق هنا عمداً —
+   glListEntries لا يُرجعه أصلاً فالبطاقة ستُظهره فارغاً دوماً، وحفظ قيمة فارغة كان سيمحو أي تاريخ استحقاق
+   مسجَّل سابقاً صامتاً؛ تعديله يبقى من نافذة القيد المنفردة التي تقرأه فعلاً أولاً)
+   items: [{id, desc?, ref?, trip?, company?}] */
+function glSaveEntriesBulk(authToken, items) {
+  var results = [], okN = 0;
+  var editable = ['desc', 'ref', 'trip', 'company'];
+  (items || []).forEach(function (it) {
+    var id = _glStr_(it && it.id); if (!id) return;
+    try {
+      var old = _glEntryFull_(id);
+      if (!old) throw new Error('القيد غير موجود');
+      var e = { id: id, date: old.date, type: old.type, desc: old.desc, ref: old.ref, trip: old.trip, company: old.company, lines: old.lines };
+      editable.forEach(function (k) { if (it[k] !== undefined) e[k] = it[k]; });
+      var r = glSaveEntry(authToken, e, old.status === GL_ST_POSTED_);
+      okN++; results.push({ id: id, success: true, result: r });
+    } catch (eErr) { results.push({ id: id, success: false, error: eErr.message }); }
+  });
+  return { success: true, done: okN, total: (items || []).length, results: results };
+}
 function glPostEntry(authToken, id) {
   var session = _glPerm_(authToken, 'edit', function () { var f0 = _glFindEntry_(_glStr_(id)); return f0 ? _glSubOfType_(f0.r[3]) : 'je'; });   // (V4.276)
   var lock = _glLock_(); lock.waitLock(30000);
@@ -1126,6 +1150,21 @@ function glVoidEntry(authToken, id, reason, wantDelta) {
     return { success: true, id: _glStr_(id), balancesDelta: _glLineDelta_(_voidLines, -1, {}),
       pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)), mirQ: _GL_MIRQ_N_ };
   } finally { _glUnlock_(lock); }
+}
+/* 🗑️ (V4.314) حذف/إلغاء جماعي لعدة قيود دفعة واحدة — تستدعي glVoidEntry الحقيقية لكل قيد (فتحصل بالضبط
+   على نفس تمييزها بين المسودة التي تُحذف نهائياً والمرحّل الذي يُلغى بحالة «ملغى» مع سبب، ونفس حراسات
+   السلامة: لا إلغاء لقيد تلقائي ولا لقيد بفترة مقفلة) — فشل قيد واحد بهذه الحراسات لا يوقف إلغاء الباقي.
+   items: [{id, reason}] — reason مطلوب حتى للمسودة (يُستخدم 'حذف مسودة' تلقائياً من الواجهة لها) */
+function glVoidEntriesBulk(authToken, items) {
+  var results = [], okN = 0;
+  (items || []).forEach(function (it) {
+    var id = _glStr_(it && it.id); if (!id) return;
+    try {
+      var r = glVoidEntry(authToken, id, it && it.reason, true);
+      okN++; results.push({ id: id, success: true, result: r });
+    } catch (eErr) { results.push({ id: id, success: false, error: eErr.message }); }
+  });
+  return { success: true, done: okN, total: (items || []).length, results: results };
 }
 // 🗑️ (V4.217) حذف قيد نهائياً (للمدير): المسودة/المرحّل/الملغى اليدوي أو المستورد — لا القيود التلقائية (تُدار من
 // مصدرها) ولا قيود الفترات المقفلة. السند المحذوف لا يُعاد استخدام رقمه.
