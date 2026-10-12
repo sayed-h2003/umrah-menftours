@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.310 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.311 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -108,7 +108,7 @@ setTimeout(function () {
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.310)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.311)', diag);
 }, 6000);
 </script>
 
@@ -1552,7 +1552,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.310</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.311</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7840,7 +7840,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.310";
+var CLIENT_APP_VERSION = "4.311";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -51085,7 +51085,11 @@ function hbxLoad() {
     var f = document.createElement('iframe');
     f.src = r.url + '&hp=' + encodeURIComponent(HBX.page) + '&embed=1';
     f.style.cssText = 'width:100%;height:600px;border:0;border-radius:12px;background:#f4f6f9;box-shadow:0 2px 8px rgba(15,23,42,.08);';
-    f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
+    // 🐛 (V4.311) إطار الحجوزات المُضمَّن هنا إطار متداخل (إطار داخل إطار البرنامج الرئيسي) — صلاحية المشاركة
+    // (web-share) لا تُورَّث تلقائياً عبر سلسلة الإطارات المتداخلة، فكانت navigator.share داخله تُحجَب صامتة
+    // (بلا أي خطأ ظاهر) فيسقط فوراً لفتح رابط جوجل درايف (الذي يطلب اختيار حساب جوجل على الموبايل) — رغم أن
+    // الملف مُشارَك فعلاً بشكل صحيح. تمرير الصلاحية صراحة لهذا الإطار يحل مشاركة كشف حساب الفندق وتقاريره مباشرة
+    f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen; web-share');
     w.innerHTML = ''; w.appendChild(f); HBX.frame = f; HBX.loadedAt = Date.now(); hbxSize(); hbxWatch_();
   }).withFailureHandler(function (e) {
     HBX.loading = false;
