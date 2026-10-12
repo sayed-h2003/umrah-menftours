@@ -38112,8 +38112,8 @@ function mfBulkEditOpen_() {
   var ids = Object.keys(MF.sel), rows = ids.map(function (id) { return mfGet(id); }).filter(Boolean);
   if (!rows.length) return;
   MF._bk = { cards: rows.map(function (f) {
-    var extra = tripListSplit_(f.extraTrips).filter(function (t) { return mfStr(t) !== mfStr(f.tripName); }).join('\n');
-    return { id: f.id, f: f, tripName: mfStr(f.tripName), extra: extra, trips0: vzBkTrips_(f.tripName, extra).join('|'), list: null, sel: {}, selDirty: false, open: false };
+    var all0 = vzBkTrips_(f.tripName, tripListSplit_(f.extraTrips).join('\n'));
+    return { id: f.id, f: f, tripName: all0[0] || '', extra: all0.slice(1).join('\n'), trips0: all0.join('|'), list: null, sel: {}, selDirty: false, open: false };
   }) };
   var E = mfEsc;
   var inp = function (ci, key, val) { return '<input class="form-control form-control-sm" data-ci="' + ci + '" data-key="' + key + '" value="' + E(String(val || '')) + '">'; };
@@ -38182,24 +38182,31 @@ function mfBkLoad_(cis) {
   var B = MF._bk; if (!B) return;
   cis = (cis || B.cards.map(function (c, i) { return i; })).filter(function (ci) { return mfBkCardTrips_(ci).length; });
   if (!cis.length) { _showPopup('لا توجد رحلات مرتبطة بالبطاقات المحدَّدة', 'info'); return; }
-  var names = {}, req = {};
-  cis.forEach(function (ci) { var c = B.cards[ci]; mfBkCardTrips_(ci).forEach(function (t) { names[t] = 1; }); c.loading = true; c.req = (c.req || 0) + 1; req[ci] = c.req; mfBkSum_(ci); });
+  var names = {}, req = {}, snap = {};
+  cis.forEach(function (ci) { var c = B.cards[ci]; snap[ci] = mfBkCardTrips_(ci); snap[ci].forEach(function (t) { names[t] = 1; }); c.loading = true; c.req = (c.req || 0) + 1; req[ci] = c.req; mfBkSum_(ci); });
   google.script.run.withSuccessHandler(function (res) {
     var map = (res && res.map) || {};
     cis.forEach(function (ci) {
       var c = B.cards[ci]; if (c.req !== req[ci]) return;   // طلب أحدث لنفس البطاقة (تغيّرت رحلتها) — تُتجاهَل النتيجة القديمة
-      var trips = mfBkCardTrips_(ci), list = [];
+      var trips = snap[ci], list = [];   // القائمة من لقطة الرحلات وقت الإرسال
       trips.forEach(function (tn) { (map[tn] || []).forEach(function (p) { list.push(Object.assign({ _trip: tn }, p)); }); });
       c.loading = false; c.list = list; c.trips = trips; c.used = mfBkUsed_(c, trips);
-      if (!c.selDirty) { var st = {}; (c.f.selected || []).forEach(function (k) { st[mfStr(k)] = 1; }); c.sel = {}; list.forEach(function (p, i) { var k = mfPickKey(p, i); if (st[k]) c.sel[k] = true; }); }
+      // أول تحميل: كل المحفوظ يبقى مختاراً (مثل النموذج المنفرد — حتى من ليس بالقائمة الحالية، فلا يُفقَد)
+      if (!c.seeded) { c.seeded = true; c.sel = {}; (c.f.selected || []).forEach(function (k) { k = mfStr(k); if (k) c.sel[k] = true; }); }
       mfBkSum_(ci); mfBkRenderPick_(ci);
     });
   }).withFailureHandler(function (e) {
-    cis.forEach(function (ci) { B.cards[ci].loading = false; mfBkSum_(ci); });
+    cis.forEach(function (ci) { var c = B.cards[ci]; if (c.req === req[ci]) c.loading = false; mfBkSum_(ci); });
     _showPopup((e && e.message) || String(e), 'error');
   }).getTripsPilgrimsMap(window.authToken, Object.keys(names));
 }
-function mfBkSelKeys_(c) { return c.list ? c.list.map(function (p, i) { return mfPickKey(p, i); }).filter(function (k) { return c.sel[k]; }) : null; }
+function mfBkSelKeys_(c) {   // المختار من القائمة بترتيبها، ثم المحفوظ من خارجها
+  if (!c.list) return null;
+  var inList = {}, out = [];
+  c.list.forEach(function (p, i) { var k = mfPickKey(p, i); inList[k] = 1; if (c.sel[k]) out.push(k); });
+  Object.keys(c.sel).forEach(function (k) { if (c.sel[k] && !inList[k]) out.push(k); });
+  return out;
+}
 function mfBkSum_(ci) {
   var c = MF._bk.cards[ci], el = document.querySelector('[data-mfbk-sum="' + ci + '"]'); if (!el) return;
   var tg = document.querySelector('[data-mfbk-tg="' + ci + '"]'); if (tg) tg.textContent = c.open ? '🔼 إخفاء المعتمرين' : '👥 عرض المعتمرين';
@@ -38207,8 +38214,9 @@ function mfBkSum_(ci) {
   if (c.loading) { el.innerHTML = '⏳ جاري تحميل المعتمرين…'; return; }
   var keys = mfBkSelKeys_(c);
   if (!keys) { el.innerHTML = '👥 المحفوظ: ' + (c.f.selected || []).length + ' اسماً — <span class="text-muted">لم تُحمَّل القائمة</span>'; return; }
-  var inf = 0; c.list.forEach(function (p, i) { if (c.sel[mfPickKey(p, i)] && mfPickIsInfant(p)) inf++; });
-  el.innerHTML = '👥 مختار <b>' + keys.length + '</b> من ' + c.list.length + ' · المُحتسَب <b>' + (keys.length - inf) + '</b>' + (inf ? ' (' + inf + ' رضيع بلا احتساب)' : '');
+  var inf = 0, inN = 0; c.list.forEach(function (p, i) { if (!c.sel[mfPickKey(p, i)]) return; inN++; if (mfPickIsInfant(p)) inf++; });
+  el.innerHTML = '👥 مختار <b>' + inN + '</b> من ' + c.list.length + ' · المُحتسَب <b>' + (inN - inf) + '</b>' + (inf ? ' (' + inf + ' رضيع بلا احتساب)' : '') +
+    (keys.length > inN ? ' <span class="text-muted" title="أسماء محفوظة ليست ضمن قائمة الرحلة/الرحلات الحالية — تبقى كما هي ما لم تضغط «إفراغ»، ولا تدخل بنود العميل">+ ' + (keys.length - inN) + ' محفوظ من خارج القائمة</span>' : '');
 }
 function mfBkRenderPick_(ci) {
   var c = MF._bk.cards[ci], box = document.querySelector('[data-mfbk-pick="' + ci + '"]'); if (!box) return;
@@ -38241,8 +38249,8 @@ function mfBkPick_(el) {
   c.selDirty = true; mfBkRenderPick_(ci);
 }
 function mfBkPickAll_(ci, on) {
-  var c = MF._bk.cards[ci]; if (!c.list) return;
-  c.list.forEach(function (p, i) { var k = mfPickKey(p, i); if (on) c.sel[k] = true; else delete c.sel[k]; });
+  var c = MF._bk.cards[ci]; if (!c.list) return;   // «إفراغ» يُفرغ الكل صراحةً (حتى المحفوظ من خارج القائمة)
+  if (!on) c.sel = {}; else c.list.forEach(function (p, i) { c.sel[mfPickKey(p, i)] = true; });
   c.selDirty = true; mfBkRenderPick_(ci);
 }
 function mfBkPickClient_(ci, gi) {
@@ -38257,8 +38265,9 @@ function mfBkSelAllCards_() {
   var n = 0, pend = 0;
   MF._bk.cards.forEach(function (c, ci) {
     if (!c.list) { if (mfBkCardTrips_(ci).length) pend++; return; }
-    if (mfBkSelKeys_(c).length) return;
-    c.list.forEach(function (p, i) { var k = mfPickKey(p, i); if (!c.used[k]) c.sel[k] = true; }); c.selDirty = true; n++; mfBkRenderPick_(ci);
+    if (Object.keys(c.sel).length) return;
+    var taken = {}; MF._bk.cards.forEach(function (o, j) { if (j !== ci) Object.keys(o.sel || {}).forEach(function (k) { if (k.indexOf('idx:') !== 0) taken[k] = 1; }); });
+    c.list.forEach(function (p, i) { var k = mfPickKey(p, i); if (!c.used[k] && !taken[k]) c.sel[k] = true; }); c.selDirty = true; n++; mfBkRenderPick_(ci);
   });
   _showPopup('✅ حُدِّد المعتمرون في ' + n + ' بطاقة' + (pend ? ' — ' + pend + ' بطاقة لم تُحمَّل قائمتها بعد (اضغط «تحميل معتمري كل البطاقات» أولاً)' : ''), pend ? 'warning' : 'success');
 }
@@ -38310,6 +38319,8 @@ function mfBulkEditSave_(btn) {
   });
   if (bad) { _showPopup('صحّح البطاقات المعلَّمة بالأحمر (' + bad + ') ثم احفظ', 'warning'); return; }
   if (!items.length) { _showPopup('لا توجد تغييرات للحفظ', 'info'); return; }
+  warns = warns.concat(bkCrossDup_(B.cards.map(function (c) { var it = items.filter(function (x) { return x.id === c.id; })[0];
+    return { lbl: 'ملف ' + (c.f.fileNo || ('#' + c.f.seq)), keys: (it && it.selected) || c.f.selected || [] }; })));
   var go = function () {
     var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…';
     google.script.run
@@ -42895,9 +42906,18 @@ function vzFilesDelSelected() {
    والحفظ نداء واحد لـ saveVisaFilesBulk. عند تغيّر الرحلات تُشتق نفس حقول النموذج المنفرد (vzTripChanged):
    الشركة/الوكيل/التاريخ إن كانت فارغة، العدد إن كان صفراً، بنود العملاء = الرحلات بأعدادها، والسعر حسب الوكيل والتاريخ.
    السكن لا يُشتق هنا (يبقى كما هو) — يُعبَّأ من نموذج المجموعة المنفرد. */
-function vzBkTrips_(main, extraTxt) {
+// ⚠️ (V4.316) جوازات مختارة بأكثر من بطاقة في نفس الحفظ — تنبيه غير مانع (مفاتيح «#»/«idx:» بلا جواز لا تُقارَن)
+function bkCrossDup_(cards) {
+  var seen = {}, dup = {};
+  cards.forEach(function (c) { (c.keys || []).forEach(function (k) { k = mfStr(k).replace(/^P:/, ''); if (!k || k.charAt(0) === '#' || k.indexOf('idx:') === 0) return;
+    if (seen[k] && seen[k] !== c.lbl) dup[k] = seen[k] + ' و' + c.lbl; else seen[k] = c.lbl; }); });
+  var ks = Object.keys(dup);
+  return ks.length ? [ks.length + ' جوازاً مختاراً بأكثر من بطاقة في هذا الحفظ (مثل ' + ks.slice(0, 3).map(function (k) { return k + ': ' + dup[k]; }).join('، ') + ')'] : [];
+}
+function vzBkTrips_(main, extraTxt) {   // 🛡️ نفس تقسيم النموذج والخادم (tripListSplit_) للرحلة الأساسية ولكل سطر إضافي
   var out = [], seen = {};
-  [mfStr(main)].concat(String(extraTxt || '').split(/\n/)).forEach(function (t) { t = mfStr(t); if (t && !seen[t]) { seen[t] = 1; out.push(t); } });
+  tripListSplit_(main).concat(String(extraTxt || '').split(/\n/).reduce(function (a, l) { return a.concat(tripListSplit_(l)); }, []))
+    .forEach(function (t) { t = mfStr(t); if (t && !seen[t]) { seen[t] = 1; out.push(t); } });
   return out;
 }
 function vzBkTripObj_(name) { return (VZ.trips || []).filter(function (x) { return x.name === name; })[0] || null; }
@@ -42906,8 +42926,8 @@ function vzBulkEditOpen_() {
   var rows = ids.map(function (id) { return vzGet(id); }).filter(Boolean);
   if (!rows.length) return;
   VZ._bk = { cards: rows.map(function (g) {
-    var extra = tripListSplit_(g.extraTrips).filter(function (t) { return mfStr(t) !== mfStr(g.tripName); }).join('\n');
-    return { id: g.id, g: g, tripName: mfStr(g.tripName), extra: extra, trips0: vzBkTrips_(g.tripName, extra).join('|'),
+    var all0 = vzBkTrips_(g.tripName, tripListSplit_(g.extraTrips).join('\n'));
+    return { id: g.id, g: g, tripName: all0[0] || '', extra: all0.slice(1).join('\n'), trips0: all0.join('|'),
       list: null, sel: {}, selDirty: false, open: false, other: {} };
   }) };
   var E = vzEsc, statusOpts = [''].concat(VZ.statuses || []);
@@ -42949,7 +42969,7 @@ function vzBulkEditOpen_() {
       '<span style="cursor:pointer;color:#b3261e;font-size:22px;line-height:1;" onclick="this.closest(\'.vz-bulk-edit-backdrop\').remove()">×</span></div>' +
     '<datalist id="vzBkTripsDL">' + (VZ.trips || []).map(function (t) { return '<option value="' + E(t.name) + '">'; }).join('') + '</datalist>' +
     '<div class="d-flex gap-2 flex-wrap mb-2"><button class="vz-btn sm" onclick="vzBkLoad_()">📥 تحميل معتمري كل البطاقات</button>' +
-      '<button class="vz-btn sm" onclick="vzBkSelAllCards_()">✅ تحديد كل المعتمرين بالبطاقات بلا اختيار</button></div>' +
+      '<button class="vz-btn sm" onclick="vzBkSelAllCards_()">✅ تحديد غير المسجَّلين بمجموعة أخرى — للبطاقات بلا اختيار</button></div>' +
     '<div id="vzBkCards">' + cards + '</div>' +
     '<div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">' +
       '<button class="btn btn-outline-secondary btn-sm" onclick="this.closest(\'.vz-bulk-edit-backdrop\').remove()">✖ إلغاء</button>' +
@@ -42971,34 +42991,54 @@ function vzBkToggle_(ci) {
   if (c.open && !c.list && vzBkCardTrips_(ci).length) vzBkLoad_([ci]); else vzBkRenderPick_(ci);
 }
 // جلب المعتمرين لعدة بطاقات بنداء واحد — ترتيب ثابت (الرحلة الأساسية ثم الإضافية) فتثبت مفاتيح من لا جواز لهم
+// جلب المعتمرين لعدة بطاقات بنداء واحد — ترتيب ثابت (الرحلة الأساسية ثم الإضافية) فتثبت مفاتيح من لا جواز لهم.
+// 🛡️ كل بطاقة تحمل رقم طلب ولقطة رحلاتها وقت الإرسال: الرد المتأخر لطلب أقدم يُتجاهَل، والقائمة تُبنى من اللقطة لا من الحقل الحالي
 function vzBkLoad_(cis) {
   var B = VZ._bk; if (!B) return;
-  cis = cis || B.cards.map(function (c, i) { return i; });
-  cis = cis.filter(function (ci) { return vzBkCardTrips_(ci).length; });
+  cis = (cis || B.cards.map(function (c, i) { return i; })).filter(function (ci) { return vzBkCardTrips_(ci).length; });
   if (!cis.length) { _showPopup('لا توجد رحلات مرتبطة بالبطاقات المحدَّدة', 'info'); return; }
-  var names = {}; cis.forEach(function (ci) { vzBkCardTrips_(ci).forEach(function (t) { names[t] = 1; }); B.cards[ci].loading = true; vzBkSum_(ci); });
+  var names = {}, snap = {}, tok = {};
+  cis.forEach(function (ci) { var c = B.cards[ci]; snap[ci] = vzBkCardTrips_(ci); snap[ci].forEach(function (t) { names[t] = 1; }); c.loading = true; c.req = (c.req || 0) + 1; tok[ci] = c.req; vzBkSum_(ci); });
   google.script.run.withSuccessHandler(function (res) {
     var map = (res && res.map) || {};
     cis.forEach(function (ci) {
-      var c = B.cards[ci], trips = vzBkCardTrips_(ci), list = [];
+      var c = B.cards[ci]; if (c.req !== tok[ci]) return;
+      var trips = snap[ci], list = [];
       trips.forEach(function (tn) { (map[tn] || []).forEach(function (p) { list.push(Object.assign({ _trip: tn }, p)); }); });
       c.loading = false; c.list = list; c.trips = trips;
-      if (!c.selDirty) {   // أول تحميل: الاختيار المحفوظ للمجموعة (وبلا جواز: بالاسم لأن ترتيب المفتاح قد يختلف)
-        var stored = {}, byName = {};
-        (c.g.selected || []).forEach(function (k) { k = mfStr(k).replace(/^P:/, ''); stored[k] = 1; var m = k.match(/^#\d+_(.*)$/); if (m) byName[mfStr(m[1])] = 1; });
-        c.sel = {};
-        list.forEach(function (p, i) { var k = vzPickKey(p, i); if (stored[k] || (!mfStr(p.passport || p.passportNo) && byName[mfStr(p.name)])) c.sel[k] = true; });
-      }
+      if (!c.seeded) vzBkSeed_(c);
       vzBkSum_(ci); vzBkRenderPick_(ci);
     });
   }).withFailureHandler(function (e) {
-    cis.forEach(function (ci) { B.cards[ci].loading = false; vzBkSum_(ci); });
+    cis.forEach(function (ci) { var c = B.cards[ci]; if (c.req === tok[ci]) c.loading = false; vzBkSum_(ci); });
     _showPopup((e && e.message) || String(e), 'error');
   }).getTripsPilgrimsMap(window.authToken, Object.keys(names));
 }
-function vzBkSelKeys_(c) {
+// أول تحميل: كل الأسماء المحفوظة تبقى مختارة (مثل النموذج المنفرد — حتى من ليس بالقائمة الحالية، فلا يُفقَد محفوظ).
+// مفتاح «#فهرس_اسم» (بلا جواز) غير الموجود حرفياً يُطابَق بالاسم مرة واحدة فقط لكل مفتاح، وإلا يبقى كما هو
+function vzBkSeed_(c) {
+  c.seeded = true; c.sel = {};
+  var inList = {}, needName = {};
+  c.list.forEach(function (p, i) { inList[vzPickKey(p, i)] = 1; });
+  (c.g.selected || []).forEach(function (k) {
+    k = mfStr(k).replace(/^P:/, ''); if (!k) return;
+    var m = k.match(/^#\d+_(.*)$/);
+    if (inList[k] || !m) { c.sel[k] = true; return; }
+    (needName[mfStr(m[1])] = needName[mfStr(m[1])] || []).push(k);
+  });
+  c.list.forEach(function (p, i) {
+    var nm = mfStr(p.name), k = vzPickKey(p, i);
+    if (mfStr(p.passport || p.passportNo) || !needName[nm] || !needName[nm].length || c.sel[k]) return;
+    needName[nm].shift(); c.sel[k] = true;
+  });
+  Object.keys(needName).forEach(function (nm) { needName[nm].forEach(function (k) { c.sel[k] = true; }); });
+}
+function vzBkSelKeys_(c) {   // المختار من القائمة بترتيبها، ثم المحفوظ من خارجها
   if (!c.list) return null;
-  return c.list.map(function (p, i) { return vzPickKey(p, i); }).filter(function (k) { return c.sel[k]; });
+  var inList = {}, out = [];
+  c.list.forEach(function (p, i) { var k = vzPickKey(p, i); inList[k] = 1; if (c.sel[k]) out.push(k); });
+  Object.keys(c.sel).forEach(function (k) { if (c.sel[k] && !inList[k]) out.push(k); });
+  return out;
 }
 function vzBkSum_(ci) {
   var c = VZ._bk.cards[ci], el = document.querySelector('[data-vzbk-sum="' + ci + '"]'); if (!el) return;
@@ -43006,8 +43046,9 @@ function vzBkSum_(ci) {
   if (tg) tg.textContent = c.open ? '🔼 إخفاء المعتمرين' : '👥 عرض المعتمرين';
   if (!trips.length) { el.innerHTML = '<span class="text-muted">بلا رحلة مرتبطة</span>'; return; }
   if (c.loading) { el.innerHTML = '⏳ جاري تحميل المعتمرين…'; return; }
-  var keys = vzBkSelKeys_(c);
-  el.innerHTML = keys ? ('👥 مختار <b>' + keys.length + '</b> من ' + c.list.length + (trips.length > 1 ? ' (' + trips.length + ' رحلات)' : '')) :
+  var keys = vzBkSelKeys_(c), inN = keys ? c.list.filter(function (p, i) { return c.sel[vzPickKey(p, i)]; }).length : 0;
+  el.innerHTML = keys ? ('👥 مختار <b>' + inN + '</b> من ' + c.list.length + (trips.length > 1 ? ' (' + trips.length + ' رحلات)' : '') +
+      (keys.length > inN ? ' <span class="text-muted" title="أسماء محفوظة ليست ضمن قائمة الرحلة/الرحلات الحالية — تبقى كما هي ما لم تضغط «إفراغ»">+ ' + (keys.length - inN) + ' محفوظ من خارج القائمة</span>' : '')) :
     ('👥 المحفوظ: ' + (c.g.selected || []).length + ' اسماً — <span class="text-muted">لم تُحمَّل القائمة</span>');
 }
 // المفتاح مستخدَم في بطاقة أخرى بهذه الشاشة (بالجواز فقط) — للتنبيه
@@ -43047,9 +43088,9 @@ function vzBkPick_(el) {
   if (el.checked) c.sel[k] = true; else delete c.sel[k];
   c.selDirty = true; vzBkRenderPick_(ci);
 }
-function vzBkPickAll_(ci, on) {
+function vzBkPickAll_(ci, on) {   // «إفراغ» يُفرغ الكل صراحةً (حتى المحفوظ من خارج القائمة)
   var c = VZ._bk.cards[ci]; if (!c.list) return;
-  c.list.forEach(function (p, i) { var k = vzPickKey(p, i); if (on) c.sel[k] = true; else delete c.sel[k]; });
+  if (!on) c.sel = {}; else c.list.forEach(function (p, i) { c.sel[vzPickKey(p, i)] = true; });
   c.selDirty = true; vzBkRenderPick_(ci);
 }
 function vzBkPickClient_(ci, gi) {
@@ -43060,14 +43101,18 @@ function vzBkPickClient_(ci, gi) {
   c.selDirty = true; vzBkRenderPick_(ci);
 }
 // ✅ لكل بطاقة مُحمَّلة بلا أي اختيار: تحديد كل معتمري رحلتها/رحلاتها
+// ✅ لكل بطاقة مُحمَّلة بلا أي اختيار: تحديد معتمري رحلتها/رحلاتها غير المسجَّلين بمجموعة أخرى ولا بطاقة أخرى هنا
 function vzBkSelAllCards_() {
-  var n = 0, pend = 0;
+  var n = 0, pend = 0, skipped = 0;
   VZ._bk.cards.forEach(function (c, ci) {
     if (!c.list) { if (vzBkCardTrips_(ci).length) pend++; return; }
-    if (vzBkSelKeys_(c).length) return;
-    c.list.forEach(function (p, i) { c.sel[vzPickKey(p, i)] = true; }); c.selDirty = true; n++; vzBkRenderPick_(ci);
+    if (Object.keys(c.sel).length) return;
+    var other = vzOtherGroupsIdx_(c.id);
+    c.list.forEach(function (p, i) { var pass = mfStr(p.passport || p.passportNo); if (pass && (other[pass] || vzBkInOtherCard_(ci, p))) { skipped++; return; } c.sel[vzPickKey(p, i)] = true; });
+    c.selDirty = true; n++; vzBkRenderPick_(ci);
   });
-  _showPopup('✅ حُدِّد كل المعتمرين في ' + n + ' بطاقة' + (pend ? ' — ' + pend + ' بطاقة لم تُحمَّل قائمتها بعد (اضغط «تحميل معتمري كل البطاقات» أولاً)' : ''), pend ? 'warning' : 'success');
+  _showPopup('✅ حُدِّد المعتمرون في ' + n + ' بطاقة' + (skipped ? ' — تُرك ' + skipped + ' مسجَّلاً بمجموعة أو بطاقة أخرى' : '') +
+    (pend ? ' — ' + pend + ' بطاقة لم تُحمَّل قائمتها بعد (اضغط «تحميل معتمري كل البطاقات» أولاً)' : ''), pend ? 'warning' : 'success');
 }
 // تجهيز حمولة البطاقة مع اشتقاقات النموذج المنفرد — يُرجع {item, errs, warns} أو item=null لو لا تغيير
 function vzBkBuild_(ci) {
@@ -43090,14 +43135,16 @@ function vzBkBuild_(ci) {
       if (!visaCount && mfNum(t.seats)) visaCount = mfNum(t.seats);
     }
     it.breakdown = trips.map(function (tn) { var tt = vzBkTripObj_(tn); return { name: tn, count: mfNum(tt && tt.seats) }; });
-    var pr = _vzPriceAt(agent, date); if (pr) it.price = pr;
   }
+  // السعر حسب الوكيل والتاريخ — كما يُعاد في النموذج المنفرد عند تغيير الرحلة أو الوكيل أو التاريخ (vzSetPrice)
+  if (tripsChanged || it.agent !== undefined || it.date !== undefined) { var pr = _vzPriceAt(agent, date); if (pr && pr !== mfNum(g.price)) { it.price = pr; changed = true; } }
   var keys = vzBkSelKeys_(c);
   if (keys && (c.selDirty || tripsChanged)) {
     var before = (g.selected || []).map(function (k) { return mfStr(k).replace(/^P:/, ''); }).sort().join('|');
     if (keys.slice().sort().join('|') !== before) { it.selected = keys; changed = true; }
     if (!visaCount) visaCount = keys.length;
     if (keys.length && keys.length < visaCount) warns.push('الأسماء المختارة (' + keys.length + ') أقل من عدد المجموعة (' + visaCount + ')');
+    if (keys.length > visaCount && visaCount) warns.push('الأسماء المختارة (' + keys.length + ') أكثر من عدد المجموعة (' + visaCount + ')');
     var other = vzOtherGroupsIdx_(g.id), dup = keys.filter(function (k) { return k.charAt(0) !== '#' && other[k]; });
     if (dup.length) warns.push(dup.length + ' معتمراً مسجَّلاً بمجموعات أخرى (مثل ' + dup.slice(0, 3).join('، ') + ')');
   }
@@ -43119,6 +43166,8 @@ function vzBulkEditSave_(btn) {
   });
   if (bad) { _showPopup('صحّح البطاقات المعلَّمة بالأحمر (' + bad + ') ثم احفظ', 'warning'); return; }
   if (!items.length) { _showPopup('لا توجد تغييرات للحفظ', 'info'); return; }
+  warns = warns.concat(bkCrossDup_(B.cards.map(function (c) { var it = items.filter(function (x) { return x.id === c.id; })[0];
+    return { lbl: 'مجموعة ' + vzGroupLbl_(c.g), keys: (it && it.selected) || c.g.selected || [] }; })));
   var go = function () {
     var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…';
     google.script.run
