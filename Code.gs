@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.315";
+var APP_VERSION = "4.316";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -18305,7 +18305,29 @@ function _getTripPilgrimsCore_(tripName) {
   for (var i = 0; i < data.length; i++) {
     var r = data[i];
     if (String(P(r, 'tripName') || "").trim() !== tripName) continue;
-    result.push({
+    result.push(_pilgrimRowObj_(P, r, i));
+  }
+  return result;
+}
+/* 👥 (V4.316) معتمرو عدة رحلات بقراءة واحدة لشيت المعتمرين (بدل قراءة الشيت كاملاً لكل رحلة) — للربط الجماعي
+   لمجموعات التأشيرات/ملفات الوزارة. نفس شكل getTripPilgrims لكل رحلة: { success, map: { tripName: [pilgrim…] } } */
+function getTripsPilgrimsMap(authToken, tripNames) {
+  requireAuth_(authToken);
+  var want = {}, map = {};
+  (Array.isArray(tripNames) ? tripNames : []).forEach(function (t) { t = String(t || '').trim(); if (t) { want[t] = 1; map[t] = []; } });
+  if (!Object.keys(want).length) return { success: true, map: map };
+  var sheet = _getPilgrimsSheet_(), lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { success: true, map: map };
+  var C = _robustColMap_(sheet, PILGRIMS_HEADERS_), P = _cellReader_(C, PILGRIMS_COL_);
+  var data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  for (var i = 0; i < data.length; i++) {
+    var tn = String(P(data[i], 'tripName') || '').trim();
+    if (want[tn]) map[tn].push(_pilgrimRowObj_(P, data[i], i));
+  }
+  return { success: true, map: map };
+}
+function _pilgrimRowObj_(P, r, i) {
+    return ({
       row: i + 2,
       serial: P(r, 'serial'),
       name: String(P(r, 'name') || ""),
@@ -18333,8 +18355,6 @@ function _getTripPilgrimsCore_(tripName) {
       housingExcludedMadinah: String(P(r, 'housingExcludedMadinah') || "") === "1",
       housingExcludedMakkah: String(P(r, 'housingExcludedMakkah') || "") === "1"
     });
-  }
-  return result;
 }
 
 /* ============================================================
@@ -24767,18 +24787,25 @@ function saveVisaFile(authToken, data) {
    على نفس كل التحقق والمزامنات الجانبية بالضبط (مزامنة السكن، أرصدة الوكلاء، بند التأشيرات بحسابات العملاء،
    سجل التعديلات) بلا أي إعادة تنفيذ لها، وبلا خطر فقدان حقل لم يُعدَّل (تُقرأ القيمة الحالية الكاملة لكل مجموعة
    أولاً ويُدمَج معها الحقول المعدَّلة فقط) — فقط داخل نداء خادم واحد بدل فتح/حفظ كل مجموعة على حدة من الواجهة.
-   items: [{id, status?, payStatus?, date?, company?, agent?, entryNo?, notes?}] */
+   items: [{id, status?, payStatus?, date?, company?, agent?, entryNo?, notes?,
+            tripName?, extraTrips?, selected?, breakdown?, visaCount?, price?}]
+   (V4.316) ربط الرحلات والمعتمرين جماعياً: الواجهة تشتق breakdown/visaCount/price كما يفعل النموذج المنفرد
+   (vzTripChanged/_vzPickCommit_) وترسلها مع الرحلة والأسماء المختارة */
 function saveVisaFilesBulk(authToken, items) {
   _vzPerm_(authToken, 'edit');
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS), results = [], okN = 0;
-  var editable = ['status', 'payStatus', 'date', 'company', 'agent', 'entryNo', 'notes'];
+  var editable = ['status', 'payStatus', 'date', 'company', 'agent', 'entryNo', 'notes',
+    'tripName', 'extraTrips', 'selected', 'breakdown', 'visaCount', 'price'];
   (items || []).forEach(function (it) {
     var id = _mfStr_(it && it.id); if (!id) return;
     try {
       var old = _vzReadOne_(sh, id);
       if (!old) throw new Error('المجموعة غير موجودة');
+      if (it.selected !== undefined && !Array.isArray(it.selected)) throw new Error('قائمة المعتمرين غير صالحة');
+      if (it.breakdown !== undefined && !Array.isArray(it.breakdown)) throw new Error('بنود العملاء غير صالحة');
       var data = Object.assign({}, old);
       editable.forEach(function (k) { if (it[k] !== undefined) data[k] = it[k]; });
+      if (it.selected) data.selected = it.selected.map(function (k) { return _mfStr_(k); }).filter(Boolean);
       var r = saveVisaFile(authToken, data);
       if (!r || !r.success) throw new Error((r && r.error) || 'فشل الحفظ');
       okN++; results.push({ id: id, success: true, file: r.file, syncTrips: r.syncTrips, agentBalances: r.agentBalances });
