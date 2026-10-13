@@ -151,6 +151,24 @@
         }
       } catch (e) { fail(e); }
     });
+
+    /* 📱 (V4.319) حفظ «مفتاح الجهاز» هنا أيضاً: تخزين إطار جوجل الداخلي معزول وقد يُمسح (خصوصاً آيفون)، أما هذه
+       الصفحة فتخزينها ثابت — فيستعيد البرنامج جلسته بصمت عند فتحه من الشاشة الرئيسية بدل طلب إعادة الدخول.
+       نفس فحص النطاقات أعلاه، والرد للإطار المرسِل فقط. */
+    window.addEventListener('message', function (ev) {
+      var d = ev.data;
+      if (!d || typeof d !== 'object' || d.type !== 'mf-auth') return;
+      var host = '';
+      try { host = new URL(ev.origin).hostname; } catch (e) { return; }
+      if (!/(^|\.)googleusercontent\.com$/.test(host) && !/(^|\.)script\.google\.com$/.test(host)) return;
+      var K = 'mfDevKey', v = '';
+      try {
+        if (d.action === 'set' && d.key) localStorage.setItem(K, String(d.key));
+        else if (d.action === 'clear') localStorage.removeItem(K);
+        else if (d.action === 'get') v = localStorage.getItem(K) || '';
+      } catch (e) {}
+      if (d.action === 'get') { try { ev.source.postMessage({ type: 'mf-auth-result', id: d.id, key: v }, ev.origin); } catch (e) {} }
+    });
   </script>
 </body>
 </html>

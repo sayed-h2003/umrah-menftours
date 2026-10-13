@@ -54,10 +54,12 @@ window.__bootBanner = function (title, details, color) {
 window.__step('1️⃣ بداية \u003Chead> — الصفحة بدأت تصل من الخادم');
 
 // 🐕 الحارس: يتأكد بعد 6 ثوانٍ أن كل مراحل الإقلاع اكتملت.
+// 📱 (V4.319) لو الصفحة ما زالت تُحمَّل (موبايل بطيء) أو بالخلفية يعيد الانتظار 5 ثوانٍ (حتى ~46 ث) بدل إنذار كاذب.
 // كتلة الجافاسكربت الرئيسية مقسّمة الآن إلى 14 مقطعاً مستقلاً، وكل مقطع يسجّل نفسه
 // عند نجاحه. فلو انهار مقطع بخطأ نحوي، تستمر بقية المقاطع في العمل، ويحدّد الحارس
 // رقم المقطع المُعطَّل بدقة بدل أن تنهار الصفحة كلها بلا أي دليل على موضع الخطأ.
-setTimeout(function () {
+(function __bootWatch_(tries) { setTimeout(function () {
+  if ((document.hidden || document.readyState !== 'complete') && tries < 8) { __bootWatch_(tries + 1); return; }
   var expected = [
     '1️⃣ بداية \u003Chead> — الصفحة بدأت تصل من الخادم',
     '2️⃣ بداية \u003Cbody> — بنية الصفحة بدأت',
@@ -109,7 +111,7 @@ setTimeout(function () {
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
   window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.318)', diag);
-}, 6000);
+}, tries ? 5000 : 6000); })(0);
 </script>
 
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.rtl.min.css">
@@ -6612,9 +6614,12 @@ function _tblSortBy_(id, k) {
    الجلسة يُلتقط هنا فيظهر تنبيه واحد واضح مع زر عودة فورية لشاشة الدخول */
 function _handleSessErr_(err) {
   var msg = String((err && (err.message || err)) || '');
-  if (msg.indexOf('جلسة غير صالحة') === -1 && msg.indexOf('منتهية') === -1) return false;
+  if (!/جلسة غير صالحة أو منتهية/.test(msg)) return false;   // (V4.319) النص الدقيق فقط — «منتهية» وحدها كانت تلتقط رسائل أخرى
   if (window._sessExpiredShown) return true; // تنبيه واحد فقط مهما تعددت النداءات الفاشلة المتزامنة
   window._sessExpiredShown = true;
+  // 📱 (V4.319) لا يصل هنا إلا لو تعذّر التجديد الصامت. أثناء الإقلاع (لم يبدأ المستخدم العمل بعد): شاشة الدخول
+  // مباشرة بسطر هادئ — بلا نافذة خطأ ولا إعادة تحميل ثانية للصفحة
+  if (!window._userWorked) { _sessToLogin_('انتهت جلستك بعد فترة عدم نشاط — سجّل الدخول للمتابعة.'); return true; }
   try { localStorage.removeItem('authToken'); } catch (e) {}
   try { sessionStorage.removeItem('authToken'); } catch (e) {}
   window.authToken = null;
@@ -6626,11 +6631,32 @@ function _handleSessErr_(err) {
       '<div style="font-size:42px;">🔐</div>' +
       '<h5 style="font-weight:800;color:#1e3d59;margin:10px 0 6px;">انتهت جلستك</h5>' +
       '<div style="font-size:13px;color:#64748b;line-height:1.8;">انتهت صلاحية جلسة العمل (أو أنهاها الخادم مبكراً). بياناتك غير المحفوظة على هذه الشاشة لن تُفقد — سجّل الدخول ثم أكمل من حيث توقفت.</div>' +
-      '<button class="btn btn-primary w-100 mt-3 fw-bold" onclick="location.reload()">🔐 تسجيل الدخول من جديد</button>' +
+      '<button class="btn btn-primary w-100 mt-3 fw-bold" onclick="this.closest(\'div[dir]\').remove();_sessToLogin_(\'\')">🔐 تسجيل الدخول من جديد</button>' +
     '</div>';
   document.body.appendChild(ov);
   return true;
 }
+
+// (V4.319) العودة لشاشة الدخول دون إنهاء مفتاح الجهاز ودون إعادة تحميل الصفحة (نفس مسار الخروج المعتاد)
+function _sessToLogin_(note) {
+  try { _BOOT_ = { state: 'idle', parts: null, at: 0, q: [], uses: {} }; } catch (e) {}
+  try { localStorage.removeItem('smartManagerUser'); } catch (e) {}
+  try { localStorage.removeItem('authToken'); } catch (e) {}
+  try { sessionStorage.removeItem('authToken'); } catch (e) {}
+  window.currentUser = null; window.authToken = null; window._devAutoTried = true; window._bootInitDone = false;
+  try { var bar = document.getElementById('_appFatalErrorBar'); if (bar) bar.remove(); } catch (e) {}
+  try { _removeTransientOverlays(); } catch (e) {}
+  try { if (typeof glDlgCloseAll === 'function') glDlgCloseAll(); } catch (e) {}
+  try { clearSessionTimer(); } catch (e) {}
+  try { if (_onlineTimer_) { clearInterval(_onlineTimer_); _onlineTimer_ = null; } } catch (e) {}
+  try { resetToDefaultScreen(); } catch (e) {}
+  try { var b = document.getElementById('btnLogin'); if (b) b.innerHTML = '🔐 تسجيل الدخول'; } catch (e) {}
+  checkAuthOnLoad();
+  if (note) _loginNote_(note);
+  setTimeout(function () { window._sessExpiredShown = false; }, 1500);
+}
+// أول تفاعل حقيقي للمستخدم بعد الإقلاع — بعده يُعامل انتهاء الجلسة كحالة «أثناء العمل» (نافذة تحفظ ما على الشاشة)
+['pointerdown', 'keydown'].forEach(function (ev) { document.addEventListener(ev, function () { if (window.authToken) window._userWorked = true; }, { capture: true, passive: true }); });
 
 /* 🛡️ حارس الضغط المتكرر: أي زر "حرج" (حفظ/اعتماد/تطبيق/تحويل/مزامنة/إرسال) تُتجاهَل أي ضغطة
    تالية عليه خلال 2.5 ثانية من الأولى — يمنع الحفظ المزدوج/المتزامن الناتج عن نقرة مكررة بالخطأ.
@@ -6797,6 +6823,120 @@ try {
   if (window.authToken) { try { localStorage.setItem("authToken", window.authToken); } catch (e2) {} }
 } catch(e) {}
 
+/* 📱 (V4.319) استئناف الجلسة بصمت على الموبايل: الجوال يُجمِّد الصفحة بالخلفية فتتوقف نبضة الجلسة وتنتهي جلسة
+   الخادم، ثم يعيد المتصفح تحميل البرنامج عند العودة فكانت كل نداءات التحميل تفشل بـ«جلسة غير صالحة أو منتهية»
+   (نافذة «خطأ في تحميل البيانات» + شريط أحمر + إعادة دخول). الآن: عند الدخول يحفظ الجهاز «مفتاح جهاز» طويل الأمد
+   (هنا وفي صفحة الغلاف أيضاً لأن تخزين إطار جوجل المعزول قد يُمسح على آيفون)، وأي نداء خادم يفشل بسبب الجلسة
+   يجدِّدها تلقائياً مرة واحدة (نداء واحد مشترك لكل النداءات المتزامنة) ثم يعيد نفس النداء بالرمز الجديد —
+   دون أي رسالة. لا يظهر للمستخدم شيء إلا لو أُلغي المفتاح (خروج يدوي/تعطيل/تغيير كلمة المرور/30 يوماً بلا استخدام) */
+var _DEVK_ = 'mfDevKey', _DEV_TOP_ORIGIN_ = 'https://sayed-h2003.github.io';
+function _devKeyGet_() { var k = ''; try { k = localStorage.getItem(_DEVK_) || ''; } catch (e) {} return k || window._devKeyTop || ''; }
+function _devTopMsg_(action, key, cb) {
+  var id = 'dk' + Date.now() + Math.random().toString(36).slice(2);
+  var t = null; try { t = (window.top && window.top !== window) ? window.top : null; } catch (e) { t = null; }
+  if (!t) { if (cb) cb(''); return; }
+  if (cb) { window._devTopCb_ = window._devTopCb_ || {}; window._devTopCb_[id] = cb; setTimeout(function () { var f = window._devTopCb_[id]; if (f) { delete window._devTopCb_[id]; f(''); } }, 1500); }
+  try { t.postMessage({ type: 'mf-auth', action: action, key: key || '', id: id }, _DEV_TOP_ORIGIN_); }
+  catch (e) { if (cb && window._devTopCb_[id]) { delete window._devTopCb_[id]; cb(''); } }
+}
+window.addEventListener('message', function (ev) {
+  var d = ev.data; if (!d || typeof d !== 'object' || d.type !== 'mf-auth-result') return;
+  try { if (ev.source !== window.top || ev.origin !== _DEV_TOP_ORIGIN_) return; } catch (e) { return; }
+  var cb = window._devTopCb_ && window._devTopCb_[d.id]; if (cb) { delete window._devTopCb_[d.id]; cb(String(d.key || '')); }
+});
+function _devKeySet_(k) {
+  try { if (k) localStorage.setItem(_DEVK_, k); else localStorage.removeItem(_DEVK_); } catch (e) {}
+  window._devKeyTop = k || '';
+  _devTopMsg_(k ? 'set' : 'clear', k || '');
+}
+var _SESS_RX_ = /جلسة غير صالحة أو منتهية/;
+var _RESUME_ = { busy: false, q: [], dead: {} };
+function _sessAdopt_(res) {
+  if (window.authToken && window.authToken !== res.token) _RESUME_.dead[window.authToken] = 1;
+  window.authToken = res.token;
+  try { localStorage.setItem('authToken', res.token); } catch (e) {}
+  try { sessionStorage.setItem('authToken', res.token); } catch (e) {}
+  var u = window.currentUser || res;
+  u.token = res.token; u.permissions = res.permissions; u.fullName = res.fullName || u.fullName; u.deviceKey = res.deviceKey; u.userRow = res.userRow;
+  window.currentUser = u;
+  try { localStorage.setItem('smartManagerUser', JSON.stringify(u)); } catch (e) {}
+  if (res.deviceKey) _devKeySet_(res.deviceKey);
+  window._sessExpiredShown = false;
+}
+function _sessResume_(cb) {
+  var dk = _devKeyGet_(); if (!dk || !window._RAW_RUN_) { cb(false); return; }
+  _RESUME_.q.push(cb); if (_RESUME_.busy) return; _RESUME_.busy = true;
+  var done = function (ok) { _RESUME_.busy = false; var q = _RESUME_.q; _RESUME_.q = []; q.forEach(function (f) { try { f(ok); } catch (e) { console.error(e); } }); };
+  window._RAW_RUN_()
+    .withSuccessHandler(function (res) {
+      if (res && res.success && res.token) { _sessAdopt_(res); try { if (window.__step) window.__step('📱 جُدِّدت الجلسة تلقائياً (مفتاح الجهاز)'); } catch (e) {} done(true); }
+      else { if (res && res.error && res.error !== 'no-device') _devKeySet_(''); done(false); }
+    })
+    .withFailureHandler(function () { done(false); })
+    .resumeSession(dk);
+}
+function _runExec_(getReal, st, fn, args, attempt) {
+  var r = getReal();
+  if (st.ok) r = r.withSuccessHandler(st.ok);
+  r = r.withFailureHandler(function (err, uo) {
+    if (!attempt && _SESS_RX_.test(String((err && err.message) || err || ''))) {
+      var retry = function () { var nt = window.authToken; _runExec_(getReal, st, fn, args.map(function (a) { return (typeof a === 'string' && _RESUME_.dead[a]) ? nt : a; }), 1); };
+      if (args.some(function (a) { return typeof a === 'string' && _RESUME_.dead[a]; })) { retry(); return; }   // جدَّدها نداء آخر للتو
+      _sessResume_(function (ok) { if (ok) retry(); else if (st.fail) st.fail(err, uo); else console.error(fn, err); });
+      return;
+    }
+    if (st.fail) st.fail(err, uo); else console.error('google.script.run.' + fn, err);
+  });
+  if (st.hasUo) r = r.withUserObject(st.uo);
+  r[fn].apply(r, args);
+}
+(function () {
+  try {
+    if (!window.google || !google.script || !google.script.run || window._RAW_RUN_) return;
+    var desc = Object.getOwnPropertyDescriptor(google.script, 'run');
+    if (desc && desc.configurable === false) return;
+    var realObj = google.script.run, getReal = (desc && desc.get) ? function () { return desc.get.call(google.script); } : function () { return realObj; };
+    window._RAW_RUN_ = getReal;
+    var NOWRAP = { resumeSession: 1, loginUser: 1, logoutUserSession: 1 };
+    var mk = function (st) {
+      return new Proxy({}, { get: function (t, prop) {
+        if (prop === 'withSuccessHandler') return function (f) { return mk({ ok: f, fail: st.fail, uo: st.uo, hasUo: st.hasUo }); };
+        if (prop === 'withFailureHandler') return function (f) { return mk({ ok: st.ok, fail: f, uo: st.uo, hasUo: st.hasUo }); };
+        if (prop === 'withUserObject') return function (o) { return mk({ ok: st.ok, fail: st.fail, uo: o, hasUo: true }); };
+        if (typeof prop !== 'string' || prop === 'then') return undefined;
+        return function () { _runExec_(getReal, st, prop, Array.prototype.slice.call(arguments), NOWRAP[prop] ? 1 : 0); };
+      } });
+    };
+    Object.defineProperty(google.script, 'run', { configurable: true, get: function () { return mk({}); } });
+  } catch (e) { console.warn('session resume wrapper', e); }
+})();
+// يُستدعى عند فتح شاشة الدخول: لو للجهاز مفتاح (محلياً أو محفوظاً بصفحة الغلاف) ندخل تلقائياً بلا كلمة مرور
+function _devAutoLogin_() {
+  if (window._devAutoTried || window.authToken) return; window._devAutoTried = true;
+  var go = function (dk) {
+    if (!dk || window.authToken) return;
+    window._devKeyTop = dk;
+    var btn = document.getElementById('btnLogin'); if (btn) btn.innerHTML = '⏳ جاري استعادة جلستك…';
+    window._RAW_RUN_ && window._RAW_RUN_()
+      .withSuccessHandler(function (res) {
+        if (res && res.success && res.token) { _sessAdopt_(res); try { handleLogin({ preventDefault: function () {}, __presetRes: res }); } catch (e) { console.error(e); } }
+        else { if (btn) btn.innerHTML = '🔐 تسجيل الدخول'; if (res && res.error && res.error !== 'no-device') _devKeySet_(''); }
+      })
+      .withFailureHandler(function () { if (btn) btn.innerHTML = '🔐 تسجيل الدخول'; })
+      .resumeSession(dk);
+  };
+  var local = ''; try { local = localStorage.getItem(_DEVK_) || ''; } catch (e) {}
+  if (local) go(local); else _devTopMsg_('get', '', go);
+}
+// رسالة هادئة بشاشة الدخول (بدل نافذة خطأ حمراء) عند تعذّر الاستئناف
+function _loginNote_(txt) {
+  var f = document.getElementById('loginForm'); if (!f) return;
+  var n = document.getElementById('loginSessNote');
+  if (!txt) { if (n) n.remove(); return; }
+  if (!n) { n = document.createElement('div'); n.id = 'loginSessNote'; n.style.cssText = 'background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:10px;padding:8px 10px;font-size:12.5px;margin-bottom:12px;line-height:1.7;'; f.parentNode.insertBefore(n, f); }
+  n.textContent = txt;
+}
+
 
 function checkAuthOnLoad() {
 
@@ -6834,6 +6974,7 @@ function checkAuthOnLoad() {
     loginContainer.style.display =
       "flex";
 
+    try { _devAutoLogin_(); } catch (e) {}   // 📱 (V4.319)
     return;
   }
 
@@ -7223,14 +7364,17 @@ function handleLogin(e) {
 
   window.__step('🔐 [دخول 2] إرسال بيانات الدخول للخادم (loginUser)');
 
-  google.script.run
-    .withSuccessHandler(function(res) {
+  var _onLoginRes_ = function(res) {
       window.__step('🔐 [دخول 3] وصل رد الخادم',
         'success: ' + (res && res.success) + ' | توكن: ' + (res && res.token ? 'موجود ✅' : 'مفقود ❌'));
       if (res && res.success) {
         // --- التعديل الجوهري: حفظ بيانات المستخدم في الذاكرة ---
 window.currentUser = res;
 window.authToken = res.token || null;
+// 📱 (V4.319) مفتاح الجهاز للاستئناف الصامت بعد انتهاء الجلسة (يُحفظ هنا وفي صفحة الغلاف)
+if (res.deviceKey) _devKeySet_(res.deviceKey);
+try { _loginNote_(''); } catch(e) {}
+window._sessExpiredShown = false;
 // 🔄 (V4.298-fix) رمز الجلسة في localStorage (يبقى بعد الريفريش داخل إطار Apps Script المعزول)
 try { localStorage.setItem('authToken', res.token || ''); } catch(e) {}
 try { sessionStorage.setItem('authToken', res.token || ''); } catch(e) {}
@@ -7387,7 +7531,10 @@ appDiv.style.backgroundColor = "white";
         var _msg = (res && res.error) ? res.error : 'اسم المستخدم أو كلمة المرور غير صحيحة.';
         _showPopup(_msg, 'error', 'تعذّر تسجيل الدخول');
       }
-    })
+    };
+  if (e && e.__presetRes) { _onLoginRes_(e.__presetRes); return; }   // (V4.319) دخول تلقائي بمفتاح الجهاز
+  google.script.run
+    .withSuccessHandler(_onLoginRes_)
     .withFailureHandler(function(err) {
       window.__step('🔐 [دخول ✗] فشل الاتصال بالخادم أثناء loginUser', (err && err.message) || err);
       btn.innerHTML = "🔐 تسجيل الدخول";
@@ -7511,6 +7658,7 @@ function _tickSessionCountdown() {
   if (display) display.textContent = _sessionWarningSecondsLeft;
 
   if (remainingMs <= 0) {
+    if (document.hidden && _devKeyGet_()) return;   // (V4.319) انتهى العدّ والجوال بالخلفية: يُحسم عند العودة (أعلاه) لا بخروج
     clearInterval(_sessionCountdownInterval);
     _sessionCountdownInterval = null;
     var modalEl = document.getElementById('sessionWarningModal');
@@ -7523,8 +7671,17 @@ function _tickSessionCountdown() {
 // مزامنة فورية لما التبويب يرجع ظاهر — تتلافى تأخير setTimeout/setInterval
 // اللي بيحصل من تبطئة المتصفح للتبويبات المخفية، بدل ما ننتظر الـ tick الجاي
 document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState !== 'visible') return;
+  if (document.visibilityState !== 'visible') { window._hiddenAt = Date.now(); return; }
   if (!window.authToken) return;
+  // 📱 (V4.319) جهاز مُتذكَّر: الوقت الذي قضاه البرنامج بالخلفية (الجوال مقفل/تطبيق آخر) لا يُخرج المستخدم —
+  // الجلسة تتجدد بصمت عند أول نداء. مهلة الخمول تبقى سارية والبرنامج ظاهر أمامه فقط
+  if (window._hiddenAt && _devKeyGet_() && ((_sessionExpiryAtMs && Date.now() >= _sessionExpiryAtMs) || _sessionWarningEndAtMs)) {
+    window._hiddenAt = 0;
+    var mEl = document.getElementById('sessionWarningModal'), mI = mEl && window.bootstrap ? bootstrap.Modal.getInstance(mEl) : null; if (mI) mI.hide();
+    restartSessionTimer();
+    return;
+  }
+  window._hiddenAt = 0;
 
   // المرحلة الأولى (قبل ظهور مودال التحذير): لو الوقت المفروض عدّى وإحنا لسه ما ظهرناش المودال
   if (_sessionExpiryAtMs && Date.now() >= _sessionExpiryAtMs) {
@@ -7864,6 +8021,8 @@ function _showAppLoadError(stage, err) {
   try {
     var msg = (err && (err.message || err.toString && err.toString())) || String(err || 'خطأ غير معروف');
     var isGeneric = (stage === 'خطأ عام في الصفحة' || stage === 'وعد (Promise) مرفوض دون معالجة');
+    // 📱 (V4.319) فشل بسبب الجلسة ليس «خطأ تحميل»: يُعالَج بمسار الجلسة الموحَّد (دخول هادئ) بلا شريط أحمر ولا نافذة
+    if (typeof _handleSessErr_ === 'function' && typeof _SESS_RX_ !== 'undefined' && _SESS_RX_.test(msg)) { _handleSessErr_(err); return; }
     console.error('❌ [_showAppLoadError] المرحلة: ' + stage + ' — التفاصيل:', err);
 
     var bar = document.getElementById('_appFatalErrorBar');
@@ -7936,9 +8095,12 @@ function logoutUser() {
   try { if (typeof glDlgCloseAll === 'function') glDlgCloseAll(); } catch (e) {}   // (V4.303) لا تبقى نافذة حسابات (أو مكدّسها) فوق شاشة الدخول
   // 🚀 (V4.200) الدخول التالي بنفس الصفحة يُرسل نداء إقلاع جديداً
   try { _BOOT_ = { state: 'idle', parts: null, at: 0, q: [], uses: {} }; } catch (e) {}
-  if (window.authToken) {
-    google.script.run.logoutUserSession(window.authToken);
+  var _dk = _devKeyGet_();
+  if (window.authToken || _dk) {
+    google.script.run.withFailureHandler(function () {}).logoutUserSession(window.authToken || '', _dk);   // (V4.319) الخروج اليدوي يُنسي الجهاز
   }
+  _devKeySet_('');
+  window._devAutoTried = true;   // لا دخول تلقائي بعد خروج يدوي بنفس الصفحة
   try { localStorage.removeItem("smartManagerUser"); } catch(e){}
   try { localStorage.removeItem("authToken"); } catch(e){}
   try { sessionStorage.removeItem("authToken"); } catch(e){}

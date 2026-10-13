@@ -5993,6 +5993,7 @@ function loginUser(username, password) {
 
       // إرجاع كائن بسيط جداً
       var sessionToken = createSession_(username, data[i][2], userPermissions);
+      var deviceKey = _devIssue_(username, data[i][1]);   // 📱 (V4.319) «تذكّر هذا الجهاز» — استئناف صامت بعد انتهاء الجلسة
       logChange_(username, "تسجيل دخول", "-", "دخول للنظام", "-", "-");
       // العمود السادس (index 5): MustChangePwd — يُجبر على تغيير كلمة المرور عند أول دخول
       var mustChangePwd = data[i][5] === true || String(data[i][5]).toLowerCase() === 'true';
@@ -6003,6 +6004,7 @@ function loginUser(username, password) {
         fullName: String(data[i][2] || ""),
         permissions: userPermissions,
         token: sessionToken,
+        deviceKey: deviceKey,
         mustChangePwd: mustChangePwd,
         userRow: i + 1   // رقم الصف في الشيت (يُستخدم لمسح علامة mustChangePwd بعد التغيير)
       };
@@ -6386,6 +6388,7 @@ function _sessPurge_() {
   try {
     var p = PropertiesService.getScriptProperties(), all = p.getProperties(), ttl = _sessTtl_() * 1000, now = Date.now();
     Object.keys(all).forEach(function (k) {
+      if (k.indexOf('DEV_') === 0) { try { var d = JSON.parse(all[k]); if (!d || now > (d.exp || 0)) p.deleteProperty(k); } catch (e) { p.deleteProperty(k); } return; }
       if (k.indexOf('SESS_') !== 0) return;
       try { var o = JSON.parse(all[k]); if (!o || now - (o.t || 0) > ttl) p.deleteProperty(k); } catch (e) { p.deleteProperty(k); }
     });
@@ -6456,8 +6459,57 @@ function requireAuthOrPrintToken_(token) {
   throw new Error("جلسة غير صالحة أو منتهية - يرجى تسجيل الدخول مرة أخرى");
 }
 
+/* 📱 (V4.319) «تذكّر هذا الجهاز»: على الموبايل يُجمِّد النظام الصفحة بالخلفية فتتوقف نبضة الجلسة، فتنتهي جلسة
+   الخادم (30 دقيقة افتراضياً) ثم يعيد المتصفح تحميل البرنامج عند العودة فتفشل كل نداءات التحميل بـ«جلسة غير صالحة
+   أو منتهية» (نافذة خطأ + شريط أحمر + إعادة دخول). الآن: عند الدخول يُصدَر للجهاز مفتاح طويل الأمد (يُخزَّن هنا
+   مُجزَّأً SHA-256 فقط) يستأنف به الجهاز جلسة جديدة بصمت. يسقط المفتاح تلقائياً عند: الخروج اليدوي، تعطيل
+   المستخدم أو حذفه، تغيير كلمة مروره، أو انقضاء المدة بلا استخدام (DEVICE_REMEMBER_DAYS، افتراضياً 30 يوماً؛ 0 = إيقاف الميزة) */
+function _devDays_() {
+  var v = null; try { v = PropertiesService.getScriptProperties().getProperty('DEVICE_REMEMBER_DAYS'); } catch (e) {}
+  if (v === null || v === '') return 30;
+  var n = parseInt(v, 10); return isNaN(n) ? 30 : Math.max(0, Math.min(365, n));
+}
+function _devHash_(s) {
+  var b = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s), Utilities.Charset.UTF_8);
+  return b.map(function (x) { return ('0' + (x & 255).toString(16)).slice(-2); }).join('');
+}
+function _devIssue_(username, storedPw) {
+  try {
+    var days = _devDays_(); if (!days) return '';
+    var key = Utilities.getUuid() + '-' + Utilities.getUuid(), now = Date.now();
+    PropertiesService.getScriptProperties().setProperty('DEV_' + _devHash_(key),
+      JSON.stringify({ u: String(username), f: _devHash_('pw|' + storedPw).slice(0, 16), exp: now + days * 86400000, t: now }));
+    return key;
+  } catch (e) { return ''; }
+}
+// يُستدعى من الواجهة عند فشل نداء بسبب انتهاء الجلسة (أو عند الإقلاع بلا جلسة محفوظة) — يعيد نفس شكل loginUser
+function resumeSession(deviceKey) {
+  if (!deviceKey) return { success: false, error: 'no-device' };
+  var p = PropertiesService.getScriptProperties(), pk = 'DEV_' + _devHash_(deviceKey), o = null;
+  try { o = JSON.parse(p.getProperty(pk) || 'null'); } catch (e) { o = null; }
+  var now = Date.now();
+  if (!o || !o.u || now > (o.exp || 0)) { try { p.deleteProperty(pk); } catch (e) {} return { success: false, error: 'expired' }; }
+  var data = getSpreadsheet_().getSheetByName('Users').getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(o.u)) continue;
+    var isActive = data[i][3];
+    if (isActive === false || String(isActive).toLowerCase() === 'false' || _devHash_('pw|' + data[i][1]).slice(0, 16) !== o.f) break;   // معطَّل أو غيّر كلمة المرور
+    var token = createSession_(data[i][0], data[i][2], data[i][4]);
+    var days = _devDays_() || 1;
+    if (now - (o.t || 0) > 3600000) { o.exp = now + days * 86400000; o.t = now; try { p.setProperty(pk, JSON.stringify(o)); } catch (e) {} }   // مدة منزلقة (تحديث كل ساعة على الأكثر)
+    return {
+      success: true, resumed: true,
+      fullName: String(data[i][2] || ''), permissions: data[i][4], token: token, deviceKey: deviceKey,
+      mustChangePwd: data[i][5] === true || String(data[i][5]).toLowerCase() === 'true', userRow: i + 1
+    };
+  }
+  try { p.deleteProperty(pk); } catch (e) {}
+  return { success: false, error: 'revoked' };
+}
+
 // تسجيل الخروج - يلغي الجلسة فوراً من جهة السيرفر
-function logoutUserSession(token) {
+function logoutUserSession(token, deviceKey) {
+  if (deviceKey) { try { PropertiesService.getScriptProperties().deleteProperty('DEV_' + _devHash_(deviceKey)); } catch (e) {} }   // (V4.319) الخروج اليدوي يُنسي الجهاز
   if (token) {
     var session = validateSession_(token);
     if (session && session.username) {
