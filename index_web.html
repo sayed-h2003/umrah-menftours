@@ -47500,7 +47500,7 @@ function glEntFiltered_() {
 // نكبح الرسم ~180ms فيُنفَّذ مرة بعد توقف الكتابة (نافذة الفلتر عنصر منفصل فيبقى التركيز بحقل الكتابة).
 var _glEntDrawDeb_ = null;
 function glDrawEntriesDeb_() { clearTimeout(_glEntDrawDeb_); _glEntDrawDeb_ = setTimeout(glDrawEntries, 180); }
-function glEntBulkEligible_(e) { return !/^AUTO:/.test(e.sourceKey || '') && ((e.status === 'مسودة' && GL.can.edit) || glCanEditPosted_(e)); }   // (V4.315) التلقائي يُعدَّل من مصدره
+function glEntBulkEligible_(e) { return (e.status === 'مسودة' && GL.can.edit) || glCanEditPosted_(e); }   // ✍️ (V4.319) كل القيود بما فيها التلقائية
 function glDrawEntries() {
   clearTimeout(_glEntDrawDeb_);
   var box = document.getElementById('glEntList'); if (!box) return;
@@ -47560,7 +47560,7 @@ function glRenderEntSelBar_() {
    الحفظ نداء واحد لـ glSaveEntriesBulk (يستدعي glSaveEntry الحقيقية لكل قيد بكل حراساتها) */
 function glCtrSelMap_(ctx) { return ctx === 'st' ? (GL._stSel = GL._stSel || {}) : ctx === 'tr' ? (GL._trSel = GL._trSel || {}) : (GL._entSel = GL._entSel || {}); }
 function glStCtrElig_(x) {
-  return GL.can.edit && !x.auto && !x.pending && glCanEditPosted_({ status: 'مرحّل', type: x.type, sourceKey: '', date: x.date });
+  return GL.can.edit && glCanEditPosted_({ status: 'مرحّل', type: x.type, sourceKey: x.auto ? 'AUTO:' : '', date: x.date });   // ✍️ (V4.319) التلقائي والمنتظر للاعتماد أيضاً
 }
 function glCtrSelToggle_(ctx, id, on) {
   var m = glCtrSelMap_(ctx); if (on) m[id] = true; else delete m[id];
@@ -47616,6 +47616,7 @@ function glCtrRender_(ctx, entries) {
     return '<div class="p-2 mb-2 rounded" data-ctr-card="' + ci + '" style="background:#f7faf9;border:1px solid #dfe6e8;">' +
       '<div class="d-flex justify-content-between flex-wrap gap-1 mb-1" style="font-size:12.5px;"><b style="color:#0b3838;">' + E(e.voucherNo || e.id) + ' <span class="text-muted" style="font-weight:400;">' + E(e.type) + ' — ' + E(e.date) + '</span></b>' +
       '<span class="text-muted" style="max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + E(e.desc) + '">' + E(e.desc || '') + '</span></div>' +
+      (/^AUTO:/.test(e.sourceKey || '') ? '<div class="small mb-1" style="color:#0e7490;">' + glAutoBadge_() + ' يُحفظ تغيير الحساب كقاعدة دائمة لهذا القيد فيبقى بعد إعادة المزامنة' + (/^AUTO:(TRIP|CI|HB|HBP|HBL|VZ|AP|AI|CP):/.test(e.sourceKey) ? ' — تغيير سطر الطرف (عميل/وكيل/فندق) يجعل كشفه بشاشته يختلف عن الحساب العام' : '') + '</div>' : '') +
       '<table class="table table-sm mb-0" style="font-size:12.5px;"><tbody>' + rowsH + '</tbody></table>' +
       '<div class="gl-ctr-err small text-danger" data-ctr-err="' + ci + '"></div></div>';
   }).join('');
@@ -47900,7 +47901,7 @@ function glShowEntry(id) {
       '<span class="gl-pill">📅 <b class="gl-latin">' + glEsc(e.date) + '</b></span><span class="gl-pill">' + glEsc(e.type) + '</span><span class="gl-pill">الحالة: <b>' + glEsc(e.status) + '</b></span>' +
       (e.ref && !/^h:/.test(e.ref) ? '<span class="gl-pill">المرجع: ' + glEsc(e.ref) + '</span>' : '') +
       (/^AUTO:/.test(e.sourceKey || '') ? '<span class="gl-pill" style="background:#ecfeff;">⚙ تلقائي من شاشات البرنامج</span>' : '') + (e.batchId ? '<span class="gl-pill">دفعة: <span class="gl-latin">' + glEsc(e.batchId) + '</span></span>' : '') + '</div>' +
-      '<div style="font-weight:700;margin-bottom:6px;">' + glEsc(e.desc) + '</div>' +
+      '<div style="font-weight:700;margin-bottom:6px;">' + glEsc(e.desc) + '</div>' + glOvrBox_(e) +
       '<div class="table-responsive"><table class="gl-tbl"><thead><tr><th>الحساب</th><th>البيان</th><th>مدين</th><th>دائن</th><th>العملة</th><th>مدين معادل</th><th>دائن معادل</th></tr></thead><tbody>' + rows +
       '<tr class="gl-tot"><td colspan="5" style="text-align:right;">الإجمالي بالجنيه</td><td class="gl-latin">' + glFmt(d) + '</td><td class="gl-latin">' + glFmt(c) + '</td></tr></tbody></table></div>' +
       '<div style="font-size:11px;color:#64748b;margin-top:6px;">أنشأه ' + glEsc(e.createdBy) + ' في <span class="gl-latin">' + glEsc(e.createdAt) + '</span>' +
@@ -47920,6 +47921,7 @@ function glShowEntry(id) {
         (e.status === 'مسودة' && GL.can.edit ? '<button class="btn btn-primary btn-sm" onclick="glDlgClose();glEditEntry(\'' + glJs(e.id) + '\')">✏️ تعديل</button><button class="btn btn-success btn-sm" onclick="glDlgClose();glPost(\'' + glJs(e.id) + '\')">✅ ترحيل</button>' : '') +
         (glCanEditPosted_(e) ? '<button class="btn btn-primary btn-sm" onclick="glDlgClose();glEditEntry(\'' + glJs(e.id) + '\')">✏️ تعديل</button>' : '') +
         '<button class="btn btn-outline-secondary btn-sm" onclick="glRowHist_(\'' + glJs(e.id) + '\')">📜 سجل التعديلات</button>' +
+        (/^AUTO:/.test(e.sourceKey || '') && e.status === 'مرحّل' && GL.can.del && glCanEditAuto_() ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glVoid(\'' + glJs(e.id) + '\',\'مرحّل\')">⛔ إلغاء القيد</button>' : '') +
         (/^AUTO:/.test(e.sourceKey || '') && e.status === 'مرحّل' && (GL.can.del || GL.isAdmin) ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glRowDel_(\'' + glJs(e.id) + '\',\'' + glJs(glRowSrc_(e.sourceKey) || 'AUTO') + '\',\'مرحّل\')">🗑️ حذف</button>' :
         GL.isAdmin && e.type !== 'قيد إقفال' ? '<button class="btn btn-danger btn-sm" onclick="glDlgClose();glEntDeleteNow(\'' + glJs(e.id) + '\',' + (/^AUTO:/.test(e.sourceKey || '') ? 1 : 0) + ')">🗑️ حذف القيد</button>' :
           (e.status !== 'ملغى' && GL.can.del && !/^AUTO:/.test(e.sourceKey || '') && e.type !== 'قيد إقفال' ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glVoid(\'' + glJs(e.id) + '\',\'' + glJs(e.status) + '\')">' + (e.status === 'مسودة' ? '🗑️ حذف المسودة' : '⛔ إلغاء القيد') + '</button>' : '')) +
@@ -47933,6 +47935,25 @@ function glPost(id) {
   askConfirm_('ترحيل القيد ' + id + '؟ بعد الترحيل لا يمكن تعديله (يمكن إلغاؤه فقط).', function () {
     glRun('glPostEntry', [id], function (res) { showToast('✅ رُحِّل القيد ' + id); glHbMirrorNote_(res); glApplyDelta_(res); });
   }, { title: 'ترحيل قيد', icon: '✅', yesLabel: 'ترحيل', danger: false });
+}
+/* ✍️ (V4.319) التعديلات اليدوية الدائمة على القيد التلقائي/قيد الشيت: ما الذي تغيّر + «↺ إعادة للتلقائي» */
+function glOvrBox_(e) {
+  var o = e && e.ovr; if (!o) return '';
+  var nm = function (c) { return glEsc((GL.map[c] || {}).name || c); }, parts = [];
+  (o.acc || []).forEach(function (a) { parts.push('🔁 ' + nm(a.from) + ' ← <b>' + nm(a.to) + '</b>'); });
+  if (o.hdr) Object.keys(o.hdr).forEach(function (k) { parts.push('✏️ ' + ({ desc: 'البيان', trip: 'الرحلة', company: 'الشركة' }[k] || k) + ': <b>' + glEsc(o.hdr[k]) + '</b>'); });
+  if (o.freeze) parts.push('✋ مبالغ/تاريخ/أسطر معدَّلة يدوياً — أي تغيّر بالمصدر ينتظر الاعتماد');
+  if (o.vd) parts.push('⛔ أُلغي يدوياً — لن تعيده المزامنة');
+  if (!parts.length) return '';
+  var who = (o.acc && o.acc[0]) || o.freeze || o.vd || {};
+  return '<div class="mb-2 p-2 rounded" style="background:#fff7ed;border:1px dashed #c2410c;font-size:12.5px;line-height:1.9;"><div class="d-flex align-items-center gap-2 flex-wrap"><b style="color:#9a3412;">✋ معدَّل يدوياً — يبقى بعد إعادة المزامنة</b>' +
+    (who.by ? '<span class="text-muted small">' + glEsc(who.by) + ' <span class="gl-latin">' + glEsc(who.at || '') + '</span></span>' : '') +
+    (glCanEditAuto_() ? '<button class="btn btn-outline-secondary btn-sm ms-auto py-0" onclick="glAutoOvrReleaseUI_(\'' + glJs(e.id) + '\')">↺ إعادة للتلقائي</button>' : '') + '</div>' + parts.join('<br>') + '</div>';
+}
+function glAutoOvrReleaseUI_(id) {
+  askConfirm_('إعادة القيد ' + id + ' لما يبنيه مصدره بالشاشات؟\nتُحذف كل تعديلاتك اليدوية عليه (الحسابات/البيان/المبالغ/الإلغاء) ويُعاد بناؤه الآن.', function () {
+    glRun('glAutoOvrRelease', [id], function (res) { showToast('↺ أُعيد القيد ' + id + ' لمصدره' + (res.note ? ' — ' + res.note : '')); glDlgClose(); glAfterChange(); });
+  }, { title: 'إعادة للتلقائي', icon: '↺', danger: false });
 }
 function glVoid(id, status) {
   if (status === 'مسودة') {
@@ -47950,7 +47971,7 @@ function glVoid(id, status) {
 var GL_AGG_SRC_ = { TRIP: 'بنود العميل بالرحلة', CI: 'بنود العميل بالرحلة', TR: 'تشغيلة النقل', HB: 'حجز الفنادق', HBP: 'دفعة الحجوزات', OPEN: 'الأرصدة الافتتاحية', HBOPEN: 'الأرصدة الافتتاحية للحجوزات' };
 var GL_ONE_SRC_ = { CP: 'دفعة العميل من «حسابات العملاء»', AP: 'دفعة الوكيل من «متابعة الوكلاء»', AI: 'بند حساب الوكيل من «متابعة الوكلاء»', VZ: 'مجموعة التأشيرات من «متابعة الوكلاء»', MF: 'ملف المراجعة من «ملفات الوزارة»', RF: 'إيصال رسوم الغرفة من «ملفات الوزارة»' };
 function glRowEdit_(id, auto) {
-  if (auto && !GL.isAdmin) return _showPopup('هذا قيد تلقائي من شاشات البرنامج — يُعدَّل من مصدره بالشاشة فيتحدّث القيد تلقائياً (تعديل القيد التلقائي مباشرة للمدير فقط)', 'info');
+  if (auto && !glCanEditAuto_()) return _showPopup('تعديل القيد التلقائي مباشرة يحتاج صلاحية تعديل «القيود التلقائية والاعتماد» — أو عدّل مصدره بالشاشة فيتحدّث القيد تلقائياً', 'info');
   glEditEntry(id);
 }
 function glRowDel_(id, src, status) {
@@ -48333,10 +48354,12 @@ function glEntryVoucherFit_(e) {
   return { kind: k, side: side, other: other, main: mains[mi], counters: cs, extras: mains.filter(function (l, i) { return i !== mi; }) };
 }
 function glEditEntry(id) { glRun('glGetEntry', [id], function (res) { var f = glEntryVoucherFit_(res.entry); glEntryDlg(f ? f.kind : 'journal', res.entry); }); }
-// ✏️ (V4.219) القيد المرحّل يُعدَّل لمن له صلاحية التعديل، والتلقائي للمدير فقط (لا الملغى ولا قيد الإقفال ولا الفترة المقفلة)
+// ✏️ (V4.219) القيد المرحّل يُعدَّل لمن له صلاحية التعديل (لا الملغى ولا قيد الإقفال ولا الفترة المقفلة)
+// ✍️ (V4.319) والتلقائي أيضاً لصاحب صلاحية تعديل «القيود التلقائية» (أو الاعتماد أو المدير) — يُحفظ تعديله كقاعدة دائمة
+function glCanEditAuto_() { return !!(GL.isAdmin || (GL.can && GL.can.autoEdit)); }
 function glCanEditPosted_(e) {
   if (!e || e.status !== 'مرحّل' || !GL.can.edit || e.type === 'قيد إقفال') return false;
-  if (/^AUTO:/.test(e.sourceKey || '') && !GL.isAdmin) return false;
+  if (/^AUTO:/.test(e.sourceKey || '') && !glCanEditAuto_()) return false;
   var lk = String(GL.settings.lockDate || '').split('/').reverse().join(''), k = String(e.date || '').split('/').reverse().join('');
   return !(lk && k && k <= lk);
 }
@@ -48411,7 +48434,7 @@ function glEntryDlg(kind, entry) {
   var isRP = kind === 'receipt' || kind === 'payment', isVchK = kind !== 'journal' && kind !== 'fx';
   // 💾 (V4.219) مثل الـ ERP: «حفظ» · «حفظ + جديد» (يفرغ النموذج لإيصال جديد بنفس الخزينة والتاريخ) · «حفظ وطباعة» — والمسودة اختيارية
   var foot = editingPosted ? '<div class="d-flex gap-2 justify-content-end align-items-center mt-3">' +
-      (/^AUTO:/.test(entry.sourceKey || '') ? '<span class="small text-muted me-auto">⚙️ قيد تلقائي: يبقى تعديلك ما لم يتغيّر مصدره بالشاشات (عندها تعيد المزامنة بناءه)</span>' : '') +
+      (/^AUTO:/.test(entry.sourceKey || '') ? '<span class="small text-muted me-auto">⚙️ قيد تلقائي: تعديلك يُحفظ كقاعدة دائمة — تغيير الحسابات والبيان يبقى بعد أي مزامنة، وتعديل المبالغ/التاريخ/الأسطر يجعل أي تغيّر لاحق بمصدره ينتظر اعتمادك</span>' : '') +
       (isRP ? '<button class="btn btn-dark btn-sm fw-bold" onclick="glSaveEntryUI(true, this, \'print\')">🖨️ حفظ وطباعة</button>' : '') +
       glEdRowBtns_(entry) +
       '<button class="btn btn-success btn-sm fw-bold" onclick="glSaveEntryUI(true, this)">💾 حفظ التعديل</button></div>' :
@@ -50541,7 +50564,7 @@ function glDrawTreasury() {
     var isIn = x.inAmt > 0, isVch = x.type === 'سند قبض' || x.type === 'سند صرف';
     var eo = { status: 'مرحّل', type: x.type, sourceKey: x.auto ? 'AUTO:' : '', date: x.date };
     var dk = glDKey(x.due || '') || x._k, later = isBank && dk > todayK;
-    var ctrOk = GL.can.edit && !x.auto && glCanEditPosted_(eo);
+    var ctrOk = GL.can.edit && glCanEditPosted_(eo);   // ✍️ (V4.319) التلقائي أيضاً
     return '<tr data-eid="' + glEsc(x.entryId) + '" style="white-space:nowrap;cursor:pointer;' + (i % 2 ? 'background:#fafbfc;' : '') + '"><td class="text-muted small">' +
       (ctrOk ? '<input type="checkbox" class="gl-ctrchk" title="تحديد لتغيير الحساب المقابل جماعياً" onclick="event.stopPropagation()" onchange="glCtrSelToggle_(\'tr\',\'' + glJs(x.entryId) + '\',this.checked)"' + ((GL._trSel || {})[x.entryId] ? ' checked' : '') + '> ' : '') + (i + 1) + '</td>' +
       '<td><span class="gl-st" style="background:' + (isIn ? '#dcfce7;color:#166534' : '#fee2e2;color:#991b1b') + ';font-size:10px;">' + (isIn ? 'وارد' : 'صادر') + '</span> <b class="gl-latin">' + glEsc(x.voucherNo || x.entryId) + '</b>' +
