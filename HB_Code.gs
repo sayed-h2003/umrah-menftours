@@ -8256,7 +8256,7 @@ function tgHandleMessage_(msg) {
       // تبقي الفقاعة (والأزرار معها) ضيقة رغم أن الأزرار مصفوفة صفين-صفين. لذا نستخدم هنا
       // سطرًا بطول مقارب لأطول سطر في /help فتتمدد الفقاعة لعرض المحادثة الكامل، فتظهر
       // الأزرار بنفس عرض /help تمامًا بدل عمود ضيق
-      tgSendTo_(chatId, '🤖 <b>القائمة الرئيسية</b>\nاختر أحد الأزرار أدناه للوصول السريع لأي أمر بدل كتابته يدويًا — نفس أوامر /help بالضبط.', mkb);
+      tgSendTo_(chatId, '📋 <b>القائمة الرئيسية</b>\nاختر أحد الأزرار أدناه للوصول السريع لأي أمر بدل كتابته يدويًا — نفس أوامر /help بالضبط.', mkb);
       return 'تم /menu';
     }
     if (startPayload || cmd.name === 'link') {
@@ -8450,7 +8450,7 @@ function tgHelpText_(tgId) {
       'ثم افتح رابط الربط الذي يرسله لك، أو أرسل هنا:\n<code>/link الكود</code>\n\n' +
       '🆔 <code>/chatid</code> — يعمل بلا ربط، ويعطي معرّف هذه المحادثة.';
   }
-  var p = bu.perms, lines = ['🤖 <b>الأوامر المتاحة لك</b>',
+  var p = bu.perms, lines = ['📖 <b>الأوامر المتاحة لك</b>',
     '<i>كل أمر هنا له زر مقابل في /menu — لا حاجة لحفظ أي صيغة.</i>', ''];
   if (p.query) {
     lines.push('🔎 <code>/booking 45670</code> — بيانات حجز (بالرقم الداخلي أو رقم الفندق)');
@@ -10200,7 +10200,7 @@ function tgApplyBookingPrices_(ctx, bookingKey, entry) {
     invalidateSourceCache_();
     hbLogChange_(ctx.user, 'تعديل حجز', bookingKey, 'تسجيل أسعار ناقصة عبر بوت تليجرام', '', '',
       { hotelRef: row[17] || row[2], clientName: row[3], recordKey: bookingRecordKey_(row[2]) });
-    tgNotifyBookingEdit_(bookingKey, diffs, staffDisplayName_(ctx.user), '🤖 من بوت تليجرام — تسجيل أسعار');
+    tgNotifyBookingEdit_(bookingKey, diffs, staffDisplayName_(ctx.user), '📲 من بوت تليجرام — تسجيل أسعار');
   }
   return diffs.length;
 }
@@ -11358,7 +11358,7 @@ function editBookingFieldsAsUser_(actingUser, bookingKey, fieldsMap) {
     if (qaidWasSet_ && sigChanged_.length) {
       flagQaidEditedBooking_(bookingRecordKey_(innerRefForLog), innerRefForLog, hotelRefOrRef, clientName, sigChanged_, actingUser);
     }
-    if (diffs.length) { try { tgNotifyBookingEdit_(bookingKey, diffs, staffDisplayName_(actingUser), '🤖 من بوت تليجرام — تعديل حجز'); } catch (eN) {} }
+    if (diffs.length) { try { tgNotifyBookingEdit_(bookingKey, diffs, staffDisplayName_(actingUser), '📲 من بوت تليجرام — تعديل حجز'); } catch (eN) {} }
     return { ok: true, count: count };
   } catch (e) { return { ok: false, error: e.message }; }
 }
@@ -11987,7 +11987,7 @@ function tgOcrFmtDate_(iso) {
 // والمورد يظهران هنا أيضًا فور تحديدهما (سواء بالتدفق الموجَّه أو بالتعديل الحر المجمَّع)
 function tgOcrShowReview_(chatId, data) {
   var d = data.d, engine = data.engine;
-  var badge = engine === 'ai' ? '🤖 بالذكاء الاصطناعي' : (engine === 'ocr' ? '🔍 قراءة ضوئية (احتياطي)' : '');
+  var badge = engine === 'ai' ? '✨ بالذكاء الاصطناعي' : (engine === 'ocr' ? '🔍 قراءة ضوئية (احتياطي)' : '');
   var saleTxt = tgOcrSaleTxt_(d);
   var queueBadge = (data.queueTotal > 1) ? ('  📚 حجز ' + data.queueIndex + ' من ' + data.queueTotal) : '';
   var lines = [
@@ -12014,7 +12014,7 @@ function tgOcrShowReview_(chatId, data) {
   // إعادة الاستخلاص على نفس الملف بمحرّك مختلف — متاحة فقط لو حُفظ معرّف الملف (كل استخلاص من
   // مستند حقيقي يحفظه؛ يغيب فقط لو استُدعيت الدالة بلا docMeta من مسار اختباري)
   if (data.docMeta && data.docMeta.fileId) {
-    kb.push([tgBtn_('🤖 إعادة استخلاص AI', 'ob:re:ai'), tgBtn_('🔍 إعادة استخلاص يدوي', 'ob:re:man')]);
+    kb.push([tgBtn_('✨ إعادة استخلاص AI', 'ob:re:ai'), tgBtn_('🔍 إعادة استخلاص يدوي', 'ob:re:man')]);
   }
   kb.push([tgBtn_(data.clientName ? '✅ اعتماد وتسجيل الحجز' : '✅ متابعة (العميل والمورد)', 'ob:go:1')]);
   kb.push([tgBtn_('❌ إلغاء', 'cf:abort:1')]);
