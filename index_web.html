@@ -5250,6 +5250,8 @@ input[type="date"]:not(:focus):not(:valid) {
     --vzBorder:#cfe6de; --vzSurf:#f4fbf8; --vzLbl:#3b6b5e; }
   #section-visas .vz-latin, .mf-dlg .vz-latin{ direction:ltr; unicode-bidi:embed; display:inline-block; font-variant-numeric:tabular-nums; }
   #section-visas .vz-bar{ background:#fff; border:1px solid var(--vzBorder); border-radius:13px; padding:11px 13px; box-shadow:0 1px 3px rgba(11,122,94,.06); }
+  /* (V4.319) صندوق اختيار المعتمرين داخل نوافذ التأشيرات (.vz-dlg — النموذج المنفرد وبطاقات الربط الجماعي) بنفس شكل الشاشة */
+  .vz-dlg .vz-bar{ background:#fff; border:1px solid var(--vzBorder); border-radius:13px; padding:11px 13px; box-shadow:0 1px 3px rgba(11,122,94,.06); }
   #section-visas .vz-btn, .vz-dlg .vz-btn, .mf-dlg .vz-btn{ font-size:12px; font-weight:800; border-radius:10px; padding:7px 13px; border:1.5px solid var(--vzBorder);
     background:#fff; color:var(--vzInk); cursor:pointer; transition:.15s; display:inline-flex; align-items:center; gap:6px; }
   #section-visas .vz-btn:hover, .vz-dlg .vz-btn:hover, .mf-dlg .vz-btn:hover{ border-color:var(--vzG); color:var(--vzG); background:var(--vzGL); }
@@ -38281,13 +38283,17 @@ function mfBulkEditOpen_() {
   var E = mfEsc;
   var inp = function (ci, key, val) { return '<input class="form-control form-control-sm" data-ci="' + ci + '" data-key="' + key + '" value="' + E(String(val || '')) + '">'; };
   var fld = function (label, html) { return '<div><label class="small text-muted">' + E(label) + '</label>' + html + '</div>'; };
+  // (V4.319) 🔍 بجوار الرحلة والرحلات الإضافية: البحث عن معتمر لمعرفة رحلته (نفس زر النموذج المنفرد) — بحاوية flex مضمّنة لا .d-flex (المُلزَمة باللفّ بهذا الملف) فيبقى الزر بجوار الحقل
+  var srch = function (ci, which) { return '<button type="button" class="mf-btn sm" style="flex-shrink:0;" data-mfbk-srch="' + which + '" title="بحث عن معتمر لمعرفة رحلته' +
+    (which === 'extra' ? ' — تُضاف رحلته للرحلات الإضافية' : '') + '" onclick="mfBkSearchTrip_(' + ci + ',\'' + which + '\')">🔍</button>'; };
   var cards = MF._bk.cards.map(function (c, ci) {
     var f = c.f;
-    return '<div class="p-2 mb-2 rounded" data-mfbk="' + ci + '" style="background:#f7faf9;border:1px solid #dfe6e8;">' +
-      '<div style="font-size:12.5px;" class="mb-1"><b style="color:#0b3838;">🏛️ ملف ' + E(f.fileNo || ('#' + f.seq)) + '</b> <span class="text-muted">' + E(f.clientLabel || '') + (f.company ? ' · ' + E(f.company) : '') + ' · معتمرين ' + mfNum(f.pilgrims) + '</span></div>' +
-      '<div style="display:grid;grid-template-columns:2fr 2fr;gap:8px;">' +
-        fld('🧳 الرحلة المرتبطة', '<input class="form-control form-control-sm" list="mfBkTripsDL" data-ci="' + ci + '" data-key="tripName" value="' + E(c.tripName) + '" onchange="mfBkTripChanged_(' + ci + ')" placeholder="اختر الرحلة…">') +
-        fld('رحلات إضافية (رحلة بكل سطر)', '<textarea class="form-control form-control-sm" rows="1" data-ci="' + ci + '" data-key="extra" onchange="mfBkTripChanged_(' + ci + ')">' + E(c.extra) + '</textarea>') +
+    // (V4.319) بطاقة بشكل بطاقات ملف الوزارة (.mf-dcard) بدل الخلفية الخضراء — وعمودا الرحلة يتراصّان على الموبايل
+    return '<div class="mf-dcard" data-mfbk="' + ci + '">' +
+      '<div style="font-size:12.5px;" class="mb-1"><b style="color:var(--mfNavy);">🏛️ ملف ' + E(f.fileNo || ('#' + f.seq)) + '</b> <span class="text-muted">' + E(f.clientLabel || '') + (f.company ? ' · ' + E(f.company) : '') + ' · معتمرين ' + mfNum(f.pilgrims) + '</span></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;">' +
+        fld('🧳 الرحلة المرتبطة', '<div style="display:flex;gap:4px;"><input class="form-control form-control-sm" style="flex:1;min-width:0;" list="mfBkTripsDL" data-ci="' + ci + '" data-key="tripName" value="' + E(c.tripName) + '" onchange="mfBkTripChanged_(' + ci + ')" placeholder="اختر الرحلة…">' + srch(ci, 'main') + '</div>') +
+        fld('رحلات إضافية (رحلة بكل سطر)', '<div style="display:flex;gap:4px;align-items:flex-start;"><textarea class="form-control form-control-sm" style="flex:1;min-width:0;" rows="' + Math.min(4, Math.max(1, c.extra ? c.extra.split('\n').length : 1)) + '" data-ci="' + ci + '" data-key="extra" onchange="mfBkTripChanged_(' + ci + ')">' + E(c.extra) + '</textarea>' + srch(ci, 'extra') + '</div>') +
       '</div>' +
       '<div class="d-flex align-items-center gap-2 flex-wrap mt-1" style="font-size:12px;"><span data-mfbk-sum="' + ci + '"></span>' +
         '<button class="mf-btn sm" onclick="mfBkToggle_(' + ci + ')" data-mfbk-tg="' + ci + '">👥 عرض المعتمرين</button></div>' +
@@ -38300,21 +38306,26 @@ function mfBulkEditOpen_() {
         '</div></details></div>';
   }).join('');
   document.querySelectorAll('.mf-bulk-edit-backdrop').forEach(function (el) { el.remove(); });
+  // (V4.319) نفس تصميم نوافذ ملفات الوزارة (mfModal): الفئة mf-dlg تُفعِّل متغيّرات وأزرار وبطاقات الشاشة، رأس كحلي، جسم
+  // قابل للتمرير بخلفية #f8fafc، وتذييل بأزرار mf-btn — والخلفية تبقى بنفس z-index فوق التطبيق
   var bd = document.createElement('div'); bd.className = 'mf-bulk-edit-backdrop';
-  bd.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;padding:30px 10px;overflow-y:auto;';
+  bd.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(10,14,24,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:12px 8px;';
   bd.addEventListener('click', function (ev) { if (ev.target === bd) bd.remove(); });
-  var p = document.createElement('div');
-  p.style.cssText = 'background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:16px;max-width:820px;width:100%;';
+  var p = document.createElement('div'); p.className = 'mf-dlg';
+  p.style.cssText = 'background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);width:min(880px,100%);max-height:94vh;display:flex;flex-direction:column;overflow:hidden;direction:rtl;font-size:13px;';
   p.addEventListener('click', function (ev) { ev.stopPropagation(); });
-  p.innerHTML = '<div class="d-flex justify-content-between align-items-center mb-2"><b style="color:#0b3838;font-size:15px;">🧳 ربط الرحلات والمعتمرين — ' + rows.length + ' ملف</b>' +
-      '<span style="cursor:pointer;color:#b3261e;font-size:22px;line-height:1;" onclick="this.closest(\'.mf-bulk-edit-backdrop\').remove()">×</span></div>' +
+  var xb = 'background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;';
+  p.innerHTML = '<div style="padding:11px 16px;background:linear-gradient(135deg,#1e3d59,#152c42);color:#fff;display:flex;align-items:center;gap:8px;">' +
+      '<div style="flex:1;font-size:13.5px;font-weight:800;line-height:1.6;">🧳 ربط الرحلات والمعتمرين — ' + rows.length + ' ملف</div>' +
+      '<button type="button" title="إغلاق" style="' + xb + '" onclick="this.closest(\'.mf-bulk-edit-backdrop\').remove()">✕</button></div>' +
+    '<div style="padding:12px 14px;overflow:auto;background:#f8fafc;flex:1;">' +
     '<datalist id="mfBkTripsDL">' + (MF.trips || []).map(function (t) { return '<option value="' + E(t.name) + '">'; }).join('') + '</datalist>' +
     '<div class="d-flex gap-2 flex-wrap mb-2"><button class="mf-btn sm" onclick="mfBkLoad_()">📥 تحميل معتمري كل البطاقات</button>' +
       '<button class="mf-btn sm" onclick="mfBkSelAllCards_()">✅ تحديد غير المسجَّلين بملف آخر — للبطاقات بلا اختيار</button></div>' +
-    '<div id="mfBkCards">' + cards + '</div>' +
-    '<div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">' +
-      '<button class="btn btn-outline-secondary btn-sm" onclick="this.closest(\'.mf-bulk-edit-backdrop\').remove()">✖ إلغاء</button>' +
-      '<button class="btn btn-sm fw-bold" style="background:#1e40af;color:#fff;" onclick="mfBulkEditSave_(this)">💾 حفظ الكل</button></div>';
+    '<div id="mfBkCards">' + cards + '</div></div>' +
+    '<div style="padding:10px 16px;border-top:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:#fff;">' +
+      '<button class="mf-btn" onclick="this.closest(\'.mf-bulk-edit-backdrop\').remove()">✖ إلغاء</button>' +
+      '<button class="mf-btn pri fw-bold" onclick="mfBulkEditSave_(this)">💾 حفظ الكل</button></div>';
   bd.appendChild(p); document.body.appendChild(bd);
   MF._bk.cards.forEach(function (c, ci) { mfBkSum_(ci); });
 }
@@ -38325,6 +38336,20 @@ function mfBkCardTrips_(ci) {
 function mfBkTripChanged_(ci) {
   var c = MF._bk.cards[ci]; c.list = null; c.used = null; c.req = (c.req || 0) + 1; c.loading = false;   // أي رد قديم جارٍ يُتجاهَل
   if (mfBkCardTrips_(ci).length) mfBkLoad_([ci]); else { mfBkSum_(ci); mfBkRenderPick_(ci); }
+}
+// (V4.319) 🔍 بحث عن معتمر لمعرفة رحلته: «main» يضعها كرحلة البطاقة، «extra» يضيفها سطراً جديداً بالرحلات الإضافية
+// (لو ليست مرتبطة بالفعل) — ثم نفس معالج تغيير الرحلة (إعادة تحميل المعتمرين بطلب جديد)
+function mfBkSearchTrip_(ci, which) {
+  openPilgrimTripPicker_(function (tn) { bkSearchTripApply_('[data-mfbk="' + ci + '"]', which, tn, function () { return mfBkCardTrips_(ci); }, function () { mfBkTripChanged_(ci); }); });
+}
+function bkSearchTripApply_(sel, which, tn, tripsFn, changed) {   // مشتركة بين بطاقات الوزارة والتأشيرات
+  var root = document.querySelector(sel); tn = mfStr(tn); if (!root || !tn) return;
+  if (which === 'extra') {
+    if (tripsFn().indexOf(tn) >= 0) { _showPopup('الرحلة «' + tn + '» مرتبطة بهذه البطاقة بالفعل', 'info'); return; }
+    var ta = root.querySelector('[data-key="extra"]'), cur = String(ta.value || '').replace(/\s+$/, '');
+    ta.value = (cur ? cur + '\n' : '') + tn; ta.rows = Math.min(4, ta.value.split('\n').length);
+  } else root.querySelector('[data-key="tripName"]').value = tn;
+  changed();
 }
 function mfBkToggle_(ci) {
   var c = MF._bk.cards[ci]; c.open = !c.open;
@@ -38381,31 +38406,45 @@ function mfBkSum_(ci) {
   el.innerHTML = '👥 مختار <b>' + inN + '</b> من ' + c.list.length + ' · المُحتسَب <b>' + (inN - inf) + '</b>' + (inf ? ' (' + inf + ' رضيع بلا احتساب)' : '') +
     (keys.length > inN ? ' <span class="text-muted" title="أسماء محفوظة ليست ضمن قائمة الرحلة/الرحلات الحالية — تبقى كما هي ما لم تضغط «إفراغ»، ولا تدخل بنود العميل">+ ' + (keys.length - inN) + ' محفوظ من خارج القائمة</span>' : '');
 }
+// (V4.319) نفس عرض اختيار النموذج المنفرد (mfTripPickRender): شريط ملخّص .mf-note info + «📂 تجميع حسب» (العميل/فندق مكة/
+// طبيعة التسكين — تفضيل عام واحد يغيّر كل البطاقات المفتوحة) + رؤوس مجموعات بعدّاد مختار/محتسَب وزر تحديد، وسطر السكن تحت كل اسم.
+// التجميع بالعرض فقط — بنود العميل عند الحفظ تبقى سطراً لكل عميل (mfBkBuild_)
 function mfBkRenderPick_(ci) {
   var c = MF._bk.cards[ci], box = document.querySelector('[data-mfbk-pick="' + ci + '"]'); if (!box) return;
   box.style.display = c.open ? '' : 'none'; mfBkSum_(ci);
   if (!c.open) return;
   if (!c.list) { box.innerHTML = '<div class="small text-muted p-1">' + (c.loading ? '⏳ جاري التحميل…' : 'لا توجد قائمة بعد') + '</div>'; return; }
   if (!c.list.length) { box.innerHTML = '<div class="small text-muted p-1">لا معتمرين بهذه الرحلة/الرحلات</div>'; return; }
-  var groups = {}, order = [], E = mfEsc;
-  c.list.forEach(function (p, i) { var g = mfPickClientOf(p); if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(i); });
-  var h = '<div class="d-flex gap-2 my-1"><button class="mf-btn sm" onclick="mfBkPickAll_(' + ci + ',true)">تحديد الكل</button><button class="mf-btn sm" onclick="mfBkPickAll_(' + ci + ',false)">إفراغ</button></div>';
-  order.forEach(function (g, gi) {
-    h += '<div class="mf-pkg" style="margin-top:4px;"><div style="background:#f1f5f9;border-radius:6px;padding:2px 6px;font-size:11px;"><b>🧾 ' + E(g) + '</b> ' +
-      '<a href="#" onclick="mfBkPickClient_(' + ci + ',' + gi + ');return false;" class="small">تبديل المجموعة</a></div><div class="mf-pk">';
-    groups[g].forEach(function (i) {
-      var p = c.list[i], k = mfPickKey(p, i), on = !!c.sel[k], u = c.used[k], vn = pilgrimVisaNote_(p), inf = mfPickIsInfant(p);
+  var E = mfEsc, by = pickByGet_(), used = c.used || {}, inN = 0, infSel = 0, dim = 0;
+  c.list.forEach(function (p, i) { var k = mfPickKey(p, i); if (used[k]) dim++; if (!c.sel[k]) return; inN++; if (mfPickIsInfant(p)) infSel++; });
+  var h = '<div class="mf-note info" style="flex-wrap:wrap;align-items:center;"><span>👥</span><div style="flex:1;min-width:180px;">' +
+    'معتمرو ' + (c.trips && c.trips.length > 1 ? c.trips.length + ' رحلات مربوطة' : 'الرحلة') + ': <b>' + c.list.length + '</b> · المُختار: <b>' + inN + '</b>' +
+    ' · المُحتسَب بالأعداد: <b>' + (inN - infSel) + '</b>' +
+    (infSel ? (' · <b style="color:#0f766e;">' + infSel + ' رضيع</b> بالأسماء فقط بلا احتساب') : '') +
+    (dim ? (' · <b style="color:#c2670a;">' + dim + '</b> مسجَّلون في ملف آخر (باهتون — الاختيار اختياري)') : '') +
+    '</div><span style="display:inline-flex;gap:4px;"><button class="mf-btn sm" onclick="mfBkPickAll_(' + ci + ',true)">تحديد الكل</button><button class="mf-btn sm" onclick="mfBkPickAll_(' + ci + ',false)">إفراغ</button></span></div>' +
+    '<div style="margin:6px 0 2px;">' + pickBySelectHtml_('mfBkRenderAllPick_') + '</div><div data-mfbk-groups="' + ci + '" style="max-height:360px;overflow:auto;">';
+  pickGroups_(c.list, mfPickKey, mfPickClientOf).forEach(function (g, gi) {
+    var onN = g.rows.filter(function (r) { return c.sel[r.k]; }).length, gCnt = g.rows.filter(function (r) { return c.sel[r.k] && !mfPickIsInfant(r.p); }).length, allOn = onN === g.rows.length;
+    h += '<div class="mf-pkg" data-mfbk-g="' + gi + '" style="margin-top:6px;"><div style="display:flex;align-items:center;gap:6px;padding:3px 6px;background:#f1f5f9;border-radius:6px;">' +
+      '<b style="font-size:11px;color:#0f4c4c;flex:1;">' + (by === 'client' ? '🧾 ' : '') + E(g.client) + '</b>' +
+      '<span style="font-size:10px;color:#64748b;">' + onN + '/' + g.rows.length + ' مختار · ' + gCnt + ' محتسَب</span>' +
+      '<button class="mf-btn sm" onclick="mfBkPickClient_(' + ci + ',' + gi + ')">' + (allOn ? 'إلغاء تحديد المجموعة' : 'تحديد الكل') + '</button></div><div class="mf-pk mt-1">';
+    g.rows.forEach(function (r) {
+      var p = r.p, i = r.i, on = !!c.sel[r.k], u = used[r.k], vn = pilgrimVisaNote_(p), inf = mfPickIsInfant(p);
       h += '<label class="mf-pkc' + ((u || vn) && !on ? ' used' : '') + (on ? ' on' : '') + '" title="' + E([u ? 'مسجَّل في ملف ' + u : '', vn ? '🎫 ' + vn : ''].filter(Boolean).join(' — ')) + '">' +
-        '<input type="checkbox" data-ci="' + ci + '" data-pi="' + i + '"' + (on ? ' checked' : '') + ' onchange="mfBkPick_(this)"> <span style="flex:1;">' + E(p.name || '') +
+        '<input type="checkbox" data-ci="' + ci + '" data-pi="' + i + '"' + (on ? ' checked' : '') + ' onchange="mfBkPick_(this)"> <span style="flex:1;">' + E(p.name || p.pilgrimName || ('معتمر ' + (i + 1))) +
         (inf ? ' <span class="mf-badge off" style="font-size:8.5px;">👶 رضيع — بلا احتساب</span>' : '') +
-        '<div style="font-size:9.5px;color:#94a3b8;" class="mf-latin">' + E(p.passportNo || p.passport || '') + (c.trips && c.trips.length > 1 ? ' · 🧳 ' + E(p._trip) : '') + '</div>' +
+        '<div style="font-size:9.5px;color:#94a3b8;"><span class="mf-latin">' + E(p.passportNo || p.passport || '') + '</span>' + (c.trips && c.trips.length > 1 ? ' · 🧳 ' + E(p._trip) : '') + '</div>' +
         (vn ? '<div style="font-size:9.5px;font-weight:800;color:#b45309;">🎫 ' + E(vn) + '</div>' : '') +
-        (u ? '<div style="font-size:9.5px;color:#c2670a;">مسجَّل في ملف ' + E(u) + '</div>' : '') + '</span></label>';
+        pickSubLine_(p) + (u ? '<div style="font-size:9.5px;color:#c2670a;">مسجَّل في ملف ' + E(u) + '</div>' : '') + '</span></label>';
     });
     h += '</div></div>';
   });
-  box.innerHTML = '<div style="border:1px solid #e2e8f0;border-radius:10px;padding:6px;max-height:340px;overflow:auto;">' + h + '</div>';
+  box.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-top:6px;">' + h + '</div></div>';
 }
+// (V4.319) رد «📂 تجميع حسب» (pickBySelectHtml_ يستدعي دالة بلا وسائط): التفضيل عام فيُعاد رسم كل البطاقات المفتوحة
+function mfBkRenderAllPick_() { var B = MF._bk; if (!B) return; B.cards.forEach(function (c, ci) { if (c.open) mfBkRenderPick_(ci); }); }
 function mfBkPick_(el) {
   var ci = +el.getAttribute('data-ci'), i = +el.getAttribute('data-pi'), c = MF._bk.cards[ci], k = mfPickKey(c.list[i], i);
   if (el.checked) c.sel[k] = true; else delete c.sel[k];
@@ -38416,11 +38455,11 @@ function mfBkPickAll_(ci, on) {
   if (!on) c.sel = {}; else c.list.forEach(function (p, i) { c.sel[mfPickKey(p, i)] = true; });
   c.selDirty = true; mfBkRenderPick_(ci);
 }
-function mfBkPickClient_(ci, gi) {
-  var c = MF._bk.cards[ci], order = [], idx = {};
-  c.list.forEach(function (p, i) { var g = mfPickClientOf(p); if (!idx[g]) { idx[g] = []; order.push(g); } idx[g].push(i); });
-  var ii = idx[order[gi]] || [], allOn = ii.every(function (i) { return c.sel[mfPickKey(c.list[i], i)]; });
-  ii.forEach(function (i) { var k = mfPickKey(c.list[i], i); if (allOn) delete c.sel[k]; else c.sel[k] = true; });
+function mfBkPickClient_(ci, gi) {   // (V4.319) نفس تجميع العرض (pickGroups_) فيطابق رقم المجموعة gi ما يراه المستخدم
+  var c = MF._bk.cards[ci]; if (!c.list) return;
+  var g = pickGroups_(c.list, mfPickKey, mfPickClientOf)[gi]; if (!g) return;
+  var allOn = g.rows.every(function (r) { return c.sel[r.k]; });
+  g.rows.forEach(function (r) { if (allOn) delete c.sel[r.k]; else c.sel[r.k] = true; });
   c.selDirty = true; mfBkRenderPick_(ci);
 }
 // ✅ للبطاقات المُحمَّلة بلا اختيار: تحديد كل من ليس مسجَّلاً بملف آخر (نفس الاختيار الافتراضي بالنموذج المنفرد)
@@ -38481,9 +38520,9 @@ function mfBulkEditSave_(btn) {
   B.cards.forEach(function (c, ci) {
     var r = mfBkBuild_(ci), eb = document.querySelector('[data-mfbk-err="' + ci + '"]'), card = document.querySelector('[data-mfbk="' + ci + '"]');
     if (eb) eb.textContent = r.errs.join(' · ');
-    if (card) card.style.borderColor = r.errs.length ? '#dc2626' : '#dfe6e8';
+    if (card) card.style.borderColor = r.errs.length ? '#dc2626' : '';   // (V4.319) '' ⇒ حدّ .mf-dcard الأصلي
     if (r.errs.length) { bad++; return; }
-    if (r.item) { items.push(r.item); r.warns.forEach(function (w) { warns.push('ملف ' + (c.f.fileNo || ('#' + c.f.seq)) + ': ' + w); }); }
+    if (r.item) { items.push(r.item); r.warns.forEach(function (w) { warns.push('ملف ' +(c.f.fileNo || ('#' + c.f.seq)) + ': ' + w); }); }
   });
   if (bad) { _showPopup('صحّح البطاقات المعلَّمة بالأحمر (' + bad + ') ثم احفظ', 'warning'); return; }
   if (!items.length) { _showPopup('لا توجد تغييرات للحفظ', 'info'); return; }
@@ -40590,14 +40629,8 @@ function mfPullTripPilgrims(quiet) {
 function mfPickIsInfant(p) { return String((p && p.type) || '').indexOf('رضيع') >= 0; }
 function mfPickClientOf(p) { return mfStr((p && (p.client || p.clientName)) || '') || '(بدون عميل)'; }
 function mfPickGroups() {
-  var P = MF._tripPick, groups = [], byName = {};
-  var by = pickByGet_();   // (V4.217) 📂 تجميع حسب: العميل / فندق مكة / طبيعة التسكين — مثل مجموعات التأشيرات
-  (P.list || []).forEach(function (p, i) {
-    var c = by === 'client' ? mfPickClientOf(p) : pickGroupOf_(p, by);
-    if (!byName[c]) { byName[c] = { client: c, rows: [] }; groups.push(byName[c]); }
-    byName[c].rows.push({ p: p, i: i, k: mfPickKey(p, i) });
-  });
-  return groups;
+  // (V4.217) 📂 تجميع حسب: العميل / فندق مكة / طبيعة التسكين — مثل مجموعات التأشيرات. (V4.319) النواة مشتركة: pickGroups_
+  return pickGroups_(MF._tripPick.list, mfPickKey, mfPickClientOf);
 }
 function mfTripPickRender() {
   var box = document.getElementById('mfTripPickBox'); if (!box) return;
@@ -41209,6 +41242,18 @@ function pickBySelectHtml_(onchangeFn) {
   var cur = pickByGet_();
   return '<label style="font-size:11px;font-weight:800;color:#334155;display:inline-flex;align-items:center;gap:4px;">📂 تجميع حسب: <select style="font-size:11px;border-radius:6px;padding:1px 4px;" onchange="pickBySet_(this.value);' + onchangeFn + '()">' +
     PICK_BY_OPTS_.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cur ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></label>';
+}
+// (V4.319) نواة التجميع المشتركة: [{client:العنوان, rows:[{p,i,k}]}] بترتيب أول ظهور — «العميل» بدالة عميل الشاشة نفسها
+// (mfPickClientOf/vzPickClientOf ⇒ «(بدون عميل)»)، والباقي pickGroupOf_. يستخدمها النموذج المنفرد وبطاقات الربط الجماعي معاً
+// فيبقى رقم المجموعة بالعرض = رقمها بزر «تحديد المجموعة»
+function pickGroups_(list, keyFn, clientFn) {
+  var by = pickByGet_(), out = [], idx = {};
+  (list || []).forEach(function (p, i) {
+    var g = by === 'client' ? clientFn(p) : pickGroupOf_(p, by);
+    if (!idx[g]) { idx[g] = { client: g, rows: [] }; out.push(idx[g]); }
+    idx[g].rows.push({ p: p, i: i, k: keyFn(p, i) });
+  });
+  return out;
 }
 function mfPickKey(p, i) { return mfStr(p.passportNo || p.passport || '') || ('idx:' + i); }
 function mfPickRender() {
@@ -43106,14 +43151,18 @@ function vzBulkEditOpen_() {
   };
   var inp = function (ci, key, val) { return '<input class="form-control form-control-sm" data-ci="' + ci + '" data-key="' + key + '" value="' + E(String(val || '')) + '">'; };
   var fld = function (label, html) { return '<div><label class="small text-muted">' + E(label) + '</label>' + html + '</div>'; };
+  // (V4.319) 🔍 بجوار الرحلة والرحلات الإضافية: البحث عن معتمر لمعرفة رحلته (نفس زر النموذج المنفرد) — بحاوية flex مضمّنة لا .d-flex (المُلزَمة باللفّ بهذا الملف) فيبقى الزر بجوار الحقل
+  var srch = function (ci, which) { return '<button type="button" class="vz-btn sm" style="flex-shrink:0;" data-vzbk-srch="' + which + '" title="بحث عن معتمر لمعرفة رحلته' +
+    (which === 'extra' ? ' — تُضاف رحلته للرحلات الإضافية' : '') + '" onclick="vzBkSearchTrip_(' + ci + ',\'' + which + '\')">🔍</button>'; };
   var cards = VZ._bk.cards.map(function (c, ci) {
     var g = c.g;
-    return '<div class="p-2 mb-2 rounded" data-vzbk="' + ci + '" style="background:#f7faf9;border:1px solid #dfe6e8;">' +
-      '<div class="d-flex justify-content-between flex-wrap gap-1 mb-1" style="font-size:12.5px;"><b style="color:#0b3838;">🛂 مجموعة ' + E(vzGroupLbl_(g)) +
-        ' <span class="text-muted" style="font-weight:400;">' + E(g.agent || '') + (g.company ? ' · ' + E(g.company) : '') + ' · العدد ' + mfNum(g.visaCount) + '</span></b></div>' +
-      '<div style="display:grid;grid-template-columns:2fr 2fr;gap:8px;">' +
-        fld('🧳 الرحلة المرتبطة', '<input class="form-control form-control-sm" list="vzBkTripsDL" data-ci="' + ci + '" data-key="tripName" value="' + E(c.tripName) + '" onchange="vzBkTripChanged_(' + ci + ')" placeholder="اختر الرحلة…">') +
-        fld('رحلات إضافية (رحلة بكل سطر)', '<textarea class="form-control form-control-sm" rows="1" data-ci="' + ci + '" data-key="extra" onchange="vzBkTripChanged_(' + ci + ')">' + E(c.extra) + '</textarea>') +
+    // (V4.319) بطاقة بشكل أقسام نموذج المجموعة (.vz-sec/.vz-sec-h) — وعمودا الرحلة يتراصّان على الموبايل
+    return '<div class="vz-sec" data-vzbk="' + ci + '">' +
+      '<div class="vz-sec-h" style="flex-wrap:wrap;margin-bottom:6px;">🛂 مجموعة ' + E(vzGroupLbl_(g)) +
+        ' <span class="text-muted" style="font-weight:400;font-size:11.5px;">' + E(g.agent || '') + (g.company ? ' · ' + E(g.company) : '') + ' · العدد ' + mfNum(g.visaCount) + '</span></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;">' +
+        fld('🧳 الرحلة المرتبطة', '<div style="display:flex;gap:4px;"><input class="form-control form-control-sm" style="flex:1;min-width:0;" list="vzBkTripsDL" data-ci="' + ci + '" data-key="tripName" value="' + E(c.tripName) + '" onchange="vzBkTripChanged_(' + ci + ')" placeholder="اختر الرحلة…">' + srch(ci, 'main') + '</div>') +
+        fld('رحلات إضافية (رحلة بكل سطر)', '<div style="display:flex;gap:4px;align-items:flex-start;"><textarea class="form-control form-control-sm" style="flex:1;min-width:0;" rows="' + Math.min(4, Math.max(1, c.extra ? c.extra.split('\n').length : 1)) + '" data-ci="' + ci + '" data-key="extra" onchange="vzBkTripChanged_(' + ci + ')">' + E(c.extra) + '</textarea>' + srch(ci, 'extra') + '</div>') +
       '</div>' +
       '<div class="d-flex align-items-center gap-2 flex-wrap mt-1" style="font-size:12px;"><span data-vzbk-sum="' + ci + '"></span>' +
         '<button class="vz-btn sm" onclick="vzBkToggle_(' + ci + ')" data-vzbk-tg="' + ci + '">👥 عرض المعتمرين</button></div>' +
@@ -43127,21 +43176,24 @@ function vzBulkEditOpen_() {
         '</div></details></div>';
   }).join('');
   document.querySelectorAll('.vz-bulk-edit-backdrop').forEach(function (el) { el.remove(); });
+  // (V4.319) نفس تصميم نوافذ التأشيرات (vzFormOpen): الفئة vz-dlg (حدّ ذهبي، تمرير داخلي) + رأس .vz-hd أخضر ثابت + تذييل
+  // .vz-foot ثابت بأزرار vz-btn — والخلفية تبقى بفئتها ونفس z-index (لا vz-dlg-ov كي لا تُغلقها أي إزالة عامة لنوافذ الشاشة)
   var bd = document.createElement('div'); bd.className = 'vz-bulk-edit-backdrop';
-  bd.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;padding:30px 10px;overflow-y:auto;';
+  bd.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(6,32,26,.62);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:12px 8px;direction:rtl;';
   bd.addEventListener('click', function (ev) { if (ev.target === bd) bd.remove(); });
-  var p = document.createElement('div');
-  p.style.cssText = 'background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:16px;max-width:820px;width:100%;';
+  var p = document.createElement('div'); p.className = 'vz-dlg';
+  p.style.cssText = 'width:min(900px,100%);';
   p.addEventListener('click', function (ev) { ev.stopPropagation(); });
-  p.innerHTML = '<div class="d-flex justify-content-between align-items-center mb-2"><b style="color:#0b3838;font-size:15px;">🧳 ربط الرحلات والمعتمرين — ' + rows.length + ' مجموعة</b>' +
-      '<span style="cursor:pointer;color:#b3261e;font-size:22px;line-height:1;" onclick="this.closest(\'.vz-bulk-edit-backdrop\').remove()">×</span></div>' +
+  p.innerHTML = '<div class="vz-hd"><b>🧳 ربط الرحلات والمعتمرين — ' + rows.length + ' مجموعة</b>' +
+      '<button class="vz-btn sm" title="إغلاق" onclick="this.closest(\'.vz-bulk-edit-backdrop\').remove()">✕</button></div>' +
+    '<div class="px-3 pb-3 pt-2">' +
     '<datalist id="vzBkTripsDL">' + (VZ.trips || []).map(function (t) { return '<option value="' + E(t.name) + '">'; }).join('') + '</datalist>' +
-    '<div class="d-flex gap-2 flex-wrap mb-2"><button class="vz-btn sm" onclick="vzBkLoad_()">📥 تحميل معتمري كل البطاقات</button>' +
+    '<div class="d-flex gap-2 flex-wrap mb-1"><button class="vz-btn sm" onclick="vzBkLoad_()">📥 تحميل معتمري كل البطاقات</button>' +
       '<button class="vz-btn sm" onclick="vzBkSelAllCards_()">✅ تحديد غير المسجَّلين بمجموعة أخرى — للبطاقات بلا اختيار</button></div>' +
-    '<div id="vzBkCards">' + cards + '</div>' +
-    '<div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">' +
-      '<button class="btn btn-outline-secondary btn-sm" onclick="this.closest(\'.vz-bulk-edit-backdrop\').remove()">✖ إلغاء</button>' +
-      '<button class="btn btn-sm fw-bold" style="background:#1e40af;color:#fff;" onclick="vzBulkEditSave_(this)">💾 حفظ الكل</button></div>';
+    '<div id="vzBkCards">' + cards + '</div></div>' +
+    '<div class="vz-foot" style="justify-content:space-between;flex-wrap:wrap;">' +
+      '<button class="vz-btn" onclick="this.closest(\'.vz-bulk-edit-backdrop\').remove()">✖ إلغاء</button>' +
+      '<button class="vz-btn pri fw-bold" onclick="vzBulkEditSave_(this)">💾 حفظ الكل</button></div>';
   bd.appendChild(p); document.body.appendChild(bd);
   VZ._bk.cards.forEach(function (c, ci) { vzBkSum_(ci); });
 }
@@ -43153,6 +43205,10 @@ function vzBkCardTrips_(ci) {
 function vzBkTripChanged_(ci) {
   var c = VZ._bk.cards[ci]; c.list = null; c.other = {}; c.req = (c.req || 0) + 1; c.loading = false;   // أي رد قديم جارٍ يُتجاهَل
   if (vzBkCardTrips_(ci).length) vzBkLoad_([ci]); else { vzBkSum_(ci); vzBkRenderPick_(ci); }
+}
+// (V4.319) 🔍 بحث عن معتمر لمعرفة رحلته — نفس mfBkSearchTrip_ (bkSearchTripApply_) لبطاقات مجموعات التأشيرات
+function vzBkSearchTrip_(ci, which) {
+  openPilgrimTripPicker_(function (tn) { bkSearchTripApply_('[data-vzbk="' + ci + '"]', which, tn, function () { return vzBkCardTrips_(ci); }, function () { vzBkTripChanged_(ci); }); });
 }
 function vzBkToggle_(ci) {
   var c = VZ._bk.cards[ci]; c.open = !c.open;
@@ -43226,31 +43282,44 @@ function vzBkInOtherCard_(ci, p) {
   VZ._bk.cards.forEach(function (c, j) { if (j === ci || hit || !c.list) return; if (c.sel[pass]) hit = vzGroupLbl_(c.g); });
   return hit;
 }
+// (V4.319) نفس عرض اختيار نموذج المجموعة (vzPickRender): صندوق .vz-bar بصف علوي (العدد/المختار/تحديد الكل/إفراغ/«📂 تجميع حسب»)
+// + رؤوس مجموعات بعدّاد وزر تحديد، وشارات 👶 و«⚠️ مجموعة/بطاقة» وسطر السكن تحت كل اسم. التفضيل عام فيغيّر كل البطاقات المفتوحة
 function vzBkRenderPick_(ci) {
   var c = VZ._bk.cards[ci], box = document.querySelector('[data-vzbk-pick="' + ci + '"]'); if (!box) return;
   box.style.display = c.open ? '' : 'none'; vzBkSum_(ci);
   if (!c.open) return;
   if (!c.list) { box.innerHTML = '<div class="small text-muted p-1">' + (c.loading ? '⏳ جاري التحميل…' : 'لا توجد قائمة بعد') + '</div>'; return; }
   if (!c.list.length) { box.innerHTML = '<div class="small text-muted p-1">لا معتمرين بهذه الرحلة/الرحلات</div>'; return; }
-  var other = vzOtherGroupsIdx_(c.id), groups = {}, order = [], E = vzEsc;
-  c.list.forEach(function (p, i) { var g = vzPickClientOf(p); if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(i); });
-  var h = '<div class="d-flex gap-2 my-1"><button class="vz-btn sm" onclick="vzBkPickAll_(' + ci + ',true)">تحديد الكل</button><button class="vz-btn sm" onclick="vzBkPickAll_(' + ci + ',false)">إفراغ</button></div>';
-  order.forEach(function (g, gi) {
-    h += '<div style="margin-top:3px;"><div style="background:#eef7f5;border-radius:6px;padding:2px 6px;font-size:11px;"><b>🧾 ' + E(g) + '</b> ' +
-      '<a href="#" onclick="vzBkPickClient_(' + ci + ',' + gi + ');return false;" class="small">تبديل المجموعة</a></div><div class="vz-pk mt-1">';
-    groups[g].forEach(function (i) {
-      var p = c.list[i], k = vzPickKey(p, i), on = !!c.sel[k], pass = mfStr(p.passport || p.passportNo);
-      var og = pass ? other[pass] : null, oc = vzBkInOtherCard_(ci, p), vn = pilgrimVisaNote_(p);
-      var warn = [og ? '⚠️ مجموعة ' + vzGroupLbl_(og) : '', oc ? '⚠️ بطاقة ' + oc : '', vn ? '🎫 ' + vn : ''].filter(Boolean).join(' · ');
-      h += '<label class="vz-pkc' + (on ? ' on' : '') + '"' + (warn && !on ? ' style="opacity:.55;"' : '') + ' title="' + E(warn) + '">' +
-        '<input type="checkbox" data-ci="' + ci + '" data-pi="' + i + '"' + (on ? ' checked' : '') + ' onchange="vzBkPick_(this)"> <span style="flex:1;">' + E(p.name || '') +
-        (vzPickIsInfant(p) ? ' 👶' : '') + '<div style="font-size:9px;color:#94a3b8;">' + E(pass) + (c.trips && c.trips.length > 1 ? ' · 🧳 ' + E(p._trip) : '') + '</div>' +
-        (warn ? '<div style="font-size:9.5px;color:#b45309;font-weight:700;">' + E(warn) + '</div>' : '') + '</span></label>';
+  var other = vzOtherGroupsIdx_(c.id), E = vzEsc, by = pickByGet_(), multi = c.trips && c.trips.length > 1;
+  var inN = c.list.filter(function (p, i) { return c.sel[vzPickKey(p, i)]; }).length;
+  var h = '<div class="d-flex align-items-center gap-2 flex-wrap mb-1">' +
+    '<b style="font-size:12px;color:#0f4c4c;">👥 معتمرو ' + (multi ? c.trips.length + ' رحلات مربوطة' : 'الرحلة') + ': ' + c.list.length + '</b>' +
+    '<span class="small text-muted">مختار: ' + inN + '</span>' +
+    '<button class="vz-btn sm" onclick="vzBkPickAll_(' + ci + ',true)">تحديد الكل</button><button class="vz-btn sm" onclick="vzBkPickAll_(' + ci + ',false)">إفراغ</button>' +
+    pickBySelectHtml_('vzBkRenderAllPick_') + '</div><div data-vzbk-groups="' + ci + '" style="max-height:360px;overflow:auto;">';
+  pickGroups_(c.list, vzPickKey, vzPickClientOf).forEach(function (g, gi) {
+    var onN = g.rows.filter(function (r) { return c.sel[r.k]; }).length, allOn = onN === g.rows.length;
+    h += '<div data-vzbk-g="' + gi + '" style="margin-top:4px;"><div style="display:flex;align-items:center;gap:6px;background:#eef7f5;border-radius:6px;padding:2px 6px;">' +
+      '<b style="font-size:11px;color:#0f4c4c;flex:1;">' + (by === 'client' ? '🧾 ' : '') + E(g.client) + '</b><span class="small text-muted">' + onN + '/' + g.rows.length + '</span>' +
+      '<button class="vz-btn sm" onclick="vzBkPickClient_(' + ci + ',' + gi + ')">' + (allOn ? 'إلغاء' : 'تحديد المجموعة') + '</button></div><div class="vz-pk mt-1">';
+    g.rows.forEach(function (r) {
+      var p = r.p, i = r.i, on = !!c.sel[r.k], pass = mfStr(p.passport || p.passportNo);
+      var og = pass ? other[pass] : null, oc = vzBkInOtherCard_(ci, p), vn = pilgrimVisaNote_(p), ogl = og ? vzGroupLbl_(og) : '';
+      var warn = [og ? '⚠️ مجموعة ' + ogl : '', oc ? '⚠️ بطاقة ' + oc : '', vn ? '🎫 ' + vn : ''].filter(Boolean).join(' · ');
+      h += '<label class="vz-pkc' + (on ? ' on' : '') + '"' + (warn && !on ? ' style="opacity:.5;"' : '') + ' title="' + E(warn) + '">' +
+        '<input type="checkbox" data-ci="' + ci + '" data-pi="' + i + '"' + (on ? ' checked' : '') + ' onchange="vzBkPick_(this)"> <span style="flex:1;">' + E(p.name || ('معتمر ' + (i + 1))) +
+        (vzPickIsInfant(p) ? ' <span class="vz-badge y" style="font-size:8px;">👶</span>' : '') +
+        (og ? ' <span class="vz-badge r" style="font-size:8px;" title="مُرسَل من قبل ضمن مجموعة ' + E(ogl) + '">⚠️ مجموعة ' + E(ogl) + '</span>' : '') +
+        (oc ? ' <span class="vz-badge r" style="font-size:8px;" title="مختار أيضاً ببطاقة أخرى في هذه النافذة">⚠️ بطاقة ' + E(oc) + '</span>' : '') +
+        '<div style="font-size:9px;color:#94a3b8;"><span class="vz-latin">' + E(pass) + '</span>' + (multi && p._trip ? ' · 🧳 ' + E(p._trip) : '') + '</div>' + pickSubLine_(p) +
+        (vn ? '<div style="font-size:9.5px;font-weight:800;color:#b45309;">🎫 ' + E(vn) + '</div>' : '') + '</span></label>';
     });
     h += '</div></div>';
   });
-  box.innerHTML = '<div class="vz-bar" style="border-radius:10px;max-height:340px;overflow:auto;">' + h + '</div>';
+  box.innerHTML = '<div class="vz-bar mt-1" style="border-radius:10px;">' + h + '</div></div>';
 }
+// (V4.319) رد «📂 تجميع حسب» (pickBySelectHtml_ يستدعي دالة بلا وسائط): التفضيل عام فيُعاد رسم كل البطاقات المفتوحة
+function vzBkRenderAllPick_() { var B = VZ._bk; if (!B) return; B.cards.forEach(function (c, ci) { if (c.open) vzBkRenderPick_(ci); }); }
 function vzBkPick_(el) {
   var ci = +el.getAttribute('data-ci'), i = +el.getAttribute('data-pi'), c = VZ._bk.cards[ci], k = vzPickKey(c.list[i], i);
   if (el.checked) c.sel[k] = true; else delete c.sel[k];
@@ -43261,11 +43330,11 @@ function vzBkPickAll_(ci, on) {   // «إفراغ» يُفرغ الكل صراح
   if (!on) c.sel = {}; else c.list.forEach(function (p, i) { c.sel[vzPickKey(p, i)] = true; });
   c.selDirty = true; vzBkRenderPick_(ci);
 }
-function vzBkPickClient_(ci, gi) {
-  var c = VZ._bk.cards[ci], order = [], idx = {};
-  c.list.forEach(function (p, i) { var g = vzPickClientOf(p); if (!idx[g]) { idx[g] = []; order.push(g); } idx[g].push(i); });
-  var ii = idx[order[gi]] || [], allOn = ii.every(function (i) { return c.sel[vzPickKey(c.list[i], i)]; });
-  ii.forEach(function (i) { var k = vzPickKey(c.list[i], i); if (allOn) delete c.sel[k]; else c.sel[k] = true; });
+function vzBkPickClient_(ci, gi) {   // (V4.319) نفس تجميع العرض (pickGroups_) فيطابق رقم المجموعة gi ما يراه المستخدم
+  var c = VZ._bk.cards[ci]; if (!c.list) return;
+  var g = pickGroups_(c.list, vzPickKey, vzPickClientOf)[gi]; if (!g) return;
+  var allOn = g.rows.every(function (r) { return c.sel[r.k]; });
+  g.rows.forEach(function (r) { if (allOn) delete c.sel[r.k]; else c.sel[r.k] = true; });
   c.selDirty = true; vzBkRenderPick_(ci);
 }
 // ✅ لكل بطاقة مُحمَّلة بلا أي اختيار: تحديد كل معتمري رحلتها/رحلاتها
@@ -43329,9 +43398,9 @@ function vzBulkEditSave_(btn) {
   B.cards.forEach(function (c, ci) {
     var r = vzBkBuild_(ci), eb = document.querySelector('[data-vzbk-err="' + ci + '"]'), card = document.querySelector('[data-vzbk="' + ci + '"]');
     if (eb) eb.textContent = r.errs.join(' · ');
-    if (card) card.style.borderColor = r.errs.length ? '#dc2626' : '#dfe6e8';
+    if (card) card.style.borderColor = r.errs.length ? '#dc2626' : '';   // (V4.319) '' ⇒ حدّ .vz-sec الأصلي
     if (r.errs.length) { bad++; return; }
-    if (r.item) { items.push(r.item); r.warns.forEach(function (w) { warns.push('مجموعة ' + vzGroupLbl_(c.g) + ': ' + w); }); }
+    if (r.item) { items.push(r.item); r.warns.forEach(function (w) { warns.push('مجموعة ' +vzGroupLbl_(c.g) + ': ' + w); }); }
   });
   if (bad) { _showPopup('صحّح البطاقات المعلَّمة بالأحمر (' + bad + ') ثم احفظ', 'warning'); return; }
   if (!items.length) { _showPopup('لا توجد تغييرات للحفظ', 'info'); return; }
