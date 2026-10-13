@@ -74,7 +74,7 @@ function doGet(e) {
   // 🧭 تشخيص: يثبت في سجل Executions أن هذا التنفيذ هو فعلاً من نسخة الكود التي تحمل هذا الإصدار،
   // فتقدر تتأكد إن النشر (Deploy) الفعلي محدَّث بمقارنة الرقم هنا مع V3.57 في الشريط العلوي بالمتصفح.
   Logger.log("🚀 doGet نُفِّذَت — APP_VERSION: " + APP_VERSION + " | page: " + (e && e.parameter && e.parameter.page) + " | time: " + new Date());
-  // 🤖 (V4.244) حفظ رابط النشر /exec الحقيقي لويب هوك بوت الحجوزات (المحرر والمشغّلات قد يرون رابط /dev)
+  // 📲 (V4.244) حفظ رابط النشر /exec الحقيقي لويب هوك بوت الحجوزات (المحرر والمشغّلات قد يرون رابط /dev)
   try { if (typeof hbRememberExecUrl_ === 'function') hbRememberExecUrl_(); } catch (eHook) {}
 
   // 🔗 صفحة العميل (قراءة فقط): ?view=trip&t=<رمز المشاركة> — بلا تسجيل دخول وبلا أي تعديل
@@ -2262,7 +2262,7 @@ function _saveBookingToServer_impl_(authToken, bookingData) {
   var session = requireAuth_(authToken);
 
   // التحقق من الحقول الإلزامية المُعرَّفة في شاشة الإعدادات
-  // 🤖 إشعارات بوت تليجرام تمر بمسار تحقق خاص بها داخل البوت (حالة "قيد المراجعة" دائمًا)
+  // 📲 إشعارات بوت تليجرام تمر بمسار تحقق خاص بها داخل البوت (حالة "قيد المراجعة" دائمًا)
   var requiredCheck = bookingData.__fromTelegramBot__ === true ? null : validateRequiredFields_(bookingData);
   if (requiredCheck) {
     return { success: false, error: requiredCheck };
@@ -7814,7 +7814,7 @@ function sendTelegramArrivalAlerts() {
         if (i < list.length - 1) msg += "▪️\n";
       });
       msg += "━━━━━━━━━━━━━━━━━━\n";
-      msg += "🤖 *نظام إشعارات رحلات العمرة التلقائي*";
+      msg += "🔔 *نظام إشعارات رحلات العمرة التلقائي*";
       return msg;
     };
 
@@ -7929,7 +7929,7 @@ function doPost(e) {
         UrlFetchApp.fetch(urlAnswer, { "method": "post", "contentType": "application/json", "muteHttpExceptions": true, "payload": JSON.stringify({ "callback_query_id": callbackId }) });
       } catch (ackErr) { Logger.log('answerCallbackQuery failed (ignored): ' + ackErr); }
 
-      // 🤖 أزرار بوت تسجيل إشعارات الوصول (بادئة bn:)
+      // 📲 أزرار بوت تسجيل إشعارات الوصول (بادئة bn:)
       if (callbackData.indexOf('bn:') === 0) {
         try {
           _tgbnHandleCallback_(cq);
@@ -8184,7 +8184,7 @@ function doPost(e) {
       return;
     }
 
-    // 3️⃣ 🤖 بوت تسجيل إشعارات الوصول: عبارات البدء + الرسائل داخل محادثة نشطة
+    // 3️⃣ 📲 بوت تسجيل إشعارات الوصول: عبارات البدء + الرسائل داخل محادثة نشطة
     try {
       _tgbnDispatchMessage_(msg);
     } catch (dspErr) {
@@ -8330,7 +8330,7 @@ function sendTelegramMessageDirect(chatId, text, buttons) {
 }
 
 // ============================================================================
-// 🤖 بوت تليجرام لتسجيل إشعارات الوصول (TGBN = Telegram Bot Notice)
+// 📲 بوت تليجرام لتسجيل إشعارات الوصول (TGBN = Telegram Bot Notice)
 // محادثة موجَّهة داخل جروبات مصرَّح بها: تذكرة → استخراج آلي (أو إدخال يدوي) →
 // عدد → شركة → اتجاه → ليالي → عميل → مراجعة → حفظ بحالة "قيد المراجعة"
 // ============================================================================
@@ -8361,7 +8361,7 @@ function _tgccCfgRaw_() {
 // ⚙️ الإعدادات الفعلية وقت التشغيل — تُستخدَم من كل معالجات الرسائل/الأزرار فقط
 function _tgccCfg_() {
   var cfg = _tgccCfgRaw_();
-  // 🤖 (V4.140) دمج بوت اتفاقيات الإعاشة في بوت الأوامر الرئيسي: لو لم يُضبَط توكن منفصل لها
+  // 📲 (V4.140) دمج بوت اتفاقيات الإعاشة في بوت الأوامر الرئيسي: لو لم يُضبَط توكن منفصل لها
   // (الوضع الافتراضي بعد الدمج)، تُستخدَم توكن البوت الرئيسي — بوت واحد للاثنين معاً. من يملك
   // بوتاً منفصلاً فعلاً (توكن محفوظ صراحةً) يستمر بلا أي تغيير.
   if (!cfg.token) cfg.token = TELEGRAM_CONFIG.token || '';
@@ -8409,7 +8409,7 @@ function testTgCateringBot(authToken) {
   requireAdminPermission_(authToken);
   var cfg = _tgccCfgRaw_();
   var checks = [];
-  // 🤖 (V4.140) لا توكن منفصل مضبوط = الوضع المدموج الطبيعي؛ لا داعي لاختبار ويب هوك مستقل هنا،
+  // 📲 (V4.140) لا توكن منفصل مضبوط = الوضع المدموج الطبيعي؛ لا داعي لاختبار ويب هوك مستقل هنا،
   // فقط تحقّق من تفعيل الميزة وضبط من له حق الاستخدام — اختبار اتصال البوت نفسه يكون من قسم إعداداته.
   if (!cfg.token) {
     checks.push({ ok: true, label: 'الوضع المدموج', detail: 'لا يوجد توكن منفصل — تعمل اتفاقيات الإعاشة عبر بوت الأوامر الرئيسي نفسه. اختبر اتصال ذلك البوت من قسم إعداداته.' });
@@ -8470,7 +8470,7 @@ function testTgCateringBot(authToken) {
 function setTgCateringWebhook(authToken) {
   requireAdminPermission_(authToken);
   var cfg = _tgccCfgRaw_();
-  // 🤖 (V4.140) هذا الزر لبوت منفصل فقط — في الوضع المدموج (توكن فارغ) لا حاجة لضبط أي ويب هوك
+  // 📲 (V4.140) هذا الزر لبوت منفصل فقط — في الوضع المدموج (توكن فارغ) لا حاجة لضبط أي ويب هوك
   // هنا إطلاقاً، وتشغيله بتوكن البوت الرئيسي كان سيسرق ويب هوكه ويعطّل بقية أزرار البوت الرئيسي.
   if (!cfg.token) return { success: false, error: 'أنت بالوضع المدموج (لا توكن منفصل) — لا حاجة لضبط ويب هوك هنا؛ الميزة تعمل تلقائياً عبر بوت الأوامر الرئيسي. أدخل توكن بوت منفصل فقط لو تريد فصله فعلاً.' };
   var webAppUrl = '';
@@ -11585,7 +11585,7 @@ function DANGER_resetAllDataForNewClient(confirmText) {
 }
 
 /* ============================================================
-   🤖 إدارة Webhook تيليجرام — يُفعَّل من شاشة الإعدادات بخطوة واحدة
+   📲 إدارة Webhook تيليجرام — يُفعَّل من شاشة الإعدادات بخطوة واحدة
    
    كيف يعمل النظام:
    1. doPost(e) يستقبل كل رسائل تيليجرام تلقائياً بعد تفعيل الـ Webhook
@@ -16071,7 +16071,7 @@ function mergeCateringDuplicates(authToken, contractNo) {
   return { success: true, mergedCount: matches.length };
 }
 
-// 🤖 (V4.55) استخلاص بيانات الاتفاقيات — يدعم عدة اتفاقيات بالملف الواحد، ومحاولة استخلاص يدوي
+// ✨ (V4.55) استخلاص بيانات الاتفاقيات — يدعم عدة اتفاقيات بالملف الواحد، ومحاولة استخلاص يدوي
 // (قواعد نصية Regex) لو تعذَّر رد الذكاء الاصطناعي أو لم يكن مفهومًا.
 // الردّ الآن دائماً {success, contracts:[...]} — مصفوفة (اتفاقية أو أكثر أو صفر).
 // 📆 (V4.58) توليد الحقل الناقص بين (days, fromDate, toDate) عبر: days = to - from + 1
@@ -16366,7 +16366,7 @@ function extractCateringContract(authToken, base64Data, mimeType, fileName) {
     return out;
   };
 
-  // 🤖 محاولة استخلاص AI — تدعم عدة اتفاقيات
+  // ✨ محاولة استخلاص AI — تدعم عدة اتفاقيات
   var _tryAi_ = function() {
     if (!GKEYS.length) return { ok: false, err: 'مفتاح Gemini غير مُعدّ' };
     // 🧠 (V4.74) بنص أوسع يميّز 3 صيغ: جدولية / بطاقات منفصلة / شاشة تفاصيل ببنية عمودية (label فوق value)
@@ -26438,7 +26438,7 @@ function _fltReportHtml_(trip, pnr, R) {
     '</table></body></html>';
 }
 
-/* 🤖 (V4.257) بوت الرحلات: «مطابقة برنت» — يطلب البرنت (صورة/PDF/نص) ثم الرحلة (اسم أو جزء منه أو تاريخ السفر، بحث تقريبي)
+/* 📲 (V4.257) بوت الرحلات: «مطابقة برنت» — يطلب البرنت (صورة/PDF/نص) ثم الرحلة (اسم أو جزء منه أو تاريخ السفر، بحث تقريبي)
    ثم يرسل التقرير مع زر PDF. الحالة في الكاش (30 دقيقة) لكل محادثة+مستخدم. */
 function _tgFltKey_(c, u) { return 'fltq_' + c + '_' + u; }
 function _tgFltGet_(c, u) { try { return JSON.parse(CacheService.getScriptCache().get(_tgFltKey_(c, u)) || 'null'); } catch (e) { return null; } }

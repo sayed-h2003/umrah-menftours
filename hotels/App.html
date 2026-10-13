@@ -2013,7 +2013,7 @@
   </details>
 
   <details class="acc-section" id="tgBotSection">
-    <summary class="acc-summary">🤖 بوت تليجرام التفاعلي — الأوامر والصلاحيات (مدير فقط)</summary>
+    <summary class="acc-summary">📲 بوت تليجرام التفاعلي — الأوامر والصلاحيات (مدير فقط)</summary>
     <div class="acc-body">
       <p class="sub2">يتيح للموظفين الرد على طلبات العملاء بالأزرار مباشرةً من تليجرام، وإصدار تأكيد الحجز وكشف الحساب كملفات PDF بأمر واحد. <b>كل إجراء يمر بفحصين معًا: صلاحية الشاشة في البرنامج + مفتاح البوت أدناه.</b></p>
 
@@ -2111,7 +2111,7 @@
   </details>
 
   <details class="acc-section" id="geminiSection">
-    <summary class="acc-summary">🤖 قراءة تأكيدات الفنادق بالذكاء الاصطناعي (مدير فقط)</summary>
+    <summary class="acc-summary">✨ قراءة تأكيدات الفنادق بالذكاء الاصطناعي (مدير فقط)</summary>
     <div class="acc-body">
       <p class="sub2">عند إرسال تأكيد فندق (PDF) للبوت، يُقرأ ويُستخلَص تلقائيًا. لأعلى دقة مهما اختلف تنسيق المورد، يُستخدَم نموذج <b>Google Gemini</b>. ضع مفتاحين (اختياريًا) يُستخدمان بالتبادل — وعند انتهاء حد أحدهما يُجرَّب الآخر. لو تُركا فارغين يعمل الاستخلاص اليدوي (قواعد + قراءة ضوئية) بدقة أقل.</p>
       <p class="sub2" style="font-size:.72rem;">احصل على مفتاح مجاني من <b>Google AI Studio</b> (aistudio.google.com ← Get API key). الطبقة المجانية تكفي مئات التأكيدات شهريًا.</p>
@@ -9653,7 +9653,7 @@ function tgLoadBotStatus_() {
         (res.pending ? (' · معلّق: ' + res.pending) : '') +
         (res.lastError ? ('<br>⚠️ آخر خطأ من تليجرام: ' + escapeHtml(res.lastError) + ' — جرّب "الوضع الموثوق (السحب)" أعلاه') : '');
     } else hs.innerHTML = '⛔ <b>الأوامر التفاعلية متوقفة</b> — فعّل "الوضع الموثوق (السحب)" أعلاه (موصى به) أو الويب هوك.';
-    if (res.botUsername) hs.innerHTML += '<br>🤖 البوت: <b dir="ltr">@' + escapeHtml(res.botUsername) + '</b>';
+    if (res.botUsername) hs.innerHTML += '<br>📲 البوت: <b dir="ltr">@' + escapeHtml(res.botUsername) + '</b>';
     tgRenderBotUsers_();
   }).withFailureHandler(function (e) {
     document.getElementById('tgHookState').textContent = 'خطأ: ' + e.message;

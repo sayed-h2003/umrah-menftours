@@ -1055,7 +1055,7 @@ function glSaveEntry(authToken, e, post) {
         _glStr_(f.r[4]) + ' — ' + _glNum_(f.r[8]) + ' ج', v.type + ' — ' + _glStr_(e.desc) + ' — ' + v.totalBase + ' ج');
       _glSyncVoucherPays_(_glStr_(f.r[0]), session.username);   // (V4.222) إيصال على حساب عميل ⇒ دفعة بحسابات العملاء
       var _delta = {}; _glLineDelta_(_oldLines, -1, _delta); if (status === GL_ST_POSTED_) _glLineDelta_(w.lRows, 1, _delta);
-      if (status === GL_ST_POSTED_) _glBotQ_(oldSt === GL_ST_POSTED_ ? 'entry_edit' : 'vch_new', _glBotWho_(_glBotEntryInfo_(_glStr_(f.r[0]), w.eRow, w.lRows), session));   // 🤖 (V4.254)
+      if (status === GL_ST_POSTED_) _glBotQ_(oldSt === GL_ST_POSTED_ ? 'entry_edit' : 'vch_new', _glBotWho_(_glBotEntryInfo_(_glStr_(f.r[0]), w.eRow, w.lRows), session));   // 📲 (V4.254)
       var _due = e.due !== undefined ? _glDueSet_(_glStr_(f.r[0]), e.due, v.date, session.username) : undefined, _sr = _glRowToListEntry_(w.eRow, w.lRows);
       if (_due !== undefined) _sr.due = _due;
       return { success: true, id: _glStr_(f.r[0]), status: status, voucherNo: (sk.match(/^VCH:(.+)$/) || [])[1] || '', due: _due,
@@ -1070,7 +1070,7 @@ function glSaveEntry(authToken, e, post) {
     _GL_HB_MIRROR_LAST_ = null;
     if (status === GL_ST_POSTED_) _glSyncVoucherPays_(id, session.username);
     var _delta2 = {}; if (status === GL_ST_POSTED_) _glLineDelta_(w2.lRows, 1, _delta2);
-    if (status === GL_ST_POSTED_) _glBotQ_('vch_new', _glBotWho_(_glBotEntryInfo_(id, w2.eRow, w2.lRows), session));   // 🤖 (V4.254)
+    if (status === GL_ST_POSTED_) _glBotQ_('vch_new', _glBotWho_(_glBotEntryInfo_(id, w2.eRow, w2.lRows), session));   // 📲 (V4.254)
     var _due2 = e.due !== undefined ? _glDueSet_(id, e.due, v.date, session.username) : undefined, _sr2 = _glRowToListEntry_(w2.eRow, w2.lRows);
     if (_due2 !== undefined) _sr2.due = _due2;
     return { success: true, id: id, status: status, voucherNo: vno, due: _due2,
@@ -1145,7 +1145,7 @@ function glPostEntry(authToken, id) {
     _glSetLinesStatus_([_glStr_(id)], GL_ST_POSTED_);
     logChange_(session.username, 'ترحيل قيد', 'GL:' + id, 'الحالة', GL_ST_DRAFT_, GL_ST_POSTED_);
     _glSyncVoucherPays_(_glStr_(id), session.username);
-    try { var _pf = _glFindEntry_(_glStr_(id)); if (_pf) _glBotQ_('vch_new', _glBotWho_(_glBotEntryInfo_(_glStr_(id), _pf.r, _glLinesOf_(_glStr_(id))), session)); } catch (eB) {}   // 🤖 (V4.254)
+    try { var _pf = _glFindEntry_(_glStr_(id)); if (_pf) _glBotQ_('vch_new', _glBotWho_(_glBotEntryInfo_(_glStr_(id), _pf.r, _glLinesOf_(_glStr_(id))), session)); } catch (eB) {}   // 📲 (V4.254)
     return { success: true, id: _glStr_(id), balancesDelta: _glLineDelta_(_glLinesOf_(_glStr_(id)), 1, {}),
       pendingCount: _glCpPending_(), savedRow: _glListEntryRow_(_glStr_(id)), hbMirror: _GL_HB_MIRROR_LAST_, mirQ: _GL_MIRQ_N_ };   // ⚡ (V4.232) دلتا محلية
   } finally { _glUnlock_(lock); }
@@ -1169,7 +1169,7 @@ function glVoidEntry(authToken, id, reason, wantDelta) {
       return { success: true, deleted: true, removedId: _glStr_(id), balancesDelta: {}, pendingCount: wantDelta ? _glCpPending_() : undefined };
     }
     var _voidLines = wantDelta ? _glLinesOf_(_glStr_(id)) : [];   // ⚡ (V4.232) قبل تغيير الحالة (مرحّلة) — وللتنبيه
-    if (wantDelta) _glBotQ_('entry_void', _glBotWho_(Object.assign(_glBotEntryInfo_(_glStr_(id), f.r, _voidLines), { reason: reason }), session));   // 🤖 (V4.254)
+    if (wantDelta) _glBotQ_('entry_void', _glBotWho_(Object.assign(_glBotEntryInfo_(_glStr_(id), f.r, _voidLines), { reason: reason }), session));   // 📲 (V4.254)
     var sh = _glSheet_('entries');
     sh.getRange(f.row, 6).setValue(GL_ST_VOID_);
     sh.getRange(f.row, 17, 1, 3).setValues([[session.username, _glNow_(), reason]]);
@@ -1208,7 +1208,7 @@ function glDeleteEntry(authToken, id) {
     if (_glStr_(f.r[3]) === 'قيد إقفال') throw new Error('قيد إقفال السنة يُلغى من «الإعدادات ← إعادة فتح السنة»');
     if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
     var _delLines = _glLinesOf_(_glStr_(id));   // ⚡ (V4.232) قبل الحذف — للدلتا (المرحّل فقط يؤثر)
-    if (_glStr_(f.r[5]) === GL_ST_POSTED_) _glBotQ_('entry_void', _glBotWho_(Object.assign(_glBotEntryInfo_(_glStr_(id), f.r, _delLines), { deleted: true }), session));   // 🤖 (V4.254)
+    if (_glStr_(f.r[5]) === GL_ST_POSTED_) _glBotQ_('entry_void', _glBotWho_(Object.assign(_glBotEntryInfo_(_glStr_(id), f.r, _delLines), { deleted: true }), session));   // 📲 (V4.254)
     _glDeleteLinesOf_([_glStr_(id)]);
     _glSheet_('entries').deleteRow(f.row);
     _glSyncVoucherPays_(_glStr_(id), session.username);   // (V4.222) تُحذف الدفعة المقابلة بحسابات العملاء
@@ -1761,7 +1761,7 @@ function glStmtIssue(authToken, info) {
     var sh = _glSheet_('stmts'), rows = _glRows_('stmts'), yr = Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'yyyy'), last = 0;
     rows.forEach(function (r) { var m = _glStr_(r[0]).match(/^ST-(\d{4})-(\d+)$/); if (m && m[1] === yr && +m[2] > last) last = +m[2]; });
     var serial = 'ST-' + yr + '-' + ('000' + (last + 1)).slice(-4), at = _glNow_();
-    _glBotQ_('stmt', { serial: serial, name: _glStr_(info.name), balances: _glStr_(info.balances), by: session.username, output: _glStr_(info.output) });   // 🤖 (V4.254)
+    _glBotQ_('stmt', { serial: serial, name: _glStr_(info.name), balances: _glStr_(info.balances), by: session.username, output: _glStr_(info.output) });   // 📲 (V4.254)
     var bal = _glStr_(info.balances), hash = _glHash_([serial, info.code, info.to, bal, at].join('|')).slice(0, 10).toUpperCase();
     sh.appendRow([serial, at, session.username, _glStr_(info.code), _glStr_(info.name), _glStr_(info.from), _glStr_(info.to), bal, _glStr_(info.output), hash, _glStr_(info.note)]);
     logChange_(session.username, 'إصدار كشف حساب', 'GL:' + _glStr_(info.code), _glStr_(info.output), '', serial + ' — ' + _glStr_(info.name) + ' — ' + bal);
@@ -2287,7 +2287,7 @@ function glErpCommit(authToken, url, opts) {
 }
 
 /* ============================================================================
-   🤖 (V4.207) المرحلة 2 — القيود التلقائية من شاشات البرنامج («وضع الظل»)
+   ⚙ (V4.207) المرحلة 2 — القيود التلقائية من شاشات البرنامج («وضع الظل»)
    ----------------------------------------------------------------------------
    الشاشات الحالية تبقى هي المصدر، والدفتر يُبنى منها تلقائياً بقيود مرحّلة لكل حدث، لكل قيد «مفتاح
    مصدر» ثابت (AUTO:…) وبصمة لمحتواه، فالمزامنة تكرارية آمنة: تُنشئ الجديد وتُحدِّث ما تغيّر مصدره وتُلغي
@@ -3071,7 +3071,7 @@ function glAutoSyncCron() {
   var lock = _glLock_(); if (!lock.tryLock(30000)) return;
   try {
     var r = _glAutoRunPre_('مزامنة مجدولة', _pre); _glAutoSaveLast_(r, 'مزامنة مجدولة');
-    _glBotPendCheck_();   // 🤖 (V4.254)
+    _glBotPendCheck_();   // 📲 (V4.254)
   }
   catch (e) { try { _glSetSetting_('auto_last_error', _glNow_() + ' — ' + e.message); } catch (e2) {} }
   _glUnlock_(lock);
@@ -3385,7 +3385,7 @@ function _glPendTop_(n) {
       (_glStr_(r[12]) || _glStr_(r[13]) ? '\n   💰 المبلغ القديم: ' + _glBotEsc_(_glStr_(r[12]) || '—') + ' · المبلغ الجديد: ' + _glBotEsc_(_glStr_(r[13]) || '—') : '') + (d ? '\n' + _glBotEsc_(d) : '') };
   });
 }
-// 🤖 تنبيه «تغييرات تنتظر الاعتماد» عند زيادة عددها (من المزامنة المجدولة واللحظية) — كل تغيير برسالة وأزرار
+// 📲 تنبيه «تغييرات تنتظر الاعتماد» عند زيادة عددها (من المزامنة المجدولة واللحظية) — كل تغيير برسالة وأزرار
 function _glBotPendCheck_() {
   try {
     var PP = PropertiesService.getScriptProperties(), lp = +(PP.getProperty('GLBOT_PEND') || 0), np = _glPendingCount_() || 0;
@@ -4746,7 +4746,7 @@ function _glCsAutoAll_() {
     try {
       var r = _glCsSync_(code, 'مزامنة مجدولة', pre ? { pre: pre } : {}); res.push(code + ': ' + r.created.length + '/' + r.pending.length);
       if (pre) { sigs[code] = { s: sig, t: now }; try { P.setProperty('GL_CS_SIG', JSON.stringify(sigs)); } catch (eW) {} }
-      var nPend = r.pending.length, lastN = +(P.getProperty('GLBOT_CS_' + code) || 0);   // 🤖 (V4.254) تنبيه عند ظهور صفوف ناقصة جديدة فقط
+      var nPend = r.pending.length, lastN = +(P.getProperty('GLBOT_CS_' + code) || 0);   // 📲 (V4.254) تنبيه عند ظهور صفوف ناقصة جديدة فقط
       if (nPend !== lastN) { P.setProperty('GLBOT_CS_' + code, String(nPend)); if (nPend > lastN) _glBotQ_('custody_err', { name: (_glAccounts_().map[code] || {}).name || code, n: nPend, code: code,
         rows: r.pending.slice(lastN - nPend).slice(-3).map(function (x) { return { row: x.row, date: x.date, desc: String(x.desc || '').slice(0, 80), inAmt: x.inAmt, outAmt: x.outAmt, cur: x.cur || (r.account || {}).currency || '', hint: String(x.hint || '').slice(0, 40), msg: x.msg ? String(x.msg).slice(0, 120) : '', sugg: (x.sugg || []).slice(0, 3) }; }) }); }
     }
@@ -6935,7 +6935,7 @@ function glHbCharterSettle(authToken, code, date, amount, note) {
 }
 
 /* ============================================================================
-   🤖 (V4.254) بوت الحسابات — نفس بوت الحجوزات (توكن واحد) بمجموعة ثانية خاصة بالحسابات
+   📲 (V4.254) بوت الحسابات — نفس بوت الحجوزات (توكن واحد) بمجموعة ثانية خاصة بالحسابات
    • تنبيهات تُختار من الإعدادات (سند/قيد جديد فوق حد أدنى، تعديل، إلغاء/حذف، عهد تحتاج مراجعة، تغييرات بانتظار
      الاعتماد، ملخص يومي للنقدية، إصدار كشف) — تُدرَج في طابور سريع (بلا انتظار تليجرام وقت الحفظ) وتُرسَل كل دقيقة
      من نفس مهمة البوت الدورية.
@@ -7591,7 +7591,7 @@ function _glBotUserCanGl_(username) {
 }
 function _glBotRun_(k, arg, inGroup) {
   var E = _glBotEsc_;
-  if (k === 'help') return '🤖 <b>أوامر الحسابات</b>\n' + GLBOT_CMDS_.filter(function (x) { return x[0] !== 'id'; }).map(function (x) { return (inGroup && x[2] ? '<code>' + x[2] + '</code> أو ' : '') + '<code>' + x[1] + '</code> — ' + E(x[3]); }).join('\n');
+  if (k === 'help') return '📖 <b>أوامر الحسابات</b>\n' + GLBOT_CMDS_.filter(function (x) { return x[0] !== 'id'; }).map(function (x) { return (inGroup && x[2] ? '<code>' + x[2] + '</code> أو ' : '') + '<code>' + x[1] + '</code> — ' + E(x[3]); }).join('\n');
   if (k === 'cash') return '💰 <b>النقدية الآن</b>\n' + _glBotCashTxt_(['safe', 'bank']);
   if (k === 'custody') return '👜 <b>العهد الآن</b>\n' + _glBotCashTxt_(['custody']);
   if (k === 'pending') { var pt = _glPendTop_(5); return '⏳ بانتظار الاعتماد: <b>' + (_glPendingCount_() || 0) + '</b>' + (pt.length ? '\n━━━━━━━━━━━━\n' + pt.map(function (x) { return x.txt; }).join('\n') : ''); }
