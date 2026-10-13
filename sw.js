@@ -1,8 +1,8 @@
 // 🔄 الشبكة أولاً دائماً (مع الكاش احتياطياً عند انقطاع الإنترنت فقط) — كي لا تُعرَض أبداً نسخة قديمة من
 // صفحة التطبيق بعد أي تحديث. لا نتدخل إطلاقاً في طلبات جوجل (البرنامج نفسه يعمل من هناك).
-const CACHE_NAME = 'umrah-v4';   // رُفِع (v3⇒v4) لإجبار تحديث الغلاف فوراً بعد السماح بالتكبير بإصبعين وتحسينات الموبايل
+const CACHE_NAME = 'umrah-v5';   // رُفِع (v4⇒v5) لإجبار تحديث الغلاف بعد إضافة أيقونات التثبيت المربعة
 // الشعار ضمن الغلاف كي تظهر شاشة التحميل بالشعار حتى بلا إنترنت
-const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.ico',
+const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.ico', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png',
   '%D9%84%D9%88%D8%AC%D9%88%20%D8%A7%D8%B4%D8%B9%D8%A7%D8%B1%D8%A7%D8%AA%20%D8%B1%D8%AD%D9%84%D8%A7%D8%AA%20%D8%A7%D9%84%D8%B9%D9%85%D8%B1%D8%A9.png'];
 
 self.addEventListener('install', e => {
