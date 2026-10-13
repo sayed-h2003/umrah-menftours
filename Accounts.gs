@@ -1406,6 +1406,7 @@ function glAutoOvrRelease(authToken, id) {
     _glOvrDrop_([k]);
     _glPendingDrop_([sk]);
     var r = { updated: 0 };
+    if (/^CUST:/.test(sk)) _glSheet_('entries').getRange(f.row, 10).setValue('cs:');   // بصمة صف فارغة ⇒ مزامنة الشيت التالية تعيد بناءه من الصف
     if (/^AUTO:/.test(sk)) {
       _glSheet_('entries').getRange(f.row, 10).setValue('');   // بصمة فارغة ⇒ يُعاد بناؤه الآن من المصدر
       var only = {}; only[sk] = 1; r = _glAutoRunPre_(session.username, _pre, { bypass: true, onlyKeys: only });
@@ -2922,7 +2923,7 @@ function _glAutoApply_(built, user, dry, opts) {
     if (e._pv.err) { res.errors.push({ key: e.key, date: e.date, desc: e.desc, msg: e._pv.err }); return; }
     var hash = e._pv.hash, eff = (x && (x.acc.length || x.hdr)) ? _glOvrEff_(e, x, accM) : null;
     var v = eff ? eff.v : e._pv.v, H = eff ? { desc: eff.desc, trip: eff.trip, company: eff.company } : { desc: e.desc, trip: e.trip || '', company: e.company || '' };
-    if (eff && eff.warn) res.errors.push({ key: e.key, date: e.date, desc: e.desc, msg: '⚠️ لم يُطبَّق التعديل اليدوي (' + eff.warn + ') — سُجّل كما في المصدر' });
+    if (eff && eff.warn) { res.errors.push({ key: e.key, date: e.date, desc: e.desc, msg: '⚠️ لم يُطبَّق التعديل اليدوي (' + eff.warn + ') — سُجّل كما في المصدر' }); hash = hash + '|ovr-fail'; }   // بصمة مختلفة ⇒ يُعاد المحاولة بالمزامنة التالية
     var ix = existing[e.key];
     if (ix === undefined) {
       if (_glLocked_(v.date)) { res.blocked.push({ key: e.key, date: v.date, desc: H.desc, why: 'حدث جديد بفترة مقفلة' }); return; }
@@ -2949,6 +2950,7 @@ function _glAutoApply_(built, user, dry, opts) {
     if (_glStr_(r[5]) === GL_ST_VOID_) return;
     if (_glLocked_(r[2])) { res.blocked.push({ key: k, date: _glDate_(r[2]), desc: _glStr_(r[4]), why: 'حُذف مصدره بعد إقفال الفترة' }); return; }
     if (ovr[k] && ovr[k].freeze && !(opts.approveKeys && opts.approveKeys[k])) { queue(k, existing[k], 'إلغاء', 'حُذف مصدره من شاشات البرنامج', 0, 'void', null, '✋ قيد معدَّل يدوياً وحُذف مصدره'); frozenQ[k] = 1; return; }   // ✍️ (V4.319)
+    if (ovr[k] && ovr[k].freeze) unfrozen.push(k);   // اعتُمد إلغاؤه ⇒ ينتهي التجميد
     if (approval) {
       // 🔎 (V4.305) إلغاء قيد حساب عميل لأن العميل نُقل لرحلة أخرى (قيدها الجديد أُنشئ بنفس المزامنة) ⇒ يُذكر ذلك صراحة
       var vh = '', mT = k.match(/^AUTO:(?:TRIP|CI):(.*)\|([^|]*)$/);
@@ -3082,6 +3084,7 @@ function _glOvrEff_(e, x, accM) {
   (x.acc || []).forEach(function (a) {
     var c = []; lines.forEach(function (l, i) { if (!done[i] && _glStr_(l.account) === a.from && curOf(l) === a.cur && side(l) === a.side) c.push(i); });
     if (c.length > 1 && a.desc) { var d = c.filter(function (i) { return _glStr_(lines[i].desc || e.desc) === a.desc; }); if (d.length) c = d; }
+    if (c.length > 1) { var byN = c.filter(function (i) { return i + 1 === a.lineNo; }); c = [byN.length ? byN[0] : c[0]]; }   // القاعدة لسطر واحد فقط (السطر الذي عدّله المستخدم)
     var fk = (accM[a.from] || {}).kind, party = fk === 'client' || fk === 'agent' || fk === 'supplier';
     c.forEach(function (i) { lines[i].account = a.to; if (party) { lines[i].client = ''; lines[i].agent = ''; } done[i] = 1; applied++; });
   });
@@ -3097,9 +3100,11 @@ function _glOvrRecord_(key, f, oldRows, v, e, user) {
   var old = (oldRows || []).slice().sort(function (a, b) { return (+a[1] || 0) - (+b[1] || 0); }), nl = v.lines || [];
   var eq = function (a, b) { return Math.abs(_glNum_(a) - _glNum_(b)) < 0.005; };
   var structural = _glDate_(f.r[2]) !== v.date || old.length !== nl.length;
-  if (!structural) old.forEach(function (o, i) { var n = nl[i]; if (!eq(o[5], n.debit) || !eq(o[6], n.credit) || _glCur_(o[7]) !== _glCur_(n.currency)) structural = true; });   // بيان السطر شكلي
-  if (structural) { if (!x.freeze) { x.freeze = { by: user, at: now }; ch = true; } }
-  else old.forEach(function (o, i) {
+  // سعر الصرف (المحفوظ بخانتين) جوهري أيضاً — تعديله يدوياً كان يضيع بصمت مع أول إعادة بناء · بيان السطر شكلي
+  if (!structural) old.forEach(function (o, i) { var n = nl[i]; if (!eq(o[5], n.debit) || !eq(o[6], n.credit) || _glCur_(o[7]) !== _glCur_(n.currency) || (_glCur_(n.currency) !== 'EGP' && Math.abs(_glNum_(o[8]) - _glNum_(n.rate)) >= 0.005)) structural = true; });
+  if (structural && !x.freeze) { x.freeze = { by: user, at: now }; ch = true; }
+  // تغيير الحسابات يُسجَّل قاعدةً حتى مع تعديل جوهري بنفس الحفظ (نفس عدد الأسطر) — فيبقى بعد اعتماد تغيّر المصدر كما يَعِد التنبيه
+  if (old.length === nl.length) old.forEach(function (o, i) {
     var oa = _glStr_(o[4]), na = _glStr_(nl[i].account); if (oa === na) return;
     var cur = _glCur_(o[7]), sd = _glNum_(o[5]) ? 'D' : 'C', ds = _glStr_(o[15]);
     var exs = x.acc.filter(function (a) { return a.to === oa && a.cur === cur && a.side === sd; }), ex = exs.filter(function (a) { return a.desc === ds; })[0] || exs[0];   // البيان قد يتغيّر (تعديل الرأس) فلا يُشترط
@@ -3912,6 +3917,7 @@ function glTripRebuild(authToken, dry) {
     // 4) تفعيل الوضع الجديد والتسجيل المباشر بلا انتظار اعتماد (أول بناء)
     _glSetSetting_('trip_mode', 'نعم'); _GL_SET_MEMO_ = null;
     _glPendingWrite_({});
+    try { _glOvrDrop_(hits.map(function (h) { return _glStr_(h.r[6]); }), ['freeze']); } catch (eOv) {}   // ✍️ (V4.320) القيود حُذفت وتُبنى من جديد ⇒ لا تجميد معلَّق (تبقى قواعد الحساب/البيان)
     var r = _glAutoRun_(session.username, false, { bypass: true });
     _glAutoSaveLast_(r, session.username);
     var tb = 0, tc = 0; try { _glRows_('lines').forEach(function (l) { if (_glStr_(l[3]) === GL_ST_POSTED_) { tb += _glNum_(l[9]); tc += _glNum_(l[10]); } }); } catch (e) {}

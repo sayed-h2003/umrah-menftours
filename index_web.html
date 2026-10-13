@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.319 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.320 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -110,7 +110,7 @@ window.__step('1️⃣ بداية \u003Chead> — الصفحة بدأت تصل �
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.319)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.320)', diag);
 }, tries ? 5000 : 6000); })(0);
 </script>
 
@@ -1252,6 +1252,13 @@ table.trips-smart { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 }
 .acc-trip-item:hover { background: rgba(255, 255, 255, .14); }
 .acc-trip-item.sel { background: #14b8a6; color: #06251f; border-color: #5eead4; }
+/* 🏷️ (V4.320) كود الرحلة بجانب اسمها + بطاقات مجموعات الدمج المتعددة */
+.acc-tref { display: inline-block; direction: ltr; font: 700 9.5px/1.5 ui-monospace, Consolas, monospace; background: #e0e7ff; color: #3730a3; border-radius: 6px; padding: 0 5px; vertical-align: middle; }
+.acc-trip-item .acc-tref, .acc-grp .acc-tref { background: rgba(255,255,255,.16); color: #e0e7ff; }
+.acc-trip-item.sel .acc-tref { background: rgba(6,37,31,.15); color: #06251f; }
+.acc-grp { border: 1px dashed #5eead4; border-radius: 10px; padding: 6px 6px 2px; margin-bottom: 8px; background: rgba(94,234,212,.08); }
+.acc-grp-h { font-size: 11.5px; font-weight: 800; color: #5eead4; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.acc-grp-h .btn { font-size: 10px; padding: 0 5px; }
 .acc-trip-item.sel .text-muted, .acc-trip-item.sel [style*="opacity"] { color: #06251f !important; }
 /* 💡 (V4.09) مبالغ القائمة الجانبية بدرجات فاتحة مقروءة على الخلفية الداكنة —
    وعند تحديد العنصر (خلفية تركوازية فاتحة) تنقلب لدرجة داكنة واضحة */
@@ -1558,7 +1565,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.319</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.320</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -8009,7 +8016,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.319";
+var CLIENT_APP_VERSION = "4.320";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -25590,15 +25597,18 @@ function _accLoad_() {
       (res.payments || []).forEach(function(p) { p.desc = cfClean(p.desc); });
       // 🏷️ (V4.22) اسم عرض الرحلة داخل هذا الكشف تحديدًا: المخصَّص لهذا العميل إن وُجد، وإلا
       // «رحلة {تاريخ السفر}» — لا يمسّ اسم الرحلة الحقيقي المستخدم بالربط في أي مكان آخر
+      // 🏷️ (V4.320) الافتراضي صار اسم الرحلة الطبيعي (بدل «رحلة {تاريخ السفر}» الذي يتشابه لرحلتين بنفس اليوم)، ويبقى تغييره من الكشف كما هو
       (res.trips || []).forEach(function(row) {
         var m = (res.meta || {})[row.trip];
-        row.displayLabel = (m && m.displayName) ? m.displayName : ('رحلة ' + (_dashDate_(row.departDate) || row.trip));
+        row.displayLabel = (m && m.displayName) ? m.displayName : row.trip;
       });
+      // 🔗 (V4.320) مجموعات دمج متعددة (خادم قديم بلا mergeGroups ⇒ مجموعة واحدة من mergeTrips)
+      res.mergeGroups = Array.isArray(res.mergeGroups) ? res.mergeGroups : (res.mergeTrips ? [{ id: '', name: 'مجموعة 1', trips: res.mergeTrips }] : []);
       _accData = res;
       _accRender_();
       // ⚡ (V4.41) حالة الدمج تصل الآن ضمن نفس استجابة تحميل الحساب (res.mergeTrips) — بلا أي طلب شبكة
       // منفصل، فتظهر شارة الدمج فورًا لحظة فتح شاشة الكشف الشامل بلا أي تأخير محسوس (بطلب صريح)
-      window._accMergeGroupCache = { trips: res.mergeTrips || null };
+      window._accMergeGroupCache = { trips: res.mergeTrips || null, groups: res.mergeGroups };
       // ↩️↪️ (V4.89) أي تحميل كامل جديد (عميل مختلف، أو إعادة تحميل قسرية) يُصفِّر تراجع/إعادة هذا العميل
       _accUndoReset_();
     })
@@ -25905,7 +25915,7 @@ function _accSettleHtml_(forPrint, tripFilter) {
         : '<b style="color:#64748b;">0</b>';
       if (!r.noAccounting) { sumDue += r.due; sumCovered += r.des + r.alloc; sumAfter += r.after; }
       return '<tr>' +
-        '<td style="text-align:right;">' + (i + 1) + '. ✈️ ' + esc(_accTripDisplay_(r.trip)) + '</td>' +
+        '<td style="text-align:right;">' + (i + 1) + '. ✈️ ' + esc(_accTripDisplay_(r.trip)) + _accRefChip_(r.trip) + '</td>' +
         // 🔀 (V4.38) style="direction:rtl" صريح — نص الأعداد عربي بالأساس (٢١ كبير + ١ رضيع) وكشف الطباعة
         // يفرض direction:ltr على كل الخلايا افتراضيًا، فكانت خوارزمية اتجاه النص تعكس ترتيب الكلمات والأرقام
         '<td style="direction:rtl;text-align:center;">' + esc(_accCountsTxt_(r)) + '</td>' +
@@ -26294,15 +26304,28 @@ function _accTripDisplay_(tripKey) {
   return (row && row.displayLabel) ? row.displayLabel : tripKey;
 }
 
+// 🏷️ (V4.320) كود الرحلة (TRP-xxxx) — يميّز الرحلات المتشابهة بالاسم
+function _accTripRef_(k) {
+  if (!k || k === 'عام' || !_accData) return '';
+  var row = (_accData.trips || []).find(function (r) { return r.trip === k; });
+  return (row && row.tripRef) || (_accData.tripRefs || {})[k] || '';
+}
+function _accRefChip_(k) { var r = _accTripRef_(k); return r ? ' <span class="acc-tref" title="كود الرحلة">' + escapeHtml_(r) + '</span>' : ''; }
+function _accTripLabelTxt_(k) { var r = _accTripRef_(k); return _accTripDisplay_(k) + (r ? ' · ' + r : ''); }
+// اسم مخصَّص بالكشف ⇒ تلميح بالاسم الحقيقي للرحلة
+function _accRealTitle_(k) { var dl = _accTripDisplay_(k); return (k && k !== 'عام' && dl !== k) ? ' title="الاسم الأصلي: ' + escapeHtml_(k) + '"' : ''; }
+function _accGroups_() { return ((_accData && _accData.mergeGroups) || []).filter(function (g) { return g && Array.isArray(g.trips) && g.trips.length >= 2; }); }
+function _accGroupOf_(k) { var g = null; _accGroups_().forEach(function (x) { if (!g && x.trips.indexOf(k) > -1) g = x; }); return g; }
+
 function _accRenameTrip_(tripKey) {
   if (!_accCan_('edit')) return;
   var cur = _accTripDisplay_(tripKey);
-  askPrompt_('اسم الرحلة كما سيظهر في كشف حساب هذا العميل فقط (لا يغيّر اسم الرحلة الفعلي):', cur, function (v) {
+  askPrompt_('اسم الرحلة كما سيظهر في كشف حساب هذا العميل فقط (لا يغيّر اسم الرحلة الفعلي «' + tripKey + '»' + (_accTripRef_(tripKey) ? ' · ' + _accTripRef_(tripKey) : '') + ') — اتركه فارغاً للرجوع للاسم الأصلي:', cur, function (v) {
   v = String(v || '').trim();
   google.script.run.withSuccessHandler(function(res) {
     if (res && res.success) {
       var row = (_accData.trips || []).find(function(r) { return r.trip === tripKey; });
-      if (row) row.displayLabel = v || ('رحلة ' + (_dashDate_(row.departDate) || row.trip));
+      if (row) row.displayLabel = v || row.trip;   // (V4.320) فارغ = الاسم الطبيعي للرحلة
       _accRender_();
       showToast && showToast('✔️ تم تحديث اسم الرحلة في هذا الكشف', 'success');
     } else {
@@ -26337,7 +26360,7 @@ function _accRender_() {
     alertsHtml = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2 p-2 rounded" style="background:#fef2f2;border:1.5px solid #fecaca;">' +
       '<span class="small fw-bold" style="color:#991b1b;">⚠️ ' + alertTrips.length + ' رحلة تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ الحساب — تحتاج مراجعة:</span>' +
       alertTrips.map(function(tn) {
-        return '<button class="btn btn-outline-danger btn-sm py-0" style="font-size:11px;" onclick="_accSelect_(\'' + _accJs_(tn) + '\');">' + esc(_accTripDisplay_(tn)) + '</button>';
+        return '<button class="btn btn-outline-danger btn-sm py-0" style="font-size:11px;" onclick="_accSelect_(\'' + _accJs_(tn) + '\');">' + esc(_accTripLabelTxt_(tn)) + '</button>';
       }).join('') + '</div>';
   }
 
@@ -26348,32 +26371,29 @@ function _accRender_() {
     var pays = d.payments.filter(function(p) { return p.trip === row.trip; });
     entries.push({ key: row.trip, row: row, items: items, pays: pays, t: _accCalc_(items, pays) });
   });
-  // 🔗 (V4.56) FIFO للرحلات المدمجة — بطلب صريح: يجمع كل دفعات المجموعة ويطبقها ترتيبًا حسب تاريخ السفر
-  // (الأقدم أولاً)، فيظهر بالشريط الجانبي «مسدَّد» للأولى إذا غطتها المدفوعات، والباقي على التالية
-  var _mergeTrips = (d.mergeTrips && Array.isArray(d.mergeTrips) && d.mergeTrips.length >= 2) ? d.mergeTrips : null;
-  window._accMergeSet_ = {}; if (_mergeTrips) _mergeTrips.forEach(function(k) { window._accMergeSet_[k] = true; });
-  window._accFifoInfo_ = null;
-  if (_mergeTrips) {
-    var _parseD2 = function(s) { var m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : Infinity; };
-    var mergedEntries = entries.filter(function(e) { return window._accMergeSet_[e.key]; })
+  // 🔗 (V4.56) FIFO للرحلات المدمجة — يجمع كل دفعات المجموعة ويطبقها ترتيبًا حسب تاريخ السفر (الأقدم أولاً)
+  // 🔗 (V4.320) لكل مجموعة دمج على حدة (أكثر من مجموعة لنفس العميل) — كل مجموعة تتشارك دفعاتها فقط
+  var _groups = _accGroups_();
+  window._accMergeSet_ = {}; window._accGroupOfMap_ = {};
+  _groups.forEach(function (g) { g.trips.forEach(function (k) { window._accMergeSet_[k] = true; window._accGroupOfMap_[k] = g.id; }); });
+  window._accFifoInfo_ = {};
+  var _parseD2 = function(s) { var m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : Infinity; };
+  _groups.forEach(function (g) {
+    var mergedEntries = entries.filter(function(e) { return g.trips.indexOf(e.key) > -1; })
       .sort(function(a, b) { return _parseD2(a.row && a.row.departDate) - _parseD2(b.row && b.row.departDate); });
-    var poolE = 0, poolS = 0;
+    var poolE = 0, poolS = 0, netE = 0, netS = 0;
     mergedEntries.forEach(function(e) { poolE += (e.t.paidE || 0); poolS += (e.t.paidS || 0) + (e.t.fxS || 0); });
     mergedEntries.forEach(function(e) {
       var netDueE = (e.t.dueE || 0) - (e.t.discE || 0) + (e.t.fxE || 0);
       var netDueS = (e.t.dueS || 0) - (e.t.discS || 0);
       var applyE = Math.max(0, Math.min(poolE, Math.max(0, netDueE)));
       var applyS = Math.max(0, Math.min(poolS, Math.max(0, netDueS)));
-      e.fifo = {
-        dueE: netDueE, dueS: netDueS,
-        paidE: applyE, paidS: applyS,
-        netE: netDueE - applyE, netS: netDueS - applyS
-      };
-      poolE = Math.max(0, poolE - applyE);
-      poolS = Math.max(0, poolS - applyS);
+      e.fifo = { dueE: netDueE, dueS: netDueS, paidE: applyE, paidS: applyS, netE: netDueE - applyE, netS: netDueS - applyS };
+      poolE = Math.max(0, poolE - applyE); poolS = Math.max(0, poolS - applyS);
+      netE += e.fifo.netE; netS += e.fifo.netS;
     });
-    window._accFifoInfo_ = { leftoverE: poolE, leftoverS: poolS, tripCount: mergedEntries.length };
-  }
+    window._accFifoInfo_[g.id] = { leftoverE: poolE, leftoverS: poolS, tripCount: mergedEntries.length, netE: netE - poolE, netS: netS - poolS };
+  });
   // 💠 (V4.13) قسم «عام»: بنود عامة + دفعات عامة غير مخصصة لرحلة — بتبويبيه الكاملين
   var genItems = d.items.filter(function(i) { return i.trip === 'عام'; });
   var genPays = d.payments.filter(function(p) { return p.trip === 'عام'; });
@@ -26403,27 +26423,9 @@ function _accRender_() {
   var validSel = entries.some(function(e) { return e.key === _accSelKey; });
   if (!validSel) _accSelKey = entries[0].key;
 
-  // 🔗 (V4.56) شريط دمج + FIFO أعلى الشريط الجانبي — يظهر عند وجود مجموعة دمج نشطة
-  var mergeBar = '';
-  if (_mergeTrips) {
-    var fifoLeftE = (window._accFifoInfo_ && window._accFifoInfo_.leftoverE) || 0;
-    var fifoLeftS = (window._accFifoInfo_ && window._accFifoInfo_.leftoverS) || 0;
-    var leftTxt = (fifoLeftE ? _accFmt_(fifoLeftE) + ' جنيه' : '') +
-                  (fifoLeftS ? (fifoLeftE ? ' + ' : '') + _accFmt_(fifoLeftS) + ' ريال' : '');
-    mergeBar = '<div class="mb-2 p-2 rounded" style="background:rgba(94,234,212,.12);border:1px dashed #5eead4;">' +
-      '<div class="fw-bold small" style="color:#5eead4;">🔗 دمج نشط — ' + _mergeTrips.length + ' رحلة</div>' +
-      '<div class="small" style="color:#a7f3d0;">الدفعات موزَّعة تلقائياً حسب الأقدم أولاً' +
-      (leftTxt ? '<br>💠 فائض مدفوعات: ' + leftTxt : '') + '</div>' +
-      (canEdit ? '<button class="btn btn-outline-light btn-sm py-0 mt-1" style="font-size:10.5px;" onclick="_accUnmergeSidebar_()">🔓 فك الدمج</button>' : '') +
-      '</div>';
-  } else if (canEdit) {
-    // زر «دمج مجموعة» يظهر لصاحب صلاحية التعديل إن كان لا يوجد دمج بعد
-    mergeBar = '<div class="mb-2"><button class="btn btn-outline-light btn-sm py-0" style="font-size:10.5px;" onclick="_accMergeSidebarOpen_()">🔗 دمج حسابات رحلات</button></div>';
-  }
-
-  var sideHtml = mergeBar + entries.map(function(e) {
+  // 🔗 (V4.320) بطاقة لكل مجموعة دمج ورحلاتها تحتها مباشرة، ثم الرحلات غير المدمجة، ثم «عام»
+  var entryHtml = function(e) {
     var hasData = e.items.length || e.pays.length;
-    // 🔗 (V4.56) لو الرحلة داخل مجموعة الدمج، نستخدم FIFO كصافي
     var isMerged = !!(window._accMergeSet_ && window._accMergeSet_[e.key]);
     var effNetE = isMerged && e.fifo ? e.fifo.netE : e.t.netE;
     var effNetS = isMerged && e.fifo ? e.fifo.netS : e.t.netS;
@@ -26436,13 +26438,28 @@ function _accRender_() {
       : ((effNetE ? _accFmt_(Math.abs(effNetE)) + ' جنيه ' + (effNetE > 0 ? 'مدين' : 'دائن') : '') +
          (effNetS ? (effNetE ? ' | ' : '') + _accFmt_(Math.abs(effNetS)) + ' ريال ' + (effNetS > 0 ? 'مدين' : 'دائن') : '') || 'مسدَّد ✓');
     var isSel = e.key === _accSelKey;
-    var mergeIcon = isMerged ? '<span title="مدموجة" style="font-size:11px;color:#5eead4;">🔗 </span>' : '';
     return '<div class="acc-trip-item' + (isSel ? ' sel' : '') + (isMerged ? ' acc-merged' : '') + '" onclick="_accSelect_(\'' + _accJs_(e.key) + '\')">' +
       '<div class="d-flex align-items-center gap-1"><span style="width:9px;height:9px;border-radius:50%;background:' + dot + ';flex-shrink:0;" title="' + dotTitle + '"></span>' +
-      '<span class="fw-bold text-truncate" style="font-size:12px;">' + mergeIcon + (e.key === 'عام' ? '📌 عام (بنود ودفعات)' : '✈️ ' + esc(_accTripDisplay_(e.key))) + '</span></div>' +
+      '<span class="fw-bold text-truncate" style="font-size:12px;"' + _accRealTitle_(e.key) + '>' + (e.key === 'عام' ? '📌 عام (بنود ودفعات)' : '✈️ ' + esc(_accTripDisplay_(e.key))) + '</span>' + _accRefChip_(e.key) + '</div>' +
       (e.row ? '<div style="font-size:10px;opacity:.75;direction:ltr;text-align:right;">' + esc(e.row.departDate || '') + (e.row.returnDate ? ' ← ' + esc(e.row.returnDate) : '') + '</div>' : '') +
       '<div class="acc-net" style="color:' + dotLight + ';direction:rtl;text-align:right;">' + netTxt + '</div></div>';
-  }).join('');
+  };
+  var amtTxt_ = function (vE, vS) { return (vE ? _accFmt_(Math.abs(vE)) + ' جنيه' + (vE > 0 ? ' مدين' : ' دائن') : '') + (vS ? (vE ? ' | ' : '') + _accFmt_(Math.abs(vS)) + ' ريال' + (vS > 0 ? ' مدين' : ' دائن') : '') || 'مسدَّد ✓'; };
+  var sideHtml = (canEdit ? '<div class="mb-2"><button class="btn btn-outline-light btn-sm py-0" style="font-size:10.5px;" onclick="_accMergeSidebarOpen_()">🔗 ' + (_groups.length ? 'مجموعة دمج جديدة' : 'دمج حسابات رحلات') + '</button></div>' : '');
+  _groups.forEach(function (g) {
+    var members = entries.filter(function (e) { return g.trips.indexOf(e.key) > -1; });
+    if (!members.length) return;
+    var fi = window._accFifoInfo_[g.id] || {}, left = (fi.leftoverE ? _accFmt_(fi.leftoverE) + ' جنيه' : '') + (fi.leftoverS ? (fi.leftoverE ? ' + ' : '') + _accFmt_(fi.leftoverS) + ' ريال' : '');
+    var gj = _accJs_(g.id);
+    sideHtml += '<div class="acc-grp"><div class="acc-grp-h">🔗 ' + esc(g.name) + ' <span style="opacity:.75;font-weight:600;">· ' + members.length + ' رحلات</span>' +
+      '<span class="ms-auto d-flex gap-1">' +
+        '<button class="btn btn-outline-light btn-sm py-0" title="كشف المجموعة" onclick="event.stopPropagation();_accPrintGroup_(\'' + gj + '\')">🖨️</button>' +
+        (canEdit && g.id ? '<button class="btn btn-outline-light btn-sm py-0" title="تعديل المجموعة" onclick="event.stopPropagation();_accMergeSidebarOpen_(\'' + gj + '\')">✏️</button>' +
+          '<button class="btn btn-outline-light btn-sm py-0" title="فك هذه المجموعة" onclick="event.stopPropagation();_accUnmergeSidebar_(\'' + gj + '\')">🔓</button>' : '') + '</span></div>' +
+      '<div class="small" style="color:#a7f3d0;font-size:10.5px;margin:2px 0 4px;">💼 رصيد المجموعة: ' + amtTxt_(fi.netE || 0, fi.netS || 0) + (left ? ' · 💠 فائض: ' + left : '') + '</div>' +
+      members.map(entryHtml).join('') + '</div>';
+  });
+  sideHtml += entries.filter(function (e) { return !(window._accMergeSet_ || {})[e.key]; }).map(entryHtml).join('');
 
   // ===== مساحة التفاصيل للمحدد =====
   var sel = entries.find(function(e) { return e.key === _accSelKey; });
@@ -26457,7 +26474,8 @@ function _accRender_() {
 
   // رأس المحدد
   main += '<div class="d-flex flex-wrap align-items-center gap-2 px-3 py-2 rounded-top" style="background:linear-gradient(135deg,#134e4a,#0f766e);color:#fff;">' +
-    '<span class="fw-bold" style="font-size:13.5px;">' + (isGen ? '📌 عام — بنود ودفعات غير مخصصة لرحلة' : '✈️ ' + esc(_accTripDisplay_(sel.key))) + '</span>' +
+    '<span class="fw-bold" style="font-size:13.5px;"' + _accRealTitle_(sel.key) + '>' + (isGen ? '📌 عام — بنود ودفعات غير مخصصة لرحلة' : '✈️ ' + esc(_accTripDisplay_(sel.key))) + '</span>' +
+    (!isGen ? _accRefChip_(sel.key) + (_accGroupOf_(sel.key) ? ' <span class="badge" style="background:rgba(94,234,212,.25);color:#ccfbf1;" title="رحلات هذه المجموعة تتشارك دفعاتها (الأقدم أولاً)">🔗 ' + esc(_accGroupOf_(sel.key).name) + '</span>' : '') + (_accTripDisplay_(sel.key) !== sel.key ? ' <span class="small" style="opacity:.75;">(الأصلي: ' + esc(sel.key) + ')</span>' : '') : '') +
     (!isGen && canEdit ? '<button class="btn btn-sm py-0 px-1" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4);" title="تغيير اسم الرحلة في كشف حساب هذا العميل فقط" onclick="_accRenameTrip_(\'' + jsT + '\')">✏️</button>' : '') +
     (sel.row ? '<span class="small" style="opacity:.85;">' + esc(sel.row.departDate || '') + (sel.row.returnDate ? ' ← ' + esc(sel.row.returnDate) : '') +
       ' · 👨' + sel.row.adults + ' 🧒' + sel.row.children + ' 👶' + sel.row.infants + '</span>' : '') +
@@ -26698,7 +26716,7 @@ function _accPayMove_(id) {
   _accData.payments.forEach(function(x) { if (x.id === id) p = x; });
   if (!p) return;
   var opts = [{ key: 'عام', label: '📌 عام (غير مخصصة لرحلة)' }]
-    .concat(_accData.trips.map(function(r) { return { key: r.trip, label: '✈️ ' + _accTripDisplay_(r.trip) }; }))
+    .concat(_accData.trips.map(function(r) { return { key: r.trip, label: '✈️ ' + _accTripLabelTxt_(r.trip) }; }))
     .filter(function(o) { return o.key !== p.trip; });
   if (!opts.length) { alert('⚠️ لا توجد رحلة أخرى لنقل الدفعة إليها'); return; }
   var prev = document.getElementById('_accPayMoveOverlay');
@@ -26739,7 +26757,7 @@ function _accCfModal_(fromTrip) {
         '<div class="small text-muted mb-2">يُحسب رصيد هذه الرحلة الحالي تلقائيًا: لو مدين يُنشأ بند دَين بالرحلة الهدف ودفعة تُقفل هذه الرحلة، ولو دائن يُنشأ العكس — دائمًا قابل للتعديل، والحذف يعيد الرصيد لرحلته.</div>' +
         '<label class="form-label small fw-bold mb-1">ترحيل إلى:</label>' +
         '<select id="_accCfSel" class="form-select form-select-sm mb-3">' +
-          opts.map(function(t) { return '<option value="' + escapeHtml_(t) + '">✈️ ' + escapeHtml_(_accTripDisplay_(t)) + '</option>'; }).join('') +
+          opts.map(function(t) { return '<option value="' + escapeHtml_(t) + '">✈️ ' + escapeHtml_(_accTripLabelTxt_(t)) + '</option>'; }).join('') +
         '</select>' +
         '<div id="_accCfErr" class="text-danger small mb-2"></div>' +
         '<div class="d-flex gap-2"><button class="btn btn-success btn-sm fw-bold flex-fill" onclick="_accCfConfirm_(\'' + _accJs_(fromTrip) + '\')">💾 ترحيل الرصيد</button>' +
@@ -26774,7 +26792,7 @@ function _accPayMoveBulk_() {
   document.querySelectorAll('.acc-pay-chk:checked').forEach(function(c) { ids.push(c.getAttribute('data-id')); });
   if (!ids.length) { alert('⚠️ حدّد دفعة واحدة على الأقل بصندوق ✔ بجوارها'); return; }
   var opts = [{ key: 'عام', label: '📌 عام (غير مخصصة لرحلة)' }]
-    .concat(_accData.trips.map(function(r) { return { key: r.trip, label: '✈️ ' + _accTripDisplay_(r.trip) }; }));
+    .concat(_accData.trips.map(function(r) { return { key: r.trip, label: '✈️ ' + _accTripLabelTxt_(r.trip) }; }));
   var prev = document.getElementById('_accPayMoveOverlay');
   if (prev) prev.remove();
   var ov = document.createElement('div');
@@ -29731,13 +29749,15 @@ function _accPrintAllPick_(mode) {
         (rows.length ? '' : '<div class="alert alert-info small py-2 mb-2">لا توجد رحلات مرتبطة بهذا العميل — سيشمل الكشف البنود والدفعات العامة (📌 عام) فقط.</div>') +
         rows.map(function(r) {
           return '<div class="form-check py-1 border-bottom"><input class="form-check-input acc-pp-chk" type="checkbox" value="' + esc(r.trip) + '" id="_pp_' + esc(r.trip) + '"' + (r.hasData ? ' checked' : '') + '>' +
-            '<label class="form-check-label d-flex justify-content-between" for="_pp_' + esc(r.trip) + '"><span>✈️ ' + esc(_accTripDisplay_(r.trip)) + '</span>' +
+            '<label class="form-check-label d-flex justify-content-between" for="_pp_' + esc(r.trip) + '"><span>✈️ ' + esc(_accTripDisplay_(r.trip)) + _accRefChip_(r.trip) + (_accGroupOf_(r.trip) ? ' <span class="badge" style="background:#ccfbf1;color:#0f4c4c;font-size:9.5px;">🔗 ' + esc(_accGroupOf_(r.trip).name) + '</span>' : '') + '</span>' +
             '<span class="text-muted small">' + esc(r.meta) + (r.hasData ? '' : ' · لم يُحاسَب بعد') + '</span></label></div>';
         }).join('') +
         // 🔗 (V4.29/V4.31) دمج الرحلات المحددة في قسم واحد بإجمالي موحد — يبقى مفعّلاً دائمًا لهذا العميل حتى يُفكّ صراحةً
         '<div class="p-2 mt-2 rounded" style="background:#eff6ff;border:2px solid #3b82f6;">' +
         '<div class="form-check"><input class="form-check-input" type="checkbox" id="_accPrintMergeChk">' +
-        '<label class="form-check-label small fw-bold" for="_accPrintMergeChk" style="color:#1e40af;">🔗 دمج الرحلات المحددة في كشف واحد — بنود كل رحلة تحت عنوانها، ودفعات وإجماليات موحّدة (مستحق/مدفوع/رصيد). <u>يبقى الدمج مفعّلاً دائمًا لهذا العميل حتى تفكّه</u>.</label></div>' +
+        '<label class="form-check-label small fw-bold" for="_accPrintMergeChk" style="color:#1e40af;">🔗 دمج الرحلات المحددة في كشف واحد — بنود كل رحلة تحت عنوانها، ودفعات وإجماليات موحّدة (مستحق/مدفوع/رصيد). (مجموعات الدمج الدائمة تُدار من شاشة الحساب بزر «🔗»)</label></div>' +
+        (_accGroups_().length ? '<div class="d-flex flex-wrap gap-1 mt-2 align-items-center"><span class="small fw-bold" style="color:#1e40af;">تحديد مجموعة:</span>' + _accGroups_().map(function (g) {
+          return '<button type="button" class="btn btn-outline-primary btn-sm py-0" onclick="_accPrintPickGroup_(\'' + _accJs_(g.id) + '\')">🔗 ' + esc(g.name) + ' (' + g.trips.length + ')</button>'; }).join('') + '</div>' : '') +
         // ⚡ (V4.41) حالة الدمج معروفة فورًا من نفس بيانات الحساب المحمَّلة مسبقًا (بلا أي طلب شبكة أو تأخير)
         '<div id="_accPrintMergeStatus" class="small mt-1"></div></div>' +
         // 📊 (V4.30) عرض ملخص كشف الحساب فقط — بلا تفاصيل رحلات أو بنود
@@ -29752,70 +29772,106 @@ function _accPrintAllPick_(mode) {
       '</div></div>';
   document.body.appendChild(ov);
   ov.addEventListener('click', function(e) { if (e.target === ov) ov.remove(); });
-  // ⚡ (V4.41) حالة الدمج معروفة فورًا (وصلت ضمن استجابة تحميل الحساب نفسها) — تُطبَّق تزامنيًا بلا أي
-  // طلب شبكة إضافي أو تأخير محسوس عند فتح الشاشة
-  var mg = window._accMergeGroupCache;
-  var st = document.getElementById('_accPrintMergeStatus');
-  if (mg && mg.trips) {
-    document.getElementById('_accPrintMergeChk').checked = true;
-    document.querySelectorAll('.acc-pp-chk').forEach(function(c) { c.checked = mg.trips.indexOf(c.value) > -1; });
-    st.innerHTML = '✅ دمج محفوظ حاليًا لـ' + mg.trips.length + ' رحلة — <button type="button" class="btn btn-outline-danger btn-sm py-0" onclick="_accPrintUnmerge_(\'' + _accJs_(d.client) + '\')">🔓 فك الدمج</button>';
-  }
+  // 🔗 (V4.320) الرحلة المحددة حالياً ضمن مجموعة دمج ⇒ تُحدَّد رحلات مجموعتها ويُفعَّل الدمج تلقائياً
+  var cg = _accGroupOf_(_accSelKey);
+  if (cg) _accPrintPickGroup_(cg.id);
+}
+function _accPrintPickGroup_(gid) {
+  var g = _accGroups_().filter(function (x) { return x.id === gid; })[0]; if (!g) return;
+  document.querySelectorAll('.acc-pp-chk').forEach(function(c) { c.checked = g.trips.indexOf(c.value) > -1; });
+  var mc = document.getElementById('_accPrintMergeChk'); if (mc) mc.checked = true;
+  var st = document.getElementById('_accPrintMergeStatus'); if (st) st.innerHTML = '✅ محدَّدة رحلات مجموعة «' + escapeHtml_(g.name) + '» (' + g.trips.length + ')';
+  window._accPrintGroupName_ = g.name;
 }
 // 🔗 (V4.56) دمج/فك الدمج مباشرة من الشريط الجانبي — بطلب صريح: يظهر بشاشة الحسابات نفسها
 // بدل الاعتماد على مودال الطباعة فقط
-function _accMergeSidebarOpen_() {
+// 🔗 (V4.320) نافذة مجموعة دمج: إنشاء جديدة أو تعديل موجودة — اسم المجموعة + اختيار رحلاتها (الاسم الطبيعي + الكود + التاريخ).
+// الرحلة بمجموعة أخرى تظهر بشارتها، واختيارها ينقلها لهذه المجموعة بعد تأكيد صريح
+function _accMergeSidebarOpen_(gid) {
   if (!_accData || !_accData.trips || !_accData.trips.length) { alert('حمّل حساب عميل أولاً'); return; }
-  var trips = _accData.trips;
-  var esc = escapeHtml_;
-  var body = '<div class="p-3" style="background:#0f4c4c;color:#fff;font-weight:800;border-radius:12px 12px 0 0;">🔗 دمج حسابات رحلات — ' + esc((_accData && _accData.client)) + '</div>' +
+  var esc = escapeHtml_, groups = _accGroups_(), g = gid ? groups.filter(function (x) { return x.id === gid; })[0] : null;
+  var trips = _accData.trips.slice().sort(function (a, b) {
+    var p = function (s) { var m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? new Date(+m[3], +m[2] - 1, +m[1]).getTime() : Infinity; };
+    return p(a.departDate) - p(b.departDate);
+  });
+  window._accMergeEditId_ = g ? g.id : '';
+  var body = '<div class="p-3" style="background:#0f4c4c;color:#fff;font-weight:800;border-radius:12px 12px 0 0;">🔗 ' + (g ? 'تعديل مجموعة دمج' : 'مجموعة دمج جديدة') + ' — ' + esc(_accData.client) + '</div>' +
     '<div class="p-3">' +
-    '<div class="small text-muted mb-2">اختر رحلتين أو أكثر لدمج حساباتهما — تُوزَّع المدفوعات تلقائياً بالأقدمية (FIFO)، وتظهر مدمجة بالشريط الجانبي وكشوف الطباعة حتى تُفكّ.</div>' +
-    trips.map(function(r) {
-      return '<div class="form-check"><input type="checkbox" class="form-check-input _acc-merge-chk" value="' + esc(r.trip) + '"> ' +
-        '<label class="form-check-label small fw-bold">✈️ ' + esc(_accTripDisplay_(r.trip)) +
-        ' <span class="text-muted small">(' + esc(r.departDate || '—') + ')</span></label></div>';
-    }).join('') +
-    '<div class="d-flex justify-content-end gap-2 mt-3">' +
+    '<label class="small fw-bold mb-1">اسم المجموعة</label><input id="_accMergeName" class="form-control form-control-sm mb-2" maxlength="60" value="' + esc(g ? g.name : ('مجموعة ' + (groups.length + 1))) + '">' +
+    '<div class="small text-muted mb-2">اختر رحلتين أو أكثر — دفعات رحلات المجموعة تتشارك وتوزَّع تلقائياً بالأقدم (FIFO). يمكن إنشاء أكثر من مجموعة لنفس العميل (مثلاً 4 رحلات معاً و5 أخرى معاً)، والرحلة الواحدة بمجموعة واحدة فقط.</div>' +
+    '<div class="d-flex gap-2 mb-1"><input id="_accMergeQ" class="form-control form-control-sm" placeholder="🔍 بحث باسم الرحلة أو كودها" oninput="_accMergeFilter_(this.value)"></div>' +
+    '<div id="_accMergeList">' + trips.map(function(r) {
+      var og = _accGroupOf_(r.trip), inThis = g && og && og.id === g.id, other = og && !inThis;
+      return '<div class="form-check py-1 border-bottom _acc-merge-row" data-q="' + esc((r.trip + ' ' + _accTripDisplay_(r.trip) + ' ' + _accTripRef_(r.trip)).toLowerCase()) + '">' +
+        '<input type="checkbox" class="form-check-input _acc-merge-chk" id="_amc_' + esc(r.trip) + '" value="' + esc(r.trip) + '"' + (inThis ? ' checked' : '') + (other ? ' data-other="' + esc(og.name) + '"' : '') + '> ' +
+        '<label class="form-check-label small fw-bold d-flex flex-wrap gap-1 align-items-center" for="_amc_' + esc(r.trip) + '">✈️ ' + esc(r.trip) + _accRefChip_(r.trip) +
+        (_accTripDisplay_(r.trip) !== r.trip ? ' <span class="text-muted fw-normal">(بالكشف: ' + esc(_accTripDisplay_(r.trip)) + ')</span>' : '') +
+        ' <span class="text-muted fw-normal">' + esc(r.departDate || '—') + '</span>' +
+        (other ? ' <span class="badge bg-warning text-dark">🔗 في «' + esc(og.name) + '»</span>' : '') + '</label></div>';
+    }).join('') + '</div>' +
+    '<div class="d-flex justify-content-end gap-2 mt-3 flex-wrap">' +
+    (g ? '<button class="btn btn-outline-danger btn-sm me-auto" onclick="_accUnmergeSidebar_(\'' + _accJs_(g.id) + '\')">🔓 فك هذه المجموعة</button>' : '') +
     '<button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById(\'_accMergeOverlay\').remove()">إلغاء</button>' +
-    '<button class="btn btn-sm fw-bold" style="background:#0f4c4c;color:#fff;" onclick="_accMergeSidebarSave_()">🔗 دمج المحدد</button>' +
+    '<button class="btn btn-sm fw-bold" style="background:#0f4c4c;color:#fff;" onclick="_accMergeSidebarSave_()">🔗 حفظ المجموعة</button>' +
     '</div></div>';
+  var old = document.getElementById('_accMergeOverlay'); if (old) old.remove();
   var ov = document.createElement('div');
   ov.id = '_accMergeOverlay';
-  // z-index أعلى من mainAppContainer (999999 بعد الدخول) وإلا تُفتح النافذة مخفية خلف التطبيق —
-  // (V4.89) كان بـ20000 فقط، أقل من ذلك بكثير، فتظهر النافذة خلف التطبيق ولا يبدو أن الزر يفعل شيئًا
+  // z-index أعلى من mainAppContainer (999999 بعد الدخول) وإلا تُفتح النافذة مخفية خلف التطبيق
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147482000;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;padding:16px;';
-  ov.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;max-height:80vh;overflow:auto;">' + body + '</div>';
+  ov.innerHTML = '<div dir="rtl" style="background:#fff;border-radius:12px;max-width:560px;width:100%;max-height:85vh;overflow:auto;">' + body + '</div>';
   ov.addEventListener('click', function(e) { if (e.target === ov) ov.remove(); });
   document.body.appendChild(ov);
 }
-function _accMergeSidebarSave_() {
-  var picks = [];
-  document.querySelectorAll('._acc-merge-chk:checked').forEach(function(c) { picks.push(c.value); });
+function _accMergeFilter_(q) {
+  q = String(q || '').trim().toLowerCase();
+  document.querySelectorAll('#_accMergeList ._acc-merge-row').forEach(function (r) { r.style.display = !q || r.getAttribute('data-q').indexOf(q) > -1 ? '' : 'none'; });
+}
+function _accMergeSidebarSave_(move) {
+  var picks = [], others = [];
+  document.querySelectorAll('._acc-merge-chk:checked').forEach(function(c) { picks.push(c.value); if (c.getAttribute('data-other')) others.push(c.value + ' (من «' + c.getAttribute('data-other') + '»)'); });
   if (picks.length < 2) { alert('⚠️ اختر رحلتين على الأقل'); return; }
+  if (others.length && !move) {
+    askConfirm_('هذه الرحلات موجودة بمجموعة أخرى وستُنقل لهذه المجموعة:\n' + others.join('\n') + '\n(المجموعة التي يبقى بها أقل من رحلتين تُفك تلقائياً)', function () { _accMergeSidebarSave_(true); }, { title: 'نقل رحلات بين المجموعات', danger: false });
+    return;
+  }
+  var nameEl = document.getElementById('_accMergeName');
+  var grp = { id: window._accMergeEditId_ || '', name: nameEl ? nameEl.value : '', trips: picks };
   google.script.run
     .withSuccessHandler(function(res) {
       if (res && res.success) {
-        document.getElementById('_accMergeOverlay').remove();
-        showToast('🔗 تم دمج ' + picks.length + ' رحلات');
-        // ⚡ (V4.199) الأرصدة تُحسب بالواجهة من mergeTrips — تحديث محلي بدل إعادة تحميل الحساب كاملاً
-        _accData.mergeTrips = picks.slice(); window._accMergeGroupCache = { trips: picks.slice() }; _accRender_();
-      } else alert('❌ ' + ((res && res.error) || 'فشل الدمج'));
+        var ov = document.getElementById('_accMergeOverlay'); if (ov) ov.remove();
+        showToast('🔗 حُفظت المجموعة (' + picks.length + ' رحلات)');
+        // ⚡ الأرصدة تُحسب بالواجهة — تحديث محلي بدل إعادة تحميل الحساب كاملاً
+        _accData.mergeGroups = res.groups || []; _accData.mergeTrips = _accData.mergeGroups.length ? _accData.mergeGroups[0].trips : null;
+        window._accMergeGroupCache = { trips: _accData.mergeTrips, groups: _accData.mergeGroups }; _accRender_();
+      } else alert('❌ ' + ((res && res.error) || 'تعذّر حفظ المجموعة'));
     })
     .withFailureHandler(function(err) { alert('❌ ' + (err.message || err)); })
-    .saveClientMergeGroup(window.authToken, (_accData && _accData.client), picks);
+    .saveClientMergeGroupV2(window.authToken, (_accData && _accData.client), grp, { move: !!move });
 }
-function _accUnmergeSidebar_() {
+function _accUnmergeSidebar_(gid) {
   if (!_accData || !(_accData && _accData.client)) return;
-  askConfirm_('🔓 فك دمج حسابات الرحلات؟ (المدفوعات ستعود لكل رحلة حسب تخصيصها الأصلي)', function () {
+  var g = _accGroups_().filter(function (x) { return x.id === gid; })[0];
+  askConfirm_('🔓 فك مجموعة الدمج «' + (g ? g.name : '') + '»؟ (تعود دفعات كل رحلة لحسابها حسب تخصيصها الأصلي — بقية المجموعات كما هي)', function () {
     google.script.run
       .withSuccessHandler(function(res) {
-        if (res && res.success) { showToast('🔓 تم فك الدمج'); _accData.mergeTrips = null; window._accMergeGroupCache = { trips: null }; _accRender_(); }
-        else alert('❌ ' + ((res && res.error) || 'فشل فك الدمج'));
+        if (res && res.success) {
+          var ov = document.getElementById('_accMergeOverlay'); if (ov) ov.remove();
+          showToast('🔓 فُكّت المجموعة');
+          _accData.mergeGroups = res.groups || []; _accData.mergeTrips = _accData.mergeGroups.length ? _accData.mergeGroups[0].trips : null;
+          window._accMergeGroupCache = { trips: _accData.mergeTrips, groups: _accData.mergeGroups }; _accRender_();
+        } else alert('❌ ' + ((res && res.error) || 'فشل فك الدمج'));
       })
       .withFailureHandler(function(err) { alert('❌ ' + (err.message || err)); })
-      .clearClientMergeGroup(window.authToken, (_accData && _accData.client));
+      .deleteClientMergeGroup(window.authToken, (_accData && _accData.client), gid);
   });
+}
+// 🖨️ (V4.320) كشف مجموعة دمج واحدة: رحلاتها فقط بدفعات وإجماليات موحّدة
+function _accPrintGroup_(gid) {
+  var g = _accGroups_().filter(function (x) { return x.id === gid; })[0]; if (!g) return;
+  window._accPrintGroupName_ = g.name;
+  _accPrint_('all', null, undefined, g.trips.slice(), true, false, false);
 }
 
 // 🔓 (V4.31) فك الدمج الدائم المحفوظ لهذا العميل
@@ -29849,11 +29905,9 @@ function _accPrintAllPickGo_(mode) {
   var _hasGen = _accData && ((_accData.items || []).some(function (i) { return i.trip === 'عام'; }) || (_accData.payments || []).some(function (p) { return p.trip === 'عام'; }));
   if (!sel.length && !_hasGen) { alert('⚠️ اختر رحلة واحدة على الأقل'); return; }
   if (merge && sel.length < 2) { alert('⚠️ الدمج يحتاج رحلتين على الأقل'); return; }
-  // 🔗 (V4.31) الدمج يبقى محفوظًا دائمًا لهذا العميل حتى يُفكّ صراحةً — يُحفظ فور تفعيله هنا
-  if (merge && _accData && (_accData && _accData.client)) {
-    window._accMergeGroupCache = { trips: sel }; // ⚡ (V4.41) تحديث الكاش فورًا ليطابق الحالة الجديدة
-    google.script.run.withSuccessHandler(function() {}).withFailureHandler(function() {}).saveClientMergeGroup(window.authToken, (_accData && _accData.client), sel);
-  }
+  // 🔗 (V4.320) الطباعة لم تعد تحفظ «دمجاً دائماً» بصمت (كانت تستبدل المجموعة المحفوظة باختيار الطباعة) — المجموعات تُدار من زر «🔗» بالشاشة
+  var gsel = _accGroups_().filter(function (g) { return g.trips.length === sel.length && g.trips.every(function (t) { return sel.indexOf(t) > -1; }); })[0];
+  window._accPrintGroupName_ = merge && gsel ? gsel.name : '';
   _accPrint_('all', null, mode || undefined, sel, merge, summaryOnly, showSettlement);
 }
 
@@ -29953,7 +30007,7 @@ function _accPrint_(scope, tripOnly, mode, tripFilter, merge, summaryOnly, showS
   };
   var acctTripHdrRow_ = function(trip, row, mode) {
     return '<tr><td colspan="6" class="span-all" style="background:#e0f2fe;font-weight:800;text-align:right;">✈️ ' + esc(_accTripDisplay_(trip)) +
-      ' <span style="font-weight:400;font-size:10px;">(' + esc(row.departDate || '') + (row.returnDate ? ' ← ' + esc(row.returnDate) : '') +
+      ' <span style="font-weight:400;font-size:10px;">(' + (_accTripRef_(trip) ? 'كود: <span dir="ltr">' + esc(_accTripRef_(trip)) + '</span> · ' : '') + esc(row.departDate || '') + (row.returnDate ? ' ← ' + esc(row.returnDate) : '') +
       (mode ? ' · نوع المحاسبة: ' + esc(mode) : '') + ')</span></td></tr>';
   };
   var acctTotalRow_ = function(label, e, s) {
@@ -38434,7 +38488,8 @@ function mfBkRenderPick_(ci) {
     (dim ? (' · <b style="color:#c2670a;">' + dim + '</b> مسجَّلون في ملف آخر (باهتون — الاختيار اختياري)') : '') +
     '</div><span style="display:inline-flex;gap:4px;"><button class="mf-btn sm" onclick="mfBkPickAll_(' + ci + ',true)">تحديد الكل</button><button class="mf-btn sm" onclick="mfBkPickAll_(' + ci + ',false)">إفراغ</button></span></div>' +
     '<div style="margin:6px 0 2px;">' + pickBySelectHtml_('mfBkRenderAllPick_') + '</div><div data-mfbk-groups="' + ci + '" style="max-height:360px;overflow:auto;">';
-  pickGroups_(c.list, mfPickKey, mfPickClientOf).forEach(function (g, gi) {
+  c._grp = pickGroups_(c.list, mfPickKey, mfPickClientOf);   // (V4.320) نفس المجموعات المرسومة لزر «تحديد المجموعة»
+  c._grp.forEach(function (g, gi) {
     var onN = g.rows.filter(function (r) { return c.sel[r.k]; }).length, gCnt = g.rows.filter(function (r) { return c.sel[r.k] && !mfPickIsInfant(r.p); }).length, allOn = onN === g.rows.length;
     h += '<div class="mf-pkg" data-mfbk-g="' + gi + '" style="margin-top:6px;"><div style="display:flex;align-items:center;gap:6px;padding:3px 6px;background:#f1f5f9;border-radius:6px;">' +
       '<b style="font-size:11px;color:#0f4c4c;flex:1;">' + (by === 'client' ? '🧾 ' : '') + E(g.client) + '</b>' +
@@ -38451,7 +38506,9 @@ function mfBkRenderPick_(ci) {
     });
     h += '</div></div>';
   });
+  var g0 = box.querySelector('[data-mfbk-groups]'), st0 = g0 ? g0.scrollTop : 0;   // (V4.320) لا قفز لأعلى القائمة مع كل اختيار
   box.innerHTML = '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px;margin-top:6px;">' + h + '</div></div>';
+  var g1 = box.querySelector('[data-mfbk-groups]'); if (g1 && st0) g1.scrollTop = st0;
 }
 // (V4.319) رد «📂 تجميع حسب» (pickBySelectHtml_ يستدعي دالة بلا وسائط): التفضيل عام فيُعاد رسم كل البطاقات المفتوحة
 function mfBkRenderAllPick_() { var B = MF._bk; if (!B) return; B.cards.forEach(function (c, ci) { if (c.open) mfBkRenderPick_(ci); }); }
@@ -38467,7 +38524,7 @@ function mfBkPickAll_(ci, on) {
 }
 function mfBkPickClient_(ci, gi) {   // (V4.319) نفس تجميع العرض (pickGroups_) فيطابق رقم المجموعة gi ما يراه المستخدم
   var c = MF._bk.cards[ci]; if (!c.list) return;
-  var g = pickGroups_(c.list, mfPickKey, mfPickClientOf)[gi]; if (!g) return;
+  var g = (c._grp || pickGroups_(c.list, mfPickKey, mfPickClientOf))[gi]; if (!g) return;
   var allOn = g.rows.every(function (r) { return c.sel[r.k]; });
   g.rows.forEach(function (r) { if (allOn) delete c.sel[r.k]; else c.sel[r.k] = true; });
   c.selDirty = true; mfBkRenderPick_(ci);
@@ -43307,7 +43364,8 @@ function vzBkRenderPick_(ci) {
     '<span class="small text-muted">مختار: ' + inN + '</span>' +
     '<button class="vz-btn sm" onclick="vzBkPickAll_(' + ci + ',true)">تحديد الكل</button><button class="vz-btn sm" onclick="vzBkPickAll_(' + ci + ',false)">إفراغ</button>' +
     pickBySelectHtml_('vzBkRenderAllPick_') + '</div><div data-vzbk-groups="' + ci + '" style="max-height:360px;overflow:auto;">';
-  pickGroups_(c.list, vzPickKey, vzPickClientOf).forEach(function (g, gi) {
+  c._grp = pickGroups_(c.list, vzPickKey, vzPickClientOf);   // (V4.320) نفس المجموعات المرسومة لزر «تحديد المجموعة»
+  c._grp.forEach(function (g, gi) {
     var onN = g.rows.filter(function (r) { return c.sel[r.k]; }).length, allOn = onN === g.rows.length;
     h += '<div data-vzbk-g="' + gi + '" style="margin-top:4px;"><div style="display:flex;align-items:center;gap:6px;background:#eef7f5;border-radius:6px;padding:2px 6px;">' +
       '<b style="font-size:11px;color:#0f4c4c;flex:1;">' + (by === 'client' ? '🧾 ' : '') + E(g.client) + '</b><span class="small text-muted">' + onN + '/' + g.rows.length + '</span>' +
@@ -43326,7 +43384,9 @@ function vzBkRenderPick_(ci) {
     });
     h += '</div></div>';
   });
+  var g0 = box.querySelector('[data-vzbk-groups]'), st0 = g0 ? g0.scrollTop : 0;   // (V4.320) لا قفز لأعلى القائمة مع كل اختيار
   box.innerHTML = '<div class="vz-bar mt-1" style="border-radius:10px;">' + h + '</div></div>';
+  var g1 = box.querySelector('[data-vzbk-groups]'); if (g1 && st0) g1.scrollTop = st0;
 }
 // (V4.319) رد «📂 تجميع حسب» (pickBySelectHtml_ يستدعي دالة بلا وسائط): التفضيل عام فيُعاد رسم كل البطاقات المفتوحة
 function vzBkRenderAllPick_() { var B = VZ._bk; if (!B) return; B.cards.forEach(function (c, ci) { if (c.open) vzBkRenderPick_(ci); }); }
@@ -43342,7 +43402,7 @@ function vzBkPickAll_(ci, on) {   // «إفراغ» يُفرغ الكل صراح
 }
 function vzBkPickClient_(ci, gi) {   // (V4.319) نفس تجميع العرض (pickGroups_) فيطابق رقم المجموعة gi ما يراه المستخدم
   var c = VZ._bk.cards[ci]; if (!c.list) return;
-  var g = pickGroups_(c.list, vzPickKey, vzPickClientOf)[gi]; if (!g) return;
+  var g = (c._grp || pickGroups_(c.list, vzPickKey, vzPickClientOf))[gi]; if (!g) return;
   var allOn = g.rows.every(function (r) { return c.sel[r.k]; });
   g.rows.forEach(function (r) { if (allOn) delete c.sel[r.k]; else c.sel[r.k] = true; });
   c.selDirty = true; vzBkRenderPick_(ci);
@@ -47744,7 +47804,8 @@ function glEntBulkEditOpen_() {
       '<div class="fw-bold mb-2" style="color:#0b3838;font-size:13px;">✏️ قيد ' + esc(r.id) + (r.voucherNo ? ' · 🧾 ' + esc(r.voucherNo) : '') + ' <span class="text-muted" style="font-size:11px;">(' + esc(r.type) + ' — ' + esc(r.date) + ')</span></div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;">' +
         mkFld('desc', 'البيان') +
-        mkFld('ref', 'المرجع') +
+        // (V4.320) مرجع القيد التلقائي/قيد الشيت بصمة مصدر داخلية لا تُعدَّل ولا تُعرض
+        (/^(AUTO|CUST):/.test(r.sourceKey || '') ? '<div class="cc-fld"><label>المرجع</label><input disabled value="مرجع نظامي (تلقائي)"></div>' : mkFld('ref', 'المرجع')) +
         mkFld('trip', 'الرحلة') +
         mkFld('company', 'الشركة') +
       '</div>' +

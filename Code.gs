@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.319";
+var APP_VERSION = "4.320";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6967,7 +6967,7 @@ var ALL_CACHE_KEYS = [
   'mf_ref_lists_cache',       // ⚡ (V4.193) الشركات/الرحلات/العملاء لشاشتي الوزارة والوكلاء
   'notifications_rows_cache', // 🔔 (V4.177) صفوف التنبيهات الخام (تُبطَّل أيضاً مع كل كتابة تنبيه)
   'ministry_trip_links_cache', // 🔗 (V4.178) روابط الرحلة⇄ملف الوزارة (تُبطَّل مع حفظ ملف أو رحلة)
-  'acc_client_stats_idx', // ⚡ (V4.199) فهرس أعداد/فنادق كل عميل برحلاته (شاشة حسابات العملاء) — يُبطَّل مع أي تعديل كشف
+  'acc_client_stats_idx_v2', // ⚡ (V4.199) فهرس أعداد/فنادق كل عميل برحلاته (شاشة حسابات العملاء) — يُبطَّل مع أي تعديل كشف
   'visa_bootstrap_cache' // 🧑‍💼 (V4.142) بيانات شاشة متابعة التأشيرات والوكلاء — كانت مفقودة من هذه القائمة
                          // فيظل ربط الوكيل بالشركة (زر إعدادات الوكيل) قديماً في هذه الشاشة حتى تنتهي صلاحية الكاش تلقائياً
 ];
@@ -13615,7 +13615,7 @@ function getClientTripStats(authToken, clientName) {
   var rows = Object.keys(byTrip).map(function(tn) {
     var t = trips[tn] || {};
     var e = byTrip[tn];
-    return { trip: tn, company: t.company || '', agent: t.agent || '',
+    return { trip: tn, company: t.company || '', agent: t.agent || '', tripRef: (idx.r || {})[tn] || '',
       departDate: t.departDate || '', returnDate: t.returnDate || '',
       adults: e.adults, children: e.children, infants: e.infants, total: e.total,
       hotels: e.hotels, accom: e.accom };
@@ -13633,8 +13633,8 @@ function getClientTripStats(authToken, clientName) {
 // نفس قواعد العدّ السابقة حرفياً (صفوف بلا اسم تُتجاهل، بلا رحلة ⇒ noTripCount، النوع طفل/رضيع/غير ذلك كبير)
 function _accClientStatsIdx_() {
   if (_accClientStatsIdx_._m) return _accClientStatsIdx_._m;
-  var cached = getCachedData('acc_client_stats_idx');
-  if (cached && cached.c && cached.t && cached.n) return (_accClientStatsIdx_._m = cached);
+  var cached = getCachedData('acc_client_stats_idx_v2');   // (V4.320) v2: + كود كل رحلة (r)
+  if (cached && cached.c && cached.t && cached.n && cached.r) return (_accClientStatsIdx_._m = cached);
   var byClient = {}, noTrip = {}, tripSeen = {};
   var pSheet = _getPilgrimsSheet_();
   if (pSheet && pSheet.getLastRow() >= 2) {
@@ -13661,13 +13661,14 @@ function _accClientStatsIdx_() {
       if (acc) e.m[acc] = (e.m[acc] || 0) + 1;
     });
   }
-  var trips = {};
+  var trips = {}, refs = {};
   var tSheet = _getTripsSheet_();
   if (tSheet && tSheet.getLastRow() >= 2) {
     var tC = _robustColMap_(tSheet, TRIPS_HEADERS_);
     var T = _cellReader_(tC, TRIPS_COL_);
     tSheet.getRange(2, 1, tSheet.getLastRow() - 1, tSheet.getLastColumn()).getValues().forEach(function(r) {
       var n = String(T(r, 'name') || '').trim();
+      if (n) { var rf = String(T(r, 'tripRef') || '').trim(); if (rf) refs[n] = rf; }   // 🏷️ (V4.320) كود كل رحلة (لكل الرحلات — يشمل رحلات بنود قديمة بلا معتمرين)
       if (!n || !tripSeen[n]) return;
       trips[n] = {
         company: String(T(r, 'company') || ''),
@@ -13677,15 +13678,15 @@ function _accClientStatsIdx_() {
       };
     });
   }
-  var idx = { c: byClient, n: noTrip, t: trips };
+  var idx = { c: byClient, n: noTrip, t: trips, r: refs };
   try {
     // حد أمان لحجم الكاش (30 جزءاً × 80KB) — لو تجاوزه يُستخدم الفهرس داخل هذا الطلب فقط بلا تخزين
-    if (JSON.stringify(idx).length < 2300000) setCachedData('acc_client_stats_idx', idx);
+    if (JSON.stringify(idx).length < 2300000) setCachedData('acc_client_stats_idx_v2', idx);
   } catch (eC) {}
   return (_accClientStatsIdx_._m = idx);
 }
 // يُستدعى بعد أي كتابة بكشف المعتمرين داخل نفس الطلب (نادراً) لإعادة بناء الفهرس
-function _accClientStatsIdxReset_() { _accClientStatsIdx_._m = null; clearCachedData('acc_client_stats_idx'); }
+function _accClientStatsIdxReset_() { _accClientStatsIdx_._m = null; clearCachedData('acc_client_stats_idx_v2'); }
 
 /* ============================================================
    💰 حسابات العملاء (V4.00)
@@ -13730,7 +13731,8 @@ var ACC_PAY_HEADERS   = ['المعرف','العميل','اسم الرحلة','ا
 var ACC_META_HEADERS  = ['العميل','اسم الرحلة','نمط الحساب','لقطة الأعداد','تنبيه مقروء','عُدّل بواسطة','عُدّل في','اسم العرض'];
 // 🔗 (V4.31) دمج ثابت لرحلات عميل بكشف الحساب — يبقى مفعّلاً حتى يُفكّ صراحةً بزر «فك الدمج»
 var ACC_MERGE_SHEET   = 'ClientAccounts_MergeGroups';
-var ACC_MERGE_HEADERS = ['العميل','الرحلات (JSON)','أنشئ/عُدّل بواسطة','أنشئ/عُدّل في'];
+// 🔗 (V4.320) أكثر من مجموعة دمج لكل عميل: صف لكل مجموعة + معرّف واسم (عمودان مُضافان بالنهاية فقط — مواضع الأعمدة القديمة ثابتة)
+var ACC_MERGE_HEADERS = ['العميل','الرحلات (JSON)','أنشئ/عُدّل بواسطة','أنشئ/عُدّل في','معرف المجموعة','اسم المجموعة'];
 
 // 📑 (V4.54) بيان اتفاقيات الإعاشة — شيت مستقل
 var CATERING_SHEET = 'CateringContracts';
@@ -13761,59 +13763,85 @@ function _ccLogDiffEntries_(contractNo, oldRow, newRow) {
   return entries;
 }
 
+/* 🔗 (V4.320) مجموعات دمج متعددة لكل عميل (مثلاً 4 رحلات معاً و5 أخرى معاً) — كل مجموعة تتشارك دفعاتها (FIFO بالأقدم)
+   بالعرض والطباعة فقط؛ لا يُكتب أي شيء في حقل رحلة البند/الدفعة ولا في قيود الحسابات العامة. الرحلة الواحدة بمجموعة واحدة
+   فقط. الصف القديم (دمج واحد بلا معرّف) يُقرأ كمجموعة صالحة ويُعطى معرّفاً واسماً «مجموعة 1» تلقائياً عند أول قراءة */
+function _accMergeGroupsRead_(client, heal) {
+  client = String(client || '').trim();
+  var sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS), last = sh.getLastRow(), out = [], fixes = [];
+  if (last < 2) return out;
+  var W = ACC_MERGE_HEADERS.length, vals = sh.getRange(2, 1, last - 1, W).getValues();
+  vals.forEach(function (r, i) {
+    if (String(r[0] || '').trim() !== client) return;
+    var trips = []; try { trips = JSON.parse(r[1] || '[]'); } catch (e) { trips = []; }
+    trips = (Array.isArray(trips) ? trips : []).map(function (t) { return String(t || '').trim(); }).filter(Boolean);
+    if (!trips.length) return;
+    var id = String(r[4] || '').trim(), name = String(r[5] || '').trim();
+    if (!id) { id = 'MG-' + Utilities.getUuid().slice(0, 8); fixes.push({ row: i + 2, id: id }); }
+    out.push({ id: id, name: name || ('مجموعة ' + (out.length + 1)), trips: trips, by: String(r[2] || ''), at: r[3] instanceof Date ? Utilities.formatDate(r[3], Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : String(r[3] || ''), rowNum: i + 2 });
+  });
+  if (heal !== false && fixes.length) { try { fixes.forEach(function (f) { sh.getRange(f.row, 5).setValue(f.id); }); } catch (e) {} }
+  return out;
+}
+function getClientMergeGroups(authToken, client) {
+  _accPerm_(authToken, 'view');
+  return { success: true, groups: _accMergeGroupsRead_(client).map(function (g) { return { id: g.id, name: g.name, trips: g.trips, by: g.by, at: g.at }; }) };
+}
+// group: {id?, name, trips[]} · opts.move: نقل رحلة من مجموعتها الأخرى بدل رفض الحفظ
+function saveClientMergeGroupV2(authToken, client, group, opts) {
+  var session = _accPerm_(authToken, 'edit');
+  client = String(client || '').trim(); group = group || {}; opts = opts || {};
+  var trips = (Array.isArray(group.trips) ? group.trips : []).map(function (t) { return String(t || '').trim(); })
+    .filter(function (t, i, a) { return t && t !== 'عام' && a.indexOf(t) === i; });
+  if (!client || trips.length < 2) return { success: false, error: 'مجموعة الدمج تحتاج رحلتين على الأقل' };
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS), groups = _accMergeGroupsRead_(client), id = String(group.id || '').trim();
+    var cur = id ? groups.filter(function (g) { return g.id === id; })[0] : null;
+    if (id && !cur) return { success: false, error: 'المجموعة غير موجودة (ربما حُذفت) — حدّث الشاشة' };
+    var name = String(group.name || '').trim() || (cur ? cur.name : 'مجموعة ' + (groups.length + 1));
+    var clash = [];
+    groups.forEach(function (g) { if (cur && g.id === cur.id) return; g.trips.forEach(function (t) { if (trips.indexOf(t) > -1) clash.push({ g: g, t: t }); }); });
+    if (clash.length && !opts.move) return { success: false, clash: clash.map(function (c) { return { trip: c.t, group: c.g.name }; }),
+      error: 'رحلات موجودة بمجموعة أخرى: ' + clash.map(function (c) { return c.t + ' («' + c.g.name + '»)'; }).join('، ') };
+    var touched = {}, dels = [];
+    clash.forEach(function (c) { var g = touched[c.g.id] || (touched[c.g.id] = { g: c.g, trips: c.g.trips.slice() }); g.trips.splice(g.trips.indexOf(c.t), 1); });
+    Object.keys(touched).forEach(function (k) { var x = touched[k]; if (x.trips.length < 2) dels.push(x.g.rowNum); else sh.getRange(x.g.rowNum, 2, 1, 3).setValues([[JSON.stringify(x.trips), session.username, new Date()]]); });
+    var row = [client, JSON.stringify(trips), session.username, new Date(), cur ? cur.id : ('MG-' + Utilities.getUuid().slice(0, 8)), name];
+    if (cur) sh.getRange(cur.rowNum, 1, 1, row.length).setValues([row]); else sh.appendRow(row);
+    dels.sort(function (a, b) { return b - a; }).forEach(function (rn) { sh.deleteRow(rn); });
+    logChange_(session.username, 'حفظ مجموعة دمج رحلات بكشف حساب: ' + name, client, '-', '-', trips.join('، '));
+    return { success: true, groups: _accMergeGroupsRead_(client, false).map(function (g) { return { id: g.id, name: g.name, trips: g.trips, by: g.by, at: g.at }; }) };
+  } finally { lock.releaseLock(); }
+}
+function deleteClientMergeGroup(authToken, client, groupId) {
+  var session = _accPerm_(authToken, 'edit');
+  client = String(client || '').trim();
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var g = _accMergeGroupsRead_(client).filter(function (x) { return x.id === String(groupId || ''); })[0];
+    if (g) { _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS).deleteRow(g.rowNum); logChange_(session.username, 'فك مجموعة دمج رحلات بكشف حساب: ' + g.name, client, '-', '-', g.trips.join('، ')); }
+    return { success: true, groups: _accMergeGroupsRead_(client, false).map(function (x) { return { id: x.id, name: x.name, trips: x.trips, by: x.by, at: x.at }; }) };
+  } finally { lock.releaseLock(); }
+}
+// ↩️ واجهات التوافق (صفحة مفتوحة بالنسخة القديمة أثناء النشر): get = أول مجموعة · save = تستبدل مجموعة وحيدة/تنشئ · clear = تحذف كل مجموعات العميل
 function getClientMergeGroup(authToken, client) {
   _accPerm_(authToken, 'view');
   return _accMergeGroupRead_(client);
 }
 function _accMergeGroupRead_(client) {
-  client = String(client || '').trim();
-  var sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS);
-  if (sh.getLastRow() < 2) return { success: true, trips: null };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, ACC_MERGE_HEADERS.length).getValues();
-  for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0] || '').trim() === client) {
-      var trips = [];
-      try { trips = JSON.parse(vals[i][1] || '[]'); } catch (e) { trips = []; }
-      return { success: true, trips: trips.length ? trips : null };
-    }
-  }
-  return { success: true, trips: null };
+  var g = _accMergeGroupsRead_(client, false)[0];
+  return { success: true, trips: g ? g.trips : null };
 }
-
 function saveClientMergeGroup(authToken, client, trips) {
-  var session = _accPerm_(authToken, 'edit');
-  client = String(client || '').trim();
-  if (!client || !Array.isArray(trips) || trips.length < 2) return { success: false, error: 'الدمج يحتاج رحلتين على الأقل' };
-  var sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS);
-  var last = sh.getLastRow();
-  if (last >= 2) {
-    var vals = sh.getRange(2, 1, last - 1, 1).getValues();
-    for (var i = 0; i < vals.length; i++) {
-      if (String(vals[i][0] || '').trim() === client) {
-        sh.getRange(i + 2, 2, 1, 3).setValues([[JSON.stringify(trips), session.username, new Date()]]);
-        logChange_(session.username, 'حفظ دمج رحلات دائم بكشف حساب', client, '-', '-', trips.join('، '));
-        return { success: true };
-      }
-    }
-  }
-  sh.appendRow([client, JSON.stringify(trips), session.username, new Date()]);
-  logChange_(session.username, 'حفظ دمج رحلات دائم بكشف حساب', client, '-', '-', trips.join('، '));
-  return { success: true };
+  var gs = _accMergeGroupsRead_(client, false);
+  return saveClientMergeGroupV2(authToken, client, { id: gs.length === 1 ? gs[0].id : '', trips: trips }, { move: true });
 }
-
 function clearClientMergeGroup(authToken, client) {
   var session = _accPerm_(authToken, 'edit');
-  client = String(client || '').trim();
-  var sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS);
-  if (sh.getLastRow() < 2) return { success: true };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
-  for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0] || '').trim() === client) {
-      sh.deleteRow(i + 2);
-      logChange_(session.username, 'فك دمج رحلات بكشف حساب', client, '-', '-', '-');
-      return { success: true };
-    }
-  }
+  var gs = _accMergeGroupsRead_(client, false), sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS);
+  gs.map(function (g) { return g.rowNum; }).sort(function (a, b) { return b - a; }).forEach(function (rn) { sh.deleteRow(rn); });
+  if (gs.length) logChange_(session.username, 'فك دمج رحلات بكشف حساب', String(client || '').trim(), '-', '-', '-');
   return { success: true };
 }
 
@@ -14434,13 +14462,16 @@ function getClientAccount(authToken, client) {
 
   // ⚡ (V4.41) حالة الدمج المحفوظة تُدمَج بنفس استجابة تحميل الحساب — بلا أي طلب شبكة إضافي لاحقًا،
   // فتظهر شارة الدمج فورًا لحظة فتح شاشة الكشف الشامل بدل انتظار طلب منفصل (بطلب صريح)
-  var mergeTrips = null;
-  try { mergeTrips = _accMergeGroupRead_(client).trips; } catch (eMg) { mergeTrips = null; }
+  var mergeTrips = null, mergeGroups = [];
+  try { mergeGroups = _accMergeGroupsRead_(client).map(function (g) { return { id: g.id, name: g.name, trips: g.trips, by: g.by, at: g.at }; }); mergeTrips = mergeGroups.length ? mergeGroups[0].trips : null; } catch (eMg) { mergeTrips = null; mergeGroups = []; }
+  // 🏷️ (V4.320) كود كل رحلة يظهر بجانب اسمها (يميّز الرحلات المتشابهة) — يشمل رحلات بنود/دفعات قديمة ليست بالكشوف
+  var tripRefs = {}; try { var _rf = _accClientStatsIdx_().r || {}; stats.rows.forEach(function (r) { if (_rf[r.trip]) tripRefs[r.trip] = _rf[r.trip]; });
+    items.concat(payments).forEach(function (x) { var tn = x && x.trip; if (tn && tn !== 'عام' && _rf[tn]) tripRefs[tn] = _rf[tn]; }); } catch (eRf) {}
 
   // 📘 (V4.222) رقم قيد إيرادات كل رحلة بالحسابات العامة (وهل له تغيير بانتظار الاعتماد)
   var glLinks = null; try { if (typeof _glClientLinks_ === 'function') glLinks = _glClientLinks_(client); } catch (eGl) { glLinks = null; }
   return { success: true, client: client, trips: stats.rows, noTripCount: stats.noTripCount,
-           items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips, gl: glLinks };
+           items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips, mergeGroups: mergeGroups, tripRefs: tripRefs, gl: glLinks };
 }
 
 // 🕘 (V4.90) سجل تعديلات كامل لحساب عميل واحد — كل عمليات AuditLog التي مرجعها اسم هذا العميل
@@ -14496,7 +14527,7 @@ function _accEnsureMeta_(authToken, client, trip, username) {
 }
 
 // 🏷️ (V4.22) اسم عرض مخصَّص للرحلة داخل كشف حساب عميل معيَّن فقط — لا يمسّ اسم الرحلة الفعلي
-// إطلاقًا (الربط الحقيقي يبقى بمعرّف/اسم الرحلة كما هو)؛ فارغ = رجوع للافتراضي «رحلة {تاريخ السفر}»
+// إطلاقًا (الربط الحقيقي يبقى بمعرّف/اسم الرحلة كما هو)؛ فارغ = رجوع للاسم الطبيعي للرحلة (V4.320)
 function setAccDisplayName(authToken, client, trip, displayName) {
   var session = _accPerm_(authToken, 'edit');
   client = String(client || '').trim(); trip = String(trip || '').trim();
