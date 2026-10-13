@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.318";
+var APP_VERSION = "4.319";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -5973,7 +5973,7 @@ function setupUsersSystemFromUI(authToken, adminPassword) {
 }
 
 
-function loginUser(username, password) {
+function loginUser(username, password, remember) {
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Users");
   var data = sheet.getDataRange().getValues();
@@ -5993,7 +5993,7 @@ function loginUser(username, password) {
 
       // إرجاع كائن بسيط جداً
       var sessionToken = createSession_(username, data[i][2], userPermissions);
-      var deviceKey = _devIssue_(username, data[i][1]);   // 📱 (V4.319) «تذكّر هذا الجهاز» — استئناف صامت بعد انتهاء الجلسة
+      var deviceKey = remember === false ? '' : _devIssue_(username, data[i][1]);   // 📱 (V4.319) «تذكّر هذا الجهاز» (اختياري بشاشة الدخول) — استئناف صامت بعد انتهاء الجلسة
       logChange_(username, "تسجيل دخول", "-", "دخول للنظام", "-", "-");
       // العمود السادس (index 5): MustChangePwd — يُجبر على تغيير كلمة المرور عند أول دخول
       var mustChangePwd = data[i][5] === true || String(data[i][5]).toLowerCase() === 'true';
@@ -6005,6 +6005,7 @@ function loginUser(username, password) {
         permissions: userPermissions,
         token: sessionToken,
         deviceKey: deviceKey,
+        username: String(username),
         mustChangePwd: mustChangePwd,
         userRow: i + 1   // رقم الصف في الشيت (يُستخدم لمسح علامة mustChangePwd بعد التغيير)
       };
@@ -6494,11 +6495,11 @@ function resumeSession(deviceKey) {
     if (String(data[i][0]) !== String(o.u)) continue;
     var isActive = data[i][3];
     if (isActive === false || String(isActive).toLowerCase() === 'false' || _devHash_('pw|' + data[i][1]).slice(0, 16) !== o.f) break;   // معطَّل أو غيّر كلمة المرور
-    var token = createSession_(data[i][0], data[i][2], data[i][4]);
+    var token = createSession_(String(data[i][0]), data[i][2], data[i][4]);   // نص دائماً (اسم مستخدم رقمي)
     var days = _devDays_() || 1;
     if (now - (o.t || 0) > 3600000) { o.exp = now + days * 86400000; o.t = now; try { p.setProperty(pk, JSON.stringify(o)); } catch (e) {} }   // مدة منزلقة (تحديث كل ساعة على الأكثر)
     return {
-      success: true, resumed: true,
+      success: true, resumed: true, username: String(data[i][0]),
       fullName: String(data[i][2] || ''), permissions: data[i][4], token: token, deviceKey: deviceKey,
       mustChangePwd: data[i][5] === true || String(data[i][5]).toLowerCase() === 'true', userRow: i + 1
     };
@@ -10262,11 +10263,13 @@ function changeMyPassword(authToken, oldPassword, newPassword) {
       if (!checkPasswordMatch_(oldPassword, data[i][1])) {
         return { success: false, error: "كلمة المرور الحالية غير صحيحة" };
       }
-      sheet.getRange(i + 1, 2).setValue(hashPassword_(newPassword));
+      var _newHash = hashPassword_(newPassword);
+      sheet.getRange(i + 1, 2).setValue(_newHash);
       // مسح علامة "يجب تغيير كلمة المرور" بعد التغيير الناجح
       sheet.getRange(i + 1, 6).setValue(false);
       logChange_(session.username, "تغيير كلمة المرور", session.username, "Password", "-", "تم التغيير بنجاح");
-      return { success: true };
+      // 📱 (V4.319) تغيير كلمة المرور يُسقط مفاتيح كل الأجهزة — ويُصدَر للجهاز الحالي مفتاح جديد فلا يُطالَب بالدخول مجدداً
+      return { success: true, deviceKey: _devIssue_(session.username, _newHash) };
     }
   }
   return { success: false, error: "تعذر العثور على المستخدم" };

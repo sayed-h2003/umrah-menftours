@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.318 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.319 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -110,7 +110,7 @@ window.__step('1️⃣ بداية \u003Chead> — الصفحة بدأت تصل �
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.318)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.319)', diag);
 }, tries ? 5000 : 6000); })(0);
 </script>
 
@@ -1529,6 +1529,10 @@ input[type="date"]:not(:focus):not(:valid) {
           <label class="form-label fw-bold">كلمة المرور</label>
           <input type="password" id="loginPassword" class="form-control" required placeholder="أدخل كلمة المرور">
         </div>
+        <div class="form-check mb-3" title="يبقى البرنامج مفتوحاً على هذا الجهاز ويجدّد جلسته تلقائياً (30 يوماً) — ألغِ التحديد على جهاز مشترك">
+          <input class="form-check-input" type="checkbox" id="loginRemember" checked>
+          <label class="form-check-label small" for="loginRemember">📱 تذكّر هذا الجهاز (بلا إعادة دخول)</label>
+        </div>
         <button type="submit" id="btnLogin" class="btn btn-success w-100 fw-bold py-2" style="background-color: #17b978; border: none;">
           🔐 تسجيل الدخول
         </button>
@@ -1554,7 +1558,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.318</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.319</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6860,7 +6864,7 @@ function _sessAdopt_(res) {
   try { localStorage.setItem('authToken', res.token); } catch (e) {}
   try { sessionStorage.setItem('authToken', res.token); } catch (e) {}
   var u = window.currentUser || res;
-  u.token = res.token; u.permissions = res.permissions; u.fullName = res.fullName || u.fullName; u.deviceKey = res.deviceKey; u.userRow = res.userRow;
+  u.token = res.token; u.permissions = res.permissions; u.fullName = res.fullName || u.fullName; u.deviceKey = res.deviceKey; u.userRow = res.userRow; if (res.username) u.username = res.username;
   window.currentUser = u;
   try { localStorage.setItem('smartManagerUser', JSON.stringify(u)); } catch (e) {}
   if (res.deviceKey) _devKeySet_(res.deviceKey);
@@ -6872,7 +6876,9 @@ function _sessResume_(cb) {
   var done = function (ok) { _RESUME_.busy = false; var q = _RESUME_.q; _RESUME_.q = []; q.forEach(function (f) { try { f(ok); } catch (e) { console.error(e); } }); };
   window._RAW_RUN_()
     .withSuccessHandler(function (res) {
-      if (res && res.success && res.token) { _sessAdopt_(res); try { if (window.__step) window.__step('📱 جُدِّدت الجلسة تلقائياً (مفتاح الجهاز)'); } catch (e) {} done(true); }
+      var cu = window.currentUser || {}, sameUser = !cu.username || !res || !res.username || String(cu.username) === String(res.username);
+      if (res && res.success && res.token && sameUser) { _sessAdopt_(res); try { if (window.__step) window.__step('📱 جُدِّدت الجلسة تلقائياً (مفتاح الجهاز)'); } catch (e) {} done(true); }
+      else if (res && res.success && !sameUser) done(false);   // (V4.319) مفتاح الجهاز صار لمستخدم آخر (دخل بتبويب آخر) ⇒ لا تبديل صامت للهوية
       else { if (res && res.error && res.error !== 'no-device') _devKeySet_(''); done(false); }
     })
     .withFailureHandler(function () { done(false); })
@@ -6922,6 +6928,7 @@ function _devAutoLogin_() {
     var btn = document.getElementById('btnLogin'); if (btn) btn.innerHTML = '⏳ جاري استعادة جلستك…';
     window._RAW_RUN_ && window._RAW_RUN_()
       .withSuccessHandler(function (res) {
+        if (window.authToken) return;   // (V4.319) سبقه دخول يدوي بنفس الصفحة
         if (res && res.success && res.token) { _sessAdopt_(res); try { handleLogin({ preventDefault: function () {}, __presetRes: res }); } catch (e) { console.error(e); } }
         else { if (btn) btn.innerHTML = '🔐 تسجيل الدخول'; if (res && res.error && res.error !== 'no-device') _devKeySet_(''); }
       })
@@ -7375,7 +7382,7 @@ function handleLogin(e) {
 window.currentUser = res;
 window.authToken = res.token || null;
 // 📱 (V4.319) مفتاح الجهاز للاستئناف الصامت بعد انتهاء الجلسة (يُحفظ هنا وفي صفحة الغلاف)
-if (res.deviceKey) _devKeySet_(res.deviceKey);
+if (res.deviceKey) _devKeySet_(res.deviceKey); else if (!res.resumed) _devKeySet_('');   // جهاز مشترك (بلا «تذكّر») ⇒ لا مفتاح قديم يبقى
 try { _loginNote_(''); } catch(e) {}
 window._sessExpiredShown = false;
 // 🔄 (V4.298-fix) رمز الجلسة في localStorage (يبقى بعد الريفريش داخل إطار Apps Script المعزول)
@@ -7545,7 +7552,8 @@ appDiv.style.backgroundColor = "white";
     })
     .loginUser(
       document.getElementById("loginUsername").value,
-      document.getElementById("loginPassword").value
+      document.getElementById("loginPassword").value,
+      !(document.getElementById("loginRemember") && !document.getElementById("loginRemember").checked)
     );
 }
 
@@ -8001,7 +8009,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.318";
+var CLIENT_APP_VERSION = "4.319";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -37424,6 +37432,7 @@ function submitForceChangePassword() {
 
   google.script.run
     .withSuccessHandler(function(res) {
+      try { if (res && res.success && res.deviceKey && _devKeyGet_()) _devKeySet_(res.deviceKey); } catch (eDk) {}   // 📱 (V4.319) المفتاح القديم سقط بتغيير كلمة المرور
       clearTimeout(_pwdTimeout);
       if (_pwdTimedOut) return;
       if (btn) { btn.disabled = false; btn.textContent = '✅ تغيير كلمة المرور والمتابعة'; }
@@ -37511,6 +37520,7 @@ function submitChangeMyPassword() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ جاري الحفظ...'; }
   google.script.run
     .withSuccessHandler(function(res) {
+      try { if (res && res.success && res.deviceKey && _devKeyGet_()) _devKeySet_(res.deviceKey); } catch (eDk) {}   // 📱 (V4.319) المفتاح القديم سقط بتغيير كلمة المرور
       if (btn) { btn.disabled = false; btn.textContent = 'حفظ'; }
       if (res && res.success) {
         try {
