@@ -1246,6 +1246,64 @@ function glEntryHistory(authToken, id) {
 function _glAutoSrc_(sk) { var m = _glStr_(sk).match(/^AUTO:([A-Z]+):(.*)$/); return m ? { src: m[1], id: m[2].replace(/#\d+$/, '') } : null; }
 var GL_SRC_LBL_ = { CP: 'دفعة العميل', CI: 'بنود العميل بالرحلة', TRIP: 'بنود العميل بالرحلة', AP: 'دفعة الوكيل', AI: 'بند حساب الوكيل', VZ: 'مجموعة التأشيرات',
   MF: 'ملف المراجعة', RF: 'إيصال رسوم الغرفة', TR: 'تشغيلة النقل', HB: 'حجز الفنادق', HBP: 'دفعة الحجوزات', OPEN: 'الأرصدة الافتتاحية' };
+/* 🩺 (V4.321) قيود بلا رأس: أسطر GL_Lines تشير لرقم قيد لا صف له بـGL_Entries — تؤثر على الأرصدة (تُحسب من الأسطر
+   مباشرة) لكن تظهر «القيد غير موجود» عند محاولة فتحه/تعديله/حذفه لأن كل هذه المسارات تبحث عن صف الرأس أولاً.
+   السبب المعتاد: صف حُذف يدوياً من شيت GL_Entries مباشرة بجوجل شيتس (بدل زر الحذف بالبرنامج، الذي يحذف
+   الرأس والأسطر معاً دائماً). الإصلاح: يُعاد بناء رأس قيد عادي (غير تلقائي، قابل للتعديل والحذف كأي قيد يدوي)
+   من بيانات أسطره نفسها بنفس رقم القيد — فلا تتغيّر الأرصدة إطلاقاً (الأسطر لم تُمَس)، ويصير القيد مرئياً وقابلاً
+   للتعديل/الحذف من جديد. يُنصَح بمراجعة بيانه وتاريخه بعد الإصلاح لأنها مُستنتَجة من الأسطر لا مضمونة الدقة */
+function _glOrphanIds_(only) {
+  var eIds = {}; _glRows_('entries').forEach(function (r) { var id = _glStr_(r[0]); if (id) eIds[id] = 1; });
+  var set = null; if (Array.isArray(only) && only.length) { set = {}; only.forEach(function (i) { set[_glStr_(i)] = 1; }); }
+  var byId = {};
+  _glRows_('lines').forEach(function (r) {
+    var id = _glStr_(r[0]); if (!id || eIds[id]) return;
+    if (set && !set[id]) return;
+    (byId[id] = byId[id] || []).push(r);
+  });
+  return byId;
+}
+function glFindOrphanEntries(authToken) {
+  var session = _glAdminPerm_(authToken);
+  var byId = _glOrphanIds_(), accM = _glAccounts_().map;
+  var out = Object.keys(byId).map(function (id) {
+    var ls = byId[id].slice().sort(function (a, b) { return (+a[1] || 0) - (+b[1] || 0); });
+    var date = _glDate_(ls[0][2]);
+    var statusCount = {}; ls.forEach(function (l) { var s = _glStr_(l[3]) || GL_ST_POSTED_; statusCount[s] = (statusCount[s] || 0) + 1; });
+    var status = Object.keys(statusCount).sort(function (a, b) { return statusCount[b] - statusCount[a]; })[0] || GL_ST_POSTED_;
+    var dB = 0, cB = 0, accs = [];
+    ls.forEach(function (l) { dB += _glNum_(l[9]); cB += _glNum_(l[10]); var a = accM[_glStr_(l[4])]; accs.push((a && a.name) || _glStr_(l[4])); });
+    return { id: id, date: date, status: status, lines: ls.length, totalBase: _glR2_(dB),
+      balanced: Math.abs(_glR2_(dB - cB)) < 0.05, accounts: accs.filter(function (x, i, A) { return A.indexOf(x) === i; }) };
+  }).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+  return { success: true, orphans: out };
+}
+function glRepairOrphanEntries(authToken, ids) {
+  var session = _glAdminPerm_(authToken);
+  var lock = _glLock_(); lock.waitLock(60000);
+  try {
+    var byId = _glOrphanIds_(ids), ids2 = Object.keys(byId);
+    if (!ids2.length) return { success: true, repaired: 0, ids: [] };
+    var now = _glNow_(), newRows = [];
+    ids2.forEach(function (id) {
+      var ls = byId[id].slice().sort(function (a, b) { return (+a[1] || 0) - (+b[1] || 0); });
+      var date = _glDate_(ls[0][2]);
+      var statusCount = {}; ls.forEach(function (l) { var s = _glStr_(l[3]) || GL_ST_POSTED_; statusCount[s] = (statusCount[s] || 0) + 1; });
+      var status = Object.keys(statusCount).sort(function (a, b) { return statusCount[b] - statusCount[a]; })[0] || GL_ST_POSTED_;
+      var dB = 0; ls.forEach(function (l) { dB += _glNum_(l[9]); });
+      var descParts = ls.map(function (l) { return _glStr_(l[15]); }).filter(Boolean);
+      var desc = '🩺 قيد مُستعاد (كان بلا رأس) — راجع بياناته: ' + (descParts[0] || '-');
+      var trip = _glStr_(ls[0][11]) || '', company = _glStr_(ls[0][12]) || '';
+      var seq = parseInt((String(id).match(/(\d+)$/) || [])[1], 10) || 0;
+      newRows.push([id, seq, date, 'قيد يومية', desc, status, '', '', _glR2_(dB), '', trip, company,
+        session.username, now, status === GL_ST_POSTED_ ? session.username : '', status === GL_ST_POSTED_ ? now : '', session.username, now, '']);
+      logChange_(session.username, 'استعادة رأس قيد مفقود', 'GL:' + id, 'القيد', '-', desc);
+    });
+    var eSh = _glSheet_('entries');
+    eSh.getRange(eSh.getLastRow() + 1, 1, newRows.length, GL_SHEETS_.entries.headers.length).setValues(newRows);
+    return { success: true, repaired: newRows.length, ids: ids2 };
+  } finally { _glUnlock_(lock); }
+}
 function glRowHistory(authToken, entryId) {
   _glPerm_(authToken, 'view');
   var id = _glStr_(entryId), f = _glFindEntry_(id); if (!f) throw new Error('القيد غير موجود');
