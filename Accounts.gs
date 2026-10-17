@@ -3285,6 +3285,7 @@ function glAutoSync(authToken) {
 }
 // مُشغِّل مجدول (كل ساعة) — يُفعَّل من تبويب القيود التلقائية؛ يعمل بصلاحية صاحب السكربت
 function glAutoSyncCron() {
+  if (_glIdleHours_()) return;   // 🌙 (V4.322) خمول ليلي 2ص–10ص: لا مزامنة ساعية مجدولة (المستخدم النشط يحصل على القيود عبر المزامنة اللحظية، والأزرار اليدوية فورية)
   if (!_glSSId_() || _glSettings_().auto_cron !== 'نعم') return;
   var _pre = _glAutoPreBuild_('مزامنة مجدولة');   // ⚡ (V4.307) البناء (20-45 ثانية) خارج القفل — القفل للكتابة فقط
   var lock = _glLock_(); if (!lock.tryLock(30000)) return;
@@ -3662,9 +3663,16 @@ function glAutoKick(authToken, since) {
 /* ⚡ (V4.236) المزامنة اللحظية بلا تعطيل للحفظ: كانت تعيد بناء كل القيود (25-90 ثانية) وهي ممسكة بالقفل العام للسكربت —
    فيتوقف أي حفظ بأي شاشة حتى تنتهي. الآن: القراءة والبناء والتحقق من كل القيود خارج القفل، ثم داخل القفل فقط كتابة
    الفرق (ثوانٍ). ولا تتكرر أكثر من مرة كل 20 ثانية مهما كثرت الشاشات المفتوحة (تغييرات الفترة تُجمَّع بمزامنة واحدة). */
-var GL_LIVE_GAP_MS_ = 20000;
+var GL_LIVE_GAP_MS_ = 180000;   // ⚡ (V4.322) كان 20 ثانية ⇒ بناء القيود التلقائية اللحظي كان يعمل كل ~دقيقة (38-57 ثانية كل مرة) ويحجز قفل الحسابات فيتأخر كل حفظ. الآن 3 دقائق على الأكثر (المشغّل الساعي glAutoSyncCron يبقى شبكة أمان، والأزرار اليدوية فورية)
+// 🌙 (V4.322) ساعات الخمول (2ص–10ص بتوقيت البرنامج): لا تعمل المزامنات الخلفية الثقيلة (بناء القيود اللحظي + مزامنة شيتات العهد المجدولة).
+// الحفظ والمزامنة اليدوية (أزرار «🔄 مزامنة الآن») لا تتأثر إطلاقاً وتعمل في أي وقت — فقط المشغّلات التلقائية هي التي تتوقف ليلاً.
+function _glIdleHours_() {
+  try { var h = +Utilities.formatDate(new Date(), (typeof _tz_ === 'function' ? _tz_() : 'Asia/Riyadh') || 'Asia/Riyadh', 'H'); return h >= 2 && h < 10; } catch (e) { return false; }
+}
 function _glLiveDue_() {
   try {
+    // ملاحظة: بناء القيود اللحظي لا يخضع لساعات الخمول — فهو لا يعمل إلا عندما يكون مستخدم فعلاً يحفظ (متصفح مفتوح)،
+    // فلو كان هناك عمل ليلي (رمضان/الحج) تظهر قيوده التلقائية كالمعتاد. الخمول يوقف المهام المجدولة فقط (مزامنة الشيتات/الساعية).
     var c = CacheService.getScriptCache();
     return !!c.get('gl_dirty') && !c.get('gl_live_busy') && Date.now() - (+c.get('gl_live_at') || 0) > GL_LIVE_GAP_MS_;
   } catch (e) { return false; }
@@ -4798,7 +4806,9 @@ function _glCsSync_(code, user, opts) {
     out.updated = toUpdate.map(function (u) { return { row: u.x.row, id: u.id }; });
     return out;
   }
-  var eSh = _glSheet_('entries'), lSh = _glSheet_('lines'), fW = [];
+  // ⚡ (V4.322) لا تُفتح/تُلمس شيتات القيود إلا عند وجود كتابة فعلية (تسجيل/تعديل). كان _glSheet_ يُستدعى دائماً فيرفع رقم إصدار
+  // بيانات الحسابات (GL_DATA_VER) ⇒ يُبطل كاش الدفتر لكل المستخدمين حتى في المزامنات التي لا تكتب شيئاً. الآن بقارئ كسول.
+  var _eSh = null, _lSh = null, eSh = function () { return _eSh || (_eSh = _glSheet_('entries')); }, lSh = function () { return _lSh || (_lSh = _glSheet_('lines')); }, fW = [];
   // 1) قيود جديدة (دفعة واحدة)
   var built = [];
   toCreate.forEach(function (c) {
@@ -4819,8 +4829,8 @@ function _glCsSync_(code, user, opts) {
       if (b.c.ccyGuessed) ccyQ.push({ id: id, v: b.v, e: b.e, ccy: b.c.ccy });   // ⚡ (V4.308) تُجمَّع وتُكتب مرة واحدة بعد الحلقة
       if (b.c.approved && b.c.x.hint && !b.c.x.isFee) learned[_glCsKey_(b.c.x.hint)] = b.c.cp;
     });
-    eSh.getRange(eSh.getLastRow() + 1, 1, eRows.length, eRows[0].length).setValues(eRows);
-    lSh.getRange(lSh.getLastRow() + 1, 1, lRows.length, lRows[0].length).setValues(lRows);
+    eSh().getRange(eSh().getLastRow() + 1, 1, eRows.length, eRows[0].length).setValues(eRows);
+    lSh().getRange(lSh().getLastRow() + 1, 1, lRows.length, lRows[0].length).setValues(lRows);
     _glCcyPendQueueMany_(ccyQ);   // (V4.306) للمراجعة بتبويب «⏳ تغييرات تنتظر الاعتماد» — ⚡ (V4.308) كتابة واحدة
     // 🐛 (V4.309) إصلاح: قيود مُنشأة تلقائياً من شيت عهدة/خزينة/بنك على حساب عميل عمرة لم تكن تُنسخ أبداً إلى
     // «حسابات عملاء العمرة» (لا تستدعي هذه الدالة إطلاقاً) فتظهر بكشف الحساب العام فقط لا بشاشة دفعات العميل.
@@ -4852,7 +4862,7 @@ function _glCsSync_(code, user, opts) {
         var b = _glCsEntry_(u.x, code, cp, uCur, fx, uov), r = u.er.r;
         var w = _glWriteEntry_(b.v, { id: u.id, seq: r[1], status: _glStr_(r[5]) || GL_ST_POSTED_, sourceKey: 'CUST:' + code, batchId: r[7], desc: b.e.desc, ref: 'cs:' + u.x.hash,
           createdBy: r[12], createdAt: r[13], row: u.er.row }, user);
-        eSh.getRange(u.er.row, 1, 1, w.eRow.length).setValues([w.eRow]);
+        eSh().getRange(u.er.row, 1, 1, w.eRow.length).setValues([w.eRow]);
         done.push({ id: u.id, lRows: w.lRows });
         out.updated.push({ row: u.x.row, id: u.id, date: u.x.date, desc: b.e.desc, inAmt: u.x.inAmt, outAmt: u.x.outAmt, account: cp });
       } catch (err) { out.problems.push({ row: u.x.row, date: u.x.date, desc: u.x.desc, inAmt: u.x.inAmt, outAmt: u.x.outAmt, hint: u.x.hint, msg: err.message }); }
@@ -4860,7 +4870,7 @@ function _glCsSync_(code, user, opts) {
     if (done.length) {
       _glDeleteLinesOf_(done.map(function (d) { return d.id; }));
       var nl = []; done.forEach(function (d) { nl = nl.concat(d.lRows); });
-      lSh.getRange(lSh.getLastRow() + 1, 1, nl.length, nl[0].length).setValues(nl);
+      lSh().getRange(lSh().getLastRow() + 1, 1, nl.length, nl[0].length).setValues(nl);
       // (V4.309) نفس إصلاح القيود المُنشأة — صف تغيّر مبلغه/بيانه بالشيت يُحدِّث دفعته المقابلة بشاشة حسابات العملاء
       if (/^(bank|safe)$/.test(a.kind || '')) done.forEach(function (d) { try { _glCpSyncVoucher_(d.id, user); } catch (eCp) { Logger.log('cs cp sync: ' + eCp.message); } });
     }
@@ -4952,22 +4962,24 @@ function _glCsAutoAll_() {
     // فينتظر حفظ المستخدمين حتى تنتهي المهلة. الآن قفل قصير لكل شيت على حدة، وتتخطى الشيت لو البرنامج مشغول (تُعاد بالدورة التالية)
     // ⚡ (V4.275) فتح الشيت الخارجي وقراءته (الجزء البطيء) **خارج** القفل: لا يتأخر حفظ/اعتماد المستخدم بسبب المزامنة المجدولة
     // («مهلة التأمين»). ولو لم يتغيّر الشيت ولا بيانات الحسابات منذ آخر مزامنة ⇒ تُتخطى بلا قفل (وكل 10 دقائق مزامنة كاملة احتياطاً)
+    var sigs = {}; try { sigs = JSON.parse(P.getProperty('GL_CS_SIG') || '{}') || {}; } catch (eS) {}
+    // ⚡ (V4.322) فحص رخيص قبل فتح/قراءة الشيت: لو لم يتغيّر «آخر تعديل» لملف الشيت منذ آخر مزامنة (وضمن نافذة المزامنة
+    // الكاملة الاحتياطية 30 دقيقة) ⇒ تخطَّ الشيت بلا openById ولا قراءة كاملة. هذا يوفّر فتح وقراءة كل شيت غير متغيّر كل دورة.
+    var luNow = 0; try { luNow = DriveApp.getFileById(cfg.id).getLastUpdated().getTime(); } catch (eLU) { luNow = 0; }
+    if (luNow && sigs[code] && sigs[code].lu === luNow && now - (sigs[code].t || 0) < 1800000) { last[code] = now; return; }
     var pre = null, sig = '';
     try {
       var cs0 = _glCsOpen_(cfg), rows0 = _glCsReadRows_(cs0.sh, cfg.startRow || 2, cfg);
-      // ⚡ (V4.307) البصمة = محتوى الشيت فقط. كانت تتضمن رقم إصدار دفتر الحسابات كله ⇒ أي حفظ لأي قيد بأي شاشة (وكتابة المزامنة
-      // نفسها) يُبطل بصمات كل الشيتات ⇒ مزامنة كاملة لكل الشيتات داخل القفل كل دقيقة (30-260 ثانية بسجلات التنفيذ) ⇒ «مهلة التأمين»
-      // عند الحفظ. تغييرات الدفتر التي تخص الشيت (حذف/إلغاء قيد صف) تلتقطها المزامنة الكاملة الاحتياطية كل 10 دقائق كما كانت
+      // (V4.307) البصمة = محتوى الشيت فقط (تغييرات الدفتر الخاصة بالشيت تلتقطها المزامنة الكاملة الاحتياطية كل 30 دقيقة)
       sig = _glHash_(JSON.stringify(rows0.map(function (y) { return [y.row, y.hash, y.f, y.ok ? 1 : 0, y.sub || 0]; })));
       pre = { S: cs0, rows: rows0 };
     } catch (eP) { pre = null; }
-    var sigs = {}; try { sigs = JSON.parse(P.getProperty('GL_CS_SIG') || '{}') || {}; } catch (eS) {}
-    if (pre && sigs[code] && sigs[code].s === sig && now - (sigs[code].t || 0) < 600000) { last[code] = now; return; }
+    if (pre && sigs[code] && sigs[code].s === sig && now - (sigs[code].t || 0) < 1800000) { last[code] = now; if (luNow) { sigs[code].lu = luNow; try { P.setProperty('GL_CS_SIG', JSON.stringify(sigs)); } catch (e9) {} } return; }
     var lock = _glLock_(); if (!lock.tryLock(2000)) { _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1); return; }
     last[code] = now;
     try {
       var r = _glCsSync_(code, 'مزامنة مجدولة', pre ? { pre: pre } : {}); res.push(code + ': ' + r.created.length + '/' + r.pending.length);
-      if (pre) { sigs[code] = { s: sig, t: now }; try { P.setProperty('GL_CS_SIG', JSON.stringify(sigs)); } catch (eW) {} }
+      if (pre) { sigs[code] = { s: sig, t: now, lu: luNow }; try { P.setProperty('GL_CS_SIG', JSON.stringify(sigs)); } catch (eW) {} }
       var nPend = r.pending.length, lastN = +(P.getProperty('GLBOT_CS_' + code) || 0);   // 📲 (V4.254) تنبيه عند ظهور صفوف ناقصة جديدة فقط
       if (nPend !== lastN) { P.setProperty('GLBOT_CS_' + code, String(nPend)); if (nPend > lastN) _glBotQ_('custody_err', { name: (_glAccounts_().map[code] || {}).name || code, n: nPend, code: code,
         rows: r.pending.slice(lastN - nPend).slice(-3).map(function (x) { return { row: x.row, date: x.date, desc: String(x.desc || '').slice(0, 80), inAmt: x.inAmt, outAmt: x.outAmt, cur: x.cur || (r.account || {}).currency || '', hint: String(x.hint || '').slice(0, 40), msg: x.msg ? String(x.msg).slice(0, 120) : '', sugg: (x.sugg || []).slice(0, 3) }; }) }); }
@@ -4981,7 +4993,8 @@ function _glCsAutoAll_() {
 // ⏱️ (V4.250) مشغّل مستقل لمزامنة شيتات العهد بأقصر تكرار مطلوب (دقيقة/5/10/15/30 أو كل ساعة) — يُعاد ضبطه عند حفظ أي إعداد
 function glCustSheetCron() {
   // ⚡ (V4.268) المشغّل القديم كان مضبوطاً كل دقيقة (يُعاد ضبطه فقط عند حفظ إعداد) — يُصحَّح ذاتياً مرة واحدة
-  try { var P0 = PropertiesService.getScriptProperties(); if (P0.getProperty('GL_CS_TRIG_V') !== '270') { P0.setProperty('GL_CS_TRIG_V', '270'); _glCsEnsureTrigger_(); return; } } catch (eT) {}
+  try { var P0 = PropertiesService.getScriptProperties(); if (P0.getProperty('GL_CS_TRIG_V') !== '322') { P0.setProperty('GL_CS_TRIG_V', '322'); _glCsEnsureTrigger_(); return; } } catch (eT) {}
+  if (_glIdleHours_()) return;   // 🌙 (V4.322) خمول ليلي 2ص–10ص: لا مزامنة خلفية مجدولة (المزامنة اليدوية من البرنامج تعمل في أي وقت)
   // 🧱 (V4.300) حارس عدم-التداخل: كانت دورات المزامنة المجدولة تتكدّس فوق بعضها (دورة تستغرق دقائق والمشغّل كل دقيقة)
   // فتُشبع حصة Apps Script وتُبطّئ كل الشاشات وتُفشل الحفظ بـ«مهلة التأمين». الآن: نبضة في Properties — لو دورة سابقة
   // ما زالت تعمل (نبضتها خلال آخر ٥ دقائق) تُتخطى هذه الدورة تماماً، فلا تكدّس. تُحدَّث النبضة بالبداية وتُمحى بالنهاية.
@@ -4993,7 +5006,7 @@ function glCustSheetCron() {
     PH.setProperty('GL_CS_CRON_HB', String(Date.now()));
   } catch (eH) { PH = null; }
   try { _glCsAutoAll_(); } catch (e) { Logger.log('glCustSheetCron: ' + e.message); }   // (V4.258) القفل لكل شيت داخل _glCsAutoAll_
-  try { _glMirFlush_(60000); } catch (eQ) { Logger.log('mirror flush: ' + eQ.message); }   // ⚡ (V4.307) طابور النسخ لكشف الحجوزات (احتياطاً)
+  try { _glMirFlush_(20000); } catch (eQ) { Logger.log('mirror flush: ' + eQ.message); }   // ⚡ (V4.307) طابور النسخ لكشف الحجوزات (احتياطاً) — (V4.322) ميزانية 20 ثانية بدل 60 (الدورة الآن كل 10 دقائق لا كل دقيقة)
   finally { try { if (PH) PH.deleteProperty('GL_CS_CRON_HB'); } catch (eF) {} }
 }
 function _glCsEnsureTrigger_() {
@@ -5006,9 +5019,11 @@ function _glCsEnsureTrigger_() {
   });
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'glCustSheetCron') ScriptApp.deleteTrigger(t); });
   if (!minI) return { every: 0 };
-  // (V4.270) الحد الأدنى للتكرار الخلفي دقيقة واحدة (خيارات المشغّل: 1 / 5 / 10 / 15 / 30 دقيقة أو كل ساعة)
+  // ⚡ (V4.322) الحد الأدنى للتكرار الخلفي 10 دقائق (كان دقيقة واحدة ⇒ دورات تتكدّس 30-133 ثانية وتُبطّئ كل البرنامج).
+  // الفحص صار رخيصاً (DriveApp.getLastUpdated قبل فتح أي شيت) فلا داعي للتكرار كل دقيقة؛ والأزرار اليدوية «🔄 مزامنة الآن» فورية.
   if (minI >= 60) { ScriptApp.newTrigger('glCustSheetCron').timeBased().everyHours(1).create(); return { every: 60 }; }
-  var step = [30, 15, 10, 5, 1].filter(function (x) { return x <= minI && minI % x === 0; })[0] || 1;
+  var mEff = Math.max(10, minI);
+  var step = [30, 15, 10].filter(function (x) { return x <= mEff && mEff % x === 0; })[0] || 10;
   ScriptApp.newTrigger('glCustSheetCron').timeBased().everyMinutes(step).create();
   return { every: step };
 }

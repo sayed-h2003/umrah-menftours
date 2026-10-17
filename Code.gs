@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.321";
+var APP_VERSION = "4.322";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6593,7 +6593,7 @@ function appPulse(authToken, p) {
         out.gl = _glKickStatus_(session, p.glSince);
         if (_glLiveDue_()) {
           var c = CacheService.getScriptCache();
-          if (!c.get('gl_live_claim')) { c.put('gl_live_claim', String(authToken).slice(-12), 60); out.glDue = true; }
+          if (!c.get('gl_live_claim')) { c.put('gl_live_claim', String(authToken).slice(-12), 180); out.glDue = true; }   // ⚡ (V4.322) 180 ثانية لتوافق فجوة المزامنة اللحظية الجديدة (كانت 60)
         }
       }
     } catch (eG) {}
@@ -11767,7 +11767,9 @@ function logChange_(username, action, recordId, field, oldVal, newVal) {
     Logger.log("logChange_ failed: " + e.message);
   }
 }
-var GL_NODIRTY_RX_ = /كلمة المرور|مستخدم|صلاحي|تعديل إعدادات (النظام|التنبيهات|بوت)|تليجرام|تنبيه|مجلد Drive|إصدار كشف حساب|دالة إدارية|اتفاقي(ة|ات) (إعاشة|سكن)|اتفاقية سكن|تخصيص سكن|السجل العام|سجل المعتمرين|تخصيص معتمر|جوال مشرف|مشاركة جماعية|تفضيلات|واجهة/;
+// ⚡ (V4.322) أُضيفت «تعديل رقم القيد» و«اعتماد ملف مراجعة» (تشمل الإلغاء) — هذه الحقول لا يقرأها بناء القيود التلقائية إطلاقاً،
+// فكانت تُطلق مزامنة كاملة (38-57 ثانية) بلا داع عند كتابة رقم القيد على ملف أو اعتماد ملف وزارة.
+var GL_NODIRTY_RX_ = /كلمة المرور|مستخدم|صلاحي|تعديل إعدادات (النظام|التنبيهات|بوت)|تليجرام|تنبيه|مجلد Drive|إصدار كشف حساب|دالة إدارية|اتفاقي(ة|ات) (إعاشة|سكن)|اتفاقية سكن|تخصيص سكن|السجل العام|سجل المعتمرين|تخصيص معتمر|جوال مشرف|مشاركة جماعية|تفضيلات|واجهة|تعديل رقم القيد|اعتماد ملف مراجعة/;
 // ⚡ (V4.222) أي حفظ بشاشات البرنامج (عدا الحسابات العامة نفسها والدخول/الخروج) ⇒ علامة «تغيّر» تلتقطها المزامنة اللحظية
 function _glMarkDirty_(action, recordId) {
   try {
@@ -19120,7 +19122,9 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
   try { _pushKashfChangeNotifications_(tripName, oldThisTrip, pilgrims, C, session.username); }
   catch (eNotif) { Logger.log('kashf change notifications failed: ' + eNotif); }
 
-  clearAllCache(); // الكشف يؤثر على قائمة الرحلات (المقاعد/الجاهزية) والسجل العام
+  // ⚡ (V4.322) كان clearAllCache() يمسح كل كاش البرنامج فيُجبر كل مستخدم آخر على قراءة باردة ثقيلة (التأشيرات/الرحلات/الوزارة…)
+  // عند أول فتح شاشة بعد أي حفظ كشف. الكشف يؤثر فقط على قائمة الرحلات (المقاعد/الجاهزية) والسجل العام وفهرس أعداد العملاء.
+  ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'].forEach(function (k) { try { clearCachedData(k); } catch (eC) {} });
 
   // 💵 (V4.12) مزامنة حسابات العملاء تلقائياً لو للرحلة تسعير مفعَّل («تطبيق» ضُغط من قبل):
   // معتمرون جدد/تغيّر مستوى أو تسكين ← تتحدث البنود التلقائية فوراً، والمعدّلة يدوياً لا تُمس.

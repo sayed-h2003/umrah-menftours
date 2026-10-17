@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.321 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.322 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -110,7 +110,7 @@ window.__step('1️⃣ بداية \u003Chead> — الصفحة بدأت تصل �
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.321)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.322)', diag);
 }, tries ? 5000 : 6000); })(0);
 </script>
 
@@ -1565,7 +1565,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.321</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.322</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -8016,7 +8016,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.321";
+var CLIENT_APP_VERSION = "4.322";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -38601,7 +38601,9 @@ function mfBulkEditSave_(btn) {
       .withSuccessHandler(function (res) {
         btn.disabled = false; btn.innerHTML = orig;
         if (!res || !res.success) { _showPopup((res && res.error) || 'فشل الحفظ', 'error'); return; }
-        (res.results || []).forEach(function (r) { if (r.success) { mfApplySaved(r, { silent: true }); delete MF.sel[r.id]; } });
+        var _bulkTrips = {};   // ⚡ (V4.322) اجمع رحلات كل الملفات المحفوظة وزامنها بنداء خلفي واحد (بدل نداء لكل ملف)
+        (res.results || []).forEach(function (r) { if (r.success) { mfApplySaved(r, { silent: true, noBg: true }); delete MF.sel[r.id]; (r.syncTrips || []).forEach(function (t) { _bulkTrips[t] = 1; }); } });
+        var _bt = Object.keys(_bulkTrips); if (_bt.length) google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).syncTripAccountsBg(window.authToken, _bt);
         var fails = (res.results || []).filter(function (r) { return !r.success; });
         document.querySelectorAll('.mf-bulk-edit-backdrop').forEach(function (el) { el.remove(); });
         mfRender();
@@ -38956,8 +38958,8 @@ function _bgSyncTrips_(res) {
   google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).syncTripAccountsBg(window.authToken, res.syncTrips);
 }
 function mfApplySaved(res, opts) {
-  _bgSyncTrips_(res);
   opts = opts || {};
+  if (!opts.noBg) _bgSyncTrips_(res);   // ⚡ (V4.322) في الحفظ الجماعي نجمع الرحلات ونزامنها مرة واحدة بدل نداء خلفي ثقيل لكل ملف
   if (!res || !res.file) { mfLoad(true); return; }
   var f = res.file;
   f._c = mfCalc(f);
@@ -43015,8 +43017,8 @@ function vzLoad(force, silent) {
 function vzApplyBalances_(res) {   // ⚡ (V4.234) دمج أرصدة الوكلاء المتأثرة (مطلقة) محلياً
   if (res && res.agentBalances) { VZ.agentBalances = VZ.agentBalances || {}; Object.keys(res.agentBalances).forEach(function (k) { VZ.agentBalances[k] = res.agentBalances[k]; }); }
 }
-function vzApplySavedFile_(res) {
-  _bgSyncTrips_(res);
+function vzApplySavedFile_(res, opts) {
+  if (!(opts && opts.noBg)) _bgSyncTrips_(res);   // ⚡ (V4.322) الحفظ الجماعي يجمع الرحلات ويزامنها مرة واحدة
   if (!res || !res.file) { vzLoad(true); return; }
   var f = res.file, i = -1, old = null;
   (VZ.files || []).forEach(function (x, ix) { if (x.id === f.id) { i = ix; old = x; } });
@@ -43482,7 +43484,9 @@ function vzBulkEditSave_(btn) {
       .withSuccessHandler(function (res) {
         btn.disabled = false; btn.innerHTML = orig;
         if (!res || !res.success) { _showPopup((res && res.error) || 'فشل الحفظ', 'error'); return; }
-        (res.results || []).forEach(function (r) { if (r.success) { vzApplySavedFile_(r); delete VZ._filesSel[r.id]; } });
+        var _bulkTrips = {};   // ⚡ (V4.322) اجمع رحلات كل المجموعات المحفوظة وزامنها بنداء خلفي واحد
+        (res.results || []).forEach(function (r) { if (r.success) { vzApplySavedFile_(r, { noBg: true }); delete VZ._filesSel[r.id]; (r.syncTrips || []).forEach(function (t) { _bulkTrips[t] = 1; }); } });
+        var _bt = Object.keys(_bulkTrips); if (_bt.length) google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).syncTripAccountsBg(window.authToken, _bt);
         var fails = (res.results || []).filter(function (r) { return !r.success; });
         document.querySelectorAll('.vz-bulk-edit-backdrop').forEach(function (el) { el.remove(); });
         vzRender(); vzRenderSelBar_();
