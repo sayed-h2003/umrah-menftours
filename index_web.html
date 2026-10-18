@@ -53286,6 +53286,7 @@ function glDupXHtml_(R) {
 function glDupXKeep_(i, s) {
   var p = ((GL._dup || {}).cross || [])[i], box = document.getElementById('glDupXA' + i); if (!p || !box) return;
   var keep = p[s], drop = p[s === 'a' ? 'b' : 'a'];
+  if (drop.posKey) { box.innerHTML = '<div class="small text-danger mb-1">⚠️ الأخرى <b class="gl-latin">' + glEsc(drop.id) + '</b> دفعة بلا معرّف ثابت — احذفها أو عدّلها من شاشتها نفسها (' + glEsc(drop.famLbl || '') + ').</div><button class="btn btn-sm btn-link p-0" onclick="glDupDraw_()">رجوع</button>'; return; }   // 🛡️ (V4.323 مراجعة)
   box.innerHTML = '<div class="small mb-1">إبقاء <b class="gl-latin">' + glEsc(keep.id) + '</b> — والأخرى <b class="gl-latin">' + glEsc(drop.id) + '</b>:</div>' +
     (drop.canSrc ? '<button class="btn btn-sm btn-danger mb-1" onclick="glDupXDo_(' + i + ',\'' + s + '\',\'src\',this)" title="تُحذف الدفعة من شاشتها (' + glEsc(drop.famLbl || '') + ') ويُلغى قيدها">🗑️ احذفها من مصدرها</button><br>' : '') +
     '<button class="btn btn-sm btn-outline-danger mb-1" onclick="glDupXDo_(' + i + ',\'' + s + '\',\'void\',this)" title="يُلغى قيدها فقط وتبقى بشاشتها">⊘ ألغِ قيدها فقط</button><br>' +

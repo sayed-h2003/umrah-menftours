@@ -7094,6 +7094,7 @@ function _glDupxBig_(type, lines) {
   (lines || []).forEach(function (l) { var a = accM[_glStr_(l[4])] || {}; if (a.kind === 'fx') return; n++; if (/^(client|supplier|agent)$/.test(a.kind)) pt[_glStr_(l[4])] = 1; });
   return n > 3 || Object.keys(pt).length > 2;
 }
+function _glDupxPosKey_(sk) { return /^AUTO:CP:#|^AUTO:HBP:row\d+$/.test(_glStr_(sk)); }   // مفتاح موضعي (دفعة بلا معرّف ثابت)
 function _glDupxOk_() { var o = {}; try { JSON.parse(_glSettings_().dupx_ok || '[]').forEach(function (k) { o[k] = 1; }); } catch (e) {} return o; }
 function _glDupCrossScan_(opts) {
   opts = opts || {};
@@ -7144,7 +7145,8 @@ function _glDupCrossScan_(opts) {
   out.forEach(function (p) { [p.a, p.b].forEach(function (x) {
     delete x.k; x.famLbl = GL_DUPX_FAM_LBL_[x.fam];
     // طرق الإلغاء المتاحة: «من المصدر» لدفعة عملاء العمرة ولدفعة حجوزات منفردة (لا المرتبطة ولا المنقولة من شيت عهدة) — وإلا «إلغاء القيد» فقط
-    x.canSrc = (x.fam === 'cp' && !/^AUTO:CP:#/.test(x.sk)) || (/^AUTO:HBP:/.test(x.sk) && !/^AUTO:HBP:CUSTODY:/.test(x.sk));
+    x.posKey = _glDupxPosKey_(x.sk);   // 🛡️ (V4.323 مراجعة) بلا معرّف ثابت ⇒ لا حذف ولا إلغاء من هنا
+    x.canSrc = !x.posKey && (x.fam === 'cp' || (/^AUTO:HBP:/.test(x.sk) && !/^AUTO:HBP:CUSTODY:/.test(x.sk)));
   }); });
   return { pairs: out.slice(0, 200), scanned: scanned };
 }
@@ -7160,24 +7162,31 @@ function glDupCrossResolve(authToken, o) {
     if (!k || _glStr_(k.r[5]) !== GL_ST_POSTED_) throw new Error('القيد المُبقى ' + keepId + ' لم يعد مرحّلاً — حدّث الفحص');
     if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
     var sk = _glStr_(f.r[6]), reason = 'مكرر عبر المصادر مع ' + keepId + (_glStr_(o.note) ? ' — ' + _glStr_(o.note) : ''), warn = '';
+    // 🛡️ (V4.323 مراجعة) دفعة بلا معرّف ثابت (مفتاحها موضعها بالشيت: AUTO:CP:#n / AUTO:HBP:rowN) لا تُحذف ولا يُلغى قيدها من هنا —
+    // الحذف قد يصيب صفاً آخر بعد انزياح الصفوف، وقاعدة الإلغاء الدائمة تُثبَّت على الموضع فتُخفي دفعة أخرى تنتقل إليه
+    if (_glDupxPosKey_(sk)) throw new Error('هذه الدفعة بلا معرّف ثابت (مفتاحها موضع صفها) — احذفها أو عدّلها من شاشتها نفسها');
+    // 🛡️ (V4.323 مراجعة) القيد المعدَّل يدوياً يبقى إلغاؤه للاعتماد لمن لا يملك صلاحية تعديل التلقائي (كما بالحذف من شاشة المصدر)
+    var voidNow = function (fx) { if (!fx || _glStr_(fx.r[5]) !== GL_ST_POSTED_) return; if (_glCanEditAuto_(session) || !(_glOvrMap_()[sk] || {}).freeze) _glVoidPostedNow_(fx, session.username, reason); else warn = 'حُذفت الدفعة من مصدرها — قيدها معدَّل يدوياً فإلغاؤه ينتظر الاعتماد بقائمة «⏳ تغييرات تنتظر الاعتماد»'; };
     if (method === 'src') {
       if (/^AUTO:CP:/.test(sk)) {
-        // 🛡️ (V4.323 مراجعة) دفعة بلا معرّف ثابت (مفتاحها موضعها بالشيت '#n') لا تُحذف بأمان من هنا
-        if (/^AUTO:CP:#/.test(sk)) throw new Error('دفعة عملاء العمرة هذه بلا معرّف ثابت — احذفها من شاشة حسابات العملاء نفسها، أو استخدم «إلغاء القيد فقط»');
         glCpDelete(authToken, [sk.slice(8)]);
         // الحذف يُلغي القيد بتشغيل مقصور — لكنه قد يبقى مرحّلاً (معدَّل يدوياً ⇒ يذهب للاعتماد، أو مصدره محذوف أصلاً) ⇒ يُلغى الآن
-        var f3 = _glFindEntry_(dropId); if (f3 && _glStr_(f3.r[5]) === GL_ST_POSTED_) _glVoidPostedNow_(f3, session.username, reason);
+        voidNow(_glFindEntry_(dropId));
       }
       else if (/^AUTO:HBP:/.test(sk) && !/^AUTO:HBP:CUSTODY:/.test(sk)) {
         glHbDeletePays(authToken, [sk.slice(9)]);
-        var f2 = _glFindEntry_(dropId); if (f2 && _glStr_(f2.r[5]) === GL_ST_POSTED_) _glVoidPostedNow_(f2, session.username, reason);   // يُلغى قيدها الآن (لا انتظار للمزامنة/الاعتماد)
+        voidNow(_glFindEntry_(dropId));   // يُلغى قيدها الآن (لا انتظار للمزامنة)
       } else throw new Error('هذا النوع لا يُحذف من مصدره هنا — استخدم «إلغاء القيد فقط»');
     } else {
       // 🛡️ (V4.323 مراجعة) قيد يدوي متعدد الأطراف/الأسطر (افتتاحي، تسوية جماعية…) لا يُلغى كله لأجل سطر واحد
       if (_glDupxFam_(sk) === 'vch' && _glDupxBig_(_glStr_(f.r[3]), _glLinesOf_(dropId))) throw new Error('القيد ' + dropId + ' يحوي أطرافاً/أسطراً أخرى — لا يُلغى كله هنا؛ افتحه وعدّل سطر الطرف المكرر يدوياً');
-      glVoidEntry(authToken, dropId, reason);
-      // صف شيت خزينة/بنك/عهدة ⇒ يُعاد ربط رقم القيد بالصف بالقيد المُبقى (كما بفحص النقدية) فلا يظهر بالمشاكل ولا يُسجَّل من جديد
+      // 🛡️ (V4.323 مراجعة) صف شيت خزينة/بنك/عهدة لا يُلغى قيده إلا لو القيد المُبقى نفسه على نفس حساب النقدية — وإلا تختفي
+      // حركة البنك/الخزينة من الحسابات بينما الشيت يُظهرها (والإبقاء الصحيح عندها: قيد الشيت، أو توجيه دفعة العميل لهذا الحساب أولاً)
       var mC = sk.match(/^CUST:(.+)$/);
+      if (mC && !_glLinesOf_(keepId).some(function (l) { return _glStr_(l[4]) === mC[1]; }))
+        throw new Error('القيد المُبقى ' + keepId + ' ليس على حساب ' + (((_glAccounts_().map[mC[1]] || {}).name) || mC[1]) + ' — إلغاء قيد الشيت يُخفي حركة النقدية. أبقِ قيد الشيت بدلاً منه، أو وجّه الدفعة الأخرى لنفس الحساب أولاً');
+      glVoidEntry(authToken, dropId, reason);
+      // صف الشيت ⇒ يُعاد ربط رقم القيد بالصف بالقيد المُبقى (كما بفحص النقدية) فلا يظهر بالمشاكل ولا يُسجَّل من جديد
       if (mC) { try { _glDupRelinkSheetRow_(mC[1], dropId, keepId); } catch (eR) { warn = 'أُلغي القيد لكن تعذّرت إعادة ربط صف الشيت (' + eR.message + ') — اكتب رقم القيد ' + keepId + ' بدلاً من ' + dropId + ' بالشيت يدوياً'; } }
     }
     logChange_(session.username, 'حل دفعة مكررة عبر المصادر', 'GL:' + dropId, 'المُبقى ' + keepId, sk, method === 'src' ? 'حُذفت من مصدرها' : 'أُلغي قيدها');
