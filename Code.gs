@@ -24819,11 +24819,7 @@ function getVisaBootstrap(authToken) {
     if (!base) base = _mfBuildRefLists_();
     // أرصدة الوكلاء (صافي كل وكيل) من التأشيرات + البنود + الدفعات
     var allItems = _vzReadItems_(''), allPays = _vzReadPays_('');
-    var agentsSet = {};
-    (base.companies || []).forEach(function (c) { if (c.agent) agentsSet[c.agent] = true; });
-    files.forEach(function (f) { if (f.agent) agentsSet[f.agent] = true; });
-    allItems.forEach(function (it) { if (it.agent) agentsSet[it.agent] = true; });
-    allPays.forEach(function (p) { if (p.agent) agentsSet[p.agent] = true; });
+    var agentsSet = _vzAgentsSet_(base, files, allItems, allPays);   // 📊 (V4.324) دالة مشتركة مع إحصائيات الوكلاء
     // 🧑‍💼 (V4.134) الأرصدة تُحسب لكل «مفتاح حساب» (الوكيل العام + حساباته الفرعية مع الشركات)
     // ⚡ (V4.139) قراءة شيت الربط مرة واحدة فقط بدل مرتين (كانت acctMap وacctRows تقرآنه منفصلتين)
     var acctRowsRaw = _vzAcctRead_();
@@ -25718,6 +25714,76 @@ function getAgentVisaStats(authToken, filters) {
     crossAgents: agentsOrder, crossCompanies: compsOrder,
     cross: Object.keys(cross).map(function (k) { return cross[k]; })
   };
+}
+/* 📊 (V4.324) إحصائيات الوكلاء بحساب الوكيل كما يظهر بنافذة «💰 حسابات الوكلاء» فقط (العامة + المشتركة/المنفصلة مع الشركات،
+   مثل «ريادة الرؤى - واي اتش ام» و«ريادة الرؤى - جنات») — صف لكل حساب: عدد التأشيرات «تم إصدار الموفا» و«تم الإرسال» والإجمالي،
+   ثم صف الإجمالي. المجموعة تُنسب لحسابها بنفس دالة الشاشة (_vzAcctKey_) فلا يختلف الرقم عنها. getAgentVisaStats تبقى للرجوع */
+function _vzAgentsSet_(base, files, items, pays) {   // نفس مصادر قائمة الحسابات بالبوتستراب
+  var set = {};
+  ((base && base.companies) || []).forEach(function (c) { if (c.agent) set[c.agent] = true; });
+  (files || []).forEach(function (f) { if (f.agent) set[f.agent] = true; });
+  (items || []).forEach(function (it) { if (it.agent) set[it.agent] = true; });
+  (pays || []).forEach(function (p) { if (p.agent) set[p.agent] = true; });
+  return set;
+}
+function _vzStCmp_(s) { return _mfStr_(s).replace(/[ً-ْـ]/g, '').replace(/[إأآٱ]/g, 'ا').replace(/\s+/g, ''); }   // «تم الارسال» = «تم الإرسال»
+function _vzListedAccounts_(files, acctMap) {
+  var base = getCachedData(MF_BOOTSTRAP_CACHE_KEY) || _mfBuildRefLists_();
+  var set = _vzAgentsSet_(base, files, _vzReadItems_(''), _vzReadPays_(''));
+  var seen = {}, out = [];
+  // مفاتيح البنود/الدفعات (مثل «وكيل - شركة») تدخل القائمة مرة ثانية كـ«عام» ⇒ بلا تكرار، والنوع الفعلي (مشترك/منفصل) أولى
+  _vzAcctKeys_(Object.keys(set), acctMap).forEach(function (ac) {
+    var cur = seen[ac.key];
+    if (cur) { if (ac.kind !== 'عام') { cur.kind = ac.kind; cur.companies = ac.companies || []; } return; }
+    seen[ac.key] = cur = { key: ac.key, kind: ac.kind, companies: ac.companies || [] }; out.push(cur);
+  });
+  return out;
+}
+function getAgentAcctVisaStats(authToken, filters) {
+  _vzPerm_(authToken, 'view');
+  filters = filters || {};
+  var MIN = -8640000000000000, MAX = 8640000000000000;
+  var fromMs = _mfMs_(_mfDate_(filters.from)); if (isNaN(fromMs)) fromMs = MIN;
+  var toMs = _mfMs_(_mfDate_(filters.to)); if (isNaN(toMs)) toMs = MAX;
+  var openPeriod = (fromMs === MIN && toMs === MAX);
+  var companies = Array.isArray(filters.companies) ? filters.companies.map(_mfStr_).filter(Boolean) : [];
+  var acctF = Array.isArray(filters.accounts) ? filters.accounts.map(_mfStr_).filter(Boolean) : [];
+  var all = _vzReadAll_(), map = _vzAcctMap_(_vzAcctRead_());
+  var listed = _vzListedAccounts_(all, map);
+  var SENT = _vzStCmp_(VZ_STATUSES_[0]), MOFA = _vzStCmp_(VZ_STATUSES_[1]);
+  var isListed = {}, rows = {}, order = [];
+  listed.forEach(function (ac) {
+    isListed[ac.key] = true;
+    if (acctF.length && acctF.indexOf(ac.key) < 0) return;
+    rows[ac.key] = { acct: ac.key, kind: ac.kind, companies: ac.companies, mofa: 0, sent: 0, total: 0, files: 0 };
+    order.push(ac.key);
+  });
+  var unlisted = {}, other = { files: 0, visas: 0, statuses: {} };
+  all.forEach(function (f) {
+    var t = _mfMs_(f.date);
+    if (!isNaN(t) && (t < fromMs || t > toMs)) return;
+    if (isNaN(t) && !openPeriod) return;
+    if (companies.length && companies.indexOf(f.company) < 0) return;
+    var key = _vzAcctKey_(f.agent, f.company, map), n = _mfNum_(f.visaCount);
+    if (!key || !isListed[key]) {   // لا يتبع أي حساب ظاهر بالنافذة ⇒ لا يُحتسب (ويُذكر أسفل الجدول)
+      if (acctF.length) return;
+      var uk = (f.agent || '') + '|' + (f.company || '');
+      (unlisted[uk] = unlisted[uk] || { agent: f.agent || '(بلا وكيل)', company: f.company || '', files: 0, visas: 0 });
+      unlisted[uk].files++; unlisted[uk].visas += n; return;
+    }
+    var row = rows[key]; if (!row) return;   // حساب ظاهر لكنه خارج فلتر الحسابات
+    var st = _vzStCmp_(f.status);
+    if (st === MOFA) row.mofa += n; else if (st === SENT) row.sent += n;
+    else { other.files++; other.visas += n; other.statuses[f.status || '(بلا حالة)'] = 1; return; }
+    row.files++;
+  });
+  var tot = { mofa: 0, sent: 0, total: 0, files: 0 };
+  var out = order.map(function (k) { var r = rows[k]; r.total = r.mofa + r.sent; tot.mofa += r.mofa; tot.sent += r.sent; tot.files += r.files; return r; });
+  tot.total = tot.mofa + tot.sent;
+  out.sort(function (a, b) { return (b.total - a.total) || (a.acct < b.acct ? -1 : a.acct > b.acct ? 1 : 0); });
+  return { success: true, statusLabels: { mofa: VZ_STATUSES_[1], sent: VZ_STATUSES_[0] }, rows: out, totals: tot,
+    unlisted: Object.keys(unlisted).map(function (k) { return unlisted[k]; }).sort(function (a, b) { return b.visas - a.visas; }),
+    other: { files: other.files, visas: other.visas, statuses: Object.keys(other.statuses) } };
 }
 /* ============================================================
    🏨 (V4.133 — المرحلة 2) اتفاقيات سكن مكة والمدينة + محرك المتاح
