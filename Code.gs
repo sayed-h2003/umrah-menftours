@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.322";
+var APP_VERSION = "4.323";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -9029,6 +9029,8 @@ function _tgccSaveOne_(contract, username) {
     contract.tripClient || '', contract.umrahCompany || '', contract.groupNo || '',
     username || 'TelegramBot', now, '', '', contract.sourceFile || '', contract.vendor || '', contract.notes || ''
   ];
+  while (newVals.length < CATERING_HEADERS.length) newVals.push('');
+  newVals[CC_I_.id] = _ccNewId_();   // 🍽️ (V4.323) معرّف ثابت من الإنشاء (مفتاح قيدها التلقائي)
   if (rowIdx > -1) {
     var origRow = existing[rowIdx - 2];
     var oldRow = origRow.slice();
@@ -11769,7 +11771,8 @@ function logChange_(username, action, recordId, field, oldVal, newVal) {
 }
 // ⚡ (V4.322) أُضيفت «تعديل رقم القيد» و«اعتماد ملف مراجعة» (تشمل الإلغاء) — هذه الحقول لا يقرأها بناء القيود التلقائية إطلاقاً،
 // فكانت تُطلق مزامنة كاملة (38-57 ثانية) بلا داع عند كتابة رقم القيد على ملف أو اعتماد ملف وزارة.
-var GL_NODIRTY_RX_ = /كلمة المرور|مستخدم|صلاحي|تعديل إعدادات (النظام|التنبيهات|بوت)|تليجرام|تنبيه|مجلد Drive|إصدار كشف حساب|دالة إدارية|اتفاقي(ة|ات) (إعاشة|سكن)|اتفاقية سكن|تخصيص سكن|السجل العام|سجل المعتمرين|تخصيص معتمر|جوال مشرف|مشاركة جماعية|تفضيلات|واجهة|تعديل رقم القيد|اعتماد ملف مراجعة/;
+// 🍽️ (V4.323) حُذفت «اتفاقيات الإعاشة» من القائمة — صارت مصدراً للقيود التلقائية (AUTO:CAT) فتغييرها يُطلق المزامنة
+var GL_NODIRTY_RX_ = /كلمة المرور|مستخدم|صلاحي|تعديل إعدادات (النظام|التنبيهات|بوت)|تليجرام|تنبيه|مجلد Drive|إصدار كشف حساب|دالة إدارية|اتفاقي(ة|ات) سكن|تخصيص سكن|السجل العام|سجل المعتمرين|تخصيص معتمر|جوال مشرف|مشاركة جماعية|تفضيلات|واجهة|تعديل رقم القيد|اعتماد ملف مراجعة/;
 // ⚡ (V4.222) أي حفظ بشاشات البرنامج (عدا الحسابات العامة نفسها والدخول/الخروج) ⇒ علامة «تغيّر» تلتقطها المزامنة اللحظية
 function _glMarkDirty_(action, recordId) {
   try {
@@ -13746,8 +13749,13 @@ var CATERING_HEADERS = [
   'تاريخ بداية الاتفاقية', 'تاريخ نهاية الاتفاقية', 'عدد المعتمرين', 'المدة',
   'المبلغ الإجمالي للمعتمرين', 'العميل / الرحلة', 'اسم شركة العمرة', 'رقم المجموعة',
   'أنشئ بواسطة', 'أنشئ في', 'عُدّل بواسطة', 'عُدّل في', 'مصدر الملف', 'المورد', 'ملاحظات',
-  'رابط مرفق الاتفاقية' // 📎 (V4.167) الملف/الصورة الذي استُخلصت منه البيانات — إضافي بحت بآخر القائمة
+  'رابط مرفق الاتفاقية', // 📎 (V4.167) الملف/الصورة الذي استُخلصت منه البيانات — إضافي بحت بآخر القائمة
+  // 🍽️ (V4.323) الربط المحاسبي — إضافي بحت بآخر القائمة: معرّف ثابت للاتفاقية (مفتاح قيدها التلقائي حتى لو تغيّر رقمها)،
+  // كود حساب المورد بالحسابات العامة، كود حساب العميل/الرحلة، سعر البيع الإجمالي (الإجمالي أعلاه = التكلفة)، رقم القيد اليدوي
+  'معرف الاتفاقية', 'حساب المورد', 'حساب العميل / الرحلة', 'سعر البيع الإجمالي', 'رقم القيد اليدوي'
 ];
+var CC_I_ = { id: 20, vendorAcc: 21, targetAcc: 22, sell: 23, manualNo: 24 };
+function _ccNewId_() { return 'CC-' + Utilities.getUuid().replace(/-/g, '').slice(0, 10).toUpperCase(); }
 // 🕘 (V4.86) أعمدة meta لا تُسجَّل كـ"حقل تغيّر" بسجل التعديلات (تُدار تلقائياً، وليست إدخال مستخدم)
 var CATERING_LOG_SKIP_COLS_ = { 12: 1, 13: 1, 14: 1, 15: 1 };
 // 🕘 (V4.86) يبني قائمة إدخالات سجل تعديلات (حقل/قديم/جديد) بمقارنة صف قديم بصف جديد لنفس الاتفاقية
@@ -15813,6 +15821,30 @@ function getCateringContracts(authToken) {
   var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
   if (sh.getLastRow() < 2) return { success: true, contracts: [] };
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, CATERING_HEADERS.length).getValues();
+  // 🍽️ (V4.323) معرّف ثابت لكل اتفاقية قديمة بلا معرّف (مرة واحدة) — مفتاح قيدها التلقائي
+  // 🛡️ (V4.323 مراجعة) وتصحيح أي معرّف مكرر (يبقى لأول صف ويأخذ ما بعده معرّفاً جديداً). القراءة والكتابة داخل قفل السكربت —
+  // وكل كاتب يحذف/يدمج صفوفاً (أو يكتب بموضع الصف) يأخذ نفس القفل الآن، فلا تنزاح المعرّفات لاتفاقيات أخرى
+  var _idFix = function (rows) { var seen = {}; return rows.some(function (r) { var id = String(r[CC_I_.id] || '').trim(); if (!String(r[0] || '').trim()) return false; if (!id || seen[id]) return true; seen[id] = 1; return false; }); };
+  if (_idFix(vals)) {
+    var lk = LockService.getScriptLock();
+    if (lk.tryLock(5000)) {
+      try {
+        vals = sh.getRange(2, 1, sh.getLastRow() - 1, CATERING_HEADERS.length).getValues();
+        var seenId = {}, chg = false;
+        var col = vals.map(function (r) {
+          var id = String(r[CC_I_.id] || '').trim();
+          if (!String(r[0] || '').trim()) return [id];
+          if (!id || seenId[id]) { id = _ccNewId_(); chg = true; }
+          seenId[id] = 1; return [id];
+        });
+        if (chg) sh.getRange(2, CC_I_.id + 1, col.length, 1).setNumberFormat('@').setValues(col);
+        col.forEach(function (c, i) { vals[i][CC_I_.id] = c[0]; });
+      } catch (eId) {} finally { lk.releaseLock(); }
+    }
+  }
+  var glE = {}, accN = {};
+  try { glE = _glCatEntryMap_(); } catch (eG) {}
+  try { if (_glSSId_()) _glAccounts_().list.forEach(function (a) { accN[a.code] = a.name; }); } catch (eA) {}
   var fmt = function(v) {
     if (!v) return '';
     if (v instanceof Date) {
@@ -15845,7 +15877,13 @@ function getCateringContracts(authToken) {
       sourceFile: String(r[16] || '').trim(),
       vendor: String(r[17] || '').trim(),
       notes: String(r[18] || '').trim(),
-      attachmentUrl: String(r[19] || '').trim() // 📎 (V4.167)
+      attachmentUrl: String(r[19] || '').trim(), // 📎 (V4.167)
+      // 🍽️ (V4.323) الربط المحاسبي + القيد التلقائي (يُبحث بمفتاح المصدر) + القيد اليدوي
+      id: String(r[CC_I_.id] || '').trim(),
+      vendorAcc: String(r[CC_I_.vendorAcc] || '').trim(), vendorAccName: accN[String(r[CC_I_.vendorAcc] || '').trim()] || '',
+      targetAcc: String(r[CC_I_.targetAcc] || '').trim(), targetAccName: accN[String(r[CC_I_.targetAcc] || '').trim()] || '',
+      sellAmount: _accNum_(r[CC_I_.sell]) || '', manualEntryNo: String(r[CC_I_.manualNo] || '').trim(),
+      glEntry: glE[String(r[CC_I_.id] || '').trim()] || null
     });
   });
   return { success: true, contracts: out };
@@ -15863,13 +15901,21 @@ function saveCateringContracts(authToken, list) {
   var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
   var now = new Date();
   var existing = sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, CATERING_HEADERS.length).getValues() : [];
-  var byNo = {};
+  var byNo = {}, byId = {};
   existing.forEach(function(r, i) {
-    var no = String(r[0] || '').trim();
-    if (no) byNo[no] = { row: i + 2, values: r };
+    var no = String(r[0] || '').trim(), rid = String(r[CC_I_.id] || '').trim();
+    var h = { row: i + 2, values: r };
+    if (no) byNo[no] = h;
+    if (rid) byId[rid] = h;   // 🍽️ (V4.323 مراجعة) كل الصفوف (لا آخر صف لكل رقم فقط) — أرقام اتفاقيات مكررة
   });
-  var created = 0, updatedFilled = 0, skipped = 0, appended = [], updates = [];
+  var created = 0, updatedFilled = 0, skipped = 0, appended = [], updates = [], postIds = [];   // 🍽️ (V4.323) postIds: اتفاقيات يُحدَّث قيدها فوراً
   var logEntries = []; // 🕘 (V4.86) إدخالات سجل التعديلات — حقل/قديم/جديد لكل اتفاقية تغيّرت فعلياً
+  // 🐛 (V4.323 مراجعة) نفس الرقم مرتين بنفس الدفعة: الصف الجديد يُعدَّل بمكانه بالمصفوفة (كان يُكتب «تحديثاً» لرقم صف
+  // خاطئ بعد آخر صف بواحد ⇒ صف فارغ + صفان بنفس المعرّف) · وكل صف عُدِّل يُحفظ بقيمته الجديدة لما بعده بالدفعة
+  var commit_ = function (hit, row) {
+    if (hit.aix !== undefined) appended[hit.aix] = row; else updates.push({ row: hit.row, values: row });
+    hit.values = row;
+  };
   list.forEach(function(c) {
     var no = String(c.contractNo || '').trim();
     if (!no) { skipped++; return; }
@@ -15879,12 +15925,20 @@ function saveCateringContracts(authToken, list) {
       _accNum_(c.pilgrims) || '', _accNum_(c.duration) || '', _accNum_(c.totalAmount) || '',
       String(c.tripClient || '').trim(), String(c.umrahCompany || '').trim(), String(c.groupNo || '').trim(),
       session.username, now, '', '', String(c.sourceFile || '').trim(), String(c.vendor || '').trim(), String(c.notes || '').trim(),
-      String(c.attachmentUrl || '').trim() // 📎 (V4.167)
+      String(c.attachmentUrl || '').trim(), // 📎 (V4.167)
+      _ccNewId_(), String(c.vendorAcc || '').trim(), String(c.targetAcc || '').trim(), _accNum_(c.sellAmount) || '', String(c.manualEntryNo || '').trim()   // 🍽️ (V4.323)
     ];
     var isEmpty_ = function(v) { return v === '' || v === null || v === undefined; };
-    if (byNo[no]) {
-      var origRow = byNo[no].values;
+    // 🍽️ (V4.323) التعديل يطابق الصف بمعرّفه الثابت أولاً (تغيير رقم الاتفاقية من نافذة التعديل كان يضيف صفاً جديداً ويترك القديم)
+    var hit = (c._id && byId[String(c._id).trim()]) || byNo[no] || null;
+    if (hit) {
+      var origRow = hit.values;
       var oldRow = origRow.slice();
+      // 🛡️ (V4.323 مراجعة) حساب ربط جديد/متغيّر ⇒ يُفحص نوعه حسب صلاحية المستخدم (القيد يُرحَّل فوراً بلا اعتماد)
+      [[CC_I_.vendorAcc, c.vendorAcc, 'حساب المورد'], [CC_I_.targetAcc, c.targetAcc, 'حساب العميل / الرحلة']].forEach(function (q) {
+        var nv = String(q[1] || '').trim(), ov = String(origRow[q[0]] || '').trim();
+        if (q[1] !== undefined && nv && nv !== ov && (c._isEdit || !ov)) _ccAccCheck_(session, nv, q[2]);
+      });
       // ✏️ (V4.62) وضع «تعديل صريح» — يُستبدَل كل حقل حتى لو المُدخل جديد فارغاً (المستخدم قصد ذلك)
       var isEdit = !!c._isEdit;
       if (isEdit) {
@@ -15894,7 +15948,14 @@ function saveCateringContracts(authToken, list) {
         oldRow[17] = String(c.vendor || '').trim(); // 📑 (V4.76) المورد — يُستبدَل صراحةً في وضع التعديل
         oldRow[18] = String(c.notes || '').trim(); // 📝 (V4.77) ملاحظات — يُستبدَل صراحةً في وضع التعديل
         if (c.attachmentUrl) oldRow[19] = String(c.attachmentUrl).trim(); // 📎 (V4.167) لا يُمسَح لو لم يُرسَل مرفق جديد
-        updates.push({ row: byNo[no].row, values: oldRow });
+        // 🍽️ (V4.323) الربط المحاسبي يُستبدل صراحةً لو أُرسل (نافذة التعديل) — ولا يُلمس لو لم يُرسل (مسارات قديمة)
+        if (c.vendorAcc !== undefined) oldRow[CC_I_.vendorAcc] = String(c.vendorAcc || '').trim();
+        if (c.targetAcc !== undefined) oldRow[CC_I_.targetAcc] = String(c.targetAcc || '').trim();
+        if (c.sellAmount !== undefined) oldRow[CC_I_.sell] = _accNum_(c.sellAmount) || '';
+        if (c.manualEntryNo !== undefined) oldRow[CC_I_.manualNo] = String(c.manualEntryNo || '').trim();
+        if (!String(oldRow[CC_I_.id] || '').trim()) oldRow[CC_I_.id] = newVals[CC_I_.id];
+        commit_(hit, oldRow);
+        postIds.push(String(oldRow[CC_I_.id]).trim());
         updatedFilled++;
         logEntries = logEntries.concat(_ccLogDiffEntries_(no, origRow, oldRow));
       } else {
@@ -15909,10 +15970,13 @@ function saveCateringContracts(authToken, list) {
         if (isEmpty_(oldRow[17]) && !isEmpty_(newVals[17])) { oldRow[17] = newVals[17]; anyFilled = true; } // المورد
         if (isEmpty_(oldRow[18]) && !isEmpty_(newVals[18])) { oldRow[18] = newVals[18]; anyFilled = true; } // ملاحظات
         if (isEmpty_(oldRow[19]) && !isEmpty_(newVals[19])) { oldRow[19] = newVals[19]; anyFilled = true; } // 📎 (V4.167) رابط المرفق
+        [CC_I_.vendorAcc, CC_I_.targetAcc, CC_I_.sell, CC_I_.manualNo].forEach(function (ci) { if (isEmpty_(oldRow[ci]) && !isEmpty_(newVals[ci])) { oldRow[ci] = newVals[ci]; anyFilled = true; } });   // 🍽️ (V4.323)
         if (anyFilled) {
           oldRow[14] = session.username; oldRow[15] = now;
           if (c.sourceFile && !oldRow[16]) oldRow[16] = String(c.sourceFile).trim();
-          updates.push({ row: byNo[no].row, values: oldRow });
+          if (!String(oldRow[CC_I_.id] || '').trim()) oldRow[CC_I_.id] = newVals[CC_I_.id];
+          commit_(hit, oldRow);
+          postIds.push(String(oldRow[CC_I_.id]).trim());
           updatedFilled++;
           logEntries = logEntries.concat(_ccLogDiffEntries_(no, origRow, oldRow));
         } else {
@@ -15920,8 +15984,11 @@ function saveCateringContracts(authToken, list) {
         }
       }
     } else {
+      if (newVals[CC_I_.vendorAcc]) _ccAccCheck_(session, newVals[CC_I_.vendorAcc], 'حساب المورد');
+      if (newVals[CC_I_.targetAcc]) _ccAccCheck_(session, newVals[CC_I_.targetAcc], 'حساب العميل / الرحلة');
       appended.push(newVals);
-      byNo[no] = { row: sh.getLastRow() + 1 + appended.length, values: newVals };
+      byNo[no] = byId[newVals[CC_I_.id]] = { aix: appended.length - 1, values: newVals };
+      if (newVals[CC_I_.vendorAcc] && newVals[CC_I_.targetAcc]) postIds.push(newVals[CC_I_.id]);
       created++;
       logEntries.push({
         action: 'إنشاء اتفاقية إعاشة', recordId: no, field: 'اتفاقية جديدة', oldVal: '-',
@@ -15960,29 +16027,132 @@ function saveCateringContracts(authToken, list) {
       } catch (eG) {}
     });
   });
-  return { success: true, created: created, updated: updatedFilled, skipped: skipped, linkedGroups: linkedGroups };
-  } finally { lock.releaseLock(); }
+  lock.releaseLock();
+  // 🍽️ (V4.323) القيد التلقائي للاتفاقيات المحفوظة يُسجَّل/يُحدَّث/يُلغى الآن (الحفظ = اعتماد) — بعد فك قفل السكربت
+  var gl = null; try { if (postIds.length && typeof _glCatPostNow_ === 'function') gl = _glCatPostNow_(session.username, postIds); } catch (eGl) { gl = { error: eGl.message }; }
+  return { success: true, created: created, updated: updatedFilled, skipped: skipped, linkedGroups: linkedGroups, gl: gl };
+  } finally { try { lock.releaseLock(); } catch (eR) {} }
 }
 
+// 🔒 (V4.323 مراجعة) قفل السكربت لكل من يحذف/يدمج صفوف الاتفاقيات أو يكتب بموضع الصف (تعيين المعرّفات، مزامنة المجموعات)
+// — نفس قفل saveCateringContracts وحفظ البوت؛ يُعاد استخدامه لو كان النداء داخله أصلاً
+function _ccWithLock_(ms, fn) {
+  var sl = LockService.getScriptLock(), had = false; try { had = sl.hasLock(); } catch (e0) {}
+  if (!had && !sl.tryLock(ms)) throw new Error('شيت الاتفاقيات مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات');
+  try { return fn(); } finally { if (!had) try { sl.releaseLock(); } catch (e1) {} }
+}
 // 🗑️ حذف اتفاقية واحدة برقمها
-function deleteCateringContract(authToken, contractNo) {
+function deleteCateringContract(authToken, contractNo, rowId) {
   var session = _ccPerm_(authToken, 'delete');
-  contractNo = String(contractNo || '').trim();
-  if (!contractNo) return { success: false, error: 'رقم الاتفاقية مطلوب' };
-  var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
-  if (sh.getLastRow() < 2) return { success: false, error: 'الاتفاقية غير موجودة' };
-  var data = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
-  for (var i = 0; i < data.length; i++) {
-    if (String(data[i][0] || '').trim() === contractNo) {
-      sh.deleteRow(i + 2);
-      SpreadsheetApp.flush();
-      logChange_(session.username, 'حذف اتفاقية إعاشة', contractNo, CATERING_SHEET, '-', 'حُذفت الاتفاقية رقم ' + contractNo);
-      return { success: true };
-    }
-  }
-  return { success: false, error: 'الاتفاقية غير موجودة' };
+  contractNo = String(contractNo || '').trim(); rowId = String(rowId || '').trim();
+  if (!contractNo && !rowId) return { success: false, error: 'رقم الاتفاقية مطلوب' };
+  var delId = '', delNo = '';
+  var miss = _ccWithLock_(30000, function () {   // 🔒 (V4.323 مراجعة) القراءة والحذف ذرّيان (تعيين المعرّفات/الحفظ بنفس القفل)
+    var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
+    if (sh.getLastRow() < 2) return true;
+    var data = sh.getRange(2, 1, sh.getLastRow() - 1, CC_I_.id + 1).getValues();
+    // 🍽️ (V4.323) بالمعرّف أولاً (أرقام اتفاقيات مكررة) ثم بالرقم
+    var ix = -1;
+    if (rowId) for (var j = 0; j < data.length; j++) if (String(data[j][CC_I_.id] || '').trim() === rowId) { ix = j; break; }
+    if (ix < 0 && contractNo) for (var i = 0; i < data.length; i++) if (String(data[i][0] || '').trim() === contractNo) { ix = i; break; }
+    if (ix < 0) return true;
+    delId = String(data[ix][CC_I_.id] || '').trim(); delNo = String(data[ix][0] || '').trim();
+    sh.deleteRow(ix + 2);
+    SpreadsheetApp.flush();
+    return false;
+  });
+  if (miss) return { success: false, error: 'الاتفاقية غير موجودة' };
+  logChange_(session.username, 'حذف اتفاقية إعاشة', delNo, CATERING_SHEET, '-', 'حُذفت الاتفاقية رقم ' + delNo);
+  var gl = null; try { if (delId && typeof _glCatPostNow_ === 'function') gl = _glCatPostNow_(session.username, [delId]); } catch (eGl) { gl = { error: eGl.message }; }   // يُلغى قيدها التلقائي فوراً
+  return { success: true, gl: gl };
 }
 
+/* 🍽️ (V4.323) بيانات الربط المحاسبي لشاشة اتفاقيات الإعاشة (بصلاحية الشاشة نفسها — بلا حاجة لصلاحية الحسابات العامة):
+   • accounts: الحسابات الورقية الفعّالة (للبحث التنبؤي: الاسم + الكود + الفئة)
+   • vendorByProvider: المورد المختار سابقاً لكل «مقدم خدمة» (الأكثر تكراراً) ⇒ الترشيح الأول للاتفاقيات التالية لنفس الشركة
+   • groupTarget: رقم مجموعة التأشيرات ⇒ الرحلة (لو رحلة واحدة) أو العميل (لو عميل واحد) المرتبط بها ⇒ الحساب الافتراضي
+   • cateringItemClients: عملاء لهم بند «الإعاشة» مُسعَّر بحساباتهم (تحذير من تحميل العميل مرتين) */
+// 🛡️ (V4.323 مراجعة) القيد التلقائي للاتفاقية يُرحَّل فوراً بلا قائمة اعتماد ⇒ صاحب صلاحية شاشة الاتفاقيات وحدها يختار
+// حسابات الأطراف فقط (عميل/رحلة/مورد/وكيل)؛ أي حساب آخر (خزينة/بنك/عهدة/مصروف…) لصاحب صلاحية تعديل القيود التلقائية/الاعتماد
+var CC_PARTY_KINDS_ = /^(client|trip|supplier|agent)$/;
+function _ccAccAll_(session) { try { return typeof _glCanEditAuto_ === 'function' && _glCanEditAuto_(session); } catch (e) { return false; } }
+function _ccAccCheck_(session, code, label) {
+  code = String(code || '').trim(); if (!code || typeof _glSSId_ !== 'function' || !_glSSId_()) return;
+  var a = _glAccounts_().map[code];
+  if (!a || a.isGroup || !a.active) throw new Error(label + ': الحساب ' + code + ' غير موجود أو ليس حساباً فرعياً فعّالاً');
+  if (CC_PARTY_KINDS_.test(a.kind || '') || _ccAccAll_(session)) return;
+  throw new Error(label + ': «' + a.name + '» ليس حساب عميل/رحلة/مورد/وكيل — اختيار حسابات أخرى يحتاج صلاحية تعديل «القيود التلقائية والاعتماد»');
+}
+function ccAccountsLite(authToken) {
+  var session = _ccPerm_(authToken, 'view');
+  if (typeof _glSSId_ !== 'function' || !_glSSId_()) return { success: true, gl: false, accounts: [] };
+  var norm = function (x) { return (typeof _glNorm_ === 'function') ? _glNorm_(x) : String(x || '').trim(); };
+  var A = _glAccounts_(), accounts = [], byLink = {}, all = _ccAccAll_(session);
+  A.list.forEach(function (a) {
+    if (a.isGroup || !a.active) return;
+    if (!all && !CC_PARTY_KINDS_.test(a.kind || '')) return;
+    accounts.push({ code: a.code, name: a.name, kind: a.kind || '', cur: a.currency || '', link: a.link || '' });
+    if (a.link && a.kind) byLink[a.kind + '|' + norm(a.link)] = a.code;
+    String(a.notes || '').replace(/⟦alias:([a-z]+)\|([^⟧]+)⟧/g, function (m0, k, n) { byLink[k + '|' + norm(n)] = a.code; return m0; });
+  });
+  // المورد السابق لكل مقدم خدمة
+  var cnt = {}, vendorByProvider = {};
+  try {
+    var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
+    if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, CATERING_HEADERS.length).getValues().forEach(function (r) {
+      var p = norm(r[1]), v = String(r[CC_I_.vendorAcc] || '').trim(); if (!p || !v || !A.map[v]) return;
+      var o = cnt[p] || (cnt[p] = {}); o[v] = (o[v] || 0) + 1;
+    });
+  } catch (e1) {}
+  Object.keys(cnt).forEach(function (p) { var best = '', bn = 0; Object.keys(cnt[p]).forEach(function (v) { if (cnt[p][v] > bn) { bn = cnt[p][v]; best = v; } }); vendorByProvider[p] = best; });
+  // مجموعة التأشيرات ⇒ الرحلة/العميل
+  var groupTarget = {};
+  try {
+    _vzReadAll_().forEach(function (f) {
+      var ref = String(f.ref || '').trim(); if (!ref) return;
+      var trips = (typeof _vzTripsOf_ === 'function' ? _vzTripsOf_(f) : [f.tripName]).filter(Boolean), t = null;
+      if (trips.length === 1 && byLink['trip|' + norm(trips[0])]) t = { code: byLink['trip|' + norm(trips[0])], why: 'رحلة المجموعة ' + ref + ': ' + trips[0] };
+      if (!t) {
+        var cl = {}; (f.breakdown || []).forEach(function (b) { var n = String((b && b.name) || '').trim(); if (n && byLink['client|' + norm(n)]) cl[byLink['client|' + norm(n)]] = n; });
+        var ks = Object.keys(cl); if (ks.length === 1) t = { code: ks[0], why: 'عميل المجموعة ' + ref + ': ' + cl[ks[0]] };
+      }
+      if (!t && trips.length > 1) t = { code: '', why: 'المجموعة ' + ref + ' مرتبطة بأكثر من رحلة: ' + trips.join('، ') };
+      if (t) groupTarget[ref] = t;
+    });
+  } catch (e2) {}
+  var itemClients = {};
+  try {
+    var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
+    if (iSh.getLastRow() >= 2) iSh.getRange(2, 1, iSh.getLastRow() - 1, ACC_ITEMS_HEADERS.length).getValues().forEach(function (r) {
+      if (/الإعاشة|الاعاشة/.test(String(r[3] || '')) && _accNum_(r[8])) itemClients[norm(r[1])] = 1;
+    });
+  } catch (e3) {}
+  var diffAcc = ''; try { diffAcc = String(_glSettings_().auto_acc_cat_diff || ''); } catch (e4) {}
+  return { success: true, gl: true, accounts: accounts, allKinds: all, vendorByProvider: vendorByProvider, groupTarget: groupTarget, cateringItemClients: Object.keys(itemClients),
+    diffAcc: diffAcc, diffAccName: diffAcc && A.map[diffAcc] ? A.map[diffAcc].name : '' };
+}
+// ➕ (V4.323) حساب جديد من شاشة الاتفاقيات (مورد إعاشة / عميل / رحلة) — بصلاحية «دليل الحسابات ← إضافة»
+function ccQuickAccount(authToken, name, kind) {
+  var session = _glPerm_(authToken, 'add', 'coa');
+  name = String(name || '').trim(); if (!name) throw new Error('اسم الحساب مطلوب');
+  var A = _glAccounts_(), parent = '';
+  if (kind === 'client') parent = '1201';
+  else if (kind === 'trip') { parent = _glTripGroup_(); if (!parent) throw new Error('مجموعة حسابات الرحلات غير مفعّلة بالدليل'); }
+  else {
+    kind = 'supplier';
+    // نفس قسم موردي الإعاشة المستخدمين سابقاً (الأكثر تكراراً)، وإلا «موردون آخرون»
+    var cnt = {};
+    try { var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS); if (sh.getLastRow() >= 2) sh.getRange(2, CC_I_.vendorAcc + 1, sh.getLastRow() - 1, 1).getValues().forEach(function (r) { var a = A.map[String(r[0] || '').trim()]; if (a && a.parent) cnt[a.parent] = (cnt[a.parent] || 0) + 1; }); } catch (e) {}
+    var best = '', bn = 0; Object.keys(cnt).forEach(function (p) { if (cnt[p] > bn && A.map[p] && A.map[p].isGroup) { bn = cnt[p]; best = p; } });
+    parent = best || (A.map['2105'] && A.map['2105'].isGroup ? '2105' : '21');
+  }
+  var lock = _glLock_(); lock.waitLock(30000);
+  try {
+    var acc = _glCreateAccount_({ parent: parent, name: name, kind: kind, link: kind === 'supplier' ? '' : name }, session.username);
+    logChange_(session.username, 'إضافة حساب من شاشة اتفاقيات الإعاشة', 'GL:' + acc.code, 'دليل الحسابات', '-', acc.code + ' — ' + acc.name);
+    return { success: true, account: { code: acc.code, name: acc.name, kind: acc.kind || '', cur: acc.currency || '', link: acc.link || '' } };
+  } finally { _glUnlock_(lock); }
+}
 // 🕘 (V4.86) سجل تعديلات اتفاقية إعاشة واحدة — كل عمليات AuditLog التي مرجعها رقم هذه الاتفاقية،
 // من أول إنشائها حتى آخر تعديل، بنفس صلاحية عرض شاشة الاتفاقيات (بلا حاجة لصلاحية سجل التعديلات
 // العامة). نسخة مطابقة لمبدأ getTripChangeLog لكن لسجل اتفاقيات الإعاشة.
@@ -16057,54 +16227,69 @@ function mergeCateringDuplicates(authToken, contractNo) {
   var session = _ccPerm_(authToken, 'edit');
   contractNo = String(contractNo || '').trim();
   if (!contractNo) return { success: false, error: 'رقم الاتفاقية مطلوب' };
-  var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
-  if (sh.getLastRow() < 3) return { success: false, error: 'لا توجد بيانات' };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, CATERING_HEADERS.length).getValues();
-  var matches = []; // { rowIndex1based, values }
-  vals.forEach(function(r, i) {
-    if (String(r[0] || '').trim() === contractNo) matches.push({ row: i + 2, values: r });
-  });
-  if (matches.length < 2) return { success: false, error: 'لا يوجد تكرار فعلي لهذا الرقم' };
+  var postIds = [];
+  var out = _ccWithLock_(30000, function () {   // 🔒 (V4.323 مراجعة) القراءة والدمج والحذف ذرّية (تعيين المعرّفات/الحفظ/الحذف بنفس القفل)
+    var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
+    if (sh.getLastRow() < 3) return { success: false, error: 'لا توجد بيانات' };
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, CATERING_HEADERS.length).getValues();
+    var matches = []; // { rowIndex1based, values }
+    vals.forEach(function(r, i) {
+      if (String(r[0] || '').trim() === contractNo) matches.push({ row: i + 2, values: r });
+    });
+    if (matches.length < 2) return { success: false, error: 'لا يوجد تكرار فعلي لهذا الرقم' };
 
-  var isEmpty_ = function(v) { return v === '' || v === null || v === undefined; };
-  // 🧩 دمج: أول 12 عمود بيانات — نأخذ أول قيمة غير فارغة عبر كل النسخ بالترتيب
-  var merged = matches[0].values.slice();
-  for (var k = 0; k < 12; k++) {
-    if (!isEmpty_(merged[k])) continue;
-    for (var m = 1; m < matches.length; m++) {
-      if (!isEmpty_(matches[m].values[k])) { merged[k] = matches[m].values[k]; break; }
+    var isEmpty_ = function(v) { return v === '' || v === null || v === undefined; };
+    // 🧩 دمج: أول 12 عمود بيانات — نأخذ أول قيمة غير فارغة عبر كل النسخ بالترتيب
+    var merged = matches[0].values.slice();
+    for (var k = 0; k < 12; k++) {
+      if (!isEmpty_(merged[k])) continue;
+      for (var m = 1; m < matches.length; m++) {
+        if (!isEmpty_(matches[m].values[k])) { merged[k] = matches[m].values[k]; break; }
+      }
     }
-  }
-  // مصدر الملف: اجمع كل المصادر المختلفة في خانة واحدة (مفيد للتتبع)
-  var sources = [];
-  matches.forEach(function(mm) {
-    var sf = String(mm.values[16] || '').trim();
-    if (sf && sources.indexOf(sf) === -1) sources.push(sf);
-  });
-  merged[14] = session.username; merged[15] = new Date();
-  if (sources.length) merged[16] = sources.join(' + ');
-  // 📑 (V4.76) المورد — أول قيمة غير فارغة عبر كل النسخ
-  if (isEmpty_(merged[17])) {
-    for (var mv = 1; mv < matches.length; mv++) {
-      if (!isEmpty_(matches[mv].values[17])) { merged[17] = matches[mv].values[17]; break; }
+    // مصدر الملف: اجمع كل المصادر المختلفة في خانة واحدة (مفيد للتتبع)
+    var sources = [];
+    matches.forEach(function(mm) {
+      var sf = String(mm.values[16] || '').trim();
+      if (sf && sources.indexOf(sf) === -1) sources.push(sf);
+    });
+    merged[14] = session.username; merged[15] = new Date();
+    if (sources.length) merged[16] = sources.join(' + ');
+    // 📑 (V4.76) المورد — أول قيمة غير فارغة عبر كل النسخ
+    if (isEmpty_(merged[17])) {
+      for (var mv = 1; mv < matches.length; mv++) {
+        if (!isEmpty_(matches[mv].values[17])) { merged[17] = matches[mv].values[17]; break; }
+      }
     }
-  }
-  // 📝 (V4.77) ملاحظات — أول قيمة غير فارغة عبر كل النسخ
-  if (isEmpty_(merged[18])) {
-    for (var mn = 1; mn < matches.length; mn++) {
-      if (!isEmpty_(matches[mn].values[18])) { merged[18] = matches[mn].values[18]; break; }
+    // 📝 (V4.77) ملاحظات — أول قيمة غير فارغة عبر كل النسخ
+    if (isEmpty_(merged[18])) {
+      for (var mn = 1; mn < matches.length; mn++) {
+        if (!isEmpty_(matches[mn].values[18])) { merged[18] = matches[mn].values[18]; break; }
+      }
     }
-  }
 
-  // نُبقي أقدم صف (الأول) ونكتب فيه القيم المدموجة، ونحذف الباقي (من الأسفل للأعلى حتى لا تتغيّر الأرقام)
-  var keepRow = matches[0].row;
-  sh.getRange(keepRow, 1, 1, CATERING_HEADERS.length).setValues([merged]);
-  var rowsToDelete = matches.slice(1).map(function(mm) { return mm.row; }).sort(function(a, b) { return b - a; });
-  rowsToDelete.forEach(function(r) { sh.deleteRow(r); });
-  SpreadsheetApp.flush();
-  logChange_(session.username, 'دمج اتفاقيات إعاشة مكرَّرة', contractNo, CATERING_SHEET, '-',
-    'دُمجت ' + matches.length + ' نسخة لرقم الاتفاقية ' + contractNo + ' في صف واحد');
-  return { success: true, mergedCount: matches.length };
+    // نُبقي أقدم صف (الأول) ونكتب فيه القيم المدموجة، ونحذف الباقي (من الأسفل للأعلى حتى لا تتغيّر الأرقام)
+    var keepRow = matches[0].row;
+    sh.getRange(keepRow, 1, 1, CATERING_HEADERS.length).setValues([merged]);
+    var rowsToDelete = matches.slice(1).map(function(mm) { return mm.row; }).sort(function(a, b) { return b - a; });
+    // 🍽️ (V4.323) الربط المحاسبي ينتقل للصف المُبقى لو كان فارغاً فيه (أول قيمة غير فارغة من النسخ المكررة)
+    [CC_I_.vendorAcc, CC_I_.targetAcc, CC_I_.sell, CC_I_.manualNo].forEach(function (ci) {
+      if (!isEmpty_(merged[ci])) return;
+      for (var mc = 1; mc < matches.length; mc++) if (!isEmpty_(matches[mc].values[ci])) { merged[ci] = matches[mc].values[ci]; break; }
+    });
+    if (isEmpty_(merged[CC_I_.id])) merged[CC_I_.id] = _ccNewId_();
+    sh.getRange(keepRow, 1, 1, CATERING_HEADERS.length).setValues([merged]);
+    var goneIds = [];   // 🍽️ (V4.323) معرّفات الصفوف المحذوفة ⇒ تُلغى قيودها التلقائية (إن وُجدت) ويبقى قيد الصف المُبقى
+    try { var wAll = sh.getRange(2, 1, sh.getLastRow() - 1, CATERING_HEADERS.length).getValues(); rowsToDelete.forEach(function (rr) { var v = wAll[rr - 2]; if (v && String(v[CC_I_.id] || '').trim()) goneIds.push(String(v[CC_I_.id]).trim()); }); } catch (eIds) {}
+    rowsToDelete.forEach(function(r) { sh.deleteRow(r); });
+    SpreadsheetApp.flush();
+    logChange_(session.username, 'دمج اتفاقيات إعاشة مكرَّرة', contractNo, CATERING_SHEET, '-',
+      'دُمجت ' + matches.length + ' نسخة لرقم الاتفاقية ' + contractNo + ' في صف واحد');
+    var keepId = String(merged[CC_I_.id] || '').trim(); postIds = goneIds.concat(keepId ? [keepId] : []);
+    return { success: true, mergedCount: matches.length };
+  });
+  try { if (postIds.length && typeof _glCatPostNow_ === 'function') _glCatPostNow_(session.username, postIds); } catch (eGl) {}
+  return out;
 }
 
 // ✨ (V4.55) استخلاص بيانات الاتفاقيات — يدعم عدة اتفاقيات بالملف الواحد، ومحاولة استخلاص يدوي
@@ -25801,6 +25986,9 @@ function _vzSyncGroupHousingAllocs_(f, username) {
 }
 // 🍽️ (V4.194) مزامنة أرقام اتفاقيات الإعاشة المكتوبة بالمجموعة مع شاشة «اتفاقيات الإعاشة»
 function _vzSyncGroupCatering_(f, ref, items, username) {
+  return _ccWithLock_(20000, function () { return _vzSyncGroupCateringCore_(f, ref, items, username); });   // 🔒 (V4.323 مراجعة) كتابة بموضع الصف
+}
+function _vzSyncGroupCateringCore_(f, ref, items, username) {
   var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
   var H = CATERING_HEADERS, W = H.length;
   var vals = sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, W).getValues() : [];
@@ -25818,7 +26006,7 @@ function _vzSyncGroupCatering_(f, ref, items, username) {
       if (!_mfStr_(r[5])) r[5] = _mfDate_(h.out);
       if (!_mfNum_(r[6])) r[6] = _mfNum_(h.count) || _mfNum_(f.visaCount) || '';
       r[14] = username; r[15] = now;
-      sh.getRange(hit.row, 1, 1, W).setValues([r]);
+      sh.getRange(hit.row, 1, 1, 16).setValues([r.slice(0, 16)]);   // 🍽️ (V4.323) أول 16 عموداً فقط — لا تُمس أعمدة المورد/المرفق/المعرّف/الربط المحاسبي
       hit.r = r; touched = true;
       logs.push({ action: 'تعديل اتفاقية إعاشة', recordId: no, field: 'رقم المجموعة', oldVal: oldG || '-', newVal: r[11] });
     } else {
@@ -25826,6 +26014,7 @@ function _vzSyncGroupCatering_(f, ref, items, username) {
         _mfStr_(f.tripName), _mfStr_(f.company), ref, username, now, '', '', '', _mfStr_(h.supplier),
         'أُنشئت تلقائياً من مجموعة تأشيرات ' + ref, ''];
       while (row.length < W) row.push('');
+      row[CC_I_.id] = _ccNewId_();   // 🍽️ (V4.323) معرّف ثابت من الإنشاء
       sh.appendRow(row.slice(0, W));
       byNo[no] = { row: sh.getLastRow(), r: row };
       touched = true;

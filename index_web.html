@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🩺 V4.322 — متتبِّع الإقلاع (Boot Tracer)
+     🩺 V4.323 — متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
 window.__BOOT_STEPS = [];
@@ -110,7 +110,7 @@ window.__step('1️⃣ بداية \u003Chead> — الصفحة بدأت تصل �
     diag += '👈 الملف وصل كاملاً وكل المقاطع نُفِّذت — العطل في مرحلة لاحقة، راجع تفاصيل المراحل.';
   }
   diag += '\n\nاكتب __bootReport() في Console لعرض كل المراحل بالتفصيل.';
-  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.322)', diag);
+  window.__bootBanner('عُثر على عطل — تشخيص تلقائي (V4.323)', diag);
 }, tries ? 5000 : 6000); })(0);
 </script>
 
@@ -1565,7 +1565,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.322</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.323</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6222,8 +6222,9 @@ window._ccDbg_ = function() {}; // بديل صامت لبقايا استدعاء
       var act = actBtn.getAttribute('data-cc-act');
       var no  = actBtn.getAttribute('data-cc-no') || '';
       try {
-        if (act === 'edit'   && typeof _ccEditRow_   === 'function') _ccEditRow_(no);
-        else if (act === 'delete' && typeof _ccDeleteRow_ === 'function') _ccDeleteRow_(no);
+        var cid = actBtn.getAttribute('data-cc-id') || '';   // 🍽️ (V4.323) المعرّف الثابت — أرقام اتفاقيات مكررة
+        if (act === 'edit'   && typeof _ccEditRow_   === 'function') _ccEditRow_(no, cid);
+        else if (act === 'delete' && typeof _ccDeleteRow_ === 'function') _ccDeleteRow_(no, cid);
       } catch (e) { alert('خطأ: ' + (e.message || e)); }
       return;
     }
@@ -8016,7 +8017,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.322";
+var CLIENT_APP_VERSION = "4.323";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -27779,7 +27780,13 @@ window._ccCols = [
   { key: 'umrahCompany', label: 'شركة العمرة', width: '160px' },
   { key: 'groupNo', label: 'رقم المجموعة', width: '90px', numish: true },
   { key: 'vendor', label: 'المورد', width: '150px' },
-  { key: 'notes', label: 'ملاحظات', width: '180px' }
+  { key: 'notes', label: 'ملاحظات', width: '180px' },
+  // 🍽️ (V4.323) الربط المحاسبي — القيد التلقائي (يُفتح بالضغط) + القيد اليدوي
+  { key: 'vendorAccName', label: 'حساب المورد', width: '150px' },
+  { key: 'targetAccName', label: 'حساب العميل / الرحلة', width: '160px' },
+  { key: 'sellAmount', label: 'سعر البيع (ر.س)', width: '105px', num: true },
+  { key: 'glEntryNo', label: 'القيد التلقائي', width: '110px', numish: true },
+  { key: 'manualEntryNo', label: 'القيد اليدوي', width: '95px', numish: true }
 ];
 
 function _ccInit_() {
@@ -27852,8 +27859,9 @@ function _ccWireRowButtons_() {
         var act = btn.getAttribute('data-cc-act');
         var no  = btn.getAttribute('data-cc-no') || '';
         try {
-          if (act === 'edit'   && typeof _ccEditRow_   === 'function') _ccEditRow_(no);
-          if (act === 'delete' && typeof _ccDeleteRow_ === 'function') _ccDeleteRow_(no);
+          var cid = btn.getAttribute('data-cc-id') || '';   // 🍽️ (V4.323) المعرّف الثابت — أرقام اتفاقيات مكررة
+          if (act === 'edit'   && typeof _ccEditRow_   === 'function') _ccEditRow_(no, cid);
+          if (act === 'delete' && typeof _ccDeleteRow_ === 'function') _ccDeleteRow_(no, cid);
         } catch (e) { alert('❌ خطأ في زر ' + act + ': ' + (e.message || e)); }
       });
     });
@@ -27871,8 +27879,10 @@ function _ccLoad_() {
       window._ccContracts.forEach(function(c) {
         var pil = Number(c.pilgrims) || 0, dys = Number(c.days) || 0, tot = Number(c.totalAmount) || 0;
         c.price = (pil && dys) ? (Math.round((tot / (pil * dys)) * 100) / 100) : '';
+        c.glEntryNo = c.glEntry && c.glEntry.id ? c.glEntry.id + (c.glEntry.status === 'ملغى' ? ' (ملغى)' : '') : '';   // 🍽️ (V4.323)
       });
       _ccRenderTable_();
+      _ccAccEnsure_();   // 🍽️ (V4.323) حسابات الربط المحاسبي بالخلفية (للبحث التنبؤي بنافذة التعديل)
     })
     .withFailureHandler(function(err) { area.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_(err.message || err) + '</div>'; })
     .getCateringContracts(window.authToken);
@@ -28447,6 +28457,11 @@ function _ccRenderTable_() {
       cols.map(function(c) {
         var v = fmtCell(c, r);
         var cls = c.num || c.numish ? 'cc-num' : 'cc-txt';
+        // 🍽️ (V4.323) رقم القيد التلقائي قابل للضغط ⇒ عرض/تعديل القيد
+        if (c.key === 'glEntryNo') {
+          if (r.glEntry && r.glEntry.id) return '<td class="cc-num"><a href="#" onclick="_ccOpenEntry_(\'' + esc(r.glEntry.id) + '\');return false;" title="عرض/تعديل القيد" style="font-weight:700;' + (r.glEntry.status === 'ملغى' ? 'color:#9ca3af;text-decoration:line-through;' : '') + '">' + esc(r.glEntry.id) + '</a>' + (r.glEntry.pending ? ' <span title="له تغيير بانتظار الاعتماد">⏳</span>' : '') + '</td>';
+          return '<td class="cc-num" title="لم يُربط محاسبياً بعد — حدّد حساب المورد وحساب العميل/الرحلة من ✏️">' + (r.vendorAcc && r.targetAcc ? '…' : '<span style="color:#b45309;font-size:11px;">غير مربوطة</span>') + '</td>';
+        }
         return '<td class="' + cls + '" title="' + esc(v) + '" onclick="this.classList.toggle(\'cc-expand\')">' + esc(v) + '</td>';
       }).join('') +
       '<td class="cc-actions">' +
@@ -28455,9 +28470,9 @@ function _ccRenderTable_() {
           ? '<a href="' + esc(r.attachmentUrl) + '" target="_blank" rel="noopener" class="btn btn-outline-success btn-sm py-0 px-2" title="فتح مرفق هذه الاتفاقية (الملف/الصورة المستخلَصة منها)">📎</a> '
           : '<span class="btn btn-outline-secondary btn-sm py-0 px-2" style="opacity:.4;cursor:default;" title="لا يوجد مرفق لهذه الاتفاقية">📎</span> ') +
         // 🎯 (V4.63) مسار مزدوج — onclick سطري + data-* للتفويض
-        '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="تعديل" data-cc-act="edit" data-cc-no="' + esc(r.contractNo) + '" onclick="try{_ccEditRow_(this.getAttribute(\'data-cc-no\'))}catch(e){alert(\'خطأ: \'+e)}">✏️</button> ' +
+        '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="تعديل" data-cc-act="edit" data-cc-no="' + esc(r.contractNo) + '" data-cc-id="' + esc(r.id || '') + '" onclick="try{_ccEditRow_(this.getAttribute(\'data-cc-no\'),this.getAttribute(\'data-cc-id\'))}catch(e){alert(\'خطأ: \'+e)}">✏️</button> ' +
         '<button type="button" class="btn btn-outline-secondary btn-sm py-0 px-2" title="سجل تعديلات هذه الاتفاقية" data-cc-act="log" data-cc-no="' + esc(r.contractNo) + '" onclick="try{openCateringChangeLog(this.getAttribute(\'data-cc-no\'))}catch(e){alert(\'خطأ: \'+e)}">🕘</button> ' +
-        '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" title="حذف" data-cc-act="delete" data-cc-no="' + esc(r.contractNo) + '" onclick="try{_ccDeleteRow_(this.getAttribute(\'data-cc-no\'))}catch(e){alert(\'خطأ: \'+e)}">🗑️</button>' +
+        '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" title="حذف" data-cc-act="delete" data-cc-no="' + esc(r.contractNo) + '" data-cc-id="' + esc(r.id || '') + '" onclick="try{_ccDeleteRow_(this.getAttribute(\'data-cc-no\'),this.getAttribute(\'data-cc-id\'))}catch(e){alert(\'خطأ: \'+e)}">🗑️</button>' +
       '</td>' +
     '</tr>';
   }).join('') || '<tr><td colspan="' + (cols.length + 3) + '" class="p-4 text-center text-muted">لا توجد نتائج مطابقة للفلاتر الحالية</td></tr>';
@@ -28783,8 +28798,9 @@ if (!window._ccDelegationWired_) {
       var act = actBtn.getAttribute('data-cc-act');
       var no  = actBtn.getAttribute('data-cc-no') || '';
       try {
-        if (act === 'edit')   { if (typeof _ccEditRow_   === 'function') _ccEditRow_(no); }
-        if (act === 'delete') { if (typeof _ccDeleteRow_ === 'function') _ccDeleteRow_(no); }
+        var cid = actBtn.getAttribute('data-cc-id') || '';   // 🍽️ (V4.323) المعرّف الثابت — أرقام اتفاقيات مكررة
+        if (act === 'edit')   { if (typeof _ccEditRow_   === 'function') _ccEditRow_(no, cid); }
+        if (act === 'delete') { if (typeof _ccDeleteRow_ === 'function') _ccDeleteRow_(no, cid); }
       } catch (e) { alert('خطأ داخلي: ' + (e.message || e)); }
       return;
     }
@@ -28869,9 +28885,10 @@ function _ccDateInstantApply_(which) {
 
 // أزرار العمليات على الصف
 // ✏️ (V4.75) التعديل الآن نموذج عائم فوق الشاشة الحالية (backdrop + تمويه) بدل التمرير لأعلى الصفحة
-function _ccEditRow_(no) {
-  var r = (window._ccContracts || []).find(function(x) { return x.contractNo === no; });
+function _ccEditRow_(no, id) {
+  var r = (window._ccContracts || []).find(function(x) { return id ? x.id === id : x.contractNo === no; }) || (window._ccContracts || []).find(function(x) { return x.contractNo === no; });
   if (!r) return;
+  window._ccEditCur = r;   // 🍽️ (V4.323)
   var esc = escapeHtml_;
   document.querySelectorAll('.cc-edit-backdrop').forEach(function(el) { el.remove(); });
   var backdrop = document.createElement('div');
@@ -28921,12 +28938,14 @@ function _ccEditRow_(no) {
       '<span id="ccEditAttStatus" class="small text-muted ms-2"></span>' +
       '<input type="hidden" id="ccEditAttUrl" value="' + esc(r.attachmentUrl || '') + '">' +
     '</div>' +
+    _ccAccSectionHtml_(r) +
     '<div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">' +
       '<button class="btn btn-outline-secondary btn-sm" onclick="this.closest(\'.cc-edit-backdrop\').remove()">✖ إلغاء</button>' +
       '<button class="btn btn-sm fw-bold" style="background:#0f4c4c;color:#fff;" onclick="_ccEditSave_(this,\'' + esc(no).replace(/'/g, "\\'") + '\')">💾 حفظ التعديلات</button>' +
     '</div>';
   backdrop.appendChild(panel);
   document.body.appendChild(backdrop);
+  _ccAccEnsure_(function () { _ccAccFill_(r); });   // 🍽️ (V4.323) الحسابات + الترشيحات
 }
 // 📎 (V4.167) رفع ملف مرفق يدوياً من نافذة تعديل اتفاقية — يُحدَّث الحقل المخفي فور نجاح الرفع
 function _ccEditAttPick_(files) {
@@ -28954,12 +28973,36 @@ function _ccEditSave_(btn, no) {
   var attEl = document.getElementById('ccEditAttUrl');
   if (attEl && attEl.value) vals.attachmentUrl = attEl.value;
   if (!vals.contractNo) { alert('⚠️ رقم الاتفاقية مطلوب'); return; }
+  // 🍽️ (V4.323) الربط المحاسبي + المعرّف الثابت (تعديل رقم الاتفاقية لا يُنشئ صفاً جديداً)
+  if (window._ccEditCur && window._ccEditCur.id) vals._id = window._ccEditCur.id;
+  if (document.getElementById('ccAccWrap') && document.getElementById('ccAccWrap').getAttribute('data-ready') === '1') {
+    var vA = _ccAccCodeOf_(document.getElementById('ccVendAcc').value), tA = _ccAccCodeOf_(document.getElementById('ccTgtAcc').value);
+    if (vA === null) { alert('⚠️ حساب المورد غير موجود بدليل الحسابات — اختره من القائمة أو أضف حساباً جديداً ➕'); return; }
+    if (tA === null) { alert('⚠️ حساب العميل/الرحلة غير موجود بدليل الحسابات — اختره من القائمة أو أضف حساباً جديداً ➕'); return; }
+    vals.vendorAcc = vA; vals.targetAcc = tA;
+    vals.sellAmount = (document.getElementById('ccSell').value || '').replace(/,/g, '').trim();
+    vals.manualEntryNo = (document.getElementById('ccManNo').value || '').trim();
+    // 🛡️ (V4.323 مراجعة) أول ربط محاسبي لاتفاقية قائمة (والحسابات قد تكون مقترحة تلقائياً) ⇒ تأكيد صريح قبل تسجيل قيد تلقائي —
+    // اتفاقية سُجّلت تكلفتها بقيد يدوي من قبل تتكرر تكلفتها لو سُجّل لها قيد تلقائي أيضاً
+    var cur0 = window._ccEditCur || {};
+    if (vA && tA && !(cur0.vendorAcc && cur0.targetAcc) && !btn._ccLinkOk && !btn._ccNoLink) {
+      var nm = function (c) { var a = (window._ccAcc && window._ccAcc.map || {})[c]; return a ? a.name : c; };
+      askConfirm_('سيُسجَّل قيد تلقائي جديد لهذه الاتفاقية الآن:\nمن ح/ ' + nm(tA) + '\nإلى ح/ ' + nm(vA) +
+        (vals.manualEntryNo ? '\n\n⚠️ للاتفاقية رقم قيد يدوي (' + vals.manualEntryNo + ') — لو سُجّلت تكلفتها به فالقيد التلقائي يكررها.' : '\n\nلو سُجّلت تكلفتها بقيد يدوي من قبل اختر «احفظ بلا ربط» واكتب رقم القيد اليدوي.'),
+        function () { btn._ccLinkOk = 1; _ccEditSave_(btn, no); btn._ccLinkOk = 0; },
+        { title: 'ربط محاسبي لأول مرة', icon: '🧾', danger: false, yesLabel: '🧾 سجّل القيد التلقائي', noLabel: 'احفظ بلا ربط',
+          onNo: function () { btn._ccNoLink = 1; _ccEditSave_(btn, no); btn._ccNoLink = 0; } });
+      return;
+    }
+    if (btn._ccNoLink) { delete vals.vendorAcc; delete vals.targetAcc; }
+  }
   var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…';
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false; btn.innerHTML = orig;
       if (res && res.success) {
-        (window.showToast || alert)('✅ حُفظ التعديل');
+        var gm = _ccGlMsg_(res.gl);   // 🍽️ (V4.323) نتيجة القيد التلقائي
+        if (gm && /⚠️/.test(gm)) alert('✅ حُفظ التعديل' + gm); else (window.showToast || alert)('✅ حُفظ التعديل' + gm);
         document.querySelectorAll('.cc-edit-backdrop').forEach(function(el) { el.remove(); });
         _ccLoad_();
       } else {
@@ -28969,21 +29012,152 @@ function _ccEditSave_(btn, no) {
     .withFailureHandler(function(err) { btn.disabled = false; btn.innerHTML = orig; alert('❌ ' + (err.message || err)); })
     .saveCateringContracts(window.authToken, [vals]);
 }
-function _ccDeleteRow_(no) {
+// 🍽️ (V4.323) نص نتيجة القيد التلقائي بعد حفظ/حذف اتفاقية (مؤجَّل · فترة مقفلة · معدَّل يدوياً ⇒ للاعتماد · أخطاء)
+function _ccGlMsg_(g) {
+  if (!g) return '';
+  if (g.error) return '\n⚠️ لم يُحدَّث القيد الآن: ' + g.error + ' — يُعاد تطبيقه تلقائياً مع أول مزامنة';
+  if (g.queued) return '\n⏳ الحسابات مشغولة بمزامنة — يُطبَّق تغيير القيد تلقائياً (كما حفظته) أول ما تنتهي';
+  var m = [];
+  (g.blocked || []).forEach(function (b) { m.push('⚠️ لم يُسجَّل القيد: ' + b); });
+  if (g.manualPending) m.push('⚠️ القيد معدَّل يدوياً بالحسابات العامة ⇒ التغيير أُرسل لقائمة «⏳ تغييرات تنتظر الاعتماد»');
+  if ((g.errors || []).length) m.push('⚠️ ' + g.errors.join(' · '));
+  if ((g.warn || []).length) m.push('⚠️ ' + g.warn.join(' · '));
+  if (!m.length && (g.created || g.updated || g.voided)) m.push('🧾 القيد التلقائي: ' + (g.created ? 'سُجّل' : g.updated ? 'حُدِّث' : 'أُلغي'));
+  return m.length ? '\n' + m.join('\n') : '';
+}
+/* 🍽️ (V4.323) الربط المحاسبي لاتفاقيات الإعاشة — بحث تنبؤي بالحسابات + ترشيح المورد السابق لنفس مقدم الخدمة + ترشيح العميل/الرحلة
+   من رقم مجموعة التأشيرات. القيد: من ح/ العميل أو الرحلة بسعر البيع — إلى ح/ المورد بالتكلفة — والفرق لـ«فروق اتفاقيات الإعاشة» */
+function _ccNorm_(s) { return String(s || '').replace(/[\u064B-\u0652\u0640]/g, '').replace(/[إأآا]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, ' ').trim().toLowerCase(); }
+function _ccAccEnsure_(cb) {
+  if (window._ccAcc) { if (cb) cb(); return; }
+  if (window._ccAccWait) { if (cb) window._ccAccWait.push(cb); return; }
+  window._ccAccWait = cb ? [cb] : [];
+  google.script.run.withSuccessHandler(function (res) {
+    var A = window._ccAcc = res && res.success ? res : { gl: false, accounts: [] };
+    A.map = {}; (A.accounts || []).forEach(function (a) { a.label = a.name + ' — ' + a.code; A.map[a.code] = a; });
+    A.vByP = {}; Object.keys(A.vendorByProvider || {}).forEach(function (k) { A.vByP[_ccNorm_(k)] = A.vendorByProvider[k]; });
+    A.itemCl = {}; (A.cateringItemClients || []).forEach(function (n) { A.itemCl[_ccNorm_(n)] = 1; });
+    var w = window._ccAccWait || []; window._ccAccWait = null; w.forEach(function (f) { try { f(); } catch (e) {} });
+  }).withFailureHandler(function () { window._ccAcc = { gl: false, accounts: [], map: {}, vByP: {}, itemCl: {} }; var w = window._ccAccWait || []; window._ccAccWait = null; w.forEach(function (f) { try { f(); } catch (e) {} }); })
+    .ccAccountsLite(window.authToken);
+}
+// '' = فارغ · null = نص لا يطابق أي حساب · وإلا الكود
+function _ccAccCodeOf_(txt) {
+  var A = window._ccAcc || {}, t = String(txt || '').trim(); if (!t) return '';
+  var hit = (A.accounts || []).filter(function (a) { return a.label === t || a.code === t; })[0]; if (hit) return hit.code;
+  var m = t.match(/(\d{3,})\s*$/); if (m && A.map && A.map[m[1]]) return m[1];
+  var byName = (A.accounts || []).filter(function (a) { return _ccNorm_(a.name) === _ccNorm_(t); }); return byName.length === 1 ? byName[0].code : null;
+}
+function _ccAccSectionHtml_(r) {
+  var esc = escapeHtml_, ge = r.glEntry;
+  var hint = function (id) { return '<div id="' + id + '" style="font-size:11px;line-height:1.5;margin-top:2px;"></div>'; };
+  return '<div id="ccAccWrap" class="mt-2 pt-2 border-top" data-ready="0">' +
+    '<div class="d-flex align-items-center gap-2 flex-wrap"><span class="fw-bold" style="color:#0b3838;">🧾 الربط المحاسبي (قيد تلقائي)</span>' +
+      (ge && ge.id ? '<a href="#" onclick="_ccOpenEntry_(\'' + esc(ge.id) + '\');return false;" class="badge bg-success text-decoration-none">📘 القيد ' + esc(ge.id) + (ge.status === 'ملغى' ? ' (ملغى)' : '') + '</a>' + (ge.pending ? ' <span class="badge bg-warning text-dark">⏳ تغيير بانتظار الاعتماد</span>' : '') : '<span class="badge bg-light text-dark border">لم يُسجَّل قيد بعد</span>') +
+      '<span id="ccAccLoading" class="small text-muted">⏳ تحميل الحسابات…</span></div>' +
+    '<div class="small text-muted mt-1">من ح/ العميل أو الرحلة بـ<b>سعر البيع</b> — إلى ح/ المورد بـ<b>سعر التكلفة</b> (الإجمالي أعلاه) — والفرق إن وُجد إلى «فروق اتفاقيات الإعاشة» (إيرادات العمرة). يُسجَّل/يُحدَّث القيد فور الحفظ.</div>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px;" class="mt-1">' +
+      '<div class="cc-fld"><label>حساب المورد</label><div class="d-flex gap-1"><input id="ccVendAcc" list="ccAccDLV" autocomplete="off" placeholder="ابحث باسم المورد أو الكود" oninput="_ccAccHints_()" style="flex:1;">' +
+        '<button type="button" class="btn btn-outline-success btn-sm py-0" title="حساب مورد جديد" onclick="_ccQuickAcc_(\'supplier\')">➕</button></div>' + hint('ccVendHint') + '</div>' +
+      '<div class="cc-fld"><label>حساب العميل / الرحلة</label><div class="d-flex gap-1"><input id="ccTgtAcc" list="ccAccDLT" autocomplete="off" placeholder="ابحث بالعميل أو الرحلة" oninput="_ccAccHints_(1)" style="flex:1;">' +
+        '<button type="button" class="btn btn-outline-success btn-sm py-0" title="حساب عميل جديد" onclick="_ccQuickAcc_(\'client\')">➕👤</button><button type="button" class="btn btn-outline-success btn-sm py-0" title="حساب رحلة جديد" onclick="_ccQuickAcc_(\'trip\')">➕🧳</button></div>' + hint('ccTgtHint') + '</div>' +
+      '<div class="cc-fld"><label>سعر البيع الإجمالي (ر.س)</label><div class="d-flex gap-1"><input id="ccSell" class="num" inputmode="decimal" value="' + esc(String(r.sellAmount || '')) + '" oninput="_ccAccHints_()" style="flex:1;">' +
+        '<button type="button" class="btn btn-outline-secondary btn-sm py-0" title="سعر البيع = سعر التكلفة" onclick="_ccSellEqCost_()">= التكلفة</button></div>' + hint('ccSellHint') + '</div>' +
+      '<div class="cc-fld"><label>رقم القيد اليدوي</label><input id="ccManNo" class="num" value="' + esc(r.manualEntryNo || '') + '" placeholder="اختياري"></div>' +
+    '</div><div id="ccAccWarn" class="mt-1"></div><datalist id="ccAccDLV"></datalist><datalist id="ccAccDLT"></datalist></div>';
+}
+function _ccCostNow_() { var w = document.getElementById('ccEditFldsWrap'), el = w && w.querySelector('[data-key="totalAmount"]'); return Number(String(el ? el.value : '').replace(/,/g, '')) || 0; }
+function _ccSellEqCost_() { var c = _ccCostNow_(), el = document.getElementById('ccSell'); if (el && c) { el.value = c; _ccAccHints_(); } }
+function _ccAccFill_(r) {
+  var A = window._ccAcc || {}, wrap = document.getElementById('ccAccWrap'); if (!wrap) return;
+  var ld = document.getElementById('ccAccLoading'); if (ld) ld.remove();
+  if (!A.gl) { wrap.innerHTML = '<div class="small text-muted">🧾 الربط المحاسبي غير متاح (ملف الحسابات العامة غير مُجهَّز).</div>'; return; }
+  // 🛡️ (V4.323 مراجعة) حساب محفوظ خارج قائمة المستخدم (مثلاً خزينة اختارها صاحب صلاحية أعلى) يُعرض كما هو ولا يُستبدل بمقترح
+  [[r.vendorAcc, r.vendorAccName], [r.targetAcc, r.targetAccName]].forEach(function (p) { if (p[0] && A.map && !A.map[p[0]]) { var a = { code: p[0], name: p[1] || p[0], kind: '', cur: '', link: '' }; a.label = a.name + ' — ' + a.code; A.map[a.code] = a; (A.accounts = A.accounts || []).push(a); } });
+  var acc = A.accounts || [], esc = escapeHtml_;
+  var opt = function (a) { return '<option value="' + esc(a.label) + '">' + esc(({ supplier: 'مورد', client: 'عميل', trip: 'رحلة', agent: 'وكيل', safe: 'خزينة', bank: 'بنك', custody: 'عهدة' })[a.kind] || '') + '</option>'; };
+  var rank = function (kinds) { return acc.slice().sort(function (a, b) { var x = kinds.indexOf(a.kind), y = kinds.indexOf(b.kind); return (x < 0 ? 9 : x) - (y < 0 ? 9 : y); }); };
+  document.getElementById('ccAccDLV').innerHTML = rank(['supplier', 'agent']).map(opt).join('');
+  document.getElementById('ccAccDLT').innerHTML = rank(['trip', 'client']).map(opt).join('');
+  wrap.setAttribute('data-ready', '1');
+  var vIn = document.getElementById('ccVendAcc'), tIn = document.getElementById('ccTgtAcc'), sIn = document.getElementById('ccSell');
+  window._ccSug = { v: '', vWhy: '', t: '', tWhy: '' };
+  if (r.vendorAcc && A.map[r.vendorAcc]) vIn.value = A.map[r.vendorAcc].label;
+  else {
+    var pv = A.vByP[_ccNorm_(r.provider)];
+    if (pv && A.map[pv]) { vIn.value = A.map[pv].label; window._ccSug.v = pv; window._ccSug.vWhy = '⭐ مقترح: المورد المختار سابقاً لنفس مقدم الخدمة «' + (r.provider || '') + '» — يمكنك اختيار غيره'; }
+  }
+  if (r.targetAcc && A.map[r.targetAcc]) tIn.value = A.map[r.targetAcc].label;
+  else {
+    var refs = String(r.groupNo || '').split(/[,،\s|+\/]+/).filter(Boolean), codes = {}, whys = [];
+    refs.forEach(function (g) { var t = (A.groupTarget || {})[g]; if (t) { if (t.code) codes[t.code] = 1; whys.push(t.why); } });
+    var ks = Object.keys(codes);
+    if (ks.length === 1 && A.map[ks[0]]) { tIn.value = A.map[ks[0]].label; window._ccSug.t = ks[0]; window._ccSug.tWhy = '⭐ مقترح من مجموعة التأشيرات — ' + whys.join(' · '); }
+    else if (whys.length) window._ccSug.tWhy = 'ℹ️ ' + whys.join(' · ') + ' — اختر الحساب يدوياً';
+    else if (r.tripClient) {
+      var nm = _ccNorm_(r.tripClient), m = acc.filter(function (a) { return /^(trip|client)$/.test(a.kind) && (_ccNorm_(a.link) === nm || _ccNorm_(a.name) === nm); });
+      if (m.length === 1) { tIn.value = m[0].label; window._ccSug.t = m[0].code; window._ccSug.tWhy = '⭐ مقترح من «العميل / الرحلة» المكتوب بالاتفاقية'; }
+    }
+  }
+  if (!sIn.value) { var tc = _ccAccCodeOf_(tIn.value); if (tc && A.map[tc] && A.map[tc].kind === 'trip' && _ccCostNow_()) sIn.value = _ccCostNow_(); }   // رحلة ⇒ البيع = التكلفة افتراضياً
+  _ccAccHints_();
+}
+function _ccAccHints_(tgtChanged) {
+  var A = window._ccAcc || {}; if (!A.map) return;
+  var vIn = document.getElementById('ccVendAcc'), tIn = document.getElementById('ccTgtAcc'), sIn = document.getElementById('ccSell'); if (!vIn) return;
+  var S = window._ccSug || {}, vC = _ccAccCodeOf_(vIn.value), tC = _ccAccCodeOf_(tIn.value), cost = _ccCostNow_();
+  var set = function (id, h) { var el = document.getElementById(id); if (el) el.innerHTML = h || ''; };
+  set('ccVendHint', vC === null ? '<span style="color:#b91c1c;">لا يطابق أي حساب — اختر من القائمة أو ➕ حساب جديد</span>' : (vC && vC === S.v ? '<span style="color:#166534;">' + escapeHtml_(S.vWhy) + '</span>' : (!vC ? '<span class="text-muted">اختر حساب المورد ليُسجَّل القيد</span>' : '')));
+  set('ccTgtHint', tC === null ? '<span style="color:#b91c1c;">لا يطابق أي حساب — اختر من القائمة أو ➕ حساب جديد</span>' : ((tC && tC === S.t) || (!tC && S.tWhy) ? '<span style="color:#166534;">' + escapeHtml_(S.tWhy) + '</span>' : (!tC ? '<span class="text-muted">اختر العميل أو الرحلة' + (A.allKinds ? ' (أو أي حساب)' : '') + '</span>' : '')));
+  if (tgtChanged && tC && A.map[tC] && A.map[tC].kind === 'trip' && !sIn.value && cost) sIn.value = cost;
+  var sell = Number(String(sIn.value || '').replace(/,/g, '')) || 0, eff = sell || cost, d = Math.round((eff - cost) * 100) / 100;
+  var w = document.getElementById('ccEditFldsWrap'), pil = Number((w.querySelector('[data-key="pilgrims"]') || {}).value) || 0, dys = Number((w.querySelector('[data-key="days"]') || {}).value) || 0;
+  set('ccSellHint', (sell ? '' : '<span class="text-muted">فارغ = سعر التكلفة (بلا فرق) · </span>') + (pil && dys && eff ? 'للفرد/اليوم: <b>' + (Math.round(eff / (pil * dys) * 100) / 100) + '</b> ر.س · ' : '') +
+    (cost ? 'الفرق: <b style="color:' + (d > 0 ? '#166534' : d < 0 ? '#b91c1c' : '#334155') + ';">' + d.toLocaleString('en-US') + '</b> ر.س' + (d ? ' ⇒ «فروق اتفاقيات الإعاشة»' : '') : ''));
+  var warn = [];
+  var tA = tC ? A.map[tC] : null, vA = vC ? A.map[vC] : null;
+  if (tA && tA.kind === 'client' && (A.itemCl[_ccNorm_(tA.link)] || A.itemCl[_ccNorm_(tA.name)])) warn.push('⚠️ لهذا العميل بند «الإعاشة» مُسعَّر بحساباته بشاشة عملاء العمرة — تسجيل الاتفاقية عليه أيضاً يحمّله الإعاشة مرتين. الأفضل ربطها بالرحلة.');
+  [vA, tA].forEach(function (a) { if (a && a.cur && a.cur !== 'SAR') warn.push('💱 حساب «' + a.name + '» بعملة ثابتة (' + a.cur + ') — يُسجَّل سطره بعملته بسعر صرف تاريخ الاتفاقية.'); });
+  if (vC && tC && vC === tC) warn.push('⚠️ حساب المورد والعميل/الرحلة نفس الحساب.');
+  if ((vC && !tC) || (!vC && tC)) warn.push('ℹ️ يُسجَّل القيد عند تحديد الحسابين معاً.');
+  set('ccAccWarn', warn.map(function (x) { return '<div class="small" style="color:' + (/⚠️/.test(x) ? '#b45309' : '#475569') + ';">' + escapeHtml_(x) + '</div>'; }).join(''));
+}
+function _ccQuickAcc_(kind) {
+  var r = window._ccEditCur || {}, w = document.getElementById('ccEditFldsWrap');
+  var def = kind === 'supplier' ? ((w.querySelector('[data-key="provider"]') || {}).value || r.provider || '') : ((w.querySelector('[data-key="tripClient"]') || {}).value || r.tripClient || '');
+  var name = prompt(kind === 'supplier' ? 'اسم حساب المورد الجديد (مثلاً: قافلة التوحيد - إعاشة مكة):' : (kind === 'trip' ? 'اسم الرحلة (حساب رحلة جديد):' : 'اسم العميل (حساب عميل جديد):'), def);
+  if (!name || !name.trim()) return;
+  google.script.run.withSuccessHandler(function (res) {
+    var a = res && res.account; if (!a) return;
+    var A = window._ccAcc; a.label = a.name + ' — ' + a.code; A.accounts.push(a); A.map[a.code] = a;
+    var dl = document.getElementById(kind === 'supplier' ? 'ccAccDLV' : 'ccAccDLT'); if (dl) dl.insertAdjacentHTML('afterbegin', '<option value="' + escapeHtml_(a.label) + '">');
+    var inp = document.getElementById(kind === 'supplier' ? 'ccVendAcc' : 'ccTgtAcc'); if (inp) inp.value = a.label;
+    _ccAccHints_(kind !== 'supplier'); (window.showToast || alert)('✅ أُضيف الحساب ' + a.code + ' — ' + a.name);
+  }).withFailureHandler(function (e) { alert('❌ ' + (e && e.message ? e.message : e)); }).ccQuickAccount(window.authToken, name.trim(), kind);
+}
+// عرض/تعديل القيد من شاشة الاتفاقيات (بلا مغادرتها) — لمن له صلاحية الحسابات العامة
+function _ccOpenEntry_(id) {
+  if (typeof hbxEnsureGl_ === 'function' && typeof glShowEntry === 'function') {
+    try { hbxEnsureGl_(function () { glShowEntry(id); }); return; } catch (e) {}
+  }
+  alert('رقم القيد: ' + id + '\nافتحه من «الحسابات العامة ← القيود».');
+}
+function _ccDeleteRow_(no, id) {
   // 🗑️ (V4.200) نافذة التأكيد الأنيقة الموحّدة askConfirm_ (بلا أي مكتبة خارجية)
   if (window._ccDbg_) window._ccDbg_('🗑️ _ccDeleteRow_ استُدعيت للحذف رقم: ' + no, 'ok');
   askConfirm_('هل تريد حذف الاتفاقية رقم "' + no + '" نهائياً؟', function () {
     if (window._ccDbg_) window._ccDbg_('   تأكيد الحذف: نعم', 'ok');
-    _ccDeleteRowRun_(no);
+    _ccDeleteRowRun_(no, id);
   }, { title: 'حذف اتفاقية', icon: '🗑️', yesLabel: 'نعم، احذف', danger: true });
 }
-function _ccDeleteRowRun_(no) {
+function _ccDeleteRowRun_(no, id) {
   if (window._ccDbg_) window._ccDbg_('📡 نداء السيرفر deleteCateringContract(' + no + ')', 'ok');
   google.script.run
     .withSuccessHandler(function(res) {
       if (window._ccDbg_) window._ccDbg_('   رد السيرفر: ' + JSON.stringify(res).substring(0, 80), 'ok');
       if (res && res.success) {
-        (window.showToast || alert)('✅ حُذفت الاتفاقية');
+        var gm = _ccGlMsg_(res.gl);   // 🍽️ (V4.323 مراجعة) نتيجة إلغاء القيد التلقائي
+        if (gm && /⚠️/.test(gm)) alert('✅ حُذفت الاتفاقية' + gm); else (window.showToast || alert)('✅ حُذفت الاتفاقية' + gm);
         _ccLoad_();
       } else {
         alert('❌ ' + ((res && res.error) || 'فشل الحذف'));
@@ -28993,7 +29167,7 @@ function _ccDeleteRowRun_(no) {
       if (window._ccDbg_) window._ccDbg_('❌ خطأ السيرفر: ' + (err.message || err), 'err');
       alert('❌ ' + ((err && err.message) || err));
     })
-    .deleteCateringContract(window.authToken, no);
+    .deleteCateringContract(window.authToken, no, id || '');
 }
 
 // ⚙️ (V4.69) تخصيص الأعمدة — قائمة منسدلة أسفل الزر تماماً كالفلاتر
@@ -46524,7 +46698,7 @@ function vzOpenAgrNo(agrNo, kind) {
       if (!list && ++tries < 60) return;
       clearInterval(t0);
       var hit = (list || []).filter(function (x) { return norm(x.contractNo) === norm(agrNo); })[0];
-      if (hit) _ccEditRow_(hit.contractNo);
+      if (hit) _ccEditRow_(hit.contractNo, hit.id);
       else { _showPopup('اتفاقية الإعاشة ' + agrNo + ' غير مسجَّلة بشاشة اتفاقيات الإعاشة — تُعرض من اتفاقيات السكن', 'info'); vzOpenAgrHa_(agrNo, kind); }
     }, 250);
     return;
@@ -48018,9 +48192,10 @@ function glOvrBox_(e) {
   (o.acc || []).forEach(function (a) { parts.push('🔁 ' + nm(a.from) + ' ← <b>' + nm(a.to) + '</b>'); });
   if (o.hdr) Object.keys(o.hdr).forEach(function (k) { parts.push('✏️ ' + ({ desc: 'البيان', trip: 'الرحلة', company: 'الشركة' }[k] || k) + ': <b>' + glEsc(o.hdr[k]) + '</b>'); });
   if (o.freeze) parts.push('✋ مبالغ/تاريخ/أسطر معدَّلة يدوياً — أي تغيّر بالمصدر ينتظر الاعتماد');
+  if (o.keep) parts.push('📌 حُذف مصدره وحُفظ يدوياً — يبقى كما هو ولا يُلغى بالمزامنة');
   if (o.vd) parts.push('⛔ أُلغي يدوياً — لن تعيده المزامنة');
   if (!parts.length) return '';
-  var who = (o.acc && o.acc[0]) || o.freeze || o.vd || {};
+  var who = (o.acc && o.acc[0]) || o.freeze || o.vd || o.keep || {};
   return '<div class="mb-2 p-2 rounded" style="background:#fff7ed;border:1px dashed #c2410c;font-size:12.5px;line-height:1.9;"><div class="d-flex align-items-center gap-2 flex-wrap"><b style="color:#9a3412;">✋ معدَّل يدوياً — يبقى بعد إعادة المزامنة</b>' +
     (who.by ? '<span class="text-muted small">' + glEsc(who.by) + ' <span class="gl-latin">' + glEsc(who.at || '') + '</span></span>' : '') +
     (glCanEditAuto_() ? '<button class="btn btn-outline-secondary btn-sm ms-auto py-0" onclick="glAutoOvrReleaseUI_(\'' + glJs(e.id) + '\')">↺ إعادة للتلقائي</button>' : '') + '</div>' + parts.join('<br>') + '</div>';
@@ -48044,7 +48219,7 @@ function glVoid(id, status) {
 }
 /* ✏️🗑️📜 (V4.237) إجراءات صف بكشف الحساب/نافذة القيد: تعديل · حذف (بتأكيد) · سجل التعديلات — للقيد أو الدفعة أو البند مصدره */
 var GL_AGG_SRC_ = { TRIP: 'بنود العميل بالرحلة', CI: 'بنود العميل بالرحلة', TR: 'تشغيلة النقل', HB: 'حجز الفنادق', HBP: 'دفعة الحجوزات', OPEN: 'الأرصدة الافتتاحية', HBOPEN: 'الأرصدة الافتتاحية للحجوزات' };
-var GL_ONE_SRC_ = { CP: 'دفعة العميل من «حسابات العملاء»', AP: 'دفعة الوكيل من «متابعة الوكلاء»', AI: 'بند حساب الوكيل من «متابعة الوكلاء»', VZ: 'مجموعة التأشيرات من «متابعة الوكلاء»', MF: 'ملف المراجعة من «ملفات الوزارة»', RF: 'إيصال رسوم الغرفة من «ملفات الوزارة»' };
+var GL_ONE_SRC_ = { CP: 'دفعة العميل من «حسابات العملاء»', AP: 'دفعة الوكيل من «متابعة الوكلاء»', AI: 'بند حساب الوكيل من «متابعة الوكلاء»', VZ: 'مجموعة التأشيرات من «متابعة الوكلاء»', MF: 'ملف المراجعة من «ملفات الوزارة»', RF: 'إيصال رسوم الغرفة من «ملفات الوزارة»', CAT: 'اتفاقية الإعاشة من «اتفاقيات الإعاشة»' };
 function glRowEdit_(id, auto) {
   if (auto && !glCanEditAuto_()) return _showPopup('تعديل القيد التلقائي مباشرة يحتاج صلاحية تعديل «القيود التلقائية والاعتماد» — أو عدّل مصدره بالشاشة فيتحدّث القيد تلقائياً', 'info');
   glEditEntry(id);
@@ -48452,6 +48627,7 @@ function glEdRowBtns_(e) {
 function glEntryDlg(kind, entry) {
   var V = GL_VOUCHERS_[kind] || GL_VOUCHERS_.journal; GL._vk = kind; GL._editId = entry && entry.id ? entry.id : '';
   var e = entry || {};
+  GL._edPend = (e.id && e.pend) || null; GL._edCcy = !!(e.id && e.ccyPend);   // ✅ (V4.323) تغيير معلَّق يُعتمد بالحفظ صراحةً
   var trips = []; (window.tripsCache || []).forEach(function (t) { if (t && t.name && trips.indexOf(t.name) < 0) trips.push(t.name); });
   var comps = []; (window.tripsCache || []).forEach(function (t) { if (t && t.company && comps.indexOf(t.company) < 0) comps.push(t.company); });
   var head = '<div class="row g-2 mb-2">' +
@@ -48521,7 +48697,7 @@ function glEntryDlg(kind, entry) {
     '<button class="btn btn-success btn-sm fw-bold" onclick="glSaveEntryUI(true, this)">💾 حفظ</button></div>';
   foot = glAttBox_(e) + foot;
   var _preset = GL._vMainPreset; GL._vMainPreset = '';
-  glDlg((GL._editId ? '✏️ تعديل ' + GL._editId + ' — ' : '') + V.title, head + body + foot, kind === 'journal' ? 1050 : 860);
+  glDlg((GL._editId ? '✏️ تعديل ' + GL._editId + ' — ' : '') + V.title, ((GL._edPend || GL._edCcy) ? glEdPendBox_(e) : '') + head + body + foot, kind === 'journal' ? 1050 : 860);
   GL._attPend = []; GL._attHave = (e.id && e.attachments) || []; glAttDraw_();
   setTimeout(function () {
     var dD = document.getElementById('glEDate'), dU = document.getElementById('glVDue'); if (!dD || !dU) return;
@@ -48985,9 +49161,25 @@ function glHbMirrorNote_(res) {
   // (V4.305) قد يُنسخ طرف ويُستبعد آخر بغير الريال (لا تحويل تلقائي لكشف الفندق) ⇒ التنبيه يظهر حتى مع النسخ الجزئي
   if (m.why) _showPopup('القيد على حساب ' + (m.names || []).join(' و ') + ' (طرف ببرنامج الحجوزات) لكنه لم يُنسخ لكشف حسابه هناك:\n' + m.why, 'warning', 'برنامج الحجوزات');
 }
+/* ✅ (V4.323) القيد عليه تغيير مصدر ينتظر الاعتماد / مبلغ طرف مقابل مستنتج: يُعرض بنافذة التعديل، والحفظ = اعتماد القيد كما حُفظ
+   (مُحدَّد افتراضياً) — تُرسل بصمة التغيير الذي رآه المستخدم فقط، فتغيير وصل بعد فتح النافذة يبقى بقائمة الاعتماد */
+function glEdPendBox_(e) {
+  var p = e.pend, c = e.ccyPend, h = [], E = glEsc;
+  if (p) h.push(p.kind === 'إلغاء' ? '🗑️ <b>حُذف مصدر هذا القيد</b> من شاشات البرنامج وإلغاؤه ينتظر الاعتماد' + (p.rejected ? ' (رُفض سابقاً)' : '')
+    : '⏳ <b>تغيّر مصدر هذا القيد</b> وينتظر الاعتماد' + (p.rejected ? ' (رُفض سابقاً)' : '') + (p.newAmt ? ' — المصدر الآن: <span class="gl-latin">' + E(p.newAmt) + '</span>' : ''));
+  if (p && p.diff) h.push('<div class="small text-muted" style="white-space:pre-line;max-height:96px;overflow:auto;">' + E(p.diff) + '</div>');
+  if (c) h.push('💱 <b>مبلغ الطرف المقابل استُنتج تلقائياً</b>' + (c.amt ? ' (<span class="gl-latin">' + E(c.amt) + '</span>)' : '') + ' وينتظر المراجعة');
+  var lbl = p && p.kind === 'إلغاء' ? 'الحفظ = اعتماد القيد كما حفظته: يبقى مرحّلاً ولا يُلغى (ما لم يعد مصدره ثم يُحذف من جديد)'
+    : 'الحفظ = اعتماد القيد كما حفظته' + (p ? ' (بدل ما يقترحه المصدر)' : '') + ' ويُزال من «تغييرات تنتظر الاعتماد»';
+  return '<div class="mb-2 p-2 rounded" style="background:#eff6ff;border:1px dashed #1d4ed8;font-size:12.5px;line-height:1.9;">' + h.join('<br>') +
+    '<label class="d-flex align-items-center gap-2 mt-1" style="cursor:pointer;"><input type="checkbox" id="glEPendAck" checked> <b>' + lbl + '</b></label>' +
+    '<div class="small text-muted">ألغِ التحديد لو تريد حفظ التعديل فقط وترك القرار لقائمة الاعتماد.</div></div>';
+}
 function glSaveEntryUI(post, btn, mode) {
   var e;
   try { e = glBuildEntry(); } catch (err) { _showPopup(err.message, 'warning'); return; }
+  var _ack = document.getElementById('glEPendAck');
+  if (e.id && _ack && _ack.checked) { if (GL._edPend && GL._edPend.hash) e.pendAck = GL._edPend.hash; if (GL._edCcy) e.ccyAck = 1; }
   if (mode === true) mode = 'print';
   var kind = GL._vk, mainCode = glAccVal(document.querySelector('#glDlgBody .glVMain')), pend = (GL._attPend || []).slice();
   var revLink = GL._afterSave || null;   // (V4.303) قيد مفتوح من صف شيت ناقص: يُربط الصف به بعد الحفظ مرحَّلاً
@@ -48996,7 +49188,8 @@ function glSaveEntryUI(post, btn, mode) {
   glRun('glSaveEntry', [e, !!post], function (res) {
     var finish = function () {
       glDlgClose();   // فوق شاشة مراجعة ⇒ تعود المراجعة محدَّثة وبنفس الصف (glRevRefresh_)
-      showToast((post ? '✅ حُفظ ' : '💾 حُفظ كمسودة ') + res.id + (res.voucherNo ? ' — إيصال رقم ' + res.voucherNo : ''));
+      showToast((post ? '✅ حُفظ ' : '💾 حُفظ كمسودة ') + res.id + (res.voucherNo ? ' — إيصال رقم ' + res.voucherNo : '') + (res.approved ? ' — واعتُمد كما حُفظ' : ''));
+      if (res.pendStale) _showPopup('حُفظ تعديلك، لكن مصدر القيد تغيّر مرة أخرى أثناء التعديل — التغيير الجديد ما زال بقائمة «⏳ تغييرات تنتظر الاعتماد» لتراجعه.', 'warning');
       glHbMirrorNote_(res);   // (V4.290) تنبيه شاشة الفنادق يتم داخل glApplyDelta_
       if (mode === 'print') glPrintVoucher(res.id);
       glAttUploadAll_(res.id, pend, function () { glApplyDelta_(res); });   // ⚡ (V4.232) تحديث محلي بلا إعادة تحميل كامل
@@ -51216,6 +51409,19 @@ function glRenderSettings() {
       '<span>عبر حساب</span><select id="glSFxAcc" class="form-select form-select-sm" style="width:auto;"><option value="">تلقائي (أول حساب «وسيط عملات»)</option>' +
       GL.accounts.filter(function (a) { return !a.isGroup && a.kind === 'fx'; }).map(function (a) { return '<option value="' + glEsc(a.code) + '"' + (GL.settings.fx_bridge_acc === a.code ? ' selected' : '') + '>' + glEsc(a.code + ' — ' + a.name) + '</option>'; }).join('') + '</select></div>' +
     '<div class="gl-note mt-1">💱 أي قيد فيه عملتان (مثل دفعة بالجنيه من عميل حسابه بالريال) تُضاف له تلقائياً أسطر على حساب «وسيط تحويل العملات» فيتوازن القيد بكل عملة على حدة وتظهر مراكز العملات في حساب الوسيط — كما كان يفعل برنامج الـ ERP.</div>' +
+    // 💱 (V4.323) قاعدة التحويل التلقائي لصفوف شيتات العهد/الخزن/البنوك — يختارها المدير
+    '<div class="mt-2"><label class="gl-lbl">💱 متى يُحوَّل مبلغ صف شيت (عهدة/خزينة/بنك) تلقائياً لعملة أخرى؟</label>' +
+      '<select id="glSCcyRule" class="form-select form-select-sm"' + (GL.isAdmin ? '' : ' disabled') + '>' +
+      [['all', 'العملة الثابتة للحساب ← الريال لأطراف برنامج الحجوزات ← عملة «أغلب» حركات الحساب (السلوك السابق)'],
+       ['hb', 'العملة الثابتة للحساب ← الريال لأطراف برنامج الحجوزات فقط (بلا تخمين من أغلب الحركات)'],
+       ['fixed', 'العملة الثابتة للحساب فقط — الحساب «متعدد العملات» لا يُحوَّل له أي مبلغ أبداً']].map(function (o) {
+        return '<option value="' + o[0] + '"' + ((GL.settings.ccy_def_rule || 'all') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<div class="gl-note mt-1">الحساب ذو <b>العملة الثابتة</b> يُحوَّل له دائماً (لا يُقبل قيد بغير عملته) — لتثبيت عملة حساب: شجرة الحسابات ← تعديل الحساب ← العملة. ' +
+        'التحويل التلقائي يُسجَّل فوراً ويظهر للمراجعة في «⏳ تغييرات تنتظر الاعتماد» باسم «💱 تحويل عملة»، وتعديل القيد يدوياً وحفظه يعتبر اعتماداً له كما حُفظ. القاعدة تسري على الصفوف الجديدة فقط.</div></div>' +
+    // 🍽️ (V4.323) حساب فروق اتفاقيات الإعاشة (فرق سعر البيع والتكلفة) — الافتراضي يُنشأ تحت إيرادات العمرة
+    '<div class="mt-2"><label class="gl-lbl">🍽️ حساب «فروق اتفاقيات الإعاشة» (فرق سعر البيع عن التكلفة)</label>' +
+      '<select id="glSCatDiff" class="form-select form-select-sm"' + (GL.isAdmin ? '' : ' disabled') + '><option value="">' + (GL.settings.auto_acc_cat_diff ? '' : 'تلقائي — يُنشأ «فروق اتفاقيات الإعاشة» تحت إيرادات العمرة عند أول قيد') + '</option>' +
+      GL.accounts.filter(function (a) { return !a.isGroup && (/^4/.test(a.code) || a.code === GL.settings.auto_acc_cat_diff); }).map(function (a) { return '<option value="' + glEsc(a.code) + '"' + (GL.settings.auto_acc_cat_diff === a.code ? ' selected' : '') + '>' + glEsc(a.code + ' — ' + a.name) + '</option>'; }).join('') + '</select></div>' +
     '<div class="gl-note mt-2">عملة الأساس: <b>الجنيه المصري</b> · العملات: جنيه / ريال / دولار · الشركة المنفذة وسم على القيد (دفتر واحد) · القيود العادية لا تُسجَّل بتاريخ قبل تاريخ البداية (البيانات الأقدم عبر الأرصدة الافتتاحية أو الاستيراد).</div>' +
     (GL.isAdmin ? '<div class="text-end"><button class="btn btn-success btn-sm fw-bold" onclick="glSaveSettingsUI(this)">💾 حفظ الإعدادات</button></div>' : '<div class="small text-muted">تعديل الإعدادات للمدير فقط.</div>') +
     (GL.url ? '<div class="mt-3 small">📁 ملف الحسابات: <a href="' + glEsc(GL.url) + '" target="_blank">فتح الشيت</a></div>' : '') + '</div>' +
@@ -51329,7 +51535,7 @@ function glReopenYearUI(btn) {
   }, { title: 'إعادة فتح سنة', danger: true });
 }
 /* ---------------------------- ⚙ القيود التلقائية (وضع الظل) ---------------------------- */
-var GL_SRC_LBL_ = { client: '👤 حسابات العملاء', agent: '🛂 الوكلاء والنقل', room: '🏛️ رسوم الغرفة', open: '🏁 أرصدة افتتاحية', hotel: '🏨 حجوزات الفنادق' };
+var GL_SRC_LBL_ = { client: '👤 حسابات العملاء', agent: '🛂 الوكلاء والنقل', room: '🏛️ رسوم الغرفة', open: '🏁 أرصدة افتتاحية', hotel: '🏨 حجوزات الفنادق', catering: '🍽️ اتفاقيات الإعاشة' };
 function glRenderAuto() {
   var box = document.getElementById('glBody');
   var s = GL.settings || {}, last = null; try { last = JSON.parse(s.auto_last || 'null'); } catch (e) {}
@@ -53043,7 +53249,63 @@ function glDupDraw_() {
         '<td style="text-align:right;">' + side(p.a) + '</td><td style="text-align:right;">' + side(p.b) + '</td><td class="gl-latin">' + glFmt(p.diff) + '</td>' +
         '<td><div class="progress" style="height:6px;width:60px;"><div class="progress-bar ' + (p.score >= 75 ? 'bg-success' : p.score >= 55 ? 'bg-warning' : 'bg-secondary') + '" style="width:' + p.score + '%"></div></div><span class="small">' + p.score + '%</span></td>' +
         '<td>' + act(p, i) + '</td></tr>';
+    }).join('') + '</tbody></table></div>') + glDupXHtml_(R);
+}
+/* ⧉ (V4.323) دفعة واحدة مسجلة من مصدرين على نفس حساب الطرف (مثل الحجوزات + عملاء العمرة) — إبقاء واحدة وإلغاء الأخرى */
+function glDupXHtml_(R) {
+  var E = glEsc, X = R.cross || [];
+  var side = function (p, s) {
+    var x = p[s], rec = p.keep === s;
+    return '<div style="' + (rec ? 'border:2px solid #16a34a;border-radius:8px;padding:4px 6px;background:#f0fdf4;' : '') + '">' + (rec ? '<div class="small fw-bold" style="color:#166534;">⭐ المقترح إبقاؤها</div>' : '') +
+      '<span class="gl-pill" style="background:#eef2ff;">' + E(x.famLbl || '') + '</span> <a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(x.id) + '\');return false;">' + E(x.id) + '</a>' +
+      '<div><b>' + E(x.accName) + '</b> · ' + (x.side === 'C' ? 'دائن' : 'مدين') + '</div>' +
+      '<div class="small">' + E(x.date) + ' · <b class="gl-latin">' + glFmt(x.amt) + '</b> ' + E(GL_CUR_LBL_[x.cur] || x.cur) + (x.trip ? ' · 🧳 ' + E(x.trip) : '') + '</div>' +
+      '<div class="small">المقابل: ' + ((x.ctr || []).map(function (c) { return E(c.name) + (c.lbl ? ' <span class="gl-pill" style="background:' + (c.lbl === 'تحت التسوية' ? '#fef3c7' : '#e0f2fe') + ';">' + E(c.lbl) + '</span>' : ''); }).join('، ') || '—') + '</div>' +
+      '<div class="small text-muted" style="max-width:330px;white-space:normal;">' + E(String(x.desc || '').slice(0, 110)) + '</div></div>';
+  };
+  var act = function (p, i) {
+    if (p.done) return '<span class="text-success fw-bold">✔ ' + E(p.done) + '</span>';
+    if (!GL.can.edit && !GL.can.del) return '';
+    return '<div id="glDupXA' + i + '"><button class="btn btn-sm btn-outline-success mb-1" onclick="glDupXKeep_(' + i + ',\'a\')">✔ أبقِ الأولى</button><br>' +
+      '<button class="btn btn-sm btn-outline-success mb-1" onclick="glDupXKeep_(' + i + ',\'b\')">✔ أبقِ الثانية</button><br>' +
+      '<button class="btn btn-sm btn-outline-secondary" onclick="glDupXNot_(' + i + ',this)">ليست مكررة</button></div>';
+  };
+  return '<div class="mt-3"><b style="color:#7c2d12;">⧉ دفعة واحدة مسجلة من مصدرين (نفس حساب الطرف)</b> <span class="small text-muted">— فُحصت ' + (R.crossScanned || 0) + ' حركة على حسابات العملاء/الموردين/الوكلاء</span></div>' +
+    '<div class="gl-note">نفس المبلغ تقريباً على نفس حساب الطرف وبنفس الاتجاه من <b>مصدرين مختلفين</b> (🏨 الحجوزات · 👤 عملاء العمرة · 🏦 شيتات الخزن/البنوك/العهد · 🧾 سندات وقيود يدوية) خلال أيام قليلة ⇒ غالباً دفعة واحدة سُجّلت مرتين فالطرف مُقيَّد له مرتين. ' +
+      '<b>⭐ المقترح إبقاؤها</b> = التي حسابها المقابل حقيقي (مورد/خزينة/بنك) بينما الأخرى على «تحت التسوية». عند الإبقاء تختار للأخرى: <b>🗑️ حذفها من مصدرها</b> (تختفي من شاشتها أيضاً) أو <b>⊘ إلغاء قيدها فقط</b> (تبقى بشاشتها بلا أثر محاسبي؛ للقيد التلقائي يمكن التراجع من القيد بـ«↺ إعادة للتلقائي»، وصف الشيت يُعاد ربطه بالقيد المُبقى). القيود اليدوية الكبيرة (افتتاحي/مستورد/أكثر من 3 أسطر أو طرفين) لا تظهر هنا ولا تُلغى كلها لأجل سطر.</div>' +
+    (R.crossErr ? '<div class="text-danger small">' + E(R.crossErr) + '</div>' : '') +
+    (!X.length ? '<div class="text-success text-center py-2">✅ لا توجد دفعات مكررة عبر المصادر</div>' :
+    '<div class="table-responsive" style="max-height:62vh;overflow:auto;"><table class="gl-tbl"><thead><tr><th>الفرق</th><th>القيد الأول</th><th>القيد الثاني</th><th>التطابق</th><th></th></tr></thead><tbody>' +
+    X.map(function (p, i) {
+      return '<tr id="glDupXR' + i + '"' + (p.done ? ' style="opacity:.45"' : '') + '><td><b style="color:#b91c1c;">⧉</b><div class="small text-muted">' + (p.dd ? p.dd + ' يوم' : 'نفس اليوم') + '</div>' + (p.diff ? '<div class="small gl-latin">' + glFmt(p.diff) + ' ج</div>' : '') + '</td>' +
+        '<td style="text-align:right;">' + side(p, 'a') + '</td><td style="text-align:right;">' + side(p, 'b') + '</td>' +
+        '<td><div class="progress" style="height:6px;width:60px;"><div class="progress-bar ' + (p.score >= 75 ? 'bg-success' : p.score >= 55 ? 'bg-warning' : 'bg-secondary') + '" style="width:' + p.score + '%"></div></div><span class="small">' + p.score + '%</span></td>' +
+        '<td>' + act(p, i) + '</td></tr>';
     }).join('') + '</tbody></table></div>');
+}
+function glDupXKeep_(i, s) {
+  var p = ((GL._dup || {}).cross || [])[i], box = document.getElementById('glDupXA' + i); if (!p || !box) return;
+  var keep = p[s], drop = p[s === 'a' ? 'b' : 'a'];
+  box.innerHTML = '<div class="small mb-1">إبقاء <b class="gl-latin">' + glEsc(keep.id) + '</b> — والأخرى <b class="gl-latin">' + glEsc(drop.id) + '</b>:</div>' +
+    (drop.canSrc ? '<button class="btn btn-sm btn-danger mb-1" onclick="glDupXDo_(' + i + ',\'' + s + '\',\'src\',this)" title="تُحذف الدفعة من شاشتها (' + glEsc(drop.famLbl || '') + ') ويُلغى قيدها">🗑️ احذفها من مصدرها</button><br>' : '') +
+    '<button class="btn btn-sm btn-outline-danger mb-1" onclick="glDupXDo_(' + i + ',\'' + s + '\',\'void\',this)" title="يُلغى قيدها فقط وتبقى بشاشتها">⊘ ألغِ قيدها فقط</button><br>' +
+    '<button class="btn btn-sm btn-link p-0" onclick="glDupDraw_()">رجوع</button>';
+}
+function glDupXDo_(i, s, method, btn) {
+  var p = ((GL._dup || {}).cross || [])[i]; if (!p) return;
+  var keep = p[s], drop = p[s === 'a' ? 'b' : 'a'];
+  btn.disabled = true;
+  glRun('glDupCrossResolve', [{ keepId: keep.id, dropId: drop.id, method: method }], function (res) {
+    p.done = method === 'src' ? 'أُبقي ' + keep.id + ' وحُذفت الأخرى من مصدرها' : 'أُبقي ' + keep.id + ' وأُلغي قيد ' + drop.id;
+    var tr = document.getElementById('glDupXR' + i); if (tr) { tr.style.opacity = '.45'; tr.lastChild.innerHTML = '<span class="text-success fw-bold">✔ ' + glEsc(p.done) + '</span>' + (res && res.warn ? '<div class="small text-danger">⚠️ ' + glEsc(res.warn) + '</div>' : ''); }
+    showToast('✅ ' + p.done); GL._hbDirty = 1;
+    if (res && res.warn) _showPopup(res.warn, 'warning');
+  }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+}
+function glDupXNot_(i, btn) {
+  var p = ((GL._dup || {}).cross || [])[i]; if (!p) return; btn.disabled = true;
+  glRun('glDupCrossDismiss', [p.pk], function () { p.done = 'ليست مكررة — لن تظهر مرة أخرى'; var tr = document.getElementById('glDupXR' + i); if (tr) { tr.style.opacity = '.45'; tr.lastChild.innerHTML = '<span class="text-muted">✔ ' + glEsc(p.done) + '</span>'; } },
+    function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
 }
 function glDupDo_(i, kind, btn) {
   var p = GL._dup && GL._dup.pairs[i]; if (!p) return;
@@ -53494,7 +53756,9 @@ function glSaveVchBrandUI(btn) {
 function glSaveSettingsUI(btn) {
   btn.disabled = true;
   glRun('glSaveSettings', [{ startDate: document.getElementById('glSStart').value, rate_SAR: document.getElementById('glSSar').value, rate_USD: document.getElementById('glSUsd').value,
-    fx_bridge: document.getElementById('glSFx').checked, fx_bridge_acc: document.getElementById('glSFxAcc').value }], function (res) {
+    fx_bridge: document.getElementById('glSFx').checked, fx_bridge_acc: document.getElementById('glSFxAcc').value,
+    ccy_def_rule: (document.getElementById('glSCcyRule') || {}).value || 'all',
+    auto_acc_cat_diff: (document.getElementById('glSCatDiff') || {}).value || undefined }], function (res) {
     btn.disabled = false; GL.settings = res.settings; GL.rates = res.rates; showToast('✅ حُفظت الإعدادات');
   }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
 }
