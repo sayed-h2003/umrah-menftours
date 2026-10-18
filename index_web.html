@@ -48628,6 +48628,9 @@ function glEntryDlg(kind, entry) {
   var V = GL_VOUCHERS_[kind] || GL_VOUCHERS_.journal; GL._vk = kind; GL._editId = entry && entry.id ? entry.id : '';
   var e = entry || {};
   GL._edPend = (e.id && e.pend) || null; GL._edCcy = !!(e.id && e.ccyPend);   // ✅ (V4.323) تغيير معلَّق يُعتمد بالحفظ صراحةً
+  // 🏁 (V4.324) تعديل قيد افتتاحي/مستورد يبقى بنوعه (كان يتحوّل «قيد يومية» فيُرفض لأن تاريخه قبل بداية الحسابات)
+  GL._keepType = (kind === 'journal' && (e.id || e._open) && /^(قيد افتتاحي|قيد مستورد)$/.test(e.type || '')) ? e.type : '';
+  if (GL._keepType) V = { title: GL._keepType === 'قيد افتتاحي' ? '🏁 قيد افتتاحي (رصيد أول المدة)' : '📥 قيد مستورد', type: GL._keepType };
   var trips = []; (window.tripsCache || []).forEach(function (t) { if (t && t.name && trips.indexOf(t.name) < 0) trips.push(t.name); });
   var comps = []; (window.tripsCache || []).forEach(function (t) { if (t && t.company && comps.indexOf(t.company) < 0) comps.push(t.company); });
   var head = '<div class="row g-2 mb-2">' +
@@ -49077,7 +49080,7 @@ function glFxCalc() {
 }
 function glBuildEntry() {
   var kind = GL._vk, V = GL_VOUCHERS_[kind];
-  var e = { id: GL._editId || '', type: V.type, date: (document.getElementById('glEDate') || {}).value, desc: document.getElementById('glEDesc').value.trim(),
+  var e = { id: GL._editId || '', type: (kind === 'journal' && GL._keepType) || V.type, date: (document.getElementById('glEDate') || {}).value, desc: document.getElementById('glEDesc').value.trim(),
     ref: document.getElementById('glERef').value.trim(), trip: document.getElementById('glETrip').value.trim(), company: document.getElementById('glEComp').value.trim(), lines: [] };
   if (kind === 'journal') {
     var ls = glJLines();
@@ -49160,6 +49163,57 @@ function glHbMirrorNote_(res) {
   if (m.written) setTimeout(function () { showToast('🏨 تُنسخ لكشف الحساب ببرنامج الحجوزات (' + m.written + ' سطر) + تنبيه تليجرام'); }, 1200);
   // (V4.305) قد يُنسخ طرف ويُستبعد آخر بغير الريال (لا تحويل تلقائي لكشف الفندق) ⇒ التنبيه يظهر حتى مع النسخ الجزئي
   if (m.why) _showPopup('القيد على حساب ' + (m.names || []).join(' و ') + ' (طرف ببرنامج الحجوزات) لكنه لم يُنسخ لكشف حسابه هناك:\n' + m.why, 'warning', 'برنامج الحجوزات');
+}
+/* 🏁 (V4.324) رصيد أول المدة لأي حساب (قديم أو جديد): يعرض أرصدته الافتتاحية الحالية (اليدوية/المستوردة تُعدَّل من القيد نفسه،
+   والتلقائية من شاشات البرنامج تُصحَّح من مصدرها أو بقيد إضافي هنا) ويسجّل قيداً افتتاحياً بتاريخ بداية الحسابات مقابل
+   «34 فروق أرصدة افتتاحية» افتراضياً (أو أي حساب) — بنفس عملة الحساب وسعرها بذلك التاريخ */
+function glOpeningDlg(code) {
+  glRun('glOpeningInfo', [code], function (res) {
+    var a = res.account, E = glEsc, start = res.startDate || GL.settings.startDate || '';
+    var cur0 = a.currency || 'EGP', lk = String(res.lockDate || '').split('/').reverse().join(''), sk = String(start).split('/').reverse().join('');
+    var locked = !!(lk && sk && sk <= lk);
+    var rows = (res.lines || []).map(function (l) {
+      return '<tr><td class="gl-latin">' + E(l.id) + '</td><td class="gl-latin">' + E(l.date) + '</td><td style="text-align:right;">' + E(l.desc) + '</td>' +
+        '<td class="gl-latin">' + (l.debit ? glFmt(l.debit) : '') + '</td><td class="gl-latin">' + (l.credit ? glFmt(l.credit) : '') + '</td><td>' + E(GL_CUR_LBL_[l.cur] || l.cur) + '</td>' +
+        '<td>' + (l.auto ? '<span class="small text-muted" title="يُبنى تلقائياً من بيانات ما قبل بداية الحسابات بشاشات البرنامج — صحّح مصدره، أو أضف قيداً افتتاحياً بالفرق أدناه">⚙ من شاشات البرنامج</span>'
+          : (GL.can.edit ? '<button class="btn btn-sm btn-outline-primary py-0" onclick="glDlgClose();glEditEntry(\'' + glJs(l.id) + '\')">✏️ تعديل القيد</button>' : '')) + '</td></tr>';
+    }).join('');
+    var h = '<div class="gl-note mb-2">🏁 <b>' + E(a.code + ' — ' + a.name) + '</b> · تاريخ بداية الحسابات: <b class="gl-latin">' + E(start || '—') + '</b>' +
+        (locked ? '<div class="text-danger mt-1">⚠️ فترة البداية مقفلة حتى ' + E(res.lockDate) + ' — افتح قفل الفترة من الإعدادات أولاً.</div>' : '') + '</div>' +
+      '<div class="fw-bold small mb-1">الأرصدة الافتتاحية الحالية لهذا الحساب</div>' +
+      (rows ? '<div class="table-responsive mb-2"><table class="gl-tbl"><thead><tr><th>القيد</th><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>العملة</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        : '<div class="text-muted small mb-2">لا يوجد رصيد افتتاحي مسجَّل لهذا الحساب.</div>') +
+      '<div class="gl-box"><div class="fw-bold small mb-2">➕ تسجيل رصيد أول المدة (أو فرق تصحيح)</div><div class="row g-2 align-items-end">' +
+        '<div class="col-md-3"><label class="gl-lbl">الطبيعة</label><select id="glOpSide" class="form-select form-select-sm"><option value="D">مدين (له علينا / أصل)</option><option value="C">دائن (لنا عليه / التزام)</option></select></div>' +
+        '<div class="col-md-3"><label class="gl-lbl">المبلغ</label><input id="glOpAmt" class="form-control form-control-sm gl-latin" inputmode="decimal"></div>' +
+        '<div class="col-md-2"><label class="gl-lbl">العملة</label>' + (a.currency ? '<div class="gl-note" style="margin:0;">' + E(GL_CUR_LBL_[a.currency] || a.currency) + '</div><input type="hidden" id="glOpCur" value="' + E(a.currency) + '">'
+          : '<select id="glOpCur" class="form-select form-select-sm" onchange="var r=document.getElementById(\'glOpRate\');if(r)r.value=glRateAt(this.value,\'' + glJs(start) + '\')">' + ['EGP', 'SAR', 'USD'].map(function (c) { return '<option value="' + c + '"' + (c === cur0 ? ' selected' : '') + '>' + GL_CUR_LBL_[c] + '</option>'; }).join('') + '</select>') + '</div>' +
+        '<div class="col-md-2"><label class="gl-lbl">سعر الصرف</label><input id="glOpRate" class="form-control form-control-sm gl-latin" value="' + glRateAt(cur0, start) + '"></div>' +
+        '<div class="col-md-6"><label class="gl-lbl">الحساب المقابل</label>' + glAccInput('glOpCtr', '', res.diffAcc || '34') + '</div>' +
+        '<div class="col-md-6"><label class="gl-lbl">البيان</label><input id="glOpDesc" class="form-control form-control-sm" value="' + E('رصيد أول المدة — ' + a.name) + '"></div>' +
+      '</div><div class="small text-muted mt-1">يُسجَّل «قيد افتتاحي» بتاريخ بداية الحسابات (يُسمح به قبل البداية) — مدين = رصيد مدين للحساب (مثل خزينة/بنك/عميل مدين لنا)، دائن = رصيد دائن (مثل مورد/عميل له رصيد مقدَّم). ' +
+        'رصيد خاطئ مسجَّل يدوياً؟ عدّل قيده أعلاه بدلاً من إضافة جديد.</div>' +
+      '<div class="d-flex justify-content-end mt-2"><button class="btn btn-success btn-sm fw-bold"' + (locked ? ' disabled' : '') + ' onclick="glOpeningSave_(\'' + glJs(a.code) + '\',\'' + glJs(start) + '\',this)">💾 تسجيل رصيد أول المدة</button></div></div>';
+    glDlg('🏁 رصيد أول المدة', h, 860);
+  });
+}
+function glOpeningSave_(code, start, btn) {
+  var amt = Number(String((document.getElementById('glOpAmt') || {}).value || '').replace(/,/g, '')) || 0;
+  if (!(amt > 0)) { _showPopup('أدخل المبلغ', 'warning'); return; }
+  var side = document.getElementById('glOpSide').value, cur = document.getElementById('glOpCur').value || 'EGP', rate = cur === 'EGP' ? 1 : (Number(document.getElementById('glOpRate').value) || glRateAt(cur, start));
+  var ctr = glAccVal(document.querySelector('#glDlgBody .glOpCtr'));
+  if (!ctr) { _showPopup('اختر الحساب المقابل', 'warning'); return; }
+  if (ctr === code) { _showPopup('الحساب المقابل لا يكون نفس الحساب', 'warning'); return; }
+  var ca = GL.map[ctr] || {}, ccur = ca.currency && ca.currency !== cur ? ca.currency : cur, crate = ccur === cur ? rate : glRateAt(ccur, start);
+  var camt = ccur === cur ? amt : Math.round(amt * rate / crate * 100) / 100, desc = (document.getElementById('glOpDesc').value || '').trim();
+  var main = { account: code, debit: side === 'D' ? amt : 0, credit: side === 'C' ? amt : 0, currency: cur, rate: rate, desc: desc };
+  var cl = { account: ctr, debit: side === 'C' ? camt : 0, credit: side === 'D' ? camt : 0, currency: ccur, rate: ccur === cur ? rate : amt * rate / camt, exact: ccur === cur ? 0 : 1, desc: desc };
+  btn.disabled = true;
+  glRun('glSaveEntry', [{ type: 'قيد افتتاحي', date: start, desc: desc, lines: [main, cl] }, true], function (res) {
+    glDlgClose(); showToast('✅ سُجّل رصيد أول المدة — قيد ' + res.id);
+    try { glApplyDelta_(res); } catch (e) {}
+    if (GL._stCode === code && typeof glLoadStmt === 'function') try { glLoadStmt(true); } catch (e2) {}
+  }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); });
 }
 /* ✅ (V4.323) القيد عليه تغيير مصدر ينتظر الاعتماد / مبلغ طرف مقابل مستنتج: يُعرض بنافذة التعديل، والحفظ = اعتماد القيد كما حُفظ
    (مُحدَّد افتراضياً) — تُرسل بصمة التغيير الذي رآه المستخدم فقط، فتغيير وصل بعد فتح النافذة يبقى بقائمة الاعتماد */
@@ -49923,6 +49977,7 @@ function glDrawStmt() {
     pill('🔢 ' + E(a.code)) + pill('🏷️ ' + E(glStRoleLbl_(res))) + (a.parentName ? pill('📂 ' + E(a.parentName)) : '') + (a.link && a.link !== a.name ? pill('🔗 ' + E(a.link)) : '') +
     (res.pending ? pill('⏳ ' + res.pending + ' بانتظار الاعتماد', 'w') : '') + '</div></div>' +
     '<div class="gl-sthact">' + (GL.can.edit ? '<button class="gl-sthb" title="تعديل بيانات الحساب" onclick="glAccForm(null,\'' + glJs(a.code) + '\')">✏️</button>' : '') +
+    (GL.can.add && !a.isGroup ? '<button class="gl-sthb" title="إضافة أو تعديل رصيد أول المدة لهذا الحساب" onclick="glOpeningDlg(\'' + glJs(a.code) + '\')">🏁 رصيد أول المدة</button>' : '') +
     '<button class="gl-sthb" title="تحديث الكشف من الخادم (بعد تعديلات من شاشات أو أجهزة أخرى)" onclick="glStRefresh_(this)">🔄</button>' +
     '<button class="gl-sthb" title="الأعمدة والعرض" onclick="glStGear_()">⚙️</button>' +
     '<button class="gl-sthb gold" onclick="glStOutDlg()">🖨️ طباعة · PDF · صورة · Excel</button></div></div>';

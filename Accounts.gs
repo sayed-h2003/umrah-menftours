@@ -1151,6 +1151,23 @@ function glSaveEntriesBulk(authToken, items) {
   // ⚡ نسخ كشف الحجوزات مؤجَّل لطابور خارج القفل — glRun يُفرغه فقط لو رجع mirQ بالمستوى الأعلى
   return { success: true, done: okN, total: (items || []).length, results: results, mirQ: _GL_MIRQ_N_ };
 }
+/* 🏁 (V4.324) رصيد أول المدة لحساب واحد (قديم أو جديد): أسطر القيود الافتتاحية الحالية لهذا الحساب — اليدوية/المستوردة (تُعدَّل
+   من نافذة القيد) والتلقائية من شاشات البرنامج (AUTO:OPEN / AUTO:HBOPEN — تُصحَّح من مصدرها أو بقيد افتتاحي إضافي) — لنافذة
+   «🏁 رصيد أول المدة» التي تسجّل قيداً افتتاحياً بتاريخ بداية الحسابات مقابل «34 فروق أرصدة افتتاحية» (أو أي حساب يختاره المستخدم) */
+function glOpeningInfo(authToken, code) {
+  _glPerm_(authToken, 'view');
+  code = _glStr_(code);
+  var a = _glAccounts_().map[code]; if (!a || a.isGroup) throw new Error('اختر حساباً فرعياً');
+  var set = _glSettings_(), ents = {}, out = [];
+  _glRows_('entries').forEach(function (r) { if (_glStr_(r[3]) === 'قيد افتتاحي' && _glStr_(r[5]) !== GL_ST_VOID_) ents[_glStr_(r[0])] = r; });
+  _glRows_('lines').forEach(function (l) {
+    var r = ents[_glStr_(l[0])]; if (!r || _glStr_(l[4]) !== code) return;
+    out.push({ id: _glStr_(r[0]), date: _glDate_(r[2]), status: _glStr_(r[5]), auto: /^AUTO:/.test(_glStr_(r[6])), sk: _glStr_(r[6]), desc: _glCleanDesc_(_glStr_(l[15]) || _glStr_(r[4])),
+      debit: _glNum_(l[5]), credit: _glNum_(l[6]), cur: _glCur_(l[7]), rate: _glNum_(l[8]) || 1, base: _glR2_(_glNum_(l[9]) - _glNum_(l[10])) });
+  });
+  return { success: true, account: { code: a.code, name: a.name, kind: a.kind || '', currency: a.currency || '' }, startDate: set.startDate, lockDate: set.lockDate || '',
+    diffAcc: GL_ACC_OPEN_DIFF_, lines: out };
+}
 // 📥 (V4.315) قراءة عدة قيود كاملة (بسطورها) بنداء واحد — لبطاقات تعديل الحساب المقابل من كشف الحساب/الخزن/البنوك/العهد
 function glGetEntriesBulk(authToken, ids) {
   _glPerm_(authToken, 'view');
