@@ -10186,7 +10186,7 @@ function _tgbnDoSave_(chatId, userId, state, cfg, group) {
       'شكرًا لك 🌹');
     // 🔔 تنبيه فوري في جروب التنبيهات
     var alertChat = (cfg.alertChatId || '').toString().trim();
-    if (alertChat && alertChat !== chatId.toString()) {
+    if (alertChat && alertChat !== chatId.toString() && _alertOn_('tg_new_notice')) {   // 🔔 (V4.324) مفتاح من مركز التنبيهات
       _tgbnSend_(alertChat,
         '💠🔔 <b>إشعار وصول جديد عبر البوت — يحتاج مراجعة</b>\n' +
         (_tgbnWithin72_(d.arrivalDate, d.arrivalTime) ? '🚨 <b>السفر خلال أقل من 72 ساعة!</b>\n' : '') +
@@ -13867,45 +13867,61 @@ var NOTIF_HEADERS = ['المعرف', 'النوع', 'الرسالة', 'العمي
    يُحفظ في Script Properties (نفس أسلوب إعدادات جروبات تليجرام)، والافتراضي: الكل مُفعَّل،
    فأي تنبيه لم يُسجَّل له مفتاح بعد يظل يعمل كما كان قبل هذه الميزة تماماً.
    ============================================================ */
+// 🔔 (V4.324) كل تنبيه مُصنَّف بشاشته وقناته (جرس/تليجرام/بريد/واجهة) ليُعرض بالإعدادات مجمَّعاً حسب الشاشة. لا يُعاد تسمية
+// أي مفتاح أبداً (المخزَّن هو المعطَّل فقط — تغيير الاسم يعيد التنبيه مفعَّلاً بصمت). المفاتيح الجديدة مُفعَّلة افتراضياً.
+var ALERT_SCREENS_ = [['dashboard', '🏠 لوحة التحكم'], ['trips', '🧳 الرحلات والكشوف'], ['registry', '📋 السجل العام'], ['bookings', '🎫 الإشعارات'],
+  ['movements', '🚌 التحركات'], ['ministry', '🏛️ ملفات الوزارة'], ['visas', '🛂 التأشيرات'], ['accounts', '💰 حسابات العملاء'],
+  ['gl', '🧾 الحسابات العامة'], ['hotels', '🏨 حجوزات الفنادق']];
 var NOTIF_TYPES_ = [
-  { key: 'tg_tomorrow',    name: 'تليجرام: تحركات الغد',              desc: 'رسالة تليجرام اليومية بتحركات الغد (وصول/مغادرة) لجروبات التنبيهات' },
-  { key: 'email_tomorrow', name: 'إيميل: تحركات الغد',                desc: 'رسالة البريد اليومية بتحركات الغد لعناوين البريد المسجَّلة بالإعدادات' },
-  { key: 'tg_movements',   name: 'تليجرام: تحركات يوم محدَّد',         desc: 'إرسال تحركات تاريخ بعينه لتليجرام (يدوي أو من البوت)' },
-  { key: 'notif_new_client', name: 'جرس: عميل جديد على رحلة',         desc: 'تنبيه داخل البرنامج عند ظهور عميل جديد بكشف رحلة' },
-  { key: 'notif_acct_change', name: 'جرس: تغيّر تسكين/عدد/فندق',      desc: 'تنبيه داخل البرنامج عند تغيّر أعداد أو تسكين أو فندق عميل له حساب مسجَّل' },
-  { key: 'mf_urgent',      name: 'ملفات الوزارة العاجلة',             desc: 'تنبيه الملفات التي لم تُراجع وباقٍ على سفرها 3 أيام أو أقل' },
-  { key: 'mf_trips_no_file', name: 'رحلات بلا ملف مراجعة وزارة',      desc: 'البانر الأحمر أعلى قائمة الرحلات وشارة «بلا ملف وزارة» للرحلات التي باقٍ لها 3 أيام أو أقل بلا ملف مراجعة (أو بملف لم يُراجع)' },
-  { key: 'mf_quota_near',  name: 'قرب اكتمال حصة الأفراد الشهرية',    desc: 'تنبيه غير مانع عند اقتراب شركة مصرية من حد 36 فرد شهرياً بالملفات الفردية' },
-  { key: 'mf_quota_exceeded', name: 'تجاوز حصة الأفراد الشهرية عند التسجيل', desc: 'تنبيه غير مانع عند تسجيل ملف فردي يتجاوز الحصة الشهرية أو حد 9 أفراد للملف الواحد، مع ترشيح شركة بديلة' },
-  { key: 'trips_no_notice', name: 'رحلات بلا إشعار خلال 72 ساعة',     desc: 'كارت التنبيه الأحمر بلوحة التحكم للرحلات التي بلا إشعار وسفرها قريب' },
-  { key: 'trips_urgent48', name: 'رقاقة «عاجل 48 ساعة» للرحلات',      desc: 'الرقاقة الحمراء النابضة بشريط تصفية الرحلات للرحلات التي يقترب سفرها' },
-  { key: 'passport_expiry', name: 'جوازات منتهية أو قاربت الانتهاء',  desc: 'شريط التنبيه بالسجل العام للمعتمرين (منتهية / تنتهي خلال 6 أشهر) — لا يشمل من سافر وعاد ما لم يُسجَّل لرحلة جديدة' },
+  { key: 'tg_tomorrow', screen: 'movements', ch: 'telegram', name: 'تليجرام: تحركات الغد',              desc: 'رسالة تليجرام اليومية بتحركات الغد (وصول/مغادرة) لجروبات التنبيهات' },
+  { key: 'email_tomorrow', screen: 'movements', ch: 'email', name: 'إيميل: تحركات الغد',                desc: 'رسالة البريد اليومية بتحركات الغد لعناوين البريد المسجَّلة بالإعدادات' },
+  { key: 'tg_movements', screen: 'movements', ch: 'telegram', name: 'تليجرام: تحركات يوم محدَّد',         desc: 'إرسال تحركات تاريخ بعينه لتليجرام (يدوي أو من البوت)' },
+  { key: 'notif_new_client', screen: 'trips', ch: 'bell', name: 'جرس: عميل جديد على رحلة',         desc: 'تنبيه داخل البرنامج عند ظهور عميل جديد بكشف رحلة' },
+  { key: 'notif_acct_change', screen: 'accounts', ch: 'bell', name: 'جرس: تغيّر تسكين/عدد/فندق',      desc: 'تنبيه داخل البرنامج عند تغيّر أعداد أو تسكين أو فندق عميل له حساب مسجَّل' },
+  { key: 'mf_urgent', screen: 'ministry', ch: 'ui', name: 'ملفات الوزارة العاجلة',             desc: 'تنبيه الملفات التي لم تُراجع وباقٍ على سفرها 3 أيام أو أقل' },
+  { key: 'mf_trips_no_file', screen: 'trips', ch: 'ui', name: 'رحلات بلا ملف مراجعة وزارة',      desc: 'البانر الأحمر أعلى قائمة الرحلات وشارة «بلا ملف وزارة» للرحلات التي باقٍ لها 3 أيام أو أقل بلا ملف مراجعة (أو بملف لم يُراجع)' },
+  { key: 'mf_quota_near', screen: 'ministry', ch: 'ui', name: 'قرب اكتمال حصة الأفراد الشهرية',    desc: 'تنبيه غير مانع عند اقتراب شركة مصرية من حد 36 فرد شهرياً بالملفات الفردية' },
+  { key: 'mf_quota_exceeded', screen: 'ministry', ch: 'ui', name: 'تجاوز حصة الأفراد الشهرية عند التسجيل', desc: 'تنبيه غير مانع عند تسجيل ملف فردي يتجاوز الحصة الشهرية أو حد 9 أفراد للملف الواحد، مع ترشيح شركة بديلة' },
+  { key: 'trips_no_notice', screen: 'dashboard', ch: 'ui', name: 'رحلات بلا إشعار خلال 72 ساعة',     desc: 'كارت التنبيه الأحمر بلوحة التحكم للرحلات التي بلا إشعار وسفرها قريب' },
+  { key: 'trips_urgent48', screen: 'trips', ch: 'ui', name: 'رقاقة «عاجل 48 ساعة» للرحلات',      desc: 'الرقاقة الحمراء النابضة بشريط تصفية الرحلات للرحلات التي يقترب سفرها' },
+  { key: 'passport_expiry', screen: 'registry', ch: 'ui', name: 'جوازات منتهية أو قاربت الانتهاء',  desc: 'شريط التنبيه بالسجل العام للمعتمرين (منتهية / تنتهي خلال 6 أشهر) — لا يشمل من سافر وعاد ما لم يُسجَّل لرحلة جديدة' },
   // 🔔 (V4.212) تنبيهات الجرس لعمليات الملفات والمجموعات
-  { key: 'notif_mf_new',      name: 'جرس: تسجيل ملف مراجعة وزارة',       desc: 'تنبيه داخل البرنامج عند تسجيل ملف مراجعة وزارة جديد' },
-  { key: 'notif_mf_reviewed', name: 'جرس: مراجعة ملف وزارة',             desc: 'تنبيه داخل البرنامج عند تسجيل تاريخ المراجعة لملف (تمت المراجعة وسُحبت رسوم الغرفة)' },
-  { key: 'notif_vz_saved',    name: 'جرس: إنشاء/تعديل مجموعة تأشيرات',   desc: 'تنبيه داخل البرنامج عند إنشاء مجموعة تأشيرات جديدة أو تعديل مجموعة قائمة' },
-  { key: 'pilgrim_no_client', name: 'معتمرون بلا اسم عميل',           desc: 'شريط التنبيه بالسجل العام للمعتمرين المسجَّلين بلا عميل (العميل حقل إلزامي عند الحفظ بكشف الرحلة والسجل العام)' }
+  { key: 'notif_mf_new', screen: 'ministry', ch: 'bell', name: 'جرس: تسجيل ملف مراجعة وزارة',       desc: 'تنبيه داخل البرنامج عند تسجيل ملف مراجعة وزارة جديد' },
+  { key: 'notif_mf_reviewed', screen: 'ministry', ch: 'bell', name: 'جرس: مراجعة ملف وزارة',             desc: 'تنبيه داخل البرنامج عند تسجيل تاريخ المراجعة لملف (تمت المراجعة وسُحبت رسوم الغرفة)' },
+  { key: 'notif_vz_saved', screen: 'visas', ch: 'bell', name: 'جرس: إنشاء/تعديل مجموعة تأشيرات',   desc: 'تنبيه داخل البرنامج عند إنشاء مجموعة تأشيرات جديدة أو تعديل مجموعة قائمة' },
+  { key: 'pilgrim_no_client', screen: 'registry', ch: 'ui', name: 'معتمرون بلا اسم عميل',           desc: 'شريط التنبيه بالسجل العام للمعتمرين المسجَّلين بلا عميل (العميل حقل إلزامي عند الحفظ بكشف الرحلة والسجل العام)' },
+  // 🔔 (V4.324) تنبيهات لم يكن لها مفتاح
+  { key: 'tg_new_notice', screen: 'bookings', ch: 'telegram', name: 'تليجرام: إشعار وصول جديد من البوت', desc: 'رسالة جروب التنبيهات عند تسجيل إشعار جديد عبر بوت الإشعارات' },
+  { key: 'tg_pay_glmirror', screen: 'gl', ch: 'telegram', name: 'تليجرام: دفعات الحسابات العامة المنسوخة لسجل الحجوزات', desc: 'تنبيه «دفعة» عند نسخ قيد من الحسابات العامة لسجل دفعات الحجوزات أو تعديله (يحتاج أيضاً تفعيل حدث «تسجيل دفعة» ببوت الحجوزات)' },
+  { key: 'ui_mf_nobal', screen: 'ministry', ch: 'ui', name: 'رصيد رسوم الغرفة غير كافٍ', desc: 'تنبيه شاشة ملفات الوزارة عند عدم كفاية رصيد رسوم الغرفة للشركة' },
+  { key: 'ui_acc_trip_changed', screen: 'accounts', ch: 'ui', name: 'رحلات تغيّر عددها/تسكينها بعد حفظ الحساب', desc: 'شريط حسابات العملاء وعلامات الرحلات التي تغيّرت أعدادها أو تسكينها بعد آخر حفظ لحساب العميل' },
+  { key: 'ui_dup_booking', screen: 'bookings', ch: 'ui', name: 'تنبيه إشعار مكرر محتمل', desc: 'نافذة التنبيه غير المانعة عند تسجيل إشعار يشبه إشعاراً مسجلاً' },
+  { key: 'ui_kashf_dup_inline', screen: 'trips', ch: 'ui', name: 'تنبيه جواز/اسم مكرر أثناء الكتابة بالكشف', desc: 'التنبيه الفوري أثناء الكتابة بكشف الرحلة (فحص التكرار قبل الحفظ يبقى كما هو)' },
+  { key: 'ui_bulk_cross_dup', screen: 'ministry', ch: 'ui', name: 'جوازات مختارة في أكثر من بطاقة (الربط الجماعي)', desc: 'تنبيه بطاقات الربط الجماعي بملفات الوزارة والتأشيرات عند اختيار نفس الجواز في أكثر من بطاقة' },
+  { key: 'ui_gl_cs_banner', screen: 'gl', ch: 'ui', name: 'شريط صفوف الخزن/البنوك/العهد غير المستكملة', desc: 'الشريط أعلى الحسابات العامة بعدد صفوف الشيتات التي تحتاج استكمال واعتماد' },
+  { key: 'ui_gl_pend_banner', screen: 'gl', ch: 'ui', name: 'شريط التغييرات التي تنتظر الاعتماد', desc: 'الشريط أعلى الحسابات العامة بعدد التغييرات التي تنتظر الاعتماد' }
 ];
+var ALERT_DEFS_ = NOTIF_TYPES_;
+var _NOTIF_MEMO_ = null;   // ⚡ (V4.324) قراءة واحدة للإعداد لكل تنفيذ (كان يُقرأ داخل الحلقات لكل تنبيه)
 function _notifCfg_() {
+  if (_NOTIF_MEMO_) return _NOTIF_MEMO_;
   var cfg = null;
   try {
     var raw = PropertiesService.getScriptProperties().getProperty('NOTIF_TOGGLES');
     if (raw) cfg = JSON.parse(raw);
   } catch (e) { cfg = null; }
-  return (cfg && typeof cfg === 'object') ? cfg : {};
+  return (_NOTIF_MEMO_ = (cfg && typeof cfg === 'object') ? cfg : {});
 }
 // الافتراضي مُفعَّل دائماً — لا يُعطَّل تنبيه إلا لو عُطِّل صراحةً من شاشة الإعدادات
-function _notifEnabled_(key) {
-  var cfg = _notifCfg_();
-  return cfg[key] === false ? false : true;
-}
+function _alertOn_(key) { return _notifCfg_()[key] !== false; }
+function _notifEnabled_(key) { return _alertOn_(key); }
 function getNotifSettings(authToken) {
   requireAuth_(authToken);
   var cfg = _notifCfg_();
   return {
-    success: true,
+    success: true, screens: ALERT_SCREENS_,
     types: NOTIF_TYPES_.map(function(t) {
-      return { key: t.key, name: t.name, desc: t.desc, enabled: cfg[t.key] === false ? false : true };
+      return { key: t.key, name: t.name, desc: t.desc, screen: t.screen, ch: t.ch, enabled: cfg[t.key] === false ? false : true };
     })
   };
 }
@@ -13916,10 +13932,62 @@ function saveNotifSettings(authToken, settings) {
     if (settings && settings[t.key] === false) clean[t.key] = false;
   });
   PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(clean));
+  _NOTIF_MEMO_ = null;
+  try { clearCachedData(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}   // 🔔 (V4.324) تنبيهات الجرس المعطَّلة تختفي من القائمة فوراً
   var offList = Object.keys(clean);
   logChange_(session.username, 'تعديل إعدادات التنبيهات', 'الإعدادات', 'التنبيهات المعطَّلة', '-',
     offList.length ? offList.join(', ') : 'لا يوجد (الكل مُفعَّل)');
   return { success: true, disabled: offList };
+}
+/* 🔔 (V4.324) مركز التنبيهات الموحَّد (للمدير): تنبيهات البرنامج + أحداث بوت الحجوزات (hb:) + أحداث بوت الحسابات (gl:) + تنبيه شيتات
+   العهد (custody:notify) — كل تنبيه له مفتاح تشغيل منفصل، والمرتبط ببوت يُحفظ في إعداد البوت نفسه (لا مفتاح ثانٍ يتعارض معه) */
+function getAlertCenter(authToken) {
+  requireAdminPermission_(authToken);
+  var base = getNotifSettings(authToken), items = base.types.slice(), warn = {};
+  try {
+    if (typeof tgCfg_ === 'function' && typeof TG_EVENTS_ !== 'undefined') {
+      var hc = tgCfg_(), hbOn = !!(hc.enabled && hc.chatId && (typeof tgToken_ !== 'function' || tgToken_()));
+      if (!hbOn) warn.hb = 'بوت تليجرام الحجوزات غير مفعّل (أو بلا مجموعة/توكن) — هذه الأحداث لن تُرسل حتى تفعّله من «إعدادات بوت الحجوزات»';
+      TG_EVENTS_.forEach(function (e) { items.push({ key: 'hb:' + e.key, name: 'تليجرام الحجوزات: ' + e.label, desc: e.scheduled ? 'تنبيه مجدول مرة يومياً' : 'يُرسل لمجموعة بوت الحجوزات', screen: 'hotels', ch: 'telegram', enabled: !!hc.events[e.key], linked: 'hb' }); });
+    }
+  } catch (e1) {}
+  try {
+    if (typeof _glBotCfg_ === 'function' && typeof _glSSId_ === 'function' && _glSSId_()) {
+      var gc = _glBotCfg_();
+      if (!(gc.enabled && gc.chatId)) warn.gl = 'بوت الحسابات غير مفعّل (أو بلا مجموعة) — هذه الأحداث لن تُرسل حتى تفعّله من «إعدادات بوت الحسابات»';
+      GLBOT_EVENTS_.forEach(function (x) { items.push({ key: 'gl:' + x[0], name: 'تليجرام الحسابات: ' + x[1], desc: 'يُرسل لمجموعة بوت الحسابات' + (gc.minAmount ? ' (من مبلغ ' + gc.minAmount + ')' : ''), screen: 'gl', ch: 'telegram', enabled: !!gc.events[x[0]], linked: 'gl' }); });
+    }
+  } catch (e2) {}
+  try {
+    if (typeof getCustodyState_ === 'function') items.push({ key: 'custody:notify', name: 'تليجرام: صفوف شيتات العهد المسجَّلة بحساب العميل', desc: 'تنبيه دفعة لكل صف عهدة يُسجَّل آلياً بحساب العميل في الحجوزات (يحتاج أيضاً تفعيل حدث «تسجيل دفعة» ببوت الحجوزات)', screen: 'hotels', ch: 'telegram', enabled: getCustodyState_().notifyEnabled !== false, linked: 'hb' });
+  } catch (e3) {}
+  return { success: true, screens: ALERT_SCREENS_, types: items, warn: warn };
+}
+function saveAlertCenter(authToken, map) {
+  var session = requireAdminPermission_(authToken);
+  map = map || {};
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var plain = {}, hb = {}, gl = {}, changed = [];
+    Object.keys(map).forEach(function (k) {
+      var v = map[k] !== false, m = k.match(/^(hb|gl):(.+)$/);
+      if (m) (m[1] === 'hb' ? hb : gl)[m[2]] = v;
+      else if (k !== 'custody:notify') plain[k] = v;
+    });
+    var cur = _notifCfg_(), next = {};
+    NOTIF_TYPES_.forEach(function (t) { var v = plain.hasOwnProperty(t.key) ? plain[t.key] : cur[t.key] !== false; if (!v) next[t.key] = false; if (v !== (cur[t.key] !== false)) changed.push(t.key + (v ? ' ✔' : ' ✘')); });
+    PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(next));
+    _NOTIF_MEMO_ = null;
+    try { clearCachedData(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}
+    if (Object.keys(hb).length && typeof tgSetEventFlags_ === 'function') { var nh = tgSetEventFlags_(hb); if (nh) changed.push('بوت الحجوزات: ' + nh); }
+    if (Object.keys(gl).length && typeof _glBotSetEventFlags_ === 'function') { var ng = _glBotSetEventFlags_(gl); if (ng) changed.push('بوت الحسابات: ' + ng); }
+    if (map.hasOwnProperty('custody:notify') && typeof getCustodyState_ === 'function') {
+      var cs = getCustodyState_(), cv = map['custody:notify'] !== false;
+      if (cv !== (cs.notifyEnabled !== false)) { saveCustodyState_(cs.sheets, cv); changed.push('custody:notify' + (cv ? ' ✔' : ' ✘')); }
+    }
+    logChange_(session.username, 'تعديل إعدادات التنبيهات', 'الإعدادات', 'مركز التنبيهات', '-', changed.length ? changed.join(', ') : 'بلا تغيير');
+    return { success: true, changed: changed.length, disabled: Object.keys(next) };
+  } finally { lock.releaseLock(); }
 }
 
 function _notifPush_(type, message, client, trip, perm, username) {
@@ -13961,6 +14029,7 @@ function getNotifications(authToken) {
   vals.forEach(function(r) {
     var perm = String(r[5] || '').trim();
     if (perm && !_sessionHasPerm_(session, perm) && !_sessionHasPerm_(session, 'all')) return;
+    if (r[1] && !_alertOn_('notif_' + String(r[1]))) return;   // 🔔 (V4.324) نوع معطَّل من الإعدادات ⇒ لا يظهر بالجرس (حتى السابق)
     out.push({
       id: String(r[0]), type: String(r[1] || ''), message: String(r[2] || ''),
       client: String(r[3] || ''), trip: String(r[4] || ''), read: String(r[6]) === 'نعم',
@@ -26302,7 +26371,10 @@ function deleteHousingAllocation(authToken, id) {
 // يعرض كل التحركات المسجَّلة في تاريخ بعينه — نفس تنسيق أزرار «تحركات اليوم/الغد» (غير مُصفّاة)
 function sendTelegramMovementsByDate_(dateStr, chatId, from) {
   // 🔕 (V4.125) مفتاح التفعيل من قسم التنبيهات بشاشة الإعدادات
-  if (!_notifEnabled_('tg_movements')) return { sent: 0, disabled: true };
+  if (!_notifEnabled_('tg_movements')) {   // 🔔 (V4.324) يُبلَّغ السائل بدل الصمت
+    try { if (chatId) sendTelegramMessageDirect(chatId, '⛔ إرسال التحركات معطَّل من «مركز التنبيهات» بإعدادات البرنامج.'); } catch (eD) {}
+    return { sent: 0, disabled: true };
+  }
   var movements = getAllMovements();
   var filtered = movements.filter(function (m) { return m.movementDate && String(m.movementDate).trim() === dateStr; });
 

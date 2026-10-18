@@ -6776,6 +6776,13 @@ function saveTelegramSettings(token, cfg, botToken) {
     return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
 }
+// 🔔 (V4.324) تفعيل/تعطيل أحداث بعينها من «مركز التنبيهات» بالبرنامج الرئيسي — يلمس events فقط (التوكن والمجموعة كما هما)
+function tgSetEventFlags_(flags) {
+  var c = tgCfg_(), n = 0;
+  TG_EVENTS_.forEach(function (e) { if (flags && flags.hasOwnProperty(e.key) && !!flags[e.key] !== !!c.events[e.key]) { c.events[e.key] = !!flags[e.key]; n++; } });
+  if (n) PropertiesService.getScriptProperties().setProperty(TG_PROP_KEY_, JSON.stringify(c));
+  return n;
+}
 // ==========================================================
 // مفاتيح Gemini (استخلاص تأكيدات الفنادق بالذكاء الاصطناعي) — مفتاحان يُستخدمان بالتبادل
 // ==========================================================

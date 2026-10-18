@@ -9480,51 +9480,87 @@ function toggleNotifsPanel() {
   var isHidden = panel.classList.contains('d-none');
   panel.classList.toggle('d-none');
   if (icon) icon.className = isHidden ? 'fas fa-chevron-up' : 'fas fa-bell';
-  if (isHidden) loadNotifSettings(_renderNotifToggles_);
+  if (!isHidden) return;
+  // 🔔 (V4.324) مركز التنبيهات الموحَّد: تنبيهات البرنامج + أحداث بوت الحجوزات وبوت الحسابات وشيتات العهد — مجمَّعة حسب الشاشة
+  var box = document.getElementById('notifsListBox'); if (box) box.innerHTML = '<div class="text-muted small">⏳ جاري التحميل…</div>';
+  google.script.run
+    .withSuccessHandler(function (res) { if (!res || !res.success) { if (box) box.innerHTML = '<div class="alert alert-warning small mb-0">تعذّر تحميل قائمة التنبيهات</div>'; return; }
+      window._alertCenter = res; _renderNotifToggles_(); })
+    .withFailureHandler(function (e) { if (box) box.innerHTML = '<div class="alert alert-danger small mb-0">❌ ' + escapeHtml_((e && e.message) || e) + '</div>'; })
+    .getAlertCenter(window.authToken);
 }
+var NOTIF_CH_LBL_ = { bell: '🔔 جرس', telegram: '📲 تليجرام', email: '📧 بريد', ui: '🖥️ داخل الشاشة' };
 function _renderNotifToggles_() {
   var box = document.getElementById('notifsListBox');
   if (!box) return;
-  var types = window._notifTypes || [];
+  var A = window._alertCenter || { types: window._notifTypes || [], screens: [] }, types = A.types || [];
   if (!types.length) { box.innerHTML = '<div class="alert alert-warning small mb-0">تعذّر تحميل قائمة التنبيهات</div>'; return; }
-  box.innerHTML = types.map(function (t) {
-    return '<div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 bg-light">' +
-      '<div style="min-width:0;">' +
-        '<div class="fw-bold" style="font-size:13px;">' + escapeHtml_(t.name) + '</div>' +
-        '<div class="text-muted" style="font-size:11px;">' + escapeHtml_(t.desc) + '</div>' +
-      '</div>' +
-      '<div class="form-check form-switch mb-0 ms-2" style="flex-shrink:0;">' +
-        '<input class="form-check-input notif-toggle" type="checkbox" role="switch"' +
-        ' data-key="' + escapeHtml_(t.key) + '"' + (t.enabled ? ' checked' : '') +
-        ' style="width:42px;height:22px;cursor:pointer;">' +
-      '</div>' +
-    '</div>';
+  var chF = window._notifChF || '', E = escapeHtml_;
+  var scr = (A.screens || []).slice(), known = {}; scr.forEach(function (x) { known[x[0]] = 1; });
+  types.forEach(function (t) { if (t.screen && !known[t.screen]) { known[t.screen] = 1; scr.push([t.screen, t.screen]); } });
+  if (types.some(function (t) { return !t.screen; })) scr.push(['', 'أخرى']);
+  var filt = '<div class="d-flex gap-1 flex-wrap mb-2 align-items-center"><span class="small text-muted">القناة:</span>' +
+    [['', 'الكل']].concat(Object.keys(NOTIF_CH_LBL_).map(function (k) { return [k, NOTIF_CH_LBL_[k]]; })).map(function (c) {
+      return '<button type="button" class="btn btn-sm py-0 ' + (chF === c[0] ? 'btn-primary' : 'btn-outline-secondary') + '" onclick="window._notifChF=\'' + c[0] + '\';_notifCollect_();_renderNotifToggles_()">' + E(c[1]) + '</button>';
+    }).join('') + '</div>';
+  var warn = A.warn || {};
+  var html = scr.map(function (sc) {
+    var list = types.filter(function (t) { return (t.screen || '') === sc[0] && (!chF || t.ch === chF); });
+    if (!list.length) return '';
+    return '<details class="border rounded mb-2" open><summary class="p-2 fw-bold d-flex align-items-center gap-2" style="cursor:pointer;background:#f8fafc;">' + E(sc[1]) +
+      ' <span class="badge bg-light text-dark border">' + list.length + '</span><span class="ms-auto d-flex gap-1">' +
+      '<button type="button" class="btn btn-sm btn-outline-success py-0" onclick="event.preventDefault();_notifScreenAll_(this,true)">تفعيل الكل</button>' +
+      '<button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="event.preventDefault();_notifScreenAll_(this,false)">تعطيل الكل</button></span></summary><div class="p-2">' +
+      list.map(function (t) {
+        var w = t.linked && warn[t.linked] ? '<div style="font-size:11px;color:#b45309;">⚠️ ' + E(warn[t.linked]) + '</div>' : '';
+        return '<div class="d-flex justify-content-between align-items-center border rounded p-2 mb-2 bg-light">' +
+          '<div style="min-width:0;">' +
+            '<div class="fw-bold" style="font-size:13px;">' + E(t.name) + ' <span class="badge bg-white text-secondary border" style="font-size:10px;">' + E(NOTIF_CH_LBL_[t.ch] || t.ch || '') + '</span>' +
+              (t.linked ? ' <span class="badge bg-white text-info border" style="font-size:10px;" title="يُحفظ في إعدادات البوت نفسه">⚙️ ' + (t.linked === 'gl' ? 'بوت الحسابات' : 'بوت الحجوزات') + '</span>' : '') + '</div>' +
+            '<div class="text-muted" style="font-size:11px;">' + E(t.desc || '') + '</div>' + w +
+          '</div>' +
+          '<div class="form-check form-switch mb-0 ms-2" style="flex-shrink:0;">' +
+            '<input class="form-check-input notif-toggle" type="checkbox" role="switch" data-key="' + E(t.key) + '"' + (t.enabled ? ' checked' : '') +
+            ' style="width:42px;height:22px;cursor:pointer;">' +
+          '</div></div>';
+      }).join('') + '</div></details>';
   }).join('');
+  box.innerHTML = filt + (html || '<div class="text-muted small">لا تنبيهات بهذه القناة</div>');
 }
+// يحفظ اختيارات المفاتيح الظاهرة قبل إعادة الرسم (تغيير فلتر القناة) حتى لا تضيع
+function _notifCollect_() {
+  var A = window._alertCenter; if (!A) return;
+  document.querySelectorAll('#notifsListBox .notif-toggle').forEach(function (el) { (A.types || []).forEach(function (t) { if (t.key === el.dataset.key) t.enabled = !!el.checked; }); });
+}
+function _notifScreenAll_(btn, on) { var d = btn.closest('details'); if (d) d.querySelectorAll('.notif-toggle').forEach(function (el) { el.checked = !!on; }); }
 function saveNotifToggles(btn) {
+  _notifCollect_();
   var settings = {};
-  document.querySelectorAll('#notifsListBox .notif-toggle').forEach(function (el) {
-    settings[el.dataset.key] = !!el.checked;
-  });
+  ((window._alertCenter || {}).types || []).forEach(function (t) { settings[t.key] = !!t.enabled; });
+  document.querySelectorAll('#notifsListBox .notif-toggle').forEach(function (el) { settings[el.dataset.key] = !!el.checked; });
   var orig = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ…'; }
   google.script.run
     .withSuccessHandler(function (res) {
       if (btn) { btn.disabled = false; btn.innerHTML = orig; }
       if (!res || !res.success) { showToast('❌ تعذّر حفظ إعدادات التنبيهات', true); return; }
-      window._notifCfg = settings;
+      var map = {}; Object.keys(settings).forEach(function (k) { if (!/:/.test(k)) map[k] = settings[k]; });
+      window._notifCfg = map;
       // 🔄 (V4.127) التنبيهات المحسوبة بالواجهة تُعاد لحظياً بلا إعادة تحميل الصفحة
       try { if (typeof _tripsRerender_ === 'function' && (window.tripsCache || []).length) _tripsRerender_(); } catch (e) {}
       try { if (typeof _renderRegistryExpiryAlert === 'function') _renderRegistryExpiryAlert(); } catch (e) {}
       try { if (typeof _paintUrgentCard === 'function') _paintUrgentCard(); } catch (e) {}
+      try { if (typeof mfRenderAlerts === 'function' && window.MF && MF.files) mfRenderAlerts(); } catch (e) {}   // (V4.324)
+      try { if (typeof glCsBanner_ === 'function') glCsBanner_(); if (typeof glPendingBanner_ === 'function') glPendingBanner_(); } catch (e) {}
+      try { if (typeof _pulseTick_ === 'function' && window._PULSE_) { _PULSE_.notifVer = ''; _pulseTick_(true); } } catch (e) {}   // الجرس يُحدَّث فوراً
       var offN = (res.disabled || []).length;
-      showToast(offN ? ('✅ حُفظت الإعدادات — معطَّل حالياً ' + offN + ' تنبيه') : '✅ حُفظت الإعدادات — كل التنبيهات مُفعَّلة');
+      showToast(offN ? ('✅ حُفظت الإعدادات — معطَّل حالياً ' + offN + ' تنبيه بالبرنامج' + (res.changed ? '' : '')) : '✅ حُفظت الإعدادات — كل تنبيهات البرنامج مُفعَّلة');
     })
     .withFailureHandler(function (e) {
       if (btn) { btn.disabled = false; btn.innerHTML = orig; }
       showToast('❌ ' + ((e && e.message) || e), true);
     })
-    .saveNotifSettings(window.authToken, settings);
+    .saveAlertCenter(window.authToken, settings);
 }
 
 /* ============================================================
@@ -10559,7 +10595,7 @@ function _applySettingsScopeVisibility() {
   // الأقسام المسموحة لصاحب «الإعدادات الأساسية»
   var basicCards = ['svcCard-companies', 'svcCard-email', 'svcCard-tgDaily', 'svcCard-requiredFields', 'svcCard-bookingsSortDefault'];
   // الأقسام الإدارية (admin فقط)
-  var adminOnlyCards = ['svcCard-folders', 'svcCard-tgWebhook', 'svcCard-gemini', 'svcCard-setup', 'svcCard-sessionDuration', 'svcCard-autoTests', 'svcCard-tgNoticeBot', 'svcCard-tgAlerts', 'svcCard-tgCcBot', 'svcCard-accPricing'];
+  var adminOnlyCards = ['svcCard-folders', 'svcCard-tgWebhook', 'svcCard-gemini', 'svcCard-setup', 'svcCard-sessionDuration', 'svcCard-autoTests', 'svcCard-tgNoticeBot', 'svcCard-tgAlerts', 'svcCard-tgCcBot', 'svcCard-accPricing', 'svcCard-notifs'];   // 🔔 (V4.324) الحفظ للمدير فقط
   basicCards.forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.remove('d-none'); });
   adminOnlyCards.forEach(function(id) {
     var el = document.getElementById(id);
@@ -16759,7 +16795,7 @@ function _checkDuplicateInline(inputEl) {
     else if (!otherPass && !String(myPass || '').trim()) dup = true;
   });
   if (dup) {
-    alert('⚠️ ' + (isPassport ? 'رقم الجواز' : 'الاسم') + ' "' + val + '" مكرر داخل هذه الرحلة');
+    if ((typeof _notifOn_ !== 'function' || _notifOn_('ui_kashf_dup_inline'))) alert('⚠️ ' + (isPassport ? 'رقم الجواز' : 'الاسم') + ' "' + val + '" مكرر داخل هذه الرحلة');   // 🔔 (V4.324) العلامة الحمراء تبقى
     inputEl.classList.add('is-invalid');
   } else {
     inputEl.classList.remove('is-invalid');
@@ -25246,7 +25282,8 @@ function _notifMarkAllRead_() {
     if (window.authToken && typeof hasPermission === 'function') {
       clearInterval(iv);
       var wrap = document.getElementById('notifBellWrap');
-      if (wrap) wrap.classList.toggle('d-none', !(hasPermission('admin') || hasPermission('accounts.view')));
+      // 🔔 (V4.324) وأصحاب ملفات الوزارة/التأشيرات (تنبيهات الجرس الموجَّهة لهم كانت لا تظهر)
+      if (wrap) wrap.classList.toggle('d-none', !(hasPermission('admin') || hasPermission('accounts.view') || hasPermission('ministry.view') || hasPermission('visas.view')));
       // ⚡ (V4.236) التحديث الدوري للشارة صار ضمن النبضة الموحّدة (_pulseTick_) — لا مؤقّت منفصل هنا
       if (typeof _pulseTick_ === 'function') setTimeout(function () { _pulseTick_(true); }, 300);
     } else if (tries > 600) clearInterval(iv);
@@ -26161,7 +26198,7 @@ function _accRenderLegacy_() { // ⛔ النسخة القديمة قبل الن�
     var pays = d.payments.filter(function(p) { return p.trip === trip; });
     var t = _accCalc_(items, pays);
     var isItems = meta.mode === 'بنود';
-    var al = d.alerts[trip];
+    var al = _accAlerts_(d)[trip];
     // 💵 (V4.55) بطلب صريح: أعمدة/سطور الريال لا تظهر إلا إذا كان هناك بند أو دفعة أو تحويل بالريال
     var _hasSar = isItems && (
       items.some(function(i) { return i.currency === 'SAR' && Math.abs(Number(i.value) || 0) > 0.004; }) ||
@@ -26356,7 +26393,7 @@ function _accRender_() {
 
   // ⚠️ (V4.33) شريط تنبيه أعلى الشاشة يلخّص كل الرحلات التي تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ الحساب
   var alertsHtml = '';
-  var alertTrips = Object.keys(d.alerts || {});
+  var alertTrips = Object.keys(_accAlerts_(d));
   if (alertTrips.length) {
     alertsHtml = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2 p-2 rounded" style="background:#fef2f2;border:1.5px solid #fecaca;">' +
       '<span class="small fw-bold" style="color:#991b1b;">⚠️ ' + alertTrips.length + ' رحلة تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ الحساب — تحتاج مراجعة:</span>' +
@@ -26470,7 +26507,7 @@ function _accRender_() {
   var isItems = meta.mode === 'بنود';
   var showNights = isItems && !isGen; // 🛏️ الليالي حصريًا في نمط «بنود»
   var t = sel.t;
-  var al = isGen ? null : d.alerts[sel.key];
+  var al = isGen ? null : _accAlerts_(d)[sel.key];
   var main = '';
 
   // رأس المحدد
@@ -27508,6 +27545,8 @@ function _accQuickPaySave_(btn) {
 /* ============================================================
    📋 (V4.24) سجل الدفعات العامة عبر كل العملاء — عرض وفلترة بالتاريخ/العميل/المبلغ
    ============================================================ */
+// 🔔 (V4.324) تنبيهات «تغيّرت الأعداد/التسكين منذ حفظ الحساب» قابلة للتعطيل من مركز التنبيهات (زر «مراجعة التغيّرات» يبقى يدوياً)
+function _accAlerts_(d) { return ((typeof _notifOn_ !== 'function' || _notifOn_('ui_acc_trip_changed')) && d && d.alerts) || {}; }
 // ⚠️ (V4.33) فحص عام: أي عملاء لهم رحلات تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ حساباتهم
 /* ============================================================
    📊 (V4.34) كشف إجمالي كل العملاء — مستحق/مدفوع/رصيد بكل العملات، مرتب تنازليًا بأعلى مستحق،
@@ -33357,6 +33396,7 @@ function _findDuplicateBooking_(bookingObj) {
   })[0] || null;
 }
 function _maybeWarnDuplicateBooking_(bookingObj, proceed) {
+  if (!(typeof _notifOn_ !== 'function' || _notifOn_('ui_dup_booking'))) { proceed(); return; }   // 🔔 (V4.324) مفتاح من مركز التنبيهات
   var run = function () {
     var dup = _findDuplicateBooking_(bookingObj);
     if (!dup) { proceed(); return; }
@@ -38898,9 +38938,10 @@ function mfRenderApplied(list) {
 }
 function mfRenderAlerts() {
   var box = document.getElementById('mfAlerts'); if (!box) return;
-  var urgent = MF.files.filter(function (f) { return mfHasFlag(f, 'URGENT'); });
+  // 🔔 (V4.324) مفتاح «ملفات الوزارة العاجلة» كان لا يؤثر على هذا القسم الظاهر · ومفتاح جديد لتنبيه رصيد رسوم الغرفة
+  var urgent = _notifOn_('mf_urgent') ? MF.files.filter(function (f) { return mfHasFlag(f, 'URGENT'); }) : [];
   var low = [];
-  (MF.companies || []).forEach(function (c) {
+  if (_notifOn_('ui_mf_nobal')) (MF.companies || []).forEach(function (c) {
     var b = mfBalanceOf(c.company);
     if (b.pending > b.balance) low.push({ company: c.company, short: b.pending - b.balance });
   });
@@ -43364,6 +43405,7 @@ function vzFilesDelSelected() {
    السكن لا يُشتق هنا (يبقى كما هو) — يُعبَّأ من نموذج المجموعة المنفرد. */
 // ⚠️ (V4.316) جوازات مختارة بأكثر من بطاقة في نفس الحفظ — تنبيه غير مانع (مفاتيح «#»/«idx:» بلا جواز لا تُقارَن)
 function bkCrossDup_(cards) {
+  if (!(typeof _notifOn_ !== 'function' || _notifOn_('ui_bulk_cross_dup'))) return [];   // 🔔 (V4.324) مفتاح من مركز التنبيهات
   var seen = {}, dup = {};
   cards.forEach(function (c) { (c.keys || []).forEach(function (k) { k = mfStr(k).replace(/^P:/, ''); if (!k || k.charAt(0) === '#' || k.indexOf('idx:') === 0) return;
     if (seen[k] && seen[k] !== c.lbl) dup[k] = seen[k] + ' و' + c.lbl; else seen[k] = c.lbl; }); });
@@ -51560,7 +51602,7 @@ function glNavBadge_() {
 // 👜 (V4.277) تنبيه ظاهر بشاشة الحسابات العامة: صفوف شيتات العهدة/الخزينة/البنوك الناقصة (طرف غير معروف) — يفتح شاشة استكمال واعتماد جماعي
 function glCsBanner_() {
   var box = document.getElementById('glBody'), old = document.getElementById('glCsBanner'), n = (typeof GL !== 'undefined' && GL.csPend) || 0;
-  if (!n || !GL.ready) { if (old) old.remove(); return; }
+  if (!n || !GL.ready || !(typeof _notifOn_ !== 'function' || _notifOn_('ui_gl_cs_banner'))) { if (old) old.remove(); return; }   // 🔔 (V4.324) مفتاح من مركز التنبيهات (الشارة بالقائمة تبقى)
   var html = '👜 <b>' + n + '</b> صف من شيتات العهدة/الخزينة/البنوك ينتظر تحديد الطرف الآخر واعتماده <span class="text-muted small">(لم يُقيَّد بعد)</span>' +
     '<button class="btn btn-danger btn-sm fw-bold ms-auto" onclick="glCsPendDlg()">استكمال واعتماد</button>';
   if (old) { old.innerHTML = html; return; }
@@ -52087,6 +52129,7 @@ function glCsApproveAll_(btn) {
   if (miss) askConfirm_(miss + ' صف محدد بلا حساب وسيبقى ناقصاً — متابعة اعتماد ' + n + ' صف؟', go, { title: 'اعتماد', danger: false }); else go();
 }
 function glPendingBanner_() {
+  if (!(typeof _notifOn_ !== 'function' || _notifOn_('ui_gl_pend_banner'))) { var ob = document.getElementById('glPendBanner'); if (ob) ob.remove(); return; }   // 🔔 (V4.324)
   var box = document.getElementById('glBody'); if (!box || !GL.pendingCount || document.getElementById('glPendBanner')) return;
   box.insertAdjacentHTML('afterbegin', '<div id="glPendBanner" class="alert alert-warning py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">🔔 <b>' + GL.pendingCount +
     '</b> تغيير ينتظر الاعتماد (تعديل مصدر قيد مسجَّل، أو مبلغ طرف مقابل 💱 مستنتَج تلقائياً).<button class="btn btn-warning btn-sm fw-bold ms-auto" onclick="glPendingDlg()">مراجعة واعتماد</button></div>');

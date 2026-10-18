@@ -6286,8 +6286,9 @@ function _glHbMirrorSync_(entryId, opt) {
   try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eI) {}
   // 🔔 (V4.246) تنبيه تليجرام «دفعة» كما كان يرسله برنامج الحجوزات عند تسجيل الدفعة هناك — لأول نسخة فقط
   // (لا عند تعديل القيد ولا في إعادة النسخ الشاملة)
-  if (opt.notify && wasRow && typeof tgEnqueue_ === 'function') try { _glHbMirrorTgChange_(oldVals, want, opt.by); } catch (eTc) { Logger.log('hb mirror tg change: ' + eTc.message); }
-  if (opt.notify && !wasRow && want.length && typeof tgEnqueue_ === 'function') {
+  var _tgOn = typeof _alertOn_ !== 'function' || _alertOn_('tg_pay_glmirror');   // 🔔 (V4.324) مفتاح مستقل من مركز التنبيهات
+  if (opt.notify && _tgOn && wasRow && typeof tgEnqueue_ === 'function') try { _glHbMirrorTgChange_(oldVals, want, opt.by); } catch (eTc) { Logger.log('hb mirror tg change: ' + eTc.message); }
+  if (opt.notify && _tgOn && !wasRow && want.length && typeof tgEnqueue_ === 'function') {
     want.forEach(function (w) {
       try {
         tgEnqueue_('payment', { client: w[1], amount: w[3], note: w[2] + (w[4] ? ' — ' + w[4] : ''), by: opt.by || 'البرنامج الرئيسي',
@@ -7539,6 +7540,15 @@ function glBotSave(authToken, c) {
   }
   logChange_(session.username, 'إعدادات بوت الحسابات', 'GL:bot', '-', '-', (o.enabled ? 'مفعّل' : 'متوقف') + ' — ' + o.chatId);
   return { success: true, cfg: _glBotCfg_() };
+}
+// 🔔 (V4.324) تفعيل/تعطيل أحداث بوت الحسابات من «مركز التنبيهات» بالإعدادات — يدمج في events فقط
+function _glBotSetEventFlags_(flags) {
+  _GL_SET_MEMO_ = null;
+  var c = {}; try { c = JSON.parse(_glSettings_().bot_gl || '{}') || {}; } catch (e) { c = {}; }
+  var cur = _glBotCfg_().events, n = 0; c.events = c.events || {};
+  GLBOT_EVENTS_.forEach(function (x) { if (flags && flags.hasOwnProperty(x[0]) && !!flags[x[0]] !== !!cur[x[0]]) { c.events[x[0]] = !!flags[x[0]]; n++; } });
+  if (n) { _glSetSetting_('bot_gl', JSON.stringify(c)); _GL_SET_MEMO_ = null; }
+  return n;
 }
 function glBotTest(authToken) {
   _glAdminPerm_(authToken);
