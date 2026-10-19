@@ -1565,7 +1565,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.326</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.327</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -1732,6 +1732,10 @@ input[type="date"]:not(:focus):not(:valid) {
     <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','entries'); closeAppSidebarOnMobile();"><i class="fas fa-receipt me-2"></i>القيود</a>
     <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','stmt'); closeAppSidebarOnMobile();"><i class="fas fa-file-lines me-2"></i>كشف حساب</a>
     <a class="nav-link smart-action side-sub d-none px-3 py-1 rounded" data-parent="link-gl-side" onclick="sideGo_('gl','reports'); closeAppSidebarOnMobile();"><i class="fas fa-chart-pie me-2"></i>التقارير والميزان</a>
+    <!-- 🧠 (V4.327) المحاسب الذكي -->
+    <a id="link-ai-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('ai'); closeAppSidebarOnMobile();">
+      <i class="fas fa-brain me-2 text-warning"></i> المحاسب الذكي
+    </a>
     <div class="side-grp g-admin">⚙️ الإدارة</div>
     <a id="link-auditLog-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('auditLog'); closeAppSidebarOnMobile();">
       <i class="fas fa-history me-2 text-warning"></i> سجل التعديلات
@@ -5576,6 +5580,8 @@ input[type="date"]:not(:focus):not(:valid) {
 </style>
 <!-- 🏨 (V4.242) الفنادق داخل البرنامج — دمج برنامج الحجوزات (المرحلة 2) -->
 <div id="section-hotels" class="page-section container-fluid my-2 px-2"><div id="hbxRoot"></div></div>
+<!-- 🧠 (V4.327) المحاسب الذكي -->
+<div id="section-ai" class="page-section container-fluid my-2 px-2"><div id="aiRoot"></div></div>
 <div id="section-gl" class="page-section container-fluid my-2 px-2">
   <div class="gl-head">
     <h5>📒 الحسابات العامة</h5><small style="opacity:.8;">الدفتر العام بالقيد المزدوج — جنيه / ريال / دولار</small>
@@ -7194,6 +7200,8 @@ function toggleAdminOnlyLinks_() {
   if (hasPermission("admin") || hasPermission("hotels.view")) setTimeout(function () { try { if (typeof hbxPreload === 'function' && window.authToken) hbxPreload(); } catch (e) {} }, 6000);
 
   (function () { var b = document.getElementById('accHbSyncBtn'); if (b) b.classList.toggle('d-none', !hasPermission('admin')); })();   // 🏨 (V4.326)
+  // 🧠 (V4.327) المحاسب الذكي — صلاحية ai.use
+  (function () { var el = document.getElementById('link-ai-side'); if (el) el.classList.toggle('d-none', !(hasPermission('admin') || hasPermission('ai.use'))); })();
   // رابط الرحلات: admin أو TRIPS
   ['link-trips', 'link-trips-side'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -7372,6 +7380,7 @@ function _canOpenScreen_(page) {
     case 'registry': return hasPermission('all') || hasPermission('REGISTRY') || hasPermission('TRIPS');
     case 'gl': return hasPermission('all') || hasPermission('gl.view');
     case 'hotels': return hasPermission('all') || hasPermission('hotels.view');
+    case 'ai': return hasPermission('all') || hasPermission('ai.use');
     default: return true;   // entry / search وما شابه: متاحة للجميع
   }
 }
@@ -8045,7 +8054,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.326";
+var CLIENT_APP_VERSION = "4.327";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -8349,6 +8358,7 @@ function _buildPermMatrixHtml(prefix) {
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="settings_basic" id="' + prefix + '-x-settingsBasic"><label class="form-check-label small" for="' + prefix + '-x-settingsBasic" title="الشركات والوكلاء واللوجوهات + تنبيه البريد اليومي + تنبيه تيليجرام اليومي + الحقول الإلزامية في الإشعار">⚙️ إعدادات أساسية</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="trips.client_link" id="' + prefix + '-x-clientLink"><label class="form-check-label small" for="' + prefix + '-x-clientLink" title="إنشاء/إلغاء روابط قراءة-فقط لعملاء الرحلة">🔗 رابط العميل</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="r70.sim" id="' + prefix + '-x-r70sim"><label class="form-check-label small" for="' + prefix + '-x-r70sim" title="فتح نموذج محاكاة افتراضية لقاعدة عودة الـ70% (بدون أي تأثير على البيانات)">🧪 محاكاة قاعدة الـ70%</label></div>' +
+      '<div class="form-check m-0"><input class="form-check-input perm-extra" type="checkbox" value="ai.use" id="' + prefix + '-x-aiUse"><label class="form-check-label small" for="' + prefix + '-x-aiUse" title="شاشة «المحاسب الذكي»: أسئلة عن الحسابات والكشوف والقيود — يقرأ بصلاحيات المستخدم نفسه فقط ولا يسجّل شيئاً">🧠 المحاسب الذكي</label></div>' +
       '<div class="form-check m-0"><input class="form-check-input perm-admin" type="checkbox" value="admin" id="' + prefix + '-x-admin" data-prefix="' + prefix + '"><label class="form-check-label small fw-bold text-danger" for="' + prefix + '-x-admin">👑 ADMIN (كل الصلاحيات)</label></div>' +
     '</div>';
   return head + rows + '</tbody></table></div>' + extras;
@@ -8425,6 +8435,7 @@ function _permsSummaryHtml(permString) {
   if (set['ministry.approve']) parts.push('<span class="badge bg-secondary me-1 mb-1">اعتماد ملف الوزارة</span>');
   if (set['settings_basic']) parts.push('<span class="badge bg-secondary me-1 mb-1">⚙️ إعدادات أساسية</span>');
   if (set['trips.client_link']) parts.push('<span class="badge bg-secondary me-1 mb-1">🔗 رابط العميل</span>');
+  if (set['ai.use']) parts.push('<span class="badge bg-secondary me-1 mb-1">🧠 المحاسب الذكي</span>');
   return parts.length ? parts.join('') : '<span class="text-muted small">— بلا صلاحيات</span>';
 }
 
@@ -24325,6 +24336,11 @@ document
     return;
   }
 
+  if (page === "ai" && !hasPermission("admin") && !hasPermission("ai.use")) {
+    alert("هذه الشاشة متاحة فقط لصاحب صلاحية «المحاسب الذكي»");
+    return;
+  }
+
   if (page === "registry" && !hasPermission("all") && !hasPermission("REGISTRY") && !hasPermission("TRIPS")) {
     alert("هذه الشاشة متاحة فقط لمستخدم بصلاحية سجل المعتمرين أو الرحلات أو ALL");
     return;
@@ -24408,6 +24424,10 @@ document
 
   if (page === 'gl') {
     if (typeof glInit === 'function') glInit(true);
+  }
+
+  if (page === 'ai') {
+    if (typeof aiInit === 'function') aiInit();
   }
 
   if (page === 'hotels') {
@@ -54076,6 +54096,231 @@ function glSaveSettingsUI(btn) {
     } finally { busy = false; cur = st; paint(); }
   };
 })();
+</script>
+<style>
+  /* 🧠 (V4.327) المحاسب الذكي */
+  #aiRoot { direction: rtl; }
+  .ai-wrap { display: flex; gap: 10px; height: calc(100vh - var(--app-top-h, 65px) - 40px); min-height: 420px; }
+  .ai-side { width: 250px; flex: 0 0 250px; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; }
+  .ai-side .ai-new { margin: 10px; }
+  .ai-list { overflow-y: auto; flex: 1; padding: 0 6px 8px; }
+  .ai-li { display: flex; align-items: center; gap: 6px; padding: 7px 9px; border-radius: 9px; cursor: pointer; font-size: 12.5px; color: #1e293b; }
+  .ai-li:hover { background: #f1f5f9; } .ai-li.on { background: #e0f2fe; font-weight: 700; }
+  .ai-li .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ai-li .d { font-size: 10px; color: #94a3b8; }
+  .ai-li .x { opacity: 0; color: #ef4444; padding: 0 3px; } .ai-li:hover .x { opacity: .8; }
+  .ai-main { flex: 1; min-width: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; display: flex; flex-direction: column; overflow: hidden; }
+  .ai-head { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid #eef2f7; background: linear-gradient(135deg, #1e3d59, #0f4c4c); color: #fff; }
+  .ai-head .ttl { font-weight: 800; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ai-head .u { font-size: 11px; opacity: .8; } .ai-head button { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 8px; padding: 2px 9px; }
+  #aiMsgs { flex: 1; overflow-y: auto; padding: 14px; background: #f8fafc; }
+  .ai-msg { display: flex; margin-bottom: 10px; } .ai-u { justify-content: flex-start; } .ai-a { justify-content: flex-end; }
+  .ai-b { max-width: min(860px, 92%); padding: 9px 13px; border-radius: 14px; font-size: 13.5px; line-height: 1.85; word-wrap: break-word; }
+  .ai-u .ai-b { background: #1e3d59; color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
+  .ai-a .ai-b { background: #fff; border: 1px solid #e2e8f0; color: #0f172a; border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .ai-b p { margin: 0 0 6px; } .ai-b ul, .ai-b ol { margin: 0 0 6px; padding-right: 20px; } .ai-b code { background: #f1f5f9; padding: 0 4px; border-radius: 4px; font-size: 12px; }
+  .ai-h1, .ai-h2 { font-weight: 800; font-size: 15px; margin: 6px 0; color: #1e3d59; } .ai-h3, .ai-h4 { font-weight: 800; font-size: 13.5px; margin: 6px 0; color: #0f4c4c; }
+  .ai-pre { background: #0f172a; color: #e2e8f0; padding: 8px 10px; border-radius: 8px; font-size: 12px; direction: ltr; text-align: left; overflow-x: auto; }
+  .ai-tbl { overflow-x: auto; margin: 4px 0 8px; } .ai-tbl table { border-collapse: collapse; font-size: 12.5px; min-width: 60%; }
+  .ai-tbl th, .ai-tbl td { border: 1px solid #e2e8f0; padding: 3px 8px; text-align: right; white-space: nowrap; } .ai-tbl th { background: #f1f5f9; font-weight: 700; }
+  .ai-tools { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; margin: -4px 0 10px; }
+  .ai-chip { font-size: 11px; background: #eef2ff; color: #3730a3; border-radius: 99px; padding: 2px 9px; } .ai-chip.err { background: #fef2f2; color: #b91c1c; }
+  .ai-note { text-align: center; font-size: 12px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; padding: 5px 10px; margin: 6px auto 10px; max-width: 600px; }
+  .ai-errbox { text-align: center; font-size: 12.5px; color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 7px 10px; margin: 6px auto; max-width: 640px; }
+  .ai-errbox button { border: none; background: #fee2e2; border-radius: 7px; padding: 1px 9px; margin-right: 6px; }
+  .ai-dots i { display: inline-block; width: 6px; height: 6px; margin: 0 1px; border-radius: 50%; background: #64748b; animation: aiDot 1s infinite; } .ai-dots i:nth-child(2) { animation-delay: .15s; } .ai-dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes aiDot { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  .ai-in { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #eef2f7; background: #fff; }
+  .ai-in textarea { flex: 1; resize: none; border: 1px solid #cbd5e1; border-radius: 12px; padding: 8px 12px; font-size: 13.5px; max-height: 160px; min-height: 42px; }
+  .ai-in button { border: none; background: #1e3d59; color: #fff; border-radius: 12px; padding: 0 18px; font-weight: 700; } .ai-in button:disabled { opacity: .5; }
+  .ai-welcome { max-width: 680px; margin: 20px auto; text-align: center; color: #334155; }
+  .ai-welcome .big { font-size: 40px; } .ai-ex { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 12px; }
+  .ai-ex button { border: 1px solid #cbd5e1; background: #fff; border-radius: 99px; padding: 5px 12px; font-size: 12.5px; color: #1e3d59; }
+  .ai-ex button:hover { background: #eff6ff; }
+  #aiSet { border-bottom: 1px solid #eef2f7; padding: 10px 14px; background: #fffdf5; font-size: 12.5px; }
+  .ai-sidebtn { display: none; }
+  @media (max-width: 767px) {
+    .ai-wrap { height: calc(100vh - var(--app-top-h, 65px) - 20px); }
+    .ai-side { position: fixed; z-index: 1050; top: var(--app-top-h, 65px); bottom: 0; right: 0; width: 82vw; max-width: 300px; box-shadow: -8px 0 24px rgba(0,0,0,.2); display: none; }
+    .ai-side.open { display: flex; } .ai-sidebtn { display: inline-block; } .ai-b { max-width: 96%; }
+  }
+</style>
+<script>
+/* 🧠 (V4.327) المحاسب الذكي — الواجهة: محادثة تُرسل لـ aiChatSend ثم تتابع بـ aiChatStep حتى يكتمل الرد
+   (الخادم يقرأ بيانات البرنامج بأدوات بصلاحيات المستخدم نفسه ولا يكتب شيئاً) */
+var AI = { id: '', busy: false, inited: false, items: [], chats: [], wait: '', err: null, usage: null };
+var AI_EX_ = ['ما أرصدة الخزن والبنوك والعهد الآن؟', 'ما التغييرات المعلقة بانتظار الاعتماد؟', 'ما أرباح كل رحلة هذا الشهر؟',
+  'أكبر 10 عملاء عليهم أرصدة في حسابات العمرة', 'أرصدة حجوزات الفنادق للعملاء والموردين', 'قارن حساب عميل في شاشة عملاء العمرة مع كشفه في الحسابات العامة'];
+function aiEsc_(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+// Markdown آمن: يُهرَّب النص أولاً ثم تُطبَّق الصيغ (جداول/عناوين/قوائم/عريض/كود) — لا HTML من النموذج أبداً
+function aiMd_(src) {
+  var s = String(src || '').replace(/\r/g, ''), blocks = [], out = [];
+  s = s.replace(/```[\w-]*\n?([\s\S]*?)```/g, function (m, code) { blocks.push('<pre class="ai-pre">' + aiEsc_(code) + '</pre>'); return '\n\u0001' + (blocks.length - 1) + '\u0001\n'; });
+  var inline = function (t) {
+    t = aiEsc_(t);
+    t = t.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[\s(«])\*([^*\n]+)\*(?=[\s).,،»:]|$)/g, '$1<i>$2</i>');
+    return t.replace(/\b(JE-\d{3,})\b/g, '<a href="#" class="ai-je" data-je="$1">$1</a>');
+  };
+  var lines = s.split('\n'), i = 0;
+  while (i < lines.length) {
+    var l = lines[i], m;
+    if ((m = l.trim().match(/^\u0001(\d+)\u0001$/))) { out.push(blocks[+m[1]]); i++; continue; }
+    if (/^\s*\|/.test(l)) {
+      var rows = []; while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]);
+      var cells = rows.map(function (r) { return r.trim().replace(/^\|/, '').replace(/\|\s*$/, '').split('|').map(function (c) { return c.trim(); }); });
+      var sep = cells.length > 1 && cells[1].every(function (c) { return /^:?-{2,}:?$/.test(c); });
+      var head = sep ? cells[0] : null, body = sep ? cells.slice(2) : cells;
+      out.push('<div class="ai-tbl"><table>' + (head ? '<thead><tr>' + head.map(function (c) { return '<th>' + inline(c) + '</th>'; }).join('') + '</tr></thead>' : '') +
+        '<tbody>' + body.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + inline(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>');
+      continue;
+    }
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { out.push('<div class="ai-h' + m[1].length + '">' + inline(m[2]) + '</div>'); i++; continue; }
+    if (/^\s*[-*•]\s+/.test(l)) { var li = []; while (i < lines.length && /^\s*[-*•]\s+/.test(lines[i])) li.push('<li>' + inline(lines[i++].replace(/^\s*[-*•]\s+/, '')) + '</li>'); out.push('<ul>' + li.join('') + '</ul>'); continue; }
+    if (/^\s*\d+[.)]\s+/.test(l)) { var ol = []; while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) ol.push('<li>' + inline(lines[i++].replace(/^\s*\d+[.)]\s+/, '')) + '</li>'); out.push('<ol>' + ol.join('') + '</ol>'); continue; }
+    if (l.trim()) out.push('<p>' + inline(l) + '</p>');
+    i++;
+  }
+  return out.join('');
+}
+function aiInit() {
+  var root = document.getElementById('aiRoot'); if (!root) return;
+  if (!AI.inited) {
+    AI.inited = true;
+    root.innerHTML = '<div class="ai-wrap"><div class="ai-side" id="aiSide"><button class="btn btn-sm btn-success fw-bold ai-new" onclick="aiNew_()">＋ محادثة جديدة</button><div class="ai-list" id="aiList"></div></div>' +
+      '<div class="ai-main"><div class="ai-head"><button class="ai-sidebtn" onclick="document.getElementById(\'aiSide\').classList.toggle(\'open\')" title="المحادثات">☰</button><span class="ttl" id="aiTitle">🧠 المحاسب الذكي</span><span class="u" id="aiUse"></span><button id="aiSetBtn" class="d-none" onclick="aiSettings_()" title="إعدادات المحاسب الذكي">⚙️</button></div>' +
+      '<div id="aiSet" class="d-none"></div><div id="aiMsgs"></div>' +
+      '<div class="ai-in"><textarea id="aiInput" rows="1" placeholder="اسأل عن أي حساب أو كشف أو قيد أو رحلة… (Enter للإرسال، Shift+Enter لسطر جديد)"></textarea><button id="aiSendBtn" onclick="aiSend_()">إرسال</button></div></div></div>';
+    var ta = document.getElementById('aiInput');
+    ta.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); aiSend_(); } });
+    ta.addEventListener('input', function () { ta.style.height = 'auto'; ta.style.height = Math.min(160, ta.scrollHeight) + 'px'; });
+    document.getElementById('aiMsgs').addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a.ai-je'); if (a) { e.preventDefault(); aiOpenEntry_(a.getAttribute('data-je')); return; }
+      var b = e.target.closest && e.target.closest('button[data-ex]'); if (b) aiSend_(b.getAttribute('data-ex'));
+    });
+  }
+  aiDraw_(); aiLoadList_(true);
+}
+function aiLastKey_() { return 'aiLast_' + ((window.currentUser || {}).username || ''); }
+function aiLoadList_(openLast) {
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r || !r.success) return;
+    AI.chats = r.chats || []; AI.isAdmin = !!r.isAdmin; AI.enabled = r.enabled; AI.hasKeys = r.hasKeys;
+    var sb = document.getElementById('aiSetBtn'); if (sb) sb.classList.toggle('d-none', !AI.isAdmin);
+    if (openLast && !AI.id && !AI.busy) { var last = ''; try { last = localStorage.getItem(aiLastKey_()) || ''; } catch (e) {} if (last && AI.chats.some(function (c) { return c.id === last; })) { aiOpen_(last); return; } }
+    aiDraw_();
+  }).withFailureHandler(aiFail_).aiChatList(window.authToken);
+}
+function aiNew_() { if (AI.busy) return; AI.id = ''; AI.items = []; AI.err = null; AI.wait = ''; AI.usage = null; try { localStorage.removeItem(aiLastKey_()); } catch (e) {} aiDraw_(); var s = document.getElementById('aiSide'); if (s) s.classList.remove('open'); var ta = document.getElementById('aiInput'); if (ta) ta.focus(); }
+function aiOpen_(id) {
+  if (AI.busy) return; AI.id = id; AI.items = []; AI.err = null; AI.wait = 'جاري فتح المحادثة…'; aiDraw_();
+  try { localStorage.setItem(aiLastKey_(), id); } catch (e) {}
+  var s = document.getElementById('aiSide'); if (s) s.classList.remove('open');
+  google.script.run.withSuccessHandler(function (r) { AI.wait = ''; AI.items = (r && r.items) || []; AI.usage = r && r.usage; AI.title = r && r.title; aiDraw_(); })
+    .withFailureHandler(function (e) { AI.id = ''; aiFail_(e); }).aiChatOpen(window.authToken, id);
+}
+function aiDel_(id, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  if (AI.busy || !confirm('حذف هذه المحادثة نهائياً؟')) return;
+  google.script.run.withSuccessHandler(function () { if (AI.id === id) aiNew_(); aiLoadList_(false); }).withFailureHandler(aiFail_).aiChatDelete(window.authToken, id);
+}
+function aiSend_(txt) {
+  var ta = document.getElementById('aiInput'); txt = String(txt != null ? txt : (ta ? ta.value : '')).trim();
+  if (!txt || AI.busy) return;
+  if (AI.enabled === false) { _showPopup('المحاسب الذكي موقوف من إعداداته', 'warning'); return; }
+  if (AI.hasKeys === false) { _showPopup('لا يوجد مفتاح ذكاء اصطناعي مخزن — يضيفه المدير من الإعدادات ← Gemini', 'warning'); return; }
+  if (ta) { ta.value = ''; ta.style.height = ''; }
+  AI.busy = true; AI.err = null; AI.items.push({ t: 'u', text: txt }); AI.wait = 'يفكر…'; aiDraw_();
+  google.script.run.withSuccessHandler(aiHandle_).withFailureHandler(aiFail_).aiChatSend(window.authToken, AI.id, txt);
+}
+function aiStep_() { AI.busy = true; google.script.run.withSuccessHandler(aiHandle_).withFailureHandler(aiFail_).aiChatStep(window.authToken, AI.id); }
+function aiHandle_(r) {
+  if (!r) { aiFail_('لم يصل رد'); return; }
+  if (r.id && r.id !== AI.id) { AI.id = r.id; try { localStorage.setItem(aiLastKey_(), r.id); } catch (e) {} aiLoadList_(false); }
+  if (r.items) AI.items = r.items; if (r.usage) AI.usage = r.usage; if (r.title) AI.title = r.title;
+  if (r.status === 'busy') { AI.wait = 'المحادثة قيد المعالجة…'; aiDraw_(); setTimeout(aiStep_, 3000); return; }
+  if (r.success === false) { AI.busy = false; AI.wait = ''; AI.err = { text: r.error || 'تعذّر الرد' }; aiDraw_(); if (r.wait && r.wait <= 90) aiCountdown_(r.wait); return; }
+  if (r.status === 'continue') { AI.wait = (r.events && r.events.length ? r.events[r.events.length - 1] : 'يتابع') + '…'; aiDraw_(); aiStep_(); return; }
+  AI.busy = false; AI.wait = ''; AI.err = null; aiDraw_();
+}
+function aiFail_(e) {
+  AI.busy = false; AI.wait = '';
+  if (typeof _handleSessErr_ === 'function' && _handleSessErr_(e)) { aiDraw_(); return; }
+  AI.err = { text: String((e && e.message) || e || 'خطأ') }; aiDraw_();
+}
+function aiRetry_() { clearInterval(AI.cd); AI.err = null; if (!AI.id) { aiDraw_(); return; } AI.wait = 'يعيد المحاولة…'; aiDraw_(); aiStep_(); }
+function aiCountdown_(sec) {
+  clearInterval(AI.cd); var n = sec, base = AI.err.text;
+  AI.cd = setInterval(function () { n--; if (!AI.err) { clearInterval(AI.cd); return; } if (n <= 0) { clearInterval(AI.cd); aiRetry_(); return; } AI.err.text = base + ' — محاولة تلقائية بعد ' + n + ' ث'; aiDraw_(); }, 1000);
+}
+function aiOpenEntry_(id) {
+  if (typeof glShowEntry !== 'function') return;
+  if (typeof GL !== 'undefined' && !GL.ready && typeof glRefreshData === 'function') { showToast('⏳ جاري فتح القيد…'); glRefreshData(function () { glShowEntry(id); }); }
+  else glShowEntry(id);
+}
+function aiArgSum_(a) {
+  a = a || {}; var k = ['account', 'client', 'party', 'query', 'id', 'trip', 'kind', 'ref', 'hotel'].filter(function (x) { return a[x]; })[0];
+  var s = k ? String(a[k]) : ''; if (a.from || a.to) s += (s ? ' · ' : '') + (a.from || '…') + ' ← ' + (a.to || '…');
+  return s.length > 50 ? s.slice(0, 49) + '…' : s;
+}
+function aiDraw_() {
+  var box = document.getElementById('aiMsgs'), list = document.getElementById('aiList'); if (!box) return;
+  if (list) list.innerHTML = AI.chats.length ? AI.chats.map(function (c) {
+    return '<div class="ai-li' + (c.id === AI.id ? ' on' : '') + '" onclick="aiOpen_(\'' + aiEsc_(c.id) + '\')"><span class="t" title="' + aiEsc_(c.title) + '">' + aiEsc_(c.title || 'محادثة') + '</span><span class="d">' + aiEsc_(String(c.updated || '').split(' ')[0]) + '</span><span class="x" onclick="aiDel_(\'' + aiEsc_(c.id) + '\',event)" title="حذف">✕</span></div>';
+  }).join('') : '<div class="text-muted small text-center py-3">لا توجد محادثات بعد</div>';
+  var t = document.getElementById('aiTitle'); if (t) t.textContent = '🧠 ' + (AI.id && AI.title ? AI.title : 'المحاسب الذكي');
+  var u = document.getElementById('aiUse'); if (u) u.textContent = AI.usage && AI.usage.reqs ? (AI.usage.reqs + ' طلب · ' + (AI.usage.model || '')) : '';
+  var sb = document.getElementById('aiSendBtn'); if (sb) sb.disabled = !!AI.busy;
+  if (!AI.items.length && !AI.wait && !AI.err) {
+    box.innerHTML = '<div class="ai-welcome"><div class="big">🧠</div><div class="fw-bold" style="font-size:16px;">المحاسب الذكي</div>' +
+      '<div class="small text-muted mt-1">يقرأ الحسابات العامة وحسابات العملاء والرحلات وحجوزات الفنادق والإعاشة بصلاحياتك أنت فقط، ويجيب بالأرقام وأرقام القيود. لا يسجّل ولا يعدّل أي شيء.</div>' +
+      (AI.hasKeys === false ? '<div class="ai-note mt-3">⚠️ لا يوجد مفتاح ذكاء اصطناعي مخزن — يضيفه المدير من الإعدادات ← Gemini</div>' : '') +
+      '<div class="ai-ex">' + AI_EX_.map(function (x) { return '<button data-ex="' + aiEsc_(x) + '">' + aiEsc_(x) + '</button>'; }).join('') + '</div></div>';
+    return;
+  }
+  var h = '', tools = [];
+  var flush = function () { if (tools.length) { h += '<div class="ai-tools">' + tools.join('') + '</div>'; tools = []; } };
+  AI.items.forEach(function (it) {
+    if (it.t === 'tool') { var as = aiArgSum_(it.args); tools.push('<span class="ai-chip">🔎 ' + aiEsc_(it.label || it.name) + (as ? ': ' + aiEsc_(as) : '') + '</span>'); return; }
+    if (it.t === 'err') { tools.push('<span class="ai-chip err" title="' + aiEsc_(it.text) + '">⚠️ ' + aiEsc_(String(it.text).slice(0, 80)) + '</span>'); return; }
+    flush();
+    if (it.t === 'u') h += '<div class="ai-msg ai-u"><div class="ai-b">' + aiEsc_(it.text) + '</div></div>';
+    else if (it.t === 'a') h += '<div class="ai-msg ai-a"><div class="ai-b">' + aiMd_(it.text) + '</div></div>';
+    else if (it.t === 'note') h += '<div class="ai-note">ℹ️ ' + aiEsc_(it.text) + '</div>';
+  });
+  flush();
+  if (AI.wait) h += '<div class="ai-msg ai-a"><div class="ai-b"><span class="ai-dots"><i></i><i></i><i></i></span> ' + aiEsc_(AI.wait) + '</div></div>';
+  if (AI.err) h += '<div class="ai-errbox">❌ ' + aiEsc_(AI.err.text) + (AI.id ? '<button onclick="aiRetry_()">🔁 إعادة المحاولة</button>' : '') + '</div>';
+  box.innerHTML = h; box.scrollTop = box.scrollHeight;
+}
+// ⚙️ إعدادات المحاسب الذكي (للمدير): التشغيل، النموذج، الحد الشهري، المفاتيح المستخدمة، الاستهلاك، اختبار الاتصال
+function aiSettings_() {
+  var p = document.getElementById('aiSet'); if (!p) return;
+  if (!p.classList.contains('d-none')) { p.classList.add('d-none'); return; }
+  p.classList.remove('d-none'); p.innerHTML = '⏳ تحميل…';
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r || !r.cfg) { p.innerHTML = 'للمدير فقط'; return; }
+    var c = r.cfg, us = r.usage || {}, users = Object.keys(us.users || {}).map(function (k) { return aiEsc_(k) + ': ' + us.users[k]; }).join('، ');
+    var models = r.models.indexOf(c.model) < 0 ? r.models.concat([c.model]) : r.models;
+    p.innerHTML = '<div class="d-flex flex-wrap gap-3 align-items-end">' +
+      '<label class="form-check m-0"><input type="checkbox" class="form-check-input" id="aiSetOn"' + (c.enabled ? ' checked' : '') + '> مفعّل</label>' +
+      '<div><div class="small text-muted">النموذج (Gemini)</div><select id="aiSetModel" class="form-select form-select-sm" style="min-width:190px;">' + models.map(function (m) { return '<option' + (m === c.model ? ' selected' : '') + '>' + aiEsc_(m) + '</option>'; }).join('') + '</select></div>' +
+      '<div><div class="small text-muted">الحد الشهري (طلبات)</div><input id="aiSetCap" type="number" min="1" class="form-control form-control-sm" style="width:110px;" value="' + (c.cap || 3000) + '"></div>' +
+      '<button class="btn btn-sm btn-success" onclick="aiSettingsSave_(this)">💾 حفظ</button><button class="btn btn-sm btn-outline-primary" onclick="aiSettingsTest_(this)">🧪 اختبار الاتصال</button></div>' +
+      '<div class="mt-2">🔑 المفاتيح المخزنة المستخدمة (' + r.keys.length + '): ' + (r.keys.length ? r.keys.map(aiEsc_).join('، ') : '<b class="text-danger">لا يوجد — أضف مفتاح Gemini من الإعدادات</b>') + ' <span class="text-muted">— تدوير تلقائي عند نفاد حصة أحدها</span></div>' +
+      '<div class="mt-1">📊 استهلاك الشهر ' + aiEsc_(us.month) + ': <b>' + (us.n || 0) + '</b> طلب من ' + (c.cap || 0) + ' · رموز إدخال ' + (us.i || 0).toLocaleString('en-US') + ' · إخراج ' + (us.o || 0).toLocaleString('en-US') + (users ? ' · ' + users : '') + '</div>' +
+      '<div id="aiSetRes" class="mt-1 small"></div>';
+  }).withFailureHandler(function (e) { p.innerHTML = '❌ ' + aiEsc_(e.message || e); }).aiGetSettings(window.authToken);
+}
+function aiSettingsSave_(btn) {
+  btn.disabled = true;
+  google.script.run.withSuccessHandler(function () { btn.disabled = false; showToast('✅ حُفظت إعدادات المحاسب الذكي'); document.getElementById('aiSet').classList.add('d-none'); aiLoadList_(false); })
+    .withFailureHandler(function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); })
+    .aiSaveSettings(window.authToken, { enabled: document.getElementById('aiSetOn').checked, model: document.getElementById('aiSetModel').value, cap: document.getElementById('aiSetCap').value });
+}
+function aiSettingsTest_(btn) {
+  var o = document.getElementById('aiSetRes'); btn.disabled = true; o.textContent = '⏳ اختبار…';
+  google.script.run.withSuccessHandler(function (r) { btn.disabled = false; o.innerHTML = '✅ يعمل — النموذج ' + aiEsc_(r.model) + ' · المفتاح رقم ' + r.key + ' من ' + r.keys + ' · ' + r.ms + ' ms · الرد: «' + aiEsc_(r.reply) + '»'; })
+    .withFailureHandler(function (e) { btn.disabled = false; o.innerHTML = '<span class="text-danger">❌ ' + aiEsc_(e.message || e) + '</span>'; }).aiTestConnection(window.authToken);
+}
 </script>
 <style>
   /* 📑 (V4.324) شريط التبويبات داخل البرنامج (سطر ثانٍ بالشريط العلوي) */
