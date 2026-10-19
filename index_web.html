@@ -51022,7 +51022,7 @@ function glCoaDraw() {
         (GL.can.edit && a.code.length > 1 ? '<button class="btn btn-sm btn-link p-0 me-1" title="نقل لقسم آخر" onclick="glAccMoveDlg(\'' + glJs(a.code) + '\')">🔀</button>' : '') +
         (!a.isGroup ? '<button class="btn btn-sm btn-link p-0 me-1" title="دفتر الأستاذ" onclick="glOpenLedger(\'' + glJs(a.code) + '\')">📖</button>' : '') +
         (GL.isAdmin && !a.isGroup ? '<button class="btn btn-sm btn-link p-0 me-1" title="دمج قيوده في حساب آخر وحذفه (حساب مكرر)" onclick="glMergeDlg(\'' + glJs(a.code) + '\')">🔗</button>' : '') +
-        (GL.can.del && a.code.length > 2 ? '<button class="btn btn-sm btn-link text-danger p-0" title="حذف" onclick="glAccDel(\'' + glJs(a.code) + '\')">🗑️</button>' : '') +
+        (GL.can.del && a.code.length > 2 ? '<button class="btn btn-sm btn-link text-danger p-0" title="' + (GL.isAdmin ? 'حذف الحساب (مع قيوده بعد المعاينة)' : 'حذف') + '" onclick="glAccDel(\'' + glJs(a.code) + '\')">🗑️</button>' : '') +
       '</td></tr>';
   }).join('');
   box.innerHTML = '<div class="table-responsive"><table class="gl-tbl"><thead><tr><th>الكود</th><th>الحساب</th><th>جنيه</th><th>ريال</th><th>دولار</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
@@ -51144,9 +51144,48 @@ function glAccMoveSave(code, btn) {
   }, fail);
 }
 function glAccDel(code) {
+  // 🗂️ (V4.324) المدير: حذف الحساب مع كل قيوده (معاينة كاملة ثم تأكيد بكتابة الكود/الاسم) · غيره: الحذف القديم (حساب بلا قيود فقط)
+  if (GL.isAdmin) { glRun('glAccountDeletePreview', [code], function (P) { glAccDelDraw_(P); }); return; }
   askConfirm_('حذف الحساب ' + glAccLabel(code) + '؟ (يُرفض لو عليه قيود — يمكن إيقافه بدلاً من ذلك)', function () {
     glRun('glDeleteAccount', [code], function () { showToast('🗑️ حُذف الحساب'); glRefreshData(function () { glTab('coa'); }); });
   }, { title: 'حذف حساب', danger: true });
+}
+/* 🗂️ (V4.324) معاينة «حذف حساب مع قيوده» (للمدير): ما سيُحذف بالضبط (القيود بكل أطرافها حسب المصدر والحالة والفترة)، أثره على
+   الحسابات الأخرى، الموانع، الملاحظات (مصادر ما زالت بشاشاتها، ربط الطرف، شيت العهدة…) ثم تأكيد بكتابة كود الحساب أو اسمه */
+function glAccDelDraw_(P) {
+  var a = P.account || {}, E = glEsc, en = P.entries || {}, bal = P.balance || {}, blocked = (P.blockers || []).length > 0;
+  var curTxt = function (o) { var t = []; ['EGP', 'SAR', 'USD'].forEach(function (c) { if (Math.abs(o[c] || 0) >= 0.01) t.push(glFmt(o[c]) + ' ' + GL_CUR_LBL_[c]); }); return t.join(' · ') || '0'; };
+  var nAll = (en.del || 0) + (en.orphan || 0);
+  var h = '<div class="gl-note mb-2">🗑️ <b>' + E(a.code + ' — ' + a.name) + '</b>' + (a.kindLbl ? ' · ' + E(a.kindLbl) : '') + (a.parentName ? ' · 📂 ' + E(a.parentName) : '') + (a.link ? ' · 🔗 ' + E(a.link) : '') +
+      '<div class="mt-1">الرصيد الحالي: <b class="gl-latin">' + curTxt(bal) + '</b></div></div>' +
+    (blocked ? '<div class="alert alert-danger py-2 small mb-2">⛔ <b>لا يمكن الحذف:</b><br>• ' + P.blockers.map(E).join('<br>• ') + '</div>' : '') +
+    '<div class="alert ' + (nAll ? 'alert-warning' : 'alert-light border') + ' py-2 small mb-2">' + (nAll ? '⚠️ سيُحذف <b>نهائياً</b> ' + nAll + ' قيداً بكل أطرافها (' + (en.lines || 0) + ' سطراً)' +
+        ' — مرحّل ' + (en.posted || 0) + ' · مسودة ' + (en.draft || 0) + ' · ملغى ' + (en['void'] || 0) + (en.from ? ' — من <span class="gl-latin">' + E(en.from) + '</span> إلى <span class="gl-latin">' + E(en.to) + '</span>' : '')
+      : 'لا قيود على هذا الحساب — يُحذف الحساب فقط.') + (en.re ? '<br>🔁 ' + en.re + ' قيد أرصدة افتتاحية مجمَّع لن يُحذف: يُحوَّل سطر الحساب فيه إلى «34 فروق أرصدة افتتاحية».' : '') + '</div>';
+  if ((P.cats || []).length) h += '<div class="small fw-bold mb-1">القيود حسب المصدر</div><div class="d-flex flex-wrap gap-1 mb-2">' + P.cats.map(function (c) { return '<span class="gl-pill">' + E(c.label) + ': <b>' + c.n + '</b></span>'; }).join('') + '</div>';
+  if ((P.others || []).length) h += '<div class="small fw-bold mb-1">أرصدة حسابات أخرى ستتغيّر (الأطراف الأخرى بالقيود المحذوفة)' + (P.othersN > P.others.length ? ' — أكبر ' + P.others.length + ' من ' + P.othersN : '') + '</div>' +
+    '<div class="table-responsive mb-2" style="max-height:180px;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th>الحساب</th><th>التغيّر</th><th>بالجنيه</th></tr></thead><tbody>' +
+    P.others.map(function (o) { return '<tr><td style="text-align:right;">' + E(o.code + ' — ' + o.name) + '</td><td class="gl-latin">' + curTxt(o) + '</td><td class="gl-latin">' + glFmt(o.base) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+  if ((P.list || []).length) h += '<details class="mb-2"><summary class="small fw-bold" style="cursor:pointer;">📋 قائمة القيود (' + P.listN + ')</summary><div class="table-responsive" style="max-height:220px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr><th>القيد</th><th>التاريخ</th><th>النوع</th><th>البيان</th><th>المبلغ</th><th>الحالة</th><th></th></tr></thead><tbody>' +
+    P.list.map(function (x) { return '<tr><td class="gl-latin">' + E(x.id) + '</td><td class="gl-latin">' + E(x.date) + '</td><td>' + E(x.type) + '</td><td style="text-align:right;">' + E(x.desc) + '</td><td class="gl-latin">' + E(x.amt) + '</td><td>' + E(x.status) + '</td><td>' + (x.act === 're' ? '🔁' : '🗑️') + '</td></tr>'; }).join('') + '</tbody></table></div></details>';
+  if ((P.notes || []).length) h += '<div class="small mb-2" style="line-height:1.9;">' + P.notes.map(E).join('<br>') + '</div>';
+  h += blocked ? '' : '<div class="gl-box"><label class="gl-lbl">للتأكيد اكتب كود الحساب <b class="gl-latin">' + E(a.code) + '</b> أو اسمه كما هو</label>' +
+    '<div class="d-flex gap-2"><input id="glAdConf" class="form-control form-control-sm" autocomplete="off" style="max-width:320px;">' +
+    '<button class="btn btn-danger btn-sm fw-bold" onclick="glAccDelGo_(\'' + glJs(a.code) + '\',\'' + glJs(P.sig) + '\',' + nAll + ',this)">🗑️ حذف الحساب' + (nAll ? ' وكل قيوده' : '') + '</button></div></div>';
+  glDlg('🗑️ حذف حساب من الدليل' + (nAll ? ' مع قيوده' : ''), h, 900);
+}
+function glAccDelGo_(code, sig, n, btn) {
+  var t = ((document.getElementById('glAdConf') || {}).value || '').trim();
+  if (!t) { _showPopup('اكتب كود الحساب أو اسمه للتأكيد', 'warning'); return; }
+  askConfirm_('تأكيد أخير: حذف الحساب ' + glAccLabel(code) + (n ? ' و' + n + ' قيداً بكل أطرافها نهائياً' : '') + '؟\nتُحفظ نسخة كاملة من كل صف محذوف بشيت «GL_Deleted» للاستعادة اليدوية.', function () {
+    btn.disabled = true;
+    glRun('glAccountDelete', [code, t, sig], function (res) {
+      glDlgClose();
+      _showPopup('🗑️ حُذف الحساب ' + res.code + ' — ' + res.name + (res.deleted ? '\nقيود محذوفة: ' + res.deleted + ' (' + res.lines + ' سطراً)' : '') + (res.reassigned ? '\nقيود افتتاحية حُوِّل سطره فيها لـ34: ' + res.reassigned : '') + '\nرقم عملية الحذف (للاستعادة): ' + res.delId, 'success', 'حذف حساب');
+      try { glApplyDelta_(res); } catch (e) {}
+      glRefreshData(function () { glTab('coa'); });
+    }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); });
+  }, { title: 'حذف نهائي', icon: '🗑️', danger: true, yesLabel: 'نعم، احذف نهائياً' });
 }
 function glSyncParties(btn) {
   btn.disabled = true; var o = btn.innerHTML; btn.innerHTML = '⏳…';
