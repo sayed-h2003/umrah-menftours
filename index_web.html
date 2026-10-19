@@ -1565,7 +1565,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.324</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.325</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -6633,6 +6633,8 @@ function _handleSessErr_(err) {
   var msg = String((err && (err.message || err)) || '');
   if (!/جلسة غير صالحة أو منتهية/.test(msg)) return false;   // (V4.319) النص الدقيق فقط — «منتهية» وحدها كانت تلتقط رسائل أخرى
   if (window._sessExpiredShown) return true; // تنبيه واحد فقط مهما تعددت النداءات الفاشلة المتزامنة
+  // 🔐 (V4.325) لا جلسة الآن (شاشة الدخول ظاهرة) ⇒ فشل متأخر لنداء قديم — بلا نافذة ولا عودة ثانية لشاشة الدخول
+  if (!window.authToken) return true;
   window._sessExpiredShown = true;
   // 📱 (V4.319) لا يصل هنا إلا لو تعذّر التجديد الصامت. أثناء الإقلاع (لم يبدأ المستخدم العمل بعد): شاشة الدخول
   // مباشرة بسطر هادئ — بلا نافذة خطأ ولا إعادة تحميل ثانية للصفحة
@@ -6882,28 +6884,47 @@ function _sessAdopt_(res) {
   window._sessExpiredShown = false;
 }
 function _sessResume_(cb) {
-  var dk = _devKeyGet_(); if (!dk || !window._RAW_RUN_) { cb(false); return; }
+  if (!window._RAW_RUN_) { cb(false); return; }
   _RESUME_.q.push(cb); if (_RESUME_.busy) return; _RESUME_.busy = true;
   var done = function (ok) { _RESUME_.busy = false; var q = _RESUME_.q; _RESUME_.q = []; q.forEach(function (f) { try { f(ok); } catch (e) { console.error(e); } }); };
-  window._RAW_RUN_()
-    .withSuccessHandler(function (res) {
-      var cu = window.currentUser || {}, sameUser = !cu.username || !res || !res.username || String(cu.username) === String(res.username);
-      if (res && res.success && res.token && sameUser) { _sessAdopt_(res); try { if (window.__step) window.__step('📱 جُدِّدت الجلسة تلقائياً (مفتاح الجهاز)'); } catch (e) {} done(true); }
-      else if (res && res.success && !sameUser) done(false);   // (V4.319) مفتاح الجهاز صار لمستخدم آخر (دخل بتبويب آخر) ⇒ لا تبديل صامت للهوية
-      else { if (res && res.error && res.error !== 'no-device') _devKeySet_(''); done(false); }
-    })
-    .withFailureHandler(function () { done(false); })
-    .resumeSession(dk);
+  var call = function (dk, tries) {
+    window._RAW_RUN_()
+      .withSuccessHandler(function (res) {
+        var cu = window.currentUser || {}, sameUser = !cu.username || !res || !res.username || String(cu.username) === String(res.username);
+        if (res && res.success && res.token && sameUser) { _sessAdopt_(res); try { if (window.__step) window.__step('📱 جُدِّدت الجلسة تلقائياً (مفتاح الجهاز)'); } catch (e) {} done(true); }
+        else if (res && res.success && !sameUser) done(false);   // (V4.319) مفتاح الجهاز صار لمستخدم آخر (دخل بتبويب آخر) ⇒ لا تبديل صامت للهوية
+        else { if (res && res.error && res.error !== 'no-device') _devKeySet_(''); done(false); }
+      })
+      // 🔐 (V4.325) عطل عابر بالخادم (ازدحام/مهلة) لا يُخرج المستخدم: محاولة ثانية بعد ثانيتين
+      .withFailureHandler(function () { if (tries < 1) setTimeout(function () { call(dk, tries + 1); }, 2000); else done(false); })
+      .resumeSession(dk);
+  };
+  var dk = _devKeyGet_();
+  if (dk) { call(dk, 0); return; }
+  // 🔐 (V4.325) تخزين الإطار الداخلي بلا مفتاح ⇒ نسخة صفحة الغلاف (كانت تُطلب عند شاشة الدخول فقط)
+  _devTopMsg_('get', '', function (k) { if (k) { window._devKeyTop = k; call(k, 0); } else done(false); });
 }
+/* 🔐 (V4.325) نداء خرج برمز جلسة ثم تغيّر الرمز قبل وصول ردّه (دخول جديد/تجديد صامت): كان فشله المتأخر
+   («جلسة غير صالحة») يُعامَل كانتهاء للجلسة الجديدة ⇒ نافذة «انتهت جلستك» فور الدخول ومسح الرمز الجديد
+   (فتتكرر بعد الدخول الثاني أيضاً). الآن: أي رمز جلسة قديم بمعاملات النداء ⇒ يُعاد النداء بالرمز الحالي. */
+var _TOK_RX_ = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function _sessStaleArg_(a, cur) { return typeof a === 'string' && !!a && a !== cur && (!!_RESUME_.dead[a] || _TOK_RX_.test(a)); }
 function _runExec_(getReal, st, fn, args, attempt) {
+  attempt = attempt || 0;
   var r = getReal();
   if (st.ok) r = r.withSuccessHandler(st.ok);
   r = r.withFailureHandler(function (err, uo) {
-    if (!attempt && _SESS_RX_.test(String((err && err.message) || err || ''))) {
-      var retry = function () { var nt = window.authToken; _runExec_(getReal, st, fn, args.map(function (a) { return (typeof a === 'string' && _RESUME_.dead[a]) ? nt : a; }), 1); };
-      if (args.some(function (a) { return typeof a === 'string' && _RESUME_.dead[a]; })) { retry(); return; }   // جدَّدها نداء آخر للتو
-      _sessResume_(function (ok) { if (ok) retry(); else if (st.fail) st.fail(err, uo); else console.error(fn, err); });
-      return;
+    if (attempt < 3 && _SESS_RX_.test(String((err && err.message) || err || ''))) {
+      var retry = function () { var nt = window.authToken; _runExec_(getReal, st, fn, args.map(function (a) { return _sessStaleArg_(a, nt) ? nt : a; }), attempt + 1); };
+      var cur = window.authToken;
+      if (cur && args.some(function (a) { return _sessStaleArg_(a, cur); })) { retry(); return; }   // تغيّر الرمز بعد خروج النداء
+      if (!attempt) {
+        _sessResume_(function (ok) {
+          if (ok || (window.authToken && window.authToken !== cur)) retry();   // جُدِّدت (أو دخل المستخدم أثناء المحاولة)
+          else if (st.fail) st.fail(err, uo); else console.error(fn, err);
+        });
+        return;
+      }
     }
     if (st.fail) st.fail(err, uo); else console.error('google.script.run.' + fn, err);
   });
@@ -6924,7 +6945,7 @@ function _runExec_(getReal, st, fn, args, attempt) {
         if (prop === 'withFailureHandler') return function (f) { return mk({ ok: st.ok, fail: f, uo: st.uo, hasUo: st.hasUo }); };
         if (prop === 'withUserObject') return function (o) { return mk({ ok: st.ok, fail: st.fail, uo: o, hasUo: true }); };
         if (typeof prop !== 'string' || prop === 'then') return undefined;
-        return function () { _runExec_(getReal, st, prop, Array.prototype.slice.call(arguments), NOWRAP[prop] ? 1 : 0); };
+        return function () { _runExec_(getReal, st, prop, Array.prototype.slice.call(arguments), NOWRAP[prop] ? 9 : 0); };
       } });
     };
     Object.defineProperty(google.script, 'run', { configurable: true, get: function () { return mk({}); } });
@@ -8021,7 +8042,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.324";
+var CLIENT_APP_VERSION = "4.325";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -10589,6 +10610,8 @@ function settingsHealth_(refresh) {
     if (bk && _stVisible_(document.getElementById('svcCard-setup') || document.createElement('i'))) h.push('<span class="st-h" onclick="settingsGo_(\'sys\',\'svcCard-setup\')">💾 النسخ الاحتياطي <span class="' + bk.className + '">' + bk.textContent + '</span></span>');
     var pend = (typeof GL !== 'undefined' && GL && GL.csPend) || 0;
     if (pend) h.push('<span class="st-h" onclick="settingsGlRun_(\'pend\')">📥 صفوف شيتات معلّقة <span class="badge bg-danger">' + pend + '</span></span>');
+    var sse = (window._servicesCache || {}).sessStoreErr;   // 🔐 (V4.325)
+    if (sse) h.push('<span class="st-h" title="' + escapeHtml_(sse) + '">🔐 حفظ الجلسات <span class="badge bg-danger">تعذّر — مساحة خصائص السكربت ممتلئة؟</span></span>');
     box.innerHTML = h.join('');
   };
   draw(); clearTimeout(ST_._ht); ST_._ht = setTimeout(draw, 2500); setTimeout(draw, 6000);

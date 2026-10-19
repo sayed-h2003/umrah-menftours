@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.324";
+var APP_VERSION = "4.325";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6375,7 +6375,14 @@ function _sessTtl_() {
   return (_SESS_TTL_MEMO_ = Math.min(21600, Math.max(SESSION_DURATION_SECONDS, (m + 10) * 60)));
 }
 function _sessPersist_(token, s) {
-  try { PropertiesService.getScriptProperties().setProperty('SESS_' + token, JSON.stringify({ s: s, t: Date.now() })); } catch (e) {}
+  var v = JSON.stringify({ s: s, t: Date.now() });
+  try { PropertiesService.getScriptProperties().setProperty('SESS_' + token, v); }
+  catch (e) {
+    // 🔐 (V4.325) مساحة الخصائص ممتلئة/عطل عابر: كانت الجلسة تبقى بالكاش فقط فتسقط مبكراً («انتهت جلستك»)
+    // ⇒ تنظيف الجلسات/المفاتيح المنتهية ثم محاولة ثانية
+    try { _sessPurge_(); PropertiesService.getScriptProperties().setProperty('SESS_' + token, v); }
+    catch (e2) { try { console.error('session persist failed: ' + (e2 && e2.message)); CacheService.getScriptCache().put('sess_store_err', String((e2 && e2.message) || e2).slice(0, 300), 21600); } catch (e3) {} }
+  }
 }
 function _sessRestore_(token) {
   try {
@@ -6478,8 +6485,9 @@ function _devIssue_(username, storedPw) {
   try {
     var days = _devDays_(); if (!days) return '';
     var key = Utilities.getUuid() + '-' + Utilities.getUuid(), now = Date.now();
-    PropertiesService.getScriptProperties().setProperty('DEV_' + _devHash_(key),
-      JSON.stringify({ u: String(username), f: _devHash_('pw|' + storedPw).slice(0, 16), exp: now + days * 86400000, t: now }));
+    var pk = 'DEV_' + _devHash_(key), v = JSON.stringify({ u: String(username), f: _devHash_('pw|' + storedPw).slice(0, 16), exp: now + days * 86400000, t: now });
+    try { PropertiesService.getScriptProperties().setProperty(pk, v); }
+    catch (eP) { _sessPurge_(); PropertiesService.getScriptProperties().setProperty(pk, v); }   // 🔐 (V4.325) تنظيف ثم محاولة ثانية
     return key;
   } catch (e) { return ''; }
 }
@@ -10939,7 +10947,9 @@ function getServicesStatus(authToken) {
       key2Configured: _fullAdmin ? !!_geminiKey2_() : false,
       masked1: _fullAdmin ? _maskKey_(_geminiKey1_()) : '',
       masked2: _fullAdmin ? _maskKey_(_geminiKey2_()) : ''
-    }
+    },
+    // 🔐 (V4.325) تعذّر حفظ الجلسات بخصائص السكربت (مساحة ممتلئة؟) ⇒ تحذير للمدير بلوحة صحة الإعدادات
+    sessStoreErr: _fullAdmin ? (function () { try { return CacheService.getScriptCache().get('sess_store_err') || ''; } catch (e) { return ''; } })() : ''
   };
 }
 
