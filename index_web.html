@@ -273,10 +273,10 @@ window.__step('1️⃣ بداية \u003Chead> — الصفحة بدأت تصل �
     ========================== */
     .app-sidebar {
       position: fixed;
-      top: 65px;
+      top: var(--app-top-h, 65px);   /* 📑 (V4.324) ارتفاع الشريط العلوي فعلياً (يزيد بسطر التبويبات) */
       right: 0;
       width: 265px;
-      height: calc(100vh - 65px);
+      height: calc(100vh - var(--app-top-h, 65px));
       background: #1e3d59;
       border-left: 1px solid rgba(255,255,255,0.08);
       overflow-y: auto;
@@ -294,7 +294,7 @@ window.__step('1️⃣ بداية \u003Chead> — الصفحة بدأت تصل �
     .app-sidebar-backdrop {
       display: none;
       position: fixed;
-      inset: 65px 0 0 0;
+      inset: var(--app-top-h, 65px) 0 0 0;
       background: rgba(0,0,0,0.35);
       z-index: 1025;
     }
@@ -1435,7 +1435,7 @@ input[type="date"]:not(:focus):not(:valid) {
   
 /* ⚙️ (V4.278) هيكل شاشة الإعدادات الجديد: مجموعات جانبية + بحث + شريط الحالة */
 .st-shell{display:flex;gap:14px;align-items:flex-start}
-.st-nav{width:230px;flex:0 0 230px;position:sticky;top:70px;background:var(--st-bg,#fff);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:8px}
+.st-nav{width:230px;flex:0 0 230px;position:sticky;top:calc(var(--app-top-h, 65px) + 5px);background:var(--st-bg,#fff);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:8px}
 .st-nav .st-g{display:flex;align-items:center;gap:8px;width:100%;border:0;background:transparent;text-align:right;padding:9px 10px;border-radius:9px;font-weight:600;font-size:14px;color:inherit;cursor:pointer}
 .st-nav .st-g:hover{background:rgba(13,110,253,.07)}
 .st-nav .st-g.on{background:#0d6efd;color:#fff}
@@ -1662,6 +1662,8 @@ input[type="date"]:not(:focus):not(:valid) {
     </div>
 
   </div>
+  <!-- 📑 (V4.324) تبويبات داخل البرنامج — يظهر الشريط فقط عند فتح أكثر من تبويب -->
+  <div id="appTabsBar" class="d-none" dir="rtl"><div id="appTabsList" role="tablist"></div><button type="button" id="appTabsAdd" title="تبويب جديد (أو Ctrl+ضغطة على أي شاشة بالقائمة)" onclick="appTabMenu_(this)">＋</button></div>
 </nav>
 
 <!-- ============ الشاشة الجانبية للتنقل (تعمل على الكمبيوتر والموبايل معاً) ============ -->
@@ -6654,6 +6656,7 @@ function _handleSessErr_(err) {
 
 // (V4.319) العودة لشاشة الدخول دون إنهاء مفتاح الجهاز ودون إعادة تحميل الصفحة (نفس مسار الخروج المعتاد)
 function _sessToLogin_(note) {
+  try { if (window.appTabsReset_) appTabsReset_(false); } catch (eT) {}   // 📑 (V4.324) تُستعاد بعد الدخول
   try { _BOOT_ = { state: 'idle', parts: null, at: 0, q: [], uses: {} }; } catch (e) {}
   try { localStorage.removeItem('smartManagerUser'); } catch (e) {}
   try { localStorage.removeItem('authToken'); } catch (e) {}
@@ -7349,6 +7352,7 @@ function _canOpenScreen_(page) {
   }
 }
 function _restoreScreenOnReload_() {
+  try { if (window.appTabsRestore_ && appTabsRestore_()) return; } catch (eT) {}   // 📑 (V4.324) التبويبات المفتوحة قبل التحديث
   var last = '';
   try { last = sessionStorage.getItem(_LAST_SCREEN_KEY_) || ''; } catch (e) {}
   if (!last) return _applyHomeScreen();
@@ -8110,6 +8114,7 @@ function _removeTransientOverlays() {
 }
 
 function logoutUser() {
+  try { if (window.appTabsReset_) appTabsReset_(true); } catch (eT) {}   // 📑 (V4.324)
   _removeTransientOverlays();
   try { if (typeof glDlgCloseAll === 'function') glDlgCloseAll(); } catch (e) {}   // (V4.303) لا تبقى نافذة حسابات (أو مكدّسها) فوق شاشة الدخول
   // 🚀 (V4.200) الدخول التالي بنفس الصفحة يُرسل نداء إقلاع جديداً
@@ -11079,6 +11084,14 @@ function _disableCleanupSchedule(btn) {
 
 // 🧹 تصفير فلاتر كل الشاشات عند مغادرتها (تُطبَّق من جديد عند العودة عبر محمّل كل شاشة)
 function _resetAllScreenFilters() {
+  // 📑 (V4.324) شاشة مفتوحة بتبويب آخر تحتفظ بفلاترها
+  var _held = function (p) { return !!(window._tabHeld_ && _tabHeld_(p)); };
+  if (!_held('registry')) _resetRegistryFilters_();
+  if (!_held('trips')) { window._tripsUrgentFilterActive = false; window._tripsFieldFilter = null; }
+  if (!_held('search') && typeof clearSearchFilters === 'function') { try { clearSearchFilters(); } catch (e) {} }
+  if (!_held('auditLog')) _resetAuditFilters_();
+}
+function _resetRegistryFilters_() {
   // سجل عام المعتمرين: الفلاتر + فلتر الجوازات + التحديد المجمع
   ['regFilterName', 'regFilterPassport', 'regFilterTrip', 'regFilterClient', 'regFilterDate', 'regFilterMfFile', 'regFilterBooking'].forEach(function(id) {
     var el = document.getElementById(id);
@@ -11091,11 +11104,8 @@ function _resetAllScreenFilters() {
     var b = document.getElementById('regNoTripBtn'); if (b) b.className = 'btn btn-sm btn-outline-danger';
   }
   if (typeof _toggleRegSelectAll === 'function') _toggleRegSelectAll(false);
-  // شاشة الرحلات: فلتر "الرحلات العاجلة بدون إشعار" + فلتر لوحة الإحصائيات
-  window._tripsUrgentFilterActive = false;
-  window._tripsFieldFilter = null;
-  // شاشة البحث المتقدم
-  if (typeof clearSearchFilters === 'function') { try { clearSearchFilters(); } catch (e) {} }
+}
+function _resetAuditFilters_() {
   // 📜 سجل التعديلات: تصفير كل فلاتره بصمت (يُعاد التحميل بفلاتر نظيفة عند العودة للشاشة)
   var _auditEnt = document.getElementById('auditFilterEntity'); if (_auditEnt) _auditEnt.value = '';
   var _auditScr = document.getElementById('auditFilterScreen');
@@ -24196,7 +24206,7 @@ function switchPage(page) {
 
   // 🧹 (V4.21) مغادرة شاشة حسابات العملاء لأي شاشة أخرى: تفريغ كامل — بيان العميل المفتوح لا يبقى
   // محفوظًا للعودة لاحقًا، فلا يظهر حساب قديم مختلط ببيانات عميل آخر عند فتح الشاشة من جديد
-  if (page !== 'accounts') {
+  if (page !== 'accounts' && !(window._tabHeld_ && _tabHeld_('accounts'))) {   // 📑 (V4.324) لا يُفرَّغ لو مفتوحاً بتبويب آخر
     var _accInp = document.getElementById('accClientInput');
     if (_accInp) _accInp.value = '';
     var _accSum = document.getElementById('accSummary'); if (_accSum) _accSum.innerHTML = '';
@@ -24219,14 +24229,14 @@ document
 }
 
     // امسح نتائج Dashboard السابقة
-    const resultsArea = document.getElementById('searchResultsArea');
+    const resultsArea = (page === 'search' || !(window._tabHeld_ && _tabHeld_('search'))) ? document.getElementById('searchResultsArea') : null;   // 📑 (V4.324)
     if (resultsArea) {
       resultsArea.innerHTML = `
         <div class="alert alert-light border text-center">
           حدد معايير البحث والفرز واضغط على زر انشاء التقرير...
         </div>`;
     }
-    const columnsArea = document.getElementById('dynamicColumnsArea');
+    const columnsArea = resultsArea ? document.getElementById('dynamicColumnsArea') : null;
     if (columnsArea) columnsArea.innerHTML = '';
     if (typeof closeColumnsSettingsModal === 'function') closeColumnsSettingsModal();
   
@@ -47379,6 +47389,7 @@ function openHotelsApp_() {
 // ⚡ (V4.252) نداءات القراءة فقط — أي نداء غيرها (حفظ/ترحيل/حذف/مزامنة…) يمسح كاش الكشوف بالواجهة ويُسخّن كاش الخادم
 var GL_RO_RX_ = /^gl(Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbErpOverlap|HbErpMatch|HbSeasonPreview|HbPaySplitPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk)$/;
 function glDataChanged_() {
+  GL._chg = (GL._chg || 0) + 1;   // 📑 (V4.324) تبويب حسابات مُوقَف يُحدَّث عند العودة له لو تغيّرت البيانات
   GL._stCache = {};
   clearTimeout(GL._warmT); GL._warmT = setTimeout(function () { try { google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).glWarm(window.authToken); } catch (e) {} }, 400);
 }
@@ -53960,6 +53971,284 @@ function glSaveSettingsUI(btn) {
       } else switchPage(st.p);
     } finally { busy = false; cur = st; paint(); }
   };
+})();
+</script>
+<style>
+  /* 📑 (V4.324) شريط التبويبات داخل البرنامج (سطر ثانٍ بالشريط العلوي) */
+  #appTabsBar { flex: 0 0 100%; display: flex; align-items: center; gap: 6px; padding: 4px 10px 0; }
+  #appTabsBar.d-none { display: none !important; }
+  #appTabsList { display: flex; gap: 4px; overflow-x: auto; flex: 1; scrollbar-width: thin; }
+  .app-tab { display: inline-flex; align-items: center; gap: 6px; max-width: 230px; padding: 4px 10px; border-radius: 9px 9px 0 0; background: rgba(255,255,255,.12);
+    color: #e2e8f0; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; border: 1px solid rgba(255,255,255,.15); border-bottom: none; user-select: none; }
+  .app-tab .t { overflow: hidden; text-overflow: ellipsis; }
+  .app-tab .x { opacity: .7; padding: 0 2px; border-radius: 4px; }
+  .app-tab .x:hover { opacity: 1; background: rgba(255,255,255,.25); }
+  .app-tab.on { background: #f8fafc; color: #1e3d59; }
+  .app-tab.on .x:hover { background: #e2e8f0; }
+  #appTabsAdd { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 8px; padding: 1px 10px; font-size: 16px; line-height: 1.5; }
+  #appTabsMenu { position: fixed; z-index: 2147483000; background: #fff; border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.28); max-height: 70vh; overflow: auto; min-width: 250px; padding: 6px 0; direction: rtl; }
+  #appTabsMenu a { display: block; padding: 6px 14px; font-size: 13px; color: #1e293b; text-decoration: none; }
+  #appTabsMenu a:hover { background: #eff6ff; }
+  #appTabsMenu .sep { border-top: 1px solid #e2e8f0; margin: 4px 0; }
+  @media (max-width: 767px) { .app-tab { max-width: 150px; } .app-tab:not(.on) .x { display: none; } }
+</style>
+<script>
+/* 📑 (V4.324) تبويبات داخل البرنامج (مثل نماذج Access): كل تبويب «شاشة» بحالتها — فتح شاشة جديدة (＋ أو Ctrl/الضغط بالعجلة على أي
+   شاشة بالقائمة) لا يغلق الحالية، والتنقل بينها بضغطة. الشاشات العادية تبقى في الصفحة فتعود بحالتها (فلاتر/تمرير/بيانات) بلا إعادة
+   تحميل ولا تصفير؛ وشاشات الحسابات العامة (العهد/كشف حساب/دليل الحسابات…) تتعدد: تُحفظ الشاشة المغادَرة بكامل عناصرها وحالتها
+   («إيقاف») وتعود كما هي، وتُحدَّث تلقائياً لو تغيّرت البيانات أثناء غيابها. الشريط لا يظهر إلا مع تبويبين فأكثر. */
+(function () {
+  var T = { list: [], active: null, seq: 0, light: false };
+  var MAX = function () { return window.innerWidth < 768 ? 5 : 8; };
+  var CASH = { custody: 'custody', treasury: 'safe', banks: 'bank' };
+  var GL_SHARED = /^_(stCache|trFull|vchLogo|coLogo|vcoLogo|warmT|pushNext|afterSave|ptPreset|vMainPreset|chg|dlg\w*)$/;
+  var E = function (t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var userKey = function () { var u = window.currentUser || {}; return 'smartTabs_' + (u.username || u.name || ''); };
+  var pageOf = function (key) { var p = String(key || '').split(':')[0]; return p === 'trip' ? 'trips' : p; };
+  var activeTab = function () { return T.list.filter(function (t) { return t.id === T.active; })[0] || null; };
+  var curPage = function () { var a = document.querySelector('.page-section.active'); return a && a.id ? a.id.replace(/^section-/, '') : ''; };
+  // مفتاح الشاشة الحالية: صفحة | gl:تبويب[:حساب] | hotels:صفحة | trip:اسم | accounts:عميل
+  var curKey = function () {
+    var page = curPage(); if (!page) return '';
+    if (page === 'gl' && window.GL) {
+      var t = GL.tab || 'home', c = '';
+      if (t === 'stmt') c = GL._stCode || ''; else if (CASH[t] && GL._cash && GL._cash[CASH[t]]) c = GL._cash[CASH[t]].code || '';
+      return 'gl:' + t + (c ? ':' + c : '');
+    }
+    if (page === 'hotels' && window.HBX && HBX.page) return 'hotels:' + HBX.page;
+    if (page === 'trips') { var m = document.getElementById('tripPilgrimsModal'); if (m && m.classList.contains('show') && window.currentTripName) return 'trip:' + window.currentTripName; }
+    if (page === 'accounts' && window._accData && _accData.client) return 'accounts:' + _accData.client;
+    return page;
+  };
+  var linkTxt = function (el) { return el ? (el.textContent || '').replace(/\s+/g, ' ').trim() : ''; };
+  var titleOf = function (key) {
+    var p = String(key || '').split(':'), page = p[0], sub = p[1] || '', arg = p.slice(2).join(':');
+    if (page === 'trip') return '🧳 ' + p.slice(1).join(':');
+    if (page === 'accounts' && sub) return '💰 ' + p.slice(1).join(':');
+    if (page === 'gl') {
+      var tb = document.querySelector('#glTabs .gl-tab[data-t="' + ({ ledger: 'stmt', import: 'settings', trial: 'reports' }[sub] || sub) + '"]');
+      var lbl = linkTxt(tb) || 'الحسابات العامة', nm = arg && window.GL && GL.map && GL.map[arg] ? GL.map[arg].name : arg;
+      return (tb ? '' : '🧾 ') + lbl + (nm ? ' — ' + nm : '');
+    }
+    if (page === 'hotels' && sub) { var hl = document.querySelector('#appSidebar a.nav-link[onclick*="sideGo_(\'hotels\',\'' + sub + '\')"]'); return linkTxt(hl) || '🏨 الفنادق'; }
+    return linkTxt(document.getElementById('link-' + page + '-side')) || page;
+  };
+  var held = function (page) { return T.list.length > 1 && T.list.some(function (t) { return t.id !== T.active && t.live && pageOf(t.key) === page && page !== 'gl'; }); };
+  window._tabHeld_ = held;
+  var save = function () {
+    try {
+      if (T.list.length < 2) { localStorage.removeItem(userKey()); return; }
+      localStorage.setItem(userKey(), JSON.stringify({ at: Date.now(), active: T.active, list: T.list.map(function (t) { return { id: t.id, key: t.key, title: t.title }; }) }));
+    } catch (e) {}
+  };
+  var render = function () {
+    var bar = document.getElementById('appTabsBar'), box = document.getElementById('appTabsList'); if (!bar || !box) return;
+    var a = activeTab(); if (a && a.live) { var k = curKey(); if (k) { a.key = k; a.title = titleOf(k); } }
+    bar.classList.toggle('d-none', T.list.length < 2);
+    box.innerHTML = T.list.map(function (t, i) {
+      return '<div class="app-tab' + (t.id === T.active ? ' on' : '') + '" role="tab" data-id="' + t.id + '" title="' + E(t.title) + (i < 9 ? ' (Alt+' + (i + 1) + ')' : '') + '">' +
+        '<span class="t">' + E(t.title) + '</span><span class="x" data-x="1" title="إغلاق التبويب">✕</span></div>';
+    }).join('');
+    var on = box.querySelector('.app-tab.on'); if (on && on.scrollIntoView) try { on.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) {}
+    save();
+  };
+  // ——— إيقاف/استئناف شاشة الحسابات العامة (العناصر تُفصل من الصفحة بحالتها، والحالة GL._* تُحفظ معها) ———
+  var glPark = function (t) {
+    var body = document.getElementById('glBody'); if (!body || !window.GL) return;
+    try { if (typeof _actBarHide_ === 'function') _actBarHide_(); } catch (e) {}
+    try { if (typeof _glpHide === 'function') _glpHide(); } catch (e) {}
+    var sc = []; Array.prototype.forEach.call(body.querySelectorAll('*'), function (el) { if (el.scrollTop || el.scrollLeft) sc.push([el, el.scrollTop, el.scrollLeft]); });
+    var frag = document.createDocumentFragment(); while (body.firstChild) frag.appendChild(body.firstChild);
+    var snap = { tab: GL.tab };
+    Object.keys(GL).forEach(function (k) { if (k.charAt(0) === '_' && !GL_SHARED.test(k)) snap[k] = GL[k]; });
+    ['_cash', '_stCf', '_ecf', '_entSel', '_trSel', '_stSel', '_coaOpen'].forEach(function (k) { try { if (GL[k] && typeof GL[k] === 'object') GL[k] = JSON.parse(JSON.stringify(GL[k])); } catch (e) {} });
+    t.park = { frag: frag, sc: sc, winY: window.scrollY || 0, snap: snap, chg: GL._chg || 0 };
+  };
+  var glUnpark = function (t) {
+    var body = document.getElementById('glBody'), P = t.park; if (!body || !P || !window.GL) return false;
+    while (body.firstChild) body.removeChild(body.firstChild);
+    Object.keys(GL).forEach(function (k) { if (k.charAt(0) === '_' && !GL_SHARED.test(k) && !(k in P.snap)) delete GL[k]; });
+    Object.keys(P.snap).forEach(function (k) { if (k !== 'tab') GL[k] = P.snap[k]; });
+    GL.tab = P.snap.tab;
+    body.appendChild(P.frag);
+    var hl = { ledger: 'stmt', import: 'settings', trial: 'reports' }[GL.tab] || GL.tab;
+    document.querySelectorAll('#glTabs .gl-tab').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === hl); });
+    P.sc.forEach(function (x) { try { x[0].scrollTop = x[1]; x[0].scrollLeft = x[2]; } catch (e) {} });
+    try { window.scrollTo(0, P.winY); } catch (e) {}
+    var stale = (GL._chg || 0) !== P.chg; t.park = null;
+    try { if (typeof _saveCurScreen_ === 'function') _saveCurScreen_(); } catch (e) {}
+    if (stale) setTimeout(function () {
+      try {
+        if (CASH[GL.tab] && typeof glLoadTreasury === 'function') glLoadTreasury(true);
+        else if (GL.tab === 'stmt' && typeof glLoadStmt === 'function') glLoadStmt(true);
+        else if (typeof glTab === 'function') glTab(GL.tab);
+      } catch (e) {}
+    }, 0);
+    return true;
+  };
+  // ——— إظهار شاشة بلا أي تصفير ولا إعادة تحميل (بعكس switchPage) ———
+  var showSection = function (page) {
+    T.light = true;
+    try {
+      try { _autoMinimizeOpenWindows_(); } catch (e) {}
+      try { _removeTransientOverlays(); } catch (e) {}
+      document.querySelectorAll('.page-section').forEach(function (s) { s.classList.remove('active'); });
+      document.querySelectorAll('.nav-link').forEach(function (l) { l.classList.remove('active'); });
+      var sec = document.getElementById('section-' + page); if (sec) sec.classList.add('active');
+      var sl = document.getElementById('link-' + page + '-side'); if (sl) sl.classList.add('active');
+      if (page === 'hotels') { try { if (typeof hbxInit === 'function') hbxInit(); } catch (e) {} try { if (typeof hbxSize === 'function') hbxSize(); } catch (e) {} }
+      try { if (typeof _saveCurScreen_ === 'function') _saveCurScreen_(); } catch (e) {}
+    } finally { T.light = false; }
+  };
+  // ——— فتح شاشة بمفتاحها (لتبويب جديد أو بعد التحديث) عبر دوال التنقل نفسها ———
+  var waitGl = function (fn, n) { n = n || 0; if (window.GL && GL.ready) { fn(); return; } if (n > 120) return; setTimeout(function () { waitGl(fn, n + 1); }, 150); };
+  var go = function (key) {
+    var p = String(key || '').split(':'), page = p[0], sub = p[1] || '', arg = p.slice(2).join(':');
+    if (page === 'trip') { switchPage('trips'); var nm = p.slice(1).join(':'); setTimeout(function () { try { openTripPilgrims(nm); } catch (e) {} }, 350); return; }
+    if (page === 'accounts' && sub) { try { _accOpenByName_(p.slice(1).join(':')); } catch (e) { switchPage('accounts'); } return; }
+    if (page === 'gl' && sub) {
+      if (CASH[sub] && arg && window.GL) { GL._cash = GL._cash || {}; GL._cash[CASH[sub]] = { code: arg }; }
+      sideGo_('gl', sub === 'stmt' ? 'stmt' : sub);
+      if (sub === 'stmt' && arg) waitGl(function () { try { glOpenStatement(arg); } catch (e) {} });
+      return;
+    }
+    if (page === 'hotels' && sub) { sideGo_('hotels', sub); return; }
+    switchPage(page || 'entry');
+  };
+  window.appGo_ = go;
+  var canOpen = function (key) { var pg = pageOf(key); return !!document.getElementById('section-' + pg) && (typeof _canOpenScreen_ !== 'function' || _canOpenScreen_(pg)); };
+  var deactivate = function (t) {
+    if (!t) return;
+    if (t.live) { var k = curKey(); if (k) { t.key = k; t.title = titleOf(k); } }
+    if (t.live && curPage() === 'gl') glPark(t);
+  };
+  var activate = function (id) {
+    var t = T.list.filter(function (x) { return x.id === id; })[0]; if (!t || id === T.active) { render(); return; }
+    if (!canOpen(t.key)) { T.list = T.list.filter(function (x) { return x.id !== id; }); _showPopup('لا تملك صلاحية هذه الشاشة — أُغلق التبويب', 'warning'); render(); return; }
+    deactivate(activeTab());
+    T.active = id; T.busy = true;
+    try {
+      var page = pageOf(t.key);
+      if (t.live && page === 'gl' && t.park) { showSection('gl'); glUnpark(t); }
+      else if (t.live && page !== 'gl' && page === pageOf(curKey()) ) { /* نفس الصفحة ظاهرة بالفعل */ }
+      else if (t.live && page !== 'gl') {
+        showSection(page);
+        var p = String(t.key).split(':');
+        if (p[0] === 'trip') {   // كشف الرحلة: يعود من شريط النوافذ المصغَّرة لو هو نفسه، وإلا يُفتح
+          var m = document.getElementById('tripPilgrimsModal'), mid = m && m.getAttribute('data-mf-min-id');
+          if (mid && window.currentTripName === p.slice(1).join(':') && typeof mfRestoreMin === 'function') mfRestoreMin(mid);
+          else setTimeout(function () { try { openTripPilgrims(p.slice(1).join(':')); } catch (e) {} }, 50);
+        }
+        if (p[0] === 'hotels' && p[1] && window.HBX && HBX.page !== p[1] && typeof hbxShow === 'function') hbxShow(p[1]);
+      } else { t.live = true; go(t.key); }
+      t.live = true;
+    } finally { T.busy = false; }
+    render();
+  };
+  var open = function (key, opts) {
+    opts = opts || {};
+    if (!key) return;
+    if (!canOpen(key)) { _showPopup('لا تملك صلاحية هذه الشاشة', 'warning'); return; }
+    if (!T.list.length) { var k0 = curKey() || 'entry'; T.list.push({ id: 't' + (++T.seq), key: k0, title: titleOf(k0), live: true }); T.active = T.list[0].id; }
+    var pg = pageOf(key);
+    if (pg !== 'gl' && !opts.dup) { var ex = T.list.filter(function (t) { return t.live && pageOf(t.key) === pg; })[0]; if (ex) { if (ex.id !== T.active) activate(ex.id); else showToast('📑 هذه الشاشة مفتوحة بالتبويب الحالي'); return; } }
+    if (T.list.length >= MAX()) { _showPopup('الحد الأقصى ' + MAX() + ' تبويبات مفتوحة — أغلق تبويباً أولاً', 'warning'); return; }
+    var t = { id: 't' + (++T.seq), key: key, title: titleOf(key), live: false };
+    var ix = T.list.indexOf(activeTab()); T.list.splice(ix < 0 ? T.list.length : ix + 1, 0, t);
+    activate(t.id);
+  };
+  var close = function (id) {
+    var ix = -1; T.list.forEach(function (t, i) { if (t.id === id) ix = i; }); if (ix < 0) return;
+    if (id === T.active && T.list.length > 1) activate((T.list[ix + 1] || T.list[ix - 1]).id);
+    var t = T.list[ix]; if (t) t.park = null;
+    T.list = T.list.filter(function (x) { return x.id !== id; });
+    if (T.list.length < 2) T.list = [];   // تبويب واحد = الوضع العادي (الشريط يختفي)
+    render();
+  };
+  window.appTabOpen = open; window.appTabActivate = activate; window.appTabClose = close;
+  window.appTabMenu_ = function (btn) {
+    var old = document.getElementById('appTabsMenu'); if (old) { old.remove(); return; }
+    var opts = (typeof _homeOpts_ === 'function' ? _homeOpts_() : []);
+    var m = document.createElement('div'); m.id = 'appTabsMenu';
+    var ck = curKey();
+    m.innerHTML = (pageOf(ck) === 'gl' ? '<a href="#" data-k="' + E(ck) + '" data-dup="1">⧉ نسخة من الشاشة الحالية بتبويب جديد</a><div class="sep"></div>' : '') +
+      '<div class="px-3 pb-1 small text-muted">افتح بتبويب جديد:</div>' +
+      opts.map(function (o) { return '<a href="#" data-k="' + E(o.k) + '" style="' + (o.sub ? 'padding-right:28px;font-size:12px;' : '') + '">' + E(o.t) + '</a>'; }).join('');
+    document.body.appendChild(m);
+    var r = btn.getBoundingClientRect(); m.style.top = (r.bottom + 4) + 'px'; m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.left)) + 'px';
+    m.addEventListener('click', function (e) { var a = e.target.closest('a[data-k]'); if (!a) return; e.preventDefault(); m.remove(); open(a.getAttribute('data-k'), { dup: !!a.getAttribute('data-dup') }); });
+    setTimeout(function () { document.addEventListener('mousedown', function f(e) { if (!m.contains(e.target) && e.target !== btn) { m.remove(); document.removeEventListener('mousedown', f); } }); }, 0);
+  };
+  // ——— تغليف التنقل: التنقل داخل التبويب يحدّث مفتاحه؛ شاشة مفتوحة بتبويب آخر ⇒ يُنتقل لتبويبها ———
+  if (typeof window.switchPage === 'function') {
+    var sp0 = window.switchPage;
+    window.switchPage = function (page) {
+      if (!T.light && !T.busy && T.list.length > 1 && page !== 'gl') {
+        var h = T.list.filter(function (t) { return t.id !== T.active && t.live && pageOf(t.key) === page; })[0];
+        if (h) { activate(h.id); return; }
+      }
+      var r = sp0.apply(this, arguments);
+      if (T.list.length > 1) setTimeout(render, 0);
+      return r;
+    };
+  }
+  if (typeof window.glTab === 'function') {
+    var gt0 = window.glTab;
+    window.glTab = function () { var r = gt0.apply(this, arguments); if (T.list.length > 1) setTimeout(render, 0); return r; };
+  }
+  if (typeof window.openTripPilgrims === 'function') {
+    var ot0 = window.openTripPilgrims;
+    window.openTripPilgrims = function () { var r = ot0.apply(this, arguments); if (T.list.length > 1) setTimeout(render, 400); return r; };
+  }
+  // ——— الشريط: ضغطة = انتقال · ✕ أو الضغط بالعجلة = إغلاق · Alt+رقم ———
+  document.addEventListener('click', function (e) {
+    var tab = e.target.closest && e.target.closest('#appTabsList .app-tab'); if (!tab) return;
+    if (e.target.getAttribute('data-x')) close(tab.getAttribute('data-id')); else activate(tab.getAttribute('data-id'));
+  });
+  document.addEventListener('auxclick', function (e) { var tab = e.button === 1 && e.target.closest && e.target.closest('#appTabsList .app-tab'); if (tab) { e.preventDefault(); close(tab.getAttribute('data-id')); } });
+  document.addEventListener('keydown', function (e) {
+    if (!e.altKey || e.ctrlKey || e.metaKey || T.list.length < 2) return;
+    if (document.querySelector('#glDlgOv, #glHistOv, #glAvOv, #glCsNaOv')) return;   // نافذة حسابات مفتوحة فوق الشاشة: تُغلق أولاً
+    var n = parseInt(e.key, 10); if (!(n >= 1 && n <= 9) || !T.list[n - 1]) return;
+    e.preventDefault(); activate(T.list[n - 1].id);
+  });
+  // Ctrl/⌘+ضغطة أو الضغط بالعجلة على أي شاشة بالقائمة الجانبية ⇒ تبويب جديد
+  var sideKey = function (a) {
+    var oc = a.getAttribute('onclick') || '', m = oc.match(/sideGo_\('(\w+)','(\w+)'\)/); if (m) return m[1] + ':' + m[2];
+    var m2 = oc.match(/switchPage\('(\w+)'\)/); return m2 ? m2[1] : '';
+  };
+  var sideNew = function (e) {
+    var a = e.target.closest && e.target.closest('#appSidebar a.nav-link'); if (!a) return;
+    var k = sideKey(a); if (!k) return;
+    e.preventDefault(); e.stopPropagation();
+    open(k);
+    try { if (typeof closeAppSidebarOnMobile === 'function') closeAppSidebarOnMobile(); } catch (x) {}
+  };
+  document.addEventListener('click', function (e) { if (e.ctrlKey || e.metaKey) sideNew(e); }, true);
+  document.addEventListener('auxclick', function (e) { if (e.button === 1) sideNew(e); }, true);
+  // ——— الاستعادة بعد التحديث (خلال 12 ساعة) · المسح عند الخروج ———
+  window.appTabsRestore_ = function () {
+    var o = null; try { o = JSON.parse(localStorage.getItem(userKey()) || 'null'); } catch (e) {}
+    if (!o || !o.list || o.list.length < 2 || Date.now() - (o.at || 0) > 12 * 3600 * 1000) return false;
+    T.list = o.list.filter(function (t) { return t && t.key && canOpen(t.key); }).map(function (t) { return { id: t.id, key: t.key, title: t.title || titleOf(t.key), live: false }; });
+    T.seq = T.list.reduce(function (m, t) { var n = parseInt(String(t.id).slice(1), 10) || 0; return Math.max(m, n); }, 0);
+    if (T.list.length < 2) { T.list = []; return false; }
+    var act = T.list.filter(function (t) { return t.id === o.active; })[0] || T.list[0];
+    T.active = null; activate(act.id);
+    return true;
+  };
+  window.appTabsReset_ = function (forget) {
+    if (forget) try { localStorage.removeItem(userKey()); } catch (e) {}
+    T.list = []; T.active = null;
+    var bar = document.getElementById('appTabsBar'); if (bar) bar.classList.add('d-none');
+  };
+  // ——— ارتفاع الشريط العلوي الفعلي (يزيد بسطر التبويبات) للقائمة الجانبية وما يلتصق أسفله ———
+  try {
+    var nav = document.querySelector('nav.navbar.sticky-top');
+    var setH = function () { if (nav && nav.offsetHeight) document.documentElement.style.setProperty('--app-top-h', nav.offsetHeight + 'px'); };   // مخفي قبل الدخول ⇒ تبقى القيمة الافتراضية
+    if (nav && window.ResizeObserver) new ResizeObserver(setH).observe(nav);
+    setH();
+  } catch (e) {}
 })();
 </script>
 </body>
