@@ -1565,7 +1565,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.325</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.326</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -4086,6 +4086,8 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="btn btn-light btn-sm fw-bold" onclick="_accUnlinkedOpen_()" title="رسوم الغرفة (ملفات الوزارة المراجَعة) والتأشيرات (الموفا الصادرة) لهذا العميل غير المرتبطة بأي رحلة — اختر ما تريد وأدرجه في حسابه">🏛️ بنود الوزارة والتأشيرات</button>
       <button id="accQuickPayBtn" class="btn btn-warning btn-sm fw-bold d-none" onclick="_accQuickPayOpen_()" title="تسجيل دفعة عامة أو عدة دفعات لعملاء مختلفين مباشرة بدون فتح أي حساب أولاً">💠 تسجيل دفعات عامة</button>
       <button class="btn btn-outline-light btn-sm" onclick="_accGenLedgerOpen_()" title="عرض وفلترة كل الدفعات العامة عبر كل العملاء">📋 سجل الدفعات العامة</button>
+      <!-- 🏨 (V4.326) مزامنة حجوزات الفنادق لحسابات العملاء بأثر رجعي (للمدير) -->
+      <button id="accHbSyncBtn" class="btn btn-outline-light btn-sm d-none" onclick="_accHbSyncAll_()" title="نقل كل حجوزات الفنادق المقيَّدة بالحسابات العامة بنوداً بحسابات العملاء، وحذف بنود «سكن مكة/المدينة» التي كانت تكرر قيمتها (للمدير)">🏨 مزامنة حجوزات الفنادق</button>
       <button class="btn btn-outline-warning btn-sm" onclick="_accAlertsScanOpen_()" title="فحص كل العملاء عن رحلات تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ حساباتهم">⚠️ مراجعة التغيّرات</button>
       <button class="btn btn-outline-light btn-sm" onclick="_accAllClientsOpen_()" title="كشف إجمالي المستحقات والمدفوعات والرصيد لكل العملاء دفعة واحدة">📊 كشف كل العملاء</button>
       <!-- 📊 (V4.48) ملخص حسابات كل عملاء رحلة واحدة في جدول واحد — بطلب صريح -->
@@ -7191,6 +7193,7 @@ function toggleAdminOnlyLinks_() {
   // 🏨 (V4.248) تجهيز «الفنادق والحجوزات» في الخلفية بعد الدخول ⇒ فتح التبويب فوري
   if (hasPermission("admin") || hasPermission("hotels.view")) setTimeout(function () { try { if (typeof hbxPreload === 'function' && window.authToken) hbxPreload(); } catch (e) {} }, 6000);
 
+  (function () { var b = document.getElementById('accHbSyncBtn'); if (b) b.classList.toggle('d-none', !hasPermission('admin')); })();   // 🏨 (V4.326)
   // رابط الرحلات: admin أو TRIPS
   ['link-trips', 'link-trips-side'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -8042,7 +8045,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.325";
+var CLIENT_APP_VERSION = "4.326";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -26613,25 +26616,44 @@ function _accRender_() {
         '<button class="btn btn-outline-primary btn-sm" onclick="_accFxItemModal_(\'' + jsT + '\')" title="تحويل مستحق من عملة لأخرى — يصفّر المستحق بعملة ويضيف مقابله بالعملة الأخرى">🔁 تحويل مستحق</button>' +
         (!isGen ? '<button class="btn btn-sm" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:800;" onclick="_accGen_(\'' + jsT + '\')">🪄 توليد البنود</button>' : '') : '') +
       (sel.items.length && canEdit ? '<button class="btn btn-outline-info btn-sm" onclick="_accEditAll_(\'' + jsT + '\')">✏️ تعديل البنود</button>' : '') +
+      (canEdit && sel.items.some(function(i) { return i.hbKey; }) ? '<button class="btn btn-sm" style="background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;font-weight:700;" onclick="_accHbMoveBulk_()" title="حدّد حجوزات الفنادق (🏨) بالجدول ثم انقلها لرحلة — مثل تخصيص الدفعات">🔀 نقل الحجوزات المحددة لرحلة</button>' : '') +
       (sel.items.length && canDel ? '<button class="btn btn-outline-danger btn-sm" onclick="_accDelSelected_(\'' + jsT + '\')">🗑️ حذف المحدد</button>' +
         '<button class="btn btn-outline-danger btn-sm" onclick="_accDelAllTrip_(\'' + jsT + '\')">🗑️ الكل</button>' : '') + '</div>';
 
+    // 🏨 (V4.326) تنبيهات حجوزات الفنادق المنقولة من الحسابات العامة
+    var _hbIt = sel.items.filter(function(i) { return i.hbKey; });
+    if (_hbIt.length) {
+      var _hbC = {}; _hbIt.forEach(function(i) { _hbC[String(i.hbKey).split('|')[0]] = 1; });
+      var _dupH = sel.items.filter(function(i) { return !i.hbKey && ((_hbC['مكة'] && /^سكن مكة/.test(i.desc)) || (_hbC['المدينة'] && /^سكن المدينة/.test(i.desc))); });
+      if (_dupH.length) main += '<div class="alert alert-warning py-1 px-2 small mb-2">⚠️ يوجد بند «' + esc(_dupH.map(function(i) { return i.desc; }).join('» و«')) + '» مع حجوزات فعلية 🏨 لنفس المدينة — غالباً السكن محسوب مرتين: احذف البند (الحجوزات لها قيودها بالحسابات العامة).</div>';
+      if (!isItems) main += '<div class="alert alert-warning py-1 px-2 small mb-2">⚠️ بهذه الرحلة حجوزات فنادق بالريال 🏨 بينما نمط الحساب «برنامج» (جنيه فقط) — حوّل النمط لـ«بنود» أو انقل الحجوزات لـ«عام».</div>';
+    }
     // جدول البنود — أعمدة أرقام ضيقة مضبوطة والبيان يأخذ العرض الأكبر
     var renderTable = function(list, headBg) {
       if (!list.length) return '<div class="text-muted small mb-2">لا توجد بنود بعد</div>';
+      var chkCol = canDel || (canEdit && list.some(function(i) { return i.hbKey; }));
       // 📏 (V4.45) صف واحد فقط لكل بند بطلب صريح — nowrap على كل الخلايا يمنع التفاف النص، والتمرير الأفقي (table-responsive) يستوعب أي زيادة بعرض الجدول
       return '<div class="table-responsive mb-2"><table class="table table-sm table-bordered align-middle mb-0" style="font-size:12px;background:#fff;white-space:nowrap;">' +
         '<thead style="background:' + headBg + ';color:#fff;"><tr>' +
-        (canDel ? '<th style="width:30px;">✔</th>' : '') +
+        (chkCol ? '<th style="width:30px;">✔</th>' : '') +
         '<th class="text-start">البيان</th><th style="width:60px;">العدد</th>' +
         (showNights ? '<th style="width:64px;">الليالي</th>' : '') +
         '<th style="width:90px;">السعر</th><th style="width:110px;">القيمة</th><th style="width:40px;"></th></tr></thead><tbody>' +
         list.map(function(it) {
           var disc = it.isDiscount;
+          if (it.hbKey) {   // 🏨 (V4.326) حجز فندقي: قيمته من قيده بالحسابات العامة — للنقل بين الرحلات فقط
+            return '<tr style="background:#f5f3ff;">' +
+              (chkCol ? '<td class="text-center">' + (canEdit ? '<input type="checkbox" class="acc-hb-chk" data-id="' + it.id + '">' : '') + '</td>' : '') +
+              '<td class="text-start">🏨 ' + esc(it.desc) + ' ' + _accHbChip_(it.hbKey) +
+                ' <span style="font-weight:400;cursor:help;font-size:10.5px;" title="حجز من برنامج الحجوزات — مسجَّل بقيده بالحسابات العامة فلا يدخل قيد الرحلة المجمّع (لا تكرار). يُعدَّل من شاشة الحجوزات، ويُنقل لرحلة بزر 🔀">🔒</span></td>' +
+              '<td></td>' + (showNights ? '<td></td>' : '') + '<td></td>' +
+              '<td class="fw-bold text-center" style="direction:ltr;">' + numOrBlank(it.value) + (it.currency === 'SAR' && !(isItems && !isGen) ? ' <span style="font-weight:400;font-size:10.5px;">ريال</span>' : '') + '</td>' +
+              '<td class="text-center">' + (canEdit ? '<button class="btn btn-outline-primary btn-sm py-0" title="نقل الحجز لرحلة أخرى" onclick="_accHbMove_([\'' + it.id + '\'])">🔀</button>' : '') + '</td></tr>';
+          }
           // 🖱️ (V4.28) نقرة مزدوجة على البند تفتح تعديله المنفرد مباشرة
           var rowStyle = (disc ? 'background:#fff1f2;color:#991b1b;font-weight:700;' : '') + (canEdit ? 'cursor:pointer;' : '');
           return '<tr' + (rowStyle ? ' style="' + rowStyle + '"' : '') + (canEdit ? ' title="نقرة مزدوجة للتعديل" ondblclick="_accItemModal_(\'' + jsT + '\', \'' + it.id + '\')"' : '') + '>' +
-            (canDel ? '<td class="text-center"><input type="checkbox" class="acc-del-chk" data-id="' + it.id + '"></td>' : '') +
+            (canDel ? '<td class="text-center"><input type="checkbox" class="acc-del-chk" data-id="' + it.id + '"></td>' : (chkCol ? '<td></td>' : '')) +
             '<td class="text-start">' + esc(it.desc) +
               (it.company ? ' <span class="text-muted" style="font-weight:400;font-size:10.5px;">(' + esc(it.company) + ')</span>' : '') +
               (it.notes ? ' <span class="text-muted" style="font-weight:400;cursor:help;" title="' + esc(it.notes) + '">ℹ️</span>' : '') +
@@ -26782,6 +26804,65 @@ function _accPayDel_(id) {
 }
 
 // 🔀 (V4.17) نقل دفعة لرحلة أخرى أو من/إلى «عام» — قائمة برحلات العميل المعروفة من حسابه المحمَّل
+// 🏨 (V4.326) مزامنة حجوزات الفنادق لكل العملاء: معاينة أولاً ثم تطبيق
+function _accHbSyncAll_() {
+  showToast('⏳ معاينة مزامنة حجوزات الفنادق…');
+  google.script.run.withSuccessHandler(function (p) {
+    var m = p.mirror || {}, conf = p.conflicts || [];
+    var msg = 'مزامنة حجوزات الفنادق لحسابات العملاء:\n• حجوزات مقيَّدة ستُضاف بنوداً: ' + (m.toAdd || 0) + ' (موجودة سابقاً: ' + (m.existing || 0) + ')\n• رحلات ستُزامَن لحذف بند «سكن» المكرر: ' + (p.trips || []).length +
+      (conf.length ? '\n• ⚠️ بنود سكن يدوية/معدّلة مع حجوزات فعلية (تُراجعها بنفسك): ' + conf.length : '') + '\n\nتطبيق الآن؟';
+    askConfirm_(msg, function () {
+      showToast('⏳ جاري المزامنة…');
+      google.script.run.withSuccessHandler(function (r) {
+        var mm = r.mirror || {};
+        var txt = '✅ تمت المزامنة: إضافة ' + (mm.added || 0) + ' · تحديث ' + (mm.updated || 0) + ' · حذف ' + (mm.removed || 0) + ' · رحلات تغيّرت ' + (r.trips || []).length;
+        if ((r.conflicts || []).length) txt += '\n\n⚠️ بنود سكن يدوية/معدّلة مع حجوزات فعلية (راجعها واحذفها لو مكررة):\n' + r.conflicts.slice(0, 40).map(function (c) { return '• ' + c.client + ' — ' + c.trip + ': ' + c.desc + ' = ' + _accFmt_(c.value) + ' ' + _accCur_(c.cur); }).join('\n');
+        _showPopup(txt, 'success', 'حجوزات الفنادق');
+        if (_accData && _accData.client) _accLoad_();
+      }).withFailureHandler(function (e) { _showPopup(e.message || e, 'error'); }).accHbSyncAll(window.authToken, false);
+    });
+  }).withFailureHandler(function (e) { _showPopup(e.message || e, 'error'); }).accHbSyncAll(window.authToken, true);
+}
+/* 🏨 (V4.326) حجوزات الفنادق بحساب العميل: رقم قيدها بالحسابات العامة + نقلها لرحلة (بنمط «بنود») أو «عام» مثل الدفعات */
+function _accHbChip_(key) {
+  var g = _accData && _accData.gl && _accData.gl.__hb && _accData.gl.__hb[key]; if (!g) return '';
+  var canGl = hasPermission('admin') || hasPermission('gl.view');
+  return '<span class="badge" style="background:' + (g.pending ? '#f59e0b;color:#111' : '#e0e7ff;color:#1e3a8a') + ';font-size:9.5px;font-weight:700;' + (canGl ? 'cursor:pointer;' : '') + '" title="قيد الحجز بالحسابات العامة' + (g.pending ? ' — تغيير بانتظار الاعتماد' : '') + '"' +
+    (canGl ? ' onclick="event.stopPropagation();_ccOpenEntry_(\'' + _accJs_(g.id) + '\')"' : '') + '>📘 ' + escapeHtml_(g.id) + '</span>';
+}
+function _accHbMoveBulk_() {
+  var ids = Array.prototype.map.call(document.querySelectorAll('.acc-hb-chk:checked'), function(c) { return c.getAttribute('data-id'); });
+  if (!ids.length) { alert('⚠️ حدّد الحجوزات (🏨) المطلوب نقلها أولاً من خانات التحديد'); return; }
+  _accHbMove_(ids);
+}
+function _accHbMove_(ids) {
+  var list = _accData.items.filter(function(x) { return ids.indexOf(x.id) >= 0 && x.hbKey; });
+  if (!list.length) return;
+  var cur = list.length === 1 ? (list[0].trip || 'عام') : '';
+  var opts = [{ key: 'عام', label: '📌 عام (غير مخصص لرحلة)', ok: true }].concat(_accData.trips.map(function(r) {
+    var m = (_accData.meta[r.trip] || {}).mode === 'بنود';
+    return { key: r.trip, label: '✈️ ' + _accTripLabelTxt_(r.trip) + (m ? '' : ' — نمط «برنامج» (حوّله لبنود أولاً)'), ok: m };
+  })).filter(function(o) { return o.key !== cur; });
+  var sum = 0; list.forEach(function(x) { sum += x.value || 0; });
+  var prev = document.getElementById('_accHbMoveOverlay'); if (prev) prev.remove();
+  var ov = document.createElement('div'); ov.id = '_accHbMoveOverlay'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147482600;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:14px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35);">' +
+    '<div class="p-2 fw-bold" style="background:#5b21b6;color:#fff;border-radius:14px 14px 0 0;">🔀 نقل ' + (list.length > 1 ? list.length + ' حجوزات' : 'حجز') + ' — ' + escapeHtml_(_accFmt_(sum) + ' ' + _accCur_(list[0].currency)) + '</div>' +
+    '<div class="p-3">' + (cur ? '<div class="small text-muted mb-2">من: ' + escapeHtml_(cur === 'عام' ? '📌 عام' : ('✈️ ' + _accTripDisplay_(cur))) + '</div>' : '') +
+    '<label class="form-label small fw-bold mb-1">إلى:</label><select id="_accHbMoveSel" class="form-select form-select-sm mb-2">' +
+    opts.map(function(o) { return '<option value="' + escapeHtml_(o.key) + '"' + (o.ok ? '' : ' disabled') + '>' + escapeHtml_(o.label) + '</option>'; }).join('') + '</select>' +
+    '<div class="small text-muted mb-3">الحجز يبقى بقيده كما هو بالحسابات العامة — النقل يحدد رحلته بحساب العميل فقط، ويُحذف بند «سكن» التقديري من الرحلة التي يصلها حجز فعلي.</div>' +
+    '<div class="d-flex gap-2"><button class="btn btn-success btn-sm fw-bold flex-fill" id="_accHbMoveGo">💾 نقل</button><button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById(\'_accHbMoveOverlay\').remove()">إلغاء</button></div></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown', function(e) { if (e.target === ov) ov.remove(); });
+  document.getElementById('_accHbMoveGo').onclick = function() {
+    var to = document.getElementById('_accHbMoveSel').value; if (!to) return;
+    this.disabled = true; ov.remove();
+    showToast('⏳ جاري نقل الحجوزات…');
+    _accRun_('transferAccItemsBulk', [list.map(function(x) { return x.id; }), to], null, null);   // إعادة تحميل (قد تتغير بنود السكن التلقائية)
+  };
+}
 function _accPayMove_(id) {
   var p = null;
   _accData.payments.forEach(function(x) { if (x.id === id) p = x; });
@@ -26943,7 +27024,7 @@ function _accDelSelected_(trip) {
   });
 }
 function _accDelAllTrip_(trip) {
-  var ids = _accData.items.filter(function(x) { return x.trip === trip; }).map(function(x) { return x.id; });
+  var ids = _accData.items.filter(function(x) { return x.trip === trip && !x.hbKey; }).map(function(x) { return x.id; });   // 🏨 (V4.326) الحجوزات لا تُحذف من هنا
   if (!ids.length) return;
   _accConfirmDel_('حذف <b>كل</b> بنود «' + escapeHtml_(trip) + '» (' + ids.length + ' بند) نهائيًا؟', function() {
     _accRun_('deleteAccItemsBulk', [ids], null, function() {
@@ -29783,7 +29864,7 @@ function _accOpenGl_(id) {
 }
 function _accEditAll_(trip) {
   _accEditTrip = trip;
-  var items = _accData.items.filter(function(i) { return i.trip === trip; });
+  var items = _accData.items.filter(function(i) { return i.trip === trip && !i.hbKey; });   // 🏨 (V4.326) الحجوزات قيمتها من قيودها
   if (!items.length) { alert('⚠️ لا توجد بنود لهذه الرحلة'); return; }
   var meta = _accData.meta[trip] || { mode: 'برنامج' };
   var allowSar = trip === 'عام' ? true : meta.mode === 'بنود';

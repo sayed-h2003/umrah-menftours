@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.325";
+var APP_VERSION = "4.326";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14485,9 +14485,11 @@ function _accRoomFeeAt_(dateStr) {
 
 // ---------- جلب حساب عميل كامل (بنود + دفعات + أنماط + تنبيهات المراجعة) ----------
 function getClientAccount(authToken, client) {
-  _accPerm_(authToken, 'view');
+  var _accSess = _accPerm_(authToken, 'view');
   client = String(client || '').trim();
   if (!client) throw new Error('اسم العميل مطلوب');
+  // 🏨 (V4.326) حجوزات الفنادق المقيَّدة على حساب العميل بالحسابات العامة ⇒ بنود بحسابه (مزامنة خفيفة لهذا العميل فقط)
+  try { if (typeof _accHbMirror_ === 'function') _accHbMirror_(client, _accSess.username); } catch (eHbM) { console.warn('hb mirror: ' + (eHbM && eHbM.message)); }
 
   var stats = getClientTripStats(authToken, client); // رحلات العميل وأعداده الحالية
 
@@ -14500,7 +14502,7 @@ function getClientAccount(authToken, client) {
         currency: String(r[5] || 'EGP'), count: _accNum_(r[6]), price: _accNum_(r[7]), value: _accNum_(r[8]),
         isDiscount: String(r[9]) === 'نعم', notes: String(r[10] || ''),
         nights: _accNum_(r[15]), company: String(r[16] || ''), auto: String(r[17] || ''), order: _accNum_(r[18]),
-        isDirect: String(r[19]) === 'نعم' });
+        isDirect: String(r[19]) === 'نعم', hbKey: _accHbKeyOf_(r[3]) || undefined });
     });
     // 🔀 (V4.26) ترتيب عرض البنود حسب الترتيب المحفوظ (السحب والإفلات) — تعادل الترتيب يحافظ على تسلسل القراءة الأصلي
     items.sort(function(a, b) { return a.order - b.order; });
@@ -14703,6 +14705,7 @@ function saveAccItem(authToken, item) {
         // 🔒 احترام التعديل اليدوي: لو البند مولَّد تلقائياً من تسعير الرحلة وتغيّرت قيمه فعلاً،
         // يُعلَّم «معدّل» فلا يعيد محرك المزامنة حسابه أبداً بعد الآن
         var _r = vals[i];
+        if (ACC_HB_RX_.test(String(_r[3] || ''))) return { success: false, error: _accHbMsg_() };   // 🏨 (V4.326)
         var _changed = String(_r[3]) !== String(item.desc) || _accNum_(_r[6]) !== count ||
                        _accNum_(_r[7]) !== price || String(_r[5] || 'EGP') !== currency ||
                        _accNum_(_r[15]) !== nights;
@@ -14774,19 +14777,20 @@ function deleteAccItemsBulk(authToken, ids) {
   ids.forEach(function(x) { idSet[String(x)] = true; });
   var sh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
   if (sh.getLastRow() < 2) return { success: false, error: 'لا توجد بنود' };
-  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues();
-  var toDelete = [], client = '', trip = '';
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+  var toDelete = [], client = '', trip = '', hbSkipped = 0;
   for (var i = 0; i < vals.length; i++) {
+    if (idSet[String(vals[i][0])] && ACC_HB_RX_.test(String(vals[i][3] || ''))) { hbSkipped++; continue; }   // 🏨 (V4.326) حجوزات الفنادق لا تُحذف من هنا
     if (idSet[String(vals[i][0])]) {
       toDelete.push(i + 2);
       client = String(vals[i][1] || client); trip = String(vals[i][2] || trip);
     }
   }
-  if (!toDelete.length) return { success: false, error: 'البنود غير موجودة' };
+  if (!toDelete.length) return { success: false, error: hbSkipped ? _accHbMsg_() : 'البنود غير موجودة' };
   // الحذف من الأسفل للأعلى حتى لا تنزاح أرقام الصفوف
   for (var j = toDelete.length - 1; j >= 0; j--) sh.deleteRow(toDelete[j]);
   logChange_(session.username, 'حذف بنود حساب دفعة واحدة', client, trip, toDelete.length + ' بند', '-');
-  return { success: true, count: toDelete.length };
+  return { success: true, count: toDelete.length, hbSkipped: hbSkipped };
 }
 
 // 🔁 (V4.18) ترحيل رصيد بين رحلتين — قيد مزدوج بعلامة رابطة مخفية ⟦cf:marker⟧ بآخر البيان:
@@ -14882,6 +14886,7 @@ function deleteAccItem(authToken, id) {
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();   // ⚡ (V4.199) الأعمدة المطلوبة فقط
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) {
+      if (ACC_HB_RX_.test(String(vals[i][3] || ''))) return { success: false, error: _accHbMsg_() };   // 🏨 (V4.326)
       logChange_(session.username, 'حذف بند حساب', String(vals[i][1]), String(vals[i][2]),
         String(vals[i][3]).replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '') + ' = ' + vals[i][8] + ' ' + vals[i][5], '-');
       // 🔁 بند ترحيل رصيد: يُحذف طرفه المقابل معه تلقائيًا فيعود الرصيد لرحلته الأصلية
@@ -15120,6 +15125,42 @@ function transferAccPaymentsBulk(authToken, ids, toTrip) {
   if (toTrip !== 'عام') _accEnsureMeta_(authToken, client, toTrip, session.username);
   logChange_(session.username, 'نقل دفعات متعددة بين رحلات', client, 'الدفعات', '-', n + ' دفعة → ' + toTrip);
   return { success: true, count: n };
+}
+
+/* 🏨 (V4.326) نقل حجوزات الفنادق (بنود الحجوزات المنقولة من الحسابات العامة) لرحلة أو «عام» — مثل تخصيص الدفعات.
+   الرحلة الهدف بنمط «بنود» فقط (الحجز بالريال). يحدّث بعدها بنود السكن التلقائية للرحلتين (لا تقدير سكن مع حجز فعلي). */
+function transferAccItemsBulk(authToken, ids, toTrip) {
+  var session = _accPerm_(authToken, 'edit');
+  toTrip = String(toTrip || '').trim();
+  if (!toTrip) return { success: false, error: 'حدّد الرحلة الهدف' };
+  if (!Array.isArray(ids) || !ids.length) return { success: false, error: 'لا توجد حجوزات محددة' };
+  var idSet = {}; ids.forEach(function(x) { idSet[String(x)] = true; });
+  var sh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
+  if (sh.getLastRow() < 2) return { success: false, error: 'لا توجد بنود' };
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues(), hit = [], client = '', fromTrips = {};
+  for (var i = 0; i < vals.length; i++) {
+    if (!idSet[String(vals[i][0])]) continue;
+    if (!ACC_HB_RX_.test(String(vals[i][3] || ''))) return { success: false, error: 'النقل متاح لبنود حجوزات الفنادق فقط' };
+    var cl = String(vals[i][1] || '').trim();
+    if (client && cl !== client) return { success: false, error: 'الحجوزات المحددة لأكثر من عميل' };
+    client = cl;
+    var fr = String(vals[i][2] || '').trim() || 'عام';
+    if (fr === toTrip) continue;
+    fromTrips[fr] = true; hit.push(i);
+  }
+  if (!hit.length) return { success: false, error: 'لا توجد حجوزات صالحة للنقل (ربما بالفعل بهذه الرحلة)' };
+  if (toTrip !== 'عام') {
+    var mSh = _accSheet_(ACC_META_SHEET, ACC_META_HEADERS), mode = '';
+    if (mSh.getLastRow() >= 2) mSh.getRange(2, 1, mSh.getLastRow() - 1, 3).getValues().forEach(function(r) { if (String(r[0]).trim() === client && String(r[1]).trim() === toTrip) mode = String(r[2] || '').trim(); });
+    if (mode !== 'بنود') return { success: false, error: 'الرحلة «' + toTrip + '» ليست بنمط «بنود» لهذا العميل — حوّل نمطها لـ«بنود» أولاً (الحجوزات بالريال)' };
+  }
+  hit.forEach(function(i) { sh.getRange(i + 2, 3).setValue(toTrip); });
+  logChange_(session.username, 'نقل حجوزات فنادق بين رحلات', client, 'البنود', Object.keys(fromTrips).join('، '), hit.length + ' حجز → ' + toTrip);
+  // بنود «سكن مكة/المدينة» التقديرية: تُحذف من الرحلة التي وصلها حجز فعلي وتعود للتي غادرها (مزامنة الرحلتين)
+  _ACC_HB_CITY_MEMO_ = null;
+  var resync = Object.keys(fromTrips).concat([toTrip]).filter(function(t) { return t && t !== 'عام'; }), synced = 0;
+  resync.forEach(function(t) { try { var rs = _syncTripAccounts_(authToken, t, session.username); if (rs && (rs.created || rs.updated || rs.removed)) synced++; } catch (eS) {} });
+  return { success: true, count: hit.length, resynced: synced };
 }
 
 function deleteAccPayment(authToken, id) {
@@ -15485,6 +15526,38 @@ function _accMfDesc_(key, a) { return key + (a && a.refs.length ? ' — ملف '
    كل بند يُدرَج بعلامة مصدر مخفية ⟦src:…⟧ في بيانه فلا يُعرض للإدراج مرتين.
    ============================================================ */
 function _accSrcMarker_(k) { return '⟦src:' + String(k).replace(/[^A-Za-z0-9._-]/g, '') + '⟧'; }
+/* 🏨 (V4.326) حجوزات الفنادق داخل حسابات العملاء: كل حجز له قيد AUTO:HB بالحسابات العامة على حساب العميل يظهر «بنداً»
+   بحسابه (بقيمة البيع الفعلية ورقم قيده) بعلامة مخفية ⟦src:HB.<مفتاح الحجز>⟧ — يُنقل لأي رحلة مثل الدفعات، ولا يدخل
+   قيد الرحلة المجمّع (AUTO:TRIP/CI) لأن قيده موجود أصلاً ⇒ لا تكرار. المفتاح بترميز base64 الآمن (يحتوي حروفاً عربية و|). */
+var ACC_HB_RX_ = /⟦src:HB\.([A-Za-z0-9_-]+)⟧/;
+function _accHbEnc_(key) { return Utilities.base64EncodeWebSafe(String(key), Utilities.Charset.UTF_8).replace(/=+$/, ''); }
+function _accHbDec_(enc) {
+  try { var x = String(enc || ''); while (x.length % 4) x += '='; return Utilities.newBlob(Utilities.base64DecodeWebSafe(x, Utilities.Charset.UTF_8)).getDataAsString('UTF-8'); }
+  catch (e) { return ''; }
+}
+function _accHbKeyOf_(desc) { var m = String(desc || '').match(ACC_HB_RX_); return m ? _accHbDec_(m[1]) : ''; }
+var _ACC_HB_IDS_MEMO_ = null;
+function _accHbPostedAll_(keys) {   // كل حجوزات المدينة لها قيد AUTO:HB مرحّل (فتظهر بنوداً بقيودها)؟
+  if (!keys || !keys.length) return false;
+  try { if (!_ACC_HB_IDS_MEMO_) _ACC_HB_IDS_MEMO_ = _glHbEntryIds_(); } catch (e) { return false; }
+  return keys.every(function (k) { var o = _ACC_HB_IDS_MEMO_['AUTO:HB:' + k]; return !!(o && o.st === GL_ST_POSTED_); });
+}
+function _accHbMsg_() { return 'هذا البند حجز فندقي من برنامج الحجوزات (له قيده بالحسابات العامة) — يُعدَّل من شاشة الحجوزات، ويمكن نقله لرحلة بزر 🔀'; }
+// مدن الحجوزات المنقولة لهذا العميل×الرحلة (لإسقاط بند «سكن مكة/المدينة» التقديري حتى لا يُحمَّل السكن مرتين)
+var _ACC_HB_CITY_MEMO_ = null;
+function _accHbCitiesIn_(client, trip) {
+  if (!_ACC_HB_CITY_MEMO_) {
+    _ACC_HB_CITY_MEMO_ = {};
+    var sh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
+    if (sh.getLastRow() >= 2) sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().forEach(function (r) {
+      var k = _accHbKeyOf_(r[3]); if (!k) return;
+      var o = _ACC_HB_CITY_MEMO_[String(r[1] || '').trim() + '|' + (String(r[2] || '').trim() || 'عام')] = _ACC_HB_CITY_MEMO_[String(r[1] || '').trim() + '|' + (String(r[2] || '').trim() || 'عام')] || {};
+      o[String(k).split('|')[0]] = true;
+    });
+  }
+  return _ACC_HB_CITY_MEMO_[client + '|' + trip] || {};
+}
+
 var ACC_MF_KEY_CODE_ = { 'رسوم غرفة': 'room', 'رسوم غرفة VIP': 'vip', 'رسوم غرفة المشرف': 'sup', 'تجديد باركود': 'bar', 'رسوم التنفيذ': 'exec' };
 function getClientUnlinkedFees(authToken, client) {
   _accPerm_(authToken, 'view');
@@ -15607,9 +15680,13 @@ function _accBondsDesired_(authToken, client, trip) {
   // ببندي «سكن مكة/سكن المدينة» بقيمة البيع الحقيقية (بند «قيمة مباشرة» بلا عدد/سعر تقديريين)
   var hbCity = null;
   try { if (typeof _glHbCityActual_ === 'function') hbCity = _glHbCityActual_(client, trip); } catch (eHbC) { hbCity = null; }
+  var hbHere = {}; try { hbHere = _accHbCitiesIn_(client, trip); } catch (eHbI) { hbHere = {}; }
   var pushHousing = function(key, cityKey, estHotel, estCi, estCo, estRooms, estNights) {
     var act = hbCity && hbCity[cityKey];
-    if (act && act.value) {
+    // 🏨 (V4.326) الحجز الفعلي يظهر بنوده الخاصة بقيودها (منقولة من الحسابات العامة) ⇒ لا بند «سكن» بقيمته داخل قيد الرحلة
+    // (كان يُسجَّل مرتين على العميل: بقيد الحجز AUTO:HB وبقيد الرحلة المجمّع) — والبند القديم يُحذف بالمزامنة تلقائياً
+    if (hbHere[cityKey] || (act && act.value && _accHbPostedAll_(act.keys))) return;
+    if (act && act.value) {   // (V4.292) حجوزات بلا قيد AUTO:HB خاص (قبل بداية الربط/مستوردة) ⇒ قيمتها الفعلية كما كانت
       var hotelsTxt = Object.keys(act.hotels).join(' + ');
       var suffix = hotelsTxt ? (' - ' + hotelsTxt + _accStayRange_(act.ci, act.co)) : '';
       lines.push({ key: key, desc: key + suffix, cat: 'أخرى', currency: 'SAR', count: 1,
@@ -16974,7 +17051,7 @@ function _accTripSupsForClient_(client, trip) {
 // الرصيد: موجب = مدين (مستحق عليه) · سالب = دائن (له) — بالجنيه والريال كلٌّ على حدة
 // 🔁 (V4.45) يبني items/payments لكل عميل ثم يمرّرها لـ_accCalc_ الموحَّدة — بدل تكرار حساب fx يدويًا،
 // فيرث تلقائيًا حسم نوع قيد كل تحويل حسب حالة رصيد عملة مصدره لحظة إجرائه
-function _accAggBalances_(tripFilter) {
+function _accAggBalances_(tripFilter, skipHb) {
   var itemsByClient = {}, paysByClient = {};
   var get = function(map, cl) { return (map[cl] = map[cl] || []); };
   var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
@@ -16983,6 +17060,7 @@ function _accAggBalances_(tripFilter) {
       var cl = String(r[1] || '').trim();
       if (!cl) return;
       if (tripFilter && String(r[2] || '').trim() !== tripFilter) return;
+      if (skipHb && ACC_HB_RX_.test(String(r[3] || ''))) return;   // 🏨 (V4.326) مطابقة الحسابات العامة تستبعد الحجوزات من الطرفين
       get(itemsByClient, cl).push({ value: _accNum_(r[8]), currency: String(r[5] || 'EGP'), isDiscount: String(r[9]) === 'نعم' });
     });
   }
@@ -17327,8 +17405,10 @@ function accGenerateDraft(authToken, client, trip, mode) {
     // 🏨 (V4.292) حجز فعلي ببرنامج الحجوزات لهذا العميل×الرحلة ← قيمة بيعه الحقيقية مباشرة بدل التقدير
     var _hbCityD = null;
     try { if (typeof _glHbCityActual_ === 'function') _hbCityD = _glHbCityActual_(client, trip); } catch (eHbD) { _hbCityD = null; }
+    var _hbHereD = {}; try { _hbHereD = _accHbCitiesIn_(client, trip); } catch (eHbI2) { _hbHereD = {}; }
     var pushHousingD = function(key, cityKey, estHotel, estCi, estCo, estRooms, estNights) {
       var act = _hbCityD && _hbCityD[cityKey];
+      if (_hbHereD[cityKey] || (act && act.value && _accHbPostedAll_(act.keys))) return;   // 🏨 (V4.326) الحجز الفعلي بنوده الخاصة بقيودها
       if (act && act.value) {
         var hTxt = Object.keys(act.hotels).join(' + ');
         push(key, 'أخرى', 'SAR', 1, act.value, 0, hTxt + _accStayRange_(act.ci, act.co), '', true);
@@ -17395,6 +17475,12 @@ function updateAccItemsBulk(authToken, client, trip, itemsArr) {
   (itemsArr || []).forEach(function(item) {
     var rowIdx = rowById[String(item.id)];
     if (!rowIdx || !String(item.desc || '').trim()) return;
+    var _hbR = dataById[String(item.id)];
+    if (_hbR && ACC_HB_RX_.test(String(_hbR[3] || ''))) {   // 🏨 (V4.326) حجز فندقي: الترتيب فقط (القيمة من قيد الحجز)
+      if (item.order !== undefined && item.order !== null) { sh.getRange(rowIdx, 19).setValue(item.order); n++; }
+      updated.push({ id: String(item.id), value: _accNum_(_hbR[8]), isDiscount: false });
+      return;
+    }
     var count = _accNum_(item.count), price = _accNum_(item.price), nights = _accNum_(item.nights);
     var value = Math.round(count * price * (nights > 0 ? nights : 1) * 100) / 100;
     var currency = (item.currency === 'SAR') ? 'SAR' : 'EGP';
@@ -26584,33 +26670,46 @@ function syncTripAccountsBg(authToken, trips) {
 // 🏨 (V4.292) أداة تطبيق بأثر رجعي: تمر على كل الرحلات وتُعيد مزامنة بنود «سكن مكة/سكن المدينة» بنمط «بنود»
 // لتُستبدَل تقديرات اتفاقية السكن بقيمة بيع الحجوزات الفعلية حيثما توفّرت — بنفس محرك _syncTripAccounts_
 // الآمن (لا يلمس بنداً «معدّل» يدوياً، ولا يغيّر أي رحلة لا بنود تلقائية فيها بعد). dry=true: تقرير بلا كتابة
-function accBackfillHbHousing(authToken, dry) {
+function accBackfillHbHousing(authToken, dry) { return accHbSyncAll(authToken, dry); }
+/* 🏨 (V4.326) مزامنة حجوزات الفنادق لحسابات العملاء بأثر رجعي (للمدير) — بدل أداة V4.292 التي كانت تضع قيمة الحجز داخل بند
+   «سكن مكة/المدينة» (فيُسجَّل الحجز مرتين على العميل). الخطوات: (1) نقل كل قيود الحجوزات المرحّلة بنوداً بحسابات العملاء
+   (2) مزامنة الرحلات ذات بنود تلقائية ⇒ حذف بنود السكن التي صار لها حجز فعلي بقيده (3) قائمة البنود اليدوية/المعدَّلة المكررة
+   لتراجعها بنفسك. dry = معاينة بلا كتابة. */
+function accHbSyncAll(authToken, dry) {
   var session = _accPerm_(authToken, 'edit');
   if (!_sessionHasPerm_(session, 'admin')) throw new Error('هذه الأداة للمدير فقط');
-  var trips = (getTripsList(authToken) || []).map(function (t) { return t.name; }).filter(Boolean);
-  var report = [];
-  trips.forEach(function (trip) {
-    try {
-      if (dry) {
-        // 🔍 وضع المعاينة: لا كتابة — فقط إحصاء العملاء (نمط بنود) اللي لهم حجز فعلي مطابق بهذه الرحلة
-        var mSh = _accSheet_(ACC_META_SHEET, ACC_META_HEADERS), mVals = mSh.getLastRow() >= 2 ?
-          mSh.getRange(2, 1, mSh.getLastRow() - 1, ACC_META_HEADERS.length).getValues() : [];
-        var clients = [];
-        mVals.forEach(function (r) {
-          if (String(r[1] || '').trim() !== trip || String(r[2] || '').trim() !== 'بنود') return;
-          var cl = String(r[0] || '').trim(); if (!cl) return;
-          var hb = null; try { if (typeof _glHbCityActual_ === 'function') hb = _glHbCityActual_(cl, trip); } catch (eD) { hb = null; }
-          if (hb) clients.push(cl);
-        });
-        if (clients.length) report.push({ trip: trip, clients: clients, dry: true });
-      } else {
-        var res = _syncTripAccounts_(authToken, trip, session.username);
-        if (res && (res.created || res.updated)) report.push({ trip: trip, created: res.created || 0, updated: res.updated || 0, removed: res.removed || 0 });
-      }
-    } catch (e) { Logger.log('accBackfillHbHousing ' + trip + ': ' + e.message); }
+  var out = { success: true, dry: !!dry, mirror: null, trips: [], conflicts: [] };
+  if (!dry) out.mirror = _accHbMirror_(null, session.username);
+  else {   // معاينة: عدد قيود الحجوزات على حسابات العملاء وما نُقل منها
+    var have = {}, iSh0 = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
+    if (iSh0.getLastRow() >= 2) iSh0.getRange(2, 1, iSh0.getLastRow() - 1, 4).getValues().forEach(function (r) { var k = _accHbKeyOf_(r[3]); if (k) have[k] = 1; });
+    var map = _glAccounts_().map, ents = {}, n = 0, seen = {};
+    _glRows_('entries').forEach(function (r) { var k = _glStr_(r[6]); if (k.indexOf('AUTO:HB:') === 0 && _glStr_(r[5]) === GL_ST_POSTED_) ents[_glStr_(r[0])] = k.slice(8); });
+    _glRows_('lines').forEach(function (l) { var k = ents[_glStr_(l[0])], a = map[_glStr_(l[4])]; if (!k || seen[k] || !a || a.kind !== 'client' || !a.link) return; seen[k] = 1; if (!have[k]) n++; });
+    out.mirror = { toAdd: n, existing: Object.keys(have).length };
+  }
+  _ACC_HB_CITY_MEMO_ = null; _ACC_HB_IDS_MEMO_ = null;
+  // الرحلات التي لعملائها بنود تلقائية «نعم» لسكن مكة/المدينة ⇒ مزامنة (تحذف ما صار له حجز فعلي)
+  var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS), rows = iSh.getLastRow() >= 2 ? iSh.getRange(2, 1, iSh.getLastRow() - 1, ACC_ITEMS_HEADERS.length).getValues() : [];
+  var hbCity = {}, tripsSet = {};
+  rows.forEach(function (r) { var k = _accHbKeyOf_(r[3]); if (!k) return; var key = String(r[1]).trim() + '|' + (String(r[2]).trim() || 'عام'); (hbCity[key] = hbCity[key] || {})[String(k).split('|')[0]] = 1; });
+  rows.forEach(function (r) {
+    var cl = String(r[1] || '').trim(), tr = String(r[2] || '').trim() || 'عام', d = String(r[3] || ''), flag = String(r[17] || '');
+    var bk = /^سكن مكة/.test(d) ? 'مكة' : (/^سكن المدينة/.test(d) ? 'المدينة' : ''); if (!bk) return;
+    var has = (hbCity[cl + '|' + tr] || {})[bk];
+    if (flag === 'نعم' && tr !== 'عام') tripsSet[tr] = 1;
+    if (has && flag !== 'نعم') out.conflicts.push({ client: cl, trip: tr, desc: d.replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, ''), value: _accNum_(r[8]), cur: String(r[5] || ''), edited: flag === 'معدّل' });
   });
-  if (!dry) logChange_(session.username, 'تطبيق سكن الحجوزات الفعلي بأثر رجعي', 'كل الرحلات', '', trips.length + ' رحلة', report.length + ' رحلة فيها تغيير');
-  return { success: true, dry: !!dry, tripsScanned: trips.length, affected: report };
+  Object.keys(tripsSet).forEach(function (trip) {
+    if (dry) { out.trips.push({ trip: trip, dry: true }); return; }
+    try {
+      var res = _syncTripAccounts_(authToken, trip, session.username);
+      if (res && (res.created || res.updated || res.removed)) out.trips.push({ trip: trip, created: res.created || 0, updated: res.updated || 0, removed: res.removed || 0 });
+    } catch (e) { out.trips.push({ trip: trip, error: e.message }); }
+  });
+  if (!dry) logChange_(session.username, 'مزامنة حجوزات الفنادق لحسابات العملاء (بأثر رجعي)', 'كل العملاء', '', '-',
+    'إضافة ' + ((out.mirror || {}).added || 0) + ' · تحديث ' + ((out.mirror || {}).updated || 0) + ' · حذف ' + ((out.mirror || {}).removed || 0) + ' · رحلات مُزامنة ' + out.trips.length);
+  return out;
 }
 
 /* ============================================================================

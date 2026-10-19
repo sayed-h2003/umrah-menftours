@@ -3009,6 +3009,7 @@ function _glAutoBuild_(user, write, scope) {
     var cur = _glStr_(r[5]) === 'SAR' ? 'SAR' : 'EGP', v = _glR2_(_accNum_(r[8])), isDisc = _glStr_(r[9]) === 'نعم';
     (calcItems[client] = calcItems[client] || []).push({ value: _accNum_(r[8]), currency: cur, isDiscount: isDisc });
     if (!v) return;
+    if (ACC_HB_RX_.test(_glStr_(r[3]))) return;   // 🏨 (V4.326) حجز فندقي له قيده AUTO:HB ⇒ خارج قيد الرحلة المجمّع (لا تكرار على العميل)
     var k = client + '|' + trip;
     (byCT[k] = byCT[k] || { client: client, trip: trip, items: [], created: '' }).items.push({ id: _glStr_(r[0]), desc: _glStr_(r[3]), cur: cur, v: v, disc: isDisc, company: _glStr_(r[16]),
       count: r[6], price: r[7], nights: Number(r[15]) || 0, order: _accNum_(r[18]), direct: _glStr_(r[19]) === 'نعم' });
@@ -3382,7 +3383,7 @@ function _glAutoApply_(built, user, dry, opts) {
     var ix = existing[e.key];
     if (ix === undefined) {
       if (_glLocked_(v.date)) { res.blocked.push({ key: e.key, date: v.date, desc: H.desc, why: 'حدث جديد بفترة مقفلة' }); return; }
-      creates.push({ e: e, v: v, hash: hash, H: H }); res.created++;
+      creates.push({ e: e, v: v, hash: hash, H: H }); res.created++; if (e.key.indexOf('AUTO:HB:') === 0) res.hbTouched = 1;
       if (res.samples.created.length < 30) res.samples.created.push({ date: v.date, desc: H.desc, base: v.totalBase, amt: _glAmtTxt_(v.lines, accM) });
       return;
     }
@@ -3396,7 +3397,7 @@ function _glAutoApply_(built, user, dry, opts) {
       unfrozen.push(e.key);
     }
     else if (approval && _glStr_(r[5]) === GL_ST_POSTED_ && !cosmetic(r, H, v)) { newDate = v.date; newType = v.type; queue(e.key, ix, 'تعديل', H.desc, v.totalBase, hash, v.lines); return; }
-    updates.push({ ix: ix, e: e, v: v, hash: hash, H: H }); res.updated++;
+    updates.push({ ix: ix, e: e, v: v, hash: hash, H: H }); res.updated++; if (e.key.indexOf('AUTO:HB:') === 0) res.hbTouched = 1;
     if (res.samples.updated.length < 30) res.samples.updated.push({ id: _glStr_(r[0]), date: v.date, desc: H.desc, base: v.totalBase, oldBase: _glNum_(r[8]), amt: _glAmtTxt_(v.lines, accM), oldAmt: _glAmtTxt_(oldOf(_glStr_(r[0])), accM) });
   });
   Object.keys(existing).forEach(function (k) {
@@ -3417,7 +3418,7 @@ function _glAutoApply_(built, user, dry, opts) {
         if (to.length) vh = '🔸 الرحلة: ' + mT[2] + ' ← ' + to.join('، ') + ' (نُقل العميل لرحلة أخرى)'; }
       queue(k, existing[k], 'إلغاء', 'حُذف مصدره من شاشات البرنامج', 0, 'void', null, vh); return;
     }
-    voids.push(existing[k]); res.voided++;
+    voids.push(existing[k]); res.voided++; if (k.indexOf('AUTO:HB:') === 0) res.hbTouched = 1;
     if (res.samples.voided.length < 30) res.samples.voided.push({ id: _glStr_(r[0]), date: _glDate_(r[2]), desc: _glStr_(r[4]), base: _glNum_(r[8]), amt: _glAmtTxt_(oldOf(_glStr_(r[0])), accM) });
   });
   // قائمة الاعتماد: تُستبدل كاملة بما يحتاج اعتماداً الآن (ما عاد مصدره كما كان يخرج منها تلقائياً)
@@ -3783,6 +3784,8 @@ function _glAutoRun_(user, dry, opts) {
   if (!dry) built.party.flush();
   var res = _glAutoApply_(built, user, dry, opts);
   if (!dry) _glAutoLogAdd_(res.createdList, 'جديد');
+  // 🏨 (V4.326) تغيّرت قيود حجوزات فنادق ⇒ بنود الحجوزات بحسابات عملاء العمرة تتبعها (القيمة/الإلغاء/العميل)
+  if (!dry && res.hbTouched && typeof _accHbMirror_ === 'function') try { res.hbMirror = _accHbMirror_(null, user); } catch (eHm) { res.hbMirror = { error: eHm.message }; }
   res.newAccounts = newParties + (built.roles._new || []).length; res.newAccountNames = newNames.slice(0, 300); res.preCount = built.preCount; res.warnings = built.warnings;
   res.total = built.entries.length;
   res.bySrc = {}; built.entries.forEach(function (e) { res.bySrc[e.src] = (res.bySrc[e.src] || 0) + 1; });
@@ -4440,20 +4443,86 @@ function _glCpSyncVoucher_(entryId, user) {
   }
 }
 
+/* 🏨 (V4.326) مرآة حجوزات الفنادق ⇒ بنود حسابات عملاء العمرة (مثل مرآة سندات الدفعات _glCpSyncVoucher_):
+   كل قيد حجز مرحّل AUTO:HB:<مفتاح> على حساب عميل (kind=client + link) يصبح بنداً بحساب العميل (link) بقيمة سطر العميل وعملته
+   وبيانه، بعلامة ⟦src:HB.<مفتاح مرمَّز>⟧. الرحلة عند الإنشاء: رحلة القيد لو نمطها للعميل «بنود»، وإلا «عام» — وبعدها لا تُمس أبداً
+   (تخصيص المستخدم). تغيّر القيمة/البيان/العميل ⇒ يُحدَّث البند؛ أُلغي القيد/حُذف ⇒ يُحذف البند. الحساب غير المحدد = كل العملاء. */
+function _accHbMirror_(onlyClient, user) {
+  if (!_glSSId_()) return { skipped: 'no-gl' };
+  var lk = LockService.getScriptLock(), own = false;
+  try { if (!lk.hasLock()) { if (!lk.tryLock(15000)) return { busy: true }; own = true; } } catch (eL) { return { busy: true }; }
+  var C = CacheService.getScriptCache(), ck = onlyClient ? ('hbm_' + _accHbEnc_(_glNorm_(onlyClient)).slice(0, 80) + '_' + _glVer_()) : '';
+  try { if (ck && C.get(ck)) return { cached: true }; } catch (eC) {}   // لا تغيير بالحسابات العامة منذ آخر مزامنة لهذا العميل
+  try {
+    var map = _glAccounts_().map, ents = {}, want = {};
+    _glRows_('entries').forEach(function (r) { var k = _glStr_(r[6]); if (k.indexOf('AUTO:HB:') === 0 && _glStr_(r[5]) === GL_ST_POSTED_) ents[_glStr_(r[0])] = r; });
+    _glRows_('lines').forEach(function (l) {
+      var e = ents[_glStr_(l[0])]; if (!e) return;
+      var a = map[_glStr_(l[4])]; if (!a || a.isGroup || a.kind !== 'client' || !a.link) return;
+      var cur = _glStr_(l[7]) || 'SAR'; if (cur !== 'SAR' && cur !== 'EGP') return;
+      var key = _glStr_(e[6]).slice(8), w = want[key];
+      if (!w) w = want[key] = { key: key, client: _glStr_(a.link), code: a.code, amt: 0, cur: cur, desc: '', trip: _glStr_(l[11]) || _glStr_(e[10]) };
+      if (a.code !== w.code) return;   // طرف عميل واحد لكل حجز
+      w.amt += _glNum_(l[5]) - _glNum_(l[6]);
+      if (!w.desc) w.desc = _glCleanDesc_(l[15]) || _glCleanDesc_(e[4]);
+    });
+    var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS), W = ACC_ITEMS_HEADERS.length, last = iSh.getLastRow();
+    var vals = last >= 2 ? iSh.getRange(2, 1, last - 1, W).getValues() : [];
+    var names = {}, have = {}, modeOf = {}, nz = function (x) { return _glNorm_(x); };
+    vals.forEach(function (r, i) { var cl = _glStr_(r[1]); if (cl && !names[nz(cl)]) names[nz(cl)] = cl; var k = _accHbKeyOf_(r[3]); if (k) (have[k] = have[k] || []).push(i); });
+    var mSh = _accSheet_(ACC_META_SHEET, ACC_META_HEADERS);
+    if (mSh.getLastRow() >= 2) mSh.getRange(2, 1, mSh.getLastRow() - 1, 3).getValues().forEach(function (r) { var cl = _glStr_(r[0]); if (!cl) return; if (!names[nz(cl)]) names[nz(cl)] = cl; modeOf[cl + '|' + _glStr_(r[1])] = _glStr_(r[2]); });
+    var only = onlyClient ? nz(onlyClient) : '', now = new Date(), who = user || 'الحسابات العامة';
+    var initTrip = function (cl, t) { return t && modeOf[cl + '|' + t] === 'بنود' ? t : 'عام'; };
+    var touched = {}, adds = [], dels = {}, nUpd = 0;
+    Object.keys(want).forEach(function (k) {
+      var w = want[k]; w.amt = _glR2_(w.amt); if (!w.amt) return;
+      var cl = names[nz(w.client)] || w.client, rows = have[k] || [];
+      if (only && nz(cl) !== only && !rows.some(function (i) { return nz(vals[i][1]) === only; })) return;
+      var desc = w.desc + ' ⟦src:HB.' + _accHbEnc_(k) + '⟧';
+      if (!rows.length) { adds.push([_accId_('I'), cl, initTrip(cl, w.trip), desc, 'أخرى', w.cur, 1, w.amt, w.amt, 'لا', '', who, now, '', '', '', '', '', '', 'نعم']); return; }
+      rows.slice(1).forEach(function (j) { dels[j] = 1; });   // مكرر لنفس الحجز
+      var r = vals[rows[0]], same = nz(r[1]) === nz(cl);
+      if (same && _glStr_(r[3]) === desc && _glR2_(_accNum_(r[8])) === w.amt && _glStr_(r[5]) === w.cur && _glStr_(r[19]) === 'نعم') return;
+      if (!same) { r[1] = cl; r[2] = initTrip(cl, w.trip); }
+      r[3] = desc; r[4] = r[4] || 'أخرى'; r[5] = w.cur; r[6] = 1; r[7] = w.amt; r[8] = w.amt; r[9] = 'لا'; r[13] = who; r[14] = now; r[17] = ''; r[19] = 'نعم';
+      touched[rows[0]] = 1; nUpd++;
+    });
+    Object.keys(have).forEach(function (k) {
+      if (want[k] && want[k].amt) return;   // القيد قائم
+      have[k].forEach(function (i) { if (!only || nz(vals[i][1]) === only) dels[i] = 1; });
+    });
+    Object.keys(touched).forEach(function (i) { i = +i; if (!dels[i]) iSh.getRange(i + 2, 1, 1, W).setValues([vals[i]]); });
+    if (adds.length) iSh.getRange(iSh.getLastRow() + 1, 1, adds.length, W).setValues(adds);
+    var dl = Object.keys(dels).map(Number).sort(function (a, b) { return b - a; });
+    dl.forEach(function (i) { iSh.deleteRow(i + 2); });
+    if (adds.length || dl.length || nUpd) {
+      try { _ACC_HB_CITY_MEMO_ = null; } catch (eM) {}
+      try { logChange_(who, 'مزامنة حجوزات الفنادق لحسابات العملاء', 'GL:hbmirror', onlyClient || 'كل العملاء', '-', 'إضافة ' + adds.length + ' · تحديث ' + nUpd + ' · حذف ' + dl.length); } catch (eLg) {}
+    }
+    if (ck) try { C.put(ck, '1', 21600); } catch (eC2) {}
+    return { added: adds.length, updated: nUpd, removed: dl.length };
+  } finally { if (own) try { lk.releaseLock(); } catch (eR) {} }
+}
+
 // 📘 رقم قيد الرحلة لكل رحلة بحساب العميل (لشاشة حسابات العملاء)
 function _glClientLinks_(client) {
   if (!_glSSId_()) return null;
   // (V4.259) + رقم قيد كل دفعة (AUTO:CP:<معرّف الدفعة>) — وأرقام قيود الرحلات في وضع قيود الرحلات فقط
-  client = _glStr_(client); var tm = _glTripMode_(), pre = 'AUTO:TRIP:' + client + '|', out = { __tm: tm, __pay: {} }, pend = _glPendingRows_(), myPays = {};
+  client = _glStr_(client); var tm = _glTripMode_(), pre = 'AUTO:TRIP:' + client + '|', out = { __tm: tm, __pay: {}, __hb: {} }, pend = _glPendingRows_(), myPays = {}, myHb = {};
   try {
     var pSh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
     if (pSh.getLastRow() >= 2) pSh.getRange(2, 1, pSh.getLastRow() - 1, 2).getValues().forEach(function (r) { if (_glStr_(r[1]) === client) myPays['AUTO:CP:' + _glStr_(r[0])] = _glStr_(r[0]); });
+    // 🏨 (V4.326) أرقام قيود حجوزات الفنادق المنقولة لحساب العميل
+    var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
+    if (iSh.getLastRow() >= 2) iSh.getRange(2, 1, iSh.getLastRow() - 1, 4).getValues().forEach(function (r) { if (_glStr_(r[1]) !== client) return; var hk = _accHbKeyOf_(r[3]); if (hk) myHb['AUTO:HB:' + hk] = hk; });
   } catch (eP) {}
   _glRows_('entries').forEach(function (r) {
     var k = _glStr_(r[6]); if (_glStr_(r[5]) === GL_ST_VOID_) return;
     var isP = pend[k] && _glStr_(pend[k].row[9]) !== 'مرفوض';
     if (tm && k.indexOf(pre) === 0) out[k.slice(pre.length)] = { id: _glStr_(r[0]), pending: !!isP };
     else if (myPays[k]) out.__pay[myPays[k]] = { id: _glStr_(r[0]), pending: !!isP };
+    else if (myHb[k]) out.__hb[myHb[k]] = { id: _glStr_(r[0]), pending: !!isP };
   });
   return out;
 }
@@ -5734,7 +5803,7 @@ function glAutoReconcile(authToken) {
     rows.push({ kind: kind, label: label, name: name, code: g.code, appE: appE, appS: appS, glE: g.E, glS: g.S, dE: dE, dS: dS, ok: Math.abs(dE) < 0.05 && Math.abs(dS) < 0.05 });
   };
   // العملاء: نفس دالة أرصدة دليل العملاء (موجب = مستحق على العميل)
-  var cl = _accAggBalances_();
+  var cl = _accAggBalances_(null, true);   // 🏨 (V4.326) بنود الحجوزات تُستبعد هنا كما تُستبعد أسطر قيودها من الطرف الآخر
   Object.keys(cl).forEach(function (n) { add('client', 'عميل', n, cl[n].netE, cl[n].netS, glOf('client', n, 1)); });
   // الوكلاء: نفس حساب كشف الوكيل العام بلا فلاتر (موجب = مستحق للوكيل علينا)
   var map = _vzAcctMap_(), files = _vzReadAll_(), items = _vzReadItems_(''), pays = _vzReadPays_('');
