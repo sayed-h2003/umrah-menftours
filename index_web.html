@@ -1565,7 +1565,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.323</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.324</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -8021,7 +8021,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.323";
+var CLIENT_APP_VERSION = "4.324";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -49195,7 +49195,7 @@ function glOpeningDlg(code) {
       (rows ? '<div class="table-responsive mb-2"><table class="gl-tbl"><thead><tr><th>القيد</th><th>التاريخ</th><th>البيان</th><th>مدين</th><th>دائن</th><th>العملة</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
         : '<div class="text-muted small mb-2">لا يوجد رصيد افتتاحي مسجَّل لهذا الحساب.</div>') +
       '<div class="gl-box"><div class="fw-bold small mb-2">➕ تسجيل رصيد أول المدة (أو فرق تصحيح)</div><div class="row g-2 align-items-end">' +
-        '<div class="col-md-3"><label class="gl-lbl">الطبيعة</label><select id="glOpSide" class="form-select form-select-sm"><option value="D">مدين (له علينا / أصل)</option><option value="C">دائن (لنا عليه / التزام)</option></select></div>' +
+        '<div class="col-md-3"><label class="gl-lbl">الطبيعة</label><select id="glOpSide" class="form-select form-select-sm"><option value="D">مدين (لنا عليه / أصل)</option><option value="C">دائن (له علينا / التزام)</option></select></div>' +
         '<div class="col-md-3"><label class="gl-lbl">المبلغ</label><input id="glOpAmt" class="form-control form-control-sm gl-latin" inputmode="decimal"></div>' +
         '<div class="col-md-2"><label class="gl-lbl">العملة</label>' + (a.currency ? '<div class="gl-note" style="margin:0;">' + E(GL_CUR_LBL_[a.currency] || a.currency) + '</div><input type="hidden" id="glOpCur" value="' + E(a.currency) + '">'
           : '<select id="glOpCur" class="form-select form-select-sm" onchange="var r=document.getElementById(\'glOpRate\');if(r)r.value=glRateAt(this.value,\'' + glJs(start) + '\')">' + ['EGP', 'SAR', 'USD'].map(function (c) { return '<option value="' + c + '"' + (c === cur0 ? ' selected' : '') + '>' + GL_CUR_LBL_[c] + '</option>'; }).join('') + '</select>') + '</div>' +
