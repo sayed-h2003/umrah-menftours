@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.328";
+var APP_VERSION = "4.329";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22977,6 +22977,24 @@ function _mfAutoApproveOnReview_(f, old, isNew) {
   if (_mfStr_(f && f.reviewDate) && (isNew || !_mfStr_(old && old.reviewDate))) f.approved = true;
   return !!(f && f.approved);
 }
+// 🚫 (V4.329) منع تكرار الأرقام المرجعية (رقم ملف الوزارة / رقم مجموعة التأشيرات): مفتاح مقارنة موحَّد
+// (أرقام لاتينية، بلا مسافات، بلا حساسية للحالة) — يمنع «١٢٣٤» و«1234 » من تجاوز الفحص
+function _dupKey_(s) {
+  return _mfStr_(s).replace(/[٠-٩]/g, function (d) { return String(d.charCodeAt(0) - 1632); })
+    .replace(/[۰-۹]/g, function (d) { return String(d.charCodeAt(0) - 1776); }).replace(/\s+/g, '').toLowerCase();
+}
+// 🏙️ (V4.329) إقامة بمدينة واحدة طوال الرحلة: لو سُجّلت تواريخ إحدى المدينتين ناقصة (دخول فقط أو خروج فقط) أو سُجّل لها
+// فندق بلا تواريخ، والمدينة الأخرى فارغة تماماً (بلا فندق ولا تواريخ) ⇒ يُستكمل الدخول من تاريخ السفر والخروج من العودة
+// بدل رفض الحفظ بـ«أدخل تاريخ الخروج». لا يمسّ أي تواريخ مُدخلة، ولا يعمل لو المدينتان كلتاهما مُسجَّلتان.
+function _mfInferSingleStay_(f) {
+  var go = _mfStr_(f.goDate), ret = _mfStr_(f.retDate); if (!go || !ret) return false;
+  var has = function (c) { return !!(_mfStr_(f[c + 'Hotel']) || _mfStr_(f[c + 'In']) || _mfStr_(f[c + 'Out'])); };
+  var md = has('madinah'), mk = has('makkah'); if (md === mk) return false;
+  var c = md ? 'madinah' : 'makkah', done = false;
+  if (!_mfStr_(f[c + 'In'])) { f[c + 'In'] = go; done = true; }
+  if (!_mfStr_(f[c + 'Out'])) { f[c + 'Out'] = ret; done = true; }
+  return done;
+}
 function saveMinistryFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _mfPerm_(authToken, isNew ? 'add' : 'edit');
@@ -22989,6 +23007,12 @@ function saveMinistryFile(authToken, data) {
     var all = _mfReadAll_();
     var old = isNew ? null : all.filter(function(x) { return x.id === _mfStr_(data.id); })[0];
     if (!isNew && !old) return { success: false, error: 'الملف غير موجود' };
+    // 🚫 (V4.329) رقم الملف لا يتكرر: يُفحص عند الإضافة، أو عند تغيير الرقم فقط (ملف قديم مكرَّر يبقى قابلاً للتعديل دون تغيير رقمه)
+    var _fnK = _dupKey_(data.fileNo);
+    if (_fnK && (isNew || _dupKey_(old.fileNo) !== _fnK)) {
+      var _fnDup = all.filter(function (x) { return (!old || x.id !== old.id) && _dupKey_(x.fileNo) === _fnK; })[0];
+      if (_fnDup) return { success: false, error: '🚫 رقم الملف «' + _mfStr_(data.fileNo) + '» مسجَّل من قبل' + (_fnDup.company ? ' لشركة «' + _fnDup.company + '»' : '') + (_fnDup.clientLabel ? ' (' + _fnDup.clientLabel + ')' : '') + ' — لا يجوز تكرار رقم الملف', dupFileNo: true };
+    }
 
     // تطبيع الأرقام العربية وتوحيد صيغة التواريخ
     var bd = Array.isArray(data.breakdown) ? data.breakdown.map(function(b) {
@@ -23042,6 +23066,7 @@ function saveMinistryFile(authToken, data) {
       updatedBy: session.username, updatedAt: _mfStamp_()
     };
 
+    _mfInferSingleStay_(f);   // 🏙️ (V4.329)
     var _dIss = _mfDatesIssues_(f);
     if (_dIss.length) return { success: false, error: '📅 صحّح التواريخ قبل الحفظ:\n• ' + _dIss.join('\n• '), dateIssues: _dIss };
     // نوع المراجعة التلقائي (جمعة/سبت أو أقل من 3 أيام) — ما لم يُثبّته الموظف يدوياً
@@ -25146,6 +25171,13 @@ function saveVisaFile(authToken, data) {
     // يقرأ عمود المعرِّف وحده ثم صف المجموعة المعدَّلة فقط، والإضافة تقرأ عمود المسلسل وحده للرقم التالي
     var old = isNew ? null : _vzReadOne_(sh, _mfStr_(data.id));
     if (!isNew && !old) return { success: false, error: 'القيد غير موجود' };
+    // 🚫 (V4.329) رقم المجموعة لا يتكرر: عند الإضافة أو تغيير الرقم فقط — قراءة عمودي المعرّف والرقم وحدهما (بلا قراءة الشيت كاملاً)
+    var _rfK = _dupKey_(data.ref);
+    if (_rfK && (isNew || _dupKey_(old.ref) !== _rfK)) {
+      var _vl = sh.getLastRow(), _vv = _vl >= 2 ? sh.getRange(2, 1, _vl - 1, 3).getValues() : [], _vd = null;
+      for (var _vi = 0; _vi < _vv.length; _vi++) if (_mfStr_(_vv[_vi][0]) !== (old ? old.id : '') && _dupKey_(_vv[_vi][2]) === _rfK) { _vd = _vv[_vi]; break; }
+      if (_vd) return { success: false, error: '🚫 رقم المجموعة «' + _mfStr_(data.ref) + '» مسجَّل من قبل (مسلسل ' + _mfStr_(_vd[1]) + ') — لا يجوز تكرار رقم المجموعة', dupRef: true };
+    }
     var bd = Array.isArray(data.breakdown) ? data.breakdown.map(function (b) {
       return { name: _mfStr_(b.name), count: _mfNum_(b.count) };
     }).filter(function (b) { return b.name; }) : (old ? old.breakdown : []);
@@ -25267,7 +25299,7 @@ function importVisaFilesBatch(authToken, rows) {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
     var all = _vzReadAll_();
     var existing = {};
-    all.forEach(function (f) { if (f.ref) existing[f.ref] = 1; });
+    all.forEach(function (f) { if (f.ref) existing[_dupKey_(f.ref)] = 1; });
     var seq = all.reduce(function (m, f) { return Math.max(m, _mfNum_(f.seq)); }, 0);
     var now = _mfStamp_();
     var out = [], skipped = [], noRef = 0, imported = 0;
@@ -25276,8 +25308,8 @@ function importVisaFilesBatch(authToken, rows) {
       // 🚫 (V4.154) لا يُستورَد إلا صف له رقم مجموعة جديد: الصف بلا رقم مجموعة لا يمكن التحقق من
       // جِدَّته فيُتخطّى، والرقم المسجَّل من قبل (بالشيت أو بنفس دفعة الاستيراد) يُتخطّى كذلك
       if (!ref) { noRef++; return; }
-      if (existing[ref]) { skipped.push(ref); return; }
-      existing[ref] = 1;
+      if (existing[_dupKey_(ref)]) { skipped.push(ref); return; }
+      existing[_dupKey_(ref)] = 1;
       var bd = Array.isArray(r.breakdown) ? r.breakdown.map(function (b) {
         return { name: _mfStr_(b.name), count: _mfNum_(b.count) };
       }).filter(function (b) { return b.name; }) : [];

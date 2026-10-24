@@ -5636,6 +5636,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="vz-btn" id="vzBtnStats" onclick="vzOpenStats()">📊 إحصائيات الوكلاء</button>
       <button class="vz-btn" onclick="vzColsToggle(this)">⚙️ تخصيص الأعمدة</button>
       <button class="vz-btn" onclick="vzPrint()">🖨️ طباعة / PDF</button>
+      <button class="vz-btn" onclick="vzExportExcel(this)" title="تصدير المجموعات الظاهرة حالياً (بعد الفلاتر والترتيب) وبالأعمدة المعروضة إلى ملف إكسيل">📊 تصدير إكسيل</button>
       <button class="vz-btn" onclick="vzExportImage(this)">📸 صورة HD</button>
       <button class="vz-btn" onclick="vzLoad(true)">🔄 تحديث</button>
     </div>
@@ -8054,7 +8055,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.328";
+var CLIENT_APP_VERSION = "4.329";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -12472,6 +12473,21 @@ function _detachModalToBody_(modalId) {
 }
 // نفس السبب أعلاه ينطبق على ستارة Bootstrap الخلفية (.modal-backdrop) التي يُنشئها تلقائياً عند كل
 // .show() كعنصر شقيق جديد في body بزاوية z-index منخفضة (~1050) — تُستدعى بعد .show() مباشرة
+// 🧊 (V4.329) شبكة أمان عامة لفك تجمّد الواجهة: بعد إغلاق أي نافذة Bootstrap، لو لم تبقَ نافذة مفتوحة تُزال أي ستارة خلفية
+// عالقة وتُعاد حالة الصفحة (modal-open / overflow)، ولو بقيت نافذة مفتوحة تبقى ستارة واحدة فقط (الأعلى). لا تمسّ نوافذ البرنامج المخصصة.
+document.addEventListener('hidden.bs.modal', function () {
+  setTimeout(function () {
+    try {
+      var open = document.querySelectorAll('.modal.show'), backs = document.querySelectorAll('.modal-backdrop');
+      if (!open.length) {
+        backs.forEach(function (b) { b.remove(); });
+        document.body.classList.remove('modal-open'); document.body.style.overflow = ''; document.body.style.paddingRight = '';
+      } else if (backs.length > 1) {
+        for (var i = 0; i < backs.length - 1; i++) backs[i].remove();
+      }
+    } catch (e) {}
+  }, 60);
+});
 function _liftModalBackdrop_() {
   requestAnimationFrame(function () {
     var backs = document.querySelectorAll('.modal-backdrop');
@@ -21447,8 +21463,11 @@ function generateHousing(city) {
   document.getElementById('housingTripNameLabel').textContent = modalTitle;
   // 🩹 (V4.128) تعمل الآن من أي شاشة (زر التسكين المباشر بقائمة الرحلات مثلاً) وليس من قسم الرحلات فقط
   _detachModalToBody_('housingModal');
-  new bootstrap.Modal(document.getElementById('housingModal')).show();
-  _liftModalBackdrop_();
+  // 🧊 (V4.329) سبب تجمّد الواجهة بعد إغلاق التسكين: هذه الدالة تُستدعى أيضاً عند التبديل بين تبويبي مكة/المدينة والنافذة مفتوحة،
+  // وكانت تُنشئ نسخة Modal جديدة وتستدعي show() فتُضاف ستارة (backdrop) ثانية؛ الإغلاق يزيل واحدة فقط وتبقى الأخرى فوق الشاشة.
+  // الآن: نسخة واحدة، ولا show() لنافذة مفتوحة أصلاً.
+  var _hmEl = document.getElementById('housingModal'), _hmInst = bootstrap.Modal.getOrCreateInstance(_hmEl);
+  if (!_hmEl.classList.contains('show')) { _hmInst.show(); _liftModalBackdrop_(); }
 }
 
 
@@ -39550,6 +39569,11 @@ function mfInlineKey(e, id) {
 var _mfInlineSaving = false;
 function mfInlineSave(id) {
   var d = _mfInlineDraft; if (!d) return;
+  // 📅 (V4.329) Enter يحفظ قبل أن يُنسِّق حقل التاريخ قيمته (blur) فكانت تُرسَل خاماً (1/8) — تُثبَّت منسَّقة بالمسودة أولاً
+  ['reviewDate', 'goDate', 'retDate', 'madinahIn', 'madinahOut', 'makkahIn', 'makkahOut'].forEach(function (k) {
+    var inp = document.getElementById('mfIn_' + k), raw = inp ? inp.value : d[k], nv = mfDate(raw);
+    if (nv) { d[k] = nv; if (inp) inp.value = nv; } else if (inp && mfStr(raw) === '') d[k] = '';
+  });
   // 🛠️ (V4.126) كان الضغط على Enter يرسل الحفظ بلا أي مؤشر انتظار، ومع بطء الحفظ كان يبدو
   // «لا يحدث شيء / الشاشة واقفة»، كما كان تكرار Enter يرسل عدة نداءات متزامنة على نفس الصف.
   // الآن: قفل ضد الإرسال المكرر + مؤشر انتظار مرئي على أزرار الصف.
@@ -39841,12 +39865,26 @@ function mfDpAfter() {
   if (MFDP.el) { try { MFDP.el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {} }
 }
 // تطبيع كل حقول التاريخ عند الخروج منها + تحويل الأرقام العربية فوراً
+// 📅 (V4.329) تثبيت التاريخ المكتوب يدوياً بحالة النموذج (MF._draft) عند مغادرة الحقل — كان الحقل يُنسَّق (1/8 ⇒ 01/08/2026)
+// بالـDOM فقط، فتبقى القيمة القديمة بالمسودة وتعود عند أول إعادة رسم أو تُحفظ قديمة. الأزرار 📅 كانت تمرّ على نفس الدوال أصلاً.
+function mfDateCommit_(el, norm) {
+  var cb = el.getAttribute('data-mfcb'); if (!cb || !window.MF || !MF._draft) return;
+  var was = el.getAttribute('data-mfv'); if (was === null) was = '';
+  if (norm === was) return;                       // لا تغيير عن آخر قيمة مثبَّتة
+  el.setAttribute('data-mfv', norm);
+  if (cb.indexOf('mfDraftDate:') === 0) mfDraftSet(cb.split(':')[1], norm);
+  else if (typeof window[cb] === 'function') window[cb](norm);
+}
 function mfAttachDateInputs() {
   document.querySelectorAll('#section-ministry .mf-date input, .mf-dlg .mf-date input').forEach(function (el) {
     if (el._mfDateBound) return; el._mfDateBound = true;
-    el.addEventListener('blur', function () {
-      el.value = mfDate(el.value);
+    el.setAttribute('data-mfv', mfDate(el.value));
+    el.addEventListener('blur', function (ev) {
+      var typed = el.value, norm = mfDate(typed), nxt = ev && ev.relatedTarget && ev.relatedTarget.id;
+      el.value = norm;
       if (el.id && el.id.indexOf('mfF_') === 0) mfRender();
+      mfDateCommit_(el, norm);
+      if (nxt) { var nx = document.getElementById(nxt); if (nx && document.activeElement !== nx) try { nx.focus(); } catch (eF) {} }   // الإعادة الرسم لا تُضيع الحقل التالي
     });
     el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { el.value = mfDate(el.value); el.blur(); } });
   });
@@ -41189,7 +41227,7 @@ function mfSel(id, opts, val, handler) {
 function mfNumFld(k, v) { return '<input class="form-control form-control-sm" value="' + mfEsc(v || '') + '" oninput="mfDraftNum(\'' + k + '\',this.value)">'; }
 function mfTxtFld(k, v) { return '<input class="form-control form-control-sm" value="' + mfEsc(v || '') + '" oninput="mfDraftSet(\'' + k + '\',this.value)">'; }
 function mfDateFld(id, v, cb) {
-  return '<div class="mf-date"><input class="form-control form-control-sm" id="' + id + '" maxlength="10" value="' + mfEsc(v || '') + '" placeholder="">' +
+  return '<div class="mf-date"><input class="form-control form-control-sm" id="' + id + '" maxlength="10" value="' + mfEsc(v || '') + '" placeholder="" data-mfcb="' + mfEsc(cb) + '">' +
     '<button type="button" onclick="mfPickDate(\'' + id + '\',event,function(val){' +
     (cb.indexOf('mfDraftDate:') === 0 ? ('mfDraftSet(\'' + cb.split(':')[1] + '\',val)') : (cb + '(val)')) + ';})">📅</button></div>';
 }
@@ -41412,6 +41450,11 @@ function mfFormValidate() {
   var sum = (d.breakdown || []).reduce(function (a, b) { return a + mfNum(b.count); }, 0);
   if (sum !== mfNum(d.pilgrims)) msgs.push('إجمالي بنود العميل (' + sum + ') ≠ عدد المعتمرين (' + mfNum(d.pilgrims) + ')');
   if (!mfStr(d.company)) msgs.push('اختر الشركة المصرية');
+  var _fk2 = _dupKeyC_(d.fileNo);   // 🚫 (V4.329) تنبيه فوري برقم الملف المكرر
+  if (_fk2) {
+    var _fo2 = d.id ? (MF.files || []).filter(function (x) { return x.id === d.id; })[0] : null;
+    if (!_fo2 || _dupKeyC_(_fo2.fileNo) !== _fk2) { var _fd2 = (MF.files || []).filter(function (x) { return x.id !== d.id && _dupKeyC_(x.fileNo) === _fk2; })[0]; if (_fd2) msgs.push('🚫 رقم الملف مكرر — مسجَّل لشركة «' + (_fd2.company || '—') + '» (لن يُحفظ)'); }
+  }
   // حد المشرف المرافق 50 معتمر إجمالاً على الملفات المتطابقة في تاريخي السفر والعودة
   (d.sups || []).forEach(function (s) {
     if (String(s.type || '').indexOf('مرافق') < 0 || !mfStr(s.name)) return;
@@ -41451,9 +41494,30 @@ function mfDatesIssues_(f) {
   if (iv.length === 2 && iv[0][0] < iv[1][1] && iv[1][0] < iv[0][1]) out.push('تعارض بين فترتي السكن: المدينة ومكة متداخلتان — الدخول لإحداهما يجب أن يكون في يوم الخروج من الأخرى أو بعده');
   return out;
 }
+// 🚫 (V4.329) مفتاح مقارنة رقم مرجعي (أرقام لاتينية، بلا مسافات) — مطابق لـ_dupKey_ بالخادم
+function _dupKeyC_(s) {
+  return mfStr(s).replace(/[٠-٩]/g, function (c) { return String(c.charCodeAt(0) - 1632); }).replace(/[۰-۹]/g, function (c) { return String(c.charCodeAt(0) - 1776); }).replace(/\s+/g, '').toLowerCase();
+}
+// 🏙️ (V4.329) إقامة بمدينة واحدة طوال الرحلة: نفس استكمال الخادم (_mfInferSingleStay_) — يظهر للمستخدم قبل الحفظ
+function mfInferSingleStay_(d) {
+  var go = mfStr(d.goDate), ret = mfStr(d.retDate); if (!go || !ret) return false;
+  var has = function (c) { return !!(mfStr(d[c + 'Hotel']) || mfStr(d[c + 'In']) || mfStr(d[c + 'Out'])); };
+  var md = has('madinah'), mk = has('makkah'); if (md === mk) return false;
+  var c = md ? 'madinah' : 'makkah', done = false;
+  if (!mfStr(d[c + 'In'])) { d[c + 'In'] = go; done = true; }
+  if (!mfStr(d[c + 'Out'])) { d[c + 'Out'] = ret; done = true; }
+  return done;
+}
 function mfSaveDraft() {
   var d = MF._draft;
   if (!mfStr(d.company)) { _showPopup('اختر الشركة المصرية', 'error'); return; }
+  // 🚫 (V4.329) رقم الملف لا يتكرر (الخادم يرفض أيضاً)
+  var _fk = _dupKeyC_(d.fileNo), _fo = d.id ? (MF.files || []).filter(function (x) { return x.id === d.id; })[0] : null;
+  if (_fk && (!_fo || _dupKeyC_(_fo.fileNo) !== _fk)) {
+    var _fd = (MF.files || []).filter(function (x) { return x.id !== d.id && _dupKeyC_(x.fileNo) === _fk; })[0];
+    if (_fd) { _showPopup('🚫 رقم الملف «' + mfStr(d.fileNo) + '» مسجَّل من قبل' + (_fd.company ? ' لشركة «' + _fd.company + '»' : '') + ' — لا يجوز تكرار رقم الملف', 'error', 'رقم ملف مكرر'); return; }
+  }
+  if (mfInferSingleStay_(d)) showToast('🏙️ إقامة بمدينة واحدة: استُكمل دخولها/خروجها من تاريخي السفر والعودة');
   var _dIss = mfDatesIssues_(d);
   if (_dIss.length) { _showPopup('📅 لا يمكن حفظ الملف قبل تصحيح التواريخ:\n• ' + _dIss.join('\n• '), 'error', 'تواريخ غير منطقية'); return; }
   mfSyncCounts();
@@ -45239,6 +45303,12 @@ function vzFormSave() {
   if (VZ._pick) _vzPickCommit_(true);
   if (!mfStr(d.agent)) { VZ._tab = 'basic'; vzFormRender(); _showPopup('اختر الوكيل السعودي', 'error'); return; }
   if (!mfNum(d.visaCount)) { VZ._tab = 'basic'; vzFormRender(); _showPopup('أدخل عدد المجموعة', 'error'); return; }
+  // 🚫 (V4.329) رقم المجموعة لا يتكرر (الخادم يرفض أيضاً)
+  var _vRk = _dupKeyC_(d.ref), _vOld = d.id ? vzGet(d.id) : null;
+  if (_vRk && (!_vOld || _dupKeyC_(_vOld.ref) !== _vRk)) {
+    var _vDup = (VZ.files || []).filter(function (x) { return x.id !== d.id && _dupKeyC_(x.ref) === _vRk; })[0];
+    if (_vDup) { VZ._tab = 'basic'; vzFormRender(); _showPopup('🚫 رقم المجموعة «' + mfStr(d.ref) + '» مسجَّل من قبل (مسلسل ' + mfStr(_vDup.seq) + ' — ' + mfStr(_vDup.agent) + ') — لا يجوز تكرار رقم المجموعة', 'error'); return; }
+  }
   // 🏨 مجموع أعداد فنادق كل مدينة = عدد المجموعة (يبقى مانعاً — خطأ تسكين صريح لا التباس فيه)
   var ht = vzHzTotals(), bad = null;
   ['مكة', 'المدينة'].forEach(function (c) {
@@ -45351,6 +45421,66 @@ function vzBuildPrintDoc(forPrint) {
     '<tbody>' + rows + totalsTr + '</tbody></table>' +
     (forPrint ? '<div class="pfoot">منظومة منف للسياحة — متابعة التأشيرات والوكلاء</div>' : '') +
     '</body></html>';
+}
+/* 📊 (V4.329) تصدير إكسيل لشاشة متابعة التأشيرات والوكلاء — يصدّر ما يظهر الآن فعلاً: المجموعات بعد كل الفلاتر (أعلى الشاشة
+   + فلاتر رؤوس الأعمدة + البحث) وبنفس الترتيب، وبالأعمدة المعروضة فقط، مع صف إجمالي العدد. بنفس آلية/تنسيق تصدير ملفات الوزارة. */
+async function vzExportExcel(btn) {
+  if (typeof ExcelJS === 'undefined') { _showPopup('مكتبة تصدير الإكسيل غير محمَّلة — أعد تحميل الصفحة', 'error'); return; }
+  var list = vzVisible();
+  if (!list.length) { _showPopup('لا توجد مجموعات مطابقة للفلاتر الحالية لتصديرها', 'error'); return; }
+  var orig = btn ? btn.innerHTML : ''; if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+  try {
+    var cols = VZ_COL_DEFS_.filter(function (c) { return !c.nof && vzColsOn_(c.k); });
+    var meta = _vzPrintMeta(), nCols = cols.length;
+    var wb = new ExcelJS.Workbook();
+    var ws = wb.addWorksheet('متابعة التأشيرات', { views: [{ rightToLeft: true, state: 'frozen', ySplit: 4 }] });
+    ws.columns = cols.map(function (c) { return { width: Math.max(8, Math.round((c.w || 90) / 7)) }; });
+    ws.mergeCells(1, 1, 1, nCols);
+    var t = ws.getCell(1, 1); t.value = 'متابعة التأشيرات والوكلاء — شركة منف للسياحة الدولية — ' + meta.stamp;
+    t.font = { name: 'Arial', size: 14, bold: true }; t.alignment = { horizontal: 'center', vertical: 'middle' }; ws.getRow(1).height = 24.75;
+    ws.mergeCells(2, 1, 2, nCols);
+    var fl = ws.getCell(2, 1); fl.value = meta.filters ? ('الفلاتر: ' + meta.filters) : 'بلا فلاتر — كل المجموعات';
+    fl.font = { name: 'Arial', size: 10, color: { argb: 'FF475569' } }; fl.alignment = { horizontal: 'center' };
+    cols.forEach(function (c, ci) { var cell = ws.getCell(4, ci + 1); _mfXlApplyStyle(cell, _mfXlHeaderStyle('blue')); cell.value = c.label.replace(/\s*\(.*\)\s*$/, ''); });
+    ws.getRow(4).height = 30;
+    var tot = 0, xr = 5, cntIdx = -1;
+    cols.forEach(function (c, ci) { if (c.k === 'visaCount') cntIdx = ci + 1; });
+    var dt = function (v) { var sd = _mfXlSerial(v); return sd != null ? new Date(sd * 86400000 + Date.UTC(1899, 11, 30)) : mfStr(v); };
+    list.forEach(function (f) {
+      tot += mfNum(f.visaCount);
+      cols.forEach(function (c, ci) {
+        var cell = ws.getCell(xr, ci + 1); _mfXlApplyStyle(cell, _mfXlDataStyle(c));
+        cell.font = { name: 'Arial', size: 10, bold: false };
+        switch (c.k) {
+          case 'seq': case 'visaCount': cell.value = mfNum(f[c.k]); break;
+          case 'date': cell.value = dt(f.date); cell.numFmt = 'dd/mm/yyyy'; break;
+          case 'ref': cell.value = _mfXlMaybeNum(f.ref); break;
+          case 'makkahStay': cell.value = (f.makkahIn || f.makkahOut) ? (mfStr(f.makkahIn) + ' ← ' + mfStr(f.makkahOut)) : ''; break;
+          case 'madinahStay': cell.value = (f.madinahIn || f.madinahOut) ? (mfStr(f.madinahIn) + ' ← ' + mfStr(f.madinahOut)) : ''; break;
+          default: cell.value = vzColRaw(c.k, f);
+        }
+        if (c.k === 'clientTrip' || c.k === 'notes' || /Agr$/.test(c.k)) cell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true };
+      });
+      xr++;
+    });
+    cols.forEach(function (c, ci) {
+      var cell = ws.getCell(xr, ci + 1); _mfXlApplyStyle(cell, _mfXlTotalsStyle());
+      if (ci === 0) cell.value = 'الإجمالي (' + list.length + ' مجموعة)';
+      if (ci + 1 === cntIdx) cell.value = { formula: 'SUM(' + _xlColLetter(cntIdx) + '5:' + _xlColLetter(cntIdx) + (xr - 1) + ')', result: tot };
+    });
+    ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: nCols } };
+    var companies = []; list.forEach(function (f) { var c = mfStr(f.company); if (c && companies.indexOf(c) < 0) companies.push(c); });
+    var base = (companies.length === 1 ? companies[0] : 'متابعة التأشيرات والوكلاء').replace(/[\\/:*?"<>|]/g, '-').trim();
+    var stamp = (VZ.today || '').replace(/\//g, '-') || new Date().toISOString().slice(0, 10);
+    var buf = await wb.xlsx.writeBuffer();
+    var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = base + ' - ' + stamp + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    _showPopup('تم تصدير ' + list.length + ' مجموعة (' + vzFmt(tot) + ' تأشيرة) حسب الفلاتر الحالية', 'success');
+  } catch (e) {
+    _showPopup('تعذّر إنشاء ملف الإكسيل: ' + (e && e.message ? e.message : e), 'error');
+  } finally { if (btn) { btn.disabled = false; btn.innerHTML = orig; } }
 }
 function vzPrint() {
   var html = vzBuildPrintDoc(true); if (!html) { _showPopup('لا توجد مجموعات للطباعة', 'error'); return; }
