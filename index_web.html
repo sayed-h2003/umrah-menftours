@@ -8055,7 +8055,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.329";
+var CLIENT_APP_VERSION = "4.330";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -26668,15 +26668,16 @@ function _accRender_() {
       if (!isItems) main += '<div class="alert alert-warning py-1 px-2 small mb-2">⚠️ بهذه الرحلة حجوزات فنادق بالريال 🏨 بينما نمط الحساب «برنامج» (جنيه فقط) — حوّل النمط لـ«بنود» أو انقل الحجوزات لـ«عام».</div>';
     }
     // جدول البنود — أعمدة أرقام ضيقة مضبوطة والبيان يأخذ العرض الأكبر
-    var renderTable = function(list, headBg) {
+    var renderTable = function(list, headBg, forceNights) {
       if (!list.length) return '<div class="text-muted small mb-2">لا توجد بنود بعد</div>';
+      var nightsCol = showNights || forceNights;
       var chkCol = canDel || (canEdit && list.some(function(i) { return i.hbKey; }));
       // 📏 (V4.45) صف واحد فقط لكل بند بطلب صريح — nowrap على كل الخلايا يمنع التفاف النص، والتمرير الأفقي (table-responsive) يستوعب أي زيادة بعرض الجدول
       return '<div class="table-responsive mb-2"><table class="table table-sm table-bordered align-middle mb-0" style="font-size:12px;background:#fff;white-space:nowrap;">' +
         '<thead style="background:' + headBg + ';color:#fff;"><tr>' +
         (chkCol ? '<th style="width:30px;">✔</th>' : '') +
         '<th class="text-start">البيان</th><th style="width:60px;">العدد</th>' +
-        (showNights ? '<th style="width:64px;">الليالي</th>' : '') +
+        (nightsCol ? '<th style="width:64px;">الليالي</th>' : '') +
         '<th style="width:90px;">السعر</th><th style="width:110px;">القيمة</th><th style="width:40px;"></th></tr></thead><tbody>' +
         list.map(function(it) {
           var disc = it.isDiscount;
@@ -26685,7 +26686,9 @@ function _accRender_() {
               (chkCol ? '<td class="text-center">' + (canEdit ? '<input type="checkbox" class="acc-hb-chk" data-id="' + it.id + '">' : '') + '</td>' : '') +
               '<td class="text-start">🏨 ' + esc(it.desc) + ' ' + _accHbChip_(it.hbKey) +
                 ' <span style="font-weight:400;cursor:help;font-size:10.5px;" title="حجز من برنامج الحجوزات — مسجَّل بقيده بالحسابات العامة فلا يدخل قيد الرحلة المجمّع (لا تكرار). يُعدَّل من شاشة الحجوزات، ويُنقل لرحلة بزر 🔀">🔒</span></td>' +
-              '<td></td>' + (showNights ? '<td></td>' : '') + '<td></td>' +
+              // 🏨 (V4.330) عدد الغرف + الليالي + سعر الغرفة/الليلة بأعمدتها (وبيان الحجز كما هو)
+              '<td class="text-center" style="direction:ltr;" title="عدد الغرف">' + numOrBlank(it.count) + '</td>' + (nightsCol ? '<td class="text-center" style="direction:ltr;">' + (it.nights ? _accFmt_(it.nights) : '') + '</td>' : '') +
+              '<td class="text-center" style="direction:ltr;" title="سعر الغرفة لليلة الواحدة">' + numOrBlank(it.price) + '</td>' +
               '<td class="fw-bold text-center" style="direction:ltr;">' + numOrBlank(it.value) + (it.currency === 'SAR' && !(isItems && !isGen) ? ' <span style="font-weight:400;font-size:10.5px;">ريال</span>' : '') + '</td>' +
               '<td class="text-center">' + (canEdit ? '<button class="btn btn-outline-primary btn-sm py-0" title="نقل الحجز لرحلة أخرى" onclick="_accHbMove_([\'' + it.id + '\'])">🔀</button>' : '') + '</td></tr>';
           }
@@ -26700,19 +26703,23 @@ function _accRender_() {
               (it.auto === 'معدّل' ? ' <span style="font-weight:400;cursor:help;font-size:10.5px;" title="بند كان تلقائياً وعُدّل يدوياً — مُثبَّت ولن يعاد حسابه تلقائياً">📌</span>' : '') + '</td>' +
             // 🔢 (V4.42) بند «قيمة مباشرة»: بلا عدد×سعر — خانتاهما تُعرَضان فارغتين بطلب صريح
             '<td class="text-center" style="direction:ltr;">' + (it.isDirect ? '' : numOrBlank(it.count)) + '</td>' +
-            (showNights ? '<td class="text-center" style="direction:ltr;">' + (it.nights ? _accFmt_(it.nights) : '') + '</td>' : '') +
+            (nightsCol ? '<td class="text-center" style="direction:ltr;">' + (it.nights ? _accFmt_(it.nights) : '') + '</td>' : '') +
             '<td class="text-center" style="direction:ltr;">' + (it.isDirect ? '' : numOrBlank(it.price)) + '</td>' +
             '<td class="fw-bold text-center" style="direction:ltr;">' + (disc && it.value ? '−' : '') + numOrBlank(it.value) + '</td>' +
             '<td class="text-center">' + (canDel ? '<button class="btn btn-outline-danger btn-sm py-0" onclick="_accItemDel_(\'' + it.id + '\')">🗑️</button>' : '') + '</td></tr>';
         }).join('') + '</tbody></table></div>';
     };
     if (isItems && !isGen) {
-      var egpItems = sel.items.filter(function(i) { return i.currency !== 'SAR'; });
-      var sarItems = sel.items.filter(function(i) { return i.currency === 'SAR'; });
+      var egpItems = sel.items.filter(function(i) { return i.currency !== 'SAR' && !i.hbKey; });
+      var sarItems = sel.items.filter(function(i) { return i.currency === 'SAR' && !i.hbKey; });
+      var hbItemsL = sel.items.filter(function(i) { return i.hbKey; });
       main += '<div class="small fw-bold mb-1" style="color:#0f4c4c;">🇪🇬 بنود بالجنيه المصري</div>' + renderTable(egpItems, '#0f4c4c');
       main += '<div class="small fw-bold mb-1" style="color:#7c3aed;">🇸🇦 بنود بالريال السعودي</div>' + renderTable(sarItems, '#7c3aed');
+      // 🏨 (V4.330) حجوزات السكن الواردة من شاشة الحجوزات في الأسفل تماماً بعد بنود الريال (تأشيرات/نقل/إعاشة/…)
+      if (hbItemsL.length) main += '<div class="small fw-bold mb-1" style="color:#5b21b6;">🏨 حجوزات السكن (من شاشة الحجوزات — مقيَّدة بقيودها بالحسابات العامة)</div>' + renderTable(hbItemsL, '#5b21b6', true);
     } else {
-      main += renderTable(sel.items, isGen ? '#78350f' : '#0f4c4c');
+      // 🏨 (V4.330) حجوزات السكن (إن وُجدت) في الأسفل دائماً
+      main += renderTable(sel.items.filter(function(i) { return !i.hbKey; }).concat(sel.items.filter(function(i) { return i.hbKey; })), isGen ? '#78350f' : '#0f4c4c', sel.items.some(function(i) { return i.hbKey; }));
     }
     // شريط الإجماليات
     // 🔤 (V4.46) اسم العملة صراحة (جنيه/ريال) بلا اختصار حرف واحد — بطلب صريح
@@ -26747,7 +26754,7 @@ function _accRender_() {
           return '<tr' + (fx ? ' style="background:#fefce8;"' : '') + (canEdit ? ' ondblclick="_accPayEdit_(\'' + p.id + '\')" style="cursor:pointer;' + (fx ? 'background:#fefce8;' : '') + '" title="انقر مرتين للتعديل"' : '') + '>' +
             (canEdit ? '<td class="text-center"><input type="checkbox" class="acc-pay-chk" data-id="' + p.id + '"></td>' : '') +
             // 📏 (V4.45) الرقم التسلسلي والتاريخ بجوار بعضهما على سطر واحد بدل سطرين (كان بينهما <br>)
-            '<td class="text-center" style="direction:ltr;">' + (p.serial ? '<span class="text-muted" style="font-size:9px;">#' + p.serial + '</span> ' : '') + esc(p.date || '-') + _accPayGlChip_(p.id) + '</td>' +
+            '<td class="text-center" style="direction:ltr;">' + esc(p.date || '-') + _accPayGlChip_(p.id, p.glId) + '</td>' +
             '<td class="text-start">' + (fx ? '💱 ' : '') + esc(p.desc || '-') + (fx ? ' <b>(= ' + _accFmt_(p.amount * p.rate) + ' ' + fxDst + ')</b>' : '') + '</td>' +
             '<td class="fw-bold text-center" style="direction:ltr;">' + _accFmt_(p.amount) + '</td><td class="text-center">' + _accCur_(p.currency) + '</td>' +
             '<td class="text-center text-nowrap">' +
@@ -29781,7 +29788,7 @@ function _accGenLedgerRun_() {
       var body = rows.map(function(p) {
         if (p.currency === 'SAR') totS += p.amount; else totE += p.amount;
         return '<tr>' +
-          '<td><b style="direction:ltr;display:inline-block;">#' + (p.serial || '—') + '</b></td>' +
+          '<td>' + (p.glId ? '<a href="#" class="fw-bold text-decoration-none" style="direction:ltr;display:inline-block;" title="فتح القيد بالحسابات العامة" onclick="event.preventDefault();_accOpenGl_(\'' + String(p.glId).replace(/'/g, '') + '\')">📘 ' + esc(p.glId) + '</a>' : '<span class="text-muted">—</span>') + '</td>' +
           '<td>' + esc(p.date || '-') + '</td>' +
           '<td><a href="#" class="fw-bold text-decoration-none" onclick="event.preventDefault();_accOpenByName_(\'' + _accJs_(p.client) + '\')">' + esc(p.client) + '</a></td>' +
           '<td><b style="direction:ltr;display:inline-block;">' + _accFmt_(p.amount) + '</b></td>' +
@@ -29791,7 +29798,7 @@ function _accGenLedgerRun_() {
           '</tr>';
       }).join('');
       area.innerHTML = '<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0" style="font-size:12px;">' +
-        '<thead class="table-light"><tr><th>الرقم</th><th>التاريخ</th><th>العميل</th><th>المبلغ</th><th>العملة</th><th>البيان</th><th></th></tr></thead>' +
+        '<thead class="table-light"><tr><th>رقم القيد</th><th>التاريخ</th><th>العميل</th><th>المبلغ</th><th>العملة</th><th>البيان</th><th></th></tr></thead>' +
         '<tbody>' + body + '</tbody>' +
         '<tfoot><tr style="background:#e2e8f0;font-weight:900;"><td colspan="3" class="text-center">الإجمالي (' + rows.length + ' دفعة)</td>' +
         '<td colspan="2">' + [totE ? _accFmt_(totE) + ' جنيه' : '', totS ? _accFmt_(totS) + ' ريال' : ''].filter(Boolean).join(' + ') + '</td><td colspan="2"></td></tr></tfoot>' +
@@ -29891,8 +29898,9 @@ function _accGlChip_(trip) {
     (canOpen ? ' onclick="_accOpenGl_(\'' + String(x.id).replace(/'/g, '') + '\')"' : '') + ' title="' + (x.pending ? 'تغيّر حساب الرحلة بعد القيد — بانتظار الاعتماد بالحسابات العامة' : 'مُرحَّل ومُزامن مع الحسابات العامة') + '">📘 قيد ' + escapeHtml_(x.id) + (x.pending ? ' ⚠️ بانتظار الاعتماد' : ' ✓') + '</span> ';
 }
 // 📘 (V4.259) رقم قيد الدفعة بالحسابات العامة بجوار تاريخها (ضغطة تفتح القيد)
-function _accPayGlChip_(pid) {
-  var g = _accData && _accData.gl, x = g && g.__pay && g.__pay[pid]; if (!x) return '';
+// 🔁 (V4.330) لا رقم إيصال تلقائي قديم: بجوار كل دفعة رقم قيدها المستندي من الحسابات العامة (من العلامة لو منسوخة من قيد، وإلا قيد AUTO:CP)
+function _accPayGlChip_(pid, glId) {
+  var g = _accData && _accData.gl, x = (glId ? { id: glId, pending: false } : null) || (g && g.__pay && g.__pay[pid]); if (!x) return '';
   var canOpen = typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'));
   return ' <span class="badge" style="background:' + (x.pending ? '#f59e0b;color:#111' : '#e0e7ff;color:#1e3a8a') + ';font-size:9.5px;' + (canOpen ? 'cursor:pointer;' : '') + '"' +
     (canOpen ? ' onclick="event.stopPropagation();_accOpenGl_(\'' + String(x.id).replace(/'/g, '') + '\')"' : '') + ' title="قيد الدفعة بالحسابات العامة">📘 ' + escapeHtml_(x.id) + '</span>';

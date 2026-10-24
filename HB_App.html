@@ -5335,9 +5335,17 @@ function deletePaymentRow(id) {
     deletePaymentRow_(id, snap);
   }).withFailureHandler(function (e) { showToast('خطأ: ' + e.message); }).getPartyPayments(party, currentSessionToken);
 }
-function deletePaymentRow_(id, snap) {
+// 🗑️ (V4.330) الدفعة المنسوخة من الحسابات العامة/اللاحقة لتاريخ القطع يرفض حذفها الخادم عادةً — المدير فقط يستطيع حذفها قسراً هنا لضبط الأرصدة
+function hbForceDelPay_(id, res, retry) {
+  if (res && /البرنامج الرئيسي/.test(String(res.error || '')) && currentUser && currentUser.role === 'admin') {
+    if (confirm('⚠️ ' + res.error + '\n\nهل تريد حذف هذه الدفعة من برنامج الحجوزات فقط قسراً (لضبط الرصيد: مكررة أو مزامَنة بالخطأ)؟\n• قيدها بالحسابات العامة لا يُحذف من هنا.\n• قد تعود نسختها لو أُعيد حفظ قيدها بالحسابات العامة.')) retry();
+    return true;
+  }
+  return false;
+}
+function deletePaymentRow_(id, snap, force) {
   google.script.run.withSuccessHandler(function(res) {
-    if (!res.ok) return alert('فشل الحذف: ' + res.error);
+    if (!res.ok) { if (hbForceDelPay_(id, res, function () { deletePaymentRow_(id, snap, true); })) return; return alert('فشل الحذف: ' + res.error); }
     var refresh = function () { if (cacheData) loadData(); };
     if (snap) pushUndo_({
       label: 'حذف دفعة (' + (snap.party || '') + ')',
@@ -5345,7 +5353,7 @@ function deletePaymentRow_(id, snap) {
       redo: function (d) { undoRedoDeletePayment_(id, refresh, d); }
     });
     refresh();
-  }).withFailureHandler(function(e){ alert('خطأ: ' + e.message); }).deletePayment(id, currentSessionToken);
+  }).withFailureHandler(function(e){ alert('خطأ: ' + e.message); }).deletePayment(id, currentSessionToken, !!force);
 }
 
 function addBatchRow() {
@@ -9248,14 +9256,14 @@ function editPaymentFromList(id) {
   openPaymentEditSmart_(p, function () { searchAllPayments(); if (cacheData) loadData(); });
 }
 
-function deletePaymentFromList(id) {
-  if (!confirm('متأكد من حذف هذه الحركة؟ لا يمكن التراجع.')) return;
+function deletePaymentFromList(id, force) {
+  if (!force && !confirm('متأكد من حذف هذه الحركة؟ لا يمكن التراجع.')) return;
   google.script.run.withSuccessHandler(function(res) {
-    if (!res.ok) return alert('فشل الحذف: ' + res.error);
+    if (!res.ok) { if (hbForceDelPay_(id, res, function () { deletePaymentFromList(id, true); })) return; return alert('فشل الحذف: ' + res.error); }
     showToast('تم الحذف');
     if (cacheData) loadData();
     searchAllPayments();
-  }).withFailureHandler(function(e){ alert('خطأ: ' + e.message); }).deletePayment(id, currentSessionToken);
+  }).withFailureHandler(function(e){ alert('خطأ: ' + e.message); }).deletePayment(id, currentSessionToken, !!force);
 }
 
 /* ============================================================ */

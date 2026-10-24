@@ -183,6 +183,38 @@ function hbBridgeSession(authToken) {
     user: { username: user.username, name: user.displayName || user.username, permissions: user.permissions || {}, financeLevel: user.financeLevel || '', admin: user.role === 'admin' || cap === 'admin',
       showCost: hasFinanceLevel_(user, 'cost'), showSale: hasFinanceLevel_(user, 'sale') } });
 }
+/* ⚡ (V4.330) الربط اللحظي لتعديلات شيتات الحجوزات المباشرة (والحذف اليدوي للدفعات): كل تعديل يدوي بالشيت يضع علامة «مستحق»
+   ثم تُحدَّث قيود الحجوزات (AUTO:HB) بالحسابات العامة فوراً لو لم تجرِ مزامنة خلال آخر 45 ثانية، وإلا تلتقطها مهمة الدقيقة
+   (drainTelegramQueue) خلال أقل من دقيقة — فلا حاجة لضغط مزامنة يدوية. التجميع يمنع بناء القيود مع كل خلية في لصق جماعي. */
+var HB_LIVE_GAP_MS_ = 45000;
+function hbGlLiveTouch_() {
+  try {
+    if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return;
+    CacheService.getScriptCache().put('hb_live_due', String(Date.now()), 900);
+    hbGlLiveRun_();
+  } catch (e) { Logger.log('hbGlLiveTouch_: ' + e.message); }
+}
+function hbGlLiveRun_() {
+  var c = CacheService.getScriptCache();
+  if (!c.get('hb_live_due') || c.get('hb_live_busy')) return null;
+  if (Date.now() - (+c.get('hb_live_at') || 0) < HB_LIVE_GAP_MS_) return null;
+  if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) { c.remove('hb_live_due'); return null; }
+  c.put('hb_live_busy', '1', 300);
+  try {
+    var lock = _glLock_();
+    if (!lock.tryLock(20000)) { _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1); return null; }   // القفل مشغول ⇒ تبقى «مستحقة» لدورة الدقيقة التالية
+    try {
+      c.remove('hb_live_due'); c.put('hb_live_at', String(Date.now()), 21600);
+      _GL_HB_MEMO_ = null; _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
+      var a = _glAutoRun_('تعديل مباشر بشيت الحجوزات', false, { onlyRx: /^AUTO:HB[PL]?:|^AUTO:HBOPEN$/ });
+      if (a.created || a.updated || a.voided) {
+        try { logChange_('الحجوزات', 'مزامنة لحظية لقيود الحجوزات', 'GL:hblive', '-', '-', 'جديد ' + a.created + '، معدّل ' + a.updated + '، ملغى ' + a.voided + (a.pending ? '، بانتظار الاعتماد ' + a.pending : '')); } catch (eL) {}
+      }
+      return a;
+    } finally { _glUnlock_(lock); }
+  } catch (e) { Logger.log('hbGlLiveRun_: ' + e.message); try { c.put('hb_live_due', String(Date.now()), 900); } catch (e2) {} return null; }
+  finally { c.remove('hb_live_busy'); }
+}
 // بعد إضافة/تعديل حجز من الشاشات الجديدة: تحديث قيود الحجوزات بالحسابات العامة فوراً (التعديل على حجز مقيَّد
 // ينتظر الاعتماد كالمعتاد). بلا ربط بالحسابات ⇒ لا شيء.
 function hbBridgeGlRefresh(authToken) {

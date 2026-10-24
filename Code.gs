@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.329";
+var APP_VERSION = "4.330";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14506,6 +14506,8 @@ function getClientAccount(authToken, client) {
     });
     // 🔀 (V4.26) ترتيب عرض البنود حسب الترتيب المحفوظ (السحب والإفلات) — تعادل الترتيب يحافظ على تسلسل القراءة الأصلي
     items.sort(function(a, b) { return a.order - b.order; });
+    // 🏨 (V4.330) حجوزات السكن الواردة من شاشة الحجوزات تأتي دائماً في الأسفل (بعد بنود الريال: تأشيرات/نقل/إعاشة…) مع بقاء ترتيب الباقي
+    items = items.filter(function(i) { return !i.hbKey; }).concat(items.filter(function(i) { return i.hbKey; }));
   }
 
   var payments = [];
@@ -14513,10 +14515,12 @@ function getClientAccount(authToken, client) {
   if (pSh.getLastRow() >= 2) {
     pSh.getRange(2, 1, pSh.getLastRow() - 1, ACC_PAY_HEADERS.length).getValues().forEach(function(r) {
       if (String(r[1] || '').trim() !== client) return;
+      var _pd = String(r[8] || ''), _pg = /⟦src:gl-([^⟧]+)⟧/.exec(_pd);   // 🔁 (V4.330) نسخة قيد بالحسابات العامة: العلامة المخفية ⇒ رقم القيد
       payments.push({ id: String(r[0]), trip: String(r[2] || ''), ptype: String(r[3] || 'دفعة'),
         date: (r[4] instanceof Date) ? Utilities.formatDate(r[4], _tz_(), 'dd/MM/yyyy') : String(r[4] || ''),
-        amount: _accNum_(r[5]), currency: String(r[6] || 'EGP'), rate: _accNum_(r[7]), desc: String(r[8] || ''),
-        serial: r[11] || '' });
+        amount: _accNum_(r[5]), currency: String(r[6] || 'EGP'), rate: _accNum_(r[7]),
+        desc: _pg ? _pd.replace(/\s*⟦src:gl-[^⟧]+⟧\s*/g, ' ').trim() : _pd,
+        glId: _pg ? _pg[1] : undefined, serial: '' });
     });
   }
 
@@ -14945,7 +14949,7 @@ function saveAccPayment(authToken, p) {
     return { success: false, error: 'الدفعة غير موجودة' };
   }
   var id = _accId_('P');
-  var serial = _accNextPaySerial_();
+  var serial = '';   // (V4.330) أُلغي الرقم التسلسلي/الإيصال التلقائي القديم — المرجع رقم القيد المستندي من الحسابات العامة (يظهر بجوار الدفعة)
   sh.appendRow([id, client, trip, ptype, String(p.date || ''), amount, currency, ptype === 'تحويل' ? rate : '', desc, session.username, new Date(), serial]);
   // 💠 (V4.13) الدفعة العامة (رحلة = «عام») لا تحتاج صف ميتا — الميتا للقطات أعداد الرحلات فقط
   if (trip !== 'عام') _accEnsureMeta_(authToken, client, trip, session.username);
@@ -15002,8 +15006,7 @@ function saveAccPaymentsBulk(authToken, client, trip, list) {
     total[currency] += amount;
   });
   if (!rows.length) return { success: false, error: 'لا توجد دفعات صالحة (المبلغ مطلوب)' };
-  var firstSerial = _accNextPaySerials_(rows.length);
-  rows.forEach(function(r, i) { r[11] = firstSerial + i; });
+  rows.forEach(function(r) { r[11] = ''; });   // (V4.330) بلا رقم تسلسلي قديم
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, ACC_PAY_HEADERS.length).setValues(rows);
   if (trip !== 'عام') _accEnsureMeta_(authToken, client, trip, session.username);
   logChange_(session.username, 'تسجيل دفعات متعددة', client, trip, '-',
@@ -15026,7 +15029,7 @@ function saveGeneralPaymentsBulk(authToken, list) {
     var amount = _accNum_(p.amount);
     if (!client || amount <= 0) return;
     var currency = (p.currency === 'SAR') ? 'SAR' : 'EGP';
-    rows.push([_accId_('P'), client, 'عام', 'دفعة', String(p.date || ''), amount, currency, '', String(p.desc || '').trim(), session.username, now, _accNextPaySerial_()]);
+    rows.push([_accId_('P'), client, 'عام', 'دفعة', String(p.date || ''), amount, currency, '', String(p.desc || '').trim(), session.username, now, '']);   // (V4.330) بلا رقم تسلسلي قديم
     total[currency] += amount;
     byClient[client] = (byClient[client] || 0) + 1;
   });
@@ -15062,13 +15065,22 @@ function getGeneralPayments(authToken, filters) {
     var amount = Number(r[5]) || 0;
     if (fMin !== null && amount < fMin) return;
     if (fMax !== null && amount > fMax) return;
+    var _gd = String(r[8] || ''), _gm = /⟦src:gl-([^⟧]+)⟧/.exec(_gd);   // 🔁 (V4.330) رقم القيد بدل الرقم التسلسلي القديم
     out.push({
       id: String(r[0] || ''), client: client, ptype: String(r[3] || ''), date: String(r[4] || ''),
-      amount: amount, currency: String(r[6] || 'EGP'), desc: String(r[8] || ''), serial: r[11] || ''
+      amount: amount, currency: String(r[6] || 'EGP'), desc: _gm ? _gd.replace(/\s*⟦src:gl-[^⟧]+⟧\s*/g, ' ').trim() : _gd, serial: '',
+      glId: _gm ? _gm[1] : ''
     });
   });
   // 🔃 الأحدث أولاً (بترتيب الإدخال بالشيت — الأحدث في الأسفل)
   out.reverse();
+  // 🔁 (V4.330) رقم القيد المستندي للدفعات المسجَّلة من الشاشة نفسها (AUTO:CP) — بجوار كل دفعة بدل الرقم التسلسلي القديم
+  try {
+    if (typeof _glSSId_ === 'function' && _glSSId_()) {
+      var _need = {}; out.forEach(function(p) { if (!p.glId) _need['AUTO:CP:' + p.id] = p; });
+      if (Object.keys(_need).length) _glRows_('entries').forEach(function(er) { var k = String(er[6] || ''); if (_need[k] && String(er[5]) !== 'ملغى') _need[k].glId = String(er[0]); });
+    }
+  } catch (eGp) {}
   return { success: true, payments: out };
 }
 

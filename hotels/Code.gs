@@ -5321,19 +5321,23 @@ function searchPayments(filters, token) {
   }
 }
 
-function deletePayment(id, token) {
+function deletePayment(id, token, force) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'delete');
     var sh = ensurePaymentsSheet_();
-    hbGlOnlyGuardRow_(sh, id);
+    // 🗑️ (V4.330) حذف يدوي قسري للمدير: دفعة منسوخة من الحسابات العامة (GL:) أو مسجَّلة بعد تاريخ القطع كان الحذف يُرفض لها —
+    // هذا يسمح بضبط الأرصدة عند وجود دفعة مكررة أو مزامَنة بالخطأ. يُسجَّل بسجل التعديلات كحذف قسري
+    var forced = !!force && actingUser && actingUser.role === 'admin';
+    if (force && !forced) throw new Error('الحذف القسري للدفعات المنسوخة من الحسابات العامة للمدير فقط');
+    if (!forced) hbGlOnlyGuardRow_(sh, id);
     var rowIdx = findPaymentRowById_(sh, id);
     if (rowIdx === -1) throw new Error('الدفعة غير موجودة (ربما حُذفت مسبقًا)');
     var rowVals = sh.getRange(rowIdx, 1, 1, 4).getValues()[0]; // التاريخ، اسم الطرف، الاتجاه، المبلغ
     sh.deleteRow(rowIdx);
-    logChange_(actingUser, 'حذف دفعة', rowVals[1], '[حذف دفعة] ' + rowVals[2], rowVals[3], '',
+    logChange_(actingUser, 'حذف دفعة', rowVals[1], '[حذف دفعة' + (forced ? ' قسري' : '') + '] ' + rowVals[2], rowVals[3], '',
       { clientName: rowVals[1], recordKey: 'PAY:' + rowVals[0] });
     SpreadsheetApp.flush(); // يختفي الصف فورًا من كشف الحساب بعد الحذف
-    return { ok: true };
+    return { ok: true, forced: forced };
   } catch (e) {
     return { ok: false, error: e.message };
   }

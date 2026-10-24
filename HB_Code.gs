@@ -5328,19 +5328,25 @@ function searchPayments(filters, token) {
   }
 }
 
-function deletePayment(id, token) {
+function deletePayment(id, token, force) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'delete');
     var sh = ensurePaymentsSheet_();
-    hbGlOnlyGuardRow_(sh, id);
+    // 🗑️ (V4.330) حذف يدوي قسري للمدير: دفعة منسوخة من الحسابات العامة (GL:) أو مسجَّلة بعد تاريخ القطع كان الحذف يُرفض لها —
+    // هذا يسمح بضبط الأرصدة عند وجود دفعة مكررة أو مزامَنة بالخطأ. يُسجَّل بسجل التعديلات كحذف قسري
+    var forced = !!force && actingUser && actingUser.role === 'admin';
+    if (force && !forced) throw new Error('الحذف القسري للدفعات المنسوخة من الحسابات العامة للمدير فقط');
+    if (!forced) hbGlOnlyGuardRow_(sh, id);
     var rowIdx = findPaymentRowById_(sh, id);
     if (rowIdx === -1) throw new Error('الدفعة غير موجودة (ربما حُذفت مسبقًا)');
     var rowVals = sh.getRange(rowIdx, 1, 1, 4).getValues()[0]; // التاريخ، اسم الطرف، الاتجاه، المبلغ
     sh.deleteRow(rowIdx);
-    hbLogChange_(actingUser, 'حذف دفعة', rowVals[1], '[حذف دفعة] ' + rowVals[2], rowVals[3], '',
+    hbLogChange_(actingUser, 'حذف دفعة', rowVals[1], '[حذف دفعة' + (forced ? ' قسري' : '') + '] ' + rowVals[2], rowVals[3], '',
       { clientName: rowVals[1], recordKey: 'PAY:' + rowVals[0] });
     SpreadsheetApp.flush(); // يختفي الصف فورًا من كشف الحساب بعد الحذف
-    return { ok: true };
+    try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eM) {}
+    try { if (typeof hbGlLiveTouch_ === 'function') hbGlLiveTouch_(); } catch (eL) {}   // ⚡ (V4.330) قيدها بالحسابات العامة يُحدَّث فوراً
+    return { ok: true, forced: forced };
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -6723,6 +6729,8 @@ function drainTelegramQueue() {
   try { tgWebhookSelfHeal_(); } catch (eHeal) { Logger.log('drain/heal: ' + eHeal.message); }
   // تفريغ دفعات تعديل الحجوزات المُجمَّعة التي انتهت مهلتها — بصرف النظر عن وضع البوت
   try { tgFlushDueBookingEditBatches_(); } catch (eBatch) { Logger.log('drain/batch: ' + eBatch.message); }
+  // ⚡ (V4.330) تعديلات الشيت التي لم تُرحَّل فوراً (مزامنة جارية/قفل مشغول) تُلتقط هنا خلال دقيقة
+  try { if (typeof hbGlLiveRun_ === 'function') hbGlLiveRun_(); } catch (eLive) { Logger.log('drain/hblive: ' + eLive.message); }
   // مزامنة شيت العهد الخارجي (CustodySync.gs) — مُقيَّدة بمهلتها الخاصة، ولا تعمل أصلاً ما
   // لم يُضبَط شيت عهدة. الحارس typeof يمنع أي عطل لو لم يُلصَق ملف المزامنة في المشروع
   try { if (typeof glBotTick_ === 'function') glBotTick_(); } catch (eGlb) { Logger.log('drain/glbot: ' + eGlb.message); }
@@ -9333,6 +9341,8 @@ function tgHandleSheetEditInstallable_(e) {
     else if (sh.getName() === s.medinaSheet) city = 'المدينة';
     else return;                                  // ورقة أخرى — لا شأن لنا بها
     var col = e.range.getColumn(), rowIdx = e.range.getRow();
+    // ⚡ (V4.330) أي تعديل بخانات الحجز (حتى اللصق الجماعي) ⇒ تحديث قيود الحجوزات بالحسابات العامة فوراً (مجمَّع، انظر hbGlLiveTouch_)
+    try { if (typeof hbGlLiveTouch_ === 'function' && rowIdx >= (city === 'المدينة' ? s.medinaStartRow : s.meccaStartRow) && col <= 34 && e.range.getLastColumn() >= 3) hbGlLiveTouch_(); } catch (eLv) {}
     if (e.range.getNumRows() !== 1 || e.range.getNumColumns() !== 1) return;  // تعديل جماعي — نتخطاه
     if (!TG_SHEET_WATCH_COLS_[col]) return;
     var startRow = city === 'المدينة' ? s.medinaStartRow : s.meccaStartRow;
