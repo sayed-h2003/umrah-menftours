@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.327";
+var APP_VERSION = "4.328";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -25638,7 +25638,12 @@ function getAgentAccount(authToken, agent, filters) {
   var items = _vzReadItems_('').filter(function (x) { return keySet[x.agent]; });
   var pays = _vzReadPays_('').filter(function (x) { return keySet[x.agent]; });
   pays = pays.filter(function (p) { return inRange(p.date); });
-  items.forEach(function (x) { delete x._row; }); pays.forEach(function (x) { delete x._row; });
+  // 🧑‍💼 (V4.328) نسخ قيود الحسابات العامة: رقم القيد (glId) للواجهة، والعلامة المخفية لا تُعرض
+  items.concat(pays).forEach(function (x) {
+    delete x._row;
+    var g = _vzGlSrc_(x.notes); if (!g) return;
+    x.glId = g; x.notes = _mfStr_(x.notes).replace(/\s*⟦src:gl-[^⟧]+⟧\s*/g, ' ').trim();
+  });
   pays.sort(function (a, b) { var x = _mfMs_(a.date), y = _mfMs_(b.date); return (isNaN(x) ? 0 : x) - (isNaN(y) ? 0 : y); });
   // الشركات التي يضمّها هذا الحساب فعلياً (تُعرض بترويسة الكشف)
   var comps = {}; files.forEach(function (f) { if (f.company) comps[f.company] = 1; });
@@ -25673,6 +25678,7 @@ function saveAgentAccItem(authToken, item) {
   if (isEdit) {
     hit = _vzReadItems_('').filter(function (x) { return x.id === id; })[0];
     if (!hit) return { success: false, error: 'البند غير موجود' };
+    if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
   }
   // (V4.216) تاريخ البند: المُدخل ⇒ تاريخه السابق ⇒ اليوم — وبيانات الإنشاء تبقى كما هي عند التعديل
   var itDate = _mfDate_(item.date) || (hit ? hit.date : '') || _mfToday_();
@@ -25689,11 +25695,15 @@ function saveAgentAccItem(authToken, item) {
   _vzClearCache_();
   return { success: true };
 }
+// 🧑‍💼 (V4.328) دفعة/بند منسوخ من قيد بالحسابات العامة (⟦src:gl-رقم القيد⟧ بالملاحظات) — يُعدَّل/يُحذف من القيد نفسه فقط
+function _vzGlSrc_(notes) { var m = /⟦src:gl-([^⟧]+)⟧/.exec(_mfStr_(notes)); return m ? m[1] : ''; }
+function _vzGlLockMsg_(entryId) { return 'هذا السطر منسوخ تلقائياً من القيد ' + entryId + ' بالحسابات العامة — عدّله أو ألغِه من القيد نفسه وسيتحدّث هنا تلقائياً'; }
 // 📝 (V4.149) تعديل رقم القيد وحده لبند/دفعة — بلا إعادة كتابة باقي بيانات الصف
 function setAgentAccItemEntryNo(authToken, id, entryNo) {
   var session = _vzFinancePerm_(authToken);   // 🔒 مالي
   var hit = _vzReadItems_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'البند غير موجود' };
+  if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
   _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS).getRange(hit._row, 11).setValue(_mfStr_(entryNo));
   logChange_(session.username, 'تعديل رقم القيد', 'AI:' + hit.id, 'رقم القيد', hit.entryNo || '-', entryNo || '-');
   _vzClearCache_();
@@ -25703,6 +25713,7 @@ function setAgentPaymentEntryNo(authToken, id, entryNo) {
   var session = _vzFinancePerm_(authToken);   // 🔒 مالي
   var hit = _vzReadPays_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
+  if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
   _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS).getRange(hit._row, 9).setValue(_mfStr_(entryNo));
   logChange_(session.username, 'تعديل رقم القيد', 'AP:' + hit.id, 'رقم القيد', hit.entryNo || '-', entryNo || '-');
   _vzClearCache_();
@@ -25712,6 +25723,7 @@ function deleteAgentAccItem(authToken, id) {
   var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var hit = _vzReadItems_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'البند غير موجود' };
+  if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
   _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS).deleteRow(hit._row);
   logChange_(session.username, 'حذف بند حساب وكيل', 'AI:' + hit.id, hit.desc, '-', '-');
   _vzClearCache_();
@@ -25724,12 +25736,14 @@ function deleteAgentAccItemsBatch(authToken, ids) {
   if (!ids.length) return { success: false, error: 'لم تُحدَّد أي بنود' };
   var sh = _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS);
   var hits = _vzReadItems_('').filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+  var glN = hits.filter(function (x) { return _vzGlSrc_(x.notes); }).length;   // 🧑‍💼 (V4.328) نسخ القيود لا تُحذف من هنا
+  hits = hits.filter(function (x) { return !_vzGlSrc_(x.notes); });
   hits.forEach(function (hit) {
     sh.deleteRow(hit._row);
     logChange_(session.username, 'حذف بند حساب وكيل (جماعي)', 'AI:' + hit.id, hit.desc, '-', '-');
   });
   _vzClearCache_();
-  return { success: true, count: hits.length };
+  return { success: true, count: hits.length, glSkipped: glN };
 }
 function saveAgentPayment(authToken, pay) {
   var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
@@ -25744,6 +25758,7 @@ function saveAgentPayment(authToken, pay) {
   if (isEdit) {
     var hit = _vzReadPays_('').filter(function (x) { return x.id === id; })[0];
     if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
+    if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
     sh.getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).setValues([rowVals]);
   } else { sh.appendRow(rowVals); id = rowVals[0]; }
   // 📜 (V4.144) سجل التعديلات لكل دفعة مستقل — بمفتاح الدفعة نفسها
@@ -25756,6 +25771,7 @@ function deleteAgentPayment(authToken, id) {
   var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var hit = _vzReadPays_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
+  if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
   _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS).deleteRow(hit._row);
   logChange_(session.username, 'حذف دفعة وكيل', 'AP:' + hit.id, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
   _vzClearCache_();
@@ -25768,12 +25784,14 @@ function deleteAgentPaymentsBatch(authToken, ids) {
   if (!ids.length) return { success: false, error: 'لم تُحدَّد أي دفعات' };
   var sh = _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS);
   var hits = _vzReadPays_('').filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+  var glN = hits.filter(function (x) { return _vzGlSrc_(x.notes); }).length;   // 🧑‍💼 (V4.328) نسخ القيود لا تُحذف من هنا
+  hits = hits.filter(function (x) { return !_vzGlSrc_(x.notes); });
   hits.forEach(function (hit) {
     sh.deleteRow(hit._row);
     logChange_(session.username, 'حذف دفعة وكيل (جماعي)', 'AP:' + hit.id, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
   });
   _vzClearCache_();
-  return { success: true, count: hits.length };
+  return { success: true, count: hits.length, glSkipped: glN };
 }
 // 📋 (V4.146) دفعات متعددة دفعة واحدة — للصق من إكسيل (كل الوكلاء والتأشيرات عامة بالريال السعودي)
 function saveAgentPaymentsBatch(authToken, agent, rows) {

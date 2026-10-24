@@ -8054,7 +8054,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.327";
+var CLIENT_APP_VERSION = "4.328";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -45691,14 +45691,16 @@ function vzAccBuildRows_() {
       desc: x.tripName || x.clientsLabel || '—', count: mfNum(x.visaCount), price: mfNum(x.price),
       debit: v, credit: 0, posting: x.clientsLabel || x.tripName || '—', status: x.status || '' });
   });
+  // 📘 (V4.328) gl: سطر منسوخ تلقائياً من قيد بالحسابات العامة — يُعدَّل/يُحذف من القيد نفسه
   (r.items || []).forEach(function (x) {
     var v = mfNum(x.value);
-    rows.push({ kind: 'item', id: x.id, entryNo: x.entryNo, date: x.date || '', groupRef: '—', desc: x.desc || '—',
-      count: '', price: '', debit: x.isCredit ? 0 : v, credit: x.isCredit ? v : 0, posting: x.notes || '—' });
+    rows.push({ kind: 'item', id: x.id, entryNo: x.glId || x.entryNo, date: x.date || '', groupRef: x.glId ? '📘 قيد' : '—', desc: (x.glId ? '📘 ' : '') + (x.desc || '—'),
+      count: '', price: '', debit: x.isCredit ? 0 : v, credit: x.isCredit ? v : 0, posting: x.notes || '—', gl: x.glId || '' });
   });
   (r.payments || []).forEach(function (x) {
-    rows.push({ kind: 'pay', id: x.id, entryNo: x.entryNo, date: x.date, groupRef: 'دفعة', desc: 'دفعة' + (x.notes ? ' — ' + x.notes : ''),
-      count: '', price: '', debit: 0, credit: mfNum(x.amount), posting: x.notes || '—' });
+    var a = mfNum(x.amount);   // دفعة سالبة (استرداد من الوكيل) تظهر بعمود «دائن»
+    rows.push({ kind: 'pay', id: x.id, entryNo: x.glId || x.entryNo, date: x.date, groupRef: x.glId ? '📘 دفعة' : 'دفعة', desc: (x.glId ? '📘 ' : '') + 'دفعة' + (x.notes ? ' — ' + x.notes : ''),
+      count: '', price: '', debit: a < 0 ? -a : 0, credit: a > 0 ? a : 0, posting: x.glId ? ('من الحسابات العامة — القيد ' + x.glId) : (x.notes || '—'), gl: x.glId || '' });
   });
   (VZ._accTransport || []).forEach(function (x) {
     if (f.company && x.company !== f.company) return;
@@ -45734,7 +45736,7 @@ function vzAccRender() {
   if (!VZ._accSel) VZ._accSel = {};
   var selKey = function (x) { return x.kind + ':' + x.id; };
   // ☑️ (V4.151) تحديد الكل/إلغاء الكل — يشمل فقط الصفوف القابلة للحذف (بنود/دفعات) الظاهرة حالياً
-  var deletableRows = rows.filter(function (x) { return x.kind === 'item' || x.kind === 'pay'; });
+  var deletableRows = rows.filter(function (x) { return (x.kind === 'item' || x.kind === 'pay') && !x.gl; });
   var allAccSel = deletableRows.length > 0 && deletableRows.every(function (x) { return VZ._accSel[selKey(x)]; });
   var selColDef = cols.filter(function (c) { return c.k === 'sel'; })[0];
   if (selColDef) selColDef.selAll = { checked: allAccSel, onchange: 'vzAccSelToggleAll(this.checked)' };
@@ -45743,6 +45745,8 @@ function vzAccRender() {
   var thead = _tblHead_('vzAccLedger', cols, 'vz-thic', VZ_ACC_LEDGER_COLS_, 'vzAccColOrderSave', vzAccColWGet_(), 'vzAccColWSave');
   var totCount = 0, totBus = 0, totDebit = 0, totCredit = 0, groupDebit = 0, payCredit = 0;
   var editBtns = function (x) {
+    if (x.gl) return '<button class="vz-rowbtn" title="فتح القيد ' + vzEsc(x.gl) + ' بالحسابات العامة — يُعدَّل أو يُلغى من هناك" onclick="vzAccOpenGl(\'' + vzJs(x.gl) + '\')">📘</button>' +
+      '<button class="vz-rowbtn" title="سجل التعديلات" onclick="vzAccRowHistory(\'' + x.kind + '\',\'' + vzJs(x.id) + '\')">📜</button>';
     var h = '<button class="vz-rowbtn" title="تعديل" onclick="vzAccEditRow(\'' + x.kind + '\',\'' + vzJs(x.id) + '\')">✏️</button>' +
       '<button class="vz-rowbtn" title="سجل التعديلات" onclick="vzAccRowHistory(\'' + x.kind + '\',\'' + vzJs(x.id) + '\')">📜</button>';
     if (x.kind === 'item') h += '<button class="vz-rowbtn" style="color:#dc2626;" title="حذف" onclick="vzAccDelItem(\'' + vzJs(x.id) + '\')">🗑️</button>';
@@ -45754,7 +45758,7 @@ function vzAccRender() {
     if (x.kind === 'transport') totBus += mfNum(x.count);
     if (x.kind === 'pay') payCredit += mfNum(x.credit);
     totDebit += mfNum(x.debit); totCredit += mfNum(x.credit);
-    var deletable = x.kind === 'item' || x.kind === 'pay';
+    var deletable = (x.kind === 'item' || x.kind === 'pay') && !x.gl;
     // 🖱️ (V4.164) تمييز الصف عند الضغط عليه وإتاحة التنقّل بالأسهم بين صفوف الكشف
     var rk = x.kind + ':' + x.id;
     var selCls = (VZ._accSelRow === rk) ? ' class="vz-acc-rowsel"' : '';
@@ -45762,8 +45766,9 @@ function vzAccRender() {
       switch (c.k) {
         case 'sel': return '<td onclick="event.stopPropagation();">' + (deletable ?
           ('<input type="checkbox" ' + (VZ._accSel[selKey(x)] ? 'checked' : '') + ' onchange="vzAccSelToggle(\'' + selKey(x) + '\',this.checked)">') : '') + '</td>';
-        case 'entryNo': return '<td onclick="event.stopPropagation();">' +
-          '<input class="vz-inline-inp" value="' + vzEsc(x.entryNo || '') + '" onchange="vzAccEntryNoEdit(\'' + x.kind + '\',\'' + vzJs(x.id) + '\',this.value)">' + '</td>';
+        case 'entryNo': return '<td onclick="event.stopPropagation();">' + (x.gl
+          ? '<a href="#" class="vz-gl-link" title="منسوخ تلقائياً من هذا القيد بالحسابات العامة — اضغط لفتحه" onclick="vzAccOpenGl(\'' + vzJs(x.gl) + '\');return false;" style="font-weight:800;color:#1d4ed8;white-space:nowrap;">📘 ' + vzEsc(x.gl) + '</a>'
+          : '<input class="vz-inline-inp" value="' + vzEsc(x.entryNo || '') + '" onchange="vzAccEntryNoEdit(\'' + x.kind + '\',\'' + vzJs(x.id) + '\',this.value)">') + '</td>';
         case 'date': return '<td dir="ltr">' + vzEsc(x.date || '—') + '</td>';
         case 'groupRef': return '<td>' + vzEsc(x.groupRef || '—') + '</td>';
         case 'status': return '<td>' + (x.status ? _vzStatusBadge(x.status) : '—') + '</td>';
@@ -45875,8 +45880,14 @@ function vzAccSelToggleAll(on) {
   if (!VZ._accSel) VZ._accSel = {};
   var allRows = vzAccBuildRows_();
   var rows = _tblApply_('vzAccLedger', allRows, VZ_ACC_LEDGER_COLS_, _vzAccLedgerRaw_);
-  rows.forEach(function (x) { if (x.kind === 'item' || x.kind === 'pay') VZ._accSel[x.kind + ':' + x.id] = on; });
+  rows.forEach(function (x) { if ((x.kind === 'item' || x.kind === 'pay') && !x.gl) VZ._accSel[x.kind + ':' + x.id] = on; });
   vzAccRender(); vzAccActBar_();
+}
+// 📘 (V4.328) فتح قيد الحسابات العامة الذي نُسخ منه السطر (فوق نافذة كشف الوكيل) — يحتاج صلاحية عرض الحسابات العامة
+function vzAccOpenGl(id) {
+  if (!id || typeof glShowEntry !== 'function') return;
+  if (typeof GL !== 'undefined' && !GL.ready && typeof glRefreshData === 'function') { showToast('⏳ جاري فتح القيد…'); glRefreshData(function () { glShowEntry(id); }); }
+  else glShowEntry(id);
 }
 // 🗑️ (V4.149) حذف جماعي للبنود/الدفعات المحدَّدة دفعة واحدة (لا يشمل مجموعات أو دورات نقل)
 function vzAccDelSelected() {
@@ -46065,6 +46076,8 @@ function vzAccDelPay(id) {
 function vzAccEditRow(kind, id) {
   var r = VZ._acc;
   if (kind === 'group') { vzAccClose(); vzEditFile(id); return; }
+  var glHit = (kind === 'item' ? (r.items || []) : kind === 'pay' ? (r.payments || []) : []).filter(function (x) { return x.id === id && x.glId; })[0];
+  if (glHit) { vzAccOpenGl(glHit.glId); return; }   // 📘 (V4.328) نسخة قيد ⇒ تُعدَّل من القيد نفسه
   // 🚌 (V4.154) تعديل دورة النقل صار داخل كشف الحساب نفسه بنفس حقول شاشة حسابات النقل السعودي —
   // كان يُغلق الكشف ويقفز لتلك الشاشة (taEditRow) فيفقد المستخدم مكانه ويحتاج فتح الحساب من جديد
   if (kind === 'transport') { vzAccEditTransport_(id); return; }
@@ -46442,6 +46455,7 @@ function vzAcctHubOpen() {
     '<span class="d-flex gap-2"><button class="vz-btn sm" onclick="vzOpenPricing()">💲 تسعير الوكلاء</button>' +
     '<button class="vz-btn sm" onclick="vzOpenTransportPricing()">🚌 تسعير دورات النقل</button>' +
     '<button class="vz-btn sm" onclick="vzAcctCfgOpen()">⚙️ إعدادات الربط</button>' +
+    (hasPermission('admin') ? '<button class="vz-btn sm" onclick="vzApMirrorSync()" title="نسخ كل دفعات/قيود الوكلاء المسجلة مباشرة بالحسابات العامة (سندات، بنوك، عهد، خزائن، قيود يومية) لكشوف الوكلاء — بمعاينة أولاً وكشف المكرر (للمدير)">🔁 مزامنة من الحسابات العامة</button>' : '') +
     '<button class="vz-btn sm" onclick="vzAcctPickerClose()">✕</button></span></div><div class="p-3">' +
     '<div class="vz-sec" style="margin-top:0;"><div class="vz-sec-h">📌 الأرصدة (المدينون/الدائنون فقط)</div>' +
     (rows.length ? ('<div class="d-flex gap-2 flex-wrap">' + rows.map(function (x) {
@@ -46463,6 +46477,82 @@ function vzAcctHubOpen() {
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) vzAcctPickerClose(); });
 }
 function vzAcctPickerClose() { var o = document.getElementById('vzAcctPickOv'); if (o) o.remove(); }
+/* 🔁 (V4.328) مزامنة قيود الوكلاء من الحسابات العامة (للمدير): معاينة كاملة أولاً — الجديد/المحدَّث/المحذوف، و«المكرر المحتمل»
+   (دفعة/بند مسجَّل يدوياً بالشاشة لنفس القيد) مع اختيار الدمج لكل سطر — ثم التنفيذ. بعدها تتم المزامنة تلقائياً مع كل حفظ قيد. */
+function vzApMirrorSync() {
+  if (!hasPermission('admin')) { _showPopup('مزامنة قيود الوكلاء من الحسابات العامة للمدير فقط', 'error'); return; }
+  showToast('⏳ جاري فحص قيود الوكلاء بالحسابات العامة…');
+  google.script.run.withSuccessHandler(function (res) {
+    if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر الفحص', 'error'); return; }
+    _vzApMirShow_(res);
+  }).withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+    .glApMirrorResync(window.authToken, true, {});
+}
+var VZ_APMIR_KIND_ = { 'new': ['➕ جديد', '#dcfce7', '#166534'], update: ['✏️ تحديث', '#e0f2fe', '#075985'], merge: ['🔗 دمج', '#fef3c7', '#92400e'], 'delete': ['🗑️ حذف', '#fee2e2', '#991b1b'] };
+function _vzApMirShow_(res) {
+  VZ._apNoMerge = {};
+  var old = document.getElementById('vzApMirOv'); if (old) old.remove();
+  var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzApMirOv';
+  var cur = function (c) { return c === 'EGP' ? 'جنيه' : 'ريال'; };
+  var amt = function (n, c) { return '<b dir="ltr">' + vzFmt(n) + '</b> ' + cur(c); };
+  var total = (res.create || 0) + (res.update || 0) + (res.merge || 0) + (res.del || 0);
+  var chip = function (lbl, n, bg) { return '<span class="vz-badge" style="background:' + bg + ';font-size:12px;padding:4px 10px;">' + lbl + ': <b>' + (n || 0) + '</b></span>'; };
+  var h = '<div class="mf-note info mb-2"><span>ℹ️</span><div>كل قيد مرحّل بالحسابات العامة على حساب وكيل (سند صرف/قبض، بنك، عهدة، خزينة، تحويل بين طرفين، قيد يومية) يظهر بكشف الوكيل: ' +
+    'القيد النقدي «دفعة»، والقيد غير النقدي «بند» — برقم القيد 📘، ويُعدَّل أو يُلغى من القيد نفسه فقط. بعد هذه المزامنة يتم ذلك تلقائياً مع كل حفظ قيد.</div></div>' +
+    '<div class="d-flex gap-2 flex-wrap mb-2">' + chip('قيود على حسابات الوكلاء', res.scanned, '#f1f5f9') + chip('جديد', res.create, '#dcfce7') + chip('تحديث', res.update, '#e0f2fe') +
+    chip('دمج مع سطر يدوي', res.merge, '#fef3c7') + chip('حذف (قيد أُلغي/حُذف)', res.del, '#fee2e2') + '</div>';
+  if (!total && !(res.dups || []).length) h += '<div class="alert alert-success py-2">✅ كل قيود الوكلاء بالحسابات العامة ظاهرة بكشوفهم ومتطابقة — لا شيء يحتاج مزامنة.</div>';
+  if ((res.dups || []).length) {
+    h += '<div class="vz-sec"><div class="vz-sec-h">🔗 مكرر محتمل (' + res.dupsN + ') — نفس المبلغ مسجَّل يدوياً بشاشة الوكيل</div>' +
+      '<div class="small mb-2" style="line-height:1.8;">السطر اليدوي له قيد تلقائي بالحسابات العامة <b>بجانب</b> هذا القيد — أي أن المبلغ مسجَّل مرتين على الوكيل. ' +
+      '<b>الدمج</b> (المُختار): يصير السطر اليدوي نسخة هذا القيد (يبقى سطراً واحداً) ويُلغى قيده التلقائي المكرر. أزل العلامة لو كانتا دفعتين مختلفتين فعلاً.</div>' +
+      '<div style="overflow:auto;max-height:260px;"><table class="vz-tab"><thead><tr><th>دمج</th><th>القيد</th><th>التاريخ</th><th>الحساب</th><th>المبلغ</th><th>السطر اليدوي بالشاشة</th><th>التطابق</th></tr></thead><tbody>' +
+      res.dups.map(function (d, i) {
+        return '<tr><td><input type="checkbox" checked onchange="VZ._apNoMerge[VZ._apMirDups[' + i + '].key]=!this.checked"></td>' +
+          '<td dir="ltr">' + vzEsc(d.entryNo) + (d.vno ? '<div class="small text-muted">' + vzEsc(d.vno) + '</div>' : '') + '</td><td dir="ltr">' + vzEsc(d.date) + '</td>' +
+          '<td>' + vzEsc(d.acct) + '<div class="small text-muted">' + (d.sheet === 'pay' ? 'دفعة' : 'بند') + '</div></td><td>' + amt(d.amt, d.cur) + '</td>' +
+          '<td style="text-align:right;font-size:11.5px;"><span dir="ltr">' + vzEsc(d.manual.date || '—') + '</span>' + (d.manual.entryNo ? ' · قيد ' + vzEsc(d.manual.entryNo) : '') +
+            (d.manual.notes ? '<div>' + vzEsc(d.manual.notes) + '</div>' : '') + (d.manual.by ? '<div class="text-muted">' + vzEsc(d.manual.by) + '</div>' : '') + '</td>' +
+          '<td style="font-size:11.5px;">' + (d.strong ? '<b style="color:#166534;">رقم القيد نفسه</b>' : (d.days ? 'فرق ' + d.days + ' يوم' : 'نفس اليوم')) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }
+  if ((res.rows || []).length) {
+    h += '<div class="vz-sec"><div class="vz-sec-h">📋 التغييرات (' + res.rowsN + ')</div><div style="overflow:auto;max-height:300px;"><table class="vz-tab"><thead><tr><th>الإجراء</th><th>القيد</th><th>التاريخ</th><th>الحساب</th><th>النوع</th><th>المبلغ</th><th>البيان</th></tr></thead><tbody>' +
+      res.rows.map(function (r) {
+        var k = VZ_APMIR_KIND_[r.kind] || [r.kind, '#f1f5f9', '#334155'];
+        return '<tr><td><span class="vz-badge" style="background:' + k[1] + ';color:' + k[2] + ';">' + k[0] + '</span></td><td dir="ltr">' + vzEsc(r.entryNo) + '</td><td dir="ltr">' + vzEsc(r.date) + '</td>' +
+          '<td>' + vzEsc(r.acct) + '</td><td>' + (r.sheet === 'pay' ? 'دفعة' : 'بند') + '</td><td>' + amt(r.amt, r.cur) + '</td><td style="text-align:right;font-size:11.5px;">' + vzEsc(r.desc) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' + (res.rowsN > res.rows.length ? '<div class="small text-muted mt-1">تُعرض أول ' + res.rows.length + ' — وتُطبَّق كلها.</div>' : '') + '</div>';
+  }
+  var warn = [];
+  (res.unknown || []).forEach(function (u) { warn.push('حساب «' + u.code + ' — ' + u.name + '» مرتبط بـ«' + u.link + '» وهو اسم غير موجود بشاشة الوكلاء — ستظهر قيوده كحساب وكيل جديد بهذا الاسم. لو المقصود وكيل موجود صحّح «مرتبط بـ» بالحساب ليطابق اسمه ثم أعد المزامنة.'); });
+  (res.skipped || []).forEach(function (s) { warn.push('القيد ' + s.id + ' على «' + s.name + '» بعملة ' + s.cur + ' — كشف الوكيل بالريال والجنيه فقط فلم يُنسخ.'); });
+  var ex = res.excluded || {}, exK = Object.keys(ex);
+  if (exK.length) warn.push('قيود ' + exK.map(function (k) { return '«' + k + '» (' + ex[k] + ')'; }).join(' و') + ' على حسابات وكلاء لا تُنسخ عمداً — للشاشة أرصدتها الافتتاحية وقيودها الخاصة.');
+  if (warn.length) h += '<div class="vz-sec"><div class="vz-sec-h">⚠️ ملاحظات</div><ul class="small mb-0" style="line-height:1.9;">' + warn.map(function (w) { return '<li>' + vzEsc(w) + '</li>'; }).join('') + '</ul></div>';
+  VZ._apMirDups = res.dups || [];
+  ov.innerHTML = '<div class="vz-dlg" style="width:min(1100px,98vw);"><div class="vz-hd"><b>🔁 مزامنة قيود الوكلاء من الحسابات العامة</b>' +
+    '<button class="vz-btn sm" onclick="document.getElementById(\'vzApMirOv\').remove()">✕</button></div><div class="p-3">' + h +
+    '<div class="d-flex gap-2 mt-3">' + ((total || (res.dups || []).length) ? '<button class="vz-btn pri" onclick="_vzApMirApply_(this)">✅ تنفيذ المزامنة</button>' : '') +
+    '<button class="vz-btn" onclick="document.getElementById(\'vzApMirOv\').remove()">إغلاق</button></div></div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('mousedown', function (e) { if (e.target === ov) ov.remove(); });
+}
+function _vzApMirApply_(btn) {
+  btn.disabled = true; btn.innerHTML = '⏳ جاري التنفيذ…';
+  google.script.run.withSuccessHandler(function (res) {
+    var ov = document.getElementById('vzApMirOv'); if (ov) ov.remove();
+    if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر التنفيذ', 'error'); return; }
+    var w = res.written || {};
+    var msg = '✅ تمت مزامنة قيود الوكلاء:\n• جديدة: ' + (w.created || 0) + '\n• محدَّثة: ' + (res.update || 0) + '\n• مدموجة مع سطر يدوي: ' + (res.merge || 0) + '\n• محذوفة: ' + (w.deleted || 0);
+    if (res.merge) msg += '\n\n⚙ أُلغي ' + (res.autoVoided || 0) + ' قيد تلقائي مكرر للسطور المدموجة' + (res.autoBlocked ? ' (و' + res.autoBlocked + ' بفترة مقفلة لم يُلغَ — افتح الفترة ثم شغّل مزامنة القيود التلقائية)' : '');
+    if (res.autoError) msg += '\n⚠️ ' + res.autoError;
+    _showPopup(msg, 'success', 'مزامنة قيود الوكلاء');
+    if (typeof vzRefreshSoon_ === 'function') vzRefreshSoon_();
+    if (VZ._acc && document.getElementById('vzAccOv')) vzAccFetch();
+  }).withFailureHandler(function (e) { btn.disabled = false; btn.innerHTML = '✅ تنفيذ المزامنة'; _showPopup(e && e.message ? e.message : e, 'error'); })
+    .glApMirrorResync(window.authToken, false, { noMerge: VZ._apNoMerge || {} });
+}
 function vzAcctPickerGo() {
   var sel = document.getElementById('vzAcctPickSel'); var key = sel ? sel.value : '';
   vzAcctPickerClose();
@@ -48648,7 +48738,7 @@ function glDlg(title, html, width) {
   ov.addEventListener('mousedown', function (e) { if (e.target === ov) glDlgClose(); });
   // 🛡️ (V4.238) شاشات الرحلات (التسكين…) تُرفع لطبقة 2147483000 عند فتحها (_detachModalToBody_) فكانت النافذة
   // (مثل «أرقام غرف الفندق») تظهر خلفها — نرفع النافذة فوق أي مودال مفتوح (وتبقى رسائل التأكيد/التنبيه فوقها)
-  try { if (document.querySelector('.modal.show')) ov.style.zIndex = '2147483010'; } catch (eZ) {}
+  try { if (document.querySelector('.modal.show, .vz-dlg-ov')) ov.style.zIndex = '2147483010'; } catch (eZ) {}   // 🧑‍💼 (V4.328) + نوافذ الوكلاء (فتح القيد من كشف الوكيل)
   document.body.appendChild(ov);
   // 🛡️ (V4.228) عند فتح النافذة فوق مودال Bootstrap مفتوح (مثل شاشة التسكين): يبقى مصيدة التركيز
   // بالمودال تسحب التركيز فلا تُكتب الحقول وتبدو النافذة «خلف الشاشة». نوقف مصيدة تركيز المودالات
@@ -53809,6 +53899,7 @@ function glRenderRecon() {
       '<button class="btn btn-sm btn-primary" onclick="glReconLoad()">↻ تحديث المقارنة</button>' +
       '<button class="btn btn-sm btn-outline-dark" onclick="glPrintBox(\'glReconBox\',\'مطابقة كشوف العملاء مع الحساب العام\')">🖨️</button>' +
       (GL.isAdmin ? '<button class="btn btn-sm btn-outline-success" onclick="glCpResync(this)" title="إعادة نسخ كل سندات القبض/الصرف/الإيداع/السحب المرحّلة على حسابات العملاء إلى «حسابات عملاء العمرة» — آمن ولا يُكرِّر، ويبلّغ عن أخطاء اسم الربط">🔁 إعادة مزامنة دفعات العملاء</button>' : '') +
+      (GL.isAdmin && typeof vzApMirrorSync === 'function' ? '<button class="btn btn-sm btn-outline-success" onclick="vzApMirrorSync()" title="نسخ كل قيود الوكلاء المسجلة بالحسابات العامة لكشوف «حسابات الوكلاء» — بمعاينة وكشف المكرر">🔁 مزامنة قيود الوكلاء</button>' : '') +
     '</div>' +
     '<div class="gl-note">يقارن <b>رصيد كل طرف بكشف حسابه ببرنامج الحجوزات</b> (كما يراه العميل) برصيد <b>حسابه الكامل</b> بالحساب العام. اضغط أي سطر لعرض الحركات الموجودة بأحد الكشفين دون الآخر، و📒 لفتح كشف الحساب.</div>' +
     '<div id="glReconBox"><div class="text-center text-muted py-4">⏳</div></div>';
