@@ -4092,6 +4092,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <button class="btn btn-outline-light btn-sm" onclick="_accGenLedgerOpen_()" title="عرض وفلترة كل الدفعات العامة عبر كل العملاء">📋 سجل الدفعات العامة</button>
       <!-- 🏨 (V4.326) مزامنة حجوزات الفنادق لحسابات العملاء بأثر رجعي (للمدير) -->
       <button id="accHbSyncBtn" class="btn btn-outline-light btn-sm d-none" onclick="_accHbSyncAll_()" title="نقل كل حجوزات الفنادق المقيَّدة بالحسابات العامة بنوداً بحسابات العملاء، وحذف بنود «سكن مكة/المدينة» التي كانت تكرر قيمتها (للمدير)">🏨 مزامنة حجوزات الفنادق</button>
+      <button class="btn btn-outline-light btn-sm" onclick="_accGlPull_()" title="احتياطي: يجلب كل دفعات العملاء المرحّلة بالحسابات العامة (بأي تاريخ وبأي طريقة تسجيل) إلى حسابات العملاء، ويذكر المسودات غير المرحّلة">🔄 جلب الدفعات من الحسابات العامة</button>
       <button class="btn btn-outline-warning btn-sm" onclick="_accAlertsScanOpen_()" title="فحص كل العملاء عن رحلات تغيّرت أعدادها أو تسكينها/فنادقها منذ حفظ حساباتهم">⚠️ مراجعة التغيّرات</button>
       <button class="btn btn-outline-light btn-sm" onclick="_accAllClientsOpen_()" title="كشف إجمالي المستحقات والمدفوعات والرصيد لكل العملاء دفعة واحدة">📊 كشف كل العملاء</button>
       <!-- 📊 (V4.48) ملخص حسابات كل عملاء رحلة واحدة في جدول واحد — بطلب صريح -->
@@ -8088,7 +8089,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.335";
+var CLIENT_APP_VERSION = "4.336";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -26723,13 +26724,13 @@ function _accRender_() {
               '<td class="text-center" style="direction:ltr;" title="عدد الغرف">' + numOrBlank(it.count) + '</td>' + (nightsCol ? '<td class="text-center" style="direction:ltr;">' + (it.nights ? _accFmt_(it.nights) : '') + '</td>' : '') +
               '<td class="text-center" style="direction:ltr;" title="سعر الغرفة لليلة الواحدة">' + numOrBlank(it.price) + '</td>' +
               '<td class="fw-bold text-center" style="direction:ltr;">' + numOrBlank(it.value) + (it.currency === 'SAR' && !(isItems && !isGen) ? ' <span style="font-weight:400;font-size:10.5px;">ريال</span>' : '') + '</td>' +
-              '<td class="text-center">' + (canEdit ? '<button class="btn btn-outline-primary btn-sm py-0" title="نقل الحجز لرحلة أخرى" onclick="_accHbMove_([\'' + it.id + '\'])">🔀</button>' : '') + '</td></tr>';
+              '<td class="text-center text-nowrap">' + (canEdit ? '<button class="btn btn-outline-primary btn-sm py-0" title="نقل الحجز لرحلة أخرى" onclick="_accHbMove_([\'' + it.id + '\'])">🔀</button>' : '') + (canDel ? ' <button class="btn btn-outline-secondary btn-sm py-0" title="إزالة من الشاشة فقط — يبقى القيد بالحسابات العامة" onclick="_accItemHide_(\'' + it.id + '\')">🙈</button>' : '') + '</td></tr>';
           }
           // 🖱️ (V4.28) نقرة مزدوجة على البند تفتح تعديله المنفرد مباشرة
           var rowStyle = (disc ? 'background:#fff1f2;color:#991b1b;font-weight:700;' : '') + (canEdit ? 'cursor:pointer;' : '');
           return '<tr' + (rowStyle ? ' style="' + rowStyle + '"' : '') + (canEdit ? ' title="نقرة مزدوجة للتعديل" ondblclick="_accItemModal_(\'' + jsT + '\', \'' + it.id + '\')"' : '') + '>' +
             (canDel ? '<td class="text-center"><input type="checkbox" class="acc-del-chk" data-id="' + it.id + '"></td>' : (chkCol ? '<td></td>' : '')) +
-            '<td class="text-start">' + esc(it.desc) +
+            '<td class="text-start">' + esc(it.desc) + _accItemGlChip_(it.trip) +
               (it.company ? ' <span class="text-muted" style="font-weight:400;font-size:10.5px;">(' + esc(it.company) + ')</span>' : '') +
               (it.notes ? ' <span class="text-muted" style="font-weight:400;cursor:help;" title="' + esc(it.notes) + '">ℹ️</span>' : '') +
               (it.auto === 'نعم' ? ' <span style="font-weight:400;cursor:help;font-size:10.5px;" title="بند تلقائي من تسعير الرحلة — يتحدث مع كل حفظ للكشف، وأي تعديل يدوي عليه يثبّته">⚙️</span>' : '') +
@@ -26859,8 +26860,16 @@ function _accCfAfterDel_(res, id) {
   _accData.payments = _accData.payments.filter(function(x) { return !gone[x.id]; });
   _accRender_();
 }
+function _accItemHide_(id) {
+  var before = _accData.items.find(function(x) { return x.id === id; });
+  showElegantConfirm({ icon: '🙈', title: 'إزالة من الشاشة فقط', message: 'يُزال هذا الحجز من حساب العميل بالشاشة فقط، ويبقى قيده ' + ((_accData.gl && _accData.gl.__hb && _accData.gl.__hb[before && before.hbKey] || {}).id || '') + ' كما هو بالحسابات العامة، ولا تعيده المزامنة.',
+    buttons: [{ label: 'إزالة من الشاشة فقط', class: 'btn-warning', onClick: function() {
+      _accRun_('deleteAccItem', [id, true], null, function() { _accData.items = _accData.items.filter(function(x) { return x.id !== id; }); _accRender_(); showToast('🙈 أُزيل من الشاشة — القيد باقٍ بالحسابات العامة'); });
+    } }, { label: 'إلغاء', class: 'btn-outline-secondary', onClick: function() {} }] });
+}
 function _accItemDel_(id) {
-  _accConfirmDel_('هل تريد حذف هذا البند نهائيًا؟', function() {
+  var it0 = _accData.items.find(function(x) { return x.id === id; }), ct = it0 && _accData.gl && _accData.gl.__ct && _accData.gl.__ct[it0.trip || 'عام'];
+  _accConfirmDel_('هل تريد حذف هذا البند نهائيًا؟' + (ct ? '\n\n📘 هذا البند جزء من قيد استحقاقات الرحلة ' + ct.id + ' بالحسابات العامة، وسيُعاد حساب ذلك القيد تلقائياً بعد حذفه (قيد الرحلة يُبنى من بنودها كلها فلا يمكن إبقاء بند منفرد فيه).' : ''), function() {
     var before = _accData.items.find(function(x) { return x.id === id; });
     _accRun_('deleteAccItem', [id], null, function(res) {
       // 🔁 بند ترحيل رصيد: طرفه المقابل حُذف أيضًا بالخادم — التحديث المحلي لا يعرف مكانه، فنعيد التحميل كاملًا
@@ -26872,14 +26881,33 @@ function _accItemDel_(id) {
   });
 }
 function _accPayDel_(id) {
-  _accConfirmDel_('هل تريد حذف هذا السجل نهائيًا؟', function() {
+  var p0 = _accData.payments.find(function(x) { return x.id === id; }), g0 = _accData.gl && _accData.gl.__pay && _accData.gl.__pay[id];
+  var eid = (p0 && p0.glId) || (g0 && g0.id) || '', mirrored = !!((p0 && p0.glId) || (g0 && g0.src));
+  if (eid) {   // 🙈 (V4.336) لهذه الدفعة قيد بالحسابات العامة: خيار الحذف من الشاشة فقط (يبقى القيد — قد يخص عملية أخرى)
+    var screenOnly = function() {
+      _accRun_('deleteAccPayment', [id, true], null, function() {
+        _accData.payments = _accData.payments.filter(function(x) { return x.id !== id; });
+        if (_accData.gl && _accData.gl.__pay) delete _accData.gl.__pay[id];
+        _accRender_(); showToast('🙈 حُذفت من الشاشة فقط — القيد ' + eid + ' باقٍ بالحسابات العامة');
+      });
+    };
+    var both = { label: 'حذف الدفعة وقيدها معاً', class: 'btn-danger', onClick: function() { _accPayDelFull_(id); } };
+    showElegantConfirm({ icon: '🗑️', title: 'حذف الدفعة', message: 'هذه الدفعة مقيَّدة بالحسابات العامة برقم ' + eid + '.' + (mirrored ? '\nالقيد أُنشئ من الحسابات العامة (قد يخص عملية أخرى) فيُحذف من الشاشة فقط ويبقى كما هو.' : ''),
+      buttons: [{ label: 'حذف من الشاشة فقط (يبقى القيد)', class: 'btn-warning', onClick: screenOnly }].concat(mirrored ? [] : [both]).concat([{ label: 'إلغاء', class: 'btn-outline-secondary', onClick: function() {} }]) });
+    return;
+  }
+  _accPayDelFull_(id, true);
+}
+function _accPayDelFull_(id, ask) {
+  var run = function() {
     var before = _accData.payments.find(function(x) { return x.id === id; });
     _accRun_('deleteAccPayment', [id], null, function(res) {
       if (res && res.cfLinked) { _accCfAfterDel_(res, id); return; }
       _accData.payments = _accData.payments.filter(function(x) { return x.id !== id; });
       if (before) _accUndoPush_({ type: 'payment', before: Object.assign({}, before), after: null, label: 'حذف دفعة: ' + (before.desc || before.amount) });
     });
-  });
+  };
+  if (ask) _accConfirmDel_('هل تريد حذف هذا السجل نهائيًا؟', run); else run();
 }
 
 // 🔀 (V4.17) نقل دفعة لرحلة أخرى أو من/إلى «عام» — قائمة برحلات العميل المعروفة من حسابه المحمَّل
@@ -29932,8 +29960,30 @@ function _accGlChip_(trip) {
 }
 // 📘 (V4.259) رقم قيد الدفعة بالحسابات العامة بجوار تاريخها (ضغطة تفتح القيد)
 // 🔁 (V4.330) لا رقم إيصال تلقائي قديم: بجوار كل دفعة رقم قيدها المستندي من الحسابات العامة (من العلامة لو منسوخة من قيد، وإلا قيد AUTO:CP)
+function _accGlPull_(restore) {
+  showToast('⏳ جاري جلب الدفعات من الحسابات العامة…');
+  google.script.run.withSuccessHandler(function (r) {
+    var msg = '✅ سندات فُحصت: ' + r.done + ' · دفعات جديدة: ' + r.created + ' · محدَّثة: ' + r.updated + (r.deleted ? ' · محذوفة (زائدة): ' + r.deleted : '');
+    if (r.draftsN) msg += '\n⚠️ ' + r.draftsN + ' قيد بسطر عميل ما زال مسودة (غير مرحّل) فلم يُجلب: ' + (r.drafts || []).slice(0, 8).join('، ') + (r.draftsN > 8 ? ' …' : '');
+    if ((r.mismatches || []).length) msg += '\n⚠️ ' + r.mismatches.length + ' عميل بحساب عام لا يطابق اسمه عميلاً مسجَّلاً بالحسابات: ' + r.mismatches.slice(0, 5).map(function (m) { return m.link; }).join('، ');
+    if (r.hiddenN && !restore) msg += '\nℹ️ ' + r.hiddenN + ' دفعة محذوفة من الشاشة فقط بقرارك (لم تُجلب). لإعادتها اضغط الزر مجدداً واختر «تضمينها».';
+    showToast(msg.split('\n')[0]);
+    if (msg.indexOf('\n') >= 0 || r.hiddenN) {
+      showElegantConfirm({ icon: 'ℹ️', title: 'نتيجة الجلب', message: msg, buttons: (r.hiddenN && !restore ? [{ label: 'تضمين المحذوفة من الشاشة أيضاً', class: 'btn-outline-primary', onClick: function () { _accGlPull_(true); } }] : []).concat([{ label: 'حسناً', class: 'btn-secondary', onClick: function () {} }]) });
+    }
+    if (typeof _accLoad_ === 'function' && _accData) _accLoad_();
+  }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); }).accGlPullPayments(window.authToken, !!restore);
+}
+function _accItemGlChip_(trip) {
+  var g = _accData && _accData.gl, x = g && g.__ct && g.__ct[trip || 'عام']; if (!g) return '';
+  if (!x) return ' <span class="badge" style="background:#f1f5f9;color:#64748b;font-size:9.5px;" title="يُسجَّل قيد استحقاقات الرحلة تلقائياً خلال أقل من دقيقة من الحفظ">📘 لم يُقيَّد بعد</span>';
+  var canOpen = typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'));
+  return ' <span class="badge" style="background:' + (x.pending ? '#f59e0b;color:#111' : '#e0e7ff;color:#1e3a8a') + ';font-size:9.5px;' + (canOpen ? 'cursor:pointer;' : '') + '"' +
+    (canOpen ? ' onclick="event.stopPropagation();_accOpenGl_(\'' + String(x.id).replace(/'/g, '') + '\')"' : '') + ' title="قيد استحقاقات هذه الرحلة بالحسابات العامة (يضم هذا البند)">📘 ' + escapeHtml_(x.id) + '</span>';
+}
 function _accPayGlChip_(pid, glId) {
-  var g = _accData && _accData.gl, x = (glId ? { id: glId, pending: false } : null) || (g && g.__pay && g.__pay[pid]); if (!x) return '';
+  var g = _accData && _accData.gl, x = (glId ? { id: glId, pending: false } : null) || (g && g.__pay && g.__pay[pid]);
+  if (!x) return g ? ' <span class="badge" style="background:#f1f5f9;color:#64748b;font-size:9.5px;" title="لم يُقيَّد بالحسابات العامة بعد (يُسجَّل تلقائياً خلال أقل من دقيقة)">📘 لم يُقيَّد بعد</span>' : '';
   var canOpen = typeof hasPermission === 'function' && (hasPermission('gl.view') || hasPermission('admin'));
   return ' <span class="badge" style="background:' + (x.pending ? '#f59e0b;color:#111' : '#e0e7ff;color:#1e3a8a') + ';font-size:9.5px;' + (canOpen ? 'cursor:pointer;' : '') + '"' +
     (canOpen ? ' onclick="event.stopPropagation();_accOpenGl_(\'' + String(x.id).replace(/'/g, '') + '\')"' : '') + ' title="قيد الدفعة بالحسابات العامة">📘 ' + escapeHtml_(x.id) + '</span>';

@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.335";
+var APP_VERSION = "4.336";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14884,13 +14884,21 @@ function carryForwardTripBalance(authToken, client, fromTrip, toTrip) {
   return { success: true, netE: netE, netS: netS, createdItems: outItems, createdPayments: outPays };
 }
 
-function deleteAccItem(authToken, id) {
+function deleteAccItem(authToken, id, screenOnly) {
   var session = _accPerm_(authToken, 'delete');
   var sh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();   // ⚡ (V4.199) الأعمدة المطلوبة فقط
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) {
-      if (ACC_HB_RX_.test(String(vals[i][3] || ''))) return { success: false, error: _accHbMsg_() };   // 🏨 (V4.326)
+      if (ACC_HB_RX_.test(String(vals[i][3] || ''))) {
+        // 🙈 (V4.336) بند حجز فندقي: يُزال من الشاشة فقط (قيده AUTO:HB يبقى بالحسابات العامة ولا تعيده المزامنة)
+        if (!screenOnly) return { success: false, error: _accHbMsg_() };   // 🏨 (V4.326)
+        var hk = _accHbKeyOf_(vals[i][3]), lk = _glLock_(); lk.waitLock(60000);
+        try { _glScrHideAdd_(['hb|' + hk + '|' + String(vals[i][1])]); } finally { _glUnlock_(lk); }
+        logChange_(session.username, 'إزالة حجز فندقي من الشاشة فقط', String(vals[i][1]), String(vals[i][2]), String(vals[i][3]).replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '') + ' = ' + vals[i][8] + ' ' + vals[i][5], 'القيد يبقى بالحسابات العامة');
+        sh.deleteRow(i + 2);
+        return { success: true, screenOnly: true };
+      }
       logChange_(session.username, 'حذف بند حساب', String(vals[i][1]), String(vals[i][2]),
         String(vals[i][3]).replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '') + ' = ' + vals[i][8] + ' ' + vals[i][5], '-');
       // 🔁 بند ترحيل رصيد: يُحذف طرفه المقابل معه تلقائيًا فيعود الرصيد لرحلته الأصلية
@@ -15175,12 +15183,24 @@ function transferAccItemsBulk(authToken, ids, toTrip) {
   return { success: true, count: hit.length, resynced: synced };
 }
 
-function deleteAccPayment(authToken, id) {
+function deleteAccPayment(authToken, id, screenOnly) {
   var session = _accPerm_(authToken, 'delete');
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();   // ⚡ (V4.199) الأعمدة المطلوبة فقط
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) {
+      if (screenOnly) {
+        // 🙈 (V4.336) حذف من الشاشة فقط: قيدها بالحسابات العامة يبقى كما هو (قد يخص عملية أخرى) ولا تعيدها المزامنة
+        var gm = /⟦src:gl-([^⟧]+)⟧/.exec(String(vals[i][8] || '')), eid = gm ? gm[1] : '', lk = _glLock_(); lk.waitLock(60000);
+        try {
+          if (!eid) eid = _glCpDetach_(String(id));   // دفعة أُنشئت من الشاشة: يُفكّ ارتباط قيدها التلقائي فيبقى قيداً يدوياً
+          if (!eid) return { success: false, error: 'لا قيد مرتبط بهذه الدفعة بالحسابات العامة — استخدم الحذف العادي' };
+          _glScrHideAdd_(['cp|' + eid + '|' + String(vals[i][1])]);
+        } finally { _glUnlock_(lk); }
+        logChange_(session.username, 'حذف دفعة من الشاشة فقط', String(vals[i][1]), String(vals[i][2]), vals[i][5] + ' ' + vals[i][6] + ' (قيد ' + eid + ')', 'القيد يبقى بالحسابات العامة');
+        sh.deleteRow(i + 2);
+        return { success: true, screenOnly: true, glId: eid };
+      }
       logChange_(session.username, 'حذف ' + (String(vals[i][3]) === 'تحويل' ? 'تحويل عملة' : 'دفعة حساب'), String(vals[i][1]), String(vals[i][2]), vals[i][5] + ' ' + vals[i][6], '-');
       // 🔁 دفعة ترحيل رصيد: يُحذف طرفها المقابل معها تلقائيًا فيعود الرصيد لرحلته الأصلية
       var marker = _accCfMarkerOf_(vals[i][8]);
