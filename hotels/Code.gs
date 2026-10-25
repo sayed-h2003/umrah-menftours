@@ -5290,7 +5290,8 @@ function searchPayments(filters, token) {
 
     var rows = [], received = 0, paid = 0;
 
-    var _pvm = null;
+    var _prefs = {};
+    if (typeof _glHbPayRefs_ === 'function') { try { _prefs = _glHbPayRefs_(data.filter(function (p) { return !fParty || (p[1] || '').toString().toLowerCase().indexOf(fParty) !== -1; }).map(function (p) { return { id: p[7], link: p[9], party: (p[1] || '').toString().trim() }; })); } catch (eR) { _prefs = {}; } }
     data.forEach(function (p) {
       var d = p[0] instanceof Date ? new Date(p[0].getTime()) : new Date(p[0]);
       if (isNaN(d.getTime())) return;
@@ -5306,9 +5307,9 @@ function searchPayments(filters, token) {
       if (dir === 'استلمنا منه') received += amount;
       else if (dir === 'دفعنا له') paid += amount;
 
-      var _gr = (typeof _glHbPayRef_ === 'function') ? _glHbPayRef_(p[7], (_pvm = _pvm || (function () { try { return _glHbVoucherMap_(); } catch (eV) { return {}; } })())) : null;
+      var _gr = _prefs[String(p[7] || '')] || null;
       rows.push({
-        id: p[7], qaid: _gr ? _gr.entry : (p[5] || ''), qaid2: _gr ? _gr.voucher : '',   // 🧾 (V4.338)
+        id: p[7], qaid: _gr ? _gr.entry : (p[5] || ''), qaid2: _gr ? _gr.voucher : '', cp: _gr ? _gr.cp : '',   // 🧾 (V4.338/339)
         dateDisp: Utilities.formatDate(d, 'GMT+3', 'dd/MM/yyyy'), dateIso: Utilities.formatDate(d, 'GMT+3', 'yyyy-MM-dd'),
         party: party, note: p[4] || '', amount: amount, direction: dir, legacyImported: !!p[8],
         linkId: (p[9] || '').toString()
@@ -5717,8 +5718,9 @@ function getUnifiedStatement_(partyName, start, end) {
     });
 
     var pData = getPaymentsRowsCached_(); // مقروءة مرة واحدة لكل تنفيذ — تخدم كل حسابات كشف الحساب
-    var _vmap = null;
-    var glRef_ = function (pid) { if (typeof _glHbPayRef_ !== 'function') return null; if (_vmap === null) { try { _vmap = _glHbVoucherMap_(); } catch (eV) { _vmap = {}; } } return _glHbPayRef_(pid, _vmap); };
+    var _refs = {};   // 🔗 (V4.339) رقم القيد/السند/الطرف المقابل من الحسابات العامة لكل دفعة (نسخة قيد أو دفعة حجوزات)
+    if (typeof _glHbPayRefs_ === 'function') { try { _refs = _glHbPayRefs_(pData.filter(function (p) { return normalizeName_(p[1]) === partyNorm; }).map(function (p) { return { id: p[7], link: p[9], party: partyName }; })); } catch (eR) { _refs = {}; } }
+    var glRef_ = function (pid) { return _refs[String(pid || '')] || null; };
     if (pData.length) {
       pData.forEach(function (p) {
         if (normalizeName_(p[1]) !== partyNorm) return;
@@ -5739,7 +5741,7 @@ function getUnifiedStatement_(partyName, start, end) {
         if (!inPeriod) return;
         items.push({
           date: pTs, ref: dir.indexOf('يدوي') !== -1 ? 'قيد يدوي' : 'دفعة', qaid: (glRef_(p[7]) ? glRef_(p[7]).entry : (p[5] || '')), qaid2: glRef_(p[7]) ? glRef_(p[7]).voucher : '',   // 🧾 (V4.338) رقم قيد الحسابات العامة + رقم سند القبض/الصرف تحته
-          role: dir.indexOf('يدوي') !== -1 ? 'manual' : 'payment', counterparty: '',
+          role: dir.indexOf('يدوي') !== -1 ? 'manual' : 'payment', counterparty: glRef_(p[7]) ? glRef_(p[7]).cp : '',   // الطرف المقابل من القيد
           note: p[4] || DEFAULT_PAYMENT_NOTE, debit: rawDebit, credit: rawCredit, excluded: false, paymentId: p[7],
           checkInTs: 0, checkOutTs: 0,   // دفعة/قيد يدوي — لا تاريخ دخول أو خروج لها
           legacyImported: !!p[8]

@@ -7261,6 +7261,44 @@ function _glHbPayRef_(pid, vmap) {
   var m = /^GL:(.+):\d+$/.exec(String(pid || '')); if (!m) return null;
   return { entry: m[1], voucher: (vmap || {})[m[1]] || '' };
 }
+/* 🔗 (V4.339) رقم القيد والسند والطرف المقابل لكل دفعة بكشف الفندق — لكل أنواع الدفعات:
+   • نسخة قيد (GL:<قيد>:<n>) ⇒ قيدها مباشرة · • دفعة سجّلها برنامج الحجوزات (أو مزامنة العهدة CUSTODY:…) ⇒ قيدها التلقائي AUTO:HBP:<معرّف الدفعة>
+   • دفعة مرتبطة بدفعة طرف آخر ⇒ AUTO:HBL:<معرّف الارتباط>.
+   الطرف المقابل = أسماء الحسابات الأخرى بالقيد (خزينة/بنك/عهدة/حساب آخر) عدا حساب الطرف نفسه.
+   pays: [{id, link, party}] ⇒ {id: {entry, voucher, cp}} — مسح واحد لقيود الدفتر وأسطر القيود المعنية فقط. */
+function _glHbPayRefs_(pays) {
+  var want = {}, byPid = {}, ent = {};
+  (pays || []).forEach(function (p) {
+    var id = String(p.id || ''); if (!id) return;
+    var m = /^GL:(.+):\d+$/.exec(id);
+    if (m) { byPid[id] = m[1]; return; }
+    want['AUTO:HBP:' + id] = id;
+    var lk = String(p.link || ''); if (lk && !/^GL:/.test(lk)) want['AUTO:HBL:' + lk] = id;
+  });
+  var vm = {}, need = {};
+  _glRows_('entries').forEach(function (r) {
+    var sk = _glStr_(r[6]), eid = _glStr_(r[0]), st = _glStr_(r[5]);
+    if (st === GL_ST_VOID_) return;
+    if (want[sk] && !byPid[want[sk]]) byPid[want[sk]] = eid;
+    var mm = /^VCH:(.+)$/.exec(sk); if (mm) vm[eid] = mm[1];
+  });
+  Object.keys(byPid).forEach(function (pid) { need[byPid[pid]] = 1; });
+  var parties = {}; try { parties = _glHbMirrorParties_(); } catch (e0) {}
+  var accs = _glAccounts_().map, linesBy = {};
+  _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (need[id]) (linesBy[id] = linesBy[id] || []).push(l); });
+  var out = {};
+  (pays || []).forEach(function (p) {
+    var id = String(p.id || ''), eid = byPid[id]; if (!eid) return;
+    var own = _glHbKey_(p.party || ''), seen = {}, cp = [];
+    (linesBy[eid] || []).forEach(function (l) {
+      var code = _glStr_(l[4]); if (seen[code]) return; seen[code] = 1;
+      if (parties[code] && _glHbKey_(parties[code]) === own) return;   // سطر الطرف نفسه
+      cp.push((accs[code] || {}).name || code);
+    });
+    out[id] = { entry: eid, voucher: vm[eid] || '', cp: cp.join('، ') };
+  });
+  return out;
+}
 /* 🔍 (V4.338) دفعات مشتبه بتكرارها بسجل دفعات الحجوزات: نفس الطرف + نفس التاريخ + نفس المبلغ والاتجاه (نسخة قيد حسابات عامة مع دفعة مسجَّلة
    بالحجوزات، أو نسختان). لكل صف: مصدره (قيد/حجوزات) ورقم القيد والسند والطرف المقابل — ليقرر المستخدم: حذف/دمج/إبقاء أحدها/تجاهل. */
 function _glHbDupScan_(onlyParty) {
