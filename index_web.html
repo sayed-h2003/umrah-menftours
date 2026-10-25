@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.342  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.343  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -5569,6 +5569,10 @@ input[type="date"]:not(:focus):not(:valid) {
   .gl-sec-h b{ font-size:15px; }
   .gl-bgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
   @media print{ .acc-screen-only, .vz-screen-only{ display:none !important; } }
+  .gl-sort-ghost{ opacity:.35; background:#e0e7ff !important; }
+  .gl-sort-chosen{ cursor:grabbing; }
+  .gl-sort-drag{ opacity:.9; box-shadow:0 10px 24px rgba(15,23,42,.25); transform:rotate(1deg); z-index:2147483000; }
+  #glBalRoot .gl-bcard{ user-select:none; -webkit-user-select:none; touch-action:manipulation; }
   .gl-bcard{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:9px 11px; cursor:pointer; box-shadow:0 1px 4px rgba(15,23,42,.05); }
   .gl-bcard:hover{ border-color:#1e3d59; box-shadow:0 4px 12px rgba(15,23,42,.1); }
   .gl-bcard-h{ font-weight:800; font-size:13px; margin-bottom:4px; display:flex; justify-content:space-between; gap:6px; }
@@ -8169,7 +8173,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.342";
+var CLIENT_APP_VERSION = "4.343";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -8314,6 +8318,7 @@ function _autoLogoutOnUnload() {
 var PERM_SCREENS = [
   { key: 'bookings',  label: 'الإشعارات (الحجوزات)' },
   { key: 'trips',     label: 'الرحلات' },
+  { key: 'tripundo',  label: '↩️ التراجع/الرجوع لنقطة بسجل تعديلات الرحلات (الأدمن افتراضياً)' },
   { key: 'kashf',     label: 'كشف المعتمرين / التسكين' },
   { key: 'registry',  label: 'السجل العام للمعتمرين' },
   { key: 'transport', label: 'حسابات النقل' },
@@ -12370,7 +12375,8 @@ function _bulkTransferKashf() {
       .withSuccessHandler(function(res) {
         var msg = '✅ نُقل ' + (res.moved || 0) + ' معتمر إلى "' + toTrip + '"' +
           ((res.names || []).length ? ':\n' + res.names.join('، ') : '') +
-          ((res.errors || []).length ? '\n\n⚠️ لم يُنقل:\n' + res.errors.join('\n') : '');
+          ((res.errors || []).length ? '\n\n⚠️ لم يُنقل:\n' + res.errors.join('\n') : '') +
+          (res.accNote ? '\n\n💵 حسابات العملاء (تلقائي):\n' + res.accNote : '');
         showElegantConfirm({ icon: '⇄', title: 'نتيجة النقل المجمع', message: msg, buttons: [{ label: 'حسناً', class: 'btn-primary' }] });
         // 🔓 كل من غادر الرحلة (المحدَّدون + توابعهم المحارم الذين نُقلوا تلقائياً معهم) يُزال محلياً،
         // وبقية أفراد أي غرفة مربوطة كانوا فيها تُعاد للتسكين الافتراضي
@@ -12462,6 +12468,7 @@ function _transferPilgrim(btn) {
             Object.keys(movedGroups).forEach(function(gid) { _resetRoomGroupCascade_(gid); });
             _manualRefreshPilgrimsView();
             _ensureRegistryCache(true);
+            if (res.accNote) showToast('💵 ' + res.accNote.replace(/\n/g, ' — '));
             // تحديث أعداد المعتمرين في شاشة الرحلات تلقائياً (المصدر والهدف معاً)
             if (typeof loadTripsList === 'function') loadTripsList();
             return;
@@ -14871,10 +14878,15 @@ function openTripChangeLog(tripName) {
   var body = document.getElementById('tripChangeLogBody');
   body.innerHTML = '<div class="text-center text-muted py-3">⏳ جاري التحميل...</div>';
   bootstrap.Modal.getOrCreateInstance(document.getElementById('tripChangeLogModal')).show();
+  var _rows = null, _snaps = null, _done = function () { if (_rows !== null && _snaps !== null) _renderTripChangeLog(_rows, _snaps); };
   google.script.run
-    .withSuccessHandler(function(rows){ _renderTripChangeLog(rows || []); })
+    .withSuccessHandler(function(rows){ _rows = rows || []; _done(); })
     .withFailureHandler(function(err){ body.innerHTML = '<div class="text-danger">تعذر التحميل: ' + (err.message || err) + '</div>'; })
     .getTripChangeLog(window.authToken, tripName);
+  google.script.run
+    .withSuccessHandler(function(r){ _snaps = r || { snaps: [], can: false }; _done(); })
+    .withFailureHandler(function(){ _snaps = { snaps: [], can: false }; _done(); })
+    .getTripSnapshots(window.authToken, tripName);
 }
 // 🧹 (V4.93) تنسيق قيم سجل التعديلات: لو القيمة نص JSON خام (كبصمة أعداد/تسكين رحلة سُجِّلت قبل
 // إصلاح V4.92) تُعرض بصيغة مقروءة بدل الأقواس والحروف الخام — يعمل بالعرض فورًا على كل السجلات
@@ -15087,13 +15099,14 @@ function _auditRowsHtml_(entries, opts) {
       (opts.global ? '<td class="text-center">' + (!_auditEmpty_(g.rec) ? '<span class="au-rec">' + esc(_auditStr_(g.rec)) + '</span>' : '<span class="text-muted">—</span>') + '</td>' : '') +
       '<td class="au-det">' + (det || '<span class="text-muted">—</span>') +
         (g.changes.length > 1 ? '<div class="au-cnt">' + g.changes.length + ' تغييرات بنفس الحفظة</div>' : '') + '</td>' +
+      (opts.rowAct ? '<td class="text-nowrap">' + (opts.rowAct(g) || '') + '</td>' : '') +
       '</tr>';
   }).join('');
 }
 function _auditHeadHtml_(opts) {
   opts = opts || {};
   return '<tr><th style="width:92px;">الوقت</th><th style="width:90px;">المستخدم</th>' + (opts.global ? '<th style="width:95px;">الشاشة</th>' : '') +
-    '<th style="width:150px;">العملية</th>' + (opts.global ? '<th style="width:90px;">المرجع</th>' : '') + '<th>التفاصيل</th></tr>';
+    '<th style="width:150px;">العملية</th>' + (opts.global ? '<th style="width:90px;">المرجع</th>' : '') + '<th>التفاصيل</th>' + (opts.rowAct ? '<th style="width:96px;">↩️</th>' : '') + '</tr>';
 }
 // الجدول كاملاً + سطر العدد — لنوافذ سجل الرحلة/الاتفاقية/الحساب/الملف/المجموعة/سطر الحساب
 function _auditTableHtml_(entries, opts) {
@@ -15103,8 +15116,37 @@ function _auditTableHtml_(entries, opts) {
   return '<div class="mb-2 text-muted small">' + n + ' عملية — الأحدث أولاً' + (opts.note ? ' ' + escapeHtml_(opts.note) : '') + '</div>' +
     '<div class="table-responsive"><table class="au-tbl"><thead>' + _auditHeadHtml_(opts) + '</thead><tbody>' + _auditRowsHtml_(entries, opts) + '</tbody></table></div>';
 }
-function _renderTripChangeLog(rows) {
-  document.getElementById('tripChangeLogBody').innerHTML = _auditTableHtml_(rows, { emptyMsg: 'لا توجد تغييرات مسجّلة لهذه الرحلة بعد.' });
+// ↩️ (V4.343) أمام كل عملية: «تراجع» (يعكس هذه العملية وحدها) و«رجوع هنا» (يُعيد الرحلة وكشفها لحالتها بعد هذه العملية) — بصلاحية الأدمن/«التراجع بسجل الرحلات»
+function _renderTripChangeLog(rows, snapInfo) {
+  var snaps = (snapInfo && snapInfo.snaps) || [], can = !!(snapInfo && snapInfo.can), trip = document.getElementById('tripChangeLogName').textContent;
+  var rowAct = null;
+  if (can && snaps.length) rowAct = function (g) {
+    var best = null, bd = 25000;
+    snaps.forEach(function (sn, i) {
+      var ms = _auditTsMs_(sn.ts); if (isNaN(ms) || isNaN(g.ms)) return;
+      var d = Math.abs(ms - g.ms); if (d <= bd && String(sn.user || '') === String(g.user || '')) { bd = d; best = { sn: sn, i: i }; }
+    });
+    if (!best) return '';
+    var id = escapeHtml_(best.sn.id).replace(/'/g, '');
+    return (best.i > 0 ? '<button type="button" class="btn btn-outline-warning btn-sm py-0 px-1 me-1" style="font-size:11px;" title="يعكس هذه العملية وحدها ويُبقي ما بعدها (ما تغيّر لاحقاً يُذكر كتعارض)" onclick="tripUndoDo_(\'' + id + '\',false)">↩️ تراجع</button>' : '') +
+      '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" style="font-size:11px;" title="يُعيد بيانات الرحلة وكشف معتمريها لحالتها بعد هذه العملية (ما بعدها يُلغى)" onclick="tripUndoDo_(\'' + id + '\',true)">⏪ رجوع هنا</button>';
+  };
+  document.getElementById('tripChangeLogBody').innerHTML = _auditTableHtml_(rows, { emptyMsg: 'لا توجد تغييرات مسجّلة لهذه الرحلة بعد.', rowAct: rowAct,
+    note: rowAct ? '— الأزرار لعمليات سُجِّلت بها لقطة (من V4.343)' : '' });
+}
+function tripUndoDo_(snapId, toPoint) {
+  var trip = document.getElementById('tripChangeLogName').textContent;
+  askConfirm_(toPoint ? 'سيُعاد بيانات الرحلة «' + trip + '» وكشف معتمريها لحالتها بعد هذه العملية، وتُلغى كل التعديلات التي بعدها. يمكن التراجع عن هذا الإجراء نفسه لاحقاً. متابعة؟'
+    : 'سيُعكَس أثر هذه العملية وحدها على الرحلة «' + trip + '» وتبقى بقية التعديلات (أي تعارض سيُذكر). متابعة؟', function () {
+    google.script.run.withSuccessHandler(function (res) {
+      if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر التنفيذ', 'error'); return; }
+      showToast(toPoint ? '✅ أُعيدت الرحلة إلى تلك النقطة (' + (res.pilgrims || 0) + ' معتمر)' : '✅ تم التراجع (' + (res.changed || 0) + ' تغيير)');
+      if (res.conflicts && res.conflicts.length) _showPopup('تعارضات لم يُعكَس فيها شيء:\n• ' + res.conflicts.slice(0, 12).join('\n• '), 'warning');
+      try { loadTripsList(); } catch (e0) {}
+      try { openTripChangeLog(trip); } catch (e1) {}
+      try { if (window.currentTripName === trip && document.getElementById('tripPilgrimsModal').classList.contains('show')) showToast('أغلق كشف الرحلة وأعد فتحه لرؤية البيانات المُسترجَعة'); } catch (e2) {}
+    }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); })[toPoint ? 'tripRestorePoint' : 'tripUndoChange'](window.authToken, trip, snapId);
+  }, { title: toPoint ? 'رجوع إلى هذه النقطة' : 'تراجع عن هذا التعديل', danger: !!toPoint });
 }
 
 // 🕘 (V4.86) سجل تعديلات اتفاقية إعاشة واحدة — من أول الإنشاء حتى آخر تعديل، بكل تفاصيله
@@ -18011,10 +18053,16 @@ function _proceedWithOrphanCheckThenSave(btn, pilgrims) {
     return;
   }
 
-  var orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ...';
+  // 💾 (V4.343) نصّ الزر الأصلي يُحفظ مرة واحدة (data-orig) — كان نداء ثانٍ أثناء الحفظ (نقر مزدوج/حفظ رغم التنبيه) يلتقط نص «جاري الحفظ…»
+  // كأنه الأصل فيبقى الزر معلَّقاً عليه للأبد. ونداء ثالث أثناء الحفظ يُتجاهل، وحارس زمني يُعيد الزر بعد دقيقتين لو لم يصل رد.
+  if (btn.dataset.saving === '1') return;
+  var orig = btn.dataset.orig || (/جاري الحفظ/.test(btn.innerHTML) ? '💾 حفظ الكشف' : btn.innerHTML);
+  btn.dataset.orig = orig; btn.dataset.saving = '1'; btn.disabled = true; btn.innerHTML = '⏳ جاري الحفظ...';
+  var _kbReset = function () { btn.disabled = false; btn.innerHTML = orig; btn.dataset.saving = '0'; clearTimeout(_kbGuard); };
+  var _kbGuard = setTimeout(_kbReset, 120000);
   google.script.run
     .withSuccessHandler(function(res) {
-      btn.disabled = false; btn.innerHTML = orig;
+      _kbReset();
       window._pilgrimsDirty = false;
       loadTripsList(); // تحديث عدد المعتمرين في قائمة الرحلات
       // 💾 (V4.342) الحفظ لا يُغلق الكشف — يبقى مفتوحاً حتى يغلقه المستخدم بنفسه. رسالة خفيفة تؤكد الحفظ، وتنبيه كامل فقط عند وجود تعارض
@@ -18028,7 +18076,7 @@ function _proceedWithOrphanCheckThenSave(btn, pilgrims) {
       } else showToast('✅ تم حفظ الكشف (' + res.count + ' معتمر)');
     })
     .withFailureHandler(function(err) {
-      btn.disabled = false; btn.innerHTML = orig;
+      _kbReset();
       alert('تعذر الحفظ: ' + (err.message || err));
     })
     .saveTripPilgrims(window.authToken, window.currentTripName, pilgrims);
@@ -19873,7 +19921,9 @@ function _cityRoomOf_(p, cityKey) { // cityKey: 'madinah' | 'makkah'
   var pm = rn.match(/^\((.+?)\)\s*/);
   if (!pm) return rn;
   var hn = cityKey === 'makkah' ? (p.hotelMakkah || '') : (p.hotelMadinah || '');
-  return pm[1].trim() === String(hn).trim() ? rn : '';
+  // 🏨 (V4.343) مقارنة متسامحة: «درة اسماء (مكة)» = «درة اسماء» (اختلاف لاحقة المدينة/المسافات/الهمزات كان يُظهر المسكَّن «بدون تسكين»)
+  var nz = function (x) { return String(x || '').replace(/\([^)]*\)/g, ' ').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim(); };
+  return (pm[1].trim() === String(hn).trim() || (nz(hn) && nz(pm[1]) === nz(hn))) ? rn : '';
 }
 
 // 🏨 بناء الغرف من أرقام الغرف المحفوظة فعلياً (مصدر الحقيقة)، مع محاكاة _buildRoomsFromLists_
@@ -22126,8 +22176,15 @@ function _fillRoomPickerList_(excludeRoomIdx, memberName) {
     return '<button class="btn btn-outline-secondary btn-sm w-100 text-start mb-1 d-flex justify-content-between" onclick="_confirmRoomPick(' + i + ')">' +
       '<span>غرفة ' + (i + 1) + ' — ' + escapeHtml_(r.type) + '</span>' +
       '<span class="badge bg-secondary">' + beds + ' سرير</span></button>';
-  }).join('');
-  new bootstrap.Modal(document.getElementById('roomPickerModal')).show();
+  }).join('') + '<button class="btn btn-success btn-sm w-100 mt-1" onclick="_confirmRoomPick(-2)">➕ غرفة جديدة</button>';
+  _pickerShow_('roomPickerModal');
+}
+// 🪜 (V4.343) نافذة اختيار الغرفة تُنقل لـbody وتُرفع فوق شاشة التسكين (2147483000) قبل فتحها — وإلا تُرسَم خلفها وتبدو الشاشة مجمّدة
+function _pickerShow_(id) {
+  var el = _detachModalToBody_(id); if (!el) return;
+  el.style.zIndex = '2147483200';
+  var inst = bootstrap.Modal.getOrCreateInstance(el); inst.show();
+  setTimeout(function () { var b = document.querySelectorAll('.modal-backdrop'); if (b.length) b[b.length - 1].style.zIndex = '2147483199'; }, 0);
 }
 
 function _confirmRoomPick(targetIdx) {
@@ -22136,6 +22193,11 @@ function _confirmRoomPick(targetIdx) {
   var inst = bootstrap.Modal.getInstance(document.getElementById('roomPickerModal'));
   if (inst) inst.hide();
   if (!ctx) return;
+  if (targetIdx === -2) {
+    var src = ctx.unhoused ? ((window._unhousedPilgrims || [])[ctx.memberIdx] || {}) : (window._housingRooms[ctx.roomIdx] || {});
+    window._housingRooms.push({ type: 'جديدة', hotel: src.hotel || (src.members && src.hotel) || '', members: [] });
+    targetIdx = window._housingRooms.length - 1;
+  }
   if (ctx.unhoused) { _placeUnhousedIntoRoom_(ctx.memberIdx, targetIdx); return; }
   _doMovePilgrim(ctx.roomIdx, ctx.memberIdx, targetIdx);
 }
@@ -22872,14 +22934,19 @@ function _mhFillRoomPickerList_(excludeRoomIdx, memberName) {
     var beds = r.members.filter(function(m) { return !m.noBed; }).length;
     return '<button class="btn btn-outline-secondary btn-sm w-100 text-start mb-1 d-flex justify-content-between" onclick="_mhConfirmRoomPick_(' + i + ')">' +
       '<span>غرفة ' + (i + 1) + ' — ' + escapeHtml_(r.type) + '</span><span class="badge bg-secondary">' + beds + ' سرير</span></button>';
-  }).join('');
-  new bootstrap.Modal(document.getElementById('mhRoomPickerModal')).show();
+  }).join('') + '<button class="btn btn-success btn-sm w-100 mt-1" onclick="_mhConfirmRoomPick_(-2)">➕ غرفة جديدة</button>';
+  _pickerShow_('mhRoomPickerModal');
 }
 function _mhConfirmRoomPick_(targetIdx) {
   var ctx = window._mhRoomPickerContext; window._mhRoomPickerContext = null;
   var inst = bootstrap.Modal.getInstance(document.getElementById('mhRoomPickerModal'));
   if (inst) inst.hide();
   if (!ctx) return;
+  if (targetIdx === -2) {
+    var src = ctx.unhoused ? ((window._mhUnhoused || [])[ctx.memberIdx] || {}) : (window._mhRooms[ctx.roomIdx] || {});
+    window._mhRooms.push({ type: 'جديدة', hotel: src.hotel || '', members: [] });
+    targetIdx = window._mhRooms.length - 1;
+  }
   if (ctx.unhoused) { _mhPlaceUnhoused_(ctx.memberIdx, targetIdx); return; }
   _mhMovePilgrim_(ctx.roomIdx, ctx.memberIdx, targetIdx);
 }
@@ -27942,9 +28009,18 @@ function _accOrphanList_() {
   var trips = Object.keys(by);
   if (!trips.length) return;
   if (trips.length === 1) return _accOrphanFix_(d.client, trips[0]);
-  _showPopup('<div style="text-align:right;">اختر الرحلة للمعالجة:<br>' + trips.map(function (t) {
-    return '<button class="btn btn-outline-warning btn-sm m-1" onclick="_accOrphanFix_(\'' + _accJs_(d.client) + '\', \'' + _accJs_(t) + '\')">' + escapeHtml_(t) + ' (' + by[t].i + ' بند، ' + by[t].p + ' دفعة)</button>';
-  }).join('') + '</div>', 'warning', 'أسطر خارج كشوف الرحلات');
+  // 🧹 (V4.343) كانت القائمة تُمرَّر لـ_showPopup كنص فتظهر أكواد HTML ولا يُمكن الضغط — صارت نافذة حقيقية بأزرار الرحلات
+  var old = document.getElementById('_accOrfListOv'); if (old) old.remove();
+  var ov = document.createElement('div'); ov.id = '_accOrfListOv'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:12px;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:14px;width:min(560px,96vw);padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);">' +
+    '<h6 class="fw-bold" style="color:#9a3412;">⚠️ أسطر خارج كشوف الرحلات — «' + escapeHtml_(d.client) + '»</h6>' +
+    '<div class="small text-muted mb-2">رحلات عليها بنود/دفعات للعميل وليس له بها معتمرون الآن. اختر رحلة للمعالجة:</div><div style="text-align:right;">' +
+    trips.map(function (t, i) { return '<button type="button" class="btn btn-outline-warning btn-sm m-1" data-i="' + i + '">' + escapeHtml_(t) + ' (' + by[t].i + ' بند، ' + by[t].p + ' دفعة)</button>'; }).join('') + '</div>' +
+    '<div class="d-flex justify-content-end mt-3"><button type="button" class="btn btn-secondary btn-sm" id="_accOrfListX">إغلاق</button></div></div>';
+  document.body.appendChild(ov);
+  ov.querySelector('#_accOrfListX').onclick = function () { ov.remove(); };
+  ov.querySelectorAll('button[data-i]').forEach(function (b) { b.onclick = function () { ov.remove(); _accOrphanFix_(d.client, trips[+b.dataset.i]); }; });
 }
 // 🛡️ (V4.235) إغلاق نافذة المعالجة مع إعادة تفعيل مصيدة تركيز مودال Bootstrap المُعطَّلة عند الفتح
 function _accOrfClose_() {
@@ -47924,7 +48000,7 @@ function openHotelsApp_() {
   }).hotelsHandoff(window.authToken);
 }
 // ⚡ (V4.252) نداءات القراءة فقط — أي نداء غيرها (حفظ/ترحيل/حذف/مزامنة…) يمسح كاش الكشوف بالواجهة ويُسخّن كاش الخادم
-var GL_RO_RX_ = /^gl(Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbSeasonPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk)$/;
+var GL_RO_RX_ = /^gl(BankPending|PartyBalances|Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbSeasonPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk)$/;
 function glDataChanged_() {
   GL._chg = (GL._chg || 0) + 1;   // 📑 (V4.324) تبويب حسابات مُوقَف يُحدَّث عند العودة له لو تغيّرت البيانات
   GL._stCache = {};
@@ -48246,14 +48322,42 @@ function glBalSecHtml_(sec, ed) {
     var b = GL.balances[a.code] || {};
     ['EGP', 'SAR', 'USD'].forEach(function (c) { tot[c] += b[c] || 0; });
     var cur = ['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(b[c] || 0) > 0.004; });
-    return '<div class="gl-bcard" data-code="' + glEsc(a.code) + '" ' + (ed ? '' : 'onclick="glOpenLedger(\'' + glJs(a.code) + '\')" title="فتح دفتر الأستاذ"') + '>' +
+    return '<div class="gl-bcard" data-code="' + glEsc(a.code) + '" ' + (ed ? '' : 'onclick="glBalOpen_(\'' + glJs(a.code) + '\')" title="' + (/^(safe|bank|custody)$/.test(a.kind) ? 'فتح شاشة ' + ({ safe: 'الخزينة', bank: 'البنوك', custody: 'العهد' })[a.kind] : 'فتح دفتر الأستاذ') + '"') + '>' +
       '<div class="gl-bcard-h">' + glEsc(sec.icon || '') + ' ' + glEsc(a.name) + '<small class="gl-latin">' + glEsc(a.code) + '</small></div>' +
       (ed ? '<button class="btn btn-sm btn-outline-danger py-0 px-1" style="position:absolute;top:4px;left:4px;font-size:10px;" title="إخفاء من القسم" onclick="glBalCardDel_(this)">✕</button>' : '') +
       (cur.length ? cur.map(function (c) { return '<div class="gl-bline"><span>' + GL_CUR_LBL_[c] + '</span><b class="gl-latin" style="color:' + ((b[c] || 0) < 0 ? '#b91c1c' : '#0f172a') + '">' + glFmt(b[c]) + '</b></div>'; }).join('')
-        : '<div class="gl-bline text-muted"><span>لا حركة</span><b>0</b></div>') + '</div>';
+        : '<div class="gl-bline text-muted"><span>لا حركة</span><b>0</b></div>') +
+      (a.kind === 'bank' ? '<div class="gl-bpend" data-code="' + glEsc(a.code) + '">' + glBalBankPendHtml_(a.code) + '</div>' : '') + '</div>';
   }).join('') || '<div class="text-muted small p-2">لا توجد حسابات في هذا القسم' + (ed ? ' — عدّل القسم (✏️) لإضافة حسابات.' : '.') + '</div>';
   return '<div class="gl-sec" data-sid="' + glEsc(sec.id) + '">' + head(['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(tot[c]) > 0.004; }).map(function (c) { return '<span class="gl-pill">' + GL_CUR_LBL_[c] + ' <b class="gl-latin">' + glFmt(tot[c]) + '</b></span>'; }).join('')) +
     '<div class="gl-bgrid" data-sid="' + glEsc(sec.id) + '">' + cards + '</div></div>';
+}
+// 🖱️ (V4.343) ضغط بطاقة: الخزينة/البنك/العهدة تفتح شاشتها مفلترة على هذا الحساب (لا كشف الحساب)، وغيرها دفتر الأستاذ
+function glBalOpen_(code) {
+  var a = GL.map[code];
+  if (a && !a.isGroup && /^(safe|bank|custody)$/.test(a.kind)) {
+    GL._cash = GL._cash || {}; (GL._cash[a.kind] = GL._cash[a.kind] || {}).code = code;
+    return glTab({ safe: 'treasury', bank: 'banks', custody: 'custody' }[a.kind]);
+  }
+  glOpenLedger(code);
+}
+// 🏦 الرصيد المتاح/المعلّق لبطاقات البنوك (معلّق = حركات استحقاقها بعد اليوم) — طلب واحد مجمّع لكل البنوك ويُخزَّن 60 ثانية
+function glBalBankPendHtml_(code) {
+  var P = GL._bankPend && GL._bankPend.data; if (!P) return '';
+  var b = GL.balances[code] || {}, p = P[code] || {}, out = '';
+  ['EGP', 'SAR', 'USD'].forEach(function (c) {
+    var tot = b[c] || 0, pe = p[c] || 0; if (Math.abs(tot) < 0.005 && Math.abs(pe) < 0.005) return;
+    out += '<div class="gl-bline" style="border-top:1px dashed #e2e8f0;margin-top:3px;padding-top:3px;font-size:11.5px;"><span>' + GL_CUR_LBL_[c] + '</span><span><span style="color:#15803d;">✅ المتاح <b class="gl-latin">' + glFmt(Math.round((tot - pe) * 100) / 100) + '</b></span>' +
+      ' · <span style="color:' + (pe ? '#b45309' : '#94a3b8') + ';">⏳ معلّق <b class="gl-latin">' + glFmt(pe) + '</b></span></span></div>';
+  });
+  return out;
+}
+function glBalBankPendLoad_() {
+  if (!document.querySelector('#glBalRoot .gl-bpend')) return;
+  var C = GL._bankPend;
+  var paint = function () { document.querySelectorAll('#glBalRoot .gl-bpend').forEach(function (el) { el.innerHTML = glBalBankPendHtml_(el.dataset.code); }); };
+  if (C && C.data && Date.now() - C.t < 60000) { paint(); return; }
+  glRun('glBankPending', [], function (res) { GL._bankPend = { t: Date.now(), data: res.pending || {} }; paint(); }, function () {});
 }
 function glRenderHome() {
   var box = document.getElementById('glBody'), ed = GL._balEd, L = ed || glBalLayout_();
@@ -48273,7 +48377,7 @@ function glRenderHome() {
   box.innerHTML =
     '<div class="gl-note">📅 بداية الحسابات: <b class="gl-latin">' + glEsc(GL.settings.startDate) + '</b> · عملة الأساس: <b>الجنيه</b> · أسعار الصرف الافتراضية: ريال <b class="gl-latin">' + glFmt(GL.rates.SAR) + '</b> · دولار <b class="gl-latin">' + glFmt(GL.rates.USD) + '</b></div>' + bar +
     '<div id="glBalRoot">' + L.secs.map(function (s) { return glBalSecHtml_(s, !!ed); }).join('') + '</div>';
-  glBalTopLoad_(L);
+  glBalTopLoad_(L); glBalBankPendLoad_();
   if (ed) glBalSortInit_();
 }
 // ---- أعلى الأرصدة: طلب واحد مجمَّع لكل المجموعات، مع تخزين مؤقت قصير ----
@@ -48317,8 +48421,10 @@ function glBalSortInit_() {
   glBalLoadSortable_(function (ok) {
     var root = document.getElementById('glBalRoot'); if (!root || !GL._balEd) return;
     if (!ok) { root.querySelectorAll('.gl-bal-mv').forEach(function (b) { b.style.display = ''; }); root.querySelectorAll('.gl-sec-grip').forEach(function (g) { g.style.display = 'none'; }); return; }   // تعذّر تحميل المكتبة ⇒ أزرار ▲▼
-    new Sortable(root, { animation: 150, handle: '.gl-sec-grip', draggable: '.gl-sec', onEnd: glBalSyncDom_ });
-    root.querySelectorAll('.gl-bgrid').forEach(function (g) { new Sortable(g, { animation: 150, group: 'balcards', draggable: '.gl-bcard', onEnd: glBalSyncDom_ }); });
+    // 🧲 (V4.343) سحب أثبت: محاكاة السحب بالمكتبة (forceFallback) بدل HTML5 DnD الذي يربك شبكة RTL ويقفز بالبطاقات المجاورة، مع عتبة تبديل أعلى
+    var base = { animation: 120, forceFallback: true, fallbackOnBody: true, fallbackTolerance: 4, swapThreshold: 0.65, ghostClass: 'gl-sort-ghost', chosenClass: 'gl-sort-chosen', dragClass: 'gl-sort-drag', filter: 'button', preventOnFilter: false, onEnd: glBalSyncDom_ };
+    new Sortable(root, Object.assign({}, base, { handle: '.gl-sec-grip', draggable: '.gl-sec' }));
+    root.querySelectorAll('.gl-bgrid').forEach(function (g) { new Sortable(g, Object.assign({}, base, { group: 'balcards', draggable: '.gl-bcard', emptyInsertThreshold: 20 })); });
   });
 }
 // يقرأ ترتيب الأقسام والبطاقات من الشاشة إلى التخطيط الجاري
@@ -51479,7 +51585,7 @@ function glCsApprove_(code, btn) {
     if (sp) { if (sp.err) { bad.push('صف ' + tr.dataset.row + ': ' + sp.err); return; } items.push({ row: +tr.dataset.row, account: sp.splits[0].account, splits: sp.splits, force: ds ? 1 : 0 }); return; }
     var acc = glAccVal(tr.querySelector('.glCsAcc'));
     if (!acc) { miss++; return; }
-    var it0 = { row: +tr.dataset.row, account: acc, force: ds ? 1 : 0 }, ce = glCcItem_(tr, it0);
+    var it0 = { row: +tr.dataset.row, account: acc, force: ds ? 1 : 0, trip: glCsTripOf_(tr) }, ce = glCcItem_(tr, it0);
     if (ce) { bad.push(ce); return; }
     items.push(it0);
   });
@@ -52728,7 +52834,7 @@ function glCsPendDraw_() {
       g.rows.map(function (x) {
         return '<tr data-code="' + glEsc(g.code) + '" data-row="' + x.row + '" data-hint="' + glEsc(x.hint || '') + '" data-sg="' + glEsc((x.sugg && x.sugg[0] && x.sugg[0].code) || '') + '"' + glCcAttrs_(x, g.currency) + '><td><input type="checkbox" class="glCsPk" checked></td><td class="gl-latin">' + (x.fee ? x.feeOf + ' <span class="badge bg-warning text-dark">🏦 مصاريف بنكية</span>' : x.row) + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x, g.currency) + '</td>' +
           '<td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
-          '<td><input class="form-control form-control-sm glCsDesc" value="' + glEsc(x.desc || '') + '" data-orig="' + glEsc(x.desc || '') + '" style="min-width:190px;"></td>' +
+          '<td><input class="form-control form-control-sm glCsDesc" value="' + glEsc(x.desc || '') + '" data-orig="' + glEsc(x.desc || '') + '" style="min-width:190px;"><input class="form-control form-control-sm glCsTrip mt-1" list="glCsTripList" placeholder="🧳 الرحلة (اختياري)" style="min-width:190px;font-size:11.5px;">' + glCsTripList_() + '</td>' +
           '<td>' + (x.dup ? '<div class="mt-1 p-1" style="background:#fff7ed;border:1px dashed #fb923c;border-radius:8px;font-size:11.5px;">🔁 <b>قيد مطابق موجود:</b> <a href="#" class="gl-latin" title="فتح القيد للتعديل فوق هذه الشاشة — وعند الإغلاق أو الحفظ تعود هنا محدَّثةً بنفس الصف" onclick="glRevOpenEntry_(\'' + glJs(x.dup.id) + '\',this);return false;">' + glEsc(x.dup.id) + '</a> · ' + glEsc(x.dup.src) + ' · <span class="gl-latin">' + glEsc(x.dup.date) + '</span><br>' + glEsc(String(x.dup.desc || '').slice(0, 90)) +
             '<select class="form-select form-select-sm mt-1 glCsDupSel" data-link="' + glEsc(x.dup.id) + '"><option value="link" selected>🔗 نفس الحركة — اربط الصف بهذا القيد (موصى به، بلا تكرار)</option><option value="new">➕ حركة مختلفة — سجّلها بالحساب المختار</option></select></div>' : '') + '<div class="d-flex gap-1">' + glAccInput('glCsAcc', '', x.preAcc || '') + glCsNaBtn_() + glCsSplitBtn_(x) + glRevDraftBtn_(x) + '</div>' + glCsSplitBox_(x) + glCsSusSel_(x) + glCcWhy_(x) + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
             return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var i=this.closest(\'tr\').querySelector(\'.glCsAcc\');i.dataset.code=\'' + glJs(sg.code) + '\';i.value=\'' + glJs(sg.code + ' — ' + sg.name) + '\';glCcAuto_(this.closest(\'tr\'))">' + glEsc(sg.name) + glCcSgLbl_(sg) + '</button>';
@@ -52918,6 +53024,12 @@ function glCsPickSugg_() {
     var b = tr.querySelector('button[onclick*="glCsAcc"]'); if (b) b.click();
   });
 }
+function glCsTripList_() {
+  if (document.getElementById('glCsTripList')) return '';
+  var t = []; (window.tripsCache || []).forEach(function (z) { if (z && z.name && t.indexOf(z.name) < 0) t.push(z.name); });
+  return '<datalist id="glCsTripList">' + t.map(function (n) { return '<option value="' + glEsc(n) + '">'; }).join('') + '</datalist>';
+}
+function glCsTripOf_(tr) { var i = tr.querySelector('.glCsTrip'); return i ? i.value.trim() : ''; }
 function glCsApproveAll_(btn) {
   var by = {}, n = 0, miss = 0, bad = [];
   document.querySelectorAll('#glCsPBox tr[data-row]').forEach(function (tr) {
@@ -52931,7 +53043,7 @@ function glCsApproveAll_(btn) {
     var sp = glCsSplitRead_(tr);   // ➗ (V4.333)
     if (sp) {
       if (sp.err) { bad.push('صف ' + tr.dataset.row + ': ' + sp.err); return; }
-      var dS = tr.querySelector('.glCsDesc'), itS = { row: +tr.dataset.row, account: sp.splits[0].account, splits: sp.splits, force: ds ? 1 : 0 };
+      var dS = tr.querySelector('.glCsDesc'), itS = { row: +tr.dataset.row, account: sp.splits[0].account, splits: sp.splits, force: ds ? 1 : 0, trip: glCsTripOf_(tr) };
       if (dS && dS.value.trim() && dS.value !== dS.dataset.orig) itS.desc = dS.value.trim();
       (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push(itS); n++; return;
     }
@@ -52939,6 +53051,7 @@ function glCsApproveAll_(btn) {
     var d = tr.querySelector('.glCsDesc'), it = { row: +tr.dataset.row, account: acc, force: ds ? 1 : 0 };
     if (d && d.value.trim() && d.value !== d.dataset.orig) it.desc = d.value.trim();
     var ce = glCcItem_(tr, it); if (ce) { bad.push(ce); return; }   // (V4.305) مبلغ/عملة الطرف المقابل
+    var tp0 = glCsTripOf_(tr); if (tp0) it.trip = tp0;   // (V4.343)
     (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push(it); n++;
   });
   if (bad.length) { _showPopup(bad.join('\n'), 'warning'); return; }

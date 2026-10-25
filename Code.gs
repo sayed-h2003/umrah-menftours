@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.342";
+var APP_VERSION = "4.343";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6055,7 +6055,7 @@ function checkPasswordMatch_(plainPassword, storedValue) {
 /* 🔐 نموذج الصلاحيات الذكية (سيرفر): يفهم رموز "screen.cap" مع التتالي + الرموز القديمة
    - أي صلاحية شاشة تعني العرض؛ الحذف يعني التعديل والعرض
    - الرمز القديم "delete" يمنح الحذف في كل الشاشات (حفاظاً على السلوك السابق) */
-var _PERM_SCREENS_ = ['bookings','trips','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl','hotels','stats'];
+var _PERM_SCREENS_ = ['bookings','trips','tripundo','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl','hotels','stats'];
 var _PERM_LEGACY_MAP_ = {
   'add':'bookings.add','edit':'bookings.edit','delete':'bookings.delete',
   'print':'bookings.print','approve':'bookings.approve',
@@ -12257,6 +12257,163 @@ function requireAuditLogPermission_(authToken) {
 
 // يرجع سجلات التعديلات (الأحدث أولاً) مع إمكانية الفلترة برقم إشعار / مستخدم / نطاق تاريخ
 // 📜 سجل تغييرات رحلة واحدة — كل عمليات AuditLog التي مرجعها اسم الرحلة (متاح لمن يرى الرحلات)
+
+/* ============================================================
+   ↩️ (V4.343) لقطات الرحلة: التراجع عن تعديل بعينه، أو الرجوع بالرحلة كلها (بياناتها + كشف معتمريها) إلى نقطة سابقة
+   ------------------------------------------------------------
+   • بعد كل عملية حفظ مؤثرة (حفظ الكشف · تعديل الرحلة · نقل معتمرين) تُحفظ لقطة «بعد العملية» بشيت TripSnapshots (مضغوطة)، ولقطة أساس قبل أول عملية.
+   • «تراجع عن هذا التعديل»: يعكس الفرق بين لقطة هذه العملية وسابقتها فوق الحالة الحالية — لا يلمس إلا ما لم يتغيّر بعدها؛ ما تغيّر لاحقاً يُذكر كتعارض.
+   • «رجوع إلى هذه النقطة»: يستبدل بيانات الرحلة وكشف معتمريها بلقطة تلك العملية (ما بعدها يُلغى) — معتمر موجود الآن برحلة أخرى لا يُستعاد مكرراً.
+   • الصلاحية للأدمن، ويمكن منحها لغيره بصلاحية «tripundo.edit» من مصفوفة الصلاحيات. كل عملية تُسجَّل بسجل التعديلات ولها لقطة جديدة (فيمكن التراجع عن التراجع).
+   ============================================================ */
+var TRIP_SNAP_SHEET_ = 'TripSnapshots', TRIP_SNAP_HEADERS_ = ['المعرف', 'الرحلة', 'الوقت', 'المستخدم', 'العملية', 'اللقطة'], TRIP_SNAP_KEEP_ = 40;
+function _tripSnapJson_(o) { return JSON.stringify(o, function (k, v) { return (this[k] instanceof Date) ? { __d: this[k].getTime() } : v; }); }
+function _tripSnapParse_(s) { return JSON.parse(s, function (k, v) { return (v && typeof v === 'object' && v.__d !== undefined) ? new Date(v.__d) : v; }); }
+function _tripSnapPack_(obj) {
+  var js = _tripSnapJson_(obj);
+  try { var z = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(js, 'application/octet-stream', 's.json')).getBytes()); if (z.length < 48000) return 'Z:' + z; } catch (e) {}
+  return js.length < 48000 ? 'J:' + js : '';
+}
+function _tripSnapUnpack_(s) {
+  s = String(s || '');
+  if (s.indexOf('Z:') === 0) return _tripSnapParse_(Utilities.newBlob(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(s.slice(2)), 'application/x-gzip')).getBytes()).getDataAsString());
+  if (s.indexOf('J:') === 0) return _tripSnapParse_(s.slice(2));
+  return null;
+}
+// حالة الرحلة الآن: {t: {عنوان: قيمة}, p: [{عنوان: قيمة}…]}
+function _tripSnapBuild_(trip) {
+  var tSh = _getTripsSheet_(), tl = tSh.getLastRow(), out = { t: null, p: [] };
+  if (tl >= 2) {
+    var tw = tSh.getLastColumn(), th = tSh.getRange(1, 1, 1, tw).getValues()[0], tC = _robustColMap_(tSh, TRIPS_HEADERS_), nc = tC[TRIPS_COL_.name];
+    var tv = tSh.getRange(2, 1, tl - 1, tw).getValues();
+    for (var i = 0; i < tv.length; i++) if (String(tv[i][nc] || '').trim() === trip) { out.t = {}; th.forEach(function (h, j) { out.t[String(h)] = tv[i][j]; }); break; }
+  }
+  var pSh = _getPilgrimsSheet_(), pl = pSh.getLastRow();
+  if (pl >= 2) {
+    var pw = pSh.getLastColumn(), ph = pSh.getRange(1, 1, 1, pw).getValues()[0], pC = _robustColMap_(pSh, PILGRIMS_HEADERS_), tc = pC[PILGRIMS_COL_.tripName];
+    pSh.getRange(2, 1, pl - 1, pw).getValues().forEach(function (r) {
+      if (String(r[tc] || '').trim() !== trip) return;
+      var o = {}; ph.forEach(function (h, j) { o[String(h)] = r[j]; }); out.p.push(o);
+    });
+  }
+  return out;
+}
+function _tripSnapRows_(trip) {
+  var sh = _accSheet_(TRIP_SNAP_SHEET_, TRIP_SNAP_HEADERS_), last = sh.getLastRow(), rows = [];
+  if (last >= 2) sh.getRange(2, 1, last - 1, 5).getValues().forEach(function (r, i) {
+    if (String(r[1] || '').trim() !== trip) return;
+    rows.push({ row: i + 2, id: String(r[0]), ts: r[2] instanceof Date ? Utilities.formatDate(r[2], _tz_() || 'Africa/Cairo', 'dd/MM/yyyy HH:mm:ss') : String(r[2] || ''), user: String(r[3] || ''), action: String(r[4] || '') });
+  });
+  return { sh: sh, rows: rows };
+}
+function _tripSnapTake_(trip, user, action) {
+  try {
+    trip = String(trip || '').trim(); if (!trip) return;
+    var packed = _tripSnapPack_(_tripSnapBuild_(trip)); if (!packed) return;
+    var R = _tripSnapRows_(trip), id = 'S' + Date.now().toString(36) + Math.floor(Math.random() * 1000).toString(36);
+    R.sh.appendRow([id, trip, new Date(), user || '', action || '', packed]);
+    if (R.rows.length >= TRIP_SNAP_KEEP_) { var del = R.rows.slice(0, R.rows.length - TRIP_SNAP_KEEP_ + 1).map(function (x) { return x.row; }).sort(function (a, b) { return b - a; }); del.forEach(function (rw) { R.sh.deleteRow(rw); }); }
+    return id;
+  } catch (e) { Logger.log('trip snapshot: ' + e.message); }
+}
+function _tripSnapEnsureBase_(trip, user) {
+  try { trip = String(trip || '').trim(); if (!trip) return; if (!_tripSnapRows_(trip).rows.length) _tripSnapTake_(trip, user, 'خط الأساس (قبل أول تعديل مُلتقَط)'); } catch (e) { Logger.log('trip snap base: ' + e.message); }
+}
+function _tripSnapRename_(oldName, newName) {
+  try { var R = _tripSnapRows_(String(oldName).trim()); R.rows.forEach(function (x) { R.sh.getRange(x.row, 2).setValue(newName); }); } catch (e) {}
+}
+function _tripUndoCan_(session) { return _sessionHasPerm_(session, 'tripundo.edit'); }
+// قائمة اللقطات (بلا محتواها) لسجل الرحلة — الأقدم أولاً
+function getTripSnapshots(authToken, tripName) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'trips.view')) throw new Error('لا تملك صلاحية عرض الرحلات');
+  tripName = String(tripName || '').trim(); if (!tripName) return { snaps: [], can: false };
+  return { snaps: _tripSnapRows_(tripName).rows.map(function (x) { return { id: x.id, ts: x.ts, user: x.user, action: x.action }; }), can: _tripUndoCan_(session) };
+}
+function _tripSnapSame_(a, b) { return _tripSnapJson_(a === undefined ? '' : a) === _tripSnapJson_(b === undefined ? '' : b); }
+function _tripSnapKey_(o) { return String(o['معرف المعتمر'] || '').trim() || String(o['رقم الجواز'] || '').trim() || String(o['اسم المعتمر'] || '').trim(); }
+// يكتب حالة (t, p) للرحلة: حقول الرحلة (عدا الاسم) + استبدال صفوف معتمريها
+function _tripSnapApply_(trip, state, keepElsewhere) {
+  if (state.t) {
+    var tSh = _getTripsSheet_(), tl = tSh.getLastRow(), tw = tSh.getLastColumn(), th = tSh.getRange(1, 1, 1, tw).getValues()[0], tC = _robustColMap_(tSh, TRIPS_HEADERS_), nc = tC[TRIPS_COL_.name];
+    var tv = tl >= 2 ? tSh.getRange(2, 1, tl - 1, tw).getValues() : [];
+    for (var i = 0; i < tv.length; i++) if (String(tv[i][nc] || '').trim() === trip) {
+      var row = tv[i].slice(); th.forEach(function (h, j) { if (j !== nc && state.t[String(h)] !== undefined) row[j] = state.t[String(h)]; });
+      tSh.getRange(i + 2, 1, 1, tw).setValues([row]); break;
+    }
+  }
+  var pSh = _getPilgrimsSheet_(), pl = pSh.getLastRow(), pw = pSh.getLastColumn(), ph = pSh.getRange(1, 1, 1, pw).getValues()[0], pC = _robustColMap_(pSh, PILGRIMS_HEADERS_), tc = pC[PILGRIMS_COL_.tripName], pc = pC[PILGRIMS_COL_.passport];
+  var all = pl >= 2 ? pSh.getRange(2, 1, pl - 1, pw).getValues() : [], kept = [], otherPass = {};
+  all.forEach(function (r) { if (String(r[tc] || '').trim() === trip) return; kept.push(r); var ps = String(r[pc] || '').trim(); if (ps) otherPass[ps] = 1; });
+  var mine = [];
+  (state.p || []).forEach(function (o) {
+    var ps = String(o['رقم الجواز'] || '').trim(); if (ps && otherPass[ps]) return;   // موجود الآن برحلة أخرى
+    var r = ph.map(function (h) { var v = o[String(h)]; return v === undefined ? '' : v; }); r[tc] = trip; mine.push(r);
+  });
+  if (pl >= 2) pSh.getRange(2, 1, pl - 1, pw).clearContent();
+  var rows = kept.concat(mine); if (rows.length) pSh.getRange(2, 1, rows.length, pw).setValues(rows);
+  return mine.length;
+}
+function _tripAfterRestore_(trip, user, label) {
+  try { clearAllCache(); } catch (e) {}
+  try { _syncTripAccounts_(null, trip, user); } catch (e1) {}
+  _tripSnapTake_(trip, user, label);
+}
+function tripRestorePoint(authToken, tripName, snapId) {
+  var session = requireAuth_(authToken);
+  if (!_tripUndoCan_(session)) throw new Error('الرجوع لنقطة سابقة للأدمن أو من مُنح صلاحية «التراجع بسجل الرحلات»');
+  tripName = String(tripName || '').trim();
+  var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try {
+    var R = _tripSnapRows_(tripName), hit = R.rows.filter(function (x) { return x.id === snapId; })[0];
+    if (!hit) return { success: false, error: 'اللقطة غير موجودة (قد تكون حُذفت لقدمها)' };
+    var st = _tripSnapUnpack_(R.sh.getRange(hit.row, 6).getValue()); if (!st) return { success: false, error: 'تعذّر قراءة اللقطة' };
+    var n = _tripSnapApply_(tripName, st, true);
+    logChange_(session.username, 'رجوع بالرحلة إلى نقطة سابقة', tripName, 'استرجاع', hit.ts + ' — ' + hit.action, '(' + n + ' معتمر)');
+    _tripAfterRestore_(tripName, session.username, 'رجوع إلى نقطة: ' + hit.ts);
+    return { success: true, pilgrims: n };
+  } finally { try { lock.releaseLock(); } catch (eR) {} }
+}
+function tripUndoChange(authToken, tripName, snapId) {
+  var session = requireAuth_(authToken);
+  if (!_tripUndoCan_(session)) throw new Error('التراجع عن تعديل للأدمن أو من مُنح صلاحية «التراجع بسجل الرحلات»');
+  tripName = String(tripName || '').trim();
+  var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  try {
+    var R = _tripSnapRows_(tripName), ix = -1; R.rows.forEach(function (x, i) { if (x.id === snapId) ix = i; });
+    if (ix < 0) return { success: false, error: 'اللقطة غير موجودة' };
+    if (ix === 0) return { success: false, error: 'هذه أقدم لقطة (خط الأساس) — لا شيء قبلها للتراجع إليه' };
+    var cur = _tripSnapUnpack_(R.sh.getRange(R.rows[ix].row, 6).getValue()), prev = _tripSnapUnpack_(R.sh.getRange(R.rows[ix - 1].row, 6).getValue());
+    if (!cur || !prev) return { success: false, error: 'تعذّر قراءة اللقطات' };
+    var now = _tripSnapBuild_(tripName), conflicts = [], changed = 0;
+    // حقول الرحلة
+    if (cur.t && prev.t && now.t) Object.keys(cur.t).forEach(function (h) {
+      if (_tripSnapSame_(prev.t[h], cur.t[h])) return;
+      if (h === TRIPS_COL_.name) return;
+      if (_tripSnapSame_(now.t[h], cur.t[h])) { now.t[h] = prev.t[h]; changed++; } else conflicts.push('حقل الرحلة «' + h + '» تغيّر بعد هذه العملية');
+    });
+    // المعتمرون
+    var mp = function (L) { var m = {}; (L || []).forEach(function (o) { m[_tripSnapKey_(o)] = o; }); return m; };
+    var pM = mp(prev.p), cM = mp(cur.p), nM = mp(now.p), nameH = 'اسم المعتمر';
+    Object.keys(cM).forEach(function (k) {
+      if (!pM[k]) {   // أُضيف بهذه العملية ⇒ يُحذف لو لم يتغيّر
+        if (nM[k]) { if (_tripSnapSame_(nM[k], cM[k])) { delete nM[k]; changed++; } else conflicts.push('«' + (cM[k][nameH] || k) + '» (أُضيف) عُدِّل بعد ذلك فلم يُحذف'); }
+        return;
+      }
+      Object.keys(cM[k]).forEach(function (h) {
+        if (_tripSnapSame_(pM[k][h], cM[k][h])) return;
+        if (!nM[k]) return;
+        if (_tripSnapSame_(nM[k][h], cM[k][h])) { nM[k][h] = pM[k][h]; changed++; } else conflicts.push('«' + (cM[k][nameH] || k) + '» — «' + h + '» تغيّر بعد هذه العملية');
+      });
+    });
+    Object.keys(pM).forEach(function (k) { if (!cM[k] && !nM[k]) { nM[k] = pM[k]; changed++; } });   // حُذف بهذه العملية ⇒ يُعاد
+    now.p = Object.keys(nM).map(function (k) { return nM[k]; });
+    var n = _tripSnapApply_(tripName, now, true);
+    logChange_(session.username, 'تراجع عن تعديل بالرحلة', tripName, 'تراجع', R.rows[ix].ts + ' — ' + R.rows[ix].action, changed + ' تغيير' + (conflicts.length ? ' (+' + conflicts.length + ' تعارض)' : ''));
+    _tripAfterRestore_(tripName, session.username, 'تراجع عن: ' + R.rows[ix].action + ' (' + R.rows[ix].ts + ')');
+    return { success: true, changed: changed, conflicts: conflicts, pilgrims: n };
+  } finally { try { lock.releaseLock(); } catch (eR) {} }
+}
 function getTripChangeLog(authToken, tripName) {
   var session = requireAuth_(authToken);
   if (!_sessionHasPerm_(session, "trips.view")) throw new Error("لا تملك صلاحية عرض الرحلات");
@@ -17561,6 +17718,7 @@ function saveTrip(authToken, targetRow, tripData) {
   if (!name) throw new Error("اسم الرحلة مطلوب");
 
   var sheet = _getTripsSheet_();
+  if (targetRow) _tripSnapEnsureBase_(name, session.username);   // ↩️ (V4.343) لقطة أساس قبل أول تعديل مُلتقَط
 
   // 🔒 خريطة أعمدة متينة (بالاسم مع رجوع قانوني)
   var C = _robustColMap_(sheet, TRIPS_HEADERS_);
@@ -17631,6 +17789,7 @@ function saveTrip(authToken, targetRow, tripData) {
       _renameTripInPilgrims_(oldName, name);
       _renameTripInBookings_(oldName, name);
       _cascadeTripRename_(oldName, name);
+      _tripSnapRename_(oldName, name);   // ↩️ (V4.343)
     }
     _savedRow = Number(targetRow);
   } else {
@@ -17673,6 +17832,7 @@ function saveTrip(authToken, targetRow, tripData) {
   try { _propagateTripChangesToBooking_(name); } catch (e) { Logger.log('propagate trip→booking failed: ' + e); }
 
   clearAllCache(); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
+  _tripSnapTake_(name, session.username, targetRow ? 'تعديل بيانات الرحلة' : 'إنشاء الرحلة');   // ↩️ (V4.343)
   return { success: true, madinahNights: madinahNights, makkahNights: makkahNights };
 }
 
@@ -19151,7 +19311,7 @@ function assignPilgrimToTrip(authToken, passportOrName, tripName, force) {
  * نقل معتمر من رحلة إلى أخرى (مع توابعه المرتبطين به كمحرم في نفس الرحلة).
  * يُنقل صف الرحلة المصدر بتغيير اسم الرحلة، مع مسح رقم الغرفة والفنادق (خاصة بالرحلة القديمة)
  */
-function movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force) {
+function movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force, skipAcc) {
   var session = requireAuth_(authToken);
   ident = ident || {};
   fromTrip = String(fromTrip || "").trim();
@@ -19237,7 +19397,8 @@ function movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force) {
     return { success: false, error: "موجود بالفعل في الرحلة الهدف: " + dupNames.join("، ") };
   }
 
-  var movedNames = [];
+  if (!skipAcc) { _tripSnapEnsureBase_(fromTrip, session.username); _tripSnapEnsureBase_(toTrip, session.username); }   // ↩️ (V4.343)
+  var movedNames = [], movedClients = {};
   var movedRoomNos = []; // 🔗 أرقام غرف من غادروا — تُستخدَم لإعادة ضبط من تبقّى منهم في الرحلة المصدر
   toMove.forEach(function(idx) {
     var rowIdx = idx + 2;
@@ -19249,6 +19410,7 @@ function movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force) {
     setP(rowIdx, 'hotelMadinah', "");    // فندق المدينة
     setP(rowIdx, 'hotelMakkah', "");     // فندق مكة
     movedNames.push(String(P(data[idx], 'name') || ""));
+    var _mc = String(P(data[idx], 'client') || "").trim(); if (_mc) movedClients[_mc] = true;
   });
 
   // 🔓 من تبقّى في الرحلة المصدر بنفس رقم غرفة أحد من غادروا (دابل/ثلاثي/رباعي أسرة/خماسي أسرة
@@ -19274,7 +19436,58 @@ function movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force) {
   logChange_(session.username, "نقل معتمر بين رحلتين", movedNames.join("، "), "معتمر",
              fromTrip, toTrip + " (عدد: " + movedNames.length + ")");
   clearAllCache();
-  return { success: true, moved: movedNames.length, names: movedNames };
+  if (!skipAcc) { _tripSnapTake_(fromTrip, session.username, 'نقل معتمر إلى «' + toTrip + '»: ' + movedNames.join('، ')); _tripSnapTake_(toTrip, session.username, 'استلام معتمر من «' + fromTrip + '»: ' + movedNames.join('، ')); }   // ↩️ (V4.343)
+  // 💵 (V4.343) حسابات العملاء تتبع النقل تلقائياً (بلا قرار معلّق): انظر _accAfterPilgrimsMoved_
+  var accNote = '';
+  if (!skipAcc) { try { accNote = _accAfterPilgrimsMoved_(Object.keys(movedClients), fromTrip, toTrip, session.username, authToken).note; } catch (eAcc) { Logger.log('acc after move: ' + eAcc.message); } }
+  return { success: true, moved: movedNames.length, names: movedNames, clients: Object.keys(movedClients), accNote: accNote };
+}
+/* 💵 (V4.343) نقل معتمرين بين رحلتين ⇒ حسابات عملائهم تتبعهم تلقائياً دون أي بند/دفعة معلّقة بقرار المستخدم:
+   • انتقل كل معتمري العميل من الرحلة (لم يبقَ له أحد) ⇒ تنتقل بنوده ودفعاته كما هي إلى الرحلة الجديدة
+   • انتقل بعضهم فقط (العميل صار على أكثر من رحلة) ⇒ دفعاته بالرحلة القديمة تُنقل إلى «عام» لإعادة تخصيصها، وبنوده التلقائية تُحذف
+     لتُولَّد من جديد بكل رحلة (تُعاد مزامنة الرحلتين). البنود اليدوية/المعدَّلة وبنود حجوزات الفنادق تبقى كما هي.
+   يُرجع {note} نصاً موجزاً للمستخدم. */
+function _accAfterPilgrimsMoved_(clients, fromTrip, toTrip, username, authToken) {
+  var out = { full: [], partial: [], note: '' };
+  clients = (clients || []).map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+  if (!clients.length) return out;
+  var pSheet = _getPilgrimsSheet_(), PC = _robustColMap_(pSheet, PILGRIMS_HEADERS_), PR = _cellReader_(PC, PILGRIMS_COL_), remain = {};
+  if (pSheet.getLastRow() >= 2) pSheet.getRange(2, 1, pSheet.getLastRow() - 1, pSheet.getLastColumn()).getValues().forEach(function (r) {
+    if (String(PR(r, 'tripName') || '').trim() !== fromTrip) return;
+    var cl = String(PR(r, 'client') || '').trim(); if (cl && String(PR(r, 'name') || '').trim()) remain[cl] = (remain[cl] || 0) + 1;
+  });
+  var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (eL) { return out; }
+  try {
+    var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS), pSh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
+    var iv = iSh.getLastRow() >= 2 ? iSh.getRange(2, 1, iSh.getLastRow() - 1, ACC_ITEMS_HEADERS.length).getValues() : [];
+    var pv = pSh.getLastRow() >= 2 ? pSh.getRange(2, 1, pSh.getLastRow() - 1, 3).getValues() : [];
+    var delRows = [], notes = [];
+    clients.forEach(function (cl) {
+      var mineI = [], mineP = [];
+      iv.forEach(function (r, i) { if (String(r[1] || '').trim() === cl && String(r[2] || '').trim() === fromTrip) mineI.push(i); });
+      pv.forEach(function (r, i) { if (String(r[1] || '').trim() === cl && String(r[2] || '').trim() === fromTrip) mineP.push(i); });
+      if (!mineI.length && !mineP.length) return;
+      if (!remain[cl]) {   // انتقل كل معتمريه
+        mineI.forEach(function (i) { iSh.getRange(i + 2, 3).setValue(toTrip); });
+        mineP.forEach(function (i) { pSh.getRange(i + 2, 3).setValue(toTrip); });
+        try { _accEnsureMeta_(authToken, cl, toTrip, username); } catch (eM) {}
+        out.full.push(cl); notes.push('«' + cl + '»: نُقلت حساباته مع معتمريه (' + mineI.length + ' بند، ' + mineP.length + ' دفعة) إلى «' + toTrip + '»');
+      } else {             // انتقل بعضهم
+        var nd = 0;
+        mineP.forEach(function (i) { pSh.getRange(i + 2, 3).setValue('عام'); });
+        mineI.forEach(function (i) { if (String(iv[i][17] || '') === 'نعم' && !ACC_HB_RX_.test(String(iv[i][3] || ''))) { delRows.push(i + 2); nd++; } });
+        out.partial.push(cl); notes.push('«' + cl + '»: دفعاته (' + mineP.length + ') نُقلت إلى «عام» لإعادة تخصيصها' + (nd ? '، وحُذف ' + nd + ' بند تلقائي ليُولَّد بكل رحلة' : ''));
+      }
+      logChange_(username, 'تبعية حساب العميل لنقل معتمريه', cl, fromTrip, remain[cl] ? 'جزئي' : 'كلي', '→ ' + toTrip);
+    });
+    delRows.sort(function (a, b) { return b - a; }).forEach(function (row) { iSh.deleteRow(row); });
+    out.note = notes.join('\n');
+  } finally { try { lock.releaseLock(); } catch (eR) {} }
+  if (out.full.length || out.partial.length) {
+    try { _syncTripAccounts_(authToken, fromTrip, username); } catch (e1) {}
+    try { _syncTripAccounts_(authToken, toTrip, username); } catch (e2) {}
+  }
+  return out;
 }
 
 /**
@@ -19284,11 +19497,12 @@ function movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force) {
 function movePilgrimsBulk(authToken, idents, fromTrip, toTrip, force) {
   requireAuth_(authToken);
   idents = idents || [];
-  var movedTotal = 0, movedNames = [], errors = [];
+  var movedTotal = 0, movedNames = [], errors = [], movedClientsAll = {}, bulkSess = requireAuth_(authToken);
+  _tripSnapEnsureBase_(String(fromTrip || '').trim(), bulkSess.username); _tripSnapEnsureBase_(String(toTrip || '').trim(), bulkSess.username);   // ↩️ (V4.343)
   idents.forEach(function(ident) {
     try {
-      var res = movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force);
-      if (res && res.success) { movedTotal += res.moved; movedNames = movedNames.concat(res.names || []); }
+      var res = movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force, true);   // بلا معالجة حسابات لكل معتمر — مرة واحدة بالنهاية
+      if (res && res.success) { movedTotal += res.moved; movedNames = movedNames.concat(res.names || []); (res.clients || []).forEach(function (c) { movedClientsAll[c] = true; }); }
       else if (res && res.error) {
         // تابع نُقل بالفعل ضمن محرمه — ليس خطأ حقيقياً
         if (String(res.error).indexOf("غير موجود في الرحلة المصدر") === -1) {
@@ -19298,7 +19512,10 @@ function movePilgrimsBulk(authToken, idents, fromTrip, toTrip, force) {
     } catch (e) { errors.push((ident.name || "?") + ": " + (e.message || e)); }
   });
   clearAllCache();
-  return { success: errors.length === 0, moved: movedTotal, names: movedNames, errors: errors };
+  var accNoteB = '';
+  if (movedTotal) { _tripSnapTake_(String(fromTrip || '').trim(), bulkSess.username, 'نقل ' + movedTotal + ' معتمر إلى «' + toTrip + '»'); _tripSnapTake_(String(toTrip || '').trim(), bulkSess.username, 'استلام ' + movedTotal + ' معتمر من «' + fromTrip + '»'); }   // ↩️ (V4.343)
+  if (movedTotal) { try { accNoteB = _accAfterPilgrimsMoved_(Object.keys(movedClientsAll), String(fromTrip || '').trim(), String(toTrip || '').trim(), bulkSess.username, authToken).note; } catch (eAccB) { Logger.log('acc after bulk move: ' + eAccB.message); } }
+  return { success: errors.length === 0, moved: movedTotal, names: movedNames, errors: errors, accNote: accNoteB };
 }
 
 /** تخصيص مجمّع: يخصص عدة معتمرين من السجل العام لرحلة ويجمع النتائج */
@@ -19374,6 +19591,7 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
       _noClientNames_.slice(0, 12).join("، ") + (_noClientNames_.length > 12 ? " …" : ""));
   }
 
+  _tripSnapEnsureBase_(tripName, session.username);   // ↩️ (V4.343) لقطة أساس قبل أول تعديل مُلتقَط
   var sheet = _getPilgrimsSheet_();
   var lastRow = sheet.getLastRow();
 
@@ -19525,6 +19743,7 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
   catch (eSync) { Logger.log('acc sync failed: ' + eSync); }
 
   var conflicts = _checkTripConflicts_(tripName, pilgrims);
+  _tripSnapTake_(tripName, session.username, 'حفظ الكشف');   // ↩️ (V4.343)
   return { success: true, count: pilgrims.length , conflicts: conflicts, accSync: accSync };
 }
 

@@ -557,6 +557,19 @@ function glBootstrap(authToken, knownVer) {
     csPend: _glCsPendTotal_(), pendingCount: (function () { try { return _glPendingCount_(); } catch (e) { return 0; } })(), tripMode: (function () { try { return _glTripMode_(); } catch (e) { return false; } })()
   };
 }
+// 🏦 (V4.343) المعلّق لكل بنك (لبطاقات شاشة الأرصدة): حركات مرحّلة تاريخ استحقاقها (أو تاريخها) بعد اليوم = إيداعات/تحويلات لم تُتَح بعد
+function glBankPending(authToken) {
+  _glPerm_(authToken, 'view');
+  var accs = _glAccounts_().map, due = _glDueMap_(), todayK = _glDKey_(_glToday_()), out = {};
+  _glRows_('lines').forEach(function (r) {
+    if (_glStr_(r[3]) !== GL_ST_POSTED_) return;
+    var code = _glStr_(r[4]), a = accs[code]; if (!a || a.kind !== 'bank') return;
+    var dk = _glDKey_(due[_glStr_(r[0])] || '') || _glDKey_(_glDate_(r[2])); if (!dk || dk <= todayK) return;
+    var cur = _glCur_(r[7]), o = (out[code] = out[code] || { EGP: 0, SAR: 0, USD: 0 });
+    o[cur] = _glR2_(o[cur] + _glNum_(r[5]) - _glNum_(r[6]));
+  });
+  return { success: true, pending: out };
+}
 // أرصدة الحسابات الورقية المرحّلة حتى تاريخ (أو كلها): {code: {EGP, SAR, USD, base}} (الموجب = مدين)
 function _glBalances_(toDate) {
   var toK = toDate ? _glDKey_(toDate) : '', out = {};
@@ -5081,6 +5094,7 @@ function _glCsEntry_(x, code, cp, cur, fx, ov, split) {
     if (Math.abs(sum0 - amt) > 0.01) throw new Error('مجموع الأطراف المقسَّمة (' + _glFmtN_(sum0) + ') لا يساوي مبلغ الصف (' + _glFmtN_(amt) + ')');
     var e0 = { date: x.date, type: isIn ? T0[0] : T0[1], desc: desc0, lines: [{ account: code, debit: isIn ? amt : 0, credit: isIn ? 0 : amt, currency: cur, rate: rate, desc: desc0 }] };
     split.forEach(function (z) { var pz = z.amt > 0, az = Math.abs(z.amt); e0.lines.push({ account: z.account, debit: isIn ? (pz ? 0 : az) : (pz ? az : 0), credit: isIn ? (pz ? az : 0) : (pz ? 0 : az), currency: cur, rate: rate, desc: desc0 + ' (جزء ' + _glFmtN_(z.amt) + ')' }); });   // الجزء السالب (نقص عن المعتمد) على الجانب المعاكس
+    if (x.trip) { e0.lines.forEach(function (l, i) { if (i) l.trip = x.trip; }); }   // (V4.343) رحلة اختيارية على أسطر الأطراف
     return { e: e0, v: _glValidate_(e0, {}), cc: null, split: true };
   }
   var kd = (_glAccounts_().map[code] || {}).kind;   // (V4.262) نوع القيد حسب الحساب: خزينة/بنك/عهدة
@@ -5098,6 +5112,7 @@ function _glCsEntry_(x, code, cp, cur, fx, ov, split) {
     { account: code, debit: isIn ? amt : 0, credit: isIn ? 0 : amt, currency: cur, rate: mRate, desc: desc },
     { account: cp, debit: isIn ? 0 : oa, credit: isIn ? oa : 0, currency: oc, rate: cRate, desc: desc + (x.hint && x.desc ? ' — ' + x.hint : '') }] };
   if (oc !== cur) _glFxSmartDescSrv_(e.lines);
+  if (x.trip) { e.lines[1].trip = x.trip; }   // (V4.343) رحلة اختيارية على سطر الطرف المقابل
   return { e: e, v: _glValidate_(e, {}), cc: oc !== cur ? { cur: oc, amt: oa } : null };
 }
 // 💱 (V4.305) بيان تحويل العملة على سطري قيد بعملتين (جنيه + أجنبية) — نفس صيغة السندات العادية (glFxSmartDesc_ بالواجهة)
@@ -5306,7 +5321,7 @@ function glCsApproveAll(authToken, groups) {
   try {
     var created = 0, problems = [], left = 0, warns = [];
     (groups || []).forEach(function (g) {
-      var pick = {}, ov = {};
+      var pick = {}, ov = {}, tov = {};
       var lnk = {}, frc = {}, cc = {}, sus = {}, rep = {}, spl = {}, accsS = _glAccounts_();
       (g.items || []).forEach(function (it) {
         if (!it || !it.row) return;
@@ -5319,9 +5334,10 @@ function glCsApproveAll(authToken, groups) {
         if (sp0) { pick[+it.row] = sp0[0].account; spl[+it.row] = sp0; if (it.force) frc[+it.row] = 1; if (_glStr_(it.desc)) ov[+it.row] = _glStr_(it.desc); return; }   // ➗ (V4.333)
         if (_glStr_(it.account)) { pick[+it.row] = _glStr_(it.account); if (it.force) frc[+it.row] = 1; if (_glStr_(it.desc)) ov[+it.row] = _glStr_(it.desc); if (_glStr_(it.ccur)) cc[+it.row] = { cur: _glCur_(it.ccur), amt: _glNum_(it.camt) }; }   // (V4.305) مبلغ/عملة الطرف المقابل
       });
+      (g.items || []).forEach(function (it) { if (it && it.row && _glStr_(it.trip) && pick[+it.row]) tov[+it.row] = _glStr_(it.trip); });
       if (!Object.keys(pick).length && !Object.keys(lnk).length && !Object.keys(rep).length) return;
       try {
-        var r = _glCsSync_(_glStr_(g.code), session.username, { approve: pick, descOv: ov, link: lnk, force: frc, ccy: cc, susp: sus, repoint: rep, split: spl, pre: preMap[_glStr_(g.code)] });
+        var r = _glCsSync_(_glStr_(g.code), session.username, { approve: pick, descOv: ov, tripOv: tov, link: lnk, force: frc, ccy: cc, susp: sus, repoint: rep, split: spl, pre: preMap[_glStr_(g.code)] });
         created += (r.merged || []).length;
         created += (r.created || []).length; left += (r.pending || []).length;
         (r.problems || []).forEach(function (x) { problems.push({ code: g.code, row: x.row, msg: x.msg }); });
@@ -5572,8 +5588,8 @@ function _glDupRelinkSheetRow_(code, oldId, newId) {
 }
 function glCustSheetApprove(authToken, code, items) {
   var session = _glPerm_(authToken, 'edit', 'sheets');
-  var pick = {}, lnk = {}, frc = {}, cc = {}, sus = {}, susAcc = {}, rep = {}, spl = {}, accsS = _glAccounts_();
-  (items || []).forEach(function (it) { if (!it || !it.row) return; if (_glStr_(it.link)) { lnk[+it.row] = _glStr_(it.link); return; }
+  var pick = {}, lnk = {}, frc = {}, cc = {}, sus = {}, susAcc = {}, rep = {}, spl = {}, tov = {}, accsS = _glAccounts_();
+  (items || []).forEach(function (it) { if (!it || !it.row) return; if (_glStr_(it.trip)) tov[+it.row] = _glStr_(it.trip); if (_glStr_(it.link)) { lnk[+it.row] = _glStr_(it.link); return; }
     var sp0 = _glCsSplitNorm_(it.splits, accsS); if (sp0) { if (it.repoint) rep[+it.row] = sp0[0].account; else pick[+it.row] = sp0[0].account; spl[+it.row] = sp0; if (it.force) frc[+it.row] = 1; return; }   // ➗ (V4.333/334)
     if (it.susp) { sus[+it.row] = 1; susAcc[+it.row] = _glStr_(it.account); if (it.force) frc[+it.row] = 1; return; }   // ⏳ (V4.324) مبلغ معلق
     if (it.repoint && _glStr_(it.account)) { rep[+it.row] = _glStr_(it.account); return; }
@@ -5584,7 +5600,7 @@ function glCustSheetApprove(authToken, code, items) {
   var lock = _glLock_(); lock.waitLock(120000);
   try {
     Object.keys(sus).forEach(function (rw) { pick[rw] = _glCsSuspAcc_(susAcc[rw], session.username); });   // داخل القفل (قد يُنشأ حساب المعلقات)
-    return _glCsSync_(_glStr_(code), session.username, { approve: pick, link: lnk, force: frc, ccy: cc, susp: sus, repoint: rep, split: spl, pre: pre });   // (V4.278 / V4.305 مبلغ وعملة الطرف المقابل)
+    return _glCsSync_(_glStr_(code), session.username, { approve: pick, tripOv: tov, link: lnk, force: frc, ccy: cc, susp: sus, repoint: rep, split: spl, pre: pre });   // (V4.278 / V4.305 مبلغ وعملة الطرف المقابل)
   } finally { _glUnlock_(lock); }
 }
 function _glHbCustPays_() {
@@ -5750,6 +5766,7 @@ function _glCsSync_(code, user, opts) {
     if (c.linkOnly) { fW.push({ x: c.x, id: c.linkOnly }); if (c.okLink) (out.merged = out.merged || []).push({ row: c.x.row, id: c.linkOnly }); else out.hb.push({ row: c.x.row, id: c.linkOnly }); return; }
     var crk = c.x.rk || c.x.row;
     if (opts.descOv && opts.descOv[crk]) c.x = Object.assign({}, c.x, { desc: opts.descOv[crk] });   // (V4.268) بيان معدَّل بشاشة الاستكمال
+    if (opts.tripOv && opts.tripOv[crk]) c.x = Object.assign({}, c.x, { trip: opts.tripOv[crk] });   // (V4.343) رحلة اختيارية
     try { var b = _glCsEntry_(c.x, code, c.cp, c.x.cur || cur, fx, c.ccy, c.split); b.c = c; built.push(b); }
     catch (err) { out.problems.push({ row: c.x.row, date: c.x.date, desc: c.x.desc, inAmt: c.x.inAmt, outAmt: c.x.outAmt, hint: c.x.hint, msg: err.message }); }
   });
@@ -5757,7 +5774,7 @@ function _glCsSync_(code, user, opts) {
     var first = _glNextEntrySeq_(built.length), eRows = [], lRows = [], ccyQ = [];
     built.forEach(function (b, i) {
       var id = b.id = _glEntryId_(first + i);
-      var w = _glWriteEntry_(b.v, { id: id, seq: first + i, status: GL_ST_POSTED_, sourceKey: 'CUST:' + code, desc: b.e.desc, ref: 'cs:' + b.c.x.hash }, user);
+      var w = _glWriteEntry_(b.v, { id: id, seq: first + i, status: GL_ST_POSTED_, sourceKey: 'CUST:' + code, desc: b.e.desc, trip: b.c.x.trip || '', ref: 'cs:' + b.c.x.hash }, user);
       eRows.push(w.eRow); lRows = lRows.concat(w.lRows);
       fW.push({ x: b.c.x, id: id });
       out.created.push({ row: b.c.x.row, id: id, date: b.c.x.date, desc: b.e.desc, inAmt: b.c.x.inAmt, outAmt: b.c.x.outAmt, account: b.c.cp, cc: b.cc || null, ccSrc: (b.c.ccy && b.c.ccy.src) || '' });
