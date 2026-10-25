@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.340";
+var APP_VERSION = "4.341";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14565,6 +14565,15 @@ function getClientAccount(authToken, client) {
 
   // 📘 (V4.222) رقم قيد إيرادات كل رحلة بالحسابات العامة (وهل له تغيير بانتظار الاعتماد)
   var glLinks = null; try { if (typeof _glClientLinks_ === 'function') glLinks = _glClientLinks_(client); } catch (eGl) { glLinks = null; }
+  // 🧾 (V4.341) رقم السند + الطرف المقابل لكل دفعة (للشاشة فقط)
+  try {
+    if (glLinks && typeof _glRefsFor_ === 'function' && payments.length) {
+      var _cnm = (typeof _glNorm_ === 'function') ? _glNorm_(client) : client;
+      var _rf = _glRefsFor_(payments.map(function (p) { var gm = glLinks.__pay && glLinks.__pay[p.id]; return { k: p.id, eid: p.glId || (gm && gm.id) || '', sk: 'AUTO:CP:' + p.id,
+        own: function (code, a) { return !!(a && a.kind === 'client' && a.link && _glNorm_(a.link) === _cnm); } }; }));
+      payments.forEach(function (p) { var x = _rf[p.id]; if (x) { p.glVch = x.voucher; p.glCp = x.cp; } });
+    }
+  } catch (eRf) {}
   return { success: true, client: client, trips: stats.rows, noTripCount: stats.noTripCount,
            items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips, mergeGroups: mergeGroups, tripRefs: tripRefs, gl: glLinks };
 }
@@ -25833,6 +25842,15 @@ function getAgentAccount(authToken, agent, filters) {
     var g = _vzGlSrc_(x.notes); if (!g) return;
     x.glId = g; x.notes = _mfStr_(x.notes).replace(/\s*⟦src:gl-[^⟧]+⟧\s*/g, ' ').trim();
   });
+  // 🧾 (V4.341) رقم القيد + السند + الطرف المقابل لكل بند/دفعة بحساب الوكيل (للشاشة فقط)
+  try {
+    if (typeof _glRefsFor_ === 'function' && _glSSId_()) {
+      var _arf = _glRefsFor_(items.map(function (x) { return { k: 'I' + x.id, eid: x.glId || '', sk: 'AUTO:AI:' + x.id, own: function (code, a) { return !!(a && a.kind === 'agent'); } }; })
+        .concat(pays.map(function (x) { return { k: 'P' + x.id, eid: x.glId || '', sk: 'AUTO:AP:' + x.id, own: function (code, a) { return !!(a && a.kind === 'agent'); } }; })));
+      items.forEach(function (x) { var r = _arf['I' + x.id]; if (r) { x.glEntry = r.entry; x.glVch = r.voucher; x.glCp = r.cp; } });
+      pays.forEach(function (x) { var r = _arf['P' + x.id]; if (r) { x.glEntry = r.entry; x.glVch = r.voucher; x.glCp = r.cp; } });
+    }
+  } catch (eArf) {}
   pays.sort(function (a, b) { var x = _mfMs_(a.date), y = _mfMs_(b.date); return (isNaN(x) ? 0 : x) - (isNaN(y) ? 0 : y); });
   // الشركات التي يضمّها هذا الحساب فعلياً (تُعرض بترويسة الكشف)
   var comps = {}; files.forEach(function (f) { if (f.company) comps[f.company] = 1; });

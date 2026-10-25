@@ -7191,53 +7191,6 @@ function _glHbPreMir_() {
   var m = {}; try { JSON.parse(raw || '[]').forEach(function (id) { m[id] = 1; }); } catch (e2) {}
   _GL_PREMIR_MEMO_ = { raw: raw, map: m }; return m;
 }
-function glHbPreCutScan(authToken) {
-  var session = _glPerm_(authToken, 'view', 'hb');
-  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
-  var cutK = _glHbOnlyK_(); if (!cutK) throw new Error('لم يُفعَّل «تاريخ القطع» بعد');
-  var parties = _glHbMirrorParties_(), fx = _glFxDailyMap_(), pre = _glHbPreMir_(), mirrored = {};
-  _glRows_('hbmir').forEach(function (r) { mirrored[_glStr_(r[0])] = 1; });
-  var pays = []; try { pays = (_glHbRead_().pays || []).filter(function (p) { return !/^GL:/.test(p.id); }); } catch (eH) {}
-  var day = function (k) { return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : 0; };
-  var out = [];
-  _glRows_('entries').forEach(function (r) {
-    var id = _glStr_(r[0]), sk = _glStr_(r[6]), k = _glDKey_(_glDate_(r[2]));
-    if (_glStr_(r[5]) !== GL_ST_POSTED_ || (sk && !/^(VCH|CUST):/.test(sk)) || !k || k >= cutK || mirrored[id]) return;
-    var rows = _glHbMirrorRowsPre_(id, cutK, parties, fx); if (!rows.length) return;
-    var e = _glEntryObj_(r);
-    rows.forEach(function (w) {
-      var amt = _glR2_(w[3]), dd = null;
-      pays.forEach(function (p) { if (p.party === w[1] && Math.abs(_glR2_(p.amount) - amt) < 0.01 && Math.abs(day(_glDKey_(p.date)) - day(k)) <= 3) dd = { id: p.id, date: _glDate_(p.date), dir: p.dir }; });
-      out.push({ id: id, voucherNo: e.voucherNo, date: e.date, party: w[1], dir: w[2], amt: amt, note: _glStr_(w[4]), src: sk ? 'شيت' : 'سند', dup: dd });
-    });
-  });
-  out.sort(function (a, b) { return _glDKey_(b.date).localeCompare(_glDKey_(a.date)); });
-  return { success: true, from: _glSettings_().hb_gl_only_from || '', rows: out.slice(0, 800), n: out.length };
-}
-// نفس _glHbMirrorRows_ لكن بتجاوز قاعدة «قبل القطع» (للمعاينة قبل الاختيار)
-function _glHbMirrorRowsPre_(id, cutK, parties, fx) {
-  var pm = _glHbPreMir_(), had = pm[id]; pm[id] = 1;
-  try { return _glHbMirrorRows_(id, cutK, parties, fx, null, false); } finally { if (!had) delete pm[id]; }
-}
-function glHbPreCutApply(authToken, ids) {
-  var session = _glPerm_(authToken, 'edit', 'hb');
-  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
-  ids = (ids || []).map(_glStr_).filter(String); if (!ids.length) throw new Error('اختر قيداً واحداً على الأقل');
-  var lock = _glLock_(); lock.waitLock(60000);
-  try {
-    var cutK = _glHbOnlyK_(); if (!cutK) throw new Error('لم يُفعَّل «تاريخ القطع» بعد');
-    var list = []; try { list = JSON.parse(_glSettings_().hb_premir || '[]'); } catch (e0) {}
-    ids.forEach(function (id) { if (list.indexOf(id) < 0) list.push(id); });
-    _glSetSetting_('hb_premir', JSON.stringify(list)); _GL_SET_MEMO_ = null;
-    var parties = _glHbMirrorParties_(), fx = _glFxDailyMap_(), c = _glHbCfg_(), n = 0, rows = 0, ss = c.ssId ? SpreadsheetApp.openById(c.ssId) : null, by = _glHbStaffName_(session.username);
-    ids.forEach(function (id) {
-      var r = _glHbMirrorSync_(id, { parties: parties, fx: fx, ss: ss, isNew: true, by: by, notify: false });
-      if (r && r.written) { n++; rows += r.written; }
-    });
-    logChange_(session.username, 'نسخ قيود ما قبل القطع لكشف الفنادق', 'GL:hbprecut', '-', '-', n + ' قيد · ' + rows + ' صف');
-    return { success: true, mirrored: n, rows: rows };
-  } finally { _glUnlock_(lock); }
-}
 function _glHbMirrorParties_() {
   var o = {}, accs = _glAccounts_().map;
   _glRows_('hbmap').forEach(function (r) {
@@ -7248,8 +7201,6 @@ function _glHbMirrorParties_() {
   });
   return o;
 }
-// allowConv: (V4.305) التحويل القديم لسطر الطرف بغير الريال بسعر النظام — للقيود المنسوخة سابقاً فقط (حفاظاً على كشوف الفنادق
-// القائمة)؛ أي قيد جديد بسطر طرف بالجنيه/الدولار لا يُنسخ لكشف الفندق (لا تحويل تلقائي) ويُعاد اسم الطرف في out.skipped
 /* 🧾 (V4.338) كشف حساب الفندق: رقم قيد الحسابات العامة لكل دفعة منسوخة + رقم إيصال سند القبض/الصرف (REC-/PAY-) تحته بحجم صغير.
    خريطة «رقم القيد ⇒ رقم السند» تُبنى من مفاتيح مصدر القيود VCH:… (دفعات النقدية فقط لها سند). */
 function _glHbVoucherMap_() {
@@ -7275,7 +7226,8 @@ function _glHbPayRefs_(pays) {
     want['AUTO:HBP:' + id] = id;
     var lk = String(p.link || ''); if (lk && !/^GL:/.test(lk)) want['AUTO:HBL:' + lk] = id;
   });
-  var vm = {}, info = {};
+  var vm = {}, info = {}, plink = {}, pnoent = {};
+  try { plink = JSON.parse(_glSettings_().hb_paylink || '{}') || {}; pnoent = JSON.parse(_glSettings_().hb_paynoent || '{}') || {}; } catch (eL) {}
   _glRows_('entries').forEach(function (r) {
     var sk = _glStr_(r[6]), eid = _glStr_(r[0]), st = _glStr_(r[5]);
     info[eid] = { sk: sk, st: st, type: _glStr_(r[3]) };
@@ -7283,6 +7235,8 @@ function _glHbPayRefs_(pays) {
     if (st === GL_ST_VOID_) return;
     if (want[sk] && !byPid[want[sk]]) byPid[want[sk]] = eid;
   });
+  // 🔗 (V4.341) ربط يدوي اختاره المستخدم (دفعة ⇒ قيد) — له الأولوية على التلقائي ما دام القيد حياً
+  (pays || []).forEach(function (p) { var id = String(p.id || ''), le = plink[id]; if (le && info[le] && info[le].st !== GL_ST_VOID_) { byPid[id] = le; how[id] = 'manual'; } });
   var parties = {}; try { parties = _glHbMirrorParties_(); } catch (e0) {}
   var accs = _glAccounts_().map;
   // 🔎 (V4.340) دفعة بلا قيد مرتبط (قيدها التلقائي أُلغي أو استُبدل بقيد مستورد من الـ ERP أو قيد آخر): مطابقة بالطرف + الاتجاه + المبلغ + التاريخ
@@ -7326,7 +7280,71 @@ function _glHbPayRefs_(pays) {
     });
     out[id] = { entry: eid, voucher: vm[eid] || '', cp: cp.join('، '), how: how[id] || '' };
   });
+  // دفعة بلا قيد: تُوسَم «لا تحتاج قيداً» لو قرّر المستخدم ذلك (وإلا تظهر لها أزرار الحل بالكشف)
+  (pays || []).forEach(function (p) { var id = String(p.id || ''); if (id && !out[id] && pnoent[id]) out[id] = { entry: '', voucher: '', cp: '', how: 'ignored' }; });
   return out;
+}
+/* 🧾 (V4.341) رقم السند + الطرف المقابل لقيود دفعات حسابات العملاء/الوكلاء (للشاشة فقط — لا تدخل الكشوف المطبوعة/المصدَّرة).
+   list: [{k, eid, sk, own}] — eid رقم قيد معلوم، أو sk مفتاح مصدر القيد (AUTO:CP:<id>…) يُبحث عنه؛ own(code) ⇒ أسطر الطرف نفسه تُستبعد من «الطرف المقابل».
+   يُرجع {k: {entry, voucher, cp}} بمسح واحد للقيود وللأسطر المعنية فقط. */
+function _glRefsFor_(list) {
+  var wantSk = {}, out = {}, byK = {}, vm = {}, need = {};
+  (list || []).forEach(function (x) { if (x.eid) byK[x.k] = x.eid; else if (x.sk) wantSk[x.sk] = x.k; });
+  _glRows_('entries').forEach(function (r) {
+    var sk = _glStr_(r[6]), eid = _glStr_(r[0]);
+    var m = /^VCH:(.+)$/.exec(sk); if (m) vm[eid] = m[1];
+    if (wantSk[sk] && _glStr_(r[5]) !== GL_ST_VOID_ && !byK[wantSk[sk]]) byK[wantSk[sk]] = eid;
+  });
+  Object.keys(byK).forEach(function (k) { need[byK[k]] = 1; });
+  var accs = _glAccounts_().map, linesBy = {};
+  _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (need[id]) (linesBy[id] = linesBy[id] || []).push(l); });
+  (list || []).forEach(function (x) {
+    var eid = byK[x.k]; if (!eid) return;
+    var seen = {}, cp = [];
+    (linesBy[eid] || []).forEach(function (l) { var code = _glStr_(l[4]); if (seen[code]) return; seen[code] = 1; if (x.own && x.own(code, accs[code])) return; cp.push((accs[code] || {}).name || code); });
+    out[x.k] = { entry: eid, voucher: vm[eid] || '', cp: cp.join('، ') };
+  });
+  return out;
+}
+/* 🛠️ (V4.341) حل «دفعة بلا قيد مطابق» بكشف الفندق: ① مرشَّحات قريبة (نفس الطرف والاتجاه، مبلغ/تاريخ قريب) لربط الدفعة بقيد منها ② إنشاء قيدها
+   التلقائي AUTO:HBP بالحسابات العامة ③ تعليمها «لا تحتاج قيداً». كل ذلك بسجل ربط بإعدادات الحسابات (hb_paylink / hb_paynoent) بلا لمس شيتات الحجوزات. */
+function _glHbPayFind_(payId) {
+  var c = _glHbCfg_(); if (!c.ssId) throw new Error('برنامج الحجوزات غير مربوط');
+  var sh = SpreadsheetApp.openById(c.ssId).getSheetByName(c.pay); if (!sh || sh.getLastRow() < 2) return null;
+  var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 10).getValues();
+  for (var i = 0; i < vals.length; i++) if (_glStr_(vals[i][7]) === _glStr_(payId)) {
+    var r = vals[i]; return { id: _glStr_(r[7]), party: _glStr_(r[1]), date: _glAutoDate_(r[0]), dir: _glStr_(r[2]), amount: _glR2_(parseFloat(r[3]) || 0), note: _glStr_(r[4]) };
+  }
+  return null;
+}
+function _glHbPayCands_(payId) {
+  var p = _glHbPayFind_(payId); if (!p) throw new Error('الدفعة غير موجودة');
+  var parties = _glHbMirrorParties_(), accs = _glAccounts_().map, pk = _glHbKey_(p.party), codes = {}, taken = {}, DENY = /^(AUTO:(HB:|HBOPEN|TRIP:|CI:|CAT|TR|MF|VZ|OPEN|CP:)|CLOSE:)/;
+  Object.keys(parties).forEach(function (c) { if (_glHbKey_(parties[c]) === pk) codes[c] = 1; });
+  var info = {}, vm = {};
+  _glRows_('entries').forEach(function (r) { var eid = _glStr_(r[0]), sk = _glStr_(r[6]); info[eid] = { sk: sk, st: _glStr_(r[5]), type: _glStr_(r[3]), desc: _glStr_(r[4]) }; var m = /^VCH:(.+)$/.exec(sk); if (m) vm[eid] = m[1]; });
+  var plink = {}; try { plink = JSON.parse(_glSettings_().hb_paylink || '{}') || {}; } catch (e) {}
+  Object.keys(plink).forEach(function (k) { if (k !== p.id) taken[plink[k]] = 1; });
+  var day = function (k) { return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : 0; }, pd = day(_glDKey_(p.date)), sar = _glRates_().SAR || 1, out = [], seen = {};
+  _glRows_('lines').forEach(function (l) {
+    var code = _glStr_(l[4]); if (!codes[code]) return;
+    var eid = _glStr_(l[0]), e = info[eid]; if (!e || e.st !== GL_ST_POSTED_ || DENY.test(e.sk) || e.type === 'قيد افتتاحي' || e.type === 'قيد إقفال' || seen[eid] || taken[eid]) return;
+    var net = _glNum_(l[5]) - _glNum_(l[6]); if (Math.abs(net) < 0.005) return;
+    if ((net < 0 ? 'استلمنا منه' : 'دفعنا له') !== (/استلمنا/.test(p.dir) ? 'استلمنا منه' : 'دفعنا له')) return;
+    var cur = _glCur_(l[7]), amt = cur === 'SAR' ? Math.abs(net) : Math.abs(_glNum_(l[9]) - _glNum_(l[10])) / sar, dd = Math.abs(day(_glDKey_(_glDate_(l[2]))) - pd);
+    if (dd > 60) return;
+    seen[eid] = 1; out.push({ entry: eid, date: _glDate_(l[2]), amount: _glR2_(amt), cur: cur, type: e.type, desc: e.desc, voucher: vm[eid] || '', score: Math.abs(amt - p.amount) / Math.max(1, p.amount) * 100 + dd });
+  });
+  out.sort(function (a, b) { return a.score - b.score; });
+  var cpOf = {}; var need = {}; out.slice(0, 10).forEach(function (x) { need[x.entry] = 1; });
+  _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (!need[id]) return; var code = _glStr_(l[4]); if (codes[code]) return; (cpOf[id] = cpOf[id] || {})[((accs[code] || {}).name || code)] = 1; });
+  return { pay: p, cands: out.slice(0, 10).map(function (x) { x.cp = Object.keys(cpOf[x.entry] || {}).join('، '); return x; }) };
+}
+function _glHbPayMapSet_(setting, payId, val) {
+  var o = {}; try { o = JSON.parse(_glSettings_()[setting] || '{}') || {}; } catch (e) {}
+  if (val) o[payId] = val; else delete o[payId];
+  var ks = Object.keys(o); if (ks.length > 600) { var keep = {}; ks.slice(-600).forEach(function (k) { keep[k] = o[k]; }); o = keep; }
+  _glSetSetting_(setting, JSON.stringify(o));
 }
 /* 🔍 (V4.338) دفعات مشتبه بتكرارها بسجل دفعات الحجوزات: نفس الطرف + نفس التاريخ + نفس المبلغ والاتجاه (نسخة قيد حسابات عامة مع دفعة مسجَّلة
    بالحجوزات، أو نسختان). لكل صف: مصدره (قيد/حجوزات) ورقم القيد والسند والطرف المقابل — ليقرر المستخدم: حذف/دمج/إبقاء أحدها/تجاهل. */

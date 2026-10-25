@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.340  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.341  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -5568,6 +5568,7 @@ input[type="date"]:not(:focus):not(:valid) {
   .gl-sec-h{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-bottom:3px solid; padding:4px 2px 6px; margin-bottom:8px; }
   .gl-sec-h b{ font-size:15px; }
   .gl-bgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+  @media print{ .acc-screen-only, .vz-screen-only{ display:none !important; } }
   .gl-bcard{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:9px 11px; cursor:pointer; box-shadow:0 1px 4px rgba(15,23,42,.05); }
   .gl-bcard:hover{ border-color:#1e3d59; box-shadow:0 4px 12px rgba(15,23,42,.1); }
   .gl-bcard-h{ font-weight:800; font-size:13px; margin-bottom:4px; display:flex; justify-content:space-between; gap:6px; }
@@ -8147,7 +8148,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.340";
+var CLIENT_APP_VERSION = "4.341";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -26846,7 +26847,7 @@ function _accRender_() {
           return '<tr' + (fx ? ' style="background:#fefce8;"' : '') + (canEdit ? ' ondblclick="_accPayEdit_(\'' + p.id + '\')" style="cursor:pointer;' + (fx ? 'background:#fefce8;' : '') + '" title="انقر مرتين للتعديل"' : '') + '>' +
             (canEdit ? '<td class="text-center"><input type="checkbox" class="acc-pay-chk" data-id="' + p.id + '"></td>' : '') +
             // 📏 (V4.45) الرقم التسلسلي والتاريخ بجوار بعضهما على سطر واحد بدل سطرين (كان بينهما <br>)
-            '<td class="text-center" style="direction:ltr;">' + esc(p.date || '-') + _accPayGlChip_(p.id, p.glId) + '</td>' +
+            '<td class="text-center" style="direction:ltr;">' + esc(p.date || '-') + _accPayGlChip_(p.id, p.glId) + _accPayRefHtml_(p) + '</td>' +
             '<td class="text-start">' + (fx ? '💱 ' : '') + esc(p.desc || '-') + (fx ? ' <b>(= ' + _accFmt_(p.amount * p.rate) + ' ' + fxDst + ')</b>' : '') + '</td>' +
             '<td class="fw-bold text-center" style="direction:ltr;">' + _accFmt_(p.amount) + '</td><td class="text-center">' + _accCur_(p.currency) + '</td>' +
             '<td class="text-center text-nowrap">' +
@@ -30018,6 +30019,11 @@ function _accGlChip_(trip) {
 }
 // 📘 (V4.259) رقم قيد الدفعة بالحسابات العامة بجوار تاريخها (ضغطة تفتح القيد)
 // 🔁 (V4.330) لا رقم إيصال تلقائي قديم: بجوار كل دفعة رقم قيدها المستندي من الحسابات العامة (من العلامة لو منسوخة من قيد، وإلا قيد AUTO:CP)
+// 🧾 (V4.341) رقم السند + الطرف المقابل بشاشة حساب العميل فقط — الكشوف المطبوعة/المصدَّرة تُبنى من بيانات أخرى ولا تتضمنه
+function _accPayRefHtml_(p) {
+  if (!p || (!p.glVch && !p.glCp)) return '';
+  return '<div class="acc-screen-only" style="direction:rtl;font-size:10px;color:#475569;font-weight:400;line-height:1.3;">' + (p.glVch ? '🧾 ' + escapeHtml_(p.glVch) : '') + (p.glVch && p.glCp ? ' · ' : '') + (p.glCp ? '↔ ' + escapeHtml_(p.glCp) : '') + '</div>';
+}
 function _accGlPull_(restore) {
   showToast('⏳ جاري جلب الدفعات من الحسابات العامة…');
   google.script.run.withSuccessHandler(function (r) {
@@ -45974,12 +45980,12 @@ function vzAccBuildRows_() {
   (r.items || []).forEach(function (x) {
     var v = mfNum(x.value);
     rows.push({ kind: 'item', id: x.id, entryNo: x.glId || x.entryNo, date: x.date || '', groupRef: x.glId ? '📘 قيد' : '—', desc: (x.glId ? '📘 ' : '') + (x.desc || '—'),
-      count: '', price: '', debit: x.isCredit ? 0 : v, credit: x.isCredit ? v : 0, posting: x.notes || '—', gl: x.glId || '' });
+      count: '', price: '', debit: x.isCredit ? 0 : v, credit: x.isCredit ? v : 0, posting: x.notes || '—', gl: x.glId || '', glEntry: x.glEntry || '', glVch: x.glVch || '', glCp: x.glCp || '' });
   });
   (r.payments || []).forEach(function (x) {
     var a = mfNum(x.amount);   // دفعة سالبة (استرداد من الوكيل) تظهر بعمود «دائن»
     rows.push({ kind: 'pay', id: x.id, entryNo: x.glId || x.entryNo, date: x.date, groupRef: x.glId ? '📘 دفعة' : 'دفعة', desc: (x.glId ? '📘 ' : '') + 'دفعة' + (x.notes ? ' — ' + x.notes : ''),
-      count: '', price: '', debit: a < 0 ? -a : 0, credit: a > 0 ? a : 0, posting: x.glId ? ('من الحسابات العامة — القيد ' + x.glId) : (x.notes || '—'), gl: x.glId || '' });
+      count: '', price: '', debit: a < 0 ? -a : 0, credit: a > 0 ? a : 0, posting: x.glId ? ('من الحسابات العامة — القيد ' + x.glId) : (x.notes || '—'), gl: x.glId || '', glEntry: x.glEntry || '', glVch: x.glVch || '', glCp: x.glCp || '' });
   });
   (VZ._accTransport || []).forEach(function (x) {
     if (f.company && x.company !== f.company) return;
@@ -46047,7 +46053,7 @@ function vzAccRender() {
           ('<input type="checkbox" ' + (VZ._accSel[selKey(x)] ? 'checked' : '') + ' onchange="vzAccSelToggle(\'' + selKey(x) + '\',this.checked)">') : '') + '</td>';
         case 'entryNo': return '<td onclick="event.stopPropagation();">' + (x.gl
           ? '<a href="#" class="vz-gl-link" title="منسوخ تلقائياً من هذا القيد بالحسابات العامة — اضغط لفتحه" onclick="vzAccOpenGl(\'' + vzJs(x.gl) + '\');return false;" style="font-weight:800;color:#1d4ed8;white-space:nowrap;">📘 ' + vzEsc(x.gl) + '</a>'
-          : '<input class="vz-inline-inp" value="' + vzEsc(x.entryNo || '') + '" onchange="vzAccEntryNoEdit(\'' + x.kind + '\',\'' + vzJs(x.id) + '\',this.value)">') + '</td>';
+          : '<input class="vz-inline-inp" value="' + vzEsc(x.entryNo || '') + '" onchange="vzAccEntryNoEdit(\'' + x.kind + '\',\'' + vzJs(x.id) + '\',this.value)">') + vzRefLine_(x) + '</td>';
         case 'date': return '<td dir="ltr">' + vzEsc(x.date || '—') + '</td>';
         case 'groupRef': return '<td>' + vzEsc(x.groupRef || '—') + '</td>';
         case 'status': return '<td>' + (x.status ? _vzStatusBadge(x.status) : '—') + '</td>';
@@ -46163,6 +46169,11 @@ function vzAccSelToggleAll(on) {
   vzAccRender(); vzAccActBar_();
 }
 // 📘 (V4.328) فتح قيد الحسابات العامة الذي نُسخ منه السطر (فوق نافذة كشف الوكيل) — يحتاج صلاحية عرض الحسابات العامة
+// 🧾 (V4.341) سطر صغير بشاشة كشف الوكيل فقط: رقم القيد (للصفوف المسجَّلة من الشاشة) + السند + الطرف المقابل — لا يدخل الطباعة/الإكسيل
+function vzRefLine_(x) {
+  if (!x || (!x.glVch && !x.glCp && !(x.glEntry && !x.gl))) return '';
+  return '<div class="vz-screen-only" style="font-size:10px;color:#475569;line-height:1.3;white-space:normal;">' + (x.glEntry && !x.gl ? '📘 ' + vzEsc(x.glEntry) + ' ' : '') + (x.glVch ? '🧾 ' + vzEsc(x.glVch) + ' ' : '') + (x.glCp ? '↔ ' + vzEsc(x.glCp) : '') + '</div>';
+}
 function vzAccOpenGl(id) {
   if (!id || typeof glShowEntry !== 'function') return;
   if (typeof GL !== 'undefined' && !GL.ready && typeof glRefreshData === 'function') { showToast('⏳ جاري فتح القيد…'); glRefreshData(function () { glShowEntry(id); }); }
@@ -53620,7 +53631,7 @@ function glHbHpayView() {
         'الدفعات المسجَّلة ببرنامج الحجوزات قبل التاريخ تبقى كما ضبطتها «دفعات برنامج الحجوزات تبدأ من». مزامنة شيت العهدة تبقى تعمل كما هي.</div>' +
       '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">من تاريخ</label><div style="width:140px;">' + glDateInput('glHbOnlyD', c.hbGlOnly || '') + '</div></div>' +
       '<button class="btn btn-primary btn-sm fw-bold" onclick="glHbOnlySet(this,false)">💾 تطبيق</button>' +
-      (c.hbGlOnly ? '<button class="btn btn-outline-secondary btn-sm" onclick="glHbOnlyResync(this)" title="إعادة كتابة كل النسخ من القيود الحالية">🔁 إعادة النسخ</button><button class="btn btn-outline-danger btn-sm" onclick="glHbOnlySet(this,true)">إيقاف</button>' : '') +
+      (c.hbGlOnly ? '<button class="btn btn-outline-danger btn-sm" onclick="glHbOnlySet(this,true)">إيقاف</button>' : '') +
       '</div><div id="glHbOnlyRes" class="small mt-1"></div></div>' : '');
   var sel = document.getElementById('glHbpParty');
   if (sel) { if (GL._hbpParty) sel.value = GL._hbpParty; sel.addEventListener('change', function () { GL._hbpParty = this.value; glHbpBal(); }); }
@@ -53672,11 +53683,6 @@ function glHbOnlySet(btn, off) {
     glRenderHotels();
   }, function (e) { btn.disabled = false; if (out) out.textContent = ''; _showPopup(e.message || String(e), 'error'); });
 }
-function glHbOnlyResync(btn) {
-  btn.disabled = true;
-  glRun('glHbMirrorResync', [], function (res) { btn.disabled = false; _showPopup('✅ قيود منسوخة: ' + (res.mirrored || 0) + ' (' + (res.rows || 0) + ' صف)' + (res.orphans ? ' · حُذف ' + res.orphans + ' صف يتيم' : ''), 'success'); glHbpList(); },
-    function (e) { btn.disabled = false; _showPopup(e.message || String(e), 'error'); });
-}
 function glHbLoad(force) {
   if (force) { GL.hb = null; var b = document.getElementById('glHbBox'); if (b) b.innerHTML = '<div class="gl-card text-muted">⏳ جاري قراءة برنامج الحجوزات…</div>'; }
   glRun('glHbState', [], function (res) { GL.hb = res; GL._hbEdit = {}; GL._hbPEdit = {}; GL._hbTEdit = {}; if (GL.tab === 'hotels') glRenderHotels(); },
@@ -53691,7 +53697,7 @@ function glHbSetupView() {
     (H.on ? '<div class="gl-card"><div class="gl-kpis" style="grid-template-columns:repeat(6,1fr);">' + k(st.bookings, 'حجز (' + st.active + ' غير لاغٍ)') + k(st.pays, 'دفعة') +
       k(st.mapped + ' / ' + st.parties, 'اسم مربوط بحساب', st.mapped < st.parties ? '#b45309' : '#166534') + k(st.reviewed, 'دفعة مراجَعة') + k(st.entries, 'قيد بالدفتر', '#1d4ed8') + k((H.tripRows || []).length, 'حجز رحلات') + '</div>' +
       '<div class="d-flex gap-2 flex-wrap align-items-center"><span class="small">الخطوات: ① خريطة الحسابات ② مراجعة الدفعات ③ ربط الرحلات ④ المزامنة ⑤ المطابقة</span>' +
-      (GL.can.add ? '<button class="btn btn-success btn-sm fw-bold ms-auto" onclick="glHbSyncUI(this)">🔄 مزامنة القيود الآن</button>' : '') + '</div></div>' : '') +
+      '<button class="btn btn-outline-success btn-sm ms-auto" onclick="glTab(\'auto\')" title="مزامنة القيود التلقائية (ومنها حجوزات الفنادق ودفعاتها) زرٌّ واحد بتبويب ⚙️ التلقائية — وتتم أيضاً لحظياً عند كل حفظ">🔄 المزامنة ← ⚙️ التلقائية</button>' + '</div></div>' : '') +
     '<div class="gl-card mt-2" style="max-width:860px;"><b>🔗 ملف برنامج الحجوزات</b>' +
       '<div class="gl-note mt-1">الصق رابط ملف Google Sheets الخاص ببرنامج الحجوزات (الذي فيه «سجل الدفعات» و«بيانات الحسابات»). لو كانت شيتات الحجوزات في ملف آخر ضع رابطه في الخانة الثانية. يلزم أن يكون حساب هذا السكربت يملك صلاحية فتح الملف.</div>' +
       '<div class="row g-2">' + f('glHbSs', 'رابط/معرّف ملف برنامج الحجوزات', c.ssId, 'col-md-8') + f('glHbSrc', 'ملف شيتات الحجوزات (اختياري)', c.srcId) +
@@ -53908,18 +53914,6 @@ function glHbSetupUI(btn, disc) {
   };
   if (disc) askConfirm_('فصل برنامج الحجوزات؟ في المزامنة التالية تُلغى كل قيود الحجوزات بالدفتر (الخريطة والمراجعات تبقى محفوظة).', go, { title: 'فصل الربط', danger: true });
   else go();
-}
-function glHbSyncUI(btn) {
-  askConfirm_('مزامنة القيود التلقائية الآن (تشمل حجوزات الفنادق ودفعاتها)؟', function () {
-    btn.disabled = true; btn.innerHTML = '⏳ جاري المزامنة…';
-    glRun('glAutoSync', [], function (res) {
-      btn.disabled = false; btn.innerHTML = '🔄 مزامنة القيود الآن';
-      _showPopup('✅ جديد ' + res.created + ' · معدّل ' + res.updated + ' · ملغى ' + res.voided + ' · بلا تغيير ' + res.same + (res.errors.length ? '\n⛔ أخطاء: ' + res.errors.length + ' — التفاصيل بتبويب القيود التلقائية' : '') +
-        ((res.warnings || []).length ? '\n\n⚠️ ' + res.warnings.slice(0, 4).join('\n⚠️ ') + (res.warnings.length > 4 ? '\n… و' + (res.warnings.length - 4) + ' تنبيهات أخرى بتبويب «القيود التلقائية»' : '') : ''), res.errors.length ? 'warning' : 'success', 'المزامنة');
-      GL._autoRes = res; GL._autoResDry = false;
-      glRefreshData(function () { glHbLoad(true); });
-    }, function (e) { btn.disabled = false; btn.innerHTML = '🔄 مزامنة القيود الآن'; _showPopup(e.message || e, 'error'); });
-  }, { title: 'المزامنة', icon: '🔄', yesLabel: 'مزامنة', danger: false });
 }
 function glHbSeasonUI(btn, go) {
   var d = (document.getElementById('glHbSeasonD') || {}).value || '';
@@ -54447,28 +54441,32 @@ function glRenderRecon() {
       '<div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="glRcOnlyDiff" checked onchange="glReconLoad()"><label class="form-check-label small" for="glRcOnlyDiff">إظهار الفروق فقط</label></div>' +
       '<button class="btn btn-sm btn-primary" onclick="glReconLoad()">↻ تحديث المقارنة</button>' +
       '<button class="btn btn-sm btn-outline-dark" onclick="glPrintBox(\'glReconBox\',\'مطابقة كشوف العملاء مع الحساب العام\')">🖨️</button>' +
-      (GL.isAdmin ? '<button class="btn btn-sm btn-outline-success" onclick="glCpResync(this)" title="إعادة نسخ كل سندات القبض/الصرف/الإيداع/السحب المرحّلة على حسابات العملاء إلى «حسابات عملاء العمرة» — آمن ولا يُكرِّر، ويبلّغ عن أخطاء اسم الربط">🔁 إعادة مزامنة دفعات العملاء</button>' : '') +
-      (GL.isAdmin && typeof vzApMirrorSync === 'function' ? '<button class="btn btn-sm btn-outline-success" onclick="vzApMirrorSync()" title="نسخ كل قيود الوكلاء المسجلة بالحسابات العامة لكشوف «حسابات الوكلاء» — بمعاينة وكشف المكرر">🔁 مزامنة قيود الوكلاء</button>' : '') +
+      (GL.isAdmin ? '<button class="btn btn-sm btn-outline-success" onclick="glSyncAll_(this)" title="زرّ واحد يعيد نسخ كل ما بالحسابات العامة إلى الشاشات: ① دفعات عملاء العمرة ② دفعات وبنود الوكلاء (بمعاينة) ③ دفعات الفنادق لكل الأطراف مع تنظيف اليتيم — آمن ولا يكرر">🔄 مزامنة شاملة للشاشات</button>' : '') +
     '</div>' +
     '<div class="gl-note">يقارن <b>رصيد كل طرف بكشف حسابه ببرنامج الحجوزات</b> (كما يراه العميل) برصيد <b>حسابه الكامل</b> بالحساب العام. اضغط أي سطر لعرض الحركات الموجودة بأحد الكشفين دون الآخر، و📒 لفتح كشف الحساب.</div>' +
     '<div id="glReconBox"><div class="text-center text-muted py-4">⏳</div></div>';
   glReconLoad();
 }
 // 💵 (V4.308) إصلاح بضغطة واحدة: يعيد مزامنة دفعات الحسابات العامة إلى حسابات عملاء العمرة ويبلّغ عن أخطاء اسم الربط
-function glCpResync(btn) {
-  var o = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳…';
-  glRun('glCpMirrorResync', [], function (res) {
-    btn.disabled = false; btn.innerHTML = o;
-    var msg = '✅ أُعيدت مزامنة ' + (res.done || 0) + ' سند قبض/صرف على حسابات العملاء.';
-    if (res.mismatches && res.mismatches.length) {
-      msg += '\n\n⚠️ حسابات اسم ربطها لا يطابق أي عميل له بنود — دفعاتها قد تُسجَّل باسم مختلف فلا تظهر تحت العميل المتوقَّع:\n' +
-        res.mismatches.map(function (m) { return '• ' + m.name + ' ← «مرتبط بـ»: ' + m.link; }).join('\n') +
-        '\n\nصحّح «مرتبط بـ» لهذه الحسابات ليطابق اسم العميل تماماً ثم أعد المزامنة.';
-    }
-    if (res.timedOut) msg += '\n\n(توقّفت عند حد الوقت — اضغط الزر مرة أخرى لإكمال الباقي.)';
-    _showPopup(msg, (res.mismatches && res.mismatches.length) ? 'warning' : 'success', 'إعادة مزامنة دفعات العملاء');
-    glReconLoad();
-  }, function (e) { btn.disabled = false; btn.innerHTML = o; _showPopup((e && e.message) || e, 'error'); });
+function glSyncAll_(btn) {
+  var o = btn.innerHTML, out = [];
+  var done = function () { btn.disabled = false; btn.innerHTML = o; };
+  btn.disabled = true; btn.innerHTML = '⏳ ① عملاء العمرة…';
+  glRun('glCpMirrorResync', [], function (cp) {
+    out.push('① عملاء العمرة: فُحص ' + (cp.done || 0) + ' سند — جديد ' + (cp.created || 0) + ' · محدَّث ' + (cp.updated || 0) + (cp.deleted ? ' · محذوف ' + cp.deleted : '') + (cp.draftsN ? ' · مسودات غير مرحّلة ' + cp.draftsN : ''));
+    if (cp.mismatches && cp.mismatches.length) out.push('⚠️ ' + cp.mismatches.length + ' حساب عميل اسم «مرتبط بـ» لا يطابق عميلاً مسجَّلاً: ' + cp.mismatches.slice(0, 5).map(function (m) { return m.name + ' ← ' + m.link; }).join('، ') + ' — صحّح «مرتبط بـ» ثم أعد المزامنة');
+    btn.innerHTML = '⏳ ② الفنادق…';
+    glRun('glHbMirrorResync', [], function (hb) {
+      out.push('② الفنادق: ' + (hb.mirrored || 0) + ' قيد (' + (hb.rows || 0) + ' صف)' + (hb.orphans ? ' · حُذف ' + hb.orphans + ' صف يتيم' : ''));
+      finish();
+    }, function (e) { out.push('② الفنادق: ' + ((e && e.message) || e)); finish(); });
+  }, function (e) { done(); _showPopup((e && e.message) || e, 'error'); });
+  function finish() {
+    done();
+    _showPopup('✅ المزامنة الشاملة\n' + out.join('\n') + (typeof vzApMirrorSync === 'function' ? '\n\nيلي ذلك ③ الوكلاء (بمعاينة)…' : ''), 'success');
+    if (typeof vzApMirrorSync === 'function') setTimeout(vzApMirrorSync, 400);
+    if (GL._rcMode === 'stmt') try { glReconLoad(); } catch (e0) {}
+  }
 }
 function glReconLoad() {
   var el = document.getElementById('glRcOnlyDiff'), only = !el || el.checked;

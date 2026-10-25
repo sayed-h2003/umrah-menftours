@@ -203,6 +203,39 @@ function hbSyncFromGl(token, party) {
     } finally { _glUnlock_(lock); }
   } catch (e) { return { ok: false, error: e.message }; }
 }
+/* 🛠️ (V4.341) دفعة بكشف الفندق بلا قيد مطابق: مرشَّحات للربط · ربط يدوي · إنشاء قيدها التلقائي · تعليمها «لا تحتاج قيداً» */
+function hbPayEntryCands(token, payId) {
+  try {
+    requirePermission_(token, 'payments', 'view');
+    if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return { ok: false, error: 'برنامج الحجوزات غير مربوط بالحسابات العامة' };
+    var r = _glHbPayCands_(payId); return { ok: true, pay: r.pay, cands: r.cands };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+// act: 'link' (entryId) · 'create' · 'ignore' · 'unignore' · 'unlink'
+function hbPayEntryAct(token, payId, act, entryId) {
+  try {
+    var user = requirePermission_(token, 'payments', 'edit');
+    if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return { ok: false, error: 'برنامج الحجوزات غير مربوط بالحسابات العامة' };
+    var lock = _glLock_();
+    if (!lock.tryLock(60000)) { _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1); return { ok: false, error: 'الحسابات العامة مشغولة بعملية أخرى — أعد المحاولة بعد لحظات' }; }
+    try {
+      _GL_SET_MEMO_ = null; _GL_ACC_MEMO_ = null; payId = String(payId || '');
+      var who = (user && user.username) || 'الحجوزات';
+      if (act === 'link') {
+        var f = _glFindEntry_(String(entryId || '')); if (!f || String(f.r[5]) !== GL_ST_POSTED_) return { ok: false, error: 'القيد غير موجود أو غير مرحَّل' };
+        _glHbPayMapSet_('hb_paylink', payId, String(entryId)); _glHbPayMapSet_('hb_paynoent', payId, '');
+      } else if (act === 'unlink') { _glHbPayMapSet_('hb_paylink', payId, ''); }
+      else if (act === 'ignore') { _glHbPayMapSet_('hb_paynoent', payId, 1); }
+      else if (act === 'unignore') { _glHbPayMapSet_('hb_paynoent', payId, ''); }
+      else if (act === 'create') {
+        var r = _glHbApplyKeysLocked_(who, ['AUTO:HBP:' + payId]);
+        if (!r || !(r.created || r.updated)) return { ok: false, error: 'لم يُنشأ قيد — تحقق من ربط الطرف بحساب (🗂️ خريطة الحسابات) ثم أعد المحاولة' };
+      } else return { ok: false, error: 'إجراء غير معروف' };
+      try { logChange_(who, 'ربط دفعة فندق بقيد (' + act + ')', 'GL:hbpaylink', payId, '-', String(entryId || '')); } catch (eL) {}
+      return { ok: true };
+    } finally { _glUnlock_(lock); }
+  } catch (e) { return { ok: false, error: e.message }; }
+}
 /* 🔍 (V4.338) تقرير الدفعات المشتبه بتكرارها (نفس الطرف والتاريخ والمبلغ) + تنفيذ قرار المستخدم (حذف/دمج/إبقاء/تجاهل) */
 function hbDupReport(token, party) {
   try {

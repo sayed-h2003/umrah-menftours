@@ -5718,8 +5718,8 @@ function getUnifiedStatement_(partyName, start, end) {
     });
 
     var pData = getPaymentsRowsCached_(); // مقروءة مرة واحدة لكل تنفيذ — تخدم كل حسابات كشف الحساب
-    var _refs = {};   // 🔗 (V4.339) رقم القيد/السند/الطرف المقابل من الحسابات العامة لكل دفعة (نسخة قيد أو دفعة حجوزات)
-    if (typeof _glHbPayRefs_ === 'function') { try { _refs = _glHbPayRefs_(pData.filter(function (p) { return normalizeName_(p[1]) === partyNorm; }).map(function (p) { return { id: p[7], link: p[9], party: partyName, date: hbRefDate_(p[0]), amount: parseFloat(p[3]) || 0, dir: p[2] }; })); } catch (eR) { _refs = {}; } }
+    var _refsOk = false, _refs = {};   // 🔗 (V4.339) رقم القيد/السند/الطرف المقابل من الحسابات العامة لكل دفعة (نسخة قيد أو دفعة حجوزات)
+    if (typeof _glHbPayRefs_ === 'function') { try { _refs = _glHbPayRefs_(pData.filter(function (p) { return normalizeName_(p[1]) === partyNorm; }).map(function (p) { return { id: p[7], link: p[9], party: partyName, date: hbRefDate_(p[0]), amount: parseFloat(p[3]) || 0, dir: p[2] }; })); _refsOk = true; } catch (eR) { _refs = {}; } }
     var glRef_ = function (pid) { return _refs[String(pid || '')] || null; };
     if (pData.length) {
       pData.forEach(function (p) {
@@ -5740,8 +5740,11 @@ function getUnifiedStatement_(partyName, start, end) {
         if (beforePeriod) { prevTotal += (rawDebit - rawCredit); return; }
         if (!inPeriod) return;
         items.push({
-          date: pTs, ref: dir.indexOf('يدوي') !== -1 ? 'قيد يدوي' : 'دفعة', qaid: (glRef_(p[7]) ? glRef_(p[7]).entry : (p[5] || '')), qaid2: glRef_(p[7]) ? glRef_(p[7]).voucher : '',   // 🧾 (V4.338) رقم قيد الحسابات العامة + رقم سند القبض/الصرف تحته
-          role: dir.indexOf('يدوي') !== -1 ? 'manual' : 'payment', counterparty: glRef_(p[7]) ? glRef_(p[7]).cp : '',   // الطرف المقابل من القيد
+          date: pTs, ref: dir.indexOf('يدوي') !== -1 ? 'قيد يدوي' : 'دفعة', qaid: (/^GL:/.test(String(p[7] || '')) && glRef_(p[7])) ? '' : (p[5] || ''),   // نسخة قيد: رقمه للشاشة فقط (glEntry) لا بالكشف المطبوع
+          // 🧾 (V4.338/341) رقم قيد الحسابات العامة + السند + الطرف المقابل: للشاشة فقط (لا تدخل الطباعة/PDF/الصورة) — حقول gl* منفصلة عن qaid/counterparty
+          glEntry: glRef_(p[7]) ? glRef_(p[7]).entry : '', glVch: glRef_(p[7]) ? glRef_(p[7]).voucher : '', glCp: glRef_(p[7]) ? glRef_(p[7]).cp : '',
+          glMissing: _refsOk && dir.indexOf('يدوي') === -1 && !glRef_(p[7]),
+          role: dir.indexOf('يدوي') !== -1 ? 'manual' : 'payment', counterparty: '',
           note: p[4] || DEFAULT_PAYMENT_NOTE, debit: rawDebit, credit: rawCredit, excluded: false, paymentId: p[7],
           checkInTs: 0, checkOutTs: 0,   // دفعة/قيد يدوي — لا تاريخ دخول أو خروج لها
           legacyImported: !!p[8]
@@ -5756,7 +5759,7 @@ function getUnifiedStatement_(partyName, start, end) {
     var finalRows = items.map(function (it) {
       if (!it.excluded) { running += it.debit - it.credit; sumD += it.debit; sumC += it.credit; }
       return {
-        ref: it.ref, qaid: it.qaid || '', qaid2: it.qaid2 || '', role: it.role, counterparty: it.counterparty, paymentId: it.paymentId, bookingKey: it.bookingKey || null,
+        ref: it.ref, qaid: it.qaid || '', glEntry: it.glEntry || '', glVch: it.glVch || '', glCp: it.glCp || '', glMissing: !!it.glMissing, role: it.role, counterparty: it.counterparty, paymentId: it.paymentId, bookingKey: it.bookingKey || null,
         note: it.note + (it.excluded ? ' — ⚠ مستبعد من الرصيد (بدون سعر)' : ''),
         legacyImported: !!it.legacyImported,
         debit: it.excluded ? null : fmtMoneyRounded_(it.debit),

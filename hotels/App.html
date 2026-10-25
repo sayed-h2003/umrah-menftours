@@ -578,6 +578,8 @@
   .city-tag.medina { background:var(--ok-soft); color:var(--ok); }
   .city-tag.mecca { background:#e2e8f8; color:#2c4590; }
   .qaid-missing { color:var(--bad); font-weight:700; }
+  .stmt-screen-only { font-size:.66rem; color:var(--ink-dim,#6b7280); line-height:1.25; }
+  @media print { .stmt-screen-only { display:none !important; } }
   .legacy-badge { font-size:.72rem; cursor:help; opacity:.7; }
   .qaid-clickable { cursor:pointer; border-bottom:1px dashed var(--line); }
   .qaid-clickable:hover { background:var(--brand-soft) !important; }
@@ -4591,10 +4593,18 @@ var STMT_COL_LABELS_ = { qaid:'القيد', ref:'المرجع', date:'التار
 // حين تكون خلايا الشيت رقمية (3357، 45670)، وإرجاعها كما هي كان يُفشل .toLowerCase() في
 // stmtRowMatches_ فيرمي استثناءً داخل filter() — فيتوقف renderTable قبل التصفية وقبل رسم
 // شريط الفلاتر أصلًا، فتبدو الميزة "لا تعمل إطلاقًا" بلا أي رسالة خطأ ظاهرة للمستخدم
+
+// 🧾 (V4.341) رقم قيد الحسابات العامة + رقم السند + حلّ «بلا قيد» — للشاشة فقط (الطباعة/PDF/الصورة تُبنى من حقول أخرى ولا تتضمنها)
+function stmtGlRefHtml_(r) {
+  var h = '';
+  if (r.glEntry) h += '<div class="stmt-screen-only" style="font-weight:700;" title="قيد الحسابات العامة (للشاشة فقط)">📘 ' + escapeHtml(r.glEntry) + '</div>' + (r.glVch ? '<div class="stmt-screen-only" style="font-size:.62rem;opacity:.85;" title="رقم إيصال السند">🧾 ' + escapeHtml(r.glVch) + '</div>' : '');
+  else if (r.glMissing && r.paymentId && typeof hbPayFix_ === 'function') h += '<div class="stmt-screen-only"><button type="button" class="btn-sm-icon" style="font-size:.62rem;background:#fef3c7;color:#92400e;" title="دفعة بلا قيد مطابق بالحسابات العامة — اضغط للحل" onclick="hbPayFix_(\'' + String(r.paymentId).replace(/'/g, '') + '\')">⚠ بلا قيد</button></div>';
+  return h;
+}
 function stmtCellText_(r, k) {
   var v;
   switch (k) {
-    case 'qaid': v = (r.qaid || '') + (r.qaid2 ? ' / ' + r.qaid2 : ''); break;
+    case 'qaid': v = (r.qaid || '') + (r.glEntry ? ' ' + r.glEntry : '') + (r.glVch ? ' ' + r.glVch : ''); break;
     case 'ref': v = r.ref; break;
     case 'date': v = r.dateDisp; break;
     case 'checkIn': v = r.checkIn; break;
@@ -4940,7 +4950,7 @@ function renderTable(res) {
     } else { actionBtns = ''; }
     var qaidAttrs = r.bookingKey ? ' class="qaid-dbl" data-key="' + r.bookingKey + '" ondblclick="inlineEditQaid(this)" title="ضغطتين لتعديل القيد"' : '';
     return stmtRowHtml_(cls, {
-      qaid: '<td data-col="qaid"' + qaidAttrs + '>' + escapeHtml(r.qaid) + (r.qaid2 ? '<div style="font-size:.62rem;opacity:.85;font-weight:600;" title="رقم إيصال السند">🧾 ' + escapeHtml(r.qaid2) + '</div>' : '') + '</td>',
+      qaid: '<td data-col="qaid"' + qaidAttrs + '>' + escapeHtml(r.qaid) + stmtGlRefHtml_(r) + '</td>',
       ref: '<td data-col="ref">' + escapeHtml(r.ref) + '</td>',
       date: '<td data-col="date">' + r.dateDisp + '</td>',
       checkIn: '<td data-col="checkIn">' + escapeHtml(r.checkIn || '') + '</td>',
@@ -4949,7 +4959,7 @@ function renderTable(res) {
       debit: '<td data-col="debit">' + (r.debit == null ? '' : r.debit) + '</td>',
       credit: '<td data-col="credit">' + (r.credit == null ? '' : r.credit) + '</td>',
       balance: '<td data-col="balance" class="' + (r.balance && r.balance.indexOf('دائن') !== -1 ? 'text-credit-cell' : (r.balance ? 'text-debit-cell' : '')) + '">' + (r.balance == null ? '' : r.balance) + '</td>',
-      counterparty: '<td data-col="counterparty">' + escapeHtml(r.counterparty) + '</td>',
+      counterparty: '<td data-col="counterparty">' + escapeHtml(r.counterparty) + (r.glCp ? '<span class="stmt-screen-only" title="الطرف المقابل بقيد الحسابات العامة (للشاشة فقط — لا يظهر بالطباعة/المشاركة)">' + escapeHtml(r.glCp) + '</span>' : '') + '</td>',
       hist: '<td data-col="hist">' + rowHistBtn_(r.paymentId ? ('PAY:' + r.paymentId) : (r.innerRef ? ('BK:' + r.innerRef) : '')) + '</td>',
       actions: '<td data-col="actions">' + actionBtns + '</td>'
     });
