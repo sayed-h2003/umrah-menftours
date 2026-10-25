@@ -5566,7 +5566,7 @@ input[type="date"]:not(:focus):not(:valid) {
   .gl-sec-h{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; border-bottom:3px solid; padding:4px 2px 6px; margin-bottom:8px; }
   .gl-sec-h b{ font-size:15px; }
   .gl-bgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
-  .gl-bcard{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:9px 11px; cursor:pointer; box-shadow:0 1px 4px rgba(15,23,42,.05); }
+  .gl-bcard{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:9px 11px; cursor:pointer; box-shadow:0 1px 4px rgba(15,23,42,.05); }
   .gl-bcard:hover{ border-color:#1e3d59; box-shadow:0 4px 12px rgba(15,23,42,.1); }
   .gl-bcard-h{ font-weight:800; font-size:13px; margin-bottom:4px; display:flex; justify-content:space-between; gap:6px; }
   .gl-bcard-h small{ color:#94a3b8; font-weight:700; }
@@ -8088,7 +8088,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.334";
+var CLIENT_APP_VERSION = "4.335";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -47848,6 +47848,7 @@ function glApplyBoot_(res) {
   GL.ready = true; GL.ver = res.ver || ''; GL.accounts = res.accounts || []; GL.map = {}; GL.accounts.forEach(function (a) { GL.map[a.code] = a; });
   GL.balances = res.balances || {}; GL.settings = res.settings || {}; GL.rates = res.rates || GL.rates; GL.fxDaily = res.fxDaily || GL.fxDaily || {}; if (res.url) GL.url = res.url;
   if (res.tripMode !== undefined) GL.tripMode = !!res.tripMode;
+  GL.balMine = res.balMine || ''; GL.balUserOn = !!res.balUserOn;   // (V4.335) تخطيط الأرصدة الشخصي + تفعيل التخصيص
 }
 function glInit(keepTab) {
   var box = document.getElementById('glBody'); if (!box) return;
@@ -47861,6 +47862,7 @@ function glInit(keepTab) {
   glRun('glBootstrap', [cached ? cached.ver : ''], function (res) {
     if (res.same && cached) {
       GL.isAdmin = !!res.isAdmin; GL.can = res.can || {}; GL.pendingCount = res.pendingCount || 0; GL.csPend = res.csPend || 0; glNavBadge_();
+      var _bm = res.balMine || '', _bo = !!res.balUserOn; if ((_bm !== (GL.balMine || '') || _bo !== !!GL.balUserOn) && !GL._balEd) { GL.balMine = _bm; GL.balUserOn = _bo; if (GL.tab === 'home' && !document.getElementById('glDlgOv')) glRenderHome(); }
       document.querySelectorAll('#glTabs .gl-adm').forEach(function (t) { t.style.display = GL.isAdmin ? '' : 'none'; });
       if (typeof glSubGate_ === 'function') glSubGate_();   // (V4.318) تبويب «المطابقة» لم يعد gl-adm — يُعاد حسابه بتغيّر الصلاحيات
       document.getElementById('glActs').classList.toggle('d-none', !GL.can.add);
@@ -48043,28 +48045,226 @@ function glCurSelect(cls, val) {
   return '<select class="form-select form-select-sm ' + (cls || '') + '">' + ['EGP', 'SAR', 'USD'].map(function (c) { return '<option value="' + c + '"' + (c === (val || 'EGP') ? ' selected' : '') + '>' + GL_CUR_LBL_[c] + '</option>'; }).join('') + '</select>';
 }
 
-/* ---------------------------- 🏠 الأرصدة ---------------------------- */
-function glRenderHome() {
-  var box = document.getElementById('glBody');
-  var sec = function (title, icon, prefix, color) {
-    var accs = GL.accounts.filter(function (a) { return !a.isGroup && a.code.indexOf(prefix) === 0; });
-    var tot = { EGP: 0, SAR: 0, USD: 0 };
-    var cards = accs.map(function (a) {
-      var b = GL.balances[a.code] || {};
-      ['EGP', 'SAR', 'USD'].forEach(function (c) { tot[c] += b[c] || 0; });
-      var cur = ['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(b[c] || 0) > 0.004; });
-      return '<div class="gl-bcard" onclick="glOpenLedger(\'' + glJs(a.code) + '\')" title="فتح دفتر الأستاذ">' +
-        '<div class="gl-bcard-h">' + icon + ' ' + glEsc(a.name) + '<small class="gl-latin">' + glEsc(a.code) + '</small></div>' +
-        (cur.length ? cur.map(function (c) { return '<div class="gl-bline"><span>' + GL_CUR_LBL_[c] + '</span><b class="gl-latin" style="color:' + ((b[c] || 0) < 0 ? '#b91c1c' : '#0f172a') + '">' + glFmt(b[c]) + '</b></div>'; }).join('')
-          : '<div class="gl-bline text-muted"><span>لا حركة</span><b>0</b></div>') + '</div>';
-    }).join('') || '<div class="text-muted small p-2">لا توجد حسابات بعد — أضفها من «دليل الحسابات».</div>';
-    return '<div class="gl-sec"><div class="gl-sec-h" style="border-color:' + color + ';"><b>' + icon + ' ' + title + '</b>' +
-      ['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(tot[c]) > 0.004; }).map(function (c) { return '<span class="gl-pill">' + GL_CUR_LBL_[c] + ' <b class="gl-latin">' + glFmt(tot[c]) + '</b></span>'; }).join('') +
-      '</div><div class="gl-bgrid">' + cards + '</div></div>';
+/* ---------------------------- 🏠 الأرصدة (V4.335: شاشة مرنة) ---------------------------- */
+// أقسام قابلة للتخصيص بالكامل: t='acc' (بطاقات حسابات: بادئات أكواد + حسابات إضافية/مخفية + ترتيب) · t='top' (أعلى أرصدة مجموعات حسابات
+// حتى اليوم والنهائي). التخطيط العام للمدير (إعداد bal_layout)، وبـ«تخصيص الصلاحيات» يحفظ كل مستخدم تخطيطه الشخصي (GL.balMine) دون التأثير على غيره.
+var GL_BAL_DEF_ = { v: 1, secs: [
+  { id: 'safe', t: 'acc', title: 'الخزائن', icon: '💵', color: '#16a34a', prefixes: ['1101'], extra: [], hide: [], order: [] },
+  { id: 'bank', t: 'acc', title: 'البنوك', icon: '🏦', color: '#1e40af', prefixes: ['1102'], extra: [], hide: [], order: [] },
+  { id: 'cust', t: 'acc', title: 'العُهد', icon: '👜', color: '#b45309', prefixes: ['13'], extra: [], hide: [], order: [] },
+  { id: 'parties', t: 'top', title: 'أرصدة العملاء', icon: '👥', color: '#7c3aed', groups: [
+    { k: 'umrah', title: 'أعلى أرصدة عملاء العمرة', prefix: '1201', dir: 'dr', n: 10 },
+    { k: 'skn', title: 'أعلى أرصدة عملاء السكن', prefix: '1203', dir: 'dr', n: 10 },
+    { k: 'sup', title: 'أعلى أرصدة موردي السكن', prefix: '2103', dir: 'cr', n: 10 },
+    { k: 'haj', title: 'أعلى أرصدة عملاء الحج', prefix: '1202', dir: 'dr', n: 10 }] }
+] };
+function glBalCan_() { return !!(GL.isAdmin || GL.balUserOn); }
+function glBalParse_(s) { try { var o = typeof s === 'string' ? JSON.parse(s) : s; return o && Array.isArray(o.secs) ? o : null; } catch (e) { return null; } }
+function glBalLayout_() {
+  var L = null;
+  if (GL.balMine && glBalCan_()) L = glBalParse_(GL.balMine);
+  if (!L && GL.settings && GL.settings.bal_layout) L = glBalParse_(GL.settings.bal_layout);
+  return L || GL_BAL_DEF_;
+}
+function glBalAuto_(sec) { var pf = sec.prefixes || []; return GL.accounts.filter(function (a) { return !a.isGroup && pf.some(function (p) { return a.code.indexOf(p) === 0; }); }).map(function (a) { return a.code; }); }
+function glBalAccs_(sec) {
+  var hide = {}, ord = {}, seen = {}, list = [];
+  (sec.hide || []).forEach(function (c) { hide[c] = 1; }); (sec.order || []).forEach(function (c, i) { ord[c] = i; });
+  glBalAuto_(sec).concat(sec.extra || []).forEach(function (c) { var a = GL.map[c]; if (a && !a.isGroup && !hide[c] && !seen[c]) { seen[c] = 1; list.push(a); } });
+  list.sort(function (x, y) { var ox = ord[x.code] !== undefined ? ord[x.code] : 1e6, oy = ord[y.code] !== undefined ? ord[y.code] : 1e6; return ox - oy || (x.code < y.code ? -1 : 1); });
+  return list;
+}
+function glBalSecHtml_(sec, ed) {
+  var head = function (extra) {
+    return '<div class="gl-sec-h" style="border-color:' + glEsc(sec.color) + ';">' + (ed ? '<span class="gl-sec-grip" title="اسحب لإعادة ترتيب القسم" style="cursor:grab;font-size:18px;">⠿</span>' : '') +
+      '<b>' + glEsc(sec.icon || '') + ' ' + glEsc(sec.title) + '</b>' + (extra || '') +
+      (ed ? '<span class="ms-auto d-flex gap-1"><button class="btn btn-sm btn-outline-secondary py-0" title="تعديل القسم" onclick="glBalSecEdit_(\'' + glJs(sec.id) + '\')">✏️</button>' +
+        '<button class="btn btn-sm btn-outline-secondary py-0 gl-bal-mv" title="أعلى" onclick="glBalMove_(\'' + glJs(sec.id) + '\',-1)" style="display:none;">▲</button><button class="btn btn-sm btn-outline-secondary py-0 gl-bal-mv" title="أسفل" onclick="glBalMove_(\'' + glJs(sec.id) + '\',1)" style="display:none;">▼</button>' +
+        '<button class="btn btn-sm btn-outline-danger py-0" title="إلغاء القسم" onclick="glBalSecDel_(\'' + glJs(sec.id) + '\')">🗑️</button></span>' : '') + '</div>';
   };
+  if (sec.t === 'top') {
+    return '<div class="gl-sec" data-sid="' + glEsc(sec.id) + '">' + head('<span class="small text-muted">الرصيد التراكمي حتى اليوم · والنهائي</span>' +
+      (ed ? '' : '<button class="btn btn-sm btn-link p-0 ms-auto" title="تحديث" onclick="glBalTopRefresh_()">↻</button>')) +
+      '<div class="row g-2">' + (sec.groups || []).map(function (g) {
+        return '<div class="col-12 col-xl-6"><div class="gl-top-box" data-sid="' + glEsc(sec.id) + '" data-k="' + glEsc(g.k) + '"><div class="fw-bold small mb-1">' + glEsc(g.title) + '</div><div class="gl-top-body text-muted small">⏳</div></div></div>';
+      }).join('') + '</div></div>';
+  }
+  var accs = glBalAccs_(sec), tot = { EGP: 0, SAR: 0, USD: 0 };
+  var cards = accs.map(function (a) {
+    var b = GL.balances[a.code] || {};
+    ['EGP', 'SAR', 'USD'].forEach(function (c) { tot[c] += b[c] || 0; });
+    var cur = ['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(b[c] || 0) > 0.004; });
+    return '<div class="gl-bcard" data-code="' + glEsc(a.code) + '" ' + (ed ? '' : 'onclick="glOpenLedger(\'' + glJs(a.code) + '\')" title="فتح دفتر الأستاذ"') + '>' +
+      '<div class="gl-bcard-h">' + glEsc(sec.icon || '') + ' ' + glEsc(a.name) + '<small class="gl-latin">' + glEsc(a.code) + '</small></div>' +
+      (ed ? '<button class="btn btn-sm btn-outline-danger py-0 px-1" style="position:absolute;top:4px;left:4px;font-size:10px;" title="إخفاء من القسم" onclick="glBalCardDel_(this)">✕</button>' : '') +
+      (cur.length ? cur.map(function (c) { return '<div class="gl-bline"><span>' + GL_CUR_LBL_[c] + '</span><b class="gl-latin" style="color:' + ((b[c] || 0) < 0 ? '#b91c1c' : '#0f172a') + '">' + glFmt(b[c]) + '</b></div>'; }).join('')
+        : '<div class="gl-bline text-muted"><span>لا حركة</span><b>0</b></div>') + '</div>';
+  }).join('') || '<div class="text-muted small p-2">لا توجد حسابات في هذا القسم' + (ed ? ' — عدّل القسم (✏️) لإضافة حسابات.' : '.') + '</div>';
+  return '<div class="gl-sec" data-sid="' + glEsc(sec.id) + '">' + head(['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(tot[c]) > 0.004; }).map(function (c) { return '<span class="gl-pill">' + GL_CUR_LBL_[c] + ' <b class="gl-latin">' + glFmt(tot[c]) + '</b></span>'; }).join('')) +
+    '<div class="gl-bgrid" data-sid="' + glEsc(sec.id) + '">' + cards + '</div></div>';
+}
+function glRenderHome() {
+  var box = document.getElementById('glBody'), ed = GL._balEd, L = ed || glBalLayout_();
+  var bar = '';
+  if (ed) {
+    var adm = GL.isAdmin;
+    bar = '<div class="gl-note d-flex flex-wrap gap-2 align-items-center" style="background:#fef9c3;border-color:#facc15;"><b>⚙️ وضع التخصيص</b><span class="small">اسحب ⠿ لترتيب الأقسام، واسحب البطاقات لترتيبها/نقلها بين الأقسام</span>' +
+      '<button class="btn btn-sm btn-outline-primary" onclick="glBalSecNew_(\'acc\')">➕ قسم حسابات</button><button class="btn btn-sm btn-outline-primary" onclick="glBalSecNew_(\'top\')">➕ قسم أعلى الأرصدة</button>' +
+      '<span class="ms-auto d-flex flex-wrap gap-2 align-items-center">' +
+      (adm ? '<label class="small mb-0"><input type="radio" name="glBalScope" value="global" ' + (GL._balScope !== 'mine' ? 'checked' : '') + ' onchange="GL._balScope=\'global\'"> للجميع</label><label class="small mb-0"><input type="radio" name="glBalScope" value="mine" ' + (GL._balScope === 'mine' ? 'checked' : '') + ' onchange="GL._balScope=\'mine\'"> لي فقط</label>' : '<span class="small text-muted">تُحفظ لحسابك فقط</span>') +
+      '<button class="btn btn-sm btn-success" onclick="glBalSave_()">💾 حفظ</button><button class="btn btn-sm btn-outline-secondary" onclick="glBalReset_()">↺ الافتراضي</button><button class="btn btn-sm btn-outline-dark" onclick="glBalCancel_()">إلغاء</button></span></div>';
+  } else if (glBalCan_()) {
+    bar = '<div class="d-flex flex-wrap gap-2 align-items-center mb-2"><button class="btn btn-sm btn-outline-dark" onclick="glBalEdit_()">⚙️ تخصيص الشاشة</button>' +
+      (GL.isAdmin ? '<label class="small mb-0 ms-2" title="عند التفعيل يحفظ كل مستخدم ترتيبه وتفضيلاته الخاصة بشاشة الأرصدة دون التأثير على الآخرين"><input type="checkbox" ' + (GL.balUserOn ? 'checked' : '') + ' onchange="glBalUserOnSet_(this)"> السماح للمستخدمين بتخصيص شاشتهم</label>' : '') +
+      (GL.balMine && glBalParse_(GL.balMine) ? '<span class="gl-pill">تخطيطك الشخصي</span><button class="btn btn-sm btn-link p-0" onclick="glBalMineReset_()">إلغاء تخطيطي الشخصي</button>' : '') + '</div>';
+  }
   box.innerHTML =
-    '<div class="gl-note">📅 بداية الحسابات: <b class="gl-latin">' + glEsc(GL.settings.startDate) + '</b> · عملة الأساس: <b>الجنيه</b> · أسعار الصرف الافتراضية: ريال <b class="gl-latin">' + glFmt(GL.rates.SAR) + '</b> · دولار <b class="gl-latin">' + glFmt(GL.rates.USD) + '</b></div>' +
-    sec('الخزائن', '💵', '1101', '#16a34a') + sec('البنوك', '🏦', '1102', '#1e40af') + sec('العُهد', '👜', '13', '#b45309');
+    '<div class="gl-note">📅 بداية الحسابات: <b class="gl-latin">' + glEsc(GL.settings.startDate) + '</b> · عملة الأساس: <b>الجنيه</b> · أسعار الصرف الافتراضية: ريال <b class="gl-latin">' + glFmt(GL.rates.SAR) + '</b> · دولار <b class="gl-latin">' + glFmt(GL.rates.USD) + '</b></div>' + bar +
+    '<div id="glBalRoot">' + L.secs.map(function (s) { return glBalSecHtml_(s, !!ed); }).join('') + '</div>';
+  glBalTopLoad_(L);
+  if (ed) glBalSortInit_();
+}
+// ---- أعلى الأرصدة: طلب واحد مجمَّع لكل المجموعات، مع تخزين مؤقت قصير ----
+function glBalTopLoad_(L, force) {
+  var gs = [];
+  L.secs.forEach(function (s) { if (s.t === 'top') (s.groups || []).forEach(function (g) { gs.push({ k: s.id + '.' + g.k, prefix: g.prefix, dir: g.dir, n: g.n }); }); });
+  if (!gs.length) return;
+  var key = JSON.stringify(gs), C = GL._balTop;
+  if (!force && C && C.key === key && Date.now() - C.t < 60000) { glBalTopDraw_(C.data); return; }
+  var seq = GL._balTopSeq = (GL._balTopSeq || 0) + 1;
+  glRun('glPartyBalances', [gs], function (res) {
+    GL._balTop = { key: key, t: Date.now(), data: res };
+    if (seq === GL._balTopSeq) glBalTopDraw_(res);
+  }, function (e) { document.querySelectorAll('#glBalRoot .gl-top-body').forEach(function (b) { b.innerHTML = '<span class="text-danger">❌ ' + glEsc((e && e.message) || e) + '</span>'; }); });
+}
+function glBalTopRefresh_() { GL._balTop = null; glBalTopLoad_(GL._balEd || glBalLayout_(), true); }
+function glBalTopDraw_(res) {
+  var fmtCur = function (o) { var p = ['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(o[c] || 0) > 0.004; }).map(function (c) { return '<div class="gl-latin" style="white-space:nowrap;">' + glFmt(o[c]) + ' <small class="text-muted">' + GL_CUR_LBL_[c] + '</small></div>'; }); return p.join('') || '<span class="text-muted">0</span>'; };
+  document.querySelectorAll('#glBalRoot .gl-top-box').forEach(function (bx) {
+    var g = ((res.groups || {})[bx.dataset.sid + '.' + bx.dataset.k]), body = bx.querySelector('.gl-top-body'); if (!body) return;
+    if (!g) { body.innerHTML = ''; return; }
+    body.className = 'gl-top-body';
+    body.innerHTML = !g.rows.length ? '<div class="text-muted small">لا أرصدة مستحقة</div>' :
+      '<div class="table-responsive"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th>#</th><th>الحساب</th><th>حتى اليوم (' + glEsc(res.asOf || '') + ')</th><th>النهائي</th></tr></thead><tbody>' +
+      g.rows.map(function (r, i) {
+        return '<tr style="cursor:pointer;" onclick="glOpenLedger(\'' + glJs(r.code) + '\')"><td>' + (i + 1) + '</td><td style="text-align:right;">' + glEsc(r.name) + '<small class="gl-latin text-muted ms-1">' + glEsc(r.code) + '</small></td><td>' + fmtCur(r.today) + '</td><td>' + fmtCur(r.fin) + '</td></tr>';
+      }).join('') + '</tbody></table></div>' + (g.total > g.rows.length ? '<div class="small text-muted">يظهر أعلى ' + g.rows.length + ' من ' + g.total + '</div>' : '');
+  });
+}
+// ---- وضع التخصيص ----
+function glBalEdit_() { if (!glBalCan_()) return; GL._balEd = JSON.parse(JSON.stringify(glBalLayout_())); GL._balScope = GL.isAdmin ? (GL._balScope || 'global') : 'mine'; glRenderHome(); }
+function glBalCancel_() { GL._balEd = null; glRenderHome(); }
+function glBalLoadSortable_(cb) {
+  if (window.Sortable) return cb(true);
+  if (GL._sortFail) return cb(false);
+  var s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js';
+  s.onload = function () { cb(!!window.Sortable); }; s.onerror = function () { GL._sortFail = true; cb(false); };
+  document.head.appendChild(s);
+}
+function glBalSortInit_() {
+  glBalLoadSortable_(function (ok) {
+    var root = document.getElementById('glBalRoot'); if (!root || !GL._balEd) return;
+    if (!ok) { root.querySelectorAll('.gl-bal-mv').forEach(function (b) { b.style.display = ''; }); root.querySelectorAll('.gl-sec-grip').forEach(function (g) { g.style.display = 'none'; }); return; }   // تعذّر تحميل المكتبة ⇒ أزرار ▲▼
+    new Sortable(root, { animation: 150, handle: '.gl-sec-grip', draggable: '.gl-sec', onEnd: glBalSyncDom_ });
+    root.querySelectorAll('.gl-bgrid').forEach(function (g) { new Sortable(g, { animation: 150, group: 'balcards', draggable: '.gl-bcard', onEnd: glBalSyncDom_ }); });
+  });
+}
+// يقرأ ترتيب الأقسام والبطاقات من الشاشة إلى التخطيط الجاري
+function glBalSyncDom_() {
+  var L = GL._balEd, root = document.getElementById('glBalRoot'); if (!L || !root) return;
+  var byId = {}; L.secs.forEach(function (s) { byId[s.id] = s; });
+  var secs = []; root.querySelectorAll(':scope > .gl-sec').forEach(function (el) { var s = byId[el.dataset.sid]; if (s) secs.push(s); });
+  if (secs.length === L.secs.length) L.secs = secs;
+  root.querySelectorAll('.gl-bgrid').forEach(function (g) {
+    var s = byId[g.dataset.sid]; if (!s || s.t !== 'acc') return;
+    var dom = [].map.call(g.querySelectorAll('.gl-bcard'), function (c) { return c.dataset.code; }), auto = glBalAuto_(s), domSet = {}, autoSet = {};
+    dom.forEach(function (c) { domSet[c] = 1; }); auto.forEach(function (c) { autoSet[c] = 1; });
+    var hide = (s.hide || []).filter(function (c) { return !domSet[c]; });
+    auto.forEach(function (c) { if (!domSet[c] && hide.indexOf(c) < 0) hide.push(c); });
+    s.hide = hide; s.extra = dom.filter(function (c) { return !autoSet[c]; }); s.order = dom;
+  });
+}
+function glBalCardDel_(btn) { var c = btn.closest('.gl-bcard'); if (c) c.remove(); glBalSyncDom_(); glRenderHome(); }
+function glBalMove_(id, d) { glBalSyncDom_(); var a = GL._balEd.secs, i = a.map(function (s) { return s.id; }).indexOf(id), j = i + d; if (i < 0 || j < 0 || j >= a.length) return; var t = a[i]; a[i] = a[j]; a[j] = t; glRenderHome(); }
+function glBalSecDel_(id) { askConfirm_('إلغاء هذا القسم من الشاشة؟', function () { glBalSyncDom_(); GL._balEd.secs = GL._balEd.secs.filter(function (s) { return s.id !== id; }); glRenderHome(); }); }
+function glBalSecNew_(t) {
+  glBalSyncDom_();
+  var id = 's' + Date.now().toString(36);
+  GL._balEd.secs.push(t === 'top' ? { id: id, t: 'top', title: 'أعلى الأرصدة', icon: '📊', color: '#7c3aed', groups: [{ k: 'g1', title: 'أعلى الأرصدة', prefix: '1201', dir: 'dr', n: 10 }] }
+    : { id: id, t: 'acc', title: 'قسم جديد', icon: '📁', color: '#475569', prefixes: [], extra: [], hide: [], order: [] });
+  glRenderHome(); glBalSecEdit_(id);
+}
+function glBalGrpOpts_(sel) { return '<option value="">— اختر المجموعة —</option>' + GL.accounts.filter(function (a) { return a.isGroup; }).sort(function (x, y) { return x.code < y.code ? -1 : 1; }).map(function (a) { return '<option value="' + glEsc(a.code) + '"' + (a.code === sel ? ' selected' : '') + '>' + glEsc(a.code + ' — ' + a.name) + '</option>'; }).join(''); }
+function glBalTopRowHtml_(g) {
+  return '<div class="d-flex gap-1 mb-1 align-items-center glBalGrp"><input class="form-control form-control-sm gbT" style="flex:1;min-width:130px;" placeholder="عنوان الجدول" value="' + glEsc(g.title) + '">' +
+    '<select class="form-select form-select-sm gbP" style="width:190px;">' + glBalGrpOpts_(g.prefix) + '</select>' +
+    '<select class="form-select form-select-sm gbD" style="width:120px;"><option value="dr"' + (g.dir !== 'cr' ? ' selected' : '') + '>مدين (عملاء)</option><option value="cr"' + (g.dir === 'cr' ? ' selected' : '') + '>دائن (موردون)</option></select>' +
+    '<input class="form-control form-control-sm gl-latin gbN" style="width:62px;" type="number" min="1" max="50" value="' + (g.n || 10) + '" title="عدد الصفوف">' +
+    '<button type="button" class="btn btn-sm btn-outline-danger py-0" onclick="this.closest(\'.glBalGrp\').remove()">✕</button></div>';
+}
+function glBalSecEdit_(id) {
+  glBalSyncDom_();
+  var s = GL._balEd.secs.filter(function (x) { return x.id === id; })[0]; if (!s) return;
+  var body = '<div class="row g-2 mb-2"><div class="col-8"><label class="gl-lbl">اسم القسم</label><input id="gbTitle" class="form-control form-control-sm" value="' + glEsc(s.title) + '"></div>' +
+    '<div class="col-2"><label class="gl-lbl">أيقونة</label><input id="gbIcon" class="form-control form-control-sm" maxlength="4" value="' + glEsc(s.icon || '') + '"></div>' +
+    '<div class="col-2"><label class="gl-lbl">لون</label><input id="gbColor" type="color" class="form-control form-control-sm form-control-color w-100" value="' + glEsc(s.color) + '"></div></div>';
+  if (s.t === 'top') {
+    body += '<div class="fw-bold small mb-1">جداول أعلى الأرصدة (مجموعة حسابات + اتجاه الرصيد + عدد الصفوف)</div><div id="gbGrps">' + (s.groups || []).map(glBalTopRowHtml_).join('') + '</div>' +
+      '<button type="button" class="btn btn-sm btn-outline-primary" onclick="document.getElementById(\'gbGrps\').insertAdjacentHTML(\'beforeend\', glBalTopRowHtml_({title:\'\',prefix:\'\',dir:\'dr\',n:10}))">➕ جدول</button>';
+  } else {
+    var pf = s.prefixes || [];
+    body += '<div class="fw-bold small mb-1">المجموعات المعروضة (كل حساب فرعي تحتها)</div><div id="gbPfs">' + pf.map(function (p) { return '<div class="d-flex gap-1 mb-1 gbPf"><select class="form-select form-select-sm">' + glBalGrpOpts_(p) + '</select><button type="button" class="btn btn-sm btn-outline-danger py-0" onclick="this.closest(\'.gbPf\').remove()">✕</button></div>'; }).join('') + '</div>' +
+      '<button type="button" class="btn btn-sm btn-outline-primary mb-2" onclick="glBalPfAdd_()">➕ مجموعة</button>' +
+      '<div class="fw-bold small mb-1 mt-1">إضافة حساب بعينه</div><div class="d-flex gap-1 mb-2">' + glAccInput('gbAdd', '', '') + '<button type="button" class="btn btn-sm btn-outline-primary" onclick="glBalAddAcc_(\'' + glJs(id) + '\')">➕ إضافة</button></div>' +
+      '<div class="small text-muted">لإخفاء حساب اضغط ✕ على بطاقته في الشاشة، ولإعادة إظهار المخفيّ:</div><div class="d-flex flex-wrap gap-1 mt-1">' +
+      (s.hide || []).filter(function (c) { return GL.map[c]; }).map(function (c) { return '<button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="glBalUnhide_(\'' + glJs(id) + '\',\'' + glJs(c) + '\')">↩ ' + glEsc(GL.map[c].name) + '</button>'; }).join('') + '</div>';
+  }
+  body += '<div class="d-flex gap-2 justify-content-end mt-3"><button class="btn btn-secondary btn-sm" onclick="glDlgClose()">إلغاء</button><button class="btn btn-primary btn-sm" onclick="glBalSecApply_(\'' + glJs(id) + '\')">تطبيق</button></div>';
+  glDlg('✏️ تعديل القسم', body, 760);
+}
+function glBalPfAdd_() { document.getElementById('gbPfs').insertAdjacentHTML('beforeend', '<div class="d-flex gap-1 mb-1 gbPf"><select class="form-select form-select-sm">' + glBalGrpOpts_('') + '</select><button type="button" class="btn btn-sm btn-outline-danger py-0" onclick="this.closest(\'.gbPf\').remove()">✕</button></div>'); }
+function glBalAddAcc_(id) {
+  var inp = document.querySelector('#glDlgBody .gbAdd'), c = glAccVal(inp); if (!c || !GL.map[c] || GL.map[c].isGroup) { showToast('اختر حساباً فرعياً صحيحاً'); return; }
+  var s = GL._balEd.secs.filter(function (x) { return x.id === id; })[0]; if (!s) return;
+  s.hide = (s.hide || []).filter(function (x) { return x !== c; });
+  if (glBalAuto_(s).indexOf(c) < 0 && (s.extra || []).indexOf(c) < 0) (s.extra = s.extra || []).push(c);
+  s.order = (s.order || []).concat([c]); inp.value = ''; inp.dataset.code = ''; showToast('أُضيف «' + GL.map[c].name + '» — اضغط تطبيق');
+}
+function glBalUnhide_(id, c) { var s = GL._balEd.secs.filter(function (x) { return x.id === id; })[0]; if (!s) return; s.hide = (s.hide || []).filter(function (x) { return x !== c; }); glBalSecEdit_(id); }
+function glBalSecApply_(id) {
+  var s = GL._balEd.secs.filter(function (x) { return x.id === id; })[0]; if (!s) return;
+  var v = function (q) { return ((document.querySelector('#glDlgBody ' + q) || {}).value || '').trim(); };
+  s.title = v('#gbTitle') || 'قسم'; s.icon = v('#gbIcon'); s.color = v('#gbColor') || s.color;
+  if (s.t === 'top') {
+    s.groups = [].map.call(document.querySelectorAll('#glDlgBody .glBalGrp'), function (r, i) {
+      return { k: 'g' + (i + 1), title: r.querySelector('.gbT').value.trim() || 'أعلى الأرصدة', prefix: r.querySelector('.gbP').value, dir: r.querySelector('.gbD').value, n: Math.max(1, Math.min(50, parseInt(r.querySelector('.gbN').value, 10) || 10)) };
+    }).filter(function (g) { return g.prefix; });
+    if (!s.groups.length) { showToast('أضف جدولاً واحداً على الأقل بمجموعة صحيحة'); return; }
+  } else {
+    s.prefixes = [].map.call(document.querySelectorAll('#glDlgBody .gbPf select'), function (x) { return x.value; }).filter(Boolean);
+    s.prefixes = s.prefixes.filter(function (p, i) { return s.prefixes.indexOf(p) === i; });
+  }
+  glDlgClose(); GL._balTop = null; glRenderHome();
+}
+function glBalSave_() {
+  glBalSyncDom_();
+  var scope = GL.isAdmin ? (GL._balScope === 'mine' ? 'mine' : 'global') : 'mine', L = GL._balEd;
+  glRun('glBalLayoutSave', [JSON.stringify(L), scope], function (res) {
+    if (scope === 'mine') GL.balMine = res.layout || ''; else { GL.settings.bal_layout = res.layout || ''; }
+    GL._balEd = null; GL._balTop = null; glRenderHome(); showToast(scope === 'mine' ? '✅ حُفظ تخطيطك الشخصي' : '✅ حُفظ التخطيط للجميع');
+  }, function (e) { _showPopup((e && e.message) || e, 'error'); });
+}
+function glBalReset_() {
+  askConfirm_('إعادة الشاشة للتخطيط الافتراضي؟ (يُطبَّق عند الحفظ)', function () { GL._balEd = JSON.parse(JSON.stringify(GL_BAL_DEF_)); glRenderHome(); });
+}
+function glBalMineReset_() {
+  askConfirm_('إلغاء تخطيطك الشخصي والعودة للتخطيط العام؟', function () {
+    glRun('glBalLayoutSave', ['', 'mine'], function () { GL.balMine = ''; glRenderHome(); showToast('عدتَ للتخطيط العام'); }, function (e) { _showPopup((e && e.message) || e, 'error'); });
+  });
+}
+function glBalUserOnSet_(cb) {
+  var on = cb.checked;
+  glRun('glBalUserCustSet', [on], function () { GL.balUserOn = on; showToast(on ? '✅ فُعِّل تخصيص الشاشة للمستخدمين' : 'أُوقف تخصيص المستخدمين'); }, function (e) { cb.checked = !on; _showPopup((e && e.message) || e, 'error'); });
 }
 function glOpenLedger(code) {
   // 📒 (V4.225) الحساب الفرعي يفتح كشف الحساب الجديد، والقسم (المجموعة) يفتح دفتر الأستاذ المجمّع

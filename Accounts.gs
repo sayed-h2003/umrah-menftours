@@ -541,7 +541,7 @@ function glBootstrap(authToken, knownVer) {
   var can = { add: _sessionHasPerm_(session, 'gl.add'), edit: _sessionHasPerm_(session, 'gl.edit'), del: _sessionHasPerm_(session, 'gl.delete'), approve: _glCanApprove_(session), autoEdit: _glCanEditAuto_(session) };
   can.sub = _glSubOn_(session) && !_sessionHasPerm_(session, 'admin') ? (function () { var o = {}; GL_SUBS_.forEach(function (x) { o[x[0]] = { view: _glHasSub_(session, x[0], 'view'), add: _glHasSub_(session, x[0], 'add'), edit: _glHasSub_(session, x[0], 'edit'), del: _glHasSub_(session, x[0], 'delete') }; }); return o; })() : null;   // 🔐 (V4.276) صلاحيات الشاشات الفرعية
   // ⚡ (V4.252) الواجهة عندها نفس الإصدار (من آخر تحميل أو من المتصفح) ⇒ لا شيء تغيّر: رد فوري بلا قراءة أي شيت
-  if (knownVer && String(knownVer) === _glVerFresh_()) return { success: true, ready: true, same: true, ver: _GL_VER_, isAdmin: admin, can: can,
+  if (knownVer && String(knownVer) === _glVerFresh_()) return { success: true, ready: true, same: true, ver: _GL_VER_, isAdmin: admin, can: can, balMine: _glBalMine_(session), balUserOn: _glBalUserOn_(),
     pendingCount: (function () { try { return _glPendingCount_(); } catch (e) { return 0; } })(), csPend: _glCsPendTotal_() };
   var ver = _glVer_();
   var accs = _glAccounts_().list.map(function (a) { var c = {}; for (var k in a) if (k !== '_row') c[k] = a[k]; return c; });
@@ -553,7 +553,7 @@ function glBootstrap(authToken, knownVer) {
     fxDaily: (function () { var m = _glFxDailyMap_(), o = {}; Object.keys(m).forEach(function (k) { o[k] = [m[k].SAR || 0, m[k].USD || 0, m[k].src || '']; }); return o; })(),
     settings: _glSettingsOut_(), rates: _glRates_(), types: GL_TYPES_, kinds: GL_KINDS_, entryTypes: GL_ENTRY_TYPES_,
     accounts: accs, balances: bal,
-    can: can,
+    can: can, balMine: _glBalMine_(session), balUserOn: _glBalUserOn_(),
     csPend: _glCsPendTotal_(), pendingCount: (function () { try { return _glPendingCount_(); } catch (e) { return 0; } })(), tripMode: (function () { try { return _glTripMode_(); } catch (e) { return false; } })()
   };
 }
@@ -569,6 +569,90 @@ function _glBalances_(toDate) {
     o.base = _glR2_(o.base + _glNum_(r[9]) - _glNum_(r[10]));
   });
   return out;
+}
+
+/* ---------------------------- 🏠 شاشة الأرصدة المرنة (V4.335) ---------------------------- */
+// التخطيط العام (للجميع) يُحفظ بإعداد bal_layout (المدير فقط) · وتفضيل كل مستخدم بخاصية خاصة به GL_BALU_<user> (لا يمس بقية المستخدمين
+// ولا يرفع إصدار البيانات) ويعمل فقط إن فعّل المدير «تخصيص الصلاحيات» (bal_user_cust = نعم).
+function _glBalUserKey_(u) { return 'GL_BALU_' + String(u || '').toLowerCase().replace(/[^a-z0-9_.\u0600-\u06FF]/g, '_').slice(0, 60); }
+function _glBalUserOn_() { try { return _glStr_(_glSettings_().bal_user_cust) === 'نعم'; } catch (e) { return false; } }
+function _glBalMine_(session) {
+  if (!_glBalUserOn_()) return '';
+  try { return PropertiesService.getScriptProperties().getProperty(_glBalUserKey_(session.username)) || ''; } catch (e) { return ''; }
+}
+function _glBalSanitize_(L) {
+  if (typeof L === 'string') L = JSON.parse(L);
+  if (!L || !Array.isArray(L.secs)) throw new Error('تخطيط غير صالح');
+  var codeArr = function (a, n) { return (Array.isArray(a) ? a : []).map(function (x) { return String(x == null ? '' : x).replace(/[^0-9A-Za-z_.\-]/g, '').slice(0, 24); }).filter(Boolean).slice(0, n || 400); };
+  var txt = function (x, n) { return String(x == null ? '' : x).replace(/[<>]/g, '').trim().slice(0, n); };
+  var seen = {}, secs = [];
+  L.secs.slice(0, 30).forEach(function (c, i) {
+    if (!c || (c.t !== 'acc' && c.t !== 'top')) return;
+    var id = String(c.id || '').replace(/[^\w-]/g, '').slice(0, 24) || ('s' + i); while (seen[id]) id += 'x'; seen[id] = 1;
+    var o = { id: id, t: c.t, title: txt(c.title, 60) || 'قسم', icon: txt(c.icon, 4), color: /^#[0-9a-fA-F]{6}$/.test(c.color) ? c.color : '#475569', off: c.off ? 1 : 0 };
+    if (c.t === 'acc') { o.prefixes = codeArr(c.prefixes, 20); o.extra = codeArr(c.extra); o.hide = codeArr(c.hide); o.order = codeArr(c.order); }
+    else o.groups = (Array.isArray(c.groups) ? c.groups : []).slice(0, 10).map(function (g, j) {
+      var k = String(g && g.k || '').replace(/[^\w-]/g, '').slice(0, 24) || ('g' + j);
+      return { k: k, title: txt(g && g.title, 60) || k, prefix: String(g && g.prefix || '').replace(/[^0-9]/g, '').slice(0, 12), dir: g && g.dir === 'cr' ? 'cr' : 'dr', n: Math.max(1, Math.min(50, parseInt(g && g.n, 10) || 10)) };
+    }).filter(function (g) { return g.prefix; });
+    secs.push(o);
+  });
+  var out = JSON.stringify({ v: 1, secs: secs });
+  if (out.length > 8500) throw new Error('التخطيط كبير جداً — قلّل عدد الأقسام/الحسابات المخصَّصة');
+  return out;
+}
+function glBalLayoutSave(authToken, layout, scope) {
+  var session = _glPerm_(authToken, 'view'), admin = _glIsAdmin_(session);
+  scope = scope === 'mine' ? 'mine' : 'global';
+  var json = layout ? _glBalSanitize_(layout) : '';   // فارغ ⇒ إعادة الافتراضي
+  if (scope === 'global') {
+    if (!admin) throw new Error('تخصيص شاشة الأرصدة للجميع متاح للمدير فقط');
+    _glSetSetting_('bal_layout', json);
+    logChange_(session.username, 'تخصيص شاشة الأرصدة (للجميع)', 'GL:bal_layout', '-', '-', json ? 'حفظ' : 'افتراضي');
+    return { success: true, scope: scope, layout: json };
+  }
+  if (!admin && !_glBalUserOn_()) throw new Error('تخصيص الأرصدة الشخصي غير مفعَّل — اطلب من المدير تفعيل «تخصيص الصلاحيات»');
+  var P = PropertiesService.getScriptProperties(), k = _glBalUserKey_(session.username);
+  if (json) P.setProperty(k, json); else P.deleteProperty(k);
+  return { success: true, scope: scope, layout: json };
+}
+function glBalUserCustSet(authToken, on) {
+  var session = requireAuth_(authToken);
+  if (!_glIsAdmin_(session)) throw new Error('هذا الإعداد للمدير فقط');
+  _glSetSetting_('bal_user_cust', on ? 'نعم' : 'لا');
+  logChange_(session.username, 'تخصيص الصلاحيات لشاشة الأرصدة', 'GL:bal_user_cust', '-', '-', on ? 'مفعَّل' : 'موقوف');
+  return { success: true, on: !!on };
+}
+// أعلى الأرصدة لمجموعات حسابات: groups = [{k, prefix, dir:'dr'|'cr', n}] — رصيد تراكمي حتى اليوم + الرصيد النهائي (كل الحركات المرحّلة)
+// dir=dr (عملاء): الموجب مدين · dir=cr (موردون): الدائن يظهر موجباً. الترتيب بالمعادل بالجنيه، ويُستبعد الصفري/العكسي
+function glPartyBalances(authToken, groups) {
+  _glPerm_(authToken, 'view');
+  var accs = _glAccounts_(), todayK = _glDKey_(_glToday_()), want = {}, G = (Array.isArray(groups) ? groups : []).slice(0, 10).map(function (g) {
+    return { k: String(g && g.k || ''), prefix: String(g && g.prefix || '').replace(/[^0-9]/g, '').slice(0, 12), dir: g && g.dir === 'cr' ? 'cr' : 'dr', n: Math.max(1, Math.min(50, parseInt(g && g.n, 10) || 10)) };
+  }).filter(function (g) { return g.prefix; });
+  accs.list.forEach(function (a) { if (a.isGroup) return; G.forEach(function (g) { if (a.code.indexOf(g.prefix) === 0) want[a.code] = 1; }); });
+  var td = {}, fn = {};
+  _glRows_('lines').forEach(function (r) {
+    if (_glStr_(r[3]) !== GL_ST_POSTED_) return;
+    var code = _glStr_(r[4]); if (!want[code]) return;
+    var cur = _glCur_(r[7]), dk = _glDKey_(_glDate_(r[2])), dr = _glNum_(r[5]) - _glNum_(r[6]), bs = _glNum_(r[9]) - _glNum_(r[10]);
+    var add = function (m) { var o = (m[code] = m[code] || { EGP: 0, SAR: 0, USD: 0, base: 0 }); o[cur] += dr; o.base += bs; };
+    add(fn); if (!dk || dk <= todayK) add(td);
+  });
+  var out = {};
+  G.forEach(function (g) {
+    var sg = g.dir === 'cr' ? -1 : 1, rows = [];
+    Object.keys(want).forEach(function (code) {
+      if (code.indexOf(g.prefix) !== 0) return;
+      var t = td[code] || { EGP: 0, SAR: 0, USD: 0, base: 0 }, f = fn[code] || { EGP: 0, SAR: 0, USD: 0, base: 0 };
+      if (!(sg * t.base > 0.004) && !(sg * f.base > 0.004)) return;
+      var ex = function (o) { return { EGP: _glR2_(sg * o.EGP), SAR: _glR2_(sg * o.SAR), USD: _glR2_(sg * o.USD), base: _glR2_(sg * o.base) }; };
+      rows.push({ code: code, name: (accs.map[code] || {}).name || code, today: ex(t), fin: ex(f) });
+    });
+    rows.sort(function (a, b) { return b.today.base - a.today.base; });
+    out[g.k] = { total: rows.length, rows: rows.slice(0, g.n) };
+  });
+  return { success: true, asOf: _glToday_(), groups: out };
 }
 
 /* ---------------------------- الإعدادات والحسابات (واجهة) ---------------------------- */
