@@ -6729,6 +6729,8 @@ function drainTelegramQueue() {
   try { tgWebhookSelfHeal_(); } catch (eHeal) { Logger.log('drain/heal: ' + eHeal.message); }
   // تفريغ دفعات تعديل الحجوزات المُجمَّعة التي انتهت مهلتها — بصرف النظر عن وضع البوت
   try { tgFlushDueBookingEditBatches_(); } catch (eBatch) { Logger.log('drain/batch: ' + eBatch.message); }
+  // ⏳ (V4.333) طابور عمليات الحسابات: يُفرَّغ ما تبقى فيه حتى لو أُغلقت صفحة صاحبه
+  try { if (typeof glJobTick_ === 'function') glJobTick_(); } catch (eJq) { Logger.log('drain/jobq: ' + eJq.message); }
   // ⚡ (V4.330) تعديلات الشيت التي لم تُرحَّل فوراً (مزامنة جارية/قفل مشغول) تُلتقط هنا خلال دقيقة
   try { if (typeof hbGlLiveRun_ === 'function') hbGlLiveRun_(); } catch (eLive) { Logger.log('drain/hblive: ' + eLive.message); }
   // مزامنة شيت العهد الخارجي (CustodySync.gs) — مُقيَّدة بمهلتها الخاصة، ولا تعمل أصلاً ما

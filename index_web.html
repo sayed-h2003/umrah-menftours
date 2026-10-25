@@ -6918,11 +6918,44 @@ function _sessResume_(cb) {
    (فتتكرر بعد الدخول الثاني أيضاً). الآن: أي رمز جلسة قديم بمعاملات النداء ⇒ يُعاد النداء بالرمز الحالي. */
 var _TOK_RX_ = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function _sessStaleArg_(a, cur) { return typeof a === 'string' && !!a && a !== cur && (!!_RESUME_.dead[a] || _TOK_RX_.test(a)); }
-function _runExec_(getReal, st, fn, args, attempt) {
-  attempt = attempt || 0;
+/* ⏳ (V4.333) لا رسالة «البرنامج مشغول… أعد المحاولة» بعد الآن: فشل قفل الحسابات يحدث قبل أي كتابة (آمن إعادته)، فتُسلَّم عمليات
+   الحسابات (gl*) تلقائياً لطابور الخادم (glJobSubmit) وتُنفَّذ تتابعياً بالخلفية ونتابع حالتها ثم ننادي نفس دالة النجاح كأن
+   النداء نجح مباشرة؛ وبقية النداءات (والقراءات) تُعاد تلقائياً بتأخير متزايد. المستخدم لا يعيد شيئاً. */
+var _BUSY_RX_ = /الحسابات مشغولة|البرنامج مشغول|مشغول بعملية|مهلة التأمين|could not obtain lock|lock timeout/i;
+var _BUSY_RES_RX_ = /الشيت مشغول|مشغول بعملية حفظ/;
+function _busyToast_(m) { try { if (typeof showToast === 'function') showToast(m); } catch (e) {} }
+function _jobQueueRun_(getReal, st, fn, args) {
+  var token = args[0], fail = function (e) { if (st.fail) st.fail(e, st.uo); else console.error('queue ' + fn, e); };
+  _busyToast_('⏳ الحسابات مشغولة بعملية أخرى — وُضعت عمليتك في الطابور وستُنفَّذ تلقائياً…');
+  var handle = function (s, id, n) {
+    if (!s || !s.success) { fail({ message: (s && s.error) || 'تعذّرت متابعة الطابور' }); return; }
+    if (s.st === 'done') { _busyToast_('✅ نُفِّذت العملية من الطابور'); if (st.ok) st.ok(s.big ? { success: true, refresh: true } : s.result, st.uo); return; }
+    if (s.st === 'error') { fail({ message: s.error || 'فشلت العملية' }); return; }
+    if (n > 120) { fail({ message: 'العملية ما زالت بالطابور وستكتمل تلقائياً — حدّث الشاشة بعد قليل' }); return; }
+    setTimeout(function () {
+      getReal().withSuccessHandler(function (x) { handle(x, id, n + 1); })
+        .withFailureHandler(function (e) { if (n < 60) handle({ success: true, st: 'q' }, id, n + 1); else fail(e); }).glJobStatus(token, id);
+    }, n < 4 ? 1500 : 3000);
+  };
+  getReal().withSuccessHandler(function (s) { handle(s, s && s.id, 0); }).withFailureHandler(fail).glJobSubmit(token, fn, args.slice(1));
+}
+function _runExec_(getReal, st, fn, args, attempt, busyN) {
+  attempt = attempt || 0; busyN = busyN || 0;
   var r = getReal();
-  if (st.ok) r = r.withSuccessHandler(st.ok);
+  if (st.ok) r = r.withSuccessHandler(function (res, uo) {
+    // نتيجة «الشيت مشغول» (قفل السكربت قبل الكتابة) ⇒ إعادة تلقائية بتأخير متزايد بدل رسالة للمستخدم
+    if (res && res.success === false && _BUSY_RES_RX_.test(String(res.error || '')) && busyN < 8) {
+      if (!busyN) _busyToast_('⏳ الشيت مشغول بعملية أخرى — جارٍ التنفيذ تلقائياً…');
+      setTimeout(function () { _runExec_(getReal, st, fn, args, attempt, busyN + 1); }, 1200 * (busyN + 1)); return;
+    }
+    st.ok(res, uo);
+  });
   r = r.withFailureHandler(function (err, uo) {
+    var emsg = String((err && err.message) || err || '');
+    if (_BUSY_RX_.test(emsg) && fn !== 'glJobSubmit' && fn !== 'glJobStatus') {
+      if (/^gl[A-Z]/.test(fn) && args.length && typeof args[0] === 'string' && !(typeof GL_RO_RX_ !== 'undefined' && GL_RO_RX_.test(fn))) { _jobQueueRun_(getReal, st, fn, args); return; }
+      if (busyN < 8) { if (!busyN) _busyToast_('⏳ النظام مشغول لحظات — جارٍ التنفيذ تلقائياً…'); setTimeout(function () { _runExec_(getReal, st, fn, args, attempt, busyN + 1); }, 1500 * (busyN + 1)); return; }
+    }
     if (attempt < 3 && _SESS_RX_.test(String((err && err.message) || err || ''))) {
       var retry = function () { var nt = window.authToken; _runExec_(getReal, st, fn, args.map(function (a) { return _sessStaleArg_(a, nt) ? nt : a; }), attempt + 1); };
       var cur = window.authToken;
@@ -8055,7 +8088,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.332";
+var CLIENT_APP_VERSION = "4.333";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -48164,7 +48197,28 @@ function glRenderEntSelBar_() {
   box.innerHTML = !ids.length ? '' :
     ((GL.can.edit ? '<button class="btn btn-sm fw-bold" style="background:#0f766e;color:#fff;" onclick="glCtrOpen_(\'ent\')">🔁 تغيير الحساب المقابل (' + ids.length + ')</button>' : '') +
      (GL.can.edit ? '<button class="btn btn-sm fw-bold" style="background:#1e40af;color:#fff;" onclick="glEntBulkEditOpen_()">✏️ تعديل البيان/المرجع (' + ids.length + ')</button>' : '') +
-     (GL.can.del ? '<button class="btn btn-sm btn-danger" onclick="glEntBulkDelSelected()">🗑️ حذف/إلغاء المحدَّد (' + ids.length + ')</button>' : ''));
+     (GL.can.del ? '<button class="btn btn-sm btn-danger" onclick="glEntBulkDelSelected()">🗑️ حذف/إلغاء المحدَّد (' + ids.length + ')</button>' : '') +
+     glAdminBulkDelBtn_('ent', ids.length));
+}
+/* 🗑️ (V4.333) الحذف المجمع النهائي للقيود — للمدير فقط: الزر لا يُرسم لغير المدير والخادم يرفض أيضاً (glDeleteEntriesBulk) */
+function glAdminBulkDelBtn_(ctx, n) {
+  return GL.isAdmin ? '<button class="btn btn-sm" style="background:#7f1d1d;color:#fff;font-weight:800;" onclick="glAdminBulkDel_(\'' + ctx + '\')" title="حذف نهائي مجمّع للقيود المحدَّدة — للمدير فقط">🗑️ حذف نهائي مجمّع (' + n + ')</button>' : '';
+}
+function glAdminBulkDel_(ctx) {
+  if (!GL.isAdmin) { _showPopup('الحذف المجمع النهائي للمدير فقط', 'error'); return; }
+  var ids = Object.keys(glCtrSelMap_(ctx));
+  if (!ids.length) return;
+  askPrompt_('⚠️ حذف نهائي لـ ' + ids.length + ' قيد — لا يمكن التراجع. القيود التلقائية تُعاد بالمزامنة ما دام مصدرها قائماً، وقيد الإقفال والفترات المقفلة تُتخطى.\nللتأكيد اكتب كلمة: حذف', '', function (txt) {
+    if (String(txt || '').trim() !== 'حذف') { _showPopup('لم يُكتب «حذف» — أُلغيت العملية', 'warning'); return; }
+    glRun('glDeleteEntriesBulk', [ids], function (res) {
+      var sk = res.skipped || [];
+      if (ctx === 'st') GL._stSel = {}; else if (ctx === 'tr') GL._trSel = {}; else GL._entSel = {};
+      showToast('🗑️ حُذف ' + (res.deleted || 0) + ' قيد' + (sk.length ? ' · تُخطّي ' + sk.length : ''));
+      if (sk.length) _showPopup(sk.map(function (z) { return z.id + ': ' + z.reason; }).join('\n'), 'warning', 'قيود لم تُحذف');
+      if (res.autoN) _showPopup('منها ' + res.autoN + ' قيد تلقائي سيُعاد إنشاؤه بالمزامنة ما دام مصدره قائماً بشاشات البرنامج.', 'info');
+      glAfterChange();
+    });
+  }, { title: 'حذف نهائي مجمّع (مدير)', icon: '🗑️', okLabel: 'حذف نهائي', danger: true });
 }
 /* 🔁 (V4.315) تغيير «الحساب المقابل» لعدة قيود دفعة واحدة — من القيود والخزن والبنوك والعهد وكشف الحساب.
    بطاقة لكل قيد: سطر الحساب الأساسي (حساب الشاشة) ثابت، وكل سطر مقابل له منتقي حساب؛ المبالغ والعملات لا تُلمَس.
@@ -48184,6 +48238,7 @@ function glCtrRenderBar_(ctx) {
   var ids = Object.keys(glCtrSelMap_(ctx));
   box.innerHTML = !ids.length ? '' :
     '<button class="btn btn-sm fw-bold" style="background:#0f766e;color:#fff;" onclick="glCtrOpen_(\'' + ctx + '\')">🔁 تغيير الحساب المقابل (' + ids.length + ')</button>' +
+    glAdminBulkDelBtn_(ctx, ids.length) +
     '<button class="btn btn-sm btn-outline-secondary" onclick="glCtrClearSel_(\'' + ctx + '\')">✖ إلغاء التحديد</button>';
 }
 function glCtrClearSel_(ctx) {
@@ -51028,7 +51083,7 @@ function glCsDraw_(code) {
           return '<tr data-row="' + x.row + '" data-hint="' + glEsc(x.hint || '') + '" data-sg="' + glEsc((x.sugg && x.sugg[0] && x.sugg[0].code) || '') + '"' + glCcAttrs_(x, r.account.currency) + ' data-desc="' + glEsc(x.desc || '') + '"><td><input type="checkbox" class="glCsChk" checked></td><td class="gl-latin">' + (x.fee ? x.feeOf + ' <span class="badge bg-warning text-dark">🏦 مصاريف</span>' : x.row) + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x) + '</td>' +
             '<td style="text-align:right;">' + glEsc(x.desc) + '</td><td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
             '<td>' + (x.dup ? '<div class="mt-1 p-1" style="background:#fff7ed;border:1px dashed #fb923c;border-radius:8px;font-size:11.5px;">🔁 <b>قيد مطابق موجود:</b> <a href="#" class="gl-latin" title="فتح القيد للتعديل فوق هذه الشاشة — وعند الإغلاق أو الحفظ تعود هنا محدَّثةً بنفس الصف" onclick="glRevOpenEntry_(\'' + glJs(x.dup.id) + '\',this);return false;">' + glEsc(x.dup.id) + '</a> · ' + glEsc(x.dup.src) + ' · <span class="gl-latin">' + glEsc(x.dup.date) + '</span><br>' + glEsc(String(x.dup.desc || '').slice(0, 90)) +
-            '<select class="form-select form-select-sm mt-1 glCsDupSel" data-link="' + glEsc(x.dup.id) + '"><option value="link" selected>🔗 نفس الحركة — اربط الصف بهذا القيد (موصى به، بلا تكرار)</option><option value="new">➕ حركة مختلفة — سجّلها بالحساب المختار</option></select></div>' : '') + '<div class="d-flex gap-1">' + glAccInput('glCsAcc', '', x.preAcc || '') + glCsNaBtn_() + glRevDraftBtn_(x) + '</div>' + glCcWhy_(x) + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (s) {
+            '<select class="form-select form-select-sm mt-1 glCsDupSel" data-link="' + glEsc(x.dup.id) + '"><option value="link" selected>🔗 نفس الحركة — اربط الصف بهذا القيد (موصى به، بلا تكرار)</option><option value="new">➕ حركة مختلفة — سجّلها بالحساب المختار</option></select></div>' : '') + '<div class="d-flex gap-1">' + glAccInput('glCsAcc', '', x.preAcc || '') + glCsNaBtn_() + glCsSplitBtn_(x) + glRevDraftBtn_(x) + '</div>' + glCsSplitBox_(x) + glCcWhy_(x) + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (s) {
               return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var i=this.closest(\'tr\').querySelector(\'.glCsAcc\');i.dataset.code=\'' + glJs(s.code) + '\';i.value=\'' + glJs(s.code + ' — ' + s.name) + '\';glCcAuto_(this.closest(\'tr\'))">' + glEsc(s.name) + glCcSgLbl_(s) + '</button>';
             }).join('') + '</div>' : '') + '</td>' + glCcCells_(x, r.account.currency) + '</tr>';
         }).join('')) +
@@ -51068,6 +51123,8 @@ function glCsApprove_(code, btn) {
     if (!tr.querySelector('.glCsChk').checked) return;
     var ds = tr.querySelector('.glCsDupSel');   // (V4.278)
     if (ds && ds.value === 'link') { items.push({ row: +tr.dataset.row, link: ds.dataset.link }); return; }
+    var sp = glCsSplitRead_(tr);   // ➗ (V4.333)
+    if (sp) { if (sp.err) { bad.push('صف ' + tr.dataset.row + ': ' + sp.err); return; } items.push({ row: +tr.dataset.row, account: sp.splits[0].account, splits: sp.splits, force: ds ? 1 : 0 }); return; }
     var acc = glAccVal(tr.querySelector('.glCsAcc'));
     if (!acc) { miss++; return; }
     var it0 = { row: +tr.dataset.row, account: acc, force: ds ? 1 : 0 }, ce = glCcItem_(tr, it0);
@@ -52070,6 +52127,42 @@ function glCsBanner_() {
 function glCsNaBtn_() {
   return (typeof GL !== 'undefined' && GL.can && glSubCan_('coa', 'add')) ? '<button type="button" class="btn btn-outline-success btn-sm py-0 px-2" title="إضافة حساب جديد للدليل واختياره لهذا الصف" onclick="glCsNewAcc_(this)">➕</button>' : '';
 }
+/* ➗ (V4.333) الطرف المقابل بأكثر من حساب (Split) في «استكمال واعتماد» وشاشة الشيت المنفردة: زر ➗ بجانب الحساب يفتح محرراً
+   (حساب + مبلغ لكل جزء، بعملة الصف)؛ مجموع الأجزاء يجب أن يساوي مبلغ الصف. الحساب الواحد يبقى كما كان (إلغاء التقسيم بالضغط ثانيةً). */
+function glCsSplitBtn_(x) { return glCcOff_(x) && x && x.fee ? '' : '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="تقسيم مبلغ الصف على أكثر من حساب مقابل" onclick="glCsSplitTog_(this)">➗</button>'; }
+function glCsSplitBox_(x) { return glCcOff_(x) && x && x.fee ? '' : '<div class="glSplBox d-none mt-1 p-1" style="border:1px dashed #3b82f6;border-radius:8px;background:#eff6ff;font-size:12px;"></div>'; }
+function glCsSplitRow_(amt) { return '<div class="d-flex gap-1 mb-1 glSplRow align-items-center">' + glAccInput('glSplAcc', '', '') + '<input class="form-control form-control-sm gl-latin glSplAmt" style="width:104px;" inputmode="decimal" value="' + (amt || '') + '" oninput="glCsSplitSum_(this)"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="var b=this.closest(\'.glSplBox\');this.closest(\'.glSplRow\').remove();glCsSplitSum_(b)">✕</button></div>'; }
+function glCsSplitTog_(btn) {
+  var tr = btn.closest('tr'), box = tr && tr.querySelector('.glSplBox'); if (!box) return;
+  var acc = tr.querySelector('.glCsAcc'), on = box.classList.contains('d-none'), amt = (+tr.dataset.amt || 0);
+  if (!on) { box.classList.add('d-none'); box.innerHTML = ''; if (acc) { acc.disabled = false; acc.style.opacity = ''; } return; }
+  box.classList.remove('d-none');
+  box.innerHTML = '<div class="fw-bold mb-1">➗ تقسيم ' + glFmt(amt) + ' على أكثر من حساب</div><div class="glSplRows">' + glCsSplitRow_(amt) + glCsSplitRow_('') + '</div>' +
+    '<button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="this.closest(\'.glSplBox\').querySelector(\'.glSplRows\').insertAdjacentHTML(\'beforeend\', glCsSplitRow_(\'\'))">+ حساب</button> <span class="glSplRest ms-2 fw-bold"></span>';
+  if (acc) { acc.disabled = true; acc.style.opacity = '.45'; }
+  glCsSplitSum_(box);
+}
+function glCsSplitSum_(el) {
+  var box = el.classList && el.classList.contains('glSplBox') ? el : el.closest('.glSplBox'); if (!box) return;
+  var tr = box.closest('tr'), tot = 0; box.querySelectorAll('.glSplAmt').forEach(function (i) { tot += glNum(i.value); });
+  var rest = Math.round(((+tr.dataset.amt || 0) - tot) * 100) / 100, lab = box.querySelector('.glSplRest');
+  if (lab) { lab.textContent = Math.abs(rest) < 0.01 ? '✅ المجموع مطابق' : ('المتبقي: ' + glFmt(rest)); lab.style.color = Math.abs(rest) < 0.01 ? '#166534' : '#b91c1c'; }
+}
+// يقرأ التقسيم من صف: null ⇒ غير مفعَّل · {err} ⇒ خطأ · {splits}
+function glCsSplitRead_(tr) {
+  var box = tr.querySelector('.glSplBox'); if (!box || box.classList.contains('d-none')) return null;
+  var out = [], tot = 0, bad = '';
+  box.querySelectorAll('.glSplRow').forEach(function (r) {
+    var a = glAccVal(r.querySelector('.glSplAcc')), v = glNum(r.querySelector('.glSplAmt').value);
+    if (!a && !(v > 0)) return;
+    if (!a || !(v > 0)) { bad = 'كل جزء يحتاج حساباً ومبلغاً'; return; }
+    out.push({ account: a, amt: Math.round(v * 100) / 100 }); tot += v;
+  });
+  if (bad) return { err: bad };
+  if (out.length < 2) return { err: 'التقسيم يحتاج حسابين على الأقل' };
+  if (Math.abs(tot - (+tr.dataset.amt || 0)) > 0.01) return { err: 'مجموع الأجزاء (' + glFmt(tot) + ') لا يساوي مبلغ الصف (' + glFmt(+tr.dataset.amt || 0) + ')' };
+  return { splits: out };
+}
 function glCsNewAcc_(btn) {
   var tr = btn.closest('tr'), inp = tr && tr.querySelector('.glCsAcc'); if (!inp) return;
   glQuickAcc_(inp, tr.dataset.hint || '', tr.dataset.sg || '');
@@ -52424,7 +52517,7 @@ function glCsPendDraw_() {
           '<td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td>' +
           '<td><input class="form-control form-control-sm glCsDesc" value="' + glEsc(x.desc || '') + '" data-orig="' + glEsc(x.desc || '') + '" style="min-width:190px;"></td>' +
           '<td>' + (x.dup ? '<div class="mt-1 p-1" style="background:#fff7ed;border:1px dashed #fb923c;border-radius:8px;font-size:11.5px;">🔁 <b>قيد مطابق موجود:</b> <a href="#" class="gl-latin" title="فتح القيد للتعديل فوق هذه الشاشة — وعند الإغلاق أو الحفظ تعود هنا محدَّثةً بنفس الصف" onclick="glRevOpenEntry_(\'' + glJs(x.dup.id) + '\',this);return false;">' + glEsc(x.dup.id) + '</a> · ' + glEsc(x.dup.src) + ' · <span class="gl-latin">' + glEsc(x.dup.date) + '</span><br>' + glEsc(String(x.dup.desc || '').slice(0, 90)) +
-            '<select class="form-select form-select-sm mt-1 glCsDupSel" data-link="' + glEsc(x.dup.id) + '"><option value="link" selected>🔗 نفس الحركة — اربط الصف بهذا القيد (موصى به، بلا تكرار)</option><option value="new">➕ حركة مختلفة — سجّلها بالحساب المختار</option></select></div>' : '') + '<div class="d-flex gap-1">' + glAccInput('glCsAcc', '', x.preAcc || '') + glCsNaBtn_() + glRevDraftBtn_(x) + '</div>' + glCsSusSel_(x) + glCcWhy_(x) + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
+            '<select class="form-select form-select-sm mt-1 glCsDupSel" data-link="' + glEsc(x.dup.id) + '"><option value="link" selected>🔗 نفس الحركة — اربط الصف بهذا القيد (موصى به، بلا تكرار)</option><option value="new">➕ حركة مختلفة — سجّلها بالحساب المختار</option></select></div>' : '') + '<div class="d-flex gap-1">' + glAccInput('glCsAcc', '', x.preAcc || '') + glCsNaBtn_() + glCsSplitBtn_(x) + glRevDraftBtn_(x) + '</div>' + glCsSplitBox_(x) + glCsSusSel_(x) + glCcWhy_(x) + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
             return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var i=this.closest(\'tr\').querySelector(\'.glCsAcc\');i.dataset.code=\'' + glJs(sg.code) + '\';i.value=\'' + glJs(sg.code + ' — ' + sg.name) + '\';glCcAuto_(this.closest(\'tr\'))">' + glEsc(sg.name) + glCcSgLbl_(sg) + '</button>';
           }).join('') + '</div>' : '') + '</td>' + glCcCells_(x, g.currency) + '</tr>';
       }).join('') + '</tbody></table></div>' + glCsSuspTbl_(g, amt) + '</div></div>';
@@ -52619,6 +52712,13 @@ function glCsApproveAll_(btn) {
     if (ss && ss.value) { var sa = ((GL._csP || {}).suspAccs || []).filter(function (z) { return z.key === ss.value; })[0] || {}, d0 = tr.querySelector('.glCsDesc');
       var si = { row: +tr.dataset.row, susp: 1, account: sa.code || '', force: ds ? 1 : 0 }; if (d0 && d0.value.trim() && d0.value !== d0.dataset.orig) si.desc = d0.value.trim();
       (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push(si); n++; return; }
+    var sp = glCsSplitRead_(tr);   // ➗ (V4.333)
+    if (sp) {
+      if (sp.err) { bad.push('صف ' + tr.dataset.row + ': ' + sp.err); return; }
+      var dS = tr.querySelector('.glCsDesc'), itS = { row: +tr.dataset.row, account: sp.splits[0].account, splits: sp.splits, force: ds ? 1 : 0 };
+      if (dS && dS.value.trim() && dS.value !== dS.dataset.orig) itS.desc = dS.value.trim();
+      (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push(itS); n++; return;
+    }
     var acc = glAccVal(tr.querySelector('.glCsAcc')); if (!acc) { miss++; return; }
     var d = tr.querySelector('.glCsDesc'), it = { row: +tr.dataset.row, account: acc, force: ds ? 1 : 0 };
     if (d && d.value.trim() && d.value !== d.dataset.orig) it.desc = d.value.trim();
