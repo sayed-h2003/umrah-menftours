@@ -1417,6 +1417,7 @@
         <div class="action-bar">
             <div class="action-group action-group-export">
                 <button onclick="refreshStatement()" title="قراءة أحدث بيانات المصدر وإعادة تحميل الكشف الآن"><span class="ai">↻</span> تحديث</button>
+                <button onclick="syncFromGl_()" id="stmtGlSyncBtn" title="احتياطي: يُظهر بهذا الكشف أي دفعة مسجَّلة بالحسابات العامة على هذا الطرف ولم تظهر (أي تاريخ). الدفعات الجديدة تصل لحظياً بحفظها بالحسابات العامة."><span class="ai">🔄</span> مزامنة من الحسابات العامة</button>
                 <button onclick="printStatement()" title="طباعة"><span class="ai">🖨</span> طباعة</button>
                 <button onclick="shareStatementPdf_()" id="stmtPdfBtn" title="ملف PDF مطابق تمامًا لمعاينة الطباعة — للمشاركة أو التحميل">📄 PDF / مشاركة</button>
                 <button onclick="shareStatementImage_()" id="stmtImgBtn" title="مشاركة كصورة بأعلى وضوح"><span>🖼 صورة</span></button>
@@ -6034,6 +6035,19 @@ function shareBookingConfirmationImage() {
 }
 
 // تحديث فوري: إلغاء كاش الحجوزات ثم إعادة تحميل كشف الحساب الحالي مباشرة من المصدر
+// 🔄 (V4.332) مزامنة يدوية احتياطية: دفعات الحسابات العامة (أي تاريخ) ⇒ كشف هذا الطرف
+function syncFromGl_() {
+  var c = (document.getElementById('customer').value || '').trim();
+  if (!confirm(c ? ('مزامنة دفعات الحسابات العامة الخاصة بـ«' + c + '» إلى هذا الكشف الآن؟') : 'لم تختر طرفاً — مزامنة دفعات كل الأطراف من الحسابات العامة (أبطأ)؟')) return;
+  var btn = document.getElementById('stmtGlSyncBtn'); if (btn) btn.disabled = true;
+  showToast('جارِ مزامنة دفعات الحسابات العامة...');
+  google.script.run.withSuccessHandler(function (res) {
+    if (btn) btn.disabled = false;
+    if (!res || !res.ok) { alert('تعذّرت المزامنة: ' + ((res && res.error) || 'خطأ غير معروف')); return; }
+    showToast('تمت المزامنة — ' + (res.rows || 0) + ' دفعة من ' + (res.mirrored || 0) + ' قيد');
+    if (c) loadData(); loadPartyList();
+  }).withFailureHandler(function (e) { if (btn) btn.disabled = false; alert('تعذّرت المزامنة: ' + e.message); }).hbSyncFromGl(currentSessionToken, c);
+}
 function refreshStatement() {
   var c = document.getElementById('customer').value;
   showToast('جارِ التحديث من المصدر...');

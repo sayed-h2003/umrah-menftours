@@ -8055,7 +8055,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.331";
+var CLIENT_APP_VERSION = "4.332";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -53209,7 +53209,7 @@ function glHbHpayView() {
         'الدفعات المسجَّلة ببرنامج الحجوزات قبل التاريخ تبقى كما ضبطتها «دفعات برنامج الحجوزات تبدأ من». مزامنة شيت العهدة تبقى تعمل كما هي.</div>' +
       '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">من تاريخ</label><div style="width:140px;">' + glDateInput('glHbOnlyD', c.hbGlOnly || '') + '</div></div>' +
       '<button class="btn btn-primary btn-sm fw-bold" onclick="glHbOnlySet(this,false)">💾 تطبيق</button>' +
-      (c.hbGlOnly ? '<button class="btn btn-outline-secondary btn-sm" onclick="glHbOnlyResync(this)" title="إعادة كتابة كل النسخ من القيود الحالية">🔁 إعادة النسخ</button><button class="btn btn-outline-primary btn-sm" onclick="glHbPreCut(this)" title="سندات/قيود يدوية مسجَّلة قبل تاريخ القطع على حساب فندق ولا تظهر بكشفه ببرنامج الحجوزات — اختر منها ما يُنسخ للكشف">🔙 قيود قبل القطع</button><button class="btn btn-outline-danger btn-sm" onclick="glHbOnlySet(this,true)">إيقاف</button>' : '') +
+      (c.hbGlOnly ? '<button class="btn btn-outline-secondary btn-sm" onclick="glHbOnlyResync(this)" title="إعادة كتابة كل النسخ من القيود الحالية">🔁 إعادة النسخ</button><button class="btn btn-outline-danger btn-sm" onclick="glHbOnlySet(this,true)">إيقاف</button>' : '') +
       '</div><div id="glHbOnlyRes" class="small mt-1"></div></div>' : '');
   var sel = document.getElementById('glHbpParty');
   if (sel) { if (GL._hbpParty) sel.value = GL._hbpParty; sel.addEventListener('change', function () { GL._hbpParty = this.value; glHbpBal(); }); }
@@ -53260,34 +53260,6 @@ function glHbOnlySet(btn, off) {
     _showPopup((res.from ? '✅ مُفعَّل منذ ' + res.from : '✅ أُوقف') + ' — قيود منسوخة: ' + (res.mirrored || 0) + ' (' + (res.rows || 0) + ' صف)' + (res.orphans ? ' · حُذف ' + res.orphans + ' صف قديم' : ''), 'success');
     glRenderHotels();
   }, function (e) { btn.disabled = false; if (out) out.textContent = ''; _showPopup(e.message || String(e), 'error'); });
-}
-/* 🔙 (V4.331) قيود يدوية قبل تاريخ القطع على حسابات الفنادق لا تصل لكشف الفندق ببرنامج الحجوزات (مصدر ما قبل القطع هناك).
-   المدير يختار منها ما يُنسخ (الافتراضي: ما ليس له دفعة مطابقة بالحجوزات) — فلا يحتاج تسجيلها ثانيةً هناك فيتكرر قيدها. */
-function glHbPreCut(btn) {
-  btn.disabled = true;
-  glRun('glHbPreCutScan', [], function (res) {
-    btn.disabled = false;
-    var rows = res.rows || [];
-    if (!rows.length) { _showPopup('✅ لا قيود يدوية قبل تاريخ القطع (' + res.from + ') على أطراف الحجوزات تحتاج نسخاً لكشف الفندق.', 'success'); return; }
-    GL._preCut = rows;
-    var h = '<div class="gl-note">سندات/قيود يدوية مرحّلة <b>قبل ' + glEsc(res.from) + '</b> على حساب فندق/مورد حجوزات ولا نسخة لها بكشفه. المحدَّد يُنسخ لسجل دفعات برنامج الحجوزات (بمعرّف GL:…) فيظهر بكشف الفندق، ويتبع القيد في أي تعديل/إلغاء لاحق. ' +
-      '<b>⚠️ ما عليه علامة «مطابق بالحجوزات»</b> له دفعة بنفس الطرف والمبلغ (±٣ أيام) مسجَّلة ببرنامج الحجوزات — غالباً هي نفسها (أو مكررة): لم يُحدَّد افتراضياً، ولا يُنسخ إلا إن قررت.</div>' +
-      '<div style="overflow:auto;max-height:55vh;"><table class="gl-tbl"><thead><tr><th></th><th>القيد</th><th>التاريخ</th><th>الطرف</th><th>الاتجاه</th><th>المبلغ (ريال)</th><th>البيان</th><th></th></tr></thead><tbody>' +
-      rows.map(function (r, i) {
-        return '<tr><td><input type="checkbox" class="glpc-chk" data-i="' + i + '"' + (r.dup ? '' : ' checked') + '></td><td class="gl-latin"><a href="#" onclick="glShowEntry(\'' + glJs(r.id) + '\');return false;">' + glEsc(r.voucherNo || r.id) + '</a></td>' +
-          '<td class="gl-latin">' + glEsc(r.date) + '</td><td>' + glEsc(r.party) + '</td><td>' + glEsc(r.dir) + '</td><td class="gl-latin fw-bold">' + glFmt(r.amt) + '</td><td style="text-align:right;font-size:11.5px;">' + glEsc(r.note) + '</td>' +
-          '<td style="font-size:11px;">' + (r.dup ? '<span class="gl-pill" style="background:#fef3c7;" title="دفعة ببرنامج الحجوزات: ' + glEsc(r.dup.date + ' — ' + r.dup.dir) + '">⚠️ مطابق بالحجوزات</span>' : '') + '</td></tr>';
-      }).join('') + '</tbody></table></div>' + (res.n > rows.length ? '<div class="small text-muted">تُعرض أول ' + rows.length + ' من ' + res.n + '.</div>' : '') +
-      '<div class="d-flex gap-2 mt-3"><button class="btn btn-primary fw-bold" onclick="glHbPreCutApply(this)">✅ نسخ المحدَّد لكشف الفندق</button><button class="btn btn-outline-secondary" onclick="glDlgClose()">إغلاق</button></div>';
-    glDlg('🔙 قيود قبل تاريخ القطع غير ظاهرة بكشف الفندق (' + rows.length + ')', h, 1000);
-  }, function (e) { btn.disabled = false; _showPopup(e.message || String(e), 'error'); });
-}
-function glHbPreCutApply(btn) {
-  var ids = {}; document.querySelectorAll('.glpc-chk:checked').forEach(function (c) { var r = (GL._preCut || [])[+c.dataset.i]; if (r) ids[r.id] = 1; });
-  ids = Object.keys(ids); if (!ids.length) { _showPopup('حدّد قيداً واحداً على الأقل', 'error'); return; }
-  btn.disabled = true; btn.innerHTML = '⏳ جارٍ النسخ…';
-  glRun('glHbPreCutApply', [ids], function (res) { glDlgClose(); _showPopup('✅ نُسخ ' + (res.mirrored || 0) + ' قيد (' + (res.rows || 0) + ' صف) لكشوف الفنادق ببرنامج الحجوزات', 'success'); try { glHbpList(); } catch (e) {} },
-    function (e) { btn.disabled = false; btn.innerHTML = '✅ نسخ المحدَّد لكشف الفندق'; _showPopup(e.message || String(e), 'error'); });
 }
 function glHbOnlyResync(btn) {
   btn.disabled = true;

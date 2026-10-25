@@ -183,6 +183,25 @@ function hbBridgeSession(authToken) {
     user: { username: user.username, name: user.displayName || user.username, permissions: user.permissions || {}, financeLevel: user.financeLevel || '', admin: user.role === 'admin' || cap === 'admin',
       showCost: hasFinanceLevel_(user, 'cost'), showSale: hasFinanceLevel_(user, 'sale') } });
 }
+/* 🔄 (V4.332) زر المزامنة الاحتياطية بكشف الفندق (شاشة كشف الحساب ببرنامج الحجوزات): يُظهر فوراً أي دفعة مسجَّلة بالحسابات العامة على
+   هذا الطرف (أي تاريخ) ولم تظهر بكشفه. الدفعات الجديدة تصل لحظياً بالحفظ — هذا احتياطي يدوي. party فارغ ⇒ كل الأطراف.
+   الجلسة جلسة برنامج الحجوزات (صلاحية تسجيل الدفعات). */
+function hbSyncFromGl(token, party) {
+  try {
+    var user = requirePermission_(token, 'payments', 'add');
+    if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return { ok: false, error: 'برنامج الحجوزات غير مربوط بالحسابات العامة' };
+    if (!_glHbOnlyK_()) return { ok: false, error: 'لم يُفعَّل «تاريخ القطع» بالحسابات العامة بعد (الحسابات العامة ← 🏨 الحجوزات ← 💳 دفعات الفنادق)' };
+    var lock = _glLock_();
+    if (!lock.tryLock(60000)) { _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1); return { ok: false, error: 'الحسابات العامة مشغولة بعملية أخرى — أعد المحاولة بعد لحظات' }; }
+    try {
+      _GL_HB_MEMO_ = null; _GL_SET_MEMO_ = null; _GL_ACC_MEMO_ = null;
+      var r = _glHbMirrorAll_(String(party || '').trim() || null);
+      try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eI) {}
+      try { logChange_(user.username || 'الحجوزات', 'مزامنة دفعات الحسابات العامة لكشف الفندق', 'GL:hbsync', String(party || '') || 'كل الأطراف', '-', (r.mirrored || 0) + ' قيد · ' + (r.rows || 0) + ' صف'); } catch (eL) {}
+      return { ok: true, mirrored: r.mirrored || 0, rows: r.rows || 0 };
+    } finally { _glUnlock_(lock); }
+  } catch (e) { return { ok: false, error: e.message }; }
+}
 /* ⚡ (V4.330) الربط اللحظي لتعديلات شيتات الحجوزات المباشرة (والحذف اليدوي للدفعات): كل تعديل يدوي بالشيت يضع علامة «مستحق»
    ثم تُحدَّث قيود الحجوزات (AUTO:HB) بالحسابات العامة فوراً لو لم تجرِ مزامنة خلال آخر 45 ثانية، وإلا تلتقطها مهمة الدقيقة
    (drainTelegramQueue) خلال أقل من دقيقة — فلا حاجة لضغط مزامنة يدوية. التجميع يمنع بناء القيود مع كل خلية في لصق جماعي. */
