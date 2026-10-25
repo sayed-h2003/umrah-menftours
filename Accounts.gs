@@ -7267,7 +7267,7 @@ function _glHbPayRef_(pid, vmap) {
    الطرف المقابل = أسماء الحسابات الأخرى بالقيد (خزينة/بنك/عهدة/حساب آخر) عدا حساب الطرف نفسه.
    pays: [{id, link, party}] ⇒ {id: {entry, voucher, cp}} — مسح واحد لقيود الدفتر وأسطر القيود المعنية فقط. */
 function _glHbPayRefs_(pays) {
-  var want = {}, byPid = {}, ent = {};
+  var want = {}, byPid = {}, how = {};
   (pays || []).forEach(function (p) {
     var id = String(p.id || ''); if (!id) return;
     var m = /^GL:(.+):\d+$/.exec(id);
@@ -7275,16 +7275,45 @@ function _glHbPayRefs_(pays) {
     want['AUTO:HBP:' + id] = id;
     var lk = String(p.link || ''); if (lk && !/^GL:/.test(lk)) want['AUTO:HBL:' + lk] = id;
   });
-  var vm = {}, need = {};
+  var vm = {}, info = {};
   _glRows_('entries').forEach(function (r) {
     var sk = _glStr_(r[6]), eid = _glStr_(r[0]), st = _glStr_(r[5]);
+    info[eid] = { sk: sk, st: st, type: _glStr_(r[3]) };
+    var mm = /^VCH:(.+)$/.exec(sk); if (mm) vm[eid] = mm[1];
     if (st === GL_ST_VOID_) return;
     if (want[sk] && !byPid[want[sk]]) byPid[want[sk]] = eid;
-    var mm = /^VCH:(.+)$/.exec(sk); if (mm) vm[eid] = mm[1];
   });
-  Object.keys(byPid).forEach(function (pid) { need[byPid[pid]] = 1; });
   var parties = {}; try { parties = _glHbMirrorParties_(); } catch (e0) {}
-  var accs = _glAccounts_().map, linesBy = {};
+  var accs = _glAccounts_().map;
+  // 🔎 (V4.340) دفعة بلا قيد مرتبط (قيدها التلقائي أُلغي أو استُبدل بقيد مستورد من الـ ERP أو قيد آخر): مطابقة بالطرف + الاتجاه + المبلغ + التاريخ
+  // (نفس اليوم أولاً ثم ±3 أيام) مع أي قيد مرحَّل بأي نوع/مصدر (مستورد · تلقائي للدفعات · يدوي…) عدا قيود الحجوزات/الرحلات/الافتتاحي/الإقفال، وكل قيد يُستخدم مرة
+  var unres = (pays || []).filter(function (p) { return p.id && !byPid[String(p.id)] && p.date && p.amount; });
+  if (unres.length) {
+    var keyOf = {}; unres.forEach(function (p) { keyOf[_glHbKey_(p.party || '')] = 1; });
+    var party = {}; Object.keys(parties).forEach(function (code) { if (keyOf[_glHbKey_(parties[code])]) party[code] = _glHbKey_(parties[code]); });
+    var sarRate = _glRates_().SAR || 1, DENY = /^(AUTO:(HB:|HBOPEN|TRIP:|CI:|CAT|TR|MF|VZ|OPEN|CP:)|CLOSE:)/, cand = {}, claimed = {};
+    Object.keys(byPid).forEach(function (k) { claimed[byPid[k]] = 1; });
+    _glRows_('lines').forEach(function (l) {
+      var code = _glStr_(l[4]), pk = party[code]; if (!pk) return;
+      var eid = _glStr_(l[0]), e = info[eid]; if (!e || e.st !== GL_ST_POSTED_ || DENY.test(e.sk) || e.type === 'قيد افتتاحي' || e.type === 'قيد إقفال') return;
+      var net = _glNum_(l[5]) - _glNum_(l[6]); if (Math.abs(net) < 0.005) return;
+      var cur = _glCur_(l[7]), amt = cur === 'SAR' ? Math.abs(net) : Math.abs(_glNum_(l[9]) - _glNum_(l[10])) / sarRate;
+      (cand[pk] = cand[pk] || []).push({ eid: eid, k: _glDKey_(_glDate_(l[2])), amt: amt, dir: net < 0 ? 'استلمنا منه' : 'دفعنا له', sar: cur === 'SAR' });
+    });
+    var day = function (k) { return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : 0; };
+    unres.sort(function (a, b) { return _glDKey_(a.date).localeCompare(_glDKey_(b.date)); }).forEach(function (p) {
+      var pk = _glHbKey_(p.party || ''), pa = _glR2_(parseFloat(p.amount) || 0), pdir = /استلمنا/.test(p.dir || '') ? 'استلمنا منه' : 'دفعنا له', pd = day(_glDKey_(p.date)), best = null, bd = 99;
+      (cand[pk] || []).forEach(function (c) {
+        if (claimed[c.eid] || c.dir !== pdir) return;
+        if (Math.abs(c.amt - pa) > (c.sar ? 0.01 : Math.max(0.01, pa * 0.015))) return;
+        var d = Math.abs(day(c.k) - pd); if (d > 3) return;
+        if (d < bd) { bd = d; best = c; }
+      });
+      if (best) { claimed[best.eid] = 1; byPid[String(p.id)] = best.eid; how[String(p.id)] = 'match'; }
+    });
+  }
+  var need = {}; Object.keys(byPid).forEach(function (pid) { need[byPid[pid]] = 1; });
+  var linesBy = {};
   _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (need[id]) (linesBy[id] = linesBy[id] || []).push(l); });
   var out = {};
   (pays || []).forEach(function (p) {
@@ -7295,7 +7324,7 @@ function _glHbPayRefs_(pays) {
       if (parties[code] && _glHbKey_(parties[code]) === own) return;   // سطر الطرف نفسه
       cp.push((accs[code] || {}).name || code);
     });
-    out[id] = { entry: eid, voucher: vm[eid] || '', cp: cp.join('، ') };
+    out[id] = { entry: eid, voucher: vm[eid] || '', cp: cp.join('، '), how: how[id] || '' };
   });
   return out;
 }

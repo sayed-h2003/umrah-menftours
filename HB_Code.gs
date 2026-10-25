@@ -5298,7 +5298,7 @@ function searchPayments(filters, token) {
     var rows = [], received = 0, paid = 0;
 
     var _prefs = {};
-    if (typeof _glHbPayRefs_ === 'function') { try { _prefs = _glHbPayRefs_(data.filter(function (p) { return !fParty || (p[1] || '').toString().toLowerCase().indexOf(fParty) !== -1; }).map(function (p) { return { id: p[7], link: p[9], party: (p[1] || '').toString().trim() }; })); } catch (eR) { _prefs = {}; } }
+    if (typeof _glHbPayRefs_ === 'function') { try { _prefs = _glHbPayRefs_(data.filter(function (p) { return !fParty || (p[1] || '').toString().toLowerCase().indexOf(fParty) !== -1; }).map(function (p) { return { id: p[7], link: p[9], party: (p[1] || '').toString().trim(), date: hbRefDate_(p[0]), amount: parseFloat(p[3]) || 0, dir: p[2] }; })); } catch (eR) { _prefs = {}; } }
     data.forEach(function (p) {
       var d = p[0] instanceof Date ? new Date(p[0].getTime()) : new Date(p[0]);
       if (isNaN(d.getTime())) return;
@@ -5728,7 +5728,7 @@ function getUnifiedStatement_(partyName, start, end) {
 
     var pData = getPaymentsRowsCached_(); // مقروءة مرة واحدة لكل تنفيذ — تخدم كل حسابات كشف الحساب
     var _refs = {};   // 🔗 (V4.339) رقم القيد/السند/الطرف المقابل من الحسابات العامة لكل دفعة (نسخة قيد أو دفعة حجوزات)
-    if (typeof _glHbPayRefs_ === 'function') { try { _refs = _glHbPayRefs_(pData.filter(function (p) { return normalizeName_(p[1]) === partyNorm; }).map(function (p) { return { id: p[7], link: p[9], party: partyName }; })); } catch (eR) { _refs = {}; } }
+    if (typeof _glHbPayRefs_ === 'function') { try { _refs = _glHbPayRefs_(pData.filter(function (p) { return normalizeName_(p[1]) === partyNorm; }).map(function (p) { return { id: p[7], link: p[9], party: partyName, date: hbRefDate_(p[0]), amount: parseFloat(p[3]) || 0, dir: p[2] }; })); } catch (eR) { _refs = {}; } }
     var glRef_ = function (pid) { return _refs[String(pid || '')] || null; };
     if (pData.length) {
       pData.forEach(function (p) {
@@ -12413,3 +12413,6 @@ function tgOcrCommitUpdate_(chatId, from, data, bookingKey) {
     if (!tgOcrAdvanceQueue_(chatId, from, data)) tgClearSession_(chatId, from.id);
   } catch (e) { tgSendTo_(chatId, '⛔ فشل التحديث: ' + tgEsc_(e.message)); }
 }
+
+// 🔗 (V4.340) تاريخ دفعة بصيغة dd/MM/yyyy لمطابقتها بقيود الحسابات العامة (فارغ لو غير صالح)
+function hbRefDate_(v) { try { var d = v instanceof Date ? v : new Date(v); return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, 'GMT+3', 'dd/MM/yyyy'); } catch (e) { return ''; } }
