@@ -7145,12 +7145,12 @@ function _glHbMirrorRows_(id, cutK, parties, fx, dup, allowConv) {
   var e = _glEntryObj_(f.r);
   // (V4.258) قيود مزامنة شيت العهدة (CUST:) تُنسخ أيضاً — دفعة عميل فندقي بالعهدة كانت تظهر بكشف الحسابات العامة فقط
   // لا بحساب العميل ببرنامج الحجوزات بعد إيقاف مزامنة العهد هناك
-  if (e.status !== GL_ST_POSTED_ || (e.sourceKey && !/^(VCH|CUST):/.test(e.sourceKey))) return [];
+  if (e.status !== GL_ST_POSTED_ || /^AUTO:HB/.test(e.sourceKey || '')) return [];   // (V4.344) كل القيود تُنسخ (يدوي/شيت/تلقائي/مستورد) عدا قيود دفعات الحجوزات نفسها — المنع من التكرار بالمبلغ+الطرف+التاريخ
   // 🔄 (V4.332) لا قيد على التاريخ: أي سند/قيد شيت يدوي على طرف حجوزات يُنسخ لكشف الفندق مهما كان تاريخه (تاريخ القطع يبقى فقط لقفل
   // أزرار الدفع ببرنامج الحجوزات). قيود AUTO:HBP التلقائية مستثناة أعلاه (sourceKey) فلا تتكرر دفعات الحجوزات الأصلية.
   var k = _glDKey_(e.date); if (!k) return [];
   // قيد شيت عهدة قبل القطع قد يكون مسجَّلاً أصلاً بمزامنة العهدة ببرنامج الحجوزات (CUSTODY:) ⇒ يُتحقَّق منها لتفادي التكرار
-  if (!dup && k < cutK && /^CUST:/.test(e.sourceKey)) { try { dup = {}; (_glHbRead_().pays || []).forEach(function (p) { if (/^CUSTODY:/.test(p.id)) dup[p.party + '|' + _glR2_(p.amount) + '|' + _glDKey_(p.date)] = 1; }); } catch (eD) { dup = null; } }
+  if (!dup) { try { dup = {}; var own = 'GL:' + id + ':'; (_glHbRead_().pays || []).forEach(function (p) { if (String(p.id || '').indexOf(own) === 0) return; dup[p.party + '|' + _glR2_(p.amount) + '|' + _glDKey_(p.date)] = 1; }); } catch (eD) { dup = null; } }
   parties = parties || _glHbMirrorParties_();
   var sarRate = _glFxRateAt_('SAR', e.date, fx).rate || _glRates_().SAR || 1, out = [], skip = [], hidP = _glScrHide_();
   _glLinesOf_(id).map(_glLineObj_).sort(function (a, b) { return a.lineNo - b.lineNo; }).forEach(function (l) {
@@ -7160,7 +7160,7 @@ function _glHbMirrorRows_(id, cutK, parties, fx, dup, allowConv) {
     if (l.currency !== 'SAR' && !allowConv) { if (skip.indexOf(nm) < 0) skip.push(nm); return; }   // 💱 (V4.305) لا تحويل تلقائي لكشف الفندق
     var amt = l.currency === 'SAR' ? Math.abs(net) : _glR2_(Math.abs(l.bDebit - l.bCredit) / sarRate);
     if (!amt) return;
-    if (dup && /^CUST:/.test(e.sourceKey) && dup[nm + '|' + _glR2_(amt) + '|' + k]) return;
+    if (dup && dup[nm + '|' + _glR2_(amt) + '|' + k]) return;
     out.push({ name: nm, dir: net < 0 ? 'استلمنا منه' : 'دفعنا له', amt: amt, note: l.desc || e.desc,
       cur: l.currency !== 'SAR' ? ' (' + _glR2_(Math.abs(net)) + ' ' + l.currency + ')' : '' });
   });
@@ -7190,7 +7190,7 @@ function _glHbMirrorWhy_(id) {
     if (!_glSettings_().hb_ss_id) why = 'برنامج الحجوزات غير مربوط بالحسابات';
     else if (!from) why = 'لم يُفعَّل بعد «تاريخ القطع» — الحسابات العامة ← 🏨 الحجوزات ← 💳 دفعات الفنادق ← 🔒 تاريخ القطع (بعد تطبيقه تُنسخ القيود من التاريخ تلقائياً، ومنها هذا القيد)';
     else if (e.status !== GL_ST_POSTED_) why = 'القيد مسودة غير مرحّل';
-    else if (e.sourceKey && !/^(VCH|CUST):/.test(e.sourceKey)) why = 'قيد تلقائي/مستورد لا يُنسخ';
+    
     return why ? { names: names, why: why } : null;
   } catch (x) { return null; }
 }
@@ -7534,7 +7534,7 @@ function _glHbMirrorAll_(onlyParty) {
     var lines = {}; _glRows_('lines').forEach(function (l) { if (parties[_glStr_(l[4])]) lines[_glStr_(l[0])] = 1; });
     _glRows_('entries').forEach(function (r) {
       var id = _glStr_(r[0]), sk = _glStr_(r[6]);
-      if (lines[id] && _glStr_(r[5]) === GL_ST_POSTED_ && (!sk || /^(VCH|CUST):/.test(sk))) ids[id] = 1;   // (V4.332) أي تاريخ
+      if (lines[id] && _glStr_(r[5]) === GL_ST_POSTED_ && !/^AUTO:HB/.test(sk)) ids[id] = 1;   // (V4.332) أي تاريخ
     });
   }
   // (V4.258) قيود العهدة: لا تُنسخ لو سجّلها برنامج الحجوزات نفسه من قبل (CUSTODY:) بنفس الطرف والمبلغ والتاريخ
