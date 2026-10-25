@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.341  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.342  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -6998,6 +6998,27 @@ function _runExec_(getReal, st, fn, args, attempt, busyN) {
   } catch (e) { console.warn('session resume wrapper', e); }
 })();
 
+
+/* 🧳 (V4.342) حقول اسم الرحلة بملفات الوزارة ومجموعات التأشيرات (الأساسية والإضافية والتعديل الجماعي): لا تقبل اسماً غير موجود — عند مغادرة
+   الحقل يُعلَّم بالأحمر مع تنبيه، ويرفضه الخادم عند الحفظ. يُعدَّل الاسم من القائمة (بحث تنبؤي) أو يُترك فارغاً (ملف بلا رحلة). */
+function _tripNameNorm_(x) { return String(x == null ? '' : x).replace(/[ً-ٰٟـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/\s+/g, '').toLowerCase(); }
+function _tripNameKnown_() {
+  var set = {}, n = 0;
+  [window.MF && MF.trips, window.VZ && VZ.trips].forEach(function (a) { (a || []).forEach(function (t) { if (t && t.name) { set[_tripNameNorm_(t.name)] = 1; n++; } }); });
+  return n ? set : null;
+}
+document.addEventListener('focusout', function (e) {
+  var el = e.target; if (!el || el.tagName !== 'INPUT') return;
+  var lst = el.getAttribute('list') || '';
+  if (!(el.id === 'mfd_trip' || el.id === 'vzfTrip' || /^(mfBkTripsDL|vzBkTripsDL|vzTripsDL|mfXtTripsDL)$/.test(lst))) return;
+  setTimeout(function () {   // تأخير قصير: اختيار اقتراح بالنقر يضبط القيمة بعد مغادرة الحقل
+    var v = (el.value || '').trim(), known = _tripNameKnown_();
+    if (!known) return;
+    var bad = !!v && !known[_tripNameNorm_(v)];
+    el.style.outline = bad ? '2px solid #dc2626' : ''; if (bad) el.title = 'اسم رحلة غير موجود — اخترها من القائمة أو اتركها فارغة';
+    if (bad) { try { showToast('⚠️ «' + v + '» ليست رحلة موجودة — اختر من القائمة أو اترك الخانة فارغة'); } catch (e0) {} }
+  }, 300);
+}, true);
 /* 🔗 (V4.337) نافذة مطابقة الشركة المصرية والوكيل السعودي بين الرحلة ومجموعات التأشيرات وملفات الوزارة.
    تظهر بعد حفظ مجموعة/ملف مرتبط برحلة (أو ربط جماعي) لو اختلفت بياناتها — لا تمنع الحفظ. يختار المستخدم ما يُصحَّح: يعدّل
    الحقول أو يضغط «اجعل الباقي مثل هذا»، ثم «تطبيق المحدد»، أو «تخطي» (تظهر ثانيةً عند أي حفظ لاحق). */
@@ -8148,7 +8169,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.341";
+var CLIENT_APP_VERSION = "4.342";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -12566,6 +12587,20 @@ function _detachModalToBody_(modalId) {
 }
 // نفس السبب أعلاه ينطبق على ستارة Bootstrap الخلفية (.modal-backdrop) التي يُنشئها تلقائياً عند كل
 // .show() كعنصر شقيق جديد في body بزاوية z-index منخفضة (~1050) — تُستدعى بعد .show() مباشرة
+// 🪜 (V4.342) نافذة تُفتح من داخل نافذة أخرى (مثل «نقل لغرفة أخرى» من شاشة التسكين) كانت تُرسَم خلفها لأن للتسكين طبقة 2147483000 وللأخرى 2100:
+// عند ظهور أي نافذة تُرفع فوق أعلى نافذة مفتوحة أخرى، وستارتها (الأحدث) تحتها مباشرة.
+document.addEventListener('shown.bs.modal', function (e) {
+  try {
+    var el = e.target; if (!el || !el.classList || !el.classList.contains('modal')) return;
+    var top = 0;
+    document.querySelectorAll('.modal.show').forEach(function (m) { if (m === el) return; var z = parseInt(m.style.zIndex, 10) || parseInt(getComputedStyle(m).zIndex, 10) || 0; if (z > top) top = z; });
+    var mine = parseInt(el.style.zIndex, 10) || parseInt(getComputedStyle(el).zIndex, 10) || 0;
+    if (top && mine <= top) {
+      el.style.zIndex = String(top + 20);
+      var backs = document.querySelectorAll('.modal-backdrop'); if (backs.length) backs[backs.length - 1].style.zIndex = String(top + 19);
+    }
+  } catch (e0) {}
+});
 // 🧊 (V4.329) شبكة أمان عامة لفك تجمّد الواجهة: بعد إغلاق أي نافذة Bootstrap، لو لم تبقَ نافذة مفتوحة تُزال أي ستارة خلفية
 // عالقة وتُعاد حالة الصفحة (modal-open / overflow)، ولو بقيت نافذة مفتوحة تبقى ستارة واحدة فقط (الأعلى). لا تمسّ نوافذ البرنامج المخصصة.
 document.addEventListener('hidden.bs.modal', function () {
@@ -17982,17 +18017,15 @@ function _proceedWithOrphanCheckThenSave(btn, pilgrims) {
       btn.disabled = false; btn.innerHTML = orig;
       window._pilgrimsDirty = false;
       loadTripsList(); // تحديث عدد المعتمرين في قائمة الرحلات
-      // إغلاق الكشف + رسالة أنيقة تؤكد اكتمال الحفظ (علامة واضحة إن العملية قُبلت)
-      var inst = bootstrap.Modal.getInstance(document.getElementById('tripPilgrimsModal'));
-      if (inst) inst.hide();
+      // 💾 (V4.342) الحفظ لا يُغلق الكشف — يبقى مفتوحاً حتى يغلقه المستخدم بنفسه. رسالة خفيفة تؤكد الحفظ، وتنبيه كامل فقط عند وجود تعارض
       var hasConf = res.conflicts && res.conflicts.length;
-      showElegantConfirm({
-        icon: hasConf ? '⚠️' : '✅',
-        title: hasConf ? 'تم الحفظ — لا يزال هناك تعارض' : 'تم الحفظ بنجاح',
-        message: 'تم حفظ بيانات المعتمرين (' + res.count + ' معتمر) وإغلاق الكشف.' +
-          (hasConf ? ' تنبيه: ظهر تعارض إضافي أثناء الحفظ (على الأرجح تغيّرت بيانات رحلة أخرى في نفس اللحظة) — راجع كشف الرحلة مرة أخرى.' : ''),
-        buttons: [ { label: 'تمام', class: hasConf ? 'btn-warning' : 'btn-success', onClick: function() {} } ]
-      });
+      if (hasConf) {
+        showElegantConfirm({
+          icon: '⚠️', title: 'تم الحفظ — لا يزال هناك تعارض',
+          message: 'تم حفظ بيانات المعتمرين (' + res.count + ' معتمر). تنبيه: ظهر تعارض إضافي أثناء الحفظ (على الأرجح تغيّرت بيانات رحلة أخرى في نفس اللحظة) — راجع كشف الرحلة مرة أخرى.',
+          buttons: [ { label: 'تمام', class: 'btn-warning', onClick: function() {} } ]
+        });
+      } else showToast('✅ تم حفظ الكشف (' + res.count + ' معتمر)');
     })
     .withFailureHandler(function(err) {
       btn.disabled = false; btn.innerHTML = orig;
@@ -47891,7 +47924,7 @@ function openHotelsApp_() {
   }).hotelsHandoff(window.authToken);
 }
 // ⚡ (V4.252) نداءات القراءة فقط — أي نداء غيرها (حفظ/ترحيل/حذف/مزامنة…) يمسح كاش الكشوف بالواجهة ويُسخّن كاش الخادم
-var GL_RO_RX_ = /^gl(Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbErpOverlap|HbErpMatch|HbSeasonPreview|HbPaySplitPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk)$/;
+var GL_RO_RX_ = /^gl(Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbSeasonPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk)$/;
 function glDataChanged_() {
   GL._chg = (GL._chg || 0) + 1;   // 📑 (V4.324) تبويب حسابات مُوقَف يُحدَّث عند العودة له لو تغيّرت البيانات
   GL._stCache = {};
@@ -51954,148 +51987,9 @@ function glRenderImport() {
     '<textarea id="glImpText" class="form-control gl-latin" style="height:160px;font-family:monospace;font-size:12px;direction:rtl;" placeholder="الصق هنا من Excel…">' + glEsc(GL._impText || '') + '</textarea>' +
     '<div class="d-flex gap-2 mt-2"><button class="btn btn-primary btn-sm" onclick="glImpPreview(this)">👁️ معاينة وفحص</button>' +
       '<button class="btn btn-outline-secondary btn-sm" onclick="glImpTemplate()">⬇️ نموذج (CSV)</button></div></div>' +
-    '<div id="glImpRes" class="mt-2"></div>' + glErpCard() +
+    '<div id="glImpRes" class="mt-2"></div>' +
     '<div class="gl-card mt-2"><div class="d-flex align-items-center mb-1"><b>📦 دفعات الاستيراد السابقة</b><button class="btn btn-sm btn-link ms-auto" onclick="glLoadBatches()">🔄</button></div><div id="glBatches" class="small text-muted">⏳</div></div>';
   glLoadBatches();
-  if (GL._erp) glErpDraw();
-}
-/* ---------------- 📦 نقل بيانات برنامج الـ ERP (دفعة واحدة قابلة للإلغاء) ---------------- */
-var GL_ERP_URL_DEF_ = 'https://docs.google.com/spreadsheets/d/12W_F2_BHYjP3OMx3LgDXKuiHwAZNcqVvxeLbniEIC44/edit';
-function glErpCard() {
-  if (!GL.can.add) return '';
-  var o = GL._erpOpt || (GL._erpOpt = { url: GL_ERP_URL_DEF_, cutoff: '30/06/2026', SAR: '', USD: '', openingYear: 'auto', includeAfter: true });
-  var yrs = (GL._erp && GL._erp.openYears) ? Object.keys(GL._erp.openYears).sort() : [];
-  return '<div class="gl-card mt-2" style="border:2px solid #c7d2fe;">' +
-    '<div class="d-flex align-items-center mb-2"><b style="font-size:15px;">📦 نقل بيانات برنامج الـ ERP</b>' +
-      '<span class="small text-muted ms-2">الحسابات + الأرصدة حتى تاريخ القطع + القيود بعده — دفعة واحدة قابلة للإلغاء</span></div>' +
-    '<div class="row g-2">' +
-      '<div class="col-md-12"><label class="gl-lbl">رابط شيت الـ ERP</label><input id="glErpUrl" class="form-control form-control-sm gl-latin" dir="ltr" value="' + glEsc(o.url) + '"></div>' +
-      '<div class="col-6 col-md-3"><label class="gl-lbl">تاريخ القطع</label>' + glDateInput('glErpCut', o.cutoff) + '</div>' +
-      '<div class="col-6 col-md-2"><label class="gl-lbl">سعر الريال يوم القطع</label><input id="glErpSar" class="form-control form-control-sm gl-latin" inputmode="decimal" placeholder="مثال 13.25" value="' + glEsc(o.SAR) + '"></div>' +
-      '<div class="col-6 col-md-2"><label class="gl-lbl">سعر الدولار يوم القطع</label><input id="glErpUsd" class="form-control form-control-sm gl-latin" inputmode="decimal" placeholder="مثال 49.70" value="' + glEsc(o.USD) + '"></div>' +
-      '<div class="col-6 col-md-3"><label class="gl-lbl">حساب الأرصدة</label><select id="glErpYear" class="form-select form-select-sm">' +
-        '<option value="auto"' + (o.openingYear === 'auto' ? ' selected' : '') + '>آخر سنة افتتاحية ≤ القطع (تلقائي)</option>' +
-        '<option value="all"' + (o.openingYear === 'all' ? ' selected' : '') + '>مثل ميزان الـ ERP (كل القيود)</option>' +
-        yrs.map(function (y) { return '<option value="' + y + '"' + (String(o.openingYear) === y ? ' selected' : '') + '>افتتاحي ' + y + ' + حركات ما بعده</option>'; }).join('') + '</select></div>' +
-      '<div class="col-12 col-md-2 d-flex align-items-end"><label class="gl-radio"><input type="checkbox" id="glErpAfter"' + (o.includeAfter ? ' checked' : '') + '> نقل قيود ما بعد القطع</label></div>' +
-    '</div>' +
-    '<div class="gl-note mt-2">• يُقرأ الشيت بصلاحية حسابك في Google (لازم يكون عندك وصول له) — لا يُكتب فيه أي شيء.<br>' +
-      '• أرصدة كل حساب بعملاتها (جنيه/ريال/دولار) تُرحَّل كقيد افتتاحي بتاريخ اليوم التالي للقطع، ويُقيَّم الريال والدولار بالسعرين أعلاه.<br>' +
-      '• كل حساب يحتفظ بمعرّفه القديم في الـ ERP، وحسابات العملاء/الوكلاء الموجودة بنفس الاسم يُعاد استخدامها بدل التكرار.</div>' +
-    '<div class="d-flex gap-2"><button class="btn btn-primary btn-sm" onclick="glErpPreviewUI(this)">🔍 فحص ومعاينة</button></div>' +
-    '<div id="glErpRes" class="mt-2"></div></div>';
-}
-function glErpReadOpt() {
-  var g = function (id) { return (document.getElementById(id) || {}); };
-  var o = GL._erpOpt;
-  o.url = (g('glErpUrl').value || '').trim(); o.cutoff = g('glErpCut').value || '30/06/2026';
-  o.SAR = g('glErpSar').value || ''; o.USD = g('glErpUsd').value || '';
-  o.openingYear = g('glErpYear').value || 'auto'; o.includeAfter = !!g('glErpAfter').checked;
-  return { url: o.url, opts: { cutoff: o.cutoff, rates: { SAR: glNum(o.SAR), USD: glNum(o.USD) }, openingYear: o.openingYear, includeAfter: o.includeAfter } };
-}
-function glErpSig(r) { return JSON.stringify([r.url, r.opts.cutoff, r.opts.rates.SAR, r.opts.rates.USD, r.opts.openingYear]); }
-function glErpPreviewUI(btn) {
-  var r = glErpReadOpt();
-  if (!r.url) { _showPopup('أدخل رابط شيت الـ ERP', 'warning'); return; }
-  btn.disabled = true; btn.innerHTML = '⏳ جاري قراءة شيت الـ ERP…';
-  glRun('glErpPreview', [r.url, r.opts], function (res) {
-    btn.disabled = false; btn.innerHTML = '🔍 فحص ومعاينة';
-    GL._erp = res; GL._erpSig = glErpSig(r); GL._erpFilter = GL._erpFilter || 'bal';
-    glRenderImport();
-    setTimeout(function () { var el = document.getElementById('glErpRes'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
-  }, function (e) { btn.disabled = false; btn.innerHTML = '🔍 فحص ومعاينة'; _showPopup((e && e.message) || e, 'error'); });
-}
-function glErpDraw() {
-  var box = document.getElementById('glErpRes'), R = GL._erp; if (!box || !R) return;
-  var o = GL._erpOpt, ratesOk = glNum(o.SAR) > 0 && glNum(o.USD) > 0;
-  var ACT = { 'new': ['➕ جديد', '#166534', '#dcfce7'], reuse: ['♻️ موجود', '#1d4ed8', '#dbeafe'], map: ['🔁 وسيط', '#6b21a8', '#f3e8ff'] };
-  var f = GL._erpFilter || 'bal', q = glNorm(GL._erpQ || '');
-  var hasBal = function (a) { return Math.abs(a.bal.EGP) >= 0.005 || Math.abs(a.bal.SAR) >= 0.005 || Math.abs(a.bal.USD) >= 0.005; };
-  var list = R.accounts.filter(function (a) {
-    if (f === 'bal' && !hasBal(a)) return false;
-    if (f === 'new' && a.action !== 'new') return false;
-    if (f === 'reuse' && a.action !== 'reuse') return false;
-    if (f === 'orphan' && !a.orphan) return false;
-    return !q || glNorm(a.name + ' ' + a.erpId).indexOf(q) >= 0;
-  });
-  var nNew = R.accounts.filter(function (a) { return a.action === 'new'; }).length;
-  var nReuse = R.accounts.filter(function (a) { return a.action === 'reuse'; }).length;
-  var nBal = R.accounts.filter(hasBal).length, nOrph = R.accounts.filter(function (a) { return a.orphan; }).length;
-  var badAfter = R.after.filter(function (v) { return !v.balanced; });
-  var yrs = Object.keys(R.openYears || {}).sort();
-  var cell = function (v) { return Math.abs(v) < 0.005 ? '' : '<span style="color:' + (v < 0 ? '#b91c1c' : '#0f172a') + ';">' + glFmt(Math.abs(v)) + (v < 0 ? ' د' : ' م') + '</span>'; };
-  var baseDiff = Math.round(R.totals.base * 100) / 100;
-  var warn = [];
-  if (R.alreadyMigrated && R.alreadyMigrated.length) warn.push('⛔ يوجد نقل سابق فعّال (' + R.alreadyMigrated.join('، ') + ') — ألغِ دفعته أولاً من «دفعات الاستيراد السابقة» قبل إعادة النقل.');
-  if (R.appOpening) warn.push('⚠️ يوجد قيد «أرصدة افتتاحية من شاشات البرنامج» (القيود التلقائية) للعملاء والوكلاء — حسابات العملاء/الوكلاء المعاد استخدامها ستأخذ رصيد الـ ERP فوق رصيدها من البرنامج. إن كانت نفس الأرصدة فأوقف «أرصدة افتتاحية من بيانات ما قبل البداية» من تبويب القيود التلقائية وزامن قبل النقل.');
-  if (yrs.length > 1) warn.push('⚠️ الـ ERP فيه أرصدة افتتاحية لأكثر من سنة (' + yrs.join('، ') + '). ميزان الـ ERP يجمعها كلها؛ لو كانت سنة لاحقة «ترحيلاً» للسابقة فاختر «آخر سنة افتتاحية» (' + (R.openYear === 'all' ? 'المختار الآن: كل القيود' : 'المختار الآن: ' + (R.openYear || '—')) + ') — قارن الأرقام بميزان الـ ERP قبل التنفيذ.');
-  if (!yrs.length) warn.push('ℹ️ لا توجد قيود أرصدة افتتاحية JV-OPENING — الأرصدة = كل الحركات حتى تاريخ القطع.');
-  if (Math.abs(R.totals.EGP) >= 0.01 || Math.abs(R.totals.SAR) >= 0.01 || Math.abs(R.totals.USD) >= 0.01) warn.push('⚠️ مجموع الأرصدة في الـ ERP نفسه غير صفري (جنيه ' + glFmt(R.totals.EGP) + ' · ريال ' + glFmt(R.totals.SAR) + ' · دولار ' + glFmt(R.totals.USD) + ') — الفرق سيُرحَّل لحساب «34 فروق أرصدة افتتاحية».');
-  else if (ratesOk && Math.abs(baseDiff) >= 0.05) warn.push('ℹ️ فرق تقييم عملات بالجنيه ' + glFmt(baseDiff) + ' (أرصدة الوسيط بين العملات) → حساب «34 فروق أرصدة افتتاحية».');
-  if (badAfter.length) warn.push('⚠️ ' + badAfter.length + ' مستند بعد القطع غير متوازن في الـ ERP نفسه — سيُتخطّى: ' + badAfter.slice(0, 8).map(function (v) { return v.vid; }).join('، ') + (badAfter.length > 8 ? '…' : ''));
-  if (!ratesOk) warn.push('✋ أدخل سعري الريال والدولار ليوم القطع ثم اضغط «فحص ومعاينة» مرة أخرى — لحساب المعادل بالجنيه وتفعيل التنفيذ.');
-  var st = R.stats || {};
-  var rows = list.map(function (a) {
-    var ac = ACT[a.action] || ['', '', ''];
-    return '<tr' + (a.orphan ? ' style="background:#fffbeb;"' : '') + '><td class="gl-latin">' + glEsc(a.erpId) + '</td>' +
-      '<td style="text-align:right;">' + glEsc(a.name) + (a.orphan ? ' <small style="color:#b45309;">(غير موجود بالدليل)</small>' : '') + '</td>' +
-      '<td class="small">' + glEsc(a.catName || a.sub || '') + '</td>' +
-      '<td class="small" style="text-align:right;">' + glEsc(glAccLabel(a.parent)) + '</td>' +
-      '<td><span style="background:' + ac[2] + ';color:' + ac[1] + ';padding:1px 7px;border-radius:9px;font-size:11px;font-weight:700;white-space:nowrap;">' + ac[0] + '</span>' +
-        (a.action !== 'new' ? '<div class="small gl-latin" style="color:#475569;">' + glEsc(a.code) + (a.codeName ? ' ' + glEsc(a.codeName) : '') + '</div>' : '') + '</td>' +
-      '<td class="gl-latin">' + cell(a.bal.EGP) + '</td><td class="gl-latin">' + cell(a.bal.SAR) + '</td><td class="gl-latin">' + cell(a.bal.USD) + '</td>' +
-      '<td class="gl-latin fw-bold">' + (ratesOk ? cell(a.base) : '') + '</td></tr>';
-  }).join('');
-  var fBtn = function (k, lbl, n) { return '<button class="btn btn-sm ' + (f === k ? 'btn-primary' : 'btn-outline-secondary') + ' py-0" onclick="GL._erpFilter=\'' + k + '\';glErpDraw()">' + lbl + ' <b class="gl-latin">' + n + '</b></button>'; };
-  var groups = (R.groups || []).slice().sort(function (a, b) { return a.parent < b.parent ? -1 : 1; });
-  var canGo = ratesOk && !(R.alreadyMigrated && R.alreadyMigrated.length) && GL.can.add && GL.isAdmin;
-  box.innerHTML =
-    '<div class="gl-note" style="background:#eef2ff;">📄 <b>' + glEsc(R.erpName) + '</b> · القطع <b class="gl-latin">' + glEsc(R.cutoff) + '</b> · ' +
-      (R.openYear === 'all' ? 'كل قيود الافتتاح + كل الحركات' : (R.openYear ? 'افتتاحي ' + R.openYear + ' + الحركات من 01/01/' + R.openYear : 'كل الحركات')) + '</div>' +
-    '<div class="gl-kpis"><div><b class="gl-latin">' + R.accounts.length + '</b><small>حساب بالـ ERP</small></div>' +
-      '<div><b class="gl-latin" style="color:#166534;">' + nNew + '</b><small>حساب جديد</small></div>' +
-      '<div><b class="gl-latin" style="color:#1d4ed8;">' + nReuse + '</b><small>موجود مسبقاً</small></div>' +
-      '<div><b class="gl-latin">' + nBal + '</b><small>له رصيد</small></div>' +
-      '<div><b class="gl-latin">' + R.after.length + '</b><small>مستند بعد القطع</small></div></div>' +
-    '<div class="small text-muted mb-1">سطور القيود: مستخدمة للأرصدة <b class="gl-latin">' + (st.linesUsed || 0) + '</b> · بعد القطع <b class="gl-latin">' + (st.linesAfter || 0) + '</b> · أقدم من سنة الافتتاح (ممثلة فيه) <b class="gl-latin">' + (st.linesExcludedOld || 0) + '</b> · افتتاح سنوات أخرى <b class="gl-latin">' + (st.linesOtherOpening || 0) + '</b>' + (st.linesBadDate ? ' · <span style="color:#b91c1c;">بلا تاريخ صالح ' + st.linesBadDate + '</span>' : '') + '</div>' +
-    (warn.length ? '<div class="gl-note" style="background:#fff7ed;border-color:#fed7aa;">' + warn.join('<br>') + '</div>' : '') +
-    '<details class="mb-2"><summary class="small fw-bold" style="cursor:pointer;">📂 التوزيع على مجموعات الدليل (' + groups.length + ')</summary><table class="gl-tbl mt-1"><thead><tr><th>المجموعة</th><th>الحسابات</th><th>جديد</th><th>موجود</th></tr></thead><tbody>' +
-      groups.map(function (g) { return '<tr><td style="text-align:right;">' + glEsc(g.parent + ' — ' + g.name) + '</td><td class="gl-latin">' + g.n + '</td><td class="gl-latin">' + g.newN + '</td><td class="gl-latin">' + g.reuse + '</td></tr>'; }).join('') + '</tbody></table></details>' +
-    '<div class="d-flex gap-1 flex-wrap align-items-center mb-1">' + fBtn('bal', 'لها رصيد', nBal) + fBtn('all', 'الكل', R.accounts.length) + fBtn('new', 'جديد', nNew) + fBtn('reuse', 'موجود', nReuse) + (nOrph ? fBtn('orphan', 'غير موجود بالدليل', nOrph) : '') +
-      '<input id="glErpQ" class="form-control form-control-sm ms-auto" style="max-width:220px;" placeholder="🔎 بحث بالاسم أو المعرف" value="' + glEsc(GL._erpQ || '') + '" oninput="glErpSearch(this.value)"></div>' +
-    '<div class="table-responsive" style="max-height:460px;"><table class="gl-tbl"><thead><tr><th>معرف ERP</th><th>اسم الحساب</th><th>التصنيف</th><th>تحت مجموعة</th><th>الإجراء</th><th>جنيه</th><th>ريال</th><th>دولار</th><th>المعادل بالجنيه</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="9" class="text-muted">لا توجد حسابات بهذا الفلتر</td></tr>') + '</tbody>' +
-      '<tfoot><tr class="gl-tot"><td colspan="5" style="text-align:right;">صافي الكل (يجب أن يكون صفراً لكل عملة)</td><td class="gl-latin">' + glFmt(R.totals.EGP) + '</td><td class="gl-latin">' + glFmt(R.totals.SAR) + '</td><td class="gl-latin">' + glFmt(R.totals.USD) + '</td><td class="gl-latin">' + (ratesOk ? glFmt(R.totals.base) : '') + '</td></tr></tfoot></table></div>' +
-    (R.after.length ? '<details class="mt-2"><summary class="small fw-bold" style="cursor:pointer;">🧾 مستندات بعد تاريخ القطع (' + R.after.length + ')' + (o.includeAfter ? '' : ' — لن تُنقل (الخيار غير مفعّل)') + '</summary>' +
-      '<div class="table-responsive" style="max-height:320px;"><table class="gl-tbl mt-1"><thead><tr><th>المستند</th><th>التاريخ</th><th>البيان</th><th>السطور</th><th>المبلغ</th><th>الحالة</th></tr></thead><tbody>' +
-      R.after.map(function (v) { return '<tr' + (v.balanced ? '' : ' style="background:#fef2f2;"') + '><td class="gl-latin">' + glEsc(v.vid) + '</td><td class="gl-latin">' + glEsc(v.date) + '</td><td style="text-align:right;">' + glEsc(v.desc) + '</td><td class="gl-latin">' + v.n + '</td><td class="gl-latin small">' + glEsc(v.amt || '') + '</td><td>' + (v.balanced ? '✅' : '<span style="color:#b91c1c;">✖ غير متوازن — يُتخطّى</span>') + '</td></tr>'; }).join('') +
-      '</tbody></table></div></details>' : '') +
-    '<div class="d-flex gap-2 align-items-center mt-2 flex-wrap"><span class="small text-muted">راجع الأرصدة مقابل ميزان المراجعة في الـ ERP بتاريخ القطع قبل التنفيذ.</span>' +
-      '<button class="btn btn-success btn-sm fw-bold ms-auto" ' + (canGo ? '' : 'disabled') + ' onclick="glErpCommitUI(this)">🚚 تنفيذ النقل</button></div>';
-}
-function glErpSearch(v) {
-  GL._erpQ = v; clearTimeout(GL._erpQT);
-  GL._erpQT = setTimeout(function () { glErpDraw(); var i = document.getElementById('glErpQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 250);
-}
-function glErpCommitUI(btn) {
-  var R = GL._erp; if (!R) return;
-  var r = glErpReadOpt();
-  if (glErpSig(r) !== GL._erpSig) {
-    _showPopup('غيّرت الإعدادات بعد المعاينة — اضغط «فحص ومعاينة» مرة أخرى أولاً.', 'warning'); return;
-  }
-  var nNew = R.accounts.filter(function (a) { return a.action === 'new'; }).length;
-  var nAfter = r.opts.includeAfter ? R.after.filter(function (v) { return v.balanced; }).length : 0;
-  askConfirm_('نقل بيانات الـ ERP الآن؟\n• إنشاء ' + nNew + ' حساب جديد\n• قيد أرصدة افتتاحية بتاريخ اليوم التالي لـ ' + R.cutoff + ' (ريال ' + r.opts.rates.SAR + ' / دولار ' + r.opts.rates.USD + ')\n• ' + nAfter + ' قيد مستورد بعد القطع\n\nيمكن إلغاء الدفعة كاملة لاحقاً (القيود تصبح ملغاة، والحسابات المنشأة تبقى).', function () {
-    btn.disabled = true; btn.innerHTML = '⏳ جاري النقل… (قد يستغرق دقيقة)';
-    glRun('glErpCommit', [r.url, r.opts], function (res) {
-      _showPopup('✅ تم نقل بيانات الـ ERP — الدفعة ' + res.batchId + '\n' + res.newAccounts + ' حساب جديد · ' + res.entries + ' قيد · ' + res.lines + ' سطر' +
-        (Math.abs(res.diff || 0) >= 0.05 ? '\nفرق التقييم → 34 فروق أرصدة افتتاحية: ' + glFmt(res.diff) : '') +
-        (res.skipped && res.skipped.length ? '\nتُخطّي ' + res.skipped.length + ' مستند غير متوازن: ' + res.skipped.join('، ') : '') +
-        '\n\nراجع «ميزان المراجعة» وقارنه بميزان الـ ERP.', 'success', 'تم النقل');
-      GL._erp = null;
-      glRefreshData(function () { glTab('import'); });
-    }, function (e) { btn.disabled = false; btn.innerHTML = '🚚 تنفيذ النقل'; _showPopup((e && e.message) || e, 'error'); });
-  }, { title: 'نقل بيانات الـ ERP', icon: '🚚', yesLabel: 'تنفيذ النقل', danger: false });
 }
 function glImpTemplate() {
   var k = GL._impKind || 'opening';
@@ -53704,89 +53598,17 @@ function glHbSetupView() {
         f('glHbMk', 'شيت حجوزات مكة', c.mk || 'حجوزات مكة', 'col-md-3') + f('glHbMkR', 'أول صف', c.mkRow || 5, 'col-md-1') + f('glHbMd', 'شيت حجوزات المدينة', c.md || 'حجوزات المدينة', 'col-md-3') + f('glHbMdR', 'أول صف', c.mdRow || 6, 'col-md-1') +
         f('glHbPay', 'شيت الدفعات', c.pay || 'سجل الدفعات', 'col-md-2') + f('glHbProf', 'شيت بيانات الحسابات', c.prof || 'بيانات الحسابات', 'col-md-2') +
         f('glHbVia', 'كلمات بنود «على الوكيل» التي هي تحويلات عملاء الفنادق عبره (تعبير نمطي)', c.viaKw, 'col-md-9') +
-        f('glHbFrom', '🔀 برنامج الحجوزات مصدر «الحجوزات» من تاريخ', c.hbFrom || '', 'col-md-3') + '</div>' +
-      '<div class="gl-note mt-1">🔀 لو نقلت بيانات الـ ERP (الأرصدة حتى تاريخ القطع + القيود بعده) وفيها حجوزات ودفعات الفنادق: ضع هنا اليوم الذي يبدأ منه برنامج الحجوزات كمصدر <b>للحجوزات</b> (مثلاً 01/07/2026) — ما قبله لا يُسجَّل من برنامج الحجوزات (ولا قيده الافتتاحي) لأنه داخل في الـ ERP. وللدفعات تاريخ مستقل في بطاقة «💵 فصل مصدر الدفعات» أسفل. تقرير «التداخل» أسفل هذه الصفحة يوضح الحسابات المشتركة.</div>' +
+        '<input type="hidden" id="glHbFrom" value="' + glEsc(c.hbFrom || '') + '"></div>' +
       '<div class="gl-note mt-1">🛂 الدفعة المحوَّلة عبر وكيل (مثل ريادة الرؤى) تُسجَّل: من ح/ «مقاصة دفعات الفنادق عبر الوكلاء» إلى ح/ العميل. وبند حساب الوكيل ببرنامج العمرة (على الوكيل) الذي يحتوي بيانه إحدى الكلمات أعلاه يُسجَّل: من ح/ الوكيل إلى ح/ نفس المقاصة — فيلتقيان ولا يتكرر المبلغ، ورصيد المقاصة يكشف أي تحويل ناقص من أحد الطرفين.</div>' +
       (GL.isAdmin ? '<div class="d-flex gap-2 justify-content-end"><button class="btn btn-success btn-sm fw-bold" onclick="glHbSetupUI(this)">💾 ربط واختبار</button>' +
         (H.on ? '<button class="btn btn-outline-danger btn-sm" onclick="glHbSetupUI(this,true)">فصل الربط</button>' : '') + '</div>' : '<div class="small text-muted">الربط للمدير فقط.</div>') + '</div>' +
     (H.on ? '<div class="gl-note mt-2" style="max-width:860px;background:#ecfeff;">💳 <b>دفعات الفنادق من البرنامج الرئيسي فقط</b> (تاريخ القطع، النسخ لبرنامج الحجوزات، تسجيل الدفعات): تبويب <a href="#" onclick="GL._hbSub=\'hpay\';glRenderHotels();return false;">«💳 دفعات الفنادق»</a>' + (c.hbGlOnly ? ' — <b>مُفعَّل منذ <span class="gl-latin">' + glEsc(c.hbGlOnly) + '</span></b>' : ' — لم يُفعَّل بعد') + '</div>' : '') +
-    // 💵 (V4.238) فصل مصدر الدفعات عن الحجوزات
-    (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>💵 فصل مصدر الدفعات عن مصدر الحجوزات</b>' +
-      '<div class="gl-note mt-1">الحجوزات من برنامج الحجوزات (من التاريخ أعلاه)، أما <b>الدفعات</b> فمصدرها الـ ERP حتى اليوم السابق للتاريخ هنا، ثم من برنامج الحجوزات. ' +
-      'المعاينة تعرض دفعات الحجوزات قبل التاريخ: ما له مقابل بالـ ERP يُلغى قيده تلقائياً، وما ليس له مقابل يبقى افتراضياً (يمكنك إلغاء إبقائه). ودفعات الـ ERP بعد التاريخ على أطراف الحجوزات تُلغى (مكررة).</div>' +
-      '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">دفعات برنامج الحجوزات تبدأ من</label><div style="width:140px;">' + glDateInput('glHbPayFrom', c.hbPayFrom || '') + '</div></div>' +
-      '<button class="btn btn-outline-primary btn-sm" onclick="glHbPaySplitPrev(this)">👁️ معاينة</button>' +
-      (c.hbPayFrom ? '<span class="small text-muted">المطبَّق حالياً: <b class="gl-latin">' + glEsc(c.hbPayFrom) + '</b></span>' : '') + '</div><div id="glHbPayBox" class="mt-2"></div></div>' : '') +
     (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>🏁 ترحيل أرباح الموردين إلى إيرادات السكن (نهاية الموسم)</b>' +
       '<div class="gl-note mt-1">ربح كل حجز يُسجَّل في حساب «إيرادات حجوزات — المورد» (تحت 47) فترى ربح كل مورد على حدة. في نهاية الموسم يُصفّى رصيد كل هذه الحسابات حتى التاريخ المختار بقيد يومية واحد إلى «إيرادات السكن». يمكن تكراره لاحقاً فيرحّل ما استجد فقط.</div>' +
       '<div class="d-flex gap-2 align-items-end flex-wrap"><div><label class="gl-lbl">حتى تاريخ</label><div style="width:140px;">' + glDateInput('glHbSeasonD', '') + '</div></div>' +
       '<button class="btn btn-outline-primary btn-sm" onclick="glHbSeasonUI(this,false)">👁️ معاينة</button>' + (GL.isAdmin ? '<button class="btn btn-warning btn-sm fw-bold" onclick="glHbSeasonUI(this,true)">🏁 ترحيل</button>' : '') + '</div><div id="glHbSeasonRes"></div></div>' : '') +
-    (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>🔀 تداخل بيانات الـ ERP المنقولة مع قيود برنامج الحجوزات</b>' +
-      '<div class="gl-note mt-1">الحسابات التي عليها أسطر من المصدرين معاً (نفس الحجز/الدفعة قد يكون مسجَّلاً مرتين). الحل: ① حدّد أعلاه «الـ ERP هو المصدر حتى تاريخ» ثم زامن ② قيود الـ ERP المنقولة بعد ذلك التاريخ لهذه الحسابات تُلغى من هنا (بمعاينة أولاً) لأن برنامج الحجوزات يسجّلها.</div>' +
-      '<button class="btn btn-outline-primary btn-sm" onclick="glHbOverlapUI(this)">🔎 فحص التداخل</button><div id="glHbOvBox" class="mt-2"></div></div>' : '') +
-    (H.on ? '<div class="gl-card mt-2" style="max-width:1000px;border:2px solid #7c3aed;"><b>🧩 مطابقة قيود الـ ERP مع الحجوزات قيداً بقيد (الطريقة الأسهل بلا حذف يدوي)</b>' +
-      '<div class="gl-note mt-1">لكل قيد حجز من برنامج الحجوزات يُبحث عن قيد الـ ERP المقابل: ① برقم القيد المسجَّل بالحجز ② برقم تأكيد الفندق ③ برقم الحجز الداخلي (داخل بيان «حجز …» بالـ ERP). ولكل دفعة: نفس حساب الطرف + نفس المبلغ والعملة والاتجاه + تاريخ ±3 أيام. ' +
-        'بعد المراجعة «🗑️ حذف المطابق» يحذف قيود الـ ERP المطابقة نهائياً فتبقى قيود الحجوزات وحدها (بصيغة قيد الـ ERP نفسها). ما لم يُطابق يُعرض أسفلها لتراجعه يدوياً.</div>' +
-      '<button class="btn btn-primary btn-sm" style="background:#7c3aed;border-color:#7c3aed;" onclick="glHbMatchUI(this)">🧩 مطابقة الآن</button><div id="glHbMatchBox" class="mt-2"></div></div>' : '') +
-    (GL.isAdmin ? '<div class="gl-card" style="border-color:#fcd34d;"><b>🩹 تصحيح مبالغ الجنيه لدفعات الحجوزات من الـ ERP</b><div class="small text-muted my-1">للدفعات التي حُذف قيد الـ ERP المقابل لها سابقاً وسُجِّل جنيهها بالتقدير من سعر اليوم: يُقرأ شيت الـ ERP الأصلي ويُؤخذ المبلغ الفعلي بالبنك/الخزينة — <b>يبقى الريال بحساب الطرف والجنيه الفعلي بالبنك ويتعدّل سعر الصرف فقط</b>. (من الآن: حذف القيود المطابقة ينقل المبلغ الفعلي تلقائياً.)</div>' +
-      '<div class="d-flex gap-2 flex-wrap"><input id="glHbFxUrl" class="form-control form-control-sm" style="flex:1;min-width:260px;" placeholder="رابط شيت الـ ERP الأصلي" value="' + glEsc((GL.settings && GL.settings.erp_url) || '') + '"><button class="btn btn-warning btn-sm fw-bold" onclick="glHbFxFixUI(this)">👁️ معاينة الفروق</button></div><div id="glHbFxBox" class="mt-2"></div></div>' : '') +
     (H.on ? '<div class="gl-card mt-2" style="max-width:860px;"><b>🧩 حسابات الأدوار</b><div class="small mt-1">' + Object.keys(H.roles || {}).map(function (r) { var x = H.roles[r]; return '<div><span class="gl-latin">' + glEsc(x.code) + '</span> — ' + glEsc(x.name) + (x.virtual ? ' <small class="text-muted">(يُنشأ عند أول حفظ/مزامنة)</small>' : ''); }).join('') + '</div></div>' : '');
 }
-function glHbOverlapUI(btn) {
-  var box = document.getElementById('glHbOvBox'); btn.disabled = true; box.innerHTML = '⏳';
-  glRun('glHbErpOverlap', [], function (res) {
-    btn.disabled = false; GL._hbOv = res;
-    if (!res.rows.length) { box.innerHTML = '<div class="small" style="color:#166534;">✅ لا يوجد حساب عليه أسطر من الـ ERP وبرنامج الحجوزات معاً.</div>'; return; }
-    box.innerHTML = '<div class="table-responsive" style="max-height:360px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr><th><input type="checkbox" checked onchange="document.querySelectorAll(\'.glHbOvC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>الحساب</th>' +
-      '<th>الـ ERP: قيود</th><th>الـ ERP: الفترة</th><th>الـ ERP: الرصيد بالعملات</th><th>الحجوزات: قيود</th><th>الحجوزات: الفترة</th><th>الحجوزات: الرصيد بالعملات</th></tr></thead><tbody>' +
-      res.rows.map(function (r) {
-        return '<tr><td><input type="checkbox" class="glHbOvC" value="' + glEsc(r.code) + '" checked></td><td style="text-align:right;">' + glEsc(r.code + ' — ' + r.name) + '</td>' +
-          '<td>' + r.erp.n + '</td><td class="gl-latin" style="font-size:10.5px;">' + glEsc(r.erp.first + ' → ' + r.erp.last) + '</td><td class="gl-latin" style="white-space:nowrap;">' + glCurBal_(r.erp.cur) + '</td>' +
-          '<td>' + r.hb.n + '</td><td class="gl-latin" style="font-size:10.5px;">' + glEsc(r.hb.first + ' → ' + r.hb.last) + '</td><td class="gl-latin" style="white-space:nowrap;">' + glCurBal_(r.hb.cur) + '</td></tr>';
-      }).join('') + '</tbody></table></div>' +
-      (GL.isAdmin ? '<div class="d-flex gap-2 align-items-end flex-wrap mt-2"><div><label class="gl-lbl">نوع قيود الـ ERP</label><select id="glHbOvKind" class="form-select form-select-sm" style="width:170px;"><option value="book">🏨 الحجوزات فقط</option><option value="pay">💵 الدفعات فقط</option><option value="">الكل</option></select></div><div><label class="gl-lbl">إلغاء قيود الـ ERP لهذه الحسابات من تاريخ</label><div style="width:140px;">' + glDateInput('glHbOvFrom', res.hbFrom || res.startDate) + '</div></div>' +
-        '<button class="btn btn-outline-danger btn-sm" onclick="glHbOvVoid(this,true)">👁️ معاينة القيود</button><button class="btn btn-danger btn-sm" onclick="glHbOvVoid(this,false)">⛔ إلغاء القيود المكررة</button></div><div id="glHbOvRes" class="mt-1"></div>' : '');
-  }, function (e) { btn.disabled = false; box.innerHTML = '<span class="text-danger">' + glEsc(e.message || e) + '</span>'; });
-}
-function glHbMatchUI(btn) {
-  var box = document.getElementById('glHbMatchBox'); if (btn) btn.disabled = true; box.innerHTML = '<div class="text-muted">⏳ مطابقة…</div>';
-  glRun('glHbErpMatch', [], function (res) {
-    if (btn) btn.disabled = false; GL._hbM = res;
-    var pairs = res.bookings.map(function (x) { x.kind = '🏨 حجز'; return x; }).concat(res.payments.map(function (x) { x.kind = '💵 دفعة'; return x; }));
-    var lk = function (id) { return '<a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(id) + '\');return false;">' + glEsc(id) + '</a>'; };
-    var h = '<div class="d-flex flex-wrap gap-2 mb-2"><span class="gl-pill">🏨 حجوزات مطابقة: <b>' + res.bookings.length + '</b></span><span class="gl-pill">💵 دفعات مطابقة: <b>' + res.payments.length + '</b></span>' +
-      '<span class="gl-pill">قيود حجوزات بلا مقابل بالـ ERP: <b>' + res.hbUnmatched + '</b></span><span class="gl-pill" style="background:#fef3c7;">قيود ERP على أطراف الحجوزات لم تُطابق: <b>' + res.erpLeft.length + '</b></span></div>';
-    // (V4.227) لكل زوج: أي المصدرين يُعتمد (ويُحذف الآخر) — الحجوزات (الافتراضي) أو الـ ERP (حين يكون قيد الحجوزات يحتاج ضبطاً)
-    if (pairs.length) h += (GL.isAdmin ? '<div class="d-flex gap-2 align-items-center flex-wrap mb-1"><span class="small fw-bold">تحديد الكل:</span>' +
-        '<button class="btn btn-sm btn-outline-primary" onclick="glHbMatchAll_(\'hb\')">🏨 اعتماد الحجوزات</button><button class="btn btn-sm btn-outline-dark" onclick="glHbMatchAll_(\'erp\')">📥 اعتماد الـ ERP</button>' +
-        '<button class="btn btn-sm btn-outline-secondary" onclick="glHbMatchAll_(\'\')">— تجاهل الكل —</button><span class="small text-muted">المبلغ الأحمر = مختلف بين المصدرين — راجعه قبل الاختيار</span></div>' : '') +
-      '<div class="table-responsive" style="max-height:380px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr><th style="min-width:150px;">المصدر المعتمد</th><th>النوع</th>' +
-      '<th>قيد الحجوزات</th><th>بيانه</th><th>المبلغ</th><th>قيد الـ ERP</th><th>التاريخ</th><th>بيانه</th><th>المبلغ</th><th>طريقة المطابقة</th></tr></thead><tbody>' +
-      pairs.map(function (x) {
-        var diff = String(x.hbAmt || '') !== String(x.erpAmt || '');
-        return '<tr' + (x.locked ? ' style="opacity:.55;"' : '') + '><td>' + (x.locked ? '🔒 فترة مقفلة' : '<select class="form-select form-select-sm glHbMS" data-erp="' + glEsc(x.erp) + '" data-hb="' + glEsc(x.hb) + '" onchange="glHbMatchPaint_(this)">' +
-            '<option value="hb" selected>🏨 الحجوزات (حذف الـ ERP)</option><option value="erp">📥 الـ ERP (حذف الحجوزات)</option><option value="">— تجاهل —</option></select>') + '</td><td>' + x.kind + '</td><td class="glHbC-hb">' + lk(x.hb) + '</td>' +
-          '<td style="text-align:right;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + glEsc(x.hbDesc) + '">' + glEsc(x.hbDesc) + '</td><td class="gl-latin" style="white-space:nowrap;">' + glEsc(x.hbAmt || glFmt(x.hbBase)) + '</td>' +
-          '<td class="glHbC-erp">' + lk(x.erp) + '<div style="font-size:10px;color:#94a3b8;">' + glEsc(x.erpVid) + '</div></td><td class="gl-latin">' + glEsc(x.erpDate) + '</td>' +
-          '<td style="text-align:right;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + glEsc(x.erpDesc) + '">' + glEsc(x.erpDesc) + '</td>' +
-          '<td class="gl-latin"' + (diff ? ' style="color:#b91c1c;font-weight:800;" title="المبلغ بالعملة مختلف — راجع قبل الحذف"' : '') + '>' + glEsc(x.erpAmt || glFmt(x.erpBase)) + '</td><td style="font-size:10.5px;">' + glEsc(x.how) + '</td></tr>';
-      }).join('') + '</tbody></table></div>' +
-      (GL.isAdmin ? '<div class="d-flex justify-content-end gap-2 mt-2"><button class="btn btn-danger btn-sm fw-bold" onclick="glHbMatchApply(this)">✅ تنفيذ الاختيارات (حذف المصدر غير المعتمد)</button></div>' : '<div class="small text-muted">التنفيذ للمدير فقط.</div>');
-    else h += '<div class="small text-muted">لا توجد قيود ERP مطابقة لقيود الحجوزات.</div>';
-    if (res.erpLeft.length) h += '<details class="mt-2"><summary class="small fw-bold">📋 قيود الـ ERP على حسابات أطراف الحجوزات ولم تُطابق (' + res.erpLeft.length + ') — راجعها يدوياً</summary><div style="max-height:260px;overflow:auto;font-size:11.5px;">' +
-      res.erpLeft.map(function (x) { return '<div>' + lk(x.erp) + ' · <span class="gl-latin">' + glEsc(x.date) + '</span> · ' + (x.isBooking ? '🏨 ' : '') + glEsc(x.desc) + ' · <span class="gl-latin">' + glEsc(x.amt || glFmt(x.base)) + '</span></div>'; }).join('') + '</div></details>';
-    h += '<div id="glHbKeepBox" class="mt-2"></div>';
-    box.innerHTML = h;
-    document.querySelectorAll('.glHbMS').forEach(glHbMatchPaint_);
-    glHbKeepLoad_();
-  }, function (e) { if (btn) btn.disabled = false; box.innerHTML = '<span class="text-danger">' + glEsc(e.message || e) + '</span>'; });
-}
-// تلوين الزوج حسب الاختيار: المعتمد أخضر، والذي سيُحذف مشطوب
-function glHbMatchPaint_(sel) {
-  var tr = sel.closest('tr'), v = sel.value, hb = tr.querySelector('.glHbC-hb'), erp = tr.querySelector('.glHbC-erp');
-  [[hb, 'hb'], [erp, 'erp']].forEach(function (p) { if (!p[0]) return; p[0].style.background = !v ? '' : (v === p[1] ? '#dcfce7' : '#fee2e2'); p[0].style.textDecoration = v && v !== p[1] ? 'line-through' : ''; });
-}
-function glHbMatchAll_(v) { document.querySelectorAll('.glHbMS').forEach(function (s) { s.value = v; glHbMatchPaint_(s); }); }
 function glHbKeepLoad_() {
   var box = document.getElementById('glHbKeepBox'); if (!box) return;
   glRun('glHbKeepList', [], function (r) {
@@ -53805,100 +53627,6 @@ function glHbKeepUndo_(btn) {
     btn.disabled = true;
     glRun('glHbKeepUndo', [keys], function (r) { showToast('↩️ أُرجع ' + r.restored + ' — يعود بالمزامنة التالية'); glHbKeepLoad_(); }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
   }, { title: 'إرجاع قيود الحجوزات', danger: false });
-}
-function glHbFxFixUI(btn) {
-  var url = glVal('glHbFxUrl'), box = document.getElementById('glHbFxBox'); if (!url) return _showPopup('أدخل رابط شيت الـ ERP', 'warning');
-  btn.disabled = true; box.innerHTML = '<div class="text-muted small">⏳ قراءة شيت الـ ERP ومطابقة الدفعات…</div>';
-  glRun('glHbFxFix', [url, false], function (r) {
-    btn.disabled = false; GL._hbFx = r;
-    var st = r.stat, E = glEsc;
-    box.innerHTML = '<div class="small mb-1">دفعات الحجوزات: ' + st.pays + ' · طوبقت بالـ ERP: ' + st.matched + ' · مطابقة المبلغ أصلاً: ' + st.same + ' · بلا مقابل: ' + st.noErp + (st.ambiguous ? ' · متعددة المرشحات (تُركت): ' + st.ambiguous : '') + '</div>' +
-      (r.rows.length ? '<div class="table-responsive" style="max-height:360px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr><th><input type="checkbox" checked onchange="document.querySelectorAll(\'.glHbFxC\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>القيد</th><th>التاريخ</th><th>الطرف</th><th>الريال</th><th>المسجَّل الآن</th><th>الفعلي بالـ ERP</th><th>السعر الناتج</th><th>مستند الـ ERP</th></tr></thead><tbody>' +
-        r.rows.map(function (x) { return '<tr data-eid="' + E(x.entry) + '"><td><input type="checkbox" class="glHbFxC" value="' + E(x.payId) + '" checked></td><td class="gl-latin">' + E(x.entry) + '</td><td class="gl-latin">' + E(x.date) + '</td><td style="text-align:right;">' + E(x.party) + ' <span class="small text-muted">' + E(x.dir) + '</span></td><td class="gl-latin">' + glFmt(x.sar) + ' ريال</td>' +
-          '<td class="gl-latin" style="color:#b91c1c;">' + (x.now ? glFmt(x.now.amt) + ' ' + (GL_CUR_LBL_[x.now.cur] || x.now.cur) + '<div class="small text-muted">' + E(x.now.name) + '</div>' : '—') + '</td>' +
-          '<td class="gl-latin" style="color:#166534;font-weight:800;">' + glFmt(x.erp.amt) + ' ' + (GL_CUR_LBL_[x.erp.cur] || x.erp.cur) + '<div class="small text-muted" style="font-weight:400;">' + E(x.erp.name) + '</div></td><td class="gl-latin">' + glR2Rate(x.erp.rate) + '</td><td class="gl-latin small">' + E(x.vid + ' · ' + x.erpDate) + '</td></tr>'; }).join('') +
-        '</tbody></table></div><div class="text-end mt-2"><button class="btn btn-warning btn-sm fw-bold" onclick="glHbFxFixGo_(this)">🩹 تصحيح المحدد</button></div>' : '<div class="small" style="color:#166534;">✅ لا توجد فروق — كل دفعات الحجوزات المطابقة مسجلة بمبلغها الفعلي</div>');
-  }, function (e) { btn.disabled = false; box.innerHTML = '<span class="text-danger">' + glEsc(e.message || e) + '</span>'; });
-}
-function glHbFxFixGo_(btn) {
-  var ids = Array.prototype.map.call(document.querySelectorAll('.glHbFxC:checked'), function (c) { return c.value; });
-  if (!ids.length) return _showPopup('حدد دفعة واحدة على الأقل', 'warning');
-  askConfirm_('تصحيح ' + ids.length + ' دفعة؟ يبقى الريال بحساب الطرف ويُسجَّل الجنيه الفعلي بالبنك/الخزينة ويتعدّل سعر الصرف.', function () {
-    btn.disabled = true;
-    glRun('glHbFxFix', [glVal('glHbFxUrl'), true, ids], function (r) { showToast('🩹 صُحّحت ' + r.fixed + ' دفعة'); glRefreshData(function () { glHbFxFixUI(document.querySelector('[onclick="glHbFxFixUI(this)"]')); }); },
-      function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
-  }, { title: 'تصحيح مبالغ الدفعات', danger: false });
-}
-function glHbMatchApply(btn) {
-  var items = Array.prototype.map.call(document.querySelectorAll('.glHbMS'), function (s) { return { erp: s.getAttribute('data-erp'), hb: s.getAttribute('data-hb'), keep: s.value }; }).filter(function (x) { return x.keep; });
-  if (!items.length) return _showPopup('اختر المصدر المعتمد لزوج واحد على الأقل', 'warning');
-  var nH = items.filter(function (x) { return x.keep === 'hb'; }).length, nE = items.length - nH;
-  askConfirm_((nH ? '🏨 اعتماد الحجوزات: حذف ' + nH + ' قيد ERP نهائياً (والجنيه الفعلي للدفعات يُنقل لمراجعتها).\n' : '') +
-    (nE ? '📥 اعتماد الـ ERP: حذف ' + nE + ' قيد حجوزات تلقائي — ولا تُعيده المزامنة (يمكن إرجاعه من قائمة «استُبدلت بقيد الـ ERP»).' : ''), function () {
-    btn.disabled = true;
-    glRun('glHbErpMatchApply', [items], function (res) {
-      showToast('✅ حُذف ' + (res.deletedErp || 0) + ' قيد ERP و' + (res.deletedHb || 0) + ' قيد حجوزات' + (res.skipped.length ? ' — تُرك ' + res.skipped.length : ''));
-      glRefreshData(function () { glHbMatchUI(null); });
-    }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
-  }, { title: 'حذف قيود مكررة', danger: true });
-}
-function glHbPaySplitPrev(btn) {
-  var from = (document.getElementById('glHbPayFrom') || {}).value || '', box = document.getElementById('glHbPayBox');
-  if (!from) return _showPopup('حدد تاريخ بداية دفعات برنامج الحجوزات', 'warning');
-  btn.disabled = true; box.innerHTML = '<div class="text-muted small">⏳ جارٍ المطابقة مع الـ ERP (قد تستغرق دقيقة)…</div>';
-  glRun('glHbPaySplitPreview', [from], function (res) {
-    btn.disabled = false; GL._hbPS = res; var E = glEsc;
-    var lk = function (id) { return id ? '<a href="#" class="gl-latin" onclick="glShowEntry(\'' + glJs(id) + '\');return false;">' + E(id) + '</a>' : ''; };
-    var keepNow = {}; (res.keep || []).forEach(function (k) { keepNow[k] = 1; });
-    var h = '<div class="d-flex flex-wrap gap-2 mb-2"><span class="gl-pill">دفعات حجوزات قبل ' + E(res.payFrom) + ': <b>' + res.hbPays.length + '</b></span>' +
-      '<span class="gl-pill" style="background:#dcfce7;">لها مقابل بالـ ERP (تُلغى): <b>' + res.hbMatched + '</b></span>' +
-      '<span class="gl-pill" style="background:#fef3c7;">بلا مقابل (تبقى افتراضياً): <b>' + res.hbUnmatched + '</b></span>' +
-      '<span class="gl-pill" style="background:#fee2e2;">دفعات ERP بعد التاريخ (مكررة): <b>' + res.erpAfterN + '</b></span>' +
-      '<span class="gl-pill" style="background:#e0f2fe;">دفعات ERP أُلغيت سابقاً قبل التاريخ (تُستعاد): <b>' + res.erpRestoreN + '</b></span></div>';
-    if (res.hbPays.length) h += '<div class="table-responsive" style="max-height:300px;overflow:auto;"><table class="gl-tbl" style="font-size:11.5px;"><thead><tr><th>إبقاء؟</th><th>قيد الحجوزات</th><th>التاريخ</th><th>البيان</th><th>المبلغ</th><th>مقابله بالـ ERP</th></tr></thead><tbody>' +
-      res.hbPays.map(function (x) {
-        var keep = !x.matched || keepNow[x.key];
-        return '<tr' + (x.matched ? '' : ' style="background:#fffbeb;"') + '><td><input type="checkbox" class="glHbPsK" value="' + E(x.key) + '" data-restore="' + (x.viaRestore ? 1 : 0) + '"' + (keep ? ' checked' : '') + '></td><td>' + lk(x.id) + '</td><td class="gl-latin">' + E(x.date) + '</td>' +
-          '<td style="text-align:right;">' + E(x.desc) + '</td><td class="gl-latin" style="white-space:nowrap;">' + E(x.amt) + '</td><td>' + (x.matched ? lk(x.erp) + ' <small class="text-muted">' + E(x.erpDate) + (x.viaRestore ? ' (مُلغى — سيُستعاد)' : '') + '</small>' : '<span class="text-warning">⚠️ لا مقابل</span>') + '</td></tr>';
-      }).join('') + '</tbody></table></div>';
-    if (res.isAdmin) h += '<div class="d-flex gap-3 flex-wrap mt-2 small"><label><input type="checkbox" id="glHbPsVoid" checked> إلغاء دفعات الـ ERP المكررة بعد التاريخ (' + res.erpAfterN + ')</label>' +
-      '<label><input type="checkbox" id="glHbPsRest" checked> استعادة دفعات الـ ERP التي أُلغيت سابقاً قبل التاريخ (' + res.erpRestoreN + ')</label></div>' +
-      '<div class="d-flex justify-content-end mt-2"><button class="btn btn-success btn-sm fw-bold" onclick="glHbPaySplitGo(this)">✅ تطبيق الفصل وتصحيح القيود</button></div>';
-    else h += '<div class="small text-muted mt-2">التطبيق للمدير فقط.</div>';
-    box.innerHTML = h;
-  }, function (e) { btn.disabled = false; box.innerHTML = '<span class="text-danger">' + glEsc(e.message || e) + '</span>'; });
-}
-function glHbPaySplitGo(btn) {
-  var res = GL._hbPS; if (!res) return;
-  var rest = !!(document.getElementById('glHbPsRest') || {}).checked, vd = !!(document.getElementById('glHbPsVoid') || {}).checked;
-  // دفعة مطابقة عبر قيد ERP مُلغى: لو لن يُستعاد تبقى دفعة الحجوزات (وإلا تضيع)
-  var keep = Array.prototype.filter.call(document.querySelectorAll('.glHbPsK'), function (c) { return c.checked || (c.dataset.restore === '1' && !rest); }).map(function (c) { return c.value; });
-  var nOut = res.hbPays.length - keep.length;
-  askConfirm_('تطبيق: دفعات برنامج الحجوزات من ' + res.payFrom + '\n• إلغاء ' + nOut + ' قيد دفعة حجوزات قبل التاريخ (مصدرها الـ ERP)\n• إبقاء ' + keep.length + ' دفعة بلا مقابل' +
-    (vd ? '\n• إلغاء ' + res.erpAfterN + ' دفعة ERP مكررة بعد التاريخ' : '') + (rest ? '\n• استعادة ' + res.erpRestoreN + ' دفعة ERP' : '') + '\n\nالقيود الملغاة تبقى ظاهرة بحالة «ملغى» للمراجعة.', function () {
-    btn.disabled = true; btn.innerHTML = '⏳ جارٍ التطبيق (قد يستغرق دقيقة)…';
-    glRun('glHbPaySplitApply', [{ payFrom: res.payFrom, keep: keep, voidErpAfter: vd, restoreErpBefore: rest }], function (r) {
-      _showPopup('✅ تم فصل المصادر:\n• دفعات حجوزات أُلغيت: ' + r.hbVoided + (r.hbCreated ? ' · أُنشئت: ' + r.hbCreated : '') + '\n• دفعات ERP أُلغيت: ' + r.erpVoided + '\n• دفعات ERP استُعيدت: ' + r.erpRestored +
-        (r.blocked ? '\n⚠️ ' + r.blocked + ' بفترة مقفلة لم تتغير' : ''), 'success', 'فصل مصدر الدفعات');
-      glRefreshData(function () { glHbLoad(true); });
-    }, function (e) { btn.disabled = false; btn.innerHTML = '✅ تطبيق الفصل وتصحيح القيود'; _showPopup(e.message || e, 'error'); });
-  }, { title: 'فصل مصدر الدفعات', danger: true });
-}
-function glHbOvVoid(btn, dry) {
-  var codes = Array.prototype.map.call(document.querySelectorAll('.glHbOvC:checked'), function (c) { return c.value; });
-  var from = (document.getElementById('glHbOvFrom') || {}).value || '', out = document.getElementById('glHbOvRes'), kind = (document.getElementById('glHbOvKind') || {}).value || 'book';
-  var run = function () {
-    btn.disabled = true;
-    glRun('glHbErpVoid', [{ from: from, codes: codes, dry: dry, kind: kind }], function (res) {
-      btn.disabled = false;
-      if (dry) out.innerHTML = res.preview.length ? '<div class="small">سيُلغى ' + res.preview.length + ' قيد:</div><div style="max-height:200px;overflow:auto;font-size:11px;">' +
-        res.preview.map(function (h) { return '<div>' + glEsc(h.id + ' · ' + h.date + ' · ' + h.desc + ' · ' + (h.amt || '') + (h.locked ? ' 🔒 (فترة مقفلة — لن يُلغى)' : '')) + '</div>'; }).join('') + '</div>'
-        : '<div class="small text-muted">لا توجد قيود ERP مطابقة بعد هذا التاريخ.</div>';
-      else { showToast('⛔ أُلغي ' + res.voided + ' قيد' + (res.skippedLocked ? ' (' + res.skippedLocked + ' بفترة مقفلة لم يُلغَ)' : '')); glHbOverlapUI(document.querySelector('[onclick^="glHbOverlapUI"]')); }
-    }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
-  };
-  if (!codes.length) return _showPopup('اختر حساباً واحداً على الأقل', 'warning');
-  if (dry) run(); else askConfirm_('إلغاء قيود الـ ERP المنقولة من ' + from + ' التي تمس ' + codes.length + ' حساب؟ تبقى ظاهرة بحالة «ملغى» ويمكن مراجعتها.', run, { title: 'إلغاء قيود مكررة', danger: true });
 }
 function glHbSetupUI(btn, disc) {
   var v = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };

@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.341";
+var APP_VERSION = "4.342";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22380,6 +22380,52 @@ function _mfObjToRow_(f) {
 }
 // 🧳 (V4.184) كل رحلات ملف المراجعة: الأساسية + الإضافية (نفس منطق _vzTripSplit_/_vzTripsOf_)
 function _mfTripSplit_(s) { return _tripListSplit_(s); }
+
+/* 🧳 (V4.342) اسم الرحلة بملفات الوزارة ومجموعات التأشيرات يُقبَل فقط لو كان لرحلة موجودة (الأساسية والإضافية):
+   • اسم موجود تماماً ⇒ كما هو · يطابق رحلة واحدة بعد التطبيع (مسافات/ي/ى/ة) ⇒ يُصحَّح للاسم الفعلي · غير موجود ⇒ يُرفض الحفظ برسالة
+   • أسماء الملف القديمة غير الموجودة (رحلة أُعيدت تسميتها مثلاً) لا تمنع تعديل الملف ما دامت لم تتغيّر
+   • فارغ ⇒ ملف بلا رحلة (مقبول). يُنفَّذ بالخادم فيشمل كل مسارات الحفظ (النموذج، التعديل الجماعي، الاستيراد). */
+function _tripNameIndex_() {
+  var idx = { exact: {}, norm: {}, n: 0 };
+  try {
+    var sh = _getTripsSheet_(), last = sh.getLastRow(); if (last < 2) return idx;
+    var C = _robustColMap_(sh, TRIPS_HEADERS_), col = C[TRIPS_COL_.name]; if (col === undefined) return idx;
+    sh.getRange(2, col + 1, last - 1, 1).getValues().forEach(function (r) {
+      var n = String(r[0] == null ? '' : r[0]).trim(); if (!n || idx.exact[n]) return;
+      idx.exact[n] = 1; idx.n++;
+      var k = _normalizeArabicName_(n).replace(/\s+/g, ''); (idx.norm[k] = idx.norm[k] || []).push(n);
+    });
+  } catch (e) { idx.n = 0; }
+  return idx;
+}
+// يُرجع {error} أو {fixed: true/false} ويعدّل f.tripName/f.extraTrips بالاسم الفعلي عند التصحيح
+// استيراد: اسم رحلة غير موجود يُترك فارغاً (بلا رفض الصف) · موجود/مطابق بعد التطبيع ⇒ الاسم الفعلي
+function _tripCanonOrEmpty_(name) {
+  name = _mfStr_(name); if (!name) return '';
+  var idx = _tripNameIndex_(); if (!idx.n) return name;
+  if (idx.exact[name]) return name;
+  var hit = idx.norm[_normalizeArabicName_(name).replace(/\s+/g, '')];
+  return hit && hit.length === 1 ? hit[0] : '';
+}
+function _tripsCheck_(f, old, tripsOf) {
+  var names = tripsOf(f); if (!names.length) return { ok: true };
+  var oldSet = {}; (old ? tripsOf(old) : []).forEach(function (t) { oldSet[t] = 1; });
+  var idx = _tripNameIndex_(); if (!idx.n) return { ok: true };   // لا قائمة رحلات للتحقق منها
+  var bad = [], map = {};
+  names.forEach(function (t) {
+    if (oldSet[t] || idx.exact[t]) return;
+    var k = _normalizeArabicName_(t).replace(/\s+/g, ''), hit = idx.norm[k];
+    if (hit && hit.length === 1) map[t] = hit[0]; else bad.push(t);
+  });
+  if (bad.length) return { error: '🧳 اسم الرحلة «' + bad.join('» و«') + '» غير موجود بالرحلات — اخترها من القائمة (بحث تنبؤي) أو اتركها فارغة' };
+  var keys = Object.keys(map);
+  if (keys.length) {
+    var fix = function (s) { return String(s == null ? '' : s).split(/[\n,،]+/).map(function (x) { x = x.trim(); return map[x] || x; }).filter(Boolean).join('\n'); };
+    if (map[_mfStr_(f.tripName)]) f.tripName = map[_mfStr_(f.tripName)];
+    if (_mfStr_(f.extraTrips)) f.extraTrips = fix(f.extraTrips);
+  }
+  return { ok: true, fixed: keys.length > 0 };
+}
 function _mfTripsOf_(f) {
   var out = [], seen = {};
   _mfTripSplit_(f && f.tripName).concat(_mfTripSplit_(f && f.extraTrips)).forEach(function(t) {
@@ -23107,6 +23153,7 @@ function saveMinistryFile(authToken, data) {
       updatedBy: session.username, updatedAt: _mfStamp_()
     };
 
+    var _trChk = _tripsCheck_(f, old, _mfTripsOf_); if (_trChk.error) return { success: false, error: _trChk.error };   // 🧳 (V4.342)
     _mfInferSingleStay_(f);   // 🏙️ (V4.329)
     var _dIss = _mfDatesIssues_(f);
     if (_dIss.length) return { success: false, error: '📅 صحّح التواريخ قبل الحفظ:\n• ' + _dIss.join('\n• '), dateIssues: _dIss };
@@ -25365,6 +25412,7 @@ function saveVisaFile(authToken, data) {
       housing: Array.isArray(data.housing) ? data.housing : (old ? old.housing : []),
       entryNo: _mfStr_(data.entryNo), extraTrips: _mfStr_(data.extraTrips)
     };
+    var _trChkV = _tripsCheck_(f, old, _vzTripsOf_); if (_trChkV.error) return { success: false, error: _trChkV.error };   // 🧳 (V4.342)
     // 🏨 (V4.134) تطبيع السكن المتعدد + مزامنة الحقول المفردة منه (أول فندق لكل مدينة)
     f.housing = _vzHousingNormalize_(f);
     var _hMk = _vzHousingFirst_(f.housing, 'مكة'), _hMd = _vzHousingFirst_(f.housing, 'المدينة');
@@ -25486,7 +25534,7 @@ function importVisaFilesBatch(authToken, rows) {
       var f = {
         id: _accId_('VZ'), seq: ++seq, ref: ref,
         status: _vzStatusNorm_(r.status), date: _mfDate_(r.date),
-        company: _mfStr_(r.company), agent: _mfStr_(r.agent), tripName: _mfStr_(r.tripName),
+        company: _mfStr_(r.company), agent: _mfStr_(r.agent), tripName: _tripCanonOrEmpty_(r.tripName),   // 🧳 (V4.342) اسم رحلة غير موجود ⇒ يُترك فارغاً
         breakdown: bd, selected: [], visaCount: cnt, price: price, notes: _mfStr_(r.notes),
         createdBy: session.username, createdAt: now, updatedBy: '', updatedAt: '',
         payStatus: '', makkahIn: _mfDate_(r.makkahIn), makkahOut: _mfDate_(r.makkahOut),
