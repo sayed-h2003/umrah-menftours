@@ -198,7 +198,33 @@ function hbSyncFromGl(token, party) {
       var r = _glHbMirrorAll_(String(party || '').trim() || null);
       try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eI) {}
       try { logChange_(user.username || 'الحجوزات', 'مزامنة دفعات الحسابات العامة لكشف الفندق', 'GL:hbsync', String(party || '') || 'كل الأطراف', '-', (r.mirrored || 0) + ' قيد · ' + (r.rows || 0) + ' صف'); } catch (eL) {}
-      return { ok: true, mirrored: r.mirrored || 0, rows: r.rows || 0 };
+      var dups = [], dupsTotal = 0; try { dups = _glHbDupScan_(String(party || '').trim() || null); dupsTotal = dups.length; dups = dups.slice(0, 60); } catch (eD) { Logger.log('dup scan: ' + eD.message); }   // 🔍 (V4.338)
+      return { ok: true, mirrored: r.mirrored || 0, rows: r.rows || 0, dups: dups, dupsTotal: dupsTotal };
+    } finally { _glUnlock_(lock); }
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+/* 🔍 (V4.338) تقرير الدفعات المشتبه بتكرارها (نفس الطرف والتاريخ والمبلغ) + تنفيذ قرار المستخدم (حذف/دمج/إبقاء/تجاهل) */
+function hbDupReport(token, party) {
+  try {
+    requirePermission_(token, 'payments', 'view');
+    if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return { ok: false, error: 'برنامج الحجوزات غير مربوط بالحسابات العامة' };
+    return { ok: true, dups: _glHbDupScan_(String(party || '').trim() || null) };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+// ops: [{act:'del', ids:[…]}, {act:'ignore', sig}] — حذف نسخة قيد = إخفاؤها بالكشف فقط (القيد باقٍ بالحسابات العامة)
+function hbDupResolve(token, ops) {
+  try {
+    var user = requirePermission_(token, 'payments', 'delete');
+    if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return { ok: false, error: 'برنامج الحجوزات غير مربوط بالحسابات العامة' };
+    var lock = _glLock_();
+    if (!lock.tryLock(60000)) { _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1); return { ok: false, error: 'الحسابات العامة مشغولة بعملية أخرى — أعد المحاولة بعد لحظات' }; }
+    try {
+      _GL_HB_MEMO_ = null; _GL_SET_MEMO_ = null; _GL_ACC_MEMO_ = null;
+      var isAdmin = user && user.role === 'admin';
+      var r = _glHbDupApply_((ops || []).slice(0, 100), function (id) { return deletePayment(id, token, isAdmin); });
+      try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eI) {}
+      try { logChange_(user.username || 'الحجوزات', 'قرار تكرار دفعات الفنادق', 'GL:hbdup', '-', '-', 'منفَّذ ' + r.done + (r.errors.length ? ' · أخطاء ' + r.errors.length : '')); } catch (eL) {}
+      return { ok: r.errors.length === 0, done: r.done, errors: r.errors, error: r.errors.join('\n') };
     } finally { _glUnlock_(lock); }
   } catch (e) { return { ok: false, error: e.message }; }
 }

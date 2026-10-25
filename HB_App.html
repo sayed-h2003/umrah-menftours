@@ -1417,6 +1417,7 @@
         <div class="action-bar">
             <div class="action-group action-group-export">
                 <button onclick="refreshStatement()" title="قراءة أحدث بيانات المصدر وإعادة تحميل الكشف الآن"><span class="ai">↻</span> تحديث</button>
+                <button onclick="hbDupOpen_()" id="stmtDupBtn" title="تقرير الدفعات المشتبه بتكرارها (نفس الطرف والتاريخ والمبلغ) لاتخاذ قرار: حذف / دمج / إبقاء أحدها / تجاهل">🔍 مشتبه بتكراره</button>
                 <button onclick="syncFromGl_()" id="stmtGlSyncBtn" title="احتياطي: يُظهر بهذا الكشف أي دفعة مسجَّلة بالحسابات العامة على هذا الطرف ولم تظهر (أي تاريخ). الدفعات الجديدة تصل لحظياً بحفظها بالحسابات العامة."><span class="ai">🔄</span> مزامنة من الحسابات العامة</button>
                 <button onclick="printStatement()" title="طباعة"><span class="ai">🖨</span> طباعة</button>
                 <button onclick="shareStatementPdf_()" id="stmtPdfBtn" title="ملف PDF مطابق تمامًا لمعاينة الطباعة — للمشاركة أو التحميل">📄 PDF / مشاركة</button>
@@ -4690,7 +4691,7 @@ var STMT_COL_LABELS_ = { qaid:'القيد', ref:'المرجع', date:'التار
 function stmtCellText_(r, k) {
   var v;
   switch (k) {
-    case 'qaid': v = r.qaid; break;
+    case 'qaid': v = (r.qaid || '') + (r.qaid2 ? ' / ' + r.qaid2 : ''); break;
     case 'ref': v = r.ref; break;
     case 'date': v = r.dateDisp; break;
     case 'checkIn': v = r.checkIn; break;
@@ -5036,7 +5037,7 @@ function renderTable(res) {
     } else { actionBtns = ''; }
     var qaidAttrs = r.bookingKey ? ' class="qaid-dbl" data-key="' + r.bookingKey + '" ondblclick="inlineEditQaid(this)" title="ضغطتين لتعديل القيد"' : '';
     return stmtRowHtml_(cls, {
-      qaid: '<td data-col="qaid"' + qaidAttrs + '>' + escapeHtml(r.qaid) + '</td>',
+      qaid: '<td data-col="qaid"' + qaidAttrs + '>' + escapeHtml(r.qaid) + (r.qaid2 ? '<div style="font-size:.62rem;opacity:.85;font-weight:600;" title="رقم إيصال السند">🧾 ' + escapeHtml(r.qaid2) + '</div>' : '') + '</td>',
       ref: '<td data-col="ref">' + escapeHtml(r.ref) + '</td>',
       date: '<td data-col="date">' + r.dateDisp + '</td>',
       checkIn: '<td data-col="checkIn">' + escapeHtml(r.checkIn || '') + '</td>',
@@ -6046,7 +6047,72 @@ function syncFromGl_() {
     if (!res || !res.ok) { alert('تعذّرت المزامنة: ' + ((res && res.error) || 'خطأ غير معروف')); return; }
     showToast('تمت المزامنة — ' + (res.rows || 0) + ' دفعة من ' + (res.mirrored || 0) + ' قيد');
     if (c) loadData(); loadPartyList();
+    if (res.dups && res.dups.length) hbDupShow_(res.dups, c, res.dupsTotal);   // 🔍 (V4.338) مشتبه بتكراره بعد المزامنة
   }).withFailureHandler(function (e) { if (btn) btn.disabled = false; alert('تعذّرت المزامنة: ' + e.message); }).hbSyncFromGl(currentSessionToken, c);
+}
+
+/* 🔍 (V4.338) تقرير الدفعات المشتبه بتكرارها: نفس الطرف + التاريخ + المبلغ + الاتجاه. لكل مجموعة صفوفها بمصدرها (قيد حسابات عامة/دفعة حجوزات)
+   ورقم القيد والسند والطرف المقابل — وقرار المستخدم: إبقاء صف وحذف الباقي · حذف صف · دمج بقيد الحسابات العامة · تجاهل (يبقى كما هو).
+   حذف نسخة قيد = إخفاؤها بالكشف فقط (القيد باقٍ بالحسابات العامة)؛ حذف دفعة حجوزات = حذفها من سجل الدفعات. */
+var HB_DUPS_ = [];
+function hbDupOpen_() {
+  var c = (document.getElementById('customer').value || '').trim();
+  showToast('جارِ فحص الدفعات المشتبه بتكرارها...');
+  google.script.run.withSuccessHandler(function (res) {
+    if (!res || !res.ok) { alert('تعذّر الفحص: ' + ((res && res.error) || 'خطأ غير معروف')); return; }
+    if (!res.dups.length) { showToast('لا توجد دفعات مشتبه بتكرارها' + (c ? ' لهذا الطرف' : '')); return; }
+    hbDupShow_(res.dups, c);
+  }).withFailureHandler(function (e) { alert('تعذّر الفحص: ' + e.message); }).hbDupReport(currentSessionToken, c);
+}
+function hbDupShow_(dups, party, total) {
+  HB_DUPS_ = dups || [];
+  var old = document.getElementById('hbDupOv'); if (old) old.remove();
+  var ov = document.createElement('div'); ov.id = 'hbDupOv'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:10px;';
+  ov.innerHTML = '<div style="background:#fff;color:#111;border-radius:14px;width:min(980px,98vw);max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">' +
+    '<div style="background:#b45309;color:#fff;padding:10px 14px;display:flex;align-items:center;"><b style="flex:1;">🔍 دفعات مشتبه بتكرارها (' + HB_DUPS_.length + ')' + (party ? ' — ' + escapeHtml(party) : '') + '</b><button onclick="document.getElementById(\'hbDupOv\').remove()" style="border:none;border-radius:6px;padding:2px 10px;">✕</button></div>' +
+    '<div id="hbDupBody" style="padding:12px;overflow:auto;"></div></div>';
+  document.body.appendChild(ov); hbDupDraw_();
+}
+function hbDupDraw_() {
+  var body = document.getElementById('hbDupBody'); if (!body) return;
+  if (!HB_DUPS_.length) { body.innerHTML = '<div style="text-align:center;padding:30px;">✅ لا توجد دفعات مشتبه بتكرارها</div>'; return; }
+  body.innerHTML = HB_DUPS_.map(function (g, gi) {
+    var glN = g.rows.filter(function (r) { return r.kind === 'gl'; }).length, hbN = g.rows.length - glN;
+    return '<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:8px;margin-bottom:10px;">' +
+      '<div style="font-weight:800;margin-bottom:4px;">' + escapeHtml(g.party) + ' — ' + escapeHtml(g.date) + ' — ' + escapeHtml(String(g.amount)) + ' ريال — ' + escapeHtml(g.dir) + '</div>' +
+      '<div style="overflow:auto;"><table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr style="background:#fde68a;"><th style="padding:3px;">المصدر</th><th>رقم القيد / السند</th><th>البيان</th><th>الطرف المقابل</th><th>سُجّلت</th><th></th></tr></thead><tbody>' +
+      g.rows.map(function (r, ri) {
+        return '<tr style="border-top:1px solid #fde68a;"><td style="padding:3px;">' + (r.kind === 'gl' ? '📘 قيد حسابات عامة' : '📝 برنامج الحجوزات') + '<div style="font-size:10.5px;color:#92400e;">' + escapeHtml(r.type || '') + '</div></td>' +
+          '<td>' + (r.entry ? '<b>' + escapeHtml(r.entry) + '</b>' + (r.voucher ? '<div style="font-size:10.5px;">🧾 ' + escapeHtml(r.voucher) + '</div>' : '') : '—') + '</td>' +
+          '<td style="text-align:right;">' + escapeHtml(r.note || '') + '</td><td>' + escapeHtml(r.cp || '—') + (r.by ? '<div style="font-size:10.5px;">بواسطة ' + escapeHtml(r.by) + '</div>' : '') + '</td><td>' + escapeHtml(r.at || '') + '</td>' +
+          '<td style="white-space:nowrap;"><button onclick="hbDupAct_(' + gi + ',\'keep\',' + ri + ')" title="يبقى هذا الصف ويُحذف باقي صفوف المجموعة">✅ أبقِ هذا</button> <button onclick="hbDupAct_(' + gi + ',\'del\',' + ri + ')" title="يُحذف هذا الصف فقط">🗑 احذف</button></td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">' +
+      (glN === 1 && hbN >= 1 ? '<button onclick="hbDupAct_(' + gi + ',\'merge\')" title="يبقى قيد الحسابات العامة (برقمه وسنده) وتُحذف دفعة الحجوزات المسجَّلة بالمثل">🔗 دمج في قيد الحسابات العامة</button>' : '') +
+      '<button onclick="hbDupAct_(' + gi + ',\'ignore\')" title="ليس تكراراً — يبقى كما هو ولا يظهر هنا ثانية">🙈 تجاهل (يبقى كما هو)</button></div></div>';
+  }).join('');
+}
+function hbDupAct_(gi, act, ri) {
+  var g = HB_DUPS_[gi]; if (!g) return;
+  var ops, msg;
+  if (act === 'ignore') { ops = [{ act: 'ignore', sig: g.sig }]; msg = 'تجاهل هذه المجموعة (تبقى الصفوف كما هي)؟'; }
+  else {
+    var ids;
+    if (act === 'keep') ids = g.rows.filter(function (r, i) { return i !== ri; }).map(function (r) { return r.id; });
+    else if (act === 'del') ids = [g.rows[ri].id];
+    else ids = g.rows.filter(function (r) { return r.kind !== 'gl'; }).map(function (r) { return r.id; });   // merge: تبقى نسخة القيد
+    ops = [{ act: 'del', ids: ids }];
+    msg = 'سيُحذف ' + ids.length + ' صف من كشف الفندق' + (ids.some(function (x) { return /^GL:/.test(x); }) ? ' (نسخة القيد تُخفى بالكشف فقط وقيدها يبقى بالحسابات العامة)' : '') + '. متابعة؟';
+  }
+  if (!confirm(msg)) return;
+  google.script.run.withSuccessHandler(function (res) {
+    if (!res || !res.ok) { alert('تعذّر التنفيذ: ' + ((res && (res.error || (res.errors || []).join('\n'))) || 'خطأ غير معروف')); return; }
+    showToast('تم التنفيذ');
+    if (act === 'del' && g.rows.length > 2) g.rows.splice(ri, 1); else HB_DUPS_.splice(gi, 1);
+    hbDupDraw_();
+    var c = (document.getElementById('customer').value || '').trim(); if (c) loadData();
+  }).withFailureHandler(function (e) { alert('تعذّر التنفيذ: ' + e.message); }).hbDupResolve(currentSessionToken, ops);
 }
 function refreshStatement() {
   var c = document.getElementById('customer').value;
@@ -11459,7 +11525,7 @@ function brOpenPartyStatement_(name) {
     var rows = '<tr class="opening-row"><td colspan="3"></td><td class="desc">رصيد أول المدة</td><td></td><td class="num">0</td><td class="num">0</td><td class="num">' + escapeHtml(res.opening) + '</td></tr>';
     rows += res.rows.map(function (r) {
       return '<tr>' +
-        '<td>' + escapeHtml(r.qaid || '') + '</td>' +
+        '<td>' + escapeHtml(r.qaid || '') + (r.qaid2 ? '<div style="font-size:.6rem;">🧾 ' + escapeHtml(r.qaid2) + '</div>' : '') + '</td>' +
         '<td>' + escapeHtml(r.ref || '') + '</td>' +
         '<td>' + escapeHtml(r.dateDisp || '') + '</td>' +
         '<td class="desc">' + escapeHtml(r.note || '') + '</td>' +

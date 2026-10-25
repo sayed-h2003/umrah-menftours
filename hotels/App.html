@@ -4594,7 +4594,7 @@ var STMT_COL_LABELS_ = { qaid:'القيد', ref:'المرجع', date:'التار
 function stmtCellText_(r, k) {
   var v;
   switch (k) {
-    case 'qaid': v = r.qaid; break;
+    case 'qaid': v = (r.qaid || '') + (r.qaid2 ? ' / ' + r.qaid2 : ''); break;
     case 'ref': v = r.ref; break;
     case 'date': v = r.dateDisp; break;
     case 'checkIn': v = r.checkIn; break;
@@ -4940,7 +4940,7 @@ function renderTable(res) {
     } else { actionBtns = ''; }
     var qaidAttrs = r.bookingKey ? ' class="qaid-dbl" data-key="' + r.bookingKey + '" ondblclick="inlineEditQaid(this)" title="ضغطتين لتعديل القيد"' : '';
     return stmtRowHtml_(cls, {
-      qaid: '<td data-col="qaid"' + qaidAttrs + '>' + escapeHtml(r.qaid) + '</td>',
+      qaid: '<td data-col="qaid"' + qaidAttrs + '>' + escapeHtml(r.qaid) + (r.qaid2 ? '<div style="font-size:.62rem;opacity:.85;font-weight:600;" title="رقم إيصال السند">🧾 ' + escapeHtml(r.qaid2) + '</div>' : '') + '</td>',
       ref: '<td data-col="ref">' + escapeHtml(r.ref) + '</td>',
       date: '<td data-col="date">' + r.dateDisp + '</td>',
       checkIn: '<td data-col="checkIn">' + escapeHtml(r.checkIn || '') + '</td>',
@@ -11319,7 +11319,7 @@ function brOpenPartyStatement_(name) {
     var rows = '<tr class="opening-row"><td colspan="3"></td><td class="desc">رصيد أول المدة</td><td></td><td class="num">0</td><td class="num">0</td><td class="num">' + escapeHtml(res.opening) + '</td></tr>';
     rows += res.rows.map(function (r) {
       return '<tr>' +
-        '<td>' + escapeHtml(r.qaid || '') + '</td>' +
+        '<td>' + escapeHtml(r.qaid || '') + (r.qaid2 ? '<div style="font-size:.6rem;">🧾 ' + escapeHtml(r.qaid2) + '</div>' : '') + '</td>' +
         '<td>' + escapeHtml(r.ref || '') + '</td>' +
         '<td>' + escapeHtml(r.dateDisp || '') + '</td>' +
         '<td class="desc">' + escapeHtml(r.note || '') + '</td>' +

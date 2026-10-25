@@ -5290,6 +5290,7 @@ function searchPayments(filters, token) {
 
     var rows = [], received = 0, paid = 0;
 
+    var _pvm = null;
     data.forEach(function (p) {
       var d = p[0] instanceof Date ? new Date(p[0].getTime()) : new Date(p[0]);
       if (isNaN(d.getTime())) return;
@@ -5305,8 +5306,9 @@ function searchPayments(filters, token) {
       if (dir === 'استلمنا منه') received += amount;
       else if (dir === 'دفعنا له') paid += amount;
 
+      var _gr = (typeof _glHbPayRef_ === 'function') ? _glHbPayRef_(p[7], (_pvm = _pvm || (function () { try { return _glHbVoucherMap_(); } catch (eV) { return {}; } })())) : null;
       rows.push({
-        id: p[7], qaid: p[5] || '',
+        id: p[7], qaid: _gr ? _gr.entry : (p[5] || ''), qaid2: _gr ? _gr.voucher : '',   // 🧾 (V4.338)
         dateDisp: Utilities.formatDate(d, 'GMT+3', 'dd/MM/yyyy'), dateIso: Utilities.formatDate(d, 'GMT+3', 'yyyy-MM-dd'),
         party: party, note: p[4] || '', amount: amount, direction: dir, legacyImported: !!p[8],
         linkId: (p[9] || '').toString()
@@ -5715,6 +5717,8 @@ function getUnifiedStatement_(partyName, start, end) {
     });
 
     var pData = getPaymentsRowsCached_(); // مقروءة مرة واحدة لكل تنفيذ — تخدم كل حسابات كشف الحساب
+    var _vmap = null;
+    var glRef_ = function (pid) { if (typeof _glHbPayRef_ !== 'function') return null; if (_vmap === null) { try { _vmap = _glHbVoucherMap_(); } catch (eV) { _vmap = {}; } } return _glHbPayRef_(pid, _vmap); };
     if (pData.length) {
       pData.forEach(function (p) {
         if (normalizeName_(p[1]) !== partyNorm) return;
@@ -5734,7 +5738,7 @@ function getUnifiedStatement_(partyName, start, end) {
         if (beforePeriod) { prevTotal += (rawDebit - rawCredit); return; }
         if (!inPeriod) return;
         items.push({
-          date: pTs, ref: dir.indexOf('يدوي') !== -1 ? 'قيد يدوي' : 'دفعة', qaid: p[5] || '',
+          date: pTs, ref: dir.indexOf('يدوي') !== -1 ? 'قيد يدوي' : 'دفعة', qaid: (glRef_(p[7]) ? glRef_(p[7]).entry : (p[5] || '')), qaid2: glRef_(p[7]) ? glRef_(p[7]).voucher : '',   // 🧾 (V4.338) رقم قيد الحسابات العامة + رقم سند القبض/الصرف تحته
           role: dir.indexOf('يدوي') !== -1 ? 'manual' : 'payment', counterparty: '',
           note: p[4] || DEFAULT_PAYMENT_NOTE, debit: rawDebit, credit: rawCredit, excluded: false, paymentId: p[7],
           checkInTs: 0, checkOutTs: 0,   // دفعة/قيد يدوي — لا تاريخ دخول أو خروج لها
@@ -5750,7 +5754,7 @@ function getUnifiedStatement_(partyName, start, end) {
     var finalRows = items.map(function (it) {
       if (!it.excluded) { running += it.debit - it.credit; sumD += it.debit; sumC += it.credit; }
       return {
-        ref: it.ref, qaid: it.qaid || '', role: it.role, counterparty: it.counterparty, paymentId: it.paymentId, bookingKey: it.bookingKey || null,
+        ref: it.ref, qaid: it.qaid || '', qaid2: it.qaid2 || '', role: it.role, counterparty: it.counterparty, paymentId: it.paymentId, bookingKey: it.bookingKey || null,
         note: it.note + (it.excluded ? ' — ⚠ مستبعد من الرصيد (بدون سعر)' : ''),
         legacyImported: !!it.legacyImported,
         debit: it.excluded ? null : fmtMoneyRounded_(it.debit),
