@@ -6956,6 +6956,64 @@ function _glHbPayPolicy_() {
    • عملاء العمرة والرحلات والعهد لا تُنسخ (العهد لها مزامنة شيت العهدة CUSTODY: الخاصة بها).
    • النسخ العاكسة لا تُقرأ كدفعات بالمزامنة (_glHbRead_) فلا يتكرر القيد. */
 function _glHbOnlyK_() { return _glDKey_(_glDate_(_glSettings_().hb_gl_only_from || '')); }
+/* 🔙 (V4.331) نسخ قيد يدوي سابق لتاريخ القطع إلى كشف الفندق: قبل التاريخ مصدر دفعات الفنادق هو برنامج الحجوزات نفسه (وقيودها
+   AUTO:HBP تُبنى منه)، فكان السند/القيد اليدوي على حساب الفندق قبل القطع يظهر بالحسابات العامة فقط ولا يصل لكشف الفندق، وتسجيله
+   ثانيةً من برنامج الحجوزات يولّد قيداً تلقائياً مكرراً. الحل: المدير يختار هذه القيود (VCH/CUST اليدوية فقط) فتُنسخ كالمعتاد بمعرّف
+   GL:<القيد>:<n> (لا تُقرأ كدفعة بالمزامنة فلا تتكرر) وتُحفظ في قائمة hb_premir فتتبعها التعديلات/الإلغاء كأي نسخة. */
+var _GL_PREMIR_MEMO_ = null;
+function _glHbPreMir_() {
+  var raw = ''; try { raw = _glSettings_().hb_premir || ''; } catch (e) {}
+  if (_GL_PREMIR_MEMO_ && _GL_PREMIR_MEMO_.raw === raw) return _GL_PREMIR_MEMO_.map;
+  var m = {}; try { JSON.parse(raw || '[]').forEach(function (id) { m[id] = 1; }); } catch (e2) {}
+  _GL_PREMIR_MEMO_ = { raw: raw, map: m }; return m;
+}
+function glHbPreCutScan(authToken) {
+  var session = _glPerm_(authToken, 'view', 'hb');
+  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
+  var cutK = _glHbOnlyK_(); if (!cutK) throw new Error('لم يُفعَّل «تاريخ القطع» بعد');
+  var parties = _glHbMirrorParties_(), fx = _glFxDailyMap_(), pre = _glHbPreMir_(), mirrored = {};
+  _glRows_('hbmir').forEach(function (r) { mirrored[_glStr_(r[0])] = 1; });
+  var pays = []; try { pays = (_glHbRead_().pays || []).filter(function (p) { return !/^GL:/.test(p.id); }); } catch (eH) {}
+  var day = function (k) { return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : 0; };
+  var out = [];
+  _glRows_('entries').forEach(function (r) {
+    var id = _glStr_(r[0]), sk = _glStr_(r[6]), k = _glDKey_(_glDate_(r[2]));
+    if (_glStr_(r[5]) !== GL_ST_POSTED_ || (sk && !/^(VCH|CUST):/.test(sk)) || !k || k >= cutK || mirrored[id]) return;
+    var rows = _glHbMirrorRowsPre_(id, cutK, parties, fx); if (!rows.length) return;
+    var e = _glEntryObj_(r);
+    rows.forEach(function (w) {
+      var amt = _glR2_(w[3]), dd = null;
+      pays.forEach(function (p) { if (p.party === w[1] && Math.abs(_glR2_(p.amount) - amt) < 0.01 && Math.abs(day(_glDKey_(p.date)) - day(k)) <= 3) dd = { id: p.id, date: _glDate_(p.date), dir: p.dir }; });
+      out.push({ id: id, voucherNo: e.voucherNo, date: e.date, party: w[1], dir: w[2], amt: amt, note: _glStr_(w[4]), src: sk ? 'شيت' : 'سند', dup: dd });
+    });
+  });
+  out.sort(function (a, b) { return _glDKey_(b.date).localeCompare(_glDKey_(a.date)); });
+  return { success: true, from: _glSettings_().hb_gl_only_from || '', rows: out.slice(0, 800), n: out.length };
+}
+// نفس _glHbMirrorRows_ لكن بتجاوز قاعدة «قبل القطع» (للمعاينة قبل الاختيار)
+function _glHbMirrorRowsPre_(id, cutK, parties, fx) {
+  var pm = _glHbPreMir_(), had = pm[id]; pm[id] = 1;
+  try { return _glHbMirrorRows_(id, cutK, parties, fx, null, false); } finally { if (!had) delete pm[id]; }
+}
+function glHbPreCutApply(authToken, ids) {
+  var session = _glPerm_(authToken, 'edit', 'hb');
+  if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
+  ids = (ids || []).map(_glStr_).filter(String); if (!ids.length) throw new Error('اختر قيداً واحداً على الأقل');
+  var lock = _glLock_(); lock.waitLock(60000);
+  try {
+    var cutK = _glHbOnlyK_(); if (!cutK) throw new Error('لم يُفعَّل «تاريخ القطع» بعد');
+    var list = []; try { list = JSON.parse(_glSettings_().hb_premir || '[]'); } catch (e0) {}
+    ids.forEach(function (id) { if (list.indexOf(id) < 0) list.push(id); });
+    _glSetSetting_('hb_premir', JSON.stringify(list)); _GL_SET_MEMO_ = null;
+    var parties = _glHbMirrorParties_(), fx = _glFxDailyMap_(), c = _glHbCfg_(), n = 0, rows = 0, ss = c.ssId ? SpreadsheetApp.openById(c.ssId) : null, by = _glHbStaffName_(session.username);
+    ids.forEach(function (id) {
+      var r = _glHbMirrorSync_(id, { parties: parties, fx: fx, ss: ss, isNew: true, by: by, notify: false });
+      if (r && r.written) { n++; rows += r.written; }
+    });
+    logChange_(session.username, 'نسخ قيود ما قبل القطع لكشف الفنادق', 'GL:hbprecut', '-', '-', n + ' قيد · ' + rows + ' صف');
+    return { success: true, mirrored: n, rows: rows };
+  } finally { _glUnlock_(lock); }
+}
 function _glHbMirrorParties_() {
   var o = {}, accs = _glAccounts_().map;
   _glRows_('hbmap').forEach(function (r) {
@@ -6974,7 +7032,7 @@ function _glHbMirrorRows_(id, cutK, parties, fx, dup, allowConv) {
   // (V4.258) قيود مزامنة شيت العهدة (CUST:) تُنسخ أيضاً — دفعة عميل فندقي بالعهدة كانت تظهر بكشف الحسابات العامة فقط
   // لا بحساب العميل ببرنامج الحجوزات بعد إيقاف مزامنة العهد هناك
   if (e.status !== GL_ST_POSTED_ || (e.sourceKey && !/^(VCH|CUST):/.test(e.sourceKey))) return [];
-  var k = _glDKey_(e.date); if (!k || k < cutK) return [];
+  var k = _glDKey_(e.date); if (!k || (k < cutK && !_glHbPreMir_()[id])) return [];   // (V4.331) قيد قبل القطع اختار المدير نسخه لكشف الفندق يُستثنى
   parties = parties || _glHbMirrorParties_();
   var sarRate = _glFxRateAt_('SAR', e.date, fx).rate || _glRates_().SAR || 1, out = [], skip = [];
   _glLinesOf_(id).map(_glLineObj_).sort(function (a, b) { return a.lineNo - b.lineNo; }).forEach(function (l) {
@@ -7013,7 +7071,7 @@ function _glHbMirrorWhy_(id) {
     if (!_glSettings_().hb_ss_id) why = 'برنامج الحجوزات غير مربوط بالحسابات';
     else if (!from) why = 'لم يُفعَّل بعد «تاريخ القطع» — الحسابات العامة ← 🏨 الحجوزات ← 💳 دفعات الفنادق ← 🔒 تاريخ القطع (بعد تطبيقه تُنسخ القيود من التاريخ تلقائياً، ومنها هذا القيد)';
     else if (e.status !== GL_ST_POSTED_) why = 'القيد مسودة غير مرحّل';
-    else if (_glDKey_(e.date) < _glDKey_(_glDate_(from))) why = 'تاريخ القيد ' + e.date + ' قبل تاريخ القطع ' + from;
+    else if (_glDKey_(e.date) < _glDKey_(_glDate_(from)) && !_glHbPreMir_()[id]) why = 'تاريخ القيد ' + e.date + ' قبل تاريخ القطع ' + from + ' — لنسخه لكشف الفندق: الحسابات العامة ← 🏨 الحجوزات ← 💳 دفعات الفنادق ← «🔙 قيود قبل القطع» (للمدير)';
     else if (e.sourceKey && !/^(VCH|CUST):/.test(e.sourceKey)) why = 'قيد تلقائي/مستورد لا يُنسخ';
     return why ? { names: names, why: why } : null;
   } catch (x) { return null; }
@@ -7334,6 +7392,7 @@ function glHbMirrorList(authToken) {
 function _glHbMirrorAll_() {
   var cutK = _glHbOnlyK_(), ids = {}, parties = _glHbMirrorParties_(), fx = _glFxDailyMap_();
   _glRows_('hbmir').forEach(function (r) { var id = _glStr_(r[0]); if (id) ids[id] = 1; });
+  Object.keys(_glHbPreMir_()).forEach(function (id) { ids[id] = 1; });   // (V4.331) قيود ما قبل القطع المختارة
   if (cutK) {
     var lines = {}; _glRows_('lines').forEach(function (l) { if (parties[_glStr_(l[4])]) lines[_glStr_(l[0])] = 1; });
     _glRows_('entries').forEach(function (r) {
