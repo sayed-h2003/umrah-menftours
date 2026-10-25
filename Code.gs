@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.336";
+var APP_VERSION = "4.337";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -22243,13 +22243,13 @@ function _mfRules_(f, allFiles, balances) {
   if (!reviewed && !isNaN(g)) {
     var days = Math.ceil((g - _mfMs_(_mfToday_())) / 86400000);
     if (days <= 3 && days >= 0) {
-      out.push({ level:'warn', code:'URGENT', msg:'السفر بعد ' + days + ' يوم ولم تتم المراجعة بعد — نوع المراجعة الافتراضي VIP.' });
+      out.push({ level:'warn', code:'URGENT', msg:'السفر بعد ' + days + ' يوم ولم تتم المراجعة بعد' + (days <= 2 ? ' — نوع المراجعة الافتراضي VIP.' : ' — تبقّى يوم قبل أن تصبح المراجعة VIP تلقائياً (يومان أو أقل).') });
     }
   }
   return out;
 }
 
-// نوع المراجعة التلقائي: VIP لو تاريخ المراجعة جمعة/سبت أو لو تبقّى أقل من 3 أيام على السفر
+// نوع المراجعة التلقائي: VIP لو تاريخ المراجعة جمعة/سبت أو لو تبقّى يومان أو أقل على السفر (V4.337)
 // (الإجازات الرسمية والمراجعة بعد 4 عصراً يحدّدها الموظف يدوياً — لا يمكن للنظام استنتاجها)
 function _mfAutoReviewType_(reviewDate, goDate, current) {
   if (current === 'تجديد باركود') return current;
@@ -22260,7 +22260,7 @@ function _mfAutoReviewType_(reviewDate, goDate, current) {
     var g = _mfMs_(_mfDate_(goDate));
     if (!isNaN(g)) {
       var diff = Math.ceil((g - _mfMs_(d)) / 86400000);
-      if (diff <= 3 && diff >= 0) return 'VIP';
+      if (diff <= 2 && diff >= 0) return 'VIP';   // (V4.337) يومان أو أقل قبل السفر (كان 3)
     }
   }
   return current === 'VIP' ? 'VIP' : 'عادية'; // VIP اليدوي يبقى كما اختاره الموظف
@@ -23101,7 +23101,7 @@ function saveMinistryFile(authToken, data) {
     _mfInferSingleStay_(f);   // 🏙️ (V4.329)
     var _dIss = _mfDatesIssues_(f);
     if (_dIss.length) return { success: false, error: '📅 صحّح التواريخ قبل الحفظ:\n• ' + _dIss.join('\n• '), dateIssues: _dIss };
-    // نوع المراجعة التلقائي (جمعة/سبت أو أقل من 3 أيام) — ما لم يُثبّته الموظف يدوياً
+    // نوع المراجعة التلقائي (جمعة/سبت أو يومان أو أقل قبل السفر) — ما لم يُثبّته الموظف يدوياً
     if (!data._manualType) f.reviewType = _mfAutoReviewType_(f.reviewDate, f.goDate, f.reviewType);
     // 🎯 (V4.178) نوع الملف التلقائي: «فردي» لو لا مشرف حقيقي (المشرف = الوكيل نفسه أو نص «الوكيل
     // السعودي»/«بدون مشرف» أو فارغ — بعد تطبيع الاسم، نفس قاعدة فحص الملفات الفردية) وكان العدد من
@@ -23263,6 +23263,7 @@ function saveMinistryFile(authToken, data) {
         ret.quotaWarning = { overMonthly: qOverMonthly, overPerFile: qOverPerFile, used: qUsed, limit: 36, perFileLimit: 9, suggestions: qSugg };
       }
     }
+    var _xc = _xcSafe_(_mfTripsOf_(f), { mf: allAfter }); if (_xc) ret.xcheck = _xc;   // 🔗 (V4.337) مطابقة الشركة/الوكيل بين الرحلة والتأشيرات والملفات
     return ret;
   } finally { if (!_lockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
 }
@@ -23273,7 +23274,7 @@ function saveMinistryFile(authToken, data) {
    بمجموعات التأشيرات. items: [{id, fileNo?, ref?, company?, agent?, reviewDate?, notes?}] */
 function saveMinistryFilesBulk(authToken, items) {
   _mfPerm_(authToken, 'edit');
-  var all = _mfReadAll_(), results = [], okN = 0;
+  var all = _mfReadAll_(), results = [], okN = 0, _xcPrev = _XC_SKIP_; _XC_SKIP_ = true;   // 🔗 (V4.337) مطابقة الشركة/الوكيل مرة واحدة بنهاية الدفعة
   // (V4.317) + ربط الرحلات والمعتمرين: الواجهة تبني البنود/العدد/اسم العميل كما يفعل mfTripPickApply بالنموذج المنفرد
   var editable = ['fileNo', 'ref', 'company', 'agent', 'reviewDate', 'notes',
     'tripName', 'extraTrips', 'selected', 'breakdown', 'pilgrims', 'clientLabel'];
@@ -23293,7 +23294,9 @@ function saveMinistryFilesBulk(authToken, items) {
       okN++; results.push({ id: id, success: true, file: r.file, balances: r.balances, others: r.others, syncTrips: r.syncTrips });
     } catch (e) { results.push({ id: id, success: false, error: e.message }); }
   });
-  return { success: true, done: okN, total: (items || []).length, results: results };
+  _XC_SKIP_ = _xcPrev;
+  var _xts = []; results.forEach(function (r) { if (r.success && r.file) _xts = _xts.concat(_mfTripsOf_(r.file)); });
+  return { success: true, done: okN, total: (items || []).length, results: results, xcheck: _xcSafe_(_xts) };
 }
 // 🔍 (V4.171/V4.173) فحص الملفات المرشَّحة لتكون «فردي»: عدد معتمريها من 1 إلى 9، ومشرفوها إما
 // بدون مشرف حقيقي (فارغ) أو المشرف هو الوكيل نفسه فقط (مقارنة بعد تطبيع الاسم — تتجاهل اختلاف
@@ -24913,6 +24916,126 @@ function _vzAcctKeyCalc_(agent, company, map) {
   if (c.mode === 'مشترك') return agent + ' - ' + (_mfStr_(c.mainCompany) || c.company);
   return agent + ' - ' + c.company;
 }
+
+/* ============================================================
+   🔗 (V4.337) مطابقة الشركة المصرية والوكيل السعودي بين الرحلة ومجموعات التأشيرات وملفات الوزارة
+   ------------------------------------------------------------
+   تُجرى عند كل حفظ لمجموعة تأشيرات أو ملف وزارة مرتبط برحلة (وعند الربط الجماعي مرة واحدة بنهايته).
+   • تطبيع الأسماء (الياء/الألف/التاء المربوطة…) ومطابقة مرنة للشركة (احتواء أحد الاسمين للآخر)
+   • الوكيل المركَّب «وكيل - شركة» (حساب مشترك) يُفكّ إلى وكيله، وتُعدّ الشركات المدمجة بحساب «مشترك» واحد (نفس الشركة الرئيسية) مكافئة
+   • لا يمنع الحفظ أبداً: يرجع xcheck للواجهة فتنبّه المستخدم ليختار ما يُصحَّح (الرحلة/التأشيرات/الملفات) أو يتخطى — ويظهر من جديد عند أي حفظ لاحق
+   ============================================================ */
+var _XC_SKIP_ = false;
+function _xcN_(s) { return _normalizeArabicName_(_mfStr_(s)).replace(/\s+/g, ' ').trim(); }
+function _xcNS_(s) { return _xcN_(s).replace(/\s+/g, ''); }
+function _xcLike_(a, b) {
+  var x = _xcNS_(a), y = _xcNS_(b); if (!x || !y) return false;
+  return x === y || (Math.min(x.length, y.length) >= 3 && (x.indexOf(y) >= 0 || y.indexOf(x) >= 0));
+}
+function _xcCfg_(agent, company, rows) {
+  for (var i = 0; i < rows.length; i++) if (_xcN_(rows[i].agent) === _xcN_(agent) && _xcLike_(rows[i].company, company)) return rows[i];
+  return null;
+}
+function _xcCompanyEq_(a, b, agent, rows) {
+  if (_xcLike_(a, b)) return true;
+  var ca = _xcCfg_(agent, a, rows), cb = _xcCfg_(agent, b, rows);
+  var ma = ca && ca.mode === 'مشترك' ? (ca.mainCompany || ca.company) : '', mb = cb && cb.mode === 'مشترك' ? (cb.mainCompany || cb.company) : '';
+  return !!((ma && mb && _xcLike_(ma, mb)) || (ma && _xcLike_(ma, b)) || (mb && _xcLike_(mb, a)));
+}
+// «وكيل - شركة» (يظهر بشاشات الحسابات المشتركة) ⇒ {agent, companies:[الشركة الفعلية، جزء الاسم المركَّب]}
+function _xcParse_(agent, company, rows) {
+  agent = _mfStr_(agent); company = _mfStr_(company);
+  var out = { agent: agent, company: company, part: '' }, i = agent.indexOf(' - ');
+  if (i > 0) {
+    var a0 = agent.slice(0, i).trim(), c0 = agent.slice(i + 3).trim();
+    if (rows.some(function (r) { return _xcN_(r.agent) === _xcN_(a0); })) { out.agent = a0; out.part = c0; }
+  }
+  return out;
+}
+function _xcRowsEq_(x, y, rows) {
+  if (_xcN_(x.agent) !== _xcN_(y.agent)) return false;
+  var cx = [x.company, x.part].filter(Boolean), cy = [y.company, y.part].filter(Boolean);
+  if (!cx.length && !cy.length) return true;
+  if (!cx.length || !cy.length) return false;
+  return cx.some(function (a) { return cy.some(function (b) { return _xcCompanyEq_(a, b, x.agent, rows); }); });
+}
+// opts: {mf: ملفات الوزارة المقروءة سلفاً, vz: مجموعات التأشيرات المقروءة سلفاً}
+function _xcCheck_(tripNames, opts) {
+  opts = opts || {};
+  var names = {}, list = [];
+  (tripNames || []).forEach(function (t) { t = _mfStr_(t); if (t && !names[t]) { names[t] = 1; list.push(t); } });
+  if (!list.length) return [];
+  var acct = _vzAcctRead_(), tripInfo = {};
+  try {
+    var tsh = _getTripsSheet_(), tl = tsh.getLastRow();
+    if (tl >= 2) {
+      var C = _robustColMap_(tsh, TRIPS_HEADERS_), T = _cellReader_(C, TRIPS_COL_);
+      tsh.getRange(2, 1, tl - 1, tsh.getLastColumn()).getValues().forEach(function (r, i) {
+        var n = String(T(r, 'name') || '').trim(); if (n && names[n]) tripInfo[n] = { company: _mfStr_(T(r, 'company')), agent: _mfStr_(T(r, 'agent')), row: i + 2 };
+      });
+    }
+  } catch (eT) {}
+  var vz = opts.vz || _vzReadAll_(), mf = opts.mf || _mfReadAll_(), out = [];
+  list.forEach(function (t) {
+    var rows = [];
+    if (tripInfo[t]) { var p0 = _xcParse_(tripInfo[t].agent, tripInfo[t].company, acct); rows.push({ src: 'trip', id: t, label: 'الرحلة', company: tripInfo[t].company, agent: tripInfo[t].agent, p: p0 }); }
+    vz.forEach(function (f) { if (_vzTripsOf_(f).indexOf(t) < 0) return;
+      rows.push({ src: 'vz', id: f.id, label: 'مجموعة تأشيرات ' + (f.ref ? 'رقم ' + f.ref : '#' + f.seq), company: f.company, agent: f.agent, p: _xcParse_(f.agent, f.company, acct) }); });
+    mf.forEach(function (f) { if (_mfTripsOf_(f).indexOf(t) < 0) return;
+      rows.push({ src: 'mf', id: f.id, label: 'ملف وزارة ' + (f.fileNo ? 'رقم ' + f.fileNo : '#' + f.seq), company: f.company, agent: f.agent, p: _xcParse_(f.agent, f.company, acct) }); });
+    if (rows.length < 2) return;
+    var anchor = rows[0], bad = false;
+    rows.forEach(function (r, i) { r.diff = i > 0 && !_xcRowsEq_(anchor.p, r.p, acct); if (r.diff) bad = true; });
+    if (!bad) return;
+    out.push({ trip: t, anchor: anchor.src === 'trip' ? 'trip' : (anchor.src + ':' + anchor.id),
+      rows: rows.map(function (r) { return { src: r.src, id: r.id, label: r.label, company: r.company, agent: r.agent, diff: !!r.diff }; }) });
+  });
+  return out;
+}
+function _xcSafe_(tripNames, opts) {
+  if (_XC_SKIP_) return undefined;
+  try { var r = _xcCheck_(tripNames, opts); return r.length ? r : undefined; } catch (e) { Logger.log('xcheck: ' + e.message); return undefined; }
+}
+// فحص يدوي (مثلاً لرحلة محددة)
+function xcCheckTrips(authToken, trips) {
+  requireAuth_(authToken);
+  return { success: true, issues: _xcCheck_(Array.isArray(trips) ? trips.slice(0, 30) : []) };
+}
+// تطبيق التصحيحات المختارة: items = [{src:'trip'|'vz'|'mf', id, company, agent}] — كل عنصر بصلاحية شاشته؛ يُرجع الفحص المحدَّث للرحلات المعنية
+function xcApply(authToken, items, trips) {
+  var session = requireAuth_(authToken), res = [], vzIt = [], mfIt = [];
+  (items || []).slice(0, 60).forEach(function (it) {
+    var company = _mfStr_(it && it.company), agent = _mfStr_(it && it.agent), id = _mfStr_(it && it.id);
+    if (!id || !agent) { res.push({ id: id, success: false, error: 'الوكيل مطلوب' }); return; }
+    if (it.src === 'vz') vzIt.push({ id: id, company: company, agent: agent });
+    else if (it.src === 'mf') mfIt.push({ id: id, company: company, agent: agent });
+    else if (it.src === 'trip') {
+      try {
+        if (!_sessionHasPerm_(session, 'trips.edit')) throw new Error('لا تملك صلاحية تعديل الرحلات');
+        var lock = LockService.getScriptLock(); lock.waitLock(30000);
+        try {
+          var sh = _getTripsSheet_(), C = _robustColMap_(sh, TRIPS_HEADERS_), nameCol = C[TRIPS_COL_.name], coCol = C[TRIPS_COL_.company], agCol = C[TRIPS_COL_.agent];
+          var last = sh.getLastRow(), names = last >= 2 ? sh.getRange(2, nameCol + 1, last - 1, 1).getValues() : [], row = 0;
+          for (var i = 0; i < names.length; i++) if (String(names[i][0]).trim() === id) { row = i + 2; break; }
+          if (!row) throw new Error('الرحلة غير موجودة');
+          var oldCo = String(sh.getRange(row, coCol + 1).getValue() || ''), oldAg = String(sh.getRange(row, agCol + 1).getValue() || '');
+          if (company) sh.getRange(row, coCol + 1).setValue(company);
+          sh.getRange(row, agCol + 1).setValue(agent);
+          logChange_(session.username, 'تصحيح شركة/وكيل الرحلة (مطابقة)', id, 'الشركة/الوكيل', oldCo + ' / ' + oldAg, (company || oldCo) + ' / ' + agent);
+        } finally { lock.releaseLock(); }
+        try { clearAllCache(); } catch (eC) {}
+        res.push({ id: id, success: true });
+      } catch (e) { res.push({ id: id, success: false, error: e.message }); }
+    }
+  });
+  var prev = _XC_SKIP_; _XC_SKIP_ = true;
+  try {
+    if (vzIt.length) { var rv = saveVisaFilesBulk(authToken, vzIt); (rv.results || []).forEach(function (r) { res.push({ id: r.id, success: r.success, error: r.error }); }); }
+    if (mfIt.length) { var rm = saveMinistryFilesBulk(authToken, mfIt); (rm.results || []).forEach(function (r) { res.push({ id: r.id, success: r.success, error: r.error }); }); }
+  } finally { _XC_SKIP_ = prev; }
+  var fresh = []; try { fresh = _xcCheck_(trips || []); } catch (eF) {}
+  return { success: true, results: res, issues: fresh };
+}
 // كل مفاتيح الحسابات المتاحة (وكيل عام + الحسابات الفرعية المُعدَّة) مرتَّبة
 // 🔘 (V4.146) الحساب العام "الوكيل (كل الشركات)" يُخفى تلقائياً بمجرد وجود أي حساب فرعي له —
 // لا داعي له عادةً حينها ويُربك القائمة. والحسابات الفرعية غير "النشطة" تُخفى من القائمة أيضاً
@@ -25285,7 +25408,7 @@ function saveVisaFile(authToken, data) {
     // ⚡ (V4.234) أرصدة الوكلاء المتأثرين فقط (الجديد + القديم إن تغيّر) — يطبّقها العميل محلياً بلا getVisaBootstrap
     var _vzBal;
     try { if (_vzHasFinance_(session)) _vzBal = _vzBalancesForAgents_([f.agent].concat(old ? [old.agent] : [])); } catch (eB) {}
-    return { success: true, file: f, syncTrips: _vzSync || [], agentBalances: _vzBal };
+    return { success: true, file: f, syncTrips: _vzSync || [], agentBalances: _vzBal, xcheck: _xcSafe_(_vzTripsOf_(f)) };
   } finally { if (!_vzLockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
 }
 /* ✏️ (V4.312) تعديل جماعي لعدة مجموعات تأشيرات دفعة واحدة: يستدعي saveVisaFile الحقيقية لكل مجموعة — فيحصل
@@ -25298,7 +25421,7 @@ function saveVisaFile(authToken, data) {
    (vzTripChanged/_vzPickCommit_) وترسلها مع الرحلة والأسماء المختارة */
 function saveVisaFilesBulk(authToken, items) {
   _vzPerm_(authToken, 'edit');
-  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS), results = [], okN = 0;
+  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS), results = [], okN = 0, _xcPrev = _XC_SKIP_; _XC_SKIP_ = true;   // 🔗 (V4.337)
   var editable = ['status', 'payStatus', 'date', 'company', 'agent', 'entryNo', 'notes',
     'tripName', 'extraTrips', 'selected', 'breakdown', 'visaCount', 'price'];
   (items || []).forEach(function (it) {
@@ -25316,7 +25439,9 @@ function saveVisaFilesBulk(authToken, items) {
       okN++; results.push({ id: id, success: true, file: r.file, syncTrips: r.syncTrips, agentBalances: r.agentBalances });
     } catch (e) { results.push({ id: id, success: false, error: e.message }); }
   });
-  return { success: true, done: okN, total: (items || []).length, results: results };
+  _XC_SKIP_ = _xcPrev;
+  var _xts = []; results.forEach(function (r) { if (r.success && r.file) _xts = _xts.concat(_vzTripsOf_(r.file)); });
+  return { success: true, done: okN, total: (items || []).length, results: results, xcheck: _xcSafe_(_xts) };
 }
 
 /* 📥 (V4.134) استيراد المجموعات القديمة دفعةً واحدة بعد معاينتها وتعديلها بالشاشة.

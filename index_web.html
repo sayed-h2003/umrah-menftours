@@ -6950,6 +6950,7 @@ function _runExec_(getReal, st, fn, args, attempt, busyN) {
       setTimeout(function () { _runExec_(getReal, st, fn, args, attempt, busyN + 1); }, 1200 * (busyN + 1)); return;
     }
     st.ok(res, uo);
+    if (res && res.xcheck && res.xcheck.length) { try { setTimeout(function () { xcShow_(res.xcheck); }, 250); } catch (eXc) {} }   // 🔗 (V4.337) عدم تطابق الشركة/الوكيل بين الرحلة والتأشيرات وملفات الوزارة
   });
   r = r.withFailureHandler(function (err, uo) {
     var emsg = String((err && err.message) || err || '');
@@ -6994,6 +6995,62 @@ function _runExec_(getReal, st, fn, args, attempt, busyN) {
     Object.defineProperty(google.script, 'run', { configurable: true, get: function () { return mk({}); } });
   } catch (e) { console.warn('session resume wrapper', e); }
 })();
+
+/* 🔗 (V4.337) نافذة مطابقة الشركة المصرية والوكيل السعودي بين الرحلة ومجموعات التأشيرات وملفات الوزارة.
+   تظهر بعد حفظ مجموعة/ملف مرتبط برحلة (أو ربط جماعي) لو اختلفت بياناتها — لا تمنع الحفظ. يختار المستخدم ما يُصحَّح: يعدّل
+   الحقول أو يضغط «اجعل الباقي مثل هذا»، ثم «تطبيق المحدد»، أو «تخطي» (تظهر ثانيةً عند أي حفظ لاحق). */
+function xcShow_(issues) {
+  if (!issues || !issues.length) return;
+  var old = document.getElementById('xcOv'); if (old) old.remove();
+  var esc = function (x) { return String(x == null ? '' : x).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var ov = document.createElement('div'); ov.id = 'xcOv'; ov.dir = 'rtl';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483300;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:12px;';
+  var blocks = issues.map(function (is, bi) {
+    return '<div class="mb-3 p-2" style="border:1px solid #fcd34d;border-radius:10px;background:#fffbeb;" data-trip="' + esc(is.trip) + '"><div class="fw-bold mb-1">🧳 ' + esc(is.trip) + '</div>' +
+      '<div class="table-responsive"><table class="table table-sm align-middle mb-0" style="font-size:12.5px;"><thead><tr><th></th><th>المصدر</th><th>الشركة المصرية</th><th>الوكيل السعودي</th><th></th></tr></thead><tbody>' +
+      is.rows.map(function (r, ri) {
+        return '<tr class="xcRow" data-src="' + esc(r.src) + '" data-id="' + esc(r.id) + '" style="' + (r.diff ? 'background:#fee2e2;' : '') + '">' +
+          '<td><input type="checkbox" class="xcCk" ' + (r.diff ? 'checked' : '') + '></td><td class="text-start">' + (r.diff ? '⚠️ ' : '✅ ') + esc(r.label) + '</td>' +
+          '<td><input class="form-control form-control-sm xcCo" value="' + esc(r.company) + '"></td><td><input class="form-control form-control-sm xcAg" value="' + esc(r.agent) + '"></td>' +
+          '<td><button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="xcLike_(this)" title="يملأ بقية الصفوف بهذه القيم ويحدّدها للتصحيح">اجعل الباقي مثل هذا</button></td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }).join('');
+  ov.innerHTML = '<div style="background:#fff;border-radius:16px;width:min(900px,98vw);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.4);overflow:hidden;">' +
+    '<div style="background:linear-gradient(135deg,#92400e,#b45309);color:#fff;padding:10px 16px;display:flex;align-items:center;"><b style="flex:1;">⚠️ الشركة المصرية / الوكيل السعودي غير متطابقين</b><button class="btn btn-light btn-sm" onclick="document.getElementById(\'xcOv\').remove()">✕</button></div>' +
+    '<div style="padding:12px 16px;overflow:auto;"><div class="small text-muted mb-2">الرحلة ومجموعات التأشيرات وملفات الوزارة المرتبطة بها يجب أن تحمل نفس الشركة والوكيل (حسابات الوكلاء المشتركة محسوبة: «وكيل - شركة» = نفس الوكيل). حدّد ما تريد تصحيحه وعدّل القيم أو اجعل الباقي مثل مرجع، أو تخطَّ — ويظهر هذا التنبيه من جديد عند أي حفظ لاحق.</div>' + blocks + '</div>' +
+    '<div class="d-flex gap-2 justify-content-end p-2" style="border-top:1px solid #e2e8f0;"><button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById(\'xcOv\').remove()">تخطي</button><button class="btn btn-warning btn-sm fw-bold" id="xcApplyBtn" onclick="xcApply_()">✅ تطبيق المحدد</button></div></div>';
+  document.body.appendChild(ov);
+}
+function xcLike_(btn) {
+  var tr = btn.closest('tr'), co = tr.querySelector('.xcCo').value, ag = tr.querySelector('.xcAg').value;
+  tr.closest('tbody').querySelectorAll('.xcRow').forEach(function (r) {
+    if (r === tr) { r.querySelector('.xcCk').checked = false; return; }
+    r.querySelector('.xcCo').value = co; r.querySelector('.xcAg').value = ag; r.querySelector('.xcCk').checked = true;
+  });
+}
+function xcApply_() {
+  var items = {}, trips = [];
+  document.querySelectorAll('#xcOv [data-trip]').forEach(function (b) {
+    trips.push(b.dataset.trip);
+    b.querySelectorAll('.xcRow').forEach(function (r) {
+      if (!r.querySelector('.xcCk').checked) return;
+      items[r.dataset.src + ':' + r.dataset.id] = { src: r.dataset.src, id: r.dataset.id, company: r.querySelector('.xcCo').value.trim(), agent: r.querySelector('.xcAg').value.trim() };
+    });
+  });
+  var list = Object.keys(items).map(function (k) { return items[k]; });
+  if (!list.length) { showToast('حدّد صفاً واحداً على الأقل للتصحيح أو اضغط «تخطي»'); return; }
+  var btn = document.getElementById('xcApplyBtn'); if (btn) btn.disabled = true;
+  google.script.run.withSuccessHandler(function (res) {
+    var bad = (res.results || []).filter(function (r) { return !r.success; });
+    if (bad.length) _showPopup(bad.map(function (r) { return r.id + ': ' + r.error; }).join('\n'), 'warning');
+    var ov = document.getElementById('xcOv'); if (ov) ov.remove();
+    showToast('✅ صُحّح ' + ((res.results || []).length - bad.length) + ' عنصر');
+    try { if (typeof mfLoad === 'function' && document.getElementById('section-ministry') && !document.getElementById('section-ministry').classList.contains('d-none')) mfLoad(true); } catch (e1) {}
+    try { if (typeof vzLoad === 'function') vzLoad(true, true); } catch (e2) {}
+    try { if (typeof loadTripsList === 'function') loadTripsList(); } catch (e3) {}
+    if ((res.issues || []).length) xcShow_(res.issues);   // ما زال هناك اختلاف بعد التصحيح الجزئي
+  }).withFailureHandler(function (e) { if (btn) btn.disabled = false; _showPopup((e && e.message) || e, 'error'); }).xcApply(window.authToken, list, trips);
+}
 // يُستدعى عند فتح شاشة الدخول: لو للجهاز مفتاح (محلياً أو محفوظاً بصفحة الغلاف) ندخل تلقائياً بلا كلمة مرور
 function _devAutoLogin_() {
   if (window._devAutoTried || window.authToken) return; window._devAutoTried = true;
@@ -8089,7 +8146,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.336";
+var CLIENT_APP_VERSION = "4.337";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -38285,7 +38342,7 @@ function mfDefaultPct(pilgrims) {
   var v = 3.00 - (n / 120) * 0.5 + (Math.random() - 0.5) * 0.04;
   return Math.round(Math.max(2.50, Math.min(3.00, v)) * 100) / 100;
 }
-// نوع المراجعة التلقائي: جمعة/سبت أو أقل من 3 أيام على السفر (الباقي يدوي بقرار الموظف)
+// نوع المراجعة التلقائي: جمعة/سبت أو يومان أو أقل على السفر (الباقي يدوي بقرار الموظف) — V4.337
 function mfAutoType(reviewDate, goDate, current) {
   if (current === 'تجديد باركود') return current;
   var d = mfDate(reviewDate);
@@ -38293,7 +38350,7 @@ function mfAutoType(reviewDate, goDate, current) {
     var dow = new Date(mfMs(d)).getDay();
     if (dow === 5 || dow === 6) return 'VIP';
     var g = mfMs(mfDate(goDate));
-    if (!isNaN(g)) { var diff = Math.ceil((g - mfMs(d)) / 86400000); if (diff <= 3 && diff >= 0) return 'VIP'; }
+    if (!isNaN(g)) { var diff = Math.ceil((g - mfMs(d)) / 86400000); if (diff <= 2 && diff >= 0) return 'VIP'; }   // (V4.337) يومان أو أقل
   }
   return current === 'VIP' ? 'VIP' : 'عادية';
 }
@@ -39805,7 +39862,7 @@ function mfDetail(f) {
     h += '<div class="mf-note good">✅ لا توجد مخالفات لقواعد العمل على هذا الملف</div>';
   }
   if (f.reviewType === 'VIP') {
-    h += '<div class="mf-note good">⭐ نوع المراجعة VIP' + (mfStr(f.vipReason) ? ' — ' + mfEsc(f.vipReason) : ' (تلقائي: جمعة/سبت أو أقل من 3 أيام على السفر)') +
+    h += '<div class="mf-note good">⭐ نوع المراجعة VIP' + (mfStr(f.vipReason) ? ' — ' + mfEsc(f.vipReason) : ' (تلقائي: جمعة/سبت أو يومان أو أقل على السفر)') +
       ' · رسوم الغرفة الإجمالية للمعتمر ' + mfL(mfFmt((MF.cfg && MF.cfg.vipRoomFee) || 3100)) + ' ج ثابتة من الإعدادات (بدل الرسوم المسجَّلة) — للمعتمر فقط دون المشرف.</div>';
   }
   if (mfReviewed(f)) {
