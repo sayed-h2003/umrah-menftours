@@ -220,3 +220,18 @@ function ledgerSetMode(authToken, on) {
   logChange_(s.username, 'توحيد قنوات التسجيل المالي', 'GL:SETTINGS', 'ledger_central', on ? 'لا' : 'نعم', on ? 'نعم' : 'لا');
   return { success: true, on: !!on };
 }
+
+/* ⚡ (V4.351) نداء مجمّع: عدة قراءات بنداء واحد (كل نداء لـ Apps Script ثانية تقريباً مهما صغر) — قائمة بيضاء للقراءة فقط */
+function _appBatchFns_() {
+  return { ledgerCount: ledgerCount, ledgerPendingFor: ledgerPendingFor, ledgerQueue: ledgerQueue, glReconLast: glReconLast, audStatus: audStatus, snapPoints: snapPoints,
+    snapScreens: snapScreens, glEntrySnaps: glEntrySnaps, glDeletedEntries: glDeletedEntries, glGetEntry: glGetEntry, snapRowList: snapRowList };
+}
+function appBatch(authToken, calls) {
+  requireAuth_(authToken);
+  var F = _appBatchFns_();
+  return { success: true, results: (calls || []).slice(0, 12).map(function (c) {
+    var fn = String((c && c.fn) || ''), f = F.hasOwnProperty(fn) ? F[fn] : null;
+    if (typeof f !== 'function') return { ok: false, error: 'غير مسموح: ' + fn };
+    try { return { ok: true, r: f.apply(null, [authToken].concat((c && c.args) || [])) }; } catch (e) { return { ok: false, error: e.message }; }
+  }) };
+}

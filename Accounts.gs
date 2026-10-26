@@ -2080,13 +2080,13 @@ function glListEntries(authToken, f) {
     picked.push({ r: r, k: k, seq: +r[1] || 0, ls: rawLs });
   });
   picked.sort(function (a, b) { return a.k < b.k ? 1 : (a.k > b.k ? -1 : (b.seq - a.seq)); });
-  var total = picked.length;
-  var out = picked.slice(0, 400).map(function (p) {
+  var total = picked.length, cap = f.all ? 2500 : 400;   // ⚡ (V4.351) all ⇒ القائمة كاملة مرة واحدة لتُصفّى محلياً بالمتصفح
+  var out = picked.slice(0, cap).map(function (p) {
     var e = _glEntryObj_(p.r); e._k = p.k;
     e.lines = p.ls.map(_glLineObj_).sort(function (a, b) { return a.lineNo - b.lineNo; });
     return e;
   });
-  return { success: true, total: total, entries: out };
+  return { success: true, total: total, entries: out, truncated: total > cap };
 }
 
 /* ---------------------------- دفتر الأستاذ والميزان ---------------------------- */

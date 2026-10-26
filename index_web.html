@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.350  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.351  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8345,7 +8345,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.350";
+var CLIENT_APP_VERSION = "4.351";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -26294,7 +26294,7 @@ function _accLoad_() {
       res.mergeGroups = Array.isArray(res.mergeGroups) ? res.mergeGroups : (res.mergeTrips ? [{ id: '', name: 'مجموعة 1', trips: res.mergeTrips }] : []);
       _accData = res;
       _accRender_();
-      try { _ledgerPendShow_('cp', client); } catch (eLp) {}   // 🏛️ (V4.349) دفعات بانتظار الاعتماد
+      try { _ledgerPendRender_('cp', res.ledgerPend || []); } catch (eLp) {}   // 🏛️ (V4.349) دفعات بانتظار الاعتماد — ⚡ (V4.351) ضمن نفس الاستجابة
       // ⚡ (V4.41) حالة الدمج تصل الآن ضمن نفس استجابة تحميل الحساب (res.mergeTrips) — بلا أي طلب شبكة
       // منفصل، فتظهر شارة الدمج فورًا لحظة فتح شاشة الكشف الشامل بلا أي تأخير محسوس (بطلب صريح)
       window._accMergeGroupCache = { trips: res.mergeTrips || null, groups: res.mergeGroups };
@@ -46373,7 +46373,7 @@ function vzAccFetch() {
       // ثانٍ متتالٍ، فزمن فتح الحساب المحسوس انخفض للنصف تقريباً.
       VZ._accTransport = res.transportRuns || [];
       vzAccRender();
-      try { _ledgerPendShow_('ap', res.agent || VZ._accKey); } catch (eLp) {}   // 🏛️ (V4.349)
+      try { _ledgerPendRender_('ap', res.ledgerPend || []); } catch (eLp) {}   // 🏛️ (V4.349) — ⚡ (V4.351) ضمن نفس الاستجابة
     })
     .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
     .getAgentAccount(window.authToken, VZ._accKey, VZ._accF);
@@ -48954,20 +48954,44 @@ function glRenderEntries() {
   var f = GL._ef || { from: '', to: '', type: '', status: '', q: '' };
   GL._ecf = GL._ecf || {}; GL._esort = GL._esort || { k: '', dir: -1 };
   box.innerHTML = '<div class="gl-fbar">' +
-    '<input id="glEfQ" class="form-control form-control-sm" style="flex:1;min-width:200px;" placeholder="🔎 بحث: رقم القيد / السند / البيان / العميل / الرحلة" value="' + glEsc(f.q) + '">' +
+    '<input id="glEfQ" class="form-control form-control-sm" style="flex:1;min-width:200px;" placeholder="🔎 بحث: رقم القيد / السند / البيان / العميل / الرحلة" value="' + glEsc(f.q) + '" oninput="if(GL._entAll){clearTimeout(GL._efT);GL._efT=setTimeout(glLoadEntries,180);}">' +
     '<div style="width:130px;">' + glDateInput('glEfFrom', f.from) + '</div><div style="width:130px;">' + glDateInput('glEfTo', f.to) + '</div>' +
-    '<select id="glEfType" class="form-select form-select-sm" style="width:150px;"><option value="">كل الأنواع</option>' + ['قيد يومية', 'سند قبض', 'سند صرف', 'إيداع بنكي', 'سحب بنكي', 'صرف عهدة', 'تسوية عهدة', 'تحويل نقدية', 'تحويل عملة', 'قيد افتتاحي', 'قيد مستورد', 'قيد تلقائي', 'قيد إقفال'].map(function (t) { return '<option' + (t === f.type ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>' +
-    '<select id="glEfSt" class="form-select form-select-sm" style="width:120px;"><option value="">كل الحالات</option>' + ['مسودة', 'مرحّل', 'ملغى'].map(function (t) { return '<option' + (t === f.status ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>' +
+    '<select id="glEfType" class="form-select form-select-sm" style="width:150px;" onchange="if(GL._entAll)glLoadEntries()"><option value="">كل الأنواع</option>' + ['قيد يومية', 'سند قبض', 'سند صرف', 'إيداع بنكي', 'سحب بنكي', 'صرف عهدة', 'تسوية عهدة', 'تحويل نقدية', 'تحويل عملة', 'قيد افتتاحي', 'قيد مستورد', 'قيد تلقائي', 'قيد إقفال'].map(function (t) { return '<option' + (t === f.type ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>' +
+    '<select id="glEfSt" class="form-select form-select-sm" style="width:120px;" onchange="if(GL._entAll)glLoadEntries()"><option value="">كل الحالات</option>' + ['مسودة', 'مرحّل', 'ملغى'].map(function (t) { return '<option' + (t === f.status ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>' +
     '<button class="btn btn-primary btn-sm" onclick="glLoadEntries()">عرض</button></div>' +
     '<div id="glEfChips" class="d-flex flex-wrap gap-1 align-items-center mb-1"></div>' +
     '<div id="glEntSelBar" class="d-flex gap-2 flex-wrap mb-1"></div>' +
     '<div id="glEntList"><div class="text-center text-muted py-4">⏳</div></div>';
   glLoadEntries();
 }
-function glLoadEntries() {
+/* ⚡ (V4.351) القيود مثل الخزينة/البنوك: تُجلب كاملة مرة واحدة (حتى 2500 قيد) ثم كل بحث/فترة/نوع/حالة يُصفّى محلياً فوراً بلا نداء
+   خادم، والحفظ/الحذف يُرقَّع محلياً، وتحديث خلفي كل 3 دقائق (وفوراً عند تغييرات من تبويب/جهاز آخر). أكبر من 2500 ⇒ الترشيح بالخادم كما كان. */
+function _glEntNorm_(s) { return String(s || '').toLowerCase().replace(/[إأآا]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[ؤ]/g, 'و').replace(/[ئ]/g, 'ي').replace(/[\u064B-\u0652\u0640]/g, '').replace(/\s+/g, ' ').trim(); }
+function _glEntLocal_(all, f) {
+  var dk = function (s) { var m = String(s || '').match(/(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + m[2] + m[1] : ''; };
+  var from = dk(f.from), to = dk(f.to), q = _glEntNorm_(f.q);
+  return all.filter(function (e) {
+    var k = e._k || dk(e.date);
+    if (from && k < from) return false; if (to && k > to) return false;
+    if (f.type && e.type !== f.type) return false; if (f.status && e.status !== f.status) return false;
+    if (q) {
+      var hay = e._hay || (e._hay = _glEntNorm_([e.id, e.voucherNo, e.desc, e.ref, e.type, e.trip, e.company].concat((e.lines || []).map(function (l) { return [l.desc, l.client, l.agent, l.trip].join(' '); })).join(' ')));
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+}
+function glLoadEntries(force) {
   var g = function (id) { return (document.getElementById(id) || {}).value || ''; };
   GL._ef = { q: g('glEfQ'), from: g('glEfFrom'), to: g('glEfTo'), type: g('glEfType'), status: g('glEfSt') };
   var box = document.getElementById('glEntList'); if (!box) return;
+  if (GL._entAll && !force) {   // ⚡ (V4.351) تصفية محلية فورية
+    var loc = _glEntLocal_(GL._entAll, GL._ef);
+    GL._entTotal = loc.length; GL._entries = loc.slice(0, 400); glDrawEntries();
+    if (Date.now() - (GL._entAllAt || 0) > 180000) _glEntFetchAll_(true);
+    return;
+  }
+  if (!GL._entAllTried && !force) { box.innerHTML = '<div class="text-center text-muted py-4">⏳ جاري تحميل القيود…</div>'; return _glEntFetchAll_(false); }
   box.innerHTML = '<div class="text-center text-muted py-4">⏳ جاري التحميل…</div>';
   // ⚡ (V4.307) دمج الطلبات المتتالية: كان كل حفظ/تحديث لحظي يطلق تحميلاً جديداً للقائمة والسابق ما زال جارياً (١٣ نداءً خلال
   // ١٥ ثانية بسجلات التنفيذ، ٤-٧ ثوانٍ لكل منها) فتتزاحم على الخادم. الآن طلب واحد جارٍ بحد أقصى + طلب أخير واحد بعده بأحدث فلتر
@@ -49590,7 +49614,7 @@ function glStPatch_(res) {
   (GL._stCache = GL._stCache || {})[st.account.code + '||'] = { t: Date.now(), r: st };
   return true;
 }
-function glAfterChange() { GL._trFull = {}; GL._stCache = {}; glRefreshData(function () { glTab(GL.tab); }); }
+function glAfterChange() { GL._trFull = {}; GL._stCache = {}; GL._entAll = null; GL._entAllTried = 0; glRefreshData(function () { glTab(GL.tab); }); }
 // ⚡ (V4.232) تحديث محلي بعد حفظ/ترحيل/إلغاء/حذف قيد — يطبّق دلتا الأرصدة ويحدّث جدول القيود بلا
 // glBootstrap ولا إعادة جلب القائمة. الخزينة/البنوك/العهد/الرئيسية تُرسَم من GL.balances محلياً.
 function glApplyDelta_(res, action) {
@@ -49612,7 +49636,17 @@ function glApplyDelta_(res, action) {
   if (/^(treasury|banks|custody)$/.test(GL.tab) && document.getElementById('glTrBox') && glCashSt_().code) { glTrShow_(); return; }
   if (GL.ready && GL.tab) try { glTab(GL.tab); } catch (e) {}   // الرئيسية/الخزينة/البنوك/العهد/الدليل تُرسَم من الحالة المحلية
 }
+function _glEntFetchAll_(bg) {
+  if (GL._entAllBusy) return; GL._entAllBusy = 1; GL._entAllTried = 1;
+  glRun('glListEntries', [{ all: true }], function (res) {
+    GL._entAllBusy = 0;
+    if (res.truncated) { GL._entAll = null; if (!bg) glLoadEntries(true); return; }   // أكبر من الحد ⇒ الترشيح بالخادم
+    GL._entAll = res.entries || []; GL._entAllAt = Date.now();
+    if (GL.tab === 'entries' && document.getElementById('glEntList')) glLoadEntries();
+  }, function (e) { GL._entAllBusy = 0; if (!bg) glLoadEntries(true); });
+}
 function glEntSplice_(res) {
+  try { _glEntAllPatch_(res); } catch (eP) { GL._entAll = null; GL._entAllTried = 0; }   // ⚡ (V4.351) نفس الترقيع على القائمة الكاملة المحلية
   var arr = GL._entries;
   if (res.deleted || res.removedId) {   // حذف نهائي أو حذف مسودة
     var rid = res.removedId || (res.savedRow && res.savedRow.id) || res.id;
@@ -49629,6 +49663,13 @@ function glEntSplice_(res) {
   if (arr.length > 400) arr.length = 400;
   if (typeof GL._entTotal === 'number') GL._entTotal++;
   return true;
+}
+function _glEntAllPatch_(res) {
+  var all = GL._entAll; if (!all) return;
+  if (res.deleted || res.removedId) { var rid = res.removedId || (res.savedRow && res.savedRow.id) || res.id; var i = all.findIndex(function (x) { return x.id === rid; }); if (i >= 0) all.splice(i, 1); return; }
+  var row = res.savedRow; if (!row) return;
+  var j = all.findIndex(function (x) { return x.id === row.id; });
+  if (j >= 0) all[j] = row; else { all.push(row); all.sort(function (a, b) { return a._k < b._k ? 1 : (a._k > b._k ? -1 : (b.seq - a.seq)); }); }
 }
 // مطابقة فلتر الشريط العلوي (GL._ef) كما يفعل glListEntries بالخادم — للقيد الجديد فقط
 function glEntMatchesFilter_(e) {
@@ -53522,16 +53563,22 @@ function _ledgerBulkDone_(res) {
   _showPopup('⏳ أُرسلت ' + res.count + ' دفعة للاعتماد (سندات مسودة بالحسابات العامة)' + (dup ? '\n🔁 منها ' + dup + ' بعلامة «تكرار محتمل» للمعتمِد' : '') + (bad.length ? '\n⚠️ تعذّر ' + bad.length + ':\n' + bad.map(function (x) { return x.error; }).join('\n') : ''), bad.length ? 'warning' : 'success');
 }
 function _ledgerPendShow_(fam, party) {
-  var host = document.getElementById(fam === 'ap' ? 'vzAccBody' : 'accBody'); if (!host || !party) return;
-  google.script.run.withSuccessHandler(function (r) {
+  if (!party) return;
+  google.script.run.withSuccessHandler(function (r) { _ledgerPendRender_(fam, (r && r.rows) || []); }).withFailureHandler(function () {}).ledgerPendingFor(window.authToken, fam, party);
+}
+function _ledgerPendRender_(fam, rows) {
+  var host = document.getElementById(fam === 'ap' ? 'vzAccBody' : 'accBody'); if (!host) return;
+  (function (r) {
     var box = document.getElementById('_ledgerPendBox_' + fam);
     if (!r || !r.rows.length) { if (box) box.remove(); return; }
     if (!box) { box = document.createElement('div'); box.id = '_ledgerPendBox_' + fam; host.parentNode.insertBefore(box, host); }
     box.innerHTML = '<div class="alert alert-warning py-2 mb-2" style="font-size:12.5px;" dir="rtl"><b>⏳ دفعات بانتظار الاعتماد (' + r.rows.length + ')</b> — لا تدخل الرصيد قبل اعتمادها من الحسابات العامة' +
       ' <button class="btn btn-sm btn-outline-dark py-0 ms-2" onclick="ledgerQueueOpen_()">📥 طابور الاعتماد</button>' +
       r.rows.map(function (x) { return '<div class="gl-latin">• ' + escapeHtml_(x.date) + ' — ' + Math.abs(x.amount).toLocaleString('en-US') + ' ' + escapeHtml_(x.cur) + (x.trip ? ' — ' + escapeHtml_(x.trip) : '') + ' — سند ' + escapeHtml_(x.voucher) + ' — ' + escapeHtml_(x.counter) + ' — أدخلها ' + escapeHtml_(x.maker) + (x.dup ? ' <span style="color:#7c3aed">🔁 تكرار محتمل</span>' : '') + '</div>'; }).join('') + '</div>';
-  }).withFailureHandler(function () {}).ledgerPendingFor(window.authToken, fam, party);
+  })({ rows: rows || [] });
 }
+// ⚡ (V4.351) نداء مجمّع للقراءات: appBatch_([{fn, args}], cb) ⇒ cb([{ok, r|error}])
+function appBatch_(calls, cb) { google.script.run.withSuccessHandler(function (res) { cb((res && res.results) || []); }).withFailureHandler(function () { cb([]); }).appBatch(window.authToken, calls); }
 var LQ = {};
 function _ledgerBanner_() {
   var now = Date.now(); if (window._lqBanAt && now - window._lqBanAt < 60000) return _ledgerBannerDraw_(); window._lqBanAt = now;

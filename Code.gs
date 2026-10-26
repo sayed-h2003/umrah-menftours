@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.350";
+var APP_VERSION = "4.351";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14743,8 +14743,10 @@ function getClientAccount(authToken, client) {
       payments.forEach(function (p) { var x = _rf[p.id]; if (x) { p.glVch = x.voucher; p.glCp = x.cp; } });
     }
   } catch (eRf) {}
+  // ⚡ (V4.351) الدفعات بانتظار الاعتماد ضمن نفس الاستجابة (بدل نداء ثانٍ)
+  var ledgerPend = null; try { if (typeof ledgerPendingFor === 'function' && _ledgerOn_()) ledgerPend = ledgerPendingFor(authToken, 'cp', client).rows; } catch (eLp) {}
   return { success: true, client: client, trips: stats.rows, noTripCount: stats.noTripCount,
-           items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips, mergeGroups: mergeGroups, tripRefs: tripRefs, gl: glLinks };
+           items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips, mergeGroups: mergeGroups, tripRefs: tripRefs, gl: glLinks, ledgerPend: ledgerPend };
 }
 
 // 🕘 (V4.90) سجل تعديلات كامل لحساب عميل واحد — كل عمليات AuditLog التي مرجعها اسم هذا العميل
@@ -26174,6 +26176,7 @@ function getAgentAccount(authToken, agent, filters) {
     transDebit += _mfNum_(t.value);
   });
   return {
+    ledgerPend: (function () { try { return (typeof ledgerPendingFor === 'function' && _ledgerOn_()) ? ledgerPendingFor(authToken, 'ap', agent).rows : null; } catch (eLp) { return null; } })(),   // ⚡ (V4.351)
     success: true, agent: agent, files: files, items: items, payments: pays,
     transportRuns: transportRuns,
     companies: Object.keys(comps).sort(),
