@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.349";
+var APP_VERSION = "4.350";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14689,7 +14689,7 @@ function getClientAccount(authToken, client) {
         date: (r[4] instanceof Date) ? Utilities.formatDate(r[4], _tz_(), 'dd/MM/yyyy') : String(r[4] || ''),
         amount: _accNum_(r[5]), currency: String(r[6] || 'EGP'), rate: _accNum_(r[7]),
         desc: _pg ? _pd.replace(/\s*⟦src:gl-[^⟧]+⟧\s*/g, ' ').trim() : _pd,
-        glId: _pg ? _pg[1] : undefined, serial: '' });
+        glId: _pg ? _pg[1] : undefined, serial: '', ver: _rowVer_(r) });   // 🔐 (V4.350) بصمة الإصدار لكشف التعديل المتزامن
     });
   }
 
@@ -15091,6 +15091,12 @@ function deleteAccItem(authToken, id, screenOnly) {
 
 // ---------- الدفعات والتحويل ----------
 // p.id (اختياري): تعديل دفعة موجودة بدل إضافة جديدة — يُبقي الرحلة وتاريخ الإنشاء الأصليين
+// 🔐 (V4.350) بصمة إصدار صف (تتغير مع أي تعديل) — تُرسل مع نافذة التعديل ويُرفض الحفظ لو تغيّر الصف بعد فتحها
+function _rowVer_(r) {
+  var s = JSON.stringify((r || []).map(function (v) { return Object.prototype.toString.call(v) === '[object Date]' ? 'D' + v.getTime() : String(v == null ? '' : v); }));
+  return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s, Utilities.Charset.UTF_8)).slice(0, 12);
+}
+function _rowConflict_(by, at) { return { success: false, conflict: true, error: '⚠️ عدّل مستخدم آخر هذا السجل بعد فتحك له' + (by ? ' (' + by + (at ? ' — ' + at : '') + ')' : '') + ' — أعد فتحه لترى التعديل ثم أعد تعديلك' }; }
 function saveAccPayment(authToken, p) {
   var isEdit = !!(p && p.id);
   var session = _accPerm_(authToken, isEdit ? 'edit' : 'add');
@@ -15121,6 +15127,7 @@ function saveAccPayment(authToken, p) {
     var vals = sh.getRange(2, 1, sh.getLastRow() - 1, ACC_PAY_HEADERS.length).getValues();
     for (var i = 0; i < vals.length; i++) {
       if (String(vals[i][0]) === String(p.id)) {
+        if (p.baseVer && String(p.baseVer) !== _rowVer_(vals[i])) return _rowConflict_();   // 🔐 (V4.350)
         // 🔁 دفعة رصيد مرحّل: علامة الربط المخفية ⟦cf:...⟧ (تُنظَّف من العرض دائمًا) يجب أن تبقى بالشيت
         // حتى لو عُدِّل البيان الظاهر — وإلا ينكسر الحذف المزدوج المرتبط بها
         var oldDesc = String(vals[i][8] || '');
@@ -15133,7 +15140,7 @@ function saveAccPayment(authToken, p) {
         logChange_(session.username, 'تعديل دفعة حساب', client, trip,
           _oldAmt + ' ' + _oldCurTxt + ' — ' + oldDesc.replace(/\s*⟦cf:[a-z0-9]+⟧\s*$/i, ''),
           amount + ' ' + currency + ' — ' + desc);
-        return { success: true, id: p.id };
+        return { success: true, id: p.id, ver: _rowVer_(sh.getRange(i + 2, 1, 1, ACC_PAY_HEADERS.length).getValues()[0]) };
       }
     }
     return { success: false, error: 'الدفعة غير موجودة' };
@@ -26136,6 +26143,7 @@ function getAgentAccount(authToken, agent, filters) {
   var items = _vzReadItems_('').filter(function (x) { return keySet[x.agent]; });
   var pays = _vzReadPays_('').filter(function (x) { return keySet[x.agent]; });
   pays = pays.filter(function (p) { return inRange(p.date); });
+  pays.forEach(function (p) { p.ver = _vzPayVer_(p); });   // 🔐 (V4.350) قبل تنظيف الملاحظات
   // 🧑‍💼 (V4.328) نسخ قيود الحسابات العامة: رقم القيد (glId) للواجهة، والعلامة المخفية لا تُعرض
   items.concat(pays).forEach(function (x) {
     delete x._row;
@@ -26203,6 +26211,7 @@ function saveAgentAccItem(authToken, item) {
   return { success: true };
 }
 // 🧑‍💼 (V4.328) دفعة/بند منسوخ من قيد بالحسابات العامة (⟦src:gl-رقم القيد⟧ بالملاحظات) — يُعدَّل/يُحذف من القيد نفسه فقط
+function _vzPayVer_(x) { return _rowVer_([x.id, x.agent, x.date, x.amount, x.currency, x.notes, x.entryNo]); }   // 🔐 (V4.350)
 function _vzGlSrc_(notes) { var m = /⟦src:gl-([^⟧]+)⟧/.exec(_mfStr_(notes)); return m ? m[1] : ''; }
 function _vzGlLockMsg_(entryId) { return 'هذا السطر منسوخ تلقائياً من القيد ' + entryId + ' بالحسابات العامة — عدّله أو ألغِه من القيد نفسه وسيتحدّث هنا تلقائياً'; }
 // 📝 (V4.149) تعديل رقم القيد وحده لبند/دفعة — بلا إعادة كتابة باقي بيانات الصف
@@ -26268,6 +26277,7 @@ function saveAgentPayment(authToken, pay) {
     var hit = _vzReadPays_('').filter(function (x) { return x.id === id; })[0];
     if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
     if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
+    if (pay.baseVer && String(pay.baseVer) !== _vzPayVer_(hit)) return _rowConflict_(hit.createdBy, hit.createdAt);   // 🔐 (V4.350)
     if (typeof _snapRowTake_ === 'function') _snapRowTake_(VZ_PAY_SHEET, id, sh.getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).getValues()[0], 'قبل تعديل دفعة وكيل', session.username);   // ⏪ (V4.346)
     sh.getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).setValues([rowVals]);
   } else { sh.appendRow(rowVals); id = rowVals[0]; }

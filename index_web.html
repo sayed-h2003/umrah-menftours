@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.349  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.350  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -6790,6 +6790,7 @@ function _onlineStart_() {
    التنبيهات لا تُعاد إلا لو تغيّرت، والتبويب المخفي يرسل «آخر ظهور» فقط. */
 var _PULSE_ = { busy: false, last: Date.now(), notifVer: '', timer: null };
 function _pulseStart_() {
+  try { _tsInit_(); } catch (eTs) {}   // 🗂️ (V4.350)
   if (_PULSE_.timer) return;
   _PULSE_.timer = setInterval(function () { _pulseTick_(false); }, 15000);
   try { document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(function () { _pulseTick_(true); }, 1200); }); } catch (e) {}
@@ -6797,20 +6798,186 @@ function _pulseStart_() {
 }
 function _pulseTick_(force) {
   if (!window.authToken || _PULSE_.busy) return;
-  var now = Date.now(), gap = document.hidden ? 110000 : 60000;
+  if (!_tsShouldPulse_(force)) return;   // 🗂️ (V4.350) تبويب واحد فقط (القائد) ينبض ويبث النتيجة للبقية
+  var now = Date.now(), gap = _tsAnyVisible_() ? 60000 : 110000;
   if (force ? (now - _PULSE_.last < 8000 && _PULSE_.notifVer) : (now - _PULSE_.last < gap)) return;
   _PULSE_.last = now; _PULSE_.busy = true;
-  var vis = !document.hidden, bell = document.getElementById('notifBellWrap');
+  var vis = _tsAnyVisible_(), bell = document.getElementById('notifBellWrap');
   var canNotif = vis && !!bell && !bell.classList.contains('d-none');
   var since = ''; try { since = localStorage.getItem('glKickSince') || ''; } catch (e) {}
   google.script.run.withSuccessHandler(function (r) {
     _PULSE_.busy = false; if (!r || !r.success) return;
+    _tsPost_({ t: 'pulse', r: r, since: since });
+    _pulseApply_(r, since);
+  }).withFailureHandler(function () { _PULSE_.busy = false; })
+    .appPulse(window.authToken, { online: true, notif: canNotif, notifVer: _PULSE_.notifVer, gl: vis, glSince: since });
+}
+function _pulseApply_(r, since) {
     if (r.online != null) { var el = document.getElementById('onlineUsersCount'); if (el) el.textContent = r.online; }
     if (r.notifications) { window._notifCache = r.notifications; _PULSE_.notifVer = r.notifVer || ''; try { _notifRenderBadge_(); } catch (e) {} }
     if (r.gl && typeof _glKickHandle_ === 'function') _glKickHandle_(r.gl, since);
     if (r.glDue && typeof glKick_ === 'function') glKick_();
-  }).withFailureHandler(function () { _PULSE_.busy = false; })
-    .appPulse(window.authToken, { online: true, notif: canNotif, notifVer: _PULSE_.notifVer, gl: vis, glSince: since });
+}
+/* ============================================================
+   🗂️ (V4.350) تعدد تبويبات المتصفح: قناة BroadcastChannel بين التبويبات + تبويب قائد واحد (navigator.locks)
+   • القائد وحده يرسل النبضة الدورية للخادم ويبث نتيجتها (المتصلون/التنبيهات/تحديثات الحسابات) — لا تتضاعف النداءات بعدد التبويبات.
+   • خروج بتبويب ⇒ كل التبويبات تعود لشاشة الدخول · دخول بتبويب ⇒ التبويبات الواقفة على شاشة الدخول تدخل تلقائياً ·
+     تجديد الرمز بتبويب ⇒ يتبناه الباقي.
+   • أي حفظ بتبويب ⇒ إشعار للبقية (تحديث الحسابات تلقائياً + شريط «تحديث الشاشة» لغيرها).
+   • معرّف لكل تبويب (sessionStorage) — تُحفظ به مسودات النماذج بـ IndexedDB.
+   ============================================================ */
+var TABSYNC = { id: '', ch: null, leader: false, leaderSeen: 0, lastPulseRx: 0, vis: {}, inited: false, nonce: Math.random().toString(36).slice(2, 10) };
+function _tsId_() {
+  if (TABSYNC.id) return TABSYNC.id;
+  var id = ''; try { id = sessionStorage.getItem('appTabId') || ''; } catch (e) {}
+  if (!id) { id = 'T' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); try { sessionStorage.setItem('appTabId', id); } catch (e) {} }
+  return (TABSYNC.id = id);
+}
+function _tsPost_(m) { try { if (TABSYNC.ch) { m.from = _tsId_(); m.nonce = TABSYNC.nonce; TABSYNC.ch.postMessage(m); } } catch (e) {} }
+function _tsAnyVisible_() {
+  if (!document.hidden) return true;
+  var now = Date.now(); return Object.keys(TABSYNC.vis).some(function (k) { return TABSYNC.vis[k] && now - TABSYNC.vis[k] < 180000; });
+}
+function _tsShouldPulse_(force) {
+  if (!TABSYNC.ch) return true;                       // متصفح قديم بلا قنوات ⇒ السلوك القديم
+  if (TABSYNC.leader) return true;
+  var now = Date.now();
+  if (now - TABSYNC.leaderSeen > 150000) return true;   // لا قائد حي ⇒ احتياط: هذا التبويب ينبض بنفسه
+  if ((force || now - TABSYNC.lastPulseRx > 90000) && !document.hidden) _tsPost_({ t: 'pulseNow' });   // اطلب من القائد نبضة فورية
+  return false;
+}
+function _tsInit_() {
+  if (TABSYNC.inited) return; TABSYNC.inited = true; _tsId_();
+  try { TABSYNC.ch = new BroadcastChannel('umrah-app-v1'); } catch (e) { TABSYNC.ch = null; }
+  if (!TABSYNC.ch) return;
+  TABSYNC.ch.onmessage = function (ev) { try { _tsOnMsg_(ev.data || {}); } catch (e) {} };
+  if (navigator.locks && navigator.locks.request) {
+    navigator.locks.request('umrah-pulse-leader', function () {
+      TABSYNC.leader = true; _tsPost_({ t: 'leader' });
+      try { setTimeout(function () { _pulseTick_(true); }, 500); } catch (e) {}
+      return new Promise(function () {});           // يبقى القفل مع التبويب حتى إغلاقه ⇒ يُنتخب غيره تلقائياً
+    }).catch(function () {});
+  } else { TABSYNC.noLocks = true; _tsElect_(); }   // احتياط بلا navigator.locks: القائد = أصغر معرّف تبويب حي
+  setInterval(function () { if (TABSYNC.noLocks) _tsElect_(); if (TABSYNC.leader) _tsPost_({ t: 'leader' }); _tsPost_({ t: 'vis', v: !document.hidden }); }, 45000);
+  document.addEventListener('visibilitychange', function () { _tsPost_({ t: 'vis', v: !document.hidden }); });
+  _tsPost_({ t: 'hello', v: !document.hidden });
+  try { window.addEventListener('pagehide', function () { _tsPost_({ t: 'bye' }); }); } catch (e) {}
+}
+function _tsElect_() {
+  var now = Date.now(), ids = [_tsId_()];
+  Object.keys(TABSYNC.alive || {}).forEach(function (k) { if (now - TABSYNC.alive[k] < 120000) ids.push(k); });
+  TABSYNC.leader = ids.sort()[0] === _tsId_();
+}
+function _tsOnMsg_(m) {
+  if (m && m.from && TABSYNC.noLocks) { (TABSYNC.alive = TABSYNC.alive || {})[m.from] = m.t === 'bye' ? 0 : Date.now(); _tsElect_(); }
+  if (!m) return;
+  // تبويب منسوخ (Duplicate) يرث نفس المعرّف من sessionStorage ⇒ الأحدث يأخذ معرّفاً جديداً
+  if (m.t === 'dupId') { if (m.to === TABSYNC.nonce) { TABSYNC.id = ''; try { sessionStorage.removeItem('appTabId'); } catch (e) {} _tsId_(); _tsPost_({ t: 'hello', v: !document.hidden }); } return; }
+  if (m.from === _tsId_()) { if (m.t === 'hello' && m.nonce !== TABSYNC.nonce) _tsPost_({ t: 'dupId', to: m.nonce }); return; }
+  if (m.t === 'hello' && m.from) { TABSYNC.vis[m.from] = m.v ? Date.now() : 0; if (TABSYNC.leader) _tsPost_({ t: 'leader' }); return; }
+  if (m.t === 'vis') { TABSYNC.vis[m.from] = m.v ? Date.now() : 0; return; }
+  if (m.t === 'leader') { TABSYNC.leaderSeen = Date.now(); return; }
+  if (m.t === 'pulseNow') { if (TABSYNC.leader) { _PULSE_.last = 0; _pulseTick_(true); } return; }
+  if (m.t === 'pulse') { TABSYNC.leaderSeen = TABSYNC.lastPulseRx = Date.now(); if (window.authToken && m.r) _pulseApply_(m.r, m.since); return; }
+  if (m.t === 'logout') { if (window.authToken) { try { _sessToLogin_('سُجِّل الخروج من تبويب آخر بنفس المتصفح.'); } catch (e) {} } return; }
+  if (m.t === 'login') { if (!window.authToken && m.token) { try { location.reload(); } catch (e) {} } return; }
+  if (m.t === 'token') { var cu = window.currentUser || {}; if (m.token && window.authToken && m.user && cu.username === m.user && window.authToken !== m.token) { window.authToken = m.token; } return; }
+  if (m.t === 'changed') { _tsChanged_(m); return; }
+}
+var _TS_CH_ = { t: null, n: 0 };
+function _tsChanged_(m) {
+  if (!window.authToken) return;
+  _TS_CH_.n++;
+  clearTimeout(_TS_CH_.t);
+  _TS_CH_.t = setTimeout(function () {
+    var gl = /^(gl|ledger|recon|snap)/i.test(m.fn || '');
+    if (gl && typeof glKick_ === 'function') { try { glKick_(); } catch (e) {} }
+    var bar = document.getElementById('_tsBar');
+    if (!bar) { bar = document.createElement('div'); bar.id = '_tsBar'; bar.dir = 'rtl'; document.body.appendChild(bar); }
+    bar.style.cssText = 'position:fixed;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:12px;z-index:2147483040;background:#1e3d59;color:#fff;border-radius:999px;padding:6px 14px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer;';
+    bar.textContent = '🔄 ' + _TS_CH_.n + ' تغيير من تبويب آخر — اضغط لتحديث الشاشة الحالية';
+    bar.onclick = function () { bar.remove(); _TS_CH_.n = 0; try { if (typeof appRefreshActive_ === 'function') appRefreshActive_(); } catch (e) {} };
+  }, 1200);
+}
+// تحديث الشاشة المعروضة حالياً بعد تغييرات من تبويب آخر
+function appRefreshActive_() {
+  var vis = function (id) { var el = document.getElementById(id); return !!(el && el.offsetParent !== null); };
+  var did = false;
+  if (vis('glBody') && typeof glAfterChange === 'function') { try { glAfterChange(); did = true; } catch (e) {} }
+  if (vis('accBody') && window._accData && typeof _accLoad_ === 'function') { try { _accLoad_(); did = true; } catch (e) {} }
+  if (vis('vzAccBody') && window.VZ && VZ._accKey && typeof vzAccFetch === 'function') { try { vzAccFetch(); did = true; } catch (e) {} }
+  if (!did) showToast('🔄 أعد فتح الشاشة لرؤية التغييرات الأحدث');
+}
+// يُستدعى بعد أي حفظ ناجح بهذا التبويب (من الغلاف الموحّد للنداءات)
+var _TS_WRITE_RX_ = /^(save|delete|update|set|move|add|remove|approve|reject|apply|glSave|glPost|glVoid|glDelete|glCs|glRecon|glEntrySnap|ledger(Decide|Cancel|Submit)|recon|snap(Apply|Row)|tripUndo|tripRestore)/;
+function _tsAfterWrite_(fn) { if (_TS_WRITE_RX_.test(fn || '') && !/^(get|list|load)/.test(fn)) _tsPost_({ t: 'changed', fn: fn }); }
+
+/* 📝 (V4.350) مسودات النماذج في IndexedDB (احتياط localStorage): تُحفظ تلقائياً أثناء الكتابة، وتُعرض للاستعادة عند فتح نفس النموذج
+   بعد إغلاق خاطئ/انقطاع/إعادة تحميل — بمعرّف التبويب والمستخدم، وتُحذف عند نجاح الحفظ. صلاحيتها 7 أيام. */
+var DRAFTS = { db: null, wait: [], t: {} };
+function _dfOpen_(cb) {
+  if (DRAFTS.db) return cb(DRAFTS.db);
+  if (DRAFTS.db === false || !window.indexedDB) return cb(null);
+  DRAFTS.wait.push(cb); if (DRAFTS.wait.length > 1) return;
+  var done = function (db) { DRAFTS.db = db || false; var w = DRAFTS.wait; DRAFTS.wait = []; w.forEach(function (f) { try { f(db || null); } catch (e) {} }); };
+  try {
+    var rq = indexedDB.open('umrah-drafts', 1);
+    rq.onupgradeneeded = function () { try { rq.result.createObjectStore('d', { keyPath: 'k' }); } catch (e) {} };
+    rq.onsuccess = function () { done(rq.result); }; rq.onerror = function () { done(null); };
+  } catch (e) { done(null); }
+}
+function _dfUser_() { return ((window.currentUser || {}).username) || ''; }
+function draftSave_(key, data) {
+  var rec = { k: _dfUser_() + '|' + key + '|' + _tsId_(), key: key, user: _dfUser_(), tab: _tsId_(), at: Date.now(), data: data };
+  _dfOpen_(function (db) {
+    if (!db) { try { localStorage.setItem('df:' + rec.k, JSON.stringify(rec)); } catch (e) {} return; }
+    try { db.transaction('d', 'readwrite').objectStore('d').put(rec); } catch (e) {}
+  });
+}
+function draftSaveSoon_(key, getData, ms) {
+  clearTimeout(DRAFTS.t[key]);
+  DRAFTS.t[key] = setTimeout(function () { var d = null; try { d = getData(); } catch (e) { d = null; } if (d) draftSave_(key, d); }, ms || 1200);
+}
+function draftList_(key, cb) {
+  var u = _dfUser_(), out = [], ttl = Date.now() - 7 * 864e5;
+  _dfOpen_(function (db) {
+    if (!db) { try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('df:' + u + '|' + key + '|') === 0) { var r = JSON.parse(localStorage.getItem(k)); if (r && r.at > ttl) out.push(r); } }); } catch (e) {} return cb(out); }
+    try {
+      var cur = db.transaction('d', 'readonly').objectStore('d').openCursor();
+      cur.onsuccess = function () { var c = cur.result; if (!c) { out.sort(function (a, b) { return b.at - a.at; }); return cb(out); } var r = c.value; if (r.user === u && r.key === key && r.at > ttl) out.push(r); c.continue(); };
+      cur.onerror = function () { cb(out); };
+    } catch (e) { cb(out); }
+  });
+}
+function draftDel_(key) {
+  clearTimeout(DRAFTS.t[key]);
+  draftList_(key, function (rs) {
+    _dfOpen_(function (db) {
+      rs.forEach(function (r) { if (db) { try { db.transaction('d', 'readwrite').objectStore('d').delete(r.k); } catch (e) {} } else { try { localStorage.removeItem('df:' + r.k); } catch (e) {} } });
+    });
+  });
+}
+// شريط «لديك مسودة غير محفوظة» داخل حاوية النموذج
+function draftOffer_(host, key, onRestore) {
+  if (!host) return;
+  draftList_(key, function (rs) {
+    var r = rs[0]; if (!r) return;
+    var old = host.querySelector('._dfBar'); if (old) old.remove();
+    var bar = document.createElement('div'); bar.className = '_dfBar alert alert-info py-1 px-2 mb-2 d-flex align-items-center gap-2 flex-wrap'; bar.style.fontSize = '12.5px';
+    var t = new Date(r.at), ts = ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ' ' + t.getDate() + '/' + (t.getMonth() + 1);
+    bar.innerHTML = '📝 لديك مسودة غير محفوظة لهذا النموذج (' + ts + (r.tab !== _tsId_() ? ' — من تبويب آخر' : '') + ')';
+    var a = document.createElement('button'); a.className = 'btn btn-sm btn-primary py-0'; a.textContent = 'استعادة'; a.onclick = function () { bar.remove(); onRestore(r.data); };
+    var b = document.createElement('button'); b.className = 'btn btn-sm btn-outline-secondary py-0'; b.textContent = 'تجاهل'; b.onclick = function () { bar.remove(); draftDel_(key); };
+    bar.appendChild(a); bar.appendChild(b); host.insertBefore(bar, host.firstChild);
+  });
+}
+// ربط نموذج بحقول ذات معرّفات (id) بالمسودات
+function draftBindIds_(host, key, ids) {
+  if (!host || host._dfBound === key) return; host._dfBound = key;
+  var collect = function () { var o = {}, any = false; ids.forEach(function (id) { var el = document.getElementById(id); if (el) { o[id] = el.value; if (el.value && el.type !== 'hidden') any = true; } }); return any ? o : null; };
+  host.addEventListener('input', function () { if (host._dfBound === key) draftSaveSoon_(key, collect); });
+  host.addEventListener('change', function () { if (host._dfBound === key) draftSaveSoon_(key, collect); });
+  draftOffer_(host, key, function (d) { Object.keys(d || {}).forEach(function (id) { var el = document.getElementById(id); if (el) { el.value = d[id]; try { el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {} } }); });
 }
 var _onlineLastBeat_ = 0;
 function _onlineTick_() {
@@ -6898,6 +7065,7 @@ function _sessAdopt_(res) {
   u.token = res.token; u.permissions = res.permissions; u.fullName = res.fullName || u.fullName; u.deviceKey = res.deviceKey; u.userRow = res.userRow; if (res.username) u.username = res.username;
   window.currentUser = u;
   try { localStorage.setItem('smartManagerUser', JSON.stringify(u)); } catch (e) {}
+  try { _tsPost_({ t: 'token', token: res.token, user: u.username || '' }); } catch (e) {}   // 🗂️ (V4.350)
   if (res.deviceKey) _devKeySet_(res.deviceKey);
   window._sessExpiredShown = false;
 }
@@ -6958,6 +7126,7 @@ function _runExec_(getReal, st, fn, args, attempt, busyN) {
       setTimeout(function () { _runExec_(getReal, st, fn, args, attempt, busyN + 1); }, 1200 * (busyN + 1)); return;
     }
     st.ok(res, uo);
+    try { if (!res || res.success !== false) _tsAfterWrite_(fn); } catch (eTs) {}   // 🗂️ (V4.350)
     if (res && res.xcheck && res.xcheck.length) { try { setTimeout(function () { xcShow_(res.xcheck); }, 250); } catch (eXc) {} }   // 🔗 (V4.337) عدم تطابق الشركة/الوكيل بين الرحلة والتأشيرات وملفات الوزارة
   });
   r = r.withFailureHandler(function (err, uo) {
@@ -7555,6 +7724,7 @@ window._sessExpiredShown = false;
 try { localStorage.setItem('authToken', res.token || ''); } catch(e) {}
 try { sessionStorage.setItem('authToken', res.token || ''); } catch(e) {}
 try { localStorage.setItem('smartManagerUser', JSON.stringify(res)); } catch(e) {}
+try { _tsInit_(); _tsPost_({ t: 'login', token: res.token || '', user: res.username || '' }); } catch(e) {}   // 🗂️ (V4.350)
 // 🚀 (V4.200) نداء الإقلاع الموحّد — يُرسَل قبل أي تحميل آخر فتأخذ كل التحميلات الأولى بياناتها منه
 try { if (typeof _bootStart_ === 'function') _bootStart_(); } catch(e) {}
 // 🔔 (V4.125) مفاتيح تفعيل التنبيهات — تُحمَّل مبكراً فتحترمها التنبيهات المحسوبة بالواجهة
@@ -8175,7 +8345,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.349";
+var CLIENT_APP_VERSION = "4.350";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -8268,6 +8438,7 @@ function _removeTransientOverlays() {
 }
 
 function logoutUser() {
+  try { _tsPost_({ t: 'logout' }); } catch (eTs) {}   // 🗂️ (V4.350) كل التبويبات تخرج معاً
   try { if (window.appTabsReset_) appTabsReset_(true); } catch (eT) {}   // 📑 (V4.324)
   _removeTransientOverlays();
   try { if (typeof glDlgCloseAll === 'function') glDlgCloseAll(); } catch (e) {}   // (V4.303) لا تبقى نافذة حسابات (أو مكدّسها) فوق شاشة الدخول
@@ -27912,6 +28083,9 @@ function _accPayModal_(trip, type, editId) {
   document.getElementById('accPayErr').textContent = '';
   if (isFx) _accFxDirChange_(true); else document.getElementById('accPayAmountLbl').textContent = 'المبلغ';
   var modal = document.getElementById('accPayModal');
+  // 📝 (V4.350) مسودة النموذج (تُستعاد بعد إغلاق خاطئ/انقطاع)
+  try { var _mb = modal.querySelector('.modal-body') || modal; _mb._dfBound = ''; var _dfk = 'accpay:' + ((_accData && _accData.client) || '') + ':' + (editId || ('new:' + trip + ':' + type));
+    window._accPayDfKey = _dfk; setTimeout(function () { draftBindIds_(_mb, _dfk, ['accPayDate', 'accPayAmount', 'accPayCurrency', 'accPayRate', 'accPayDesc', 'accPayCp', 'accPayTrip']); }, 50); } catch (eDf) {}
   if (!modal._pasteWired) {
     modal._pasteWired = true;
     modal.addEventListener('paste', function(ev) {
@@ -27977,6 +28151,7 @@ function _accPaySave_(btn) {
   var fxSrc = document.getElementById('accPayCurrency').value;
   var p = {
     id: editId || null,
+    baseVer: editId ? (((_accData && _accData.payments) || []).filter(function (x) { return x.id === editId; })[0] || {}).ver || '' : '',   // 🔐 (V4.350)
     client: (_accData && _accData.client),
     trip: document.getElementById('accPayTrip').value,
     ptype: type,
@@ -27998,6 +28173,7 @@ function _accPaySave_(btn) {
       btn.disabled = false;
       // 🏛️ (V4.349) دفعة جديدة ⇒ سند مسودة بالحسابات العامة بانتظار الاعتماد (لا تظهر بالدفعات قبل اعتمادها)
       if (res && res.dup) { return _ledgerDupAsk_(res, function () { window._accPayForce = true; _accPaySave_(btn); }); }
+      if (res && res.success && window._accPayDfKey) { try { draftDel_(window._accPayDfKey); } catch (eDf) {} }   // 📝 (V4.350)
       if (res && res.success && res.pending) {
         bootstrap.Modal.getInstance(document.getElementById('accPayModal')).hide();
         showToast('⏳ أُرسلت الدفعة للاعتماد — سند رقم ' + (res.voucherNo || '') + ' (قيد ' + (res.id || '') + ')');
@@ -28019,7 +28195,7 @@ function _accPaySave_(btn) {
           var old = _accData.payments.find(function(x) { return x.id === editId; });
           if (old) {
             var beforeSnap = Object.assign({}, old); // ↩️ (V4.89) لقطة قبل التعديل — للتراجع
-            old.date = p.date; old.amount = p.amount; old.currency = ptype === 'تحويل' ? fxSrc : p.currency; old.rate = ptype === 'تحويل' ? p.rate : 0; old.desc = desc;
+            old.date = p.date; old.amount = p.amount; old.currency = ptype === 'تحويل' ? fxSrc : p.currency; old.rate = ptype === 'تحويل' ? p.rate : 0; old.desc = desc; if (res.ver) old.ver = res.ver;
             _accUndoPush_({ type: 'payment', before: beforeSnap, after: Object.assign({}, old), label: 'تعديل دفعة: ' + desc });
           }
         } else {
@@ -46740,6 +46916,7 @@ function vzAccEditRow(kind, id) {
       { k: 'entryNo', l: 'رقم القيد' }, { k: 'date', l: 'التاريخ', date: 1 }, { k: 'amount', l: 'المبلغ', num: 1 },
       { k: 'currency', l: 'العملة', opts: ['SAR', 'EGP'] }, { k: 'notes', l: 'ملاحظات' }
     ], { id: p.id, agent: p.agent, date: p.date, amount: p.amount, currency: p.currency, notes: p.notes, entryNo: p.entryNo }, function (obj) {
+      obj.baseVer = p.ver || '';   // 🔐 (V4.350)
       google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } _showPopup('حُفظ التعديل', 'success'); vzAccFetch(); vzRefreshSoon_(); })
         .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPayment(window.authToken, obj);
     });
@@ -49856,6 +50033,17 @@ function glEntryDlg(kind, entry) {
     GL._ptPreset = null;
     glPtCalc();
   }
+  // 📝 (V4.350) مسودة القيد/السند: حفظ تلقائي أثناء الكتابة + عرض استعادة عند فتح نفس النموذج
+  try {
+    var _dfB = document.getElementById('glDlgBody'), _dfKey = 'gl:' + (GL._editId || ('new:' + kind));
+    GL._dfKey = _dfKey;
+    if (_dfB) {
+      _dfB._dfBound = _dfKey;
+      if (!_dfB._dfWired) { _dfB._dfWired = 1; ['input', 'change'].forEach(function (ev) { _dfB.addEventListener(ev, function () { if (!GL._dfKey || _dfB._dfBound !== GL._dfKey) return; var k = GL._dfKey, vk = GL._vk;
+        draftSaveSoon_(k, function () { var e0 = glBuildEntry(); return (e0 && ((e0.lines || []).some(function (l) { return +l.debit || +l.credit; }) || e0.desc)) ? { kind: vk, e: e0 } : null; }, 1500); }); }); }
+      if (!entry || !entry._fromDraft) draftOffer_(_dfB, _dfKey, function (d) { if (d && d.e) { d.e._fromDraft = 1; if (GL._editId) { d.e.id = GL._editId; d.e.ver = GL._edVer; } glEntryDlg(d.kind || kind, d.e); } });
+    }
+  } catch (eDf) {}
   // ✍️ (V4.262) البيان الذكي لكل طرف يتحدّث لحظياً (البيان العام/الحسابات)
   var dlgB = document.getElementById('glDlgBody');
   if (dlgB && !dlgB._smartWired) { dlgB._smartWired = 1; ['input', 'change'].forEach(function (ev) { dlgB.addEventListener(ev, function (x) { var t = x.target; if (!t || !t.classList) return;
@@ -50358,6 +50546,7 @@ function glSaveEntryUI(post, btn, mode) {
   if (mode === 'new' && (revLink || glDlgDepth())) mode = '';   // «حفظ + جديد» لا معنى له والنموذج مفتوح فوق شاشة مراجعة
   btn.disabled = true; var orig = btn.innerHTML; btn.innerHTML = '⏳…';
   glRun('glSaveEntry', [e, !!post], function (res) {
+    try { if (GL._dfKey) draftDel_(GL._dfKey); } catch (eDf) {}   // 📝 (V4.350) حُفظ ⇒ لا مسودة
     var finish = function () {
       glDlgClose();   // فوق شاشة مراجعة ⇒ تعود المراجعة محدَّثة وبنفس الصف (glRevRefresh_)
       showToast((post ? '✅ حُفظ ' : '💾 حُفظ كمسودة ') + res.id + (res.voucherNo ? ' — إيصال رقم ' + res.voucherNo : '') + (res.approved ? ' — واعتُمد كما حُفظ' : ''));
