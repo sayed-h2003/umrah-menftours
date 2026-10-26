@@ -1308,10 +1308,38 @@ function glSyncParties(authToken) {
 }
 
 /* ---------------------------- القيود ---------------------------- */
+/* 🔢 (V4.353) حجز أرقام القيود — الحل الجذري لتكرار رقم القيد (قيدان تلقائيان مختلفان بنفس الرقم فتندمج أسطرهما)
+   كان العدّاد يُقرأ من ذاكرة/كاش الإعدادات (_glSettings_) ⇒ المزامنة اللحظية تبني خارج القفل فتملأ الذاكرة، وفي الأثناء تنشئ
+   عملية أخرى قيوداً وتزيد العدّاد، ثم تحجز المزامنة الأرقام من القيمة القديمة ⇒ نفس الرقم لقيدين.
+   الآن: قفل مستقل «seq» + قراءة العدّاد مباشرة من الشيت + لا يقل أبداً عن أكبر رقم قيد موجود فعلاً */
 function _glNextEntrySeq_(n) {
-  var s = _glSettings_(), cur = parseInt(s.seq_entry, 10) || 0;
-  _glSetSetting_('seq_entry', cur + (n || 1));
-  return cur + 1;
+  n = Math.max(1, parseInt(n, 10) || 1);
+  var lk = _glNamedLock_('seq'); lk.waitLock(60000);
+  try {
+    var sh = _glSheetR_('settings'), last = sh.getLastRow(), row = 0, cur = 0;
+    if (last >= 2) {
+      var v = sh.getRange(2, 1, last - 1, 2).getValues();
+      for (var i = 0; i < v.length; i++) if (_glStr_(v[i][0]) === 'seq_entry') { row = i + 2; cur = parseInt(_glStr_(v[i][1]), 10) || 0; break; }
+    }
+    cur = Math.max(cur, _glMaxEntrySeq_());
+    var nv = String(cur + n);
+    if (row) sh.getRange(row, 2).setNumberFormat('@').setValue(nv);
+    else { sh.appendRow(['seq_entry', nv]); try { sh.getRange(sh.getLastRow(), 2).setNumberFormat('@'); } catch (e0) {} }
+    try { SpreadsheetApp.flush(); } catch (e1) {}
+    _glSetDrop_();
+    return cur + 1;
+  } finally { lk.releaseLock(); }
+}
+// أكبر رقم قيد مستخدم فعلاً (عمود التسلسل + الرقم داخل JE-xxxxxx) — قراءة مباشرة من الشيت (لا كاش)
+function _glMaxEntrySeq_() {
+  var sh = _glSheetR_('entries'), last = sh.getLastRow(), mx = 0;
+  if (last < 2) return 0;
+  sh.getRange(2, 1, last - 1, 2).getValues().forEach(function (r) {
+    var s = parseInt(_glStr_(r[1]), 10) || 0, m = /^JE-(\d+)$/.exec(_glStr_(r[0]));
+    if (s > mx) mx = s;
+    if (m && +m[1] > mx) mx = +m[1];
+  });
+  return mx;
 }
 function _glEntryId_(seq) { var s = String(seq); while (s.length < 6) s = '0' + s; return 'JE-' + s; }
 // تطبيع وفحص قيد قبل الحفظ — يُعيد {lines, totalBase} أو يرمي خطأً واضحاً
@@ -1857,6 +1885,62 @@ function glRepairOrphanEntries(authToken, ids) {
     var eSh = _glSheet_('entries');
     eSh.getRange(eSh.getLastRow() + 1, 1, newRows.length, GL_SHEETS_.entries.headers.length).setValues(newRows);
     return { success: true, repaired: newRows.length, ids: ids2 };
+  } finally { _glUnlock_(lock); }
+}
+/* 🔢 (V4.353) قيود مكررة الرقم: أكثر من صف رأس بنفس رقم القيد ⇒ أسطرهما مدموجة تحت رقم واحد (نتيجة خلل العدّاد قبل V4.353)
+   الإصلاح للتلقائية فقط: لقطة + سجل محصّن ⇒ حذف الرؤوس والأسطر المدموجة ⇒ إعادة إنشاء كل قيد من مصدره برقم جديد
+   (التعديلات اليدوية المحفوظة على القيود التلقائية تُطبَّق كما هي). المختلط (يدوي + تلقائي) يُعرض للإصلاح اليدوي. */
+function _glDupIdGroups_() {
+  var eRows = _glRows_('entries'), by = {};
+  eRows.forEach(function (r, i) { var id = _glStr_(r[0]); if (id) (by[id] = by[id] || []).push(i); });
+  var out = {};
+  Object.keys(by).forEach(function (id) { if (by[id].length > 1) out[id] = by[id].map(function (i) { return eRows[i]; }); });
+  return out;
+}
+function glFindDupEntryIds(authToken) {
+  _glAdminPerm_(authToken);
+  var g = _glDupIdGroups_(), ids = Object.keys(g), nL = {};
+  if (ids.length) _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (g[id]) nL[id] = (nL[id] || 0) + 1; });
+  var out = ids.map(function (id) {
+    var hs = g[id], auto = hs.every(function (r) { return /^AUTO:/.test(_glStr_(r[6])); });
+    return { id: id, lines: nL[id] || 0, auto: auto, locked: hs.some(function (r) { return _glLocked_(r[2]); }),
+      heads: hs.map(function (r) { return { date: _glDate_(r[2]), type: _glStr_(r[3]), desc: _glStr_(r[4]), src: _glStr_(r[6]), base: _glNum_(r[8]), status: _glStr_(r[5]) }; }) };
+  }).sort(function (a, b) { return a.id < b.id ? -1 : 1; });
+  return { success: true, dups: out };
+}
+function glRepairDupEntryIds(authToken, ids) {
+  var session = _glAdminPerm_(authToken), user = session.username;
+  var want = {}; (Array.isArray(ids) ? ids : []).forEach(function (x) { x = _glStr_(x); if (x) want[x] = 1; });
+  if (typeof _snapPreRisk_ === 'function') _snapPreRisk_('إصلاح قيود مكررة الرقم', user);
+  var lock = _glLock_(); lock.waitLock(90000);
+  try {
+    var g = _glDupIdGroups_(), fix = [], skipped = [], keys = [];
+    Object.keys(g).forEach(function (id) {
+      if (!want[id]) return;
+      var hs = g[id];
+      if (!hs.every(function (r) { return /^AUTO:/.test(_glStr_(r[6])); })) { skipped.push({ id: id, reason: 'يحتوي قيداً يدوياً — يُصلح يدوياً' }); return; }
+      if (hs.some(function (r) { return _glLocked_(r[2]); })) { skipped.push({ id: id, reason: 'في فترة مقفلة حتى ' + _glSettings_().lockDate }); return; }
+      fix.push(id); hs.forEach(function (r) { var k = _glStr_(r[6]); if (keys.indexOf(k) < 0) keys.push(k); });
+    });
+    if (!fix.length) return { success: true, fixed: 0, skipped: skipped, created: [] };
+    var fixSet = {}; fix.forEach(function (id) { fixSet[id] = 1; });
+    var byE = {}; _glRows_('lines').forEach(function (l) { var id = _glStr_(l[0]); if (fixSet[id]) (byE[id] = byE[id] || []).push(l); });
+    fix.forEach(function (id) {
+      g[id].forEach(function (r) {
+        if (typeof _snapEntryTake_ === 'function') _snapEntryTake_(id, r, byE[id] || [], 'قبل إصلاح رقم مكرر', user);
+        if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(user, id, _audSnapRows_(r, byE[id] || []), null, 'إصلاح قيد مكرر الرقم (يُعاد إنشاؤه برقم جديد)');
+      });
+    });
+    _glDeleteLinesOf_(fix);
+    var sh = _glSheet_('entries'), rowsDel = [];
+    _glRows_('entries').forEach(function (r, i) { if (fixSet[_glStr_(r[0])]) rowsDel.push({ row: i + 2 }); });
+    _glRowBlocks_(rowsDel).forEach(function (b) { sh.deleteRows(b[0], b[1]); });
+    try { _glPendingDrop_(keys); } catch (ePd) {}
+    _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
+    var r = _glAutoRun_(user, false, { onlyKeys: keys, bypass: true });
+    var created = (r.createdList || []).map(function (x) { return x.id; });
+    logChange_(user, 'إصلاح قيود مكررة الرقم', 'GL:dupfix', fix.join('، '), '-', 'أُعيد إنشاء ' + created.length + ' قيد: ' + created.slice(0, 12).join('، '));
+    return { success: true, fixed: fix.length, skipped: skipped, created: created, keys: keys.length, errors: (r.errors || []).slice(0, 20) };
   } finally { _glUnlock_(lock); }
 }
 function glRowHistory(authToken, entryId) {

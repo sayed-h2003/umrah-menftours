@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.352  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.353  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8345,7 +8345,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.352";
+var CLIENT_APP_VERSION = "4.353";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -52849,7 +52849,8 @@ function glRenderAuto() {
       '<div class="ms-auto d-flex gap-2 flex-wrap"><button class="btn btn-outline-primary btn-sm" onclick="glAutoPreviewUI(this)">👁️ معاينة التغييرات</button>' +
       (GL.isAdmin ? '<button class="btn btn-success btn-sm fw-bold" onclick="glAutoSyncUI(this)">🔄 مزامنة الآن</button>' : '') +
       '<button class="btn btn-outline-dark btn-sm" onclick="glAutoRecUI(this)">⚖️ تقرير المطابقة</button>' +
-      (GL.isAdmin ? '<button class="btn btn-outline-danger btn-sm" title="قيود لها أسطر تؤثر على الأرصدة لكن لا رأس لها — تظهر «القيد غير موجود» عند فتحها" onclick="glOrphanUI(this)">🩺 فحص قيود بلا رأس</button>' : '') +
+      (GL.isAdmin ? '<button class="btn btn-outline-danger btn-sm" title="قيود لها أسطر تؤثر على الأرصدة لكن لا رأس لها — تظهر «القيد غير موجود» عند فتحها" onclick="glOrphanUI(this)">🩺 فحص قيود بلا رأس</button>' +
+        '<button class="btn btn-outline-danger btn-sm" title="قيدان مختلفان يحملان نفس رقم القيد فاندمجت أسطرهما (خلل عدّاد الأرقام قبل V4.353)" onclick="glDupIdUI(this)">🔢 فحص الأرقام المكررة</button>' : '') +
       '</div></div>' +
     '<div class="gl-note mt-2">الشاشات الحالية تبقى هي المصدر: كل بند ودفعة بحسابات العملاء، وكل مجموعة تأشيرات ودورة نقل وبند ودفعة بحسابات الوكلاء، وكل إيصال رسوم غرفة وملف مراجَع — يتحول لقيد مرحّل في الدفتر تلقائياً. أي تعديل أو حذف بالشاشة يعدّل قيده أو يلغيه في المزامنة التالية. القيد التلقائي قابل للتعديل يدوياً أيضاً (لمن له الصلاحية) ويبقى تعديله بعد أي مزامنة تالية.<br>' +
       '💵 دفعات الشاشات لا تحدد خزينة أو بنكاً، فتسجَّل في حساب <b>«نقدية تحت التسوية»</b> — وجّهها للخزينة أو البنك أو العهدة من «💰 الخزينة ← 💵 توجيه الدفعات» (أو سجّلها مباشرة بإيصال استلام من الحسابات العامة فتنزل دفعة بحسابات العملاء تلقائياً).' +
@@ -53890,6 +53891,42 @@ function glOrphanRepairUI(btn) {
       showToast('✅ أُصلح ' + res.repaired + ' قيد'); GL._orphan = []; glOrphanDraw(); glAfterChange();
     }, function (e) { btn.disabled = false; btn.innerHTML = '🔧 إصلاح الكل'; _showPopup(e.message || e, 'error'); });
   }, { title: 'إصلاح قيود بلا رأس', icon: '🩺', danger: true, okLabel: 'إصلاح' });
+}
+
+/* 🔢 (V4.353) قيود مكررة الرقم (رأسان بنفس الرقم ⇒ أسطر مدموجة) — للمدير فقط */
+function glDupIdUI(btn) {
+  btn.disabled = true;
+  glRun('glFindDupEntryIds', [], function (res) { btn.disabled = false; GL._dupIds = res.dups || []; glDupIdDraw(); },
+    function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
+}
+function glDupIdDraw() {
+  var box = document.getElementById('glAutoRes'), rows = GL._dupIds; if (!box || !rows) return;
+  var nAuto = rows.filter(function (x) { return x.auto && !x.locked; }).length;
+  var html = '<div class="gl-card" id="glDupIdBox"><div class="d-flex align-items-center gap-2 flex-wrap mb-1"><b>🔢 قيود مكررة الرقم</b>' +
+      (rows.length ? '<span class="gl-pill" style="background:#fef2f2;color:#b91c1c;">' + rows.length + ' رقم</span>' +
+        (nAuto ? '<button class="btn btn-danger btn-sm fw-bold ms-auto" onclick="glDupIdRepairUI(this)">🔧 إصلاح التلقائية (' + nAuto + ')</button>' : '') :
+        '<span class="gl-pill" style="background:#dcfce7;color:#166534;">✅ لا توجد أرقام مكررة</span>') + '</div>' +
+    (rows.length ? '<div class="gl-note">كل رقم هنا يحمله أكثر من قيد، فاندمجت أسطرها تحت رقم واحد. الإصلاح (للقيود التلقائية): لقطة احتياطية ثم حذف القيود المدموجة وإعادة إنشاء كل قيد من مصدره برقم جديد مستقل. القيد الذي فيه جزء يدوي يُصلح يدوياً (افتحه وعدّله).</div>' +
+      '<div class="table-responsive"><table class="gl-tbl"><thead><tr><th>رقم القيد</th><th>القيود المدموجة</th><th>الأسطر</th><th>الإصلاح</th></tr></thead><tbody>' +
+      rows.map(function (x) {
+        return '<tr><td class="gl-latin"><a href="#" onclick="glEditEntry(\'' + glJs(x.id) + '\');return false;">' + glEsc(x.id) + '</a></td><td style="text-align:right;font-size:11.5px;">' +
+          x.heads.map(function (h) { return glEsc(h.date) + ' · ' + glEsc(h.type) + ' · ' + glEsc(h.desc) + ' <small class="text-muted gl-latin">' + glEsc(h.src) + '</small>'; }).join('<br>') + '</td>' +
+          '<td class="gl-latin">' + x.lines + '</td><td>' + (x.locked ? '🔒 فترة مقفلة' : x.auto ? '✅ تلقائي' : '✋ يدوي') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : '') + '</div>';
+  var old = document.getElementById('glDupIdBox'); if (old) old.remove();
+  box.insertAdjacentHTML('afterbegin', html);
+}
+function glDupIdRepairUI(btn) {
+  var ids = GL._dupIds.filter(function (x) { return x.auto && !x.locked; }).map(function (x) { return x.id; });
+  askConfirm_('إصلاح ' + ids.length + ' رقم قيد مكرر؟ تُحفظ لقطة احتياطية، ثم تُحذف القيود المدموجة ويُعاد إنشاء كل قيد تلقائي من مصدره برقم جديد (قد يستغرق دقيقة).', function () {
+    btn.disabled = true; btn.innerHTML = '⏳ جاري الإصلاح…';
+    glRun('glRepairDupEntryIds', [ids], function (res) {
+      _showPopup('أُصلح ' + res.fixed + ' رقم — أُعيد إنشاء ' + res.created.length + ' قيد' + (res.created.length ? ': ' + res.created.join('، ') : '') +
+        (res.skipped.length ? '\nتُرك: ' + res.skipped.map(function (k) { return k.id + ' (' + k.reason + ')'; }).join('، ') : '') +
+        (res.errors && res.errors.length ? '\n⚠️ ' + res.errors.length + ' خطأ بإعادة الإنشاء — راجع القيود التلقائية' : ''), 'success');
+      GL._dupIds = null; var o = document.getElementById('glDupIdBox'); if (o) o.remove(); glAfterChange();
+    }, function (e) { btn.disabled = false; btn.innerHTML = '🔧 إصلاح التلقائية'; _showPopup(e.message || e, 'error'); });
+  }, { title: 'إصلاح الأرقام المكررة', icon: '🔢', danger: true, okLabel: 'إصلاح' });
 }
 
 /* ---------------------------- 🏨 (V4.208) ربط برنامج حجوزات الفنادق ---------------------------- */
