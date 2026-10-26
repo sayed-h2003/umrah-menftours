@@ -983,6 +983,7 @@ function hbLogChange_(user, type, ref, desc, oldVal, newVal, extra) {
       str(extra.recordKey || ref || '')
     ]);
   } catch (e) { Logger.log('hbLogChange_ error: ' + e.message); }
+  try { if (typeof hbGlLiveMark_ === 'function') hbGlLiveMark_(type); } catch (eG) {}   // ⚡ (V4.354) قيد الحجز بالحسابات العامة خلال دقيقة
 }
 
 // كل أحداث سجل واحد مرتّبة زمنيًا من الأقدم للأحدث — يغذّي زر "📜 السجل الكامل" لكل صف

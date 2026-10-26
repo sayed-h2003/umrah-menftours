@@ -272,6 +272,18 @@ function hbGlLiveTouch_() {
     hbGlLiveRun_();
   } catch (e) { Logger.log('hbGlLiveTouch_: ' + e.message); }
 }
+/* ⚡ (V4.354) إضافة/تعديل حجز من النموذج أو شاشة الحجوزات أو بوت تليجرام (كتابة بالسكربت لا تُطلق مشغّل تعديل الشيت)
+   كانت تنتظر المزامنة الساعية. الآن: علامة «مستحق» فقط (بلا أي تأخير للحفظ) ⇒ مهمة الدقيقة تسجّل القيد خلال أقل من دقيقة،
+   وعلامة gl_dirty احتياطاً ⇒ المزامنة اللحظية من أي متصفح مفتوح تلتقطه لو مشغّل الدقيقة غير مثبَّت (البوت معطَّل) */
+var HB_GL_LIVE_TYPES_ = /^(حجز جديد|تعديل حجز|دفعة|حذف دفعة|إعادة تسمية طرف|استيراد دفعات قديمة)$/;
+function hbGlLiveMark_(type) {
+  try {
+    if (type && !HB_GL_LIVE_TYPES_.test(String(type))) return;
+    if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) return;
+    var c = CacheService.getScriptCache(), now = String(Date.now());
+    c.put('hb_live_due', now, 900); c.put('gl_dirty', now, 21600);
+  } catch (e) { Logger.log('hbGlLiveMark_: ' + e.message); }
+}
 function hbGlLiveRun_() {
   var c = CacheService.getScriptCache();
   if (!c.get('hb_live_due') || c.get('hb_live_busy')) return null;
