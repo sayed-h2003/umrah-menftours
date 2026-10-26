@@ -1514,7 +1514,11 @@ function glSaveEntry(authToken, e, post) {
       if (oldSt === GL_ST_POSTED_) status = GL_ST_POSTED_;
       if (isAuto) v.type = _glStr_(f.r[3]) || v.type;
       var _oldLines = (oldSt === GL_ST_POSTED_) ? _glLinesOf_(_glStr_(f.r[0])) : [];   // ⚡ (V4.232) للدلتا — قبل الحذف
-      var _audB = (typeof _audSnapRows_ === 'function') ? _audSnapRows_(f.r, _glLinesOf_(_glStr_(f.r[0]))) : null;   // 🛡️ (V4.345) حالة القيد قبل التعديل — للسجل المحصّن
+      var _curL = _glLinesOf_(_glStr_(f.r[0])), _audB = (typeof _audSnapRows_ === 'function') ? _audSnapRows_(f.r, _curL) : null;
+      // 🔐 (V4.346) تعديل متزامن: القيد تغيّر بعد فتحه بنافذة هذا المستخدم ⇒ رفض بدل مسح تعديل الآخر بصمت
+      if (_glStr_(e.baseVer) && typeof _glEntryVer_ === 'function' && _glStr_(e.baseVer) !== _glEntryVer_(f.r, _curL))
+        throw new Error('⚠️ عدّل مستخدم آخر هذا القيد بعد فتحك له' + (_glStr_(f.r[16]) ? ' (' + _glStr_(f.r[16]) + (_glStr_(f.r[17]) ? ' — ' + _glStr_(f.r[17]) : '') + ')' : '') + ' — أغلق النافذة وافتح القيد من جديد لترى التعديل ثم أعد تعديلك');
+      (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(f.r[0]), f.r, _curL, oldSt === GL_ST_POSTED_ ? 'قبل تعديل قيد مرحّل' : 'قبل تعديل قيد', session.username);   // ⏪ (V4.346) نسخة قابلة للاستعادة   // 🛡️ (V4.345) حالة القيد قبل التعديل — للسجل المحصّن
       var sk = _glStr_(f.r[6]);
       if (GL_VCH_PREFIX_[v.type] && !sk) sk = 'VCH:' + _glNextVoucherNo_(v.type);   // سند قديم بلا رقم ⇒ يأخذ رقماً
       // ✅ (V4.323) الحفظ اليدوي = اعتماد القيد كما حُفظ: لو للقيد تغيير مصدر معلَّق بقائمة «⏳ تغييرات تنتظر الاعتماد» تُعتمد بصمة
@@ -1671,6 +1675,7 @@ function glVoidEntry(authToken, id, reason, wantDelta) {
     if (_autoK && !_glCanEditAuto_(session)) throw new Error('إلغاء القيد التلقائي يحتاج صلاحية تعديل «القيود التلقائية والاعتماد» — أو عدّل/احذف مصدره بالشاشة');
     if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
     if (st === GL_ST_DRAFT_) {   // المسودة تُحذف نهائياً (لم تؤثر على أي رصيد)
+      (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(id), f.r, _glLinesOf_(_glStr_(id)), 'قبل حذف قيد مسودة', session.username);   // ⏪ (V4.346)
       if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(session.username, _glStr_(id), _audSnapRows_(f.r, _glLinesOf_(_glStr_(id))), null, 'حذف قيد مسودة');   // 🛡️ (V4.345)
       _glDeleteLinesOf_([_glStr_(id)]);
       _glSheet_('entries').deleteRow(f.row);
@@ -1679,6 +1684,7 @@ function glVoidEntry(authToken, id, reason, wantDelta) {
     }
     var _voidLines = wantDelta ? _glLinesOf_(_glStr_(id)) : [];   // ⚡ (V4.232) قبل تغيير الحالة (مرحّلة) — وللتنبيه
     if (wantDelta) _glBotQ_('entry_void', _glBotWho_(Object.assign(_glBotEntryInfo_(_glStr_(id), f.r, _voidLines), { reason: reason }), session));   // 📲 (V4.254)
+    (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(id), f.r, _glLinesOf_(_glStr_(id)), 'قبل إلغاء قيد', session.username);   // ⏪ (V4.346)
     var sh = _glSheet_('entries');
     sh.getRange(f.row, 6).setValue(GL_ST_VOID_);
     sh.getRange(f.row, 17, 1, 3).setValues([[session.username, _glNow_(), reason]]);
@@ -1719,6 +1725,7 @@ function glDeleteEntry(authToken, id) {
     if (_glStr_(f.r[3]) === 'قيد إقفال') throw new Error('قيد إقفال السنة يُلغى من «الإعدادات ← إعادة فتح السنة»');
     if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
     var _delLines = _glLinesOf_(_glStr_(id));   // ⚡ (V4.232) قبل الحذف — للدلتا (المرحّل فقط يؤثر)
+    (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(id), f.r, _delLines, 'قبل حذف قيد نهائياً', session.username);   // ⏪ (V4.346) يُستعاد من «القيود المحذوفة»
     if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(session.username, _glStr_(id), _audSnapRows_(f.r, _delLines), null, 'حذف قيد نهائياً');   // 🛡️ (V4.345) صورة كاملة قبل الحذف
     if (_glStr_(f.r[5]) === GL_ST_POSTED_) _glBotQ_('entry_void', _glBotWho_(Object.assign(_glBotEntryInfo_(_glStr_(id), f.r, _delLines), { deleted: true }), session));   // 📲 (V4.254)
     _glDeleteLinesOf_([_glStr_(id)]);
@@ -1739,6 +1746,7 @@ function glDeleteEntriesBulk(authToken, ids) {
   var seen = {}; ids = (Array.isArray(ids) ? ids : []).map(_glStr_).filter(function (x) { if (!x || seen[x]) return false; seen[x] = 1; return true; });
   if (!ids.length) throw new Error('اختر قيداً واحداً على الأقل');
   if (ids.length > 300) throw new Error('الحد الأقصى 300 قيد بالمرة الواحدة (المحدَّد ' + ids.length + ')');
+  if (typeof _snapPreRisk_ === 'function') _snapPreRisk_('حذف مجمع لـ ' + ids.length + ' قيد', session.username);   // ⏪ (V4.346) نقطة استعادة فورية قبل العملية الخطرة
   var lock = _glLock_(); lock.waitLock(90000);
   try {
     var eRows = _glRows_('entries'), at = {}, skipped = [], del = [], autoN = 0;
@@ -1761,6 +1769,7 @@ function glDeleteEntriesBulk(authToken, ids) {
       pendKeys.push('CCY:' + id); if (/^AUTO:/.test(sk)) pendKeys.push(sk);
       sums.push(id + ' ' + _glStr_(r[3]) + ' ' + _glNum_(r[8]));
     });
+    if (typeof _snapEntryTake_ === 'function') del.forEach(function (id) { _snapEntryTake_(id, eRows[at[id]], byE[id] || [], 'قبل حذف مجمع', session.username); });   // ⏪ (V4.346)
     if (typeof _audEntryDiff_ === 'function') del.forEach(function (id) { _audEntryDiff_(session.username, id, _audSnapRows_(eRows[at[id]], byE[id] || []), null, 'حذف مجمع نهائي للقيود'); });   // 🛡️ (V4.345)
     _glDeleteLinesOf_(del);                                              // أسطرها أولاً (فلا يبقى سطر بلا رأس يؤثر بالأرصدة)
     var sh = _glSheet_('entries'), fresh = _glRows_('entries'), rowsDel = [];
@@ -1988,6 +1997,7 @@ function glGetEntry(authToken, id) {
   var e = _glEntryFull_(_glStr_(id));
   if (!e) throw new Error('القيد غير موجود');
   e.due = _glDueMap_()[e.id] || '';
+  try { var _fv = _glFindEntry_(e.id); if (_fv && typeof _glEntryVer_ === 'function') e.ver = _glEntryVer_(_fv.r, _glLinesOf_(e.id)); } catch (eV) {}   // 🔐 (V4.346) بصمة الإصدار
   // ✍️ (V4.319) التعديلات اليدوية الدائمة على القيد التلقائي/قيد الشيت (لعرض «معدَّل يدوياً» وزر «↺ إعادة للتلقائي»)
   if (/^(AUTO|CUST):/.test(_glStr_(e.sourceKey))) { var x = _glOvrMap_()[/^CUST:/.test(e.sourceKey) ? e.sourceKey + '#' + e.id : e.sourceKey];
     if (x) e.ovr = { acc: x.acc.map(function (a) { return { from: a.from, to: a.to, cur: a.cur, side: a.side, by: a.by, at: a.at }; }), hdr: x.hdr || null, freeze: x.freeze || null, vd: x.vd || null, keep: x.keep || null }; }
@@ -2578,6 +2588,7 @@ function glImportCommit(authToken, payload) {
   var session = _glAdminPerm_(authToken);
   payload = payload || {};
   var kind = payload.kind === 'entries' ? 'entries' : 'opening';
+  if (typeof _snapPreRisk_ === 'function') _snapPreRisk_('استيراد ' + (kind === 'entries' ? 'قيود' : 'أرصدة افتتاحية'), session.username);   // ⏪ (V4.346)
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
@@ -6214,6 +6225,7 @@ function glCloseYear(authToken, year, lockAfter) {
   var session = requireAuth_(authToken);
   if (!_glIsAdmin_(session)) throw new Error('إقفال السنة للمدير فقط');
   year = parseInt(year, 10); if (!(year > 2000)) throw new Error('السنة غير صالحة');
+  if (typeof _snapPreRisk_ === 'function') _snapPreRisk_('إقفال سنة ' + year, session.username);   // ⏪ (V4.346)
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
@@ -6256,6 +6268,7 @@ function glCloseYear(authToken, year, lockAfter) {
 function glReopenYear(authToken, year) {
   var session = requireAuth_(authToken);
   if (!_glIsAdmin_(session)) throw new Error('للمدير فقط');
+  if (typeof _snapPreRisk_ === 'function') _snapPreRisk_('إعادة فتح سنة ' + year, session.username);   // ⏪ (V4.346)
   var key = 'CLOSE:' + parseInt(year, 10);
   var eSh = _glSheet_('entries'), rows = _glRows_('entries'), hit = null;
   rows.forEach(function (r, i) { if (_glStr_(r[6]) === key && _glStr_(r[5]) !== GL_ST_VOID_) hit = { r: r, row: i + 2 }; });

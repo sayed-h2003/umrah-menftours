@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.345";
+var APP_VERSION = "4.346";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6056,7 +6056,7 @@ function checkPasswordMatch_(plainPassword, storedValue) {
 /* 🔐 نموذج الصلاحيات الذكية (سيرفر): يفهم رموز "screen.cap" مع التتالي + الرموز القديمة
    - أي صلاحية شاشة تعني العرض؛ الحذف يعني التعديل والعرض
    - الرمز القديم "delete" يمنح الحذف في كل الشاشات (حفاظاً على السلوك السابق) */
-var _PERM_SCREENS_ = ['bookings','trips','tripundo','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl','hotels','stats'];
+var _PERM_SCREENS_ = ['bookings','trips','tripundo', 'snaprestore','kashf','registry','transport','audit','users','accounts','catering','pricing','ministry','visas','gl','hotels','stats'];
 var _PERM_LEGACY_MAP_ = {
   'add':'bookings.add','edit':'bookings.edit','delete':'bookings.delete',
   'print':'bookings.print','approve':'bookings.approve',
@@ -15124,6 +15124,7 @@ function saveAccPayment(authToken, p) {
         var cfM = oldDesc.match(/⟦cf:[a-z0-9]+⟧/i);
         var newDesc = desc + (cfM && desc.indexOf('⟦cf:') === -1 ? ' ' + cfM[0] : '');
         // 🕘 (V4.90) القيمة القديمة الحقيقية بدل «-» — لسجل تعديلات شاشة حسابات العملاء
+        if (typeof _snapRowTake_ === 'function') _snapRowTake_(ACC_PAY_SHEET, String(p.id), vals[i], 'قبل تعديل دفعة', session.username);   // ⏪ (V4.346)
         var _oldAmt = _accNum_(vals[i][5]) || 0, _oldCurTxt = String(vals[i][6] || 'EGP') === 'SAR' ? 'ريال' : 'جنيه';
         sh.getRange(i + 2, 4, 1, 6).setValues([[ptype, String(p.date || ''), amount, currency, ptype === 'تحويل' ? rate : '', newDesc]]);
         logChange_(session.username, 'تعديل دفعة حساب', client, trip,
@@ -15160,6 +15161,7 @@ function updateAccPaymentsBulk(authToken, client, trip, list) {
     if (!rowIdx) return;
     var amount = _accNum_(p.amount);
     if (amount <= 0) return;
+    if (typeof _snapRowTake_ === 'function') _snapRowTake_(ACC_PAY_SHEET, String(p.id), sh.getRange(rowIdx, 1, 1, ACC_PAY_HEADERS.length).getValues()[0], 'قبل تعديل دفعات جماعي', session.username);   // ⏪ (V4.346)
     var currency = (p.currency === 'SAR') ? 'SAR' : 'EGP';
     // 🔁 حافظ على علامة ربط ترحيل الرصيد ⟦cf:...⟧ إن وُجدت بالبيان الأصلي حتى لو عُدِّل البيان الظاهر
     var oldDesc2 = String(descById[String(p.id)] || '');
@@ -15367,6 +15369,7 @@ function deleteAccPayment(authToken, id, screenOnly) {
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 9).getValues();   // ⚡ (V4.199) الأعمدة المطلوبة فقط
   for (var i = 0; i < vals.length; i++) {
     if (String(vals[i][0]) === String(id)) {
+      if (typeof _snapRowTake_ === 'function') _snapRowTake_(ACC_PAY_SHEET, String(id), sh.getRange(i + 2, 1, 1, ACC_PAY_HEADERS.length).getValues()[0], screenOnly ? 'قبل حذف دفعة من الشاشة' : 'قبل حذف دفعة', session.username);   // ⏪ (V4.346)
       if (screenOnly) {
         // 🙈 (V4.336) حذف من الشاشة فقط: قيدها بالحسابات العامة يبقى كما هو (قد يخص عملية أخرى) ولا تعيدها المزامنة
         var gm = /⟦src:gl-([^⟧]+)⟧/.exec(String(vals[i][8] || '')), eid = gm ? gm[1] : '', lk = _glLock_(); lk.waitLock(60000);
@@ -26258,6 +26261,7 @@ function saveAgentPayment(authToken, pay) {
     var hit = _vzReadPays_('').filter(function (x) { return x.id === id; })[0];
     if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
     if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
+    if (typeof _snapRowTake_ === 'function') _snapRowTake_(VZ_PAY_SHEET, id, sh.getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).getValues()[0], 'قبل تعديل دفعة وكيل', session.username);   // ⏪ (V4.346)
     sh.getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).setValues([rowVals]);
   } else { sh.appendRow(rowVals); id = rowVals[0]; }
   // 📜 (V4.144) سجل التعديلات لكل دفعة مستقل — بمفتاح الدفعة نفسها
@@ -26271,6 +26275,7 @@ function deleteAgentPayment(authToken, id) {
   var hit = _vzReadPays_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'الدفعة غير موجودة' };
   if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
+  if (typeof _snapRowTake_ === 'function') _snapRowTake_(VZ_PAY_SHEET, hit.id, _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS).getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).getValues()[0], 'قبل حذف دفعة وكيل', session.username);   // ⏪ (V4.346)
   _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS).deleteRow(hit._row);
   logChange_(session.username, 'حذف دفعة وكيل', 'AP:' + hit.id, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
   _vzClearCache_();
@@ -26286,6 +26291,7 @@ function deleteAgentPaymentsBatch(authToken, ids) {
   var glN = hits.filter(function (x) { return _vzGlSrc_(x.notes); }).length;   // 🧑‍💼 (V4.328) نسخ القيود لا تُحذف من هنا
   hits = hits.filter(function (x) { return !_vzGlSrc_(x.notes); });
   hits.forEach(function (hit) {
+    if (typeof _snapRowTake_ === 'function') _snapRowTake_(VZ_PAY_SHEET, hit.id, sh.getRange(hit._row, 1, 1, VZ_PAY_HEADERS.length).getValues()[0], 'قبل حذف جماعي لدفعات وكيل', session.username);   // ⏪ (V4.346)
     sh.deleteRow(hit._row);
     logChange_(session.username, 'حذف دفعة وكيل (جماعي)', 'AP:' + hit.id, _accNum_(hit.amount) + ' ' + hit.currency, '-', '-');
   });

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.345  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.346  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -5782,6 +5782,7 @@ input[type="date"]:not(:focus):not(:valid) {
           <span class="small text-nowrap">دخول/خروج</span>
         </label>
         <button type="button" class="btn btn-sm btn-dark fw-bold" onclick="audOpen_()" title="سجل غير قابل للتلاعب في ملف مستقل مع فحص السلامة">🛡️ السجل المحصّن</button>
+        <button type="button" class="btn btn-sm btn-outline-dark fw-bold" onclick="snapOpen_()" title="نقاط الاستعادة اليومية/الفورية + القيود والدفعات المحذوفة">⏪ التراجع الزمني</button>
       </div>
     </div>
   </div>
@@ -8174,7 +8175,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.345";
+var CLIENT_APP_VERSION = "4.346";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -8320,6 +8321,7 @@ var PERM_SCREENS = [
   { key: 'bookings',  label: 'الإشعارات (الحجوزات)' },
   { key: 'trips',     label: 'الرحلات' },
   { key: 'tripundo',  label: '↩️ التراجع/الرجوع لنقطة بسجل تعديلات الرحلات (الأدمن افتراضياً)' },
+  { key: 'snaprestore', label: '⏪ استعادة النسخ السابقة للقيود والدفعات (الأدمن افتراضياً)' },
   { key: 'kashf',     label: 'كشف المعتمرين / التسكين' },
   { key: 'registry',  label: 'السجل العام للمعتمرين' },
   { key: 'transport', label: 'حسابات النقل' },
@@ -24284,6 +24286,116 @@ function audVerify_(full) {
     else _showPopup('⛔ السلسلة مكسورة عند السطر ' + r.broken.seq + ' (صف ' + r.broken.row + ' بالملف)\nالسبب: ' + r.broken.why + '\nكل ما قبله سليم حتى ' + r.upToSeq, 'error');
     audStatus_();
   }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); }).audVerify(window.authToken, !!full);
+}
+/* ⏪ (V4.346) التراجع الزمني: نسخ القيد السابقة · القيود/الدفعات المحذوفة · نقاط استعادة النظام */
+function _snapOv_(id, title, z) {
+  var o = document.getElementById(id); if (o) o.remove();
+  document.body.insertAdjacentHTML('beforeend', '<div id="' + id + '" dir="rtl" style="position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:' + (z || 2147483100) + ';display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;">' +
+    '<div style="background:#fff;border-radius:12px;max-width:1100px;width:100%;padding:14px 16px;box-shadow:0 20px 50px rgba(0,0,0,.3);"><div class="d-flex align-items-center gap-2 mb-2"><b style="font-size:16px;">' + title + '</b>' +
+    '<button class="btn btn-sm btn-outline-secondary ms-auto" onclick="document.getElementById(\'' + id + '\').remove()">✕ إغلاق</button></div><div class="_body"><div class="text-center text-muted py-4">⏳ جاري التحميل…</div></div></div></div>');
+  return document.querySelector('#' + id + ' ._body');
+}
+function _snapRun_(fn, args, ok, box) {
+  var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { var m = (e && e.message) || e; if (box) box.innerHTML = '<div class="text-danger p-3">❌ ' + escapeHtml_(m) + '</div>'; else _showPopup(m, 'error'); });
+  r[fn].apply(r, [window.authToken].concat(args));
+}
+function snapEntryDlg_(id) {
+  var box = _snapOv_('_snapEOv', '⏪ النسخ السابقة للقيد ' + escapeHtml_(id), 2147483050), e = escapeHtml_;
+  _snapRun_('glEntrySnaps', [id], function (r) {
+    if (!r.snaps.length) { box.innerHTML = '<div class="text-muted p-3">لا نسخ سابقة بعد — تُحفظ نسخة تلقائياً قبل كل تعديل أو إلغاء أو حذف (من V4.346).</div>'; return; }
+    box.innerHTML = r.snaps.map(function (s) {
+      return '<div class="border rounded p-2 mb-2" style="font-size:12.5px;"><div class="d-flex flex-wrap gap-2 align-items-center"><b>' + e(s.action) + '</b><span class="gl-latin text-muted">' + e(s.at) + '</span><span>— ' + e(s.by) + '</span>' +
+        '<span class="badge bg-light text-dark">' + e(s.status) + '</span><span class="gl-latin">' + e(s.date) + '</span><span class="gl-latin fw-bold">' + glFmt(s.total) + '</span>' +
+        (r.canRestore ? '<button class="btn btn-sm btn-warning ms-auto py-0" onclick="snapEntryRestore_(\'' + e(s.sid) + '\', this)">↩️ استعادة هذه النسخة</button>' : '') + '</div>' +
+        '<div class="text-muted">' + e(s.desc) + '</div><div class="gl-latin" style="font-size:11.5px;">' + s.lines.map(function (l) { return e(l.acc) + (l.d ? ' مدين ' + glFmt(l.d) : '') + (l.c ? ' دائن ' + glFmt(l.c) : '') + ' ' + e(l.cur); }).join(' · ') + '</div></div>';
+    }).join('') + (r.canRestore ? '<div class="small text-muted">الاستعادة تحفظ الحالة الحالية كنسخة أولاً — فهي نفسها قابلة للتراجع، وتُسجَّل بالسجل المحصّن.</div>' : '');
+  }, box);
+}
+function snapEntryRestore_(sid, btn) {
+  askConfirm_('استعادة القيد لهذه النسخة؟ تُحفظ الحالة الحالية كنسخة أولاً (يمكن التراجع).', function () {
+    btn.disabled = true; btn.textContent = '⏳';
+    _snapRun_('glEntrySnapRestore', [sid], function (res) {
+      showToast('✅ ' + (res.recreated ? 'أُعيد القيد المحذوف ' : 'استُعيد القيد ') + res.id);
+      ['_snapEOv', '_snapDelOv'].forEach(function (k) { var o = document.getElementById(k); if (o) o.remove(); });
+      try { glDlgCloseAll(); } catch (e0) {}
+      try { glApplyDelta_(res); } catch (e1) {}
+      try { glAfterChange(); } catch (e2) {}
+    });
+  }, { title: 'استعادة نسخة سابقة', danger: false });
+}
+function snapOpen_() {
+  var box = _snapOv_('_snapOv', '⏪ التراجع الزمني');
+  box.innerHTML = '<div class="d-flex gap-1 flex-wrap mb-2"><button class="btn btn-sm btn-primary" onclick="snapPointsLoad_()">🗄️ نقاط استعادة النظام</button>' +
+    '<button class="btn btn-sm btn-outline-primary" onclick="snapDeletedLoad_()">🗑️ القيود المحذوفة</button>' +
+    '<button class="btn btn-sm btn-outline-primary" onclick="snapRowsLoad_()">💳 نسخ الدفعات (عملاء/وكلاء)</button></div><div id="_snapBody"></div>';
+  snapPointsLoad_();
+}
+function snapPointsLoad_() {
+  var b = document.getElementById('_snapBody'), e = escapeHtml_; b.innerHTML = '<div class="text-center text-muted py-4">⏳</div>';
+  _snapRun_('snapPoints', [], function (r) {
+    var h = '<div class="d-flex gap-2 align-items-center flex-wrap mb-2 small">' + (r.cron ? '<span class="text-success fw-bold">● النسخة اليومية مفعّلة (3 صباحاً)</span>' : '<span class="text-danger fw-bold">النسخة اليومية غير مفعّلة</span> <button class="btn btn-sm btn-danger py-0" onclick="snapSetup_(this)">تفعيل</button>') +
+      '<button class="btn btn-sm btn-outline-dark py-0 ms-auto" onclick="snapNow_(this)">📸 نقطة استعادة الآن</button></div>' +
+      '<div class="small text-muted mb-2">الاحتفاظ: اليومية 30 يوماً، وأول نسخة بكل شهر 12 شهراً، والفورية (قبل العمليات الخطرة) 14 يوماً. الملفات بمجلد «🛡️ نقاط الاستعادة» في Drive — لا تشاركه.</div>';
+    if (!r.points.length) { b.innerHTML = h + '<div class="text-muted p-3">لا نقاط بعد.</div>'; return; }
+    b.innerHTML = h + '<table class="table table-sm" style="font-size:12.5px;"><thead><tr><th>الوقت</th><th>النوع</th><th>السبب</th><th>بواسطة</th><th>الملفات</th><th>استعادة انتقائية</th></tr></thead><tbody>' +
+      r.points.map(function (p) {
+        return '<tr><td class="gl-latin" style="white-space:nowrap">' + e(p.at) + '</td><td>' + e(p.kind) + '</td><td>' + e(p.reason) + (p.state !== 'كاملة' ? ' <span class="text-danger">' + e(p.state) + '</span>' : '') + '</td><td>' + e(p.by) + '</td><td>' +
+          p.files.map(function (f) { return '<a href="' + e(f.url) + '" target="_blank" rel="noopener">' + e(f.label) + ' ↗</a>'; }).join('<br>') + '</td><td style="white-space:nowrap">' +
+          '<button class="btn btn-sm btn-outline-warning py-0" onclick="snapPickEntry_(\'' + e(p.id) + '\',\'' + e(p.at) + '\')">قيد</button> ' +
+          '<button class="btn btn-sm btn-outline-danger py-0" onclick="snapPickSheet_(\'' + e(p.id) + '\',\'' + e(p.at) + '\',' + e(JSON.stringify(p.files.map(function (f) { return [f.role, f.label]; }))).replace(/"/g, '&quot;') + ')">ورقة كاملة</button></td></tr>';
+      }).join('') + '</tbody></table>';
+  }, b);
+}
+function snapSetup_(btn) { btn.disabled = true; _snapRun_('snapSetup', [], function () { showToast('✅ فُعِّلت النسخة اليومية'); snapPointsLoad_(); }); }
+function snapNow_(btn) { btn.disabled = true; btn.textContent = '⏳ جاري النسخ (قد يستغرق دقيقة)…'; _snapRun_('snapNow', ['نقطة يدوية'], function (r) { showToast('✅ نقطة استعادة ' + r.point.files.length + ' ملف' + (r.point.errors.length ? ' — ⚠️ ' + r.point.errors.join(' · ') : '')); snapPointsLoad_(); }); }
+function snapPickEntry_(pid, at) {
+  var v = prompt('رقم القيد المراد إرجاعه كما كان في ' + at + ':'); if (!v) return;
+  askConfirm_('استعادة القيد ' + v + ' كما كان في ' + at + '؟ تُحفظ حالته الحالية كنسخة أولاً.', function () {
+    _snapRun_('snapRestoreEntry', [pid, v.trim()], function (res) { showToast('✅ ' + (res.recreated ? 'أُعيد القيد ' : 'استُعيد القيد ') + res.id); try { glAfterChange(); } catch (e) {} });
+  }, { title: 'استعادة قيد من نقطة', danger: false });
+}
+function snapPickSheet_(pid, at, files) {
+  var b = document.getElementById('_snapBody'), e = escapeHtml_;
+  b.innerHTML = '<div class="alert alert-danger py-2 small">⚠️ استعادة ورقة كاملة تستبدل كل بياناتها الحالية ببياناتها في ' + e(at) + ' (تضيع كل التعديلات عليها بعد ذلك الوقت). تُؤخذ نقطة استعادة فورية قبلها حتماً فيمكن الرجوع. استخدمها فقط لإصلاح خطأ كارثي.</div>' +
+    '<div class="d-flex gap-1 flex-wrap">' + files.map(function (f) { return '<button class="btn btn-sm btn-outline-secondary" onclick="snapSheetList_(\'' + e(pid) + '\',\'' + e(at) + '\',\'' + e(f[0]) + '\')">' + e(f[1]) + '</button>'; }).join('') +
+    '<button class="btn btn-sm btn-link" onclick="snapPointsLoad_()">↩ رجوع</button></div><div id="_snapShL" class="mt-2"></div>';
+}
+function snapSheetList_(pid, at, role) {
+  var d = document.getElementById('_snapShL'), e = escapeHtml_; d.innerHTML = '⏳';
+  _snapRun_('snapPointSheets', [pid, role], function (r) {
+    d.innerHTML = r.sheets.map(function (s) { return '<button class="btn btn-sm btn-outline-danger m-1" onclick="snapSheetRestore_(\'' + e(pid) + '\',\'' + e(at) + '\',\'' + e(role) + '\',\'' + e(glJs(s.name)) + '\')">' + e(s.name) + ' <span class="text-muted">(' + s.rows + ')</span></button>'; }).join('');
+  }, d);
+}
+function snapSheetRestore_(pid, at, role, name) {
+  var t = prompt('سيتم استبدال كل بيانات ورقة «' + name + '» الحالية ببياناتها في ' + at + '.\nاكتب كلمة: استعادة'); if (t == null) return;
+  showToast('⏳ نقطة استعادة فورية ثم الاستعادة…');
+  _snapRun_('snapRestoreSheet', [pid, role, name, t.trim()], function (r) { _showPopup('✅ استُعيدت ورقة «' + name + '» (' + r.rows + ' صف) كما كانت في ' + at + '.\nنقطة الاستعادة الفورية قبلها: ' + r.prePoint + '\nأعد تحميل الشاشات (Ctrl+Shift+R).', 'success'); snapPointsLoad_(); });
+}
+function snapDeletedLoad_() {
+  var b = document.getElementById('_snapBody'), e = escapeHtml_; b.innerHTML = '<div class="text-center text-muted py-4">⏳</div>';
+  _snapRun_('glDeletedEntries', [], function (r) {
+    if (!r.rows.length) { b.innerHTML = '<div class="text-muted p-3">لا قيود محذوفة نهائياً لها نسخة (تُحفظ من V4.346).</div>'; return; }
+    b.innerHTML = '<table class="table table-sm" style="font-size:12.5px;"><thead><tr><th>القيد</th><th>النوع</th><th>التاريخ</th><th>البيان</th><th>المعادل</th><th>حُذف</th><th></th></tr></thead><tbody>' + r.rows.map(function (x) {
+      return '<tr><td class="gl-latin">' + e(x.id) + '</td><td>' + e(x.type) + '</td><td class="gl-latin">' + e(x.date) + '</td><td>' + e(x.desc) + '</td><td class="gl-latin">' + glFmt(x.total) + '</td><td class="gl-latin">' + e(x.at) + ' — ' + e(x.by) + '</td><td>' +
+        (r.canRestore ? '<button class="btn btn-sm btn-warning py-0" onclick="snapEntryRestore_(\'' + e(x.sid) + '\', this)">↩️ إعادة القيد</button>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  }, b);
+}
+function snapRowsLoad_() {
+  var b = document.getElementById('_snapBody'), e = escapeHtml_; b.innerHTML = '<div class="text-center text-muted py-4">⏳</div>';
+  _snapRun_('snapRowList', ['', ''], function (r) {
+    if (!r.rows.length) { b.innerHTML = '<div class="text-muted p-3">لا نسخ دفعات بعد (تُحفظ قبل كل تعديل/حذف من V4.346).</div>'; return; }
+    b.innerHTML = '<table class="table table-sm" style="font-size:12.5px;"><thead><tr><th>الوقت</th><th>العملية</th><th>بواسطة</th><th>الورقة</th><th>البيانات</th><th></th></tr></thead><tbody>' + r.rows.map(function (x) {
+      var d = (x.row || []).slice(1, 9).map(function (v) { return e(String(v == null ? '' : v)); }).filter(Boolean).join(' · ');
+      return '<tr><td class="gl-latin" style="white-space:nowrap">' + e(x.at) + '</td><td>' + e(x.action) + '</td><td>' + e(x.by) + '</td><td>' + e(x.sheet === 'AgentAccounts_Payments' ? 'دفعات الوكلاء' : (x.sheet === 'ClientAccounts_Payments' ? 'دفعات العملاء' : x.sheet)) + '</td><td style="font-size:11.5px;">' + d + '</td><td>' +
+        (r.canRestore ? '<button class="btn btn-sm btn-warning py-0" onclick="snapRowRestore_(\'' + e(x.sid) + '\', this)">↩️ استعادة</button>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  }, b);
+}
+function snapRowRestore_(sid, btn) {
+  askConfirm_('استعادة الدفعة لهذه النسخة (أو إعادتها إن حُذفت)؟', function () {
+    btn.disabled = true; _snapRun_('snapRowRestore', [sid], function () { showToast('✅ استُعيدت الدفعة — حدّث شاشة الحساب'); snapRowsLoad_(); });
+  }, { title: 'استعادة دفعة', danger: false });
 }
 function loadAuditLogTable() {
   var tbody = document.getElementById('auditLogTableBody');
@@ -49563,10 +49675,11 @@ function glEdRowBtns_(e) {
   if (!e || !e.id) return '';
   var id = glJs(e.id), src = /^AUTO:/.test(e.sourceKey || '') ? (glRowSrc_(e.sourceKey) || 'AUTO') : '';
   return '<button class="btn btn-outline-secondary btn-sm" onclick="glRowHist_(\'' + id + '\')">📜 سجل التعديلات</button>' +
+    '<button class="btn btn-outline-secondary btn-sm" onclick="snapEntryDlg_(\'' + id + '\')" title="نسخ القيد قبل كل تعديل — استعادة أي نسخة">⏪ النسخ السابقة</button>' +
     ((GL.can.del || GL.isAdmin) && e.type !== 'قيد إقفال' ? '<button class="btn btn-outline-danger btn-sm" onclick="glDlgClose();glRowDel_(\'' + id + '\',\'' + glJs(src) + '\',\'' + glJs(e.status || '') + '\')">🗑️ حذف</button>' : '');
 }
 function glEntryDlg(kind, entry) {
-  var V = GL_VOUCHERS_[kind] || GL_VOUCHERS_.journal; GL._vk = kind; GL._editId = entry && entry.id ? entry.id : '';
+  var V = GL_VOUCHERS_[kind] || GL_VOUCHERS_.journal; GL._vk = kind; GL._editId = entry && entry.id ? entry.id : ''; GL._edVer = (entry && entry.id && entry.ver) || '';   // 🔐 (V4.346)
   var e = entry || {};
   GL._edPend = (e.id && e.pend) || null; GL._edCcy = !!(e.id && e.ccyPend);   // ✅ (V4.323) تغيير معلَّق يُعتمد بالحفظ صراحةً
   // 🏁 (V4.324) تعديل قيد افتتاحي/مستورد يبقى بنوعه (كان يتحوّل «قيد يومية» فيُرفض لأن تاريخه قبل بداية الحسابات)
@@ -50175,6 +50288,7 @@ function glSaveEntryUI(post, btn, mode) {
   try { e = glBuildEntry(); } catch (err) { _showPopup(err.message, 'warning'); return; }
   var _ack = document.getElementById('glEPendAck');
   if (e.id && _ack && _ack.checked) { if (GL._edPend && GL._edPend.hash) e.pendAck = GL._edPend.hash; if (GL._edCcy) e.ccyAck = 1; }
+  if (e.id && GL._edVer && e.id === GL._editId) e.baseVer = GL._edVer;   // 🔐 (V4.346) كشف التعديل المتزامن
   if (mode === true) mode = 'print';
   var kind = GL._vk, mainCode = glAccVal(document.querySelector('#glDlgBody .glVMain')), pend = (GL._attPend || []).slice();
   var revLink = GL._afterSave || null;   // (V4.303) قيد مفتوح من صف شيت ناقص: يُربط الصف به بعد الحفظ مرحَّلاً
