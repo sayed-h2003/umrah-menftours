@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.355  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.356  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8345,7 +8345,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.355";
+var CLIENT_APP_VERSION = "4.356";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -52923,14 +52923,17 @@ function glCsNaBtn_() {
    (حساب + مبلغ لكل جزء، بعملة الصف)؛ مجموع الأجزاء يجب أن يساوي مبلغ الصف. الحساب الواحد يبقى كما كان (إلغاء التقسيم بالضغط ثانيةً). */
 function glCsSplitBtn_(x) { return glCcOff_(x) && x && x.fee ? '' : '<button type="button" class="btn btn-outline-primary btn-sm py-0 px-2" title="تقسيم مبلغ الصف على أكثر من حساب مقابل" onclick="glCsSplitTog_(this)">➗</button>'; }
 function glCsSplitBox_(x) { return glCcOff_(x) && x && x.fee ? '' : '<div class="glSplBox d-none mt-1 p-1" style="border:1px dashed #3b82f6;border-radius:8px;background:#eff6ff;font-size:12px;"></div>'; }
-function glCsSplitRow_(amt) { return '<div class="d-flex gap-1 mb-1 glSplRow align-items-center">' + glAccInput('glSplAcc', '', '') + '<input class="form-control form-control-sm gl-latin glSplAmt" style="width:104px;" inputmode="decimal" value="' + (amt || '') + '" oninput="glCsSplitSum_(this)"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="var b=this.closest(\'.glSplBox\');this.closest(\'.glSplRow\').remove();glCsSplitSum_(b)">✕</button></div>'; }
+function glCsSplitRow_(amt, cur) { cur = cur || 'EGP'; return '<div class="d-flex gap-1 mb-1 glSplRow align-items-center flex-wrap" data-rc="' + cur + '">' + glAccInput('glSplAcc', '', '') + '<input class="form-control form-control-sm gl-latin glSplAmt" style="width:104px;" inputmode="decimal" title="حصة هذا الحساب بعملة الصف" value="' + (amt || '') + '" oninput="glCsSplitSum_(this);glCsSplitCur_(this)">' +
+  '<select class="form-select form-select-sm glSplCur" style="width:78px;" title="عملة هذا الحساب" onchange="glCsSplitCur_(this)">' + ['EGP', 'SAR', 'USD'].map(function (c) { return '<option value="' + c + '"' + (c === cur ? ' selected' : '') + '>' + GL_CUR_LBL_[c] + '</option>'; }).join('') + '</select>' +
+  '<input class="form-control form-control-sm gl-latin glSplCAmt d-none" style="width:104px;background:#fef9c3;" inputmode="decimal" placeholder="المبلغ بعملته" title="مبلغ هذا الحساب بعملته" oninput="this.dataset.man=\'1\'"><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="var b=this.closest(\'.glSplBox\');this.closest(\'.glSplRow\').remove();glCsSplitSum_(b)">✕</button></div>'; }
 function glCsSplitTog_(btn) {
   var tr = btn.closest('tr'), box = tr && tr.querySelector('.glSplBox'); if (!box) return;
   var acc = tr.querySelector('.glCsAcc'), on = box.classList.contains('d-none'), amt = (+tr.dataset.amt || 0);
   if (!on) { box.classList.add('d-none'); box.innerHTML = ''; if (acc) { acc.disabled = false; acc.style.opacity = ''; } return; }
   box.classList.remove('d-none');
-  box.innerHTML = '<div class="fw-bold mb-1">➗ تقسيم ' + glFmt(amt) + ' على أكثر من حساب</div><div class="glSplRows">' + glCsSplitRow_(amt) + glCsSplitRow_('') + '</div>' +
-    '<button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="this.closest(\'.glSplBox\').querySelector(\'.glSplRows\').insertAdjacentHTML(\'beforeend\', glCsSplitRow_(\'\'))">+ حساب</button> <span class="glSplRest ms-2 fw-bold"></span>';
+  var rc = tr.dataset.cur || 'EGP';
+  box.innerHTML = '<div class="fw-bold mb-1">➗ تقسيم ' + glFmt(amt) + ' ' + (GL_CUR_LBL_[rc] || '') + ' على أكثر من حساب <span class="small text-muted fw-normal">(الحصة بعملة الصف — ولو عملة الحساب مختلفة اكتب مبلغه بعملته)</span></div><div class="glSplRows">' + glCsSplitRow_(amt, rc) + glCsSplitRow_('', rc) + '</div>' +
+    '<button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="this.closest(\'.glSplBox\').querySelector(\'.glSplRows\').insertAdjacentHTML(\'beforeend\', glCsSplitRow_(\'\', this.closest(\'tr\').dataset.cur))">+ حساب</button> <span class="glSplRest ms-2 fw-bold"></span>';
   if (acc) { acc.disabled = true; acc.style.opacity = '.45'; }
   glCsSplitSum_(box);
 }
@@ -52948,12 +52951,22 @@ function glCsSplitRead_(tr) {
     var a = glAccVal(r.querySelector('.glSplAcc')), v = glNum(r.querySelector('.glSplAmt').value);
     if (!a && !(v > 0)) return;
     if (!a || !(v > 0)) { bad = 'كل جزء يحتاج حساباً ومبلغاً'; return; }
-    out.push({ account: a, amt: Math.round(v * 100) / 100 }); tot += v;
+    var o = { account: a, amt: Math.round(v * 100) / 100 }, cs = r.querySelector('.glSplCur'), rc = r.dataset.rc || tr.dataset.cur || 'EGP';
+    if (cs && cs.value !== rc) { var ca = glNum(r.querySelector('.glSplCAmt').value); if (!(ca > 0)) { bad = 'اكتب مبلغ الحساب بعملته (' + (GL_CUR_LBL_[cs.value] || cs.value) + ')'; return; } o.cur = cs.value; o.camt = Math.round(ca * 100) / 100; }   // 💱 (V4.356)
+    out.push(o); tot += v;
   });
   if (bad) return { err: bad };
   if (out.length < 2) return { err: 'التقسيم يحتاج حسابين على الأقل' };
   if (Math.abs(tot - (+tr.dataset.amt || 0)) > 0.01) return { err: 'مجموع الأجزاء (' + glFmt(tot) + ') لا يساوي مبلغ الصف (' + glFmt(+tr.dataset.amt || 0) + ')' };
   return { splits: out };
+}
+// 💱 (V4.356) عملة جزء التقسيم: مختلفة عن عملة الصف ⇒ يظهر مبلغه بعملته (مقترَح بسعر اليوم/البيان حتى تكتبه بنفسك)
+function glCsSplitCur_(el) {
+  var r = el.closest('.glSplRow'); if (!r) return;
+  var cs = r.querySelector('.glSplCur'), ca = r.querySelector('.glSplCAmt'), rc = r.dataset.rc || 'EGP', tr = r.closest('tr'); if (!cs || !ca) return;
+  if (cs.value === rc) { ca.classList.add('d-none'); ca.value = ''; ca.dataset.man = ''; return; }
+  ca.classList.remove('d-none');
+  if (ca.dataset.man !== '1') { var v = glNum(r.querySelector('.glSplAmt').value); if (v > 0) { var d = tr && tr.querySelector('.glCsDesc'); var g = glCcyGuess_(d ? d.value : (tr && tr.dataset.desc) || '', v, rc, cs.value, tr && tr.dataset.date); ca.value = g.amt; } }
 }
 function glCsNewAcc_(btn) {
   var tr = btn.closest('tr'), inp = tr && tr.querySelector('.glCsAcc'); if (!inp) return;
@@ -53238,11 +53251,13 @@ function glCcInit_(box) {
     else if (glAccVal(tr.querySelector('.glCsAcc'))) glCcAuto_(tr);
     else glCcFill_(tr);
   });
+  box.querySelectorAll('tr[data-srow]').forEach(function (tr) { if (tr.querySelector('.glCcCur')) glCcFill_(tr); });   // 💱 (V4.356) المبالغ المعلقة
 }
+function glCcAccEl_(tr) { return tr.querySelector('.glCsAcc') || tr.querySelector('.glCsSAcc'); }
 // اختيار الحساب ⇒ عملته الافتراضية (لو مختلفة) واقتراح مبلغه؛ وإلا يعود لمبلغ وعملة الشيت
 function glCcAuto_(tr) {
   var E = glCcEls_(tr); if (!E.cs) return;
-  var dc = glAccDefCur_(glAccVal(tr.querySelector('.glCsAcc')));
+  var dc = glAccDefCur_(glAccVal(glCcAccEl_(tr)));
   E.cs.value = dc && dc !== E.rc ? dc : E.rc; E.am.dataset.man = '';
   glCcFill_(tr);
 }
@@ -53263,7 +53278,7 @@ function glCcHint_(tr) {
   if (!diff) { E.src.innerHTML = ''; return; }
   var rate = v > 0 ? glR2Rate(E.rc === 'EGP' ? E.ra / v : (cur === 'EGP' ? v / E.ra : v / E.ra)) : 0;
   var lbl = { desc: '📝 من البيان', rate: '📝 بسعر البيان', fx: '💱 بسعر اليوم', man: '✍️ مبلغ يدوي' }[E.am.dataset.man === '1' ? 'man' : E.am.dataset.src] || '💱 مقترح';
-  var acc = GL.map[glAccVal(tr.querySelector('.glCsAcc'))] || {};
+  var acc = GL.map[glAccVal(glCcAccEl_(tr))] || {};
   E.src.innerHTML = '<span style="color:#92400e;font-weight:700;">' + lbl + '</span>' + (rate ? ' <span class="gl-latin" style="color:#475569;">· سعر ' + rate + '</span>' : '') + '<br><span style="color:#b45309;">⏳ يُعتمد مع الصف</span>' +
     (acc.hb && cur !== 'SAR' ? '<br><span style="color:#b91c1c;font-weight:700;">⚠️ طرف فندقي: بغير الريال لن يُنسخ لكشف الفندق</span>' : '');
 }
@@ -53279,11 +53294,15 @@ function glCcSet_(tr, st) {
 function glCcItem_(tr, it) {
   var E = glCcEls_(tr); if (!E.cs) return '';
   it.ccur = E.cs.value;
-  if (E.cs.value !== E.rc) { var v = glNum(E.am.value); if (!(v > 0)) return 'صف ' + tr.dataset.row + ': أدخل مبلغ الطرف المقابل بـ' + (GL_CUR_LBL_[E.cs.value] || E.cs.value); it.camt = v; }
+  if (E.cs.value !== E.rc) { var v = glNum(E.am.value); if (!(v > 0)) return 'صف ' + (tr.dataset.row || tr.dataset.srow) + ': أدخل مبلغ الطرف المقابل بـ' + (GL_CUR_LBL_[E.cs.value] || E.cs.value); it.camt = v; }
   return '';
 }
 // اختيار حساب بالبحث التنبّؤي (حدث change) أو تعديل البيان ⇒ إعادة الاقتراح (ما لم يكتب المستخدم المبلغ بنفسه)
-document.addEventListener('change', function (e) { var t = e.target; if (t && t.classList && t.classList.contains('glCsAcc')) { var tr = t.closest('tr[data-row]'); if (tr) glCcAuto_(tr); } });
+document.addEventListener('change', function (e) {
+  var t = e.target; if (!t || !t.classList) return;
+  if (t.classList.contains('glCsAcc') || t.classList.contains('glCsSAcc')) { var tr = t.closest('tr[data-row], tr[data-srow]'); if (tr) glCcAuto_(tr); }
+  if (t.classList.contains('glSplAcc')) { var rw = t.closest('.glSplRow'), cs = rw && rw.querySelector('.glSplCur'), dc = glAccDefCur_(glAccVal(t)); if (cs && dc) { cs.value = dc; glCsSplitCur_(cs); } }   // 💱 (V4.356)
+});
 document.addEventListener('input', function (e) { var t = e.target; if (t && t.classList && t.classList.contains('glCsDesc')) { var tr = t.closest('tr[data-row]'), cs = tr && tr.querySelector('.glCcCur'); if (cs && cs.value !== (tr.dataset.cur || 'EGP')) glCcFill_(tr); } });
 function glCsPendDlg(force) {
   glDlg('👜 صفوف الشيتات الناقصة — استكمال واعتماد', '<div id="glCsPBox" class="text-muted small py-4 text-center">⏳ جارٍ جلب الصفوف من الشيتات…</div>', 1180);
@@ -53299,6 +53318,7 @@ function glCsPendDraw_() {
     '<button class="btn btn-outline-secondary btn-sm ms-auto" onclick="glCsPendDlg(true)" title="يفحص كل الشيتات المربوطة">🔄 فحص كل الشيتات</button>' +
     '<button class="btn btn-outline-success btn-sm" onclick="glCsPickSugg_()" title="يملأ حقل الحساب بأول اقتراح للصفوف الفارغة">✨ تعبئة بأول اقتراح</button>' +
     ((R.suspAccs || []).length ? '<button class="btn btn-outline-warning btn-sm" onclick="glCsSusFill_()" title="الصفوف المحددة التي بلا حساب تُسجَّل كمبالغ معلقة (متعلقات) حتى يُحدَّد حسابها لاحقاً — فتصبح أرصدة الخزن/البنوك/العهد فعلية">⏳ المحدد بلا حساب ⇒ مبالغ معلقة</button>' : '') +
+    (R.canApprove ? '<label class="small d-flex align-items-center gap-1" style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:2px 8px;" title="تشغيل: أي صف جديد بلا طرف معروف يُسجَّل فوراً على «متعلقات» ثم تنقله لاحقاً · إيقاف (الافتراضي): ينتظر هنا حتى تحدد حسابه/حساباته وعملته ومبلغه أو تختار «مبلغ معلق»"><input type="checkbox" ' + (R.autoSusp ? 'checked' : '') + ' onchange="glCsAutoSusp_(this)"> تسجيل الصفوف بلا طرف تلقائياً على «متعلقات»</label>' : '') +
     '<button class="btn btn-outline-warning btn-sm" onclick="glCsDupDlg_(\'\')" title="قيود سُجّلت من الشيت وهي مسجّلة أيضاً من شاشات البرنامج">🔁 فحص التكرار مع الشاشات</button>' +
     '<button class="btn btn-danger btn-sm fw-bold" onclick="glCashDupDlg_()" title="فحص تكرار عام عبر الخزينة والبنوك والعهد وكل المصادر">🔁🔁 فحص التكرار العام</button></div>';
   R.groups.forEach(function (g) {
@@ -53446,6 +53466,11 @@ function glCsSusSel_(x) {
   return '<select class="form-select form-select-sm mt-1 glCsSus" style="font-size:11.5px;" title="مبلغ معلق بلا طرف بعد — يُقيَّد على حساب المعلقات ويظهر لاحقاً هنا حتى تحديد حسابه" onchange="glCsSusTog_(this)">' +
     '<option value="">— بحساب الطرف أعلاه —</option>' + A.map(function (z) { return '<option value="' + glEsc(z.key) + '">⏳ مبلغ معلق ⇒ ' + glEsc(z.name) + '</option>'; }).join('') + '</select>';
 }
+function glCsAutoSusp_(cb) {
+  cb.disabled = true;
+  glRun('glCsAutoSuspSet', [cb.checked], function (res) { cb.disabled = false; if (GL._csP) GL._csP.autoSusp = res.on; showToast(res.on ? '⏳ الصفوف بلا طرف ستُسجَّل تلقائياً على «متعلقات»' : '✅ الصفوف بلا طرف ستنتظر هنا حتى تحدد حسابها'); },
+    function (e) { cb.disabled = false; cb.checked = !cb.checked; _showPopup((e && e.message) || e, 'error'); });
+}
 function glCsSusTog_(sel) { var tr = sel.closest('tr'), i = tr && tr.querySelector('.glCsAcc'); if (i) { i.disabled = !!sel.value; i.style.opacity = sel.value ? '.45' : ''; } if (tr) tr.style.background = sel.value ? '#fffbeb' : ''; }
 function glCsSusFill_() {
   var A = (GL._csP || {}).suspAccs || []; if (!A.length) return; var n = 0;
@@ -53460,14 +53485,14 @@ function glCsSuspTbl_(g, amt) {
   var L = g.susp || []; if (!L.length) return '';
   var R = GL._csP || {};
   return '<div class="mt-2" style="border-top:2px dashed #f59e0b;padding-top:6px;"><div class="fw-bold small mb-1" style="color:#92400e;">⏳ مبالغ معلقة بانتظار تحديد الحساب (' + L.length + ') — مسجَّلة بالأرصدة على حساب المعلقات؛ اختر حسابها الحقيقي لنقل القيد نفسه إليه</div>' +
-    '<div class="table-responsive" style="max-height:260px;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" onchange="this.closest(\'table\').querySelectorAll(\'.glCsSpk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>صف</th><th>التاريخ</th><th>المبلغ</th><th>الطرف بالشيت</th><th>البيان</th><th>القيد / الحساب الحالي</th><th style="min-width:250px;">الحساب الحقيقي</th></tr></thead><tbody>' +
+    '<div class="table-responsive" style="max-height:260px;overflow:auto;"><table class="gl-tbl" style="font-size:12px;"><thead><tr><th><input type="checkbox" onchange="this.closest(\'table\').querySelectorAll(\'.glCsSpk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>صف</th><th>التاريخ</th><th>المبلغ</th><th>الطرف بالشيت</th><th>البيان</th><th>القيد / الحساب الحالي</th><th style="min-width:250px;">الحساب الحقيقي</th><th>مبلغ الطرف المقابل</th><th>العملة</th></tr></thead><tbody>' +
     L.map(function (x) {
-      return '<tr data-scode="' + glEsc(g.code) + '" data-srow="' + x.row + '" data-amt="' + (x.inAmt || x.outAmt || 0) + '"><td><input type="checkbox" class="glCsSpk"></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x, g.currency) + '</td>' +
+      return '<tr data-scode="' + glEsc(g.code) + '" data-srow="' + x.row + '" data-desc="' + glEsc(x.desc || '') + '"' + glCcAttrs_(x, g.currency) + '><td><input type="checkbox" class="glCsSpk"></td><td class="gl-latin">' + x.row + '</td><td class="gl-latin">' + glEsc(x.date || '—') + '</td><td>' + amt(x, g.currency) + '</td>' +
         '<td style="text-align:right;color:#92400e;font-weight:700;">' + glEsc(x.hint || '— فارغ —') + '</td><td style="text-align:right;">' + glEsc(x.desc || '') + '</td>' +
         '<td><a href="#" class="gl-latin" onclick="glRevOpenEntry_(\'' + glJs(x.id) + '\',this);return false;">' + glEsc(x.id) + '</a><div class="small text-muted">' + glEsc(x.accName || x.acc) + '</div></td>' +
         '<td><div class="d-flex gap-1 align-items-center">' + glAccInput('glCsSAcc', '', '') + glCsSplitBtn_({}) + '</div>' + glCsSplitBox_({}) + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
-          return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var tr=this.closest(\'tr\'),i=tr.querySelector(\'.glCsSAcc\');i.dataset.code=\'' + glJs(sg.code) + '\';i.value=\'' + glJs(sg.code + ' — ' + sg.name) + '\';tr.querySelector(\'.glCsSpk\').checked=true">' + glEsc(sg.name) + '</button>';
-        }).join('') + '</div>' : '') + glCsBkSug_(x, g, R) + '</td></tr>';
+          return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var tr=this.closest(\'tr\'),i=tr.querySelector(\'.glCsSAcc\');i.dataset.code=\'' + glJs(sg.code) + '\';i.value=\'' + glJs(sg.code + ' — ' + sg.name) + '\';tr.querySelector(\'.glCsSpk\').checked=true;glCcAuto_(tr)">' + glEsc(sg.name) + '</button>';
+        }).join('') + '</div>' : '') + glCsBkSug_(x, g, R) + '</td>' + glCcCells_(x, g.currency) + '</tr>';
     }).join('') + '</tbody></table></div>' +
     (R.canApprove ? '<div class="d-flex justify-content-end mt-1"><button class="btn btn-warning btn-sm fw-bold" onclick="glCsRepoint_(this,\'' + glJs(g.code) + '\')">✅ نقل المحدد لحسابه الحقيقي</button></div>' : '') + '</div>';
 }
@@ -53486,7 +53511,9 @@ function glCsBkSug_(x, g, R) {
 function glCsBkLink_(btn, code, row, acc, name) {
   askConfirm_('نقل هذا المبلغ المعلق (نفس القيد) إلى حساب «' + name + '»؟ يخرج من «متعلقات» ويظهر بكشف الحساب مقابل الحجز.', function () {
     btn.disabled = true; btn.innerHTML = '⏳ جاري الربط…';
-    glRun('glCsApproveAll', [[{ code: code, items: [{ row: row, repoint: 1, account: acc }] }]], function (res) {
+    var it = { row: row, repoint: 1, account: acc }, tr = document.querySelector('#glCsPBox tr[data-scode="' + code + '"][data-srow="' + row + '"]');
+    if (tr) { var si = tr.querySelector('.glCsSAcc'); if (si) { si.dataset.code = acc; si.value = acc + ' — ' + name; } glCcAuto_(tr); var ce = glCcItem_(tr, it); if (ce) { btn.disabled = false; btn.innerHTML = '🔗 ربط بهذا الحجز'; _showPopup(ce, 'warning'); return; } }
+    glRun('glCsApproveAll', [[{ code: code, items: [it] }]], function (res) {
       var pr = (res && res.problems) || [];
       if (pr.length) _showPopup(pr.map(function (p) { return 'صف ' + p.row + ': ' + p.msg; }).join('\n'), 'warning');
       else showToast('✅ رُبط المبلغ بحساب ' + name);
@@ -53502,7 +53529,8 @@ function glCsRepoint_(btn, code) {
     var spR = glCsSplitRead_(tr);   // ➗ (V4.334) نقل المعلق لأكثر من حساب
     if (spR) { if (spR.err) { miss++; bad.push('صف ' + tr.dataset.srow + ': ' + spR.err); return; } items.push({ row: +tr.dataset.srow, repoint: 1, account: spR.splits[0].account, splits: spR.splits }); return; }
     var acc = glAccVal(tr.querySelector('.glCsSAcc')); if (!acc) { miss++; return; }
-    items.push({ row: +tr.dataset.srow, repoint: 1, account: acc });
+    var it = { row: +tr.dataset.srow, repoint: 1, account: acc }, ce = glCcItem_(tr, it); if (ce) { bad.push(ce); return; }   // 💱 (V4.356) عملة ومبلغ الطرف المقابل
+    items.push(it);
   });
   if (bad.length) { _showPopup(bad.join('\n'), 'warning'); return; }
   if (!items.length) { _showPopup(miss ? 'اختر الحساب الحقيقي للصفوف المحددة' : 'حدّد صفاً واحداً على الأقل', 'warning'); return; }

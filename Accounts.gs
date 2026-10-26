@@ -5186,7 +5186,9 @@ function _glCsSplitNorm_(arr, accs) {
     var c = _glStr_(z && z.account), a = _glR2_(_glNum_(z && z.amt));
     if (!c || !(a > 0)) return;
     var ac = accs.map[c]; if (!ac || ac.isGroup) throw new Error('حساب التقسيم ' + c + ' غير صالح (غير موجود أو تجميعي)');
-    out.push({ account: c, amt: a });
+    var o = { account: c, amt: a }, zc = _glStr_(z && z.cur);   // 💱 (V4.356) عملة ومبلغ لكل جزء (اختياري)
+    if (zc) { o.cur = _glCur_(zc); var ca = _glR2_(_glNum_(z.camt)); if (ca > 0) o.camt = ca; }
+    out.push(o);
   });
   return out.length >= 2 ? out : null;
 }
@@ -5198,7 +5200,22 @@ function _glCsEntry_(x, code, cp, cur, fx, ov, split) {
     split.forEach(function (z) { sum0 += z.amt; });
     if (Math.abs(sum0 - amt) > 0.01) throw new Error('مجموع الأطراف المقسَّمة (' + _glFmtN_(sum0) + ') لا يساوي مبلغ الصف (' + _glFmtN_(amt) + ')');
     var e0 = { date: x.date, type: isIn ? T0[0] : T0[1], desc: desc0, lines: [{ account: code, debit: isIn ? amt : 0, credit: isIn ? 0 : amt, currency: cur, rate: rate, desc: desc0 }] };
-    split.forEach(function (z) { var pz = z.amt > 0, az = Math.abs(z.amt); e0.lines.push({ account: z.account, debit: isIn ? (pz ? 0 : az) : (pz ? az : 0), credit: isIn ? (pz ? az : 0) : (pz ? 0 : az), currency: cur, rate: rate, desc: desc0 + ' (جزء ' + _glFmtN_(z.amt) + ')' }); });   // الجزء السالب (نقص عن المعتمد) على الجانب المعاكس
+    // 💱 (V4.356) جزء بعملة أخرى: مبلغه بعملته (camt) وسعره يُحسب بدقة بحيث يساوي معادله حصته من الصف (القيد متوازن تماماً)
+    var mixed = split.some(function (z) { return z.cur && z.cur !== cur && z.camt > 0; }), baseSum = 0;
+    if (mixed) {
+      split.forEach(function (z) {
+        var pc = z.cur && z.camt > 0 ? z.cur : cur, base = pc === 'EGP' && cur !== 'EGP' ? z.camt : (cur === 'EGP' ? z.amt : z.amt * rate);
+        z._pc = pc; z._qa = pc === cur ? Math.abs(z.amt) : z.camt; z._rt = pc === 'EGP' ? 1 : Math.abs(base) / z._qa; baseSum += Math.abs(base) * (z.amt > 0 ? 1 : -1);
+      });
+      if (cur !== 'EGP') { e0.lines[0].rate = Math.abs(baseSum) / amt; e0.lines[0].exact = true; }
+    }
+    split.forEach(function (z) {
+      var pz = z.amt > 0, az = mixed ? z._qa : Math.abs(z.amt), pcur = mixed ? z._pc : cur;
+      var ln = { account: z.account, debit: isIn ? (pz ? 0 : az) : (pz ? az : 0), credit: isIn ? (pz ? az : 0) : (pz ? 0 : az), currency: pcur, rate: mixed ? z._rt : rate,
+        desc: desc0 + ' (جزء ' + _glFmtN_(az) + (pcur !== cur ? ' ' + ({ EGP: 'جنيه', SAR: 'ريال', USD: 'دولار' }[pcur] || pcur) : '') + ')' };
+      if (mixed && pcur !== 'EGP') ln.exact = true;
+      e0.lines.push(ln);
+    });
     if (x.trip) { e0.lines.forEach(function (l, i) { if (i) l.trip = x.trip; }); }   // (V4.343) رحلة اختيارية على أسطر الأطراف
     return { e: e0, v: _glValidate_(e0, {}), cc: null, split: true };
   }
@@ -5412,7 +5429,17 @@ function glCsPendAll(authToken, force) {
     } catch (e) { errs.push(((accM[code] || {}).name || code) + ': ' + e.message); }
   });
   try { _glCsSuspBkSugg_(groups); } catch (eBk) { Logger.log('susp bk sugg: ' + eBk.message); }   // 🏨 (V4.355)
-  return { success: true, groups: groups, errors: errs, canApprove: _sessionHasPerm_(session, 'admin') || _sessionHasPerm_(session, 'gl.edit'), csPend: _glCsPendTotal_(), suspAccs: _glCsSuspAccs_() };
+  return { success: true, autoSusp: _glStr_(_glSettings_().cs_auto_susp) === 'نعم', groups: groups, errors: errs, canApprove: _sessionHasPerm_(session, 'admin') || _sessionHasPerm_(session, 'gl.edit'), csPend: _glCsPendTotal_(), suspAccs: _glCsSuspAccs_() };
+}
+// ⏳ (V4.356) تشغيل/إيقاف «التسجيل التلقائي على المتعلقات» للصفوف بلا طرف (افتراضياً: إيقاف = تنتظر الاستكمال)
+function glCsAutoSuspSet(authToken, on) {
+  var session = _glPerm_(authToken, 'edit', 'sheets');
+  var lock = _glLock_(); lock.waitLock(30000);
+  try {
+    _glSetSetting_('cs_auto_susp', on ? 'نعم' : 'لا');
+    logChange_(session.username, 'إعداد شيتات العهد', 'GL:cs', 'التسجيل التلقائي على المتعلقات', '-', on ? 'تشغيل' : 'إيقاف');
+    return { success: true, on: !!on };
+  } finally { _glUnlock_(lock); }
 }
 /* 🏨 (V4.355) اقتراح الحجز المطابق لكل مبلغ معلق: صادر ⇒ تكلفة الحجز على المورد/الفندق · وارد ⇒ سعر البيع على العميل.
    المطابقة بالمعادل بالريال (فارق ≤ 2% أو 5 ريال للريال، ≤ 4% لعملة أخرى بسعر صرف تقريبي) وتاريخ دخول خلال ±30 يوماً.
@@ -5482,7 +5509,7 @@ function glCsApproveAll(authToken, groups) {
         if (it.susp) { pick[+it.row] = _glCsSuspAcc_(it.account, session.username); sus[+it.row] = 1; if (it.force) frc[+it.row] = 1; if (_glStr_(it.desc)) ov[+it.row] = _glStr_(it.desc); return; }
         var sp0 = null;
         if (it.repoint && Array.isArray(it.splits)) { try { sp0 = _glCsSplitNorm_(it.splits, accsS); } catch (eSp1) { problems.push({ code: g.code, row: it.row, msg: eSp1.message }); return; } if (sp0) { rep[+it.row] = sp0[0].account; spl[+it.row] = sp0; return; } }   // ➗ نقل المعلق لأكثر من حساب
-        if (it.repoint && _glStr_(it.account)) { rep[+it.row] = _glStr_(it.account); return; } try { sp0 = _glCsSplitNorm_(it.splits, accsS); } catch (eSp) { problems.push({ code: g.code, row: it.row, msg: eSp.message }); return; }
+        if (it.repoint && _glStr_(it.account)) { rep[+it.row] = _glStr_(it.account); if (_glStr_(it.ccur)) cc[+it.row] = { cur: _glCur_(it.ccur), amt: _glNum_(it.camt) }; return; } try { sp0 = _glCsSplitNorm_(it.splits, accsS); } catch (eSp) { problems.push({ code: g.code, row: it.row, msg: eSp.message }); return; }
         if (sp0) { pick[+it.row] = sp0[0].account; spl[+it.row] = sp0; if (it.force) frc[+it.row] = 1; if (_glStr_(it.desc)) ov[+it.row] = _glStr_(it.desc); return; }   // ➗ (V4.333)
         if (_glStr_(it.account)) { pick[+it.row] = _glStr_(it.account); if (it.force) frc[+it.row] = 1; if (_glStr_(it.desc)) ov[+it.row] = _glStr_(it.desc); if (_glStr_(it.ccur)) cc[+it.row] = { cur: _glCur_(it.ccur), amt: _glNum_(it.camt) }; }   // (V4.305) مبلغ/عملة الطرف المقابل
       });
@@ -5744,7 +5771,7 @@ function glCustSheetApprove(authToken, code, items) {
   (items || []).forEach(function (it) { if (!it || !it.row) return; if (_glStr_(it.trip)) tov[+it.row] = _glStr_(it.trip); if (_glStr_(it.link)) { lnk[+it.row] = _glStr_(it.link); return; }
     var sp0 = _glCsSplitNorm_(it.splits, accsS); if (sp0) { if (it.repoint) rep[+it.row] = sp0[0].account; else pick[+it.row] = sp0[0].account; spl[+it.row] = sp0; if (it.force) frc[+it.row] = 1; return; }   // ➗ (V4.333/334)
     if (it.susp) { sus[+it.row] = 1; susAcc[+it.row] = _glStr_(it.account); if (it.force) frc[+it.row] = 1; return; }   // ⏳ (V4.324) مبلغ معلق
-    if (it.repoint && _glStr_(it.account)) { rep[+it.row] = _glStr_(it.account); return; }
+    if (it.repoint && _glStr_(it.account)) { rep[+it.row] = _glStr_(it.account); if (_glStr_(it.ccur)) cc[+it.row] = { cur: _glCur_(it.ccur), amt: _glNum_(it.camt) }; return; }
     if (_glStr_(it.account)) { pick[+it.row] = _glStr_(it.account); if (it.force) frc[+it.row] = 1; if (_glStr_(it.ccur)) cc[+it.row] = { cur: _glCur_(it.ccur), amt: _glNum_(it.camt) }; } });
   if (!Object.keys(pick).length && !Object.keys(lnk).length && !Object.keys(sus).length && !Object.keys(rep).length) throw new Error('اختر حساب الطرف (أو الربط بالقيد القائم) لصف واحد على الأقل');
   // ⚡ (V4.308) فتح الشيت الخارجي وقراءته (الجزء البطيء) قبل أخذ القفل — فلا يتجمّد حفظ بقية المستخدمين أثناء الاعتماد
@@ -5831,7 +5858,7 @@ function _glCsSync_(code, user, opts) {
               inAmt: susReg[x.f].d !== undefined ? (x.inAmt > 0 ? Math.abs(susReg[x.f].d) : 0) : x.inAmt, outAmt: susReg[x.f].d !== undefined ? (x.outAmt > 0 ? Math.abs(susReg[x.f].d) : 0) : x.outAmt, cur: x.cur || '', hint: x.hint,
               acc: susReg[x.f].a, accName: (accs.map[susReg[x.f].a] || {}).name || susReg[x.f].a, sugg: _glCsSuggest_(x.hint, accs, code) });
           }
-          if (rp || (_glStr_(er[9]).match(/^cs:(.+)$/) || [])[1] !== x.hash) { toUpdate.push({ x: x, id: x.f, er: ents[x.f], repoint: rp || '', split: rp && opts.split && opts.split[x.rk || x.row] || null }); return; }
+          if (rp || (_glStr_(er[9]).match(/^cs:(.+)$/) || [])[1] !== x.hash) { toUpdate.push({ x: x, id: x.f, er: ents[x.f], repoint: rp || '', split: rp && opts.split && opts.split[x.rk || x.row] || null, ccy: rp && opts.ccy && opts.ccy[x.rk || x.row] || null }); return; }
         }
         out.linked++; return;
       }
@@ -5874,7 +5901,8 @@ function _glCsSync_(code, user, opts) {
     // ويبقى ظاهراً بشاشة «استكمال واعتماد» (جدول المبالغ المعلقة) لتحديد الطرف الحقيقي أو الأطراف (➗) فيُنقل القيد نفسه إليها.
     // يُعطَّل بإعداد cs_auto_susp = «لا». المعاينة لا تُنشئ حسابات، والمصاريف البنكية لها مسارها (حساب مصروفات مختار مسبقاً).
     var spAuto = false;
-    if (!cp && !x.isFee && !opts.preview && _glStr_(_glSettings_().cs_auto_susp) !== 'لا') { cp = _glCsSuspAcc_('', user); spAuto = !!cp; }
+    // (V4.356) أصبح اختيارياً (معطَّل افتراضياً): الصف بلا طرف ينتظر بشاشة الاستكمال حتى تحدد حسابه/حساباته وعملته ومبلغه أو تختار «مبلغ معلق»
+    if (!cp && !x.isFee && !opts.preview && _glStr_(_glSettings_().cs_auto_susp) === 'نعم') { cp = _glCsSuspAcc_('', user); spAuto = !!cp; }
     if (!cp) { if (x.sub > 0 && !x.isFee) return; if (x.subN > 1) base.desc = (base.desc || '') + ' [صف متعدد العملات — يُفصل لقيد لكل عملة]'; base.sugg = _glCsSuggest_(x.hint, accs, code); out.pending.push(ccAnn(base, x)); return; }
     // 💱 (V4.306) الطرف عملته الافتراضية غير عملة الصف (مثل عميل فندقي بالريال وصف خزينة بالجنيه): يُسجَّل تلقائياً بالمبلغ
     // المستنتج من البيان (مقرَّباً لأقرب رقم صحيح)، وإلا بسعر صرف تاريخ الحركة عبر وسيط تحويل العملات — بلا انتظار اختيار
@@ -5964,14 +5992,18 @@ function _glCsSync_(code, user, opts) {
           if (u.split && !sdMode) spU = u.split;   // ➗ نقل معلق عادي لأكثر من حساب (المجموع مُتحقَّق منه في _glCsEntry_)
           else {
             // الأجزاء المعتمدة تبقى بمبالغها (بعملة القيد) · أجزاء المعلقات القديمة تُعاد حسابها كفرق جديد
+            var rowCurS = u.x.cur || cur, rowRtS = cashOld ? (_glNum_(cashOld[8]) || 1) : 1;
             prevAll.forEach(function (r) {
               if (_glStr_(r[4]) === susA) return;
-              spU.push({ account: _glStr_(r[4]), amt: _glR2_(_glNum_(r[5]) || _glNum_(r[6])) }); keepS += spU[spU.length - 1].amt;
+              var lc = _glCur_(_glStr_(r[7]) || rowCurS), la = _glR2_(_glNum_(r[5]) || _glNum_(r[6]));
+              if (lc === rowCurS) spU.push({ account: _glStr_(r[4]), amt: la });
+              else spU.push({ account: _glStr_(r[4]), amt: _glR2_((_glNum_(r[9]) || _glNum_(r[10])) / (rowCurS === 'EGP' ? 1 : rowRtS)), cur: lc, camt: la });   // 💱 (V4.356) جزء بعملة أخرى يبقى بعملته
+              keepS += spU[spU.length - 1].amt;
             });
             var diffS = _glR2_(nAmtS - keepS);
             if (sdMode && u.repoint) {   // نقل الفرق المعلق لحسابه الحقيقي (أو أكثر)
               var sgn = diffS < 0 ? -1 : 1, parts = u.split ? u.split : [{ account: u.repoint, amt: Math.abs(diffS) }];
-              parts.forEach(function (z) { spU.push({ account: z.account, amt: _glR2_(sgn * z.amt) }); });
+              parts.forEach(function (z) { spU.push(Object.assign({}, z, { amt: _glR2_(sgn * z.amt) })); });
             } else if (Math.abs(diffS) >= 0.01) spU.push({ account: susA, amt: diffS });
           }
           var needSus = spU.some(function (z) { return z.account === susA; });
@@ -5996,7 +6028,11 @@ function _glCsSync_(code, user, opts) {
         if (!u.x.date) throw new Error('بلا تاريخ (العمود D)');
         // 💱 (V4.305) قيد معتمد بعملة طرف مختلفة: يبقى بعملته — نفس المبلغ ⇒ نفس المقابل المعتمد، وإلا من البيان أو بنفس السعر المعتمد
         var uCur = u.x.cur || cur, uov = null, nAmt = u.x.inAmt || u.x.outAmt;
-        if (u.repoint) {   // ⏳ (V4.324) نقل مبلغ معلق لطرف عملته الافتراضية مختلفة ⇒ مبلغه بعملته مستنتجاً (للمراجعة بـ«💱 تحويل عملة»)
+        var uExp = false;
+        if (u.repoint && u.ccy && u.ccy.cur) {   // 💱 (V4.356) عملة ومبلغ الطرف المقابل كما اختارهما المستخدم صراحة (بلا مراجعة لاحقة)
+          if (_glCur_(u.ccy.cur) !== uCur) { if (!(u.ccy.amt > 0)) throw new Error('أدخل مبلغ الطرف المقابل بعملته'); uov = { cur: _glCur_(u.ccy.cur), amt: _glR2_(u.ccy.amt), src: 'man' }; }
+          uExp = true;
+        } else if (u.repoint) {   // ⏳ (V4.324) نقل مبلغ معلق لطرف عملته الافتراضية مختلفة ⇒ مبلغه بعملته مستنتجاً (للمراجعة بـ«💱 تحويل عملة»)
           var dcr = dcOf(cp); if (dcr && dcr !== uCur) { var gr = _glCcyGuess_(u.x.desc, nAmt, uCur, dcr, u.x.date, fx); uov = { cur: dcr, amt: Math.round(gr.amt), src: gr.src }; }
         } else if (prev && _glCur_(prev[7]) !== uCur && cp === _glStr_(prev[4])) {
           var pc = _glCur_(prev[7]), pAmt = _glNum_(prev[5]) || _glNum_(prev[6]), oAmt = cashOld ? (_glNum_(cashOld[5]) || _glNum_(cashOld[6])) : 0;
@@ -6008,7 +6044,7 @@ function _glCsSync_(code, user, opts) {
           createdBy: r[12], createdAt: r[13], row: u.er.row }, user);
         eSh().getRange(u.er.row, 1, 1, w.eRow.length).setValues([w.eRow]);
         done.push({ id: u.id, lRows: w.lRows, eRow: w.eRow, repoint: u.repoint, oldRows: oldLines[u.id] || [] });
-        if (u.repoint && uov) (out._rpCcy = out._rpCcy || []).push({ id: u.id, v: b.v, e: b.e, ccy: uov });
+        if (u.repoint && uov && !uExp) (out._rpCcy = out._rpCcy || []).push({ id: u.id, v: b.v, e: b.e, ccy: uov });
         out.updated.push({ row: u.x.row, id: u.id, date: u.x.date, desc: b.e.desc, inAmt: u.x.inAmt, outAmt: u.x.outAmt, account: cp });
       } catch (err) { out.problems.push({ row: u.x.row, date: u.x.date, desc: u.x.desc, inAmt: u.x.inAmt, outAmt: u.x.outAmt, hint: u.x.hint, msg: err.message }); }
     });
