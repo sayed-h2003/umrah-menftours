@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.344";
+var APP_VERSION = "4.345";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2228,6 +2228,7 @@ if (
 // لتعديل الترقيم يدوياً: افتح شيت Bookings مباشرة وعدّل عمود «رقم الإشعار» بالرقم المطلوب،
 // وسيلتقط الإشعار التالي هذا الرقم تلقائياً (بدون أي إعداد إضافي)
 function _nextBookingId_() {
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -6581,6 +6582,7 @@ function heartbeatOnline(authToken) {
 function appPulse(authToken, p) {
   var session = requireAuth_(authToken); p = p || {};
   var out = { success: true };
+  if (typeof _audFlushSoft_ === 'function') _audFlushSoft_();   // 🛡️ (V4.345) تفريغ طابور السجل المحصّن بالنبضة
   if (p.online) {
     var map = _onlinePrune_();
     map[authToken] = { username: session.username, fullName: session.fullName || session.username, ts: Date.now() };
@@ -9020,6 +9022,7 @@ function _tgccSaveOne_(contract, username) {
   var no = String(contract.contractNo || '').trim();
   if (!no) return { success: false, error: 'رقم الاتفاقية فارغ' };
   // 🔒 (V4.73) نفس قفل saveCateringContracts — يمنع تكرار الصفوف لو تزامن حفظ البوت مع حفظ الويب
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (eLock) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
   try {
@@ -11778,6 +11781,7 @@ function logChange_(username, action, recordId, field, oldVal, newVal) {
   } catch (e) {
     Logger.log("logChange_ failed: " + e.message);
   }
+  if (typeof _audLog_ === 'function') _audLog_([{ user: username, action: action, record: recordId, field: field, old: oldVal, 'new': newVal }]);   // 🛡️ (V4.345) السجل المحصّن
 }
 // ⚡ (V4.322) أُضيفت «تعديل رقم القيد» و«اعتماد ملف مراجعة» (تشمل الإلغاء) — هذه الحقول لا يقرأها بناء القيود التلقائية إطلاقاً،
 // فكانت تُطلق مزامنة كاملة (38-57 ثانية) بلا داع عند كتابة رقم القيد على ملف أو اعتماد ملف وزارة.
@@ -11818,6 +11822,7 @@ function logChangesBatch_(username, entries) {
   } catch (e) {
     Logger.log("logChangesBatch_ failed: " + e.message);
   }
+  if (typeof _audLog_ === 'function') _audLog_(entries.map(function (e) { return { user: username, action: e.action, record: e.recordId, field: e.field, old: e.oldVal, 'new': e.newVal }; }));   // 🛡️ (V4.345)
 }
 
 // أسماء الحقول بالعربي بنفس ترتيب أعمدة شيت Bookings (تبدأ من العمود الأول: الحالة)
@@ -12363,6 +12368,7 @@ function tripRestorePoint(authToken, tripName, snapId) {
   var session = requireAuth_(authToken);
   if (!_tripUndoCan_(session)) throw new Error('الرجوع لنقطة سابقة للأدمن أو من مُنح صلاحية «التراجع بسجل الرحلات»');
   tripName = String(tripName || '').trim();
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
     var R = _tripSnapRows_(tripName), hit = R.rows.filter(function (x) { return x.id === snapId; })[0];
@@ -12378,6 +12384,7 @@ function tripUndoChange(authToken, tripName, snapId) {
   var session = requireAuth_(authToken);
   if (!_tripUndoCan_(session)) throw new Error('التراجع عن تعديل للأدمن أو من مُنح صلاحية «التراجع بسجل الرحلات»');
   tripName = String(tripName || '').trim();
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
     var R = _tripSnapRows_(tripName), ix = -1; R.rows.forEach(function (x, i) { if (x.id === snapId) ix = i; });
@@ -13971,6 +13978,7 @@ function saveClientMergeGroupV2(authToken, client, group, opts) {
   var trips = (Array.isArray(group.trips) ? group.trips : []).map(function (t) { return String(t || '').trim(); })
     .filter(function (t, i, a) { return t && t !== 'عام' && a.indexOf(t) === i; });
   if (!client || trips.length < 2) return { success: false, error: 'مجموعة الدمج تحتاج رحلتين على الأقل' };
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     var sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS), groups = _accMergeGroupsRead_(client), id = String(group.id || '').trim();
@@ -13994,6 +14002,7 @@ function saveClientMergeGroupV2(authToken, client, group, opts) {
 function deleteClientMergeGroup(authToken, client, groupId) {
   var session = _accPerm_(authToken, 'edit');
   client = String(client || '').trim();
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     var g = _accMergeGroupsRead_(client).filter(function (x) { return x.id === String(groupId || ''); })[0];
@@ -14133,6 +14142,7 @@ function getAlertCenter(authToken) {
 function saveAlertCenter(authToken, map) {
   var session = requireAdminPermission_(authToken);
   map = map || {};
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
     var plain = {}, hb = {}, gl = {}, changed = [];
@@ -14341,6 +14351,7 @@ function _accId_(prefix) {
 
 // 🔢 (V4.24) رقم تسلسلي تلقائي لكل دفعة جديدة — عدّاد مستمر بخصائص السكربت، لا يتكرر ولا يُعاد ترقيمه
 function _accNextPaySerial_() {
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -14357,6 +14368,7 @@ function _accNextPaySerial_() {
 // (كان حفظ 10 دفعات معاً = 10 أقفال و20 نداء خصائص). يُعيد أول رقم بالمجموعة
 function _accNextPaySerials_(n) {
   n = Math.max(1, n | 0);
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -16249,6 +16261,7 @@ function saveCateringContracts(authToken, list) {
   if (!Array.isArray(list) || !list.length) return { success: false, error: 'لا توجد اتفاقيات للحفظ' };
   // 🔒 (V4.73) قفل صريح يمنع تكرار الصفوف عند نداءين متزامنين (نقرتين سريعتين، أو حفظ من الويب
   // والبوت في نفس اللحظة) — بدونه قد يقرأ كلا النداءين "غير موجود" معاً فيُضيفان صفّين مكرَّرين
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (eLock) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
   try {
@@ -22653,6 +22666,7 @@ function _mfTripsOf_(f) {
   return out;
 }
 function _mfNextSeq_() {
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -22744,6 +22758,7 @@ function getRoomFeeLedger(authToken, company) {
 
 function saveRoomFeeReceipt(authToken, rec) {
   var session = _mfPerm_(authToken, 'add');
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
@@ -23304,6 +23319,7 @@ function _mfInferSingleStay_(f) {
 function saveMinistryFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _mfPerm_(authToken, isNew ? 'add' : 'edit');
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
@@ -23617,6 +23633,7 @@ function bulkSetMfFileType(authToken, ids, fileType) {
   ids = Array.isArray(ids) ? ids.map(_mfStr_).filter(String) : [];
   fileType = (_mfStr_(fileType) === 'فردي') ? 'فردي' : 'مجموعات';
   if (!ids.length) return { success: false, error: 'لم يُحدَّد أي ملف' };
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
@@ -23712,6 +23729,7 @@ function saveMfQuotaTransfer(authToken, data) {
   if (!/^\d{4}-\d{2}$/.test(fromMonth) || !/^\d{4}-\d{2}$/.test(toMonth)) return { success: false, error: 'حدِّد الشهرين بصيغة صحيحة' };
   if (fromMonth === toMonth) return { success: false, error: 'لا يمكن ترحيل حصة لنفس الشهر' };
   if (!amount || amount <= 0) return { success: false, error: 'أدخل عدداً صحيحاً أكبر من صفر' };
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' }; }
@@ -24271,6 +24289,7 @@ function importMinistryFilesBatch(authToken, rows) {
   var session = requireAdminPermission_(authToken);
   rows = Array.isArray(rows) ? rows : [];
   if (!rows.length) return { success: false, error: 'لا توجد صفوف صالحة للاستيراد' };
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
@@ -25287,6 +25306,7 @@ function xcApply(authToken, items, trips) {
     else if (it.src === 'trip') {
       try {
         if (!_sessionHasPerm_(session, 'trips.edit')) throw new Error('لا تملك صلاحية تعديل الرحلات');
+        if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
         var lock = LockService.getScriptLock(); lock.waitLock(30000);
         try {
           var sh = _getTripsSheet_(), C = _robustColMap_(sh, TRIPS_HEADERS_), nameCol = C[TRIPS_COL_.name], coCol = C[TRIPS_COL_.company], agCol = C[TRIPS_COL_.agent];
@@ -25592,6 +25612,7 @@ function _vzBalancesForAgents_(agentNames) {
 function saveVisaFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
   var _vzLockReleased = false;
@@ -25726,6 +25747,7 @@ function importVisaFilesBatch(authToken, rows) {
   var session = _vzPerm_(authToken, 'add');
   rows = Array.isArray(rows) ? rows : [];
   if (!rows.length) return { success: false, error: 'لا توجد صفوف للاستيراد' };
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
@@ -25828,6 +25850,7 @@ function saveVisaAgentPrices(authToken, agent, periods) {
   var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
@@ -25861,6 +25884,7 @@ function saveVisaAgentTransportPrices(authToken, agent, periods) {
   var session = _vzFinancePerm_(authToken);   // 🔒 مالي
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
@@ -25943,6 +25967,7 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
   // صامتة. `_mfMs_` الموجودة أصلاً بالبرنامج تُحلِّل dd/mm/yyyy بشكل صريح وصحيح دوماً.
   var fromMs = from ? _mfMs_(_mfDate_(from)) : -Infinity;
   var toMs = to ? _mfMs_(_mfDate_(to)) : Infinity;
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
@@ -27015,6 +27040,7 @@ function saveUiPref(authToken, screenKey, prefsObj) {
   if (!screenKey) return { success: false, error: 'معرِّف الشاشة مفقود' };
   var json = '';
   try { json = JSON.stringify(prefsObj || {}); } catch (e) { return { success: false, error: 'تعذّر ترميز التفضيلات' }; }
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); }
   catch (e) { return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' }; }
@@ -27116,6 +27142,7 @@ function accFixOrphanLines(authToken, client, trip, action, target) {
   if (!client || !trip) return { success: false, error: 'العميل والرحلة مطلوبان' };
   if ((action === 'moveClient' || action === 'moveTrip') && !target) return { success: false, error: 'حدّد الوجهة' };
   if (action === 'moveClient' && target === client) return { success: false, error: 'اختر عميلاً آخر' };
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
   try {

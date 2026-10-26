@@ -2658,6 +2658,7 @@ function appendBookingRaw_(city, data, clientName, salesAgent, status) {
   var startRow = city === 'المدينة' ? s.medinaStartRow : s.meccaStartRow;
   var sh = ss.getSheetByName(sheetName);
   if (!sh) throw new Error('ورقة "' + sheetName + '" غير موجودة في المصدر');
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) throw new Error('الخادم مشغول بإنشاء حجز آخر — أعد المحاولة بعد لحظات');
   try {
@@ -2889,6 +2890,7 @@ function registerBookingsBulk(token, rows) {
     var results = [];
     var s = getSourceSettings_();
     var ss = openSourceSpreadsheet_(s);
+    if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(30000)) throw new Error('الخادم مشغول بإنشاء حجز آخر — أعد المحاولة بعد لحظات');
     try {
@@ -9392,6 +9394,7 @@ function tgEditBatchKeyHash_(bookingKey) {
   ).replace(/[^A-Za-z0-9]/g, '').slice(0, 24);
 }
 function tgQueueBookingEditDiff_(bookingKey, city, diff, actor, source) {
+  if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(3000)) return;   // تزاحم نادر جدًا — التعديل سيُلتقط في الدورة القادمة
   try {

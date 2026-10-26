@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.344  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.345  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -5781,6 +5781,7 @@ input[type="date"]:not(:focus):not(:valid) {
           <input class="form-check-input m-0" type="checkbox" id="auditFilterShowLoginLogout" onchange="applyAuditLogFilters()">
           <span class="small text-nowrap">دخول/خروج</span>
         </label>
+        <button type="button" class="btn btn-sm btn-dark fw-bold" onclick="audOpen_()" title="سجل غير قابل للتلاعب في ملف مستقل مع فحص السلامة">🛡️ السجل المحصّن</button>
       </div>
     </div>
   </div>
@@ -8173,7 +8174,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.344";
+var CLIENT_APP_VERSION = "4.345";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -24220,6 +24221,70 @@ function _ensureAuditEntityList() {
   }
 }
 
+/* 🛡️ (V4.345) السجل المحصّن: عرض + فلترة + فحص سلامة سلسلة البصمات + تفعيل (للمدير) */
+var AUD = { f: {} };
+function audOpen_() {
+  var ov = document.getElementById('_audOv'); if (ov) ov.remove();
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="_audOv" style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:2147483100;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;" dir="rtl">' +
+    '<div style="background:#fff;border-radius:12px;max-width:1200px;width:100%;padding:14px 16px;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
+    '<div class="d-flex align-items-center gap-2 mb-2 flex-wrap"><b style="font-size:16px;">🛡️ سجل التتبع المحصّن</b><span id="_audSt" class="small text-muted">⏳</span>' +
+    '<button class="btn btn-sm btn-outline-secondary ms-auto" onclick="document.getElementById(\'_audOv\').remove()">✕ إغلاق</button></div>' +
+    '<div class="d-flex gap-1 flex-wrap mb-2" style="font-size:13px;">' +
+    '<input id="_audU" class="form-control form-control-sm" style="width:130px" placeholder="المستخدم">' +
+    '<select id="_audT" class="form-select form-select-sm" style="width:auto"><option value="">كل الأنواع</option>' +
+    ['إضافة', 'تعديل', 'حذف', 'إلغاء', 'اعتماد/ترحيل', 'استعادة', 'دخول/خروج', 'أخرى'].map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select>' +
+    '<input id="_audQ" class="form-control form-control-sm" style="width:200px" placeholder="بحث (رقم قيد/رحلة/قيمة…)">' +
+    '<input id="_audF" type="date" class="form-control form-control-sm" style="width:auto" title="من"><input id="_audTo" type="date" class="form-control form-control-sm" style="width:auto" title="إلى">' +
+    '<button class="btn btn-sm btn-primary" onclick="audLoad_()">🔎 عرض</button>' +
+    '<button class="btn btn-sm btn-outline-success" onclick="audVerify_(false)">✅ فحص السلامة</button>' +
+    '<button class="btn btn-sm btn-outline-success" onclick="audVerify_(true)" title="من أول سطر (أبطأ)">فحص كامل</button></div>' +
+    '<div id="_audBox" style="max-height:65vh;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;"></div></div></div>');
+  audStatus_(); audLoad_();
+}
+function audStatus_() {
+  google.script.run.withSuccessHandler(function (r) {
+    var el = document.getElementById('_audSt'); if (!el) return;
+    if (!r.configured) { el.innerHTML = '<span class="text-danger fw-bold">غير مفعّل بعد</span>' + (r.isAdmin ? ' <button class="btn btn-sm btn-danger py-0" onclick="audSetup_(this)">تفعيل الآن</button>' : ' — يفعّله المدير'); return; }
+    var h = r.head || {}, parts = ['السطور: <b>' + (h.seq || 0) + '</b>'];
+    parts.push(r.fail ? '<span class="text-danger fw-bold">⛔ معطّل: ' + escapeHtml_(r.fail.msg || '') + ' (طابور ' + r.queued + ')</span>' : '<span class="text-success fw-bold">● يعمل</span>' + (r.queued ? ' (بانتظار الكتابة ' + r.queued + ')' : ''));
+    if (r.verified) parts.push('آخر فحص سليم حتى ' + r.verified.seq);
+    if (r.lastAnchor) parts.push('آخر مرساة ' + escapeHtml_(r.lastAnchor.day) + ' (' + escapeHtml_(r.lastAnchor.sent) + ')');
+    if (!r.cron) parts.push('<span class="text-warning fw-bold">المشغّلات غير مثبّتة</span>' + (r.isAdmin ? ' <button class="btn btn-sm btn-warning py-0" onclick="audSetup_(this)">تثبيت</button>' : ''));
+    if (r.url) parts.push('<a href="' + r.url + '" target="_blank" rel="noopener">الملف ↗</a>');
+    el.innerHTML = parts.join(' · ');
+  }).withFailureHandler(function (e) { var el = document.getElementById('_audSt'); if (el) el.textContent = '❌ ' + ((e && e.message) || e); }).audStatus(window.authToken);
+}
+function audSetup_(btn) {
+  btn.disabled = true; btn.textContent = '⏳';
+  google.script.run.withSuccessHandler(function () { showToast('✅ فُعِّل السجل المحصّن'); audStatus_(); audLoad_(); })
+    .withFailureHandler(function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); }).audSetup(window.authToken);
+}
+function audLoad_() {
+  var box = document.getElementById('_audBox'); if (!box) return;
+  box.innerHTML = '<div class="text-center text-muted py-4">⏳ جاري التحميل…</div>';
+  var f = { user: document.getElementById('_audU').value, type: document.getElementById('_audT').value, q: document.getElementById('_audQ').value,
+    from: document.getElementById('_audF').value, to: document.getElementById('_audTo').value, limit: 800 };
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r.rows.length) { box.innerHTML = '<div class="text-center text-muted py-4">لا سطور مطابقة</div>'; return; }
+    var e = escapeHtml_, cut = function (v) { v = String(v || ''); return v.length > 140 ? '<span title="' + e(v) + '">' + e(v.slice(0, 140)) + '…</span>' : e(v); };
+    box.innerHTML = '<table class="table table-sm table-hover mb-0" style="font-size:12px;"><thead style="position:sticky;top:0;background:#f8fafc;"><tr>' +
+      ['#', 'الوقت', 'المستخدم', 'النوع', 'العملية', 'السجل', 'الحقل', 'القديمة', 'الجديدة', 'الطلب'].map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      r.rows.map(function (x) {
+        var cls = x[5] === 'حذف' ? 'table-danger' : (x[5] === 'إضافة' ? 'table-success' : '');
+        return '<tr class="' + cls + '"><td class="gl-latin">' + e(x[0]) + '</td><td class="gl-latin" style="white-space:nowrap">' + e(x[1]) + '</td><td>' + e(x[2]) + '</td><td>' + e(x[5]) + '</td><td>' + e(x[6]) +
+          '</td><td class="gl-latin">' + e(x[7]) + '</td><td>' + e(x[8]) + '</td><td>' + cut(x[9]) + '</td><td>' + cut(x[10]) + '</td><td class="gl-latin text-muted" title="الجلسة ' + e(x[3]) + ' · البصمة ' + e(x[11]) + '">' + e(x[4]) + '</td></tr>';
+      }).join('') + '</tbody></table><div class="small text-muted p-2">يُعرض ' + r.rows.length + ' من ' + r.total + ' سطر (الأحدث أولاً) — مرّر على «الطلب» لرؤية البصمة</div>';
+  }).withFailureHandler(function (e) { box.innerHTML = '<div class="text-danger p-3">❌ ' + escapeHtml_((e && e.message) || e) + '</div>'; }).audList(window.authToken, f);
+}
+function audVerify_(full) {
+  showToast('⏳ جاري فحص سلامة السلسلة…');
+  google.script.run.withSuccessHandler(function (r) {
+    if (r.ok) _showPopup('✅ السلسلة سليمة حتى السطر ' + r.upToSeq + ' من ' + r.total + (r.anchorsOk ? ' — وطابقت ' + r.anchorsOk + ' مرساة مرسلة لتليجرام' : '') + (r.done ? '' : '\nلم يكتمل الفحص (حد الوقت) — اضغط «فحص السلامة» مرة أخرى للإكمال'), 'success');
+    else _showPopup('⛔ السلسلة مكسورة عند السطر ' + r.broken.seq + ' (صف ' + r.broken.row + ' بالملف)\nالسبب: ' + r.broken.why + '\nكل ما قبله سليم حتى ' + r.upToSeq, 'error');
+    audStatus_();
+  }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); }).audVerify(window.authToken, !!full);
+}
 function loadAuditLogTable() {
   var tbody = document.getElementById('auditLogTableBody');
   tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">⏳ جاري التحميل...</td></tr>';
