@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.348";
+var APP_VERSION = "4.349";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -15113,6 +15113,9 @@ function saveAccPayment(authToken, p) {
     var fxOp = currency === 'SAR' ? '×' : '/';
     desc = 'قيمة تحويل ' + Math.round(amount) + ' ' + srcTxt + ' ' + fxOp + ' ' + rate + ' الى المعادل بال' + dstTxt;
   }
+  // 🏛️ (V4.349) توحيد قنوات التسجيل: الدفعة الجديدة ⇒ سند مسودة بالحسابات العامة بانتظار الاعتماد (الحساب المقابل إلزامي)
+  if (!isEdit && ptype !== 'تحويل' && (typeof _ledgerOn_ === 'function' && _ledgerOn_()))
+    return _ledgerFromScreen_(session, 'cp', [{ party: client, trip: trip, date: p.date, amount: amount, currency: currency, desc: desc, cp: p.cp, dir: p.dir, force: !!p.force }]);
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
   if (isEdit) {
     var vals = sh.getRange(2, 1, sh.getLastRow() - 1, ACC_PAY_HEADERS.length).getValues();
@@ -15181,6 +15184,7 @@ function saveAccPaymentsBulk(authToken, client, trip, list) {
   var session = _accPerm_(authToken, 'add');
   client = String(client || '').trim(); trip = String(trip || '').trim();
   if (!client || !trip || !Array.isArray(list) || !list.length) return { success: false, error: 'لا توجد دفعات' };
+  if ((typeof _ledgerOn_ === 'function' && _ledgerOn_())) return _ledgerFromScreen_(session, 'cp', list.filter(function (p) { return _accNum_(p.amount) > 0; }).map(function (p) { return { party: client, trip: trip, date: p.date, amount: _accNum_(p.amount), currency: p.currency === 'SAR' ? 'SAR' : 'EGP', desc: p.desc, cp: p.cp }; }), { bulk: true });   // 🏛️ (V4.349)
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
   var now = new Date(), rows = [], total = { EGP: 0, SAR: 0 }, seen = {};
   list.forEach(function(p) {
@@ -15210,6 +15214,7 @@ function saveAccPaymentsBulk(authToken, client, trip, list) {
 function saveGeneralPaymentsBulk(authToken, list) {
   var session = _accPerm_(authToken, 'add');
   if (!Array.isArray(list) || !list.length) return { success: false, error: 'لا توجد دفعات' };
+  if ((typeof _ledgerOn_ === 'function' && _ledgerOn_())) return _ledgerFromScreen_(session, 'cp', list.filter(function (p) { return String(p.client || '').trim() && _accNum_(p.amount) > 0; }).map(function (p) { return { party: String(p.client).trim(), trip: 'عام', date: p.date, amount: _accNum_(p.amount), currency: p.currency === 'SAR' ? 'SAR' : 'EGP', desc: p.desc, cp: p.cp }; }), { bulk: true });   // 🏛️ (V4.349)
   var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
   var now = new Date(), rows = [], total = { EGP: 0, SAR: 0 }, byClient = {};
   list.forEach(function(p) {
@@ -26251,6 +26256,8 @@ function saveAgentPayment(authToken, pay) {
   var session = _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   var agent = _mfStr_(pay && pay.agent);
   if (!agent || !_accNum_(pay.amount)) return { success: false, error: 'الوكيل والمبلغ مطلوبان' };
+  if (!_mfStr_(pay.id) && (typeof _ledgerOn_ === 'function' && _ledgerOn_()))   // 🏛️ (V4.349) دفعة وكيل جديدة ⇒ سند مسودة بانتظار الاعتماد
+    return _ledgerFromScreen_(session, 'ap', [{ party: agent, date: _mfDate_(pay.date) || _mfToday_(), amount: _accNum_(pay.amount), currency: _mfStr_(pay.currency) || 'SAR', desc: _mfStr_(pay.notes), cp: pay.cp, dir: pay.dir, company: pay.company, force: !!pay.force }]);
   var sh = _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS);
   var now = _mfStamp_();
   var id = _mfStr_(pay.id);
@@ -26305,6 +26312,7 @@ function saveAgentPaymentsBatch(authToken, agent, rows) {
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
   var valid = (Array.isArray(rows) ? rows : []).filter(function (r) { return _accNum_(r.amount); });
   if (!valid.length) return { success: false, error: 'لا توجد دفعات صالحة بالبيانات الملصقة' };
+  if ((typeof _ledgerOn_ === 'function' && _ledgerOn_())) return _ledgerFromScreen_(session, 'ap', valid.map(function (r) { return { party: agent, date: _mfDate_(r.date) || _mfToday_(), amount: _accNum_(r.amount), currency: 'SAR', desc: _mfStr_(r.notes), cp: r.cp }; }), { bulk: true });   // 🏛️ (V4.349)
   var sh = _accSheet_(VZ_PAY_SHEET, VZ_PAY_HEADERS);
   var now = _mfStamp_();
   var out = [], entries = [];

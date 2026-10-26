@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.348  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.349  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -4321,7 +4321,7 @@ input[type="date"]:not(:focus):not(:valid) {
           <div class="col-12"><label class="form-label small fw-bold mb-1">البيان</label>
             <input type="text" id="accPayDesc" class="form-control form-control-sm" placeholder="مثال: دفعة أولى — تحويل بنكي"></div>
           <!-- 🏦 (V4.259) الحساب المقابل للدفعة بالحسابات العامة — بدل «نقدية تحت التسوية» -->
-          <div class="col-12" id="accPayCpWrap"><label class="form-label small fw-bold mb-1">🏦 الحساب المقابل (اختياري) <span class="text-muted fw-normal">— الخزينة/البنك/العهدة… التي دخلت فيها الدفعة</span></label>
+          <div class="col-12" id="accPayCpWrap"><label class="form-label small fw-bold mb-1">🏦 الحساب المقابل <span class="text-danger">(إلزامي للدفعة الجديدة — تُرسل للاعتماد)</span> <span class="text-muted fw-normal">— الخزينة/البنك/العهدة… التي دخلت فيها الدفعة</span></label>
             <input type="text" id="accPayCp" class="form-control form-control-sm" list="accPayCpDL" autocomplete="off" placeholder="🔎 اكتب اسم الحساب — فارغ = نقدية تحت التسوية"><datalist id="accPayCpDL"></datalist></div>
         </div>
         <div id="accFxPreview" class="small fw-bold mt-2 text-primary"></div>
@@ -8175,7 +8175,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.348";
+var CLIENT_APP_VERSION = "4.349";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -26123,6 +26123,7 @@ function _accLoad_() {
       res.mergeGroups = Array.isArray(res.mergeGroups) ? res.mergeGroups : (res.mergeTrips ? [{ id: '', name: 'مجموعة 1', trips: res.mergeTrips }] : []);
       _accData = res;
       _accRender_();
+      try { _ledgerPendShow_('cp', client); } catch (eLp) {}   // 🏛️ (V4.349) دفعات بانتظار الاعتماد
       // ⚡ (V4.41) حالة الدمج تصل الآن ضمن نفس استجابة تحميل الحساب (res.mergeTrips) — بلا أي طلب شبكة
       // منفصل، فتظهر شارة الدمج فورًا لحظة فتح شاشة الكشف الشامل بلا أي تأخير محسوس (بطلب صريح)
       window._accMergeGroupCache = { trips: res.mergeTrips || null, groups: res.mergeGroups };
@@ -27630,10 +27631,13 @@ function _accPaysBulkSave_(btn) {
       currency: r.querySelector('.pb-cur').value, desc: r.querySelector('.pb-desc').value.trim() });
   });
   if (!list.length) { _showBlockingError_('⚠️ لا توجد دفعات', 'أدخل مبلغًا واحدًا على الأقل قبل الحفظ.'); return; }
+  if (window._ledgerCp) { list.forEach(function (x) { x.cp = window._ledgerCp; }); window._ledgerCp = ''; }
   btn.disabled = true;
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
+      if (res && res.code === 'LEDGER_NEED_CP') return _ledgerPickCp_('cp', function () { _accPaysBulkSave_(btn); });   // 🏛️ (V4.349)
+      if (res && res.success && res.pending) { bootstrap.Modal.getInstance(document.getElementById('accPaysBulkModal')).hide(); _ledgerBulkDone_(res); _ledgerPendShow_('cp', _accData && _accData.client); return; }
       if (res && res.success) {
         bootstrap.Modal.getInstance(document.getElementById('accPaysBulkModal')).hide();
         // ⚡ (V4.199) إضافة الدفعات محلياً من رد السيرفر بدل إعادة تحميل الحساب كاملاً (كانت ~12 ثانية)
@@ -27986,10 +27990,20 @@ function _accPaySave_(btn) {
   var cpCode = type === 'تحويل' ? '' : _accCpCode_();
   if (cpCode === null) { document.getElementById('accPayErr').textContent = '⚠️ اختر الحساب المقابل من القائمة (أو اتركه فارغاً)'; return; }
   if (type === 'تحويل' && p.rate <= 0) { document.getElementById('accPayErr').textContent = '⚠️ سعر الصرف مطلوب'; return; }
+  if (cpCode) p.cp = cpCode;
+  if (window._accPayForce) { p.force = true; window._accPayForce = false; }
   btn.disabled = true;
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
+      // 🏛️ (V4.349) دفعة جديدة ⇒ سند مسودة بالحسابات العامة بانتظار الاعتماد (لا تظهر بالدفعات قبل اعتمادها)
+      if (res && res.dup) { return _ledgerDupAsk_(res, function () { window._accPayForce = true; _accPaySave_(btn); }); }
+      if (res && res.success && res.pending) {
+        bootstrap.Modal.getInstance(document.getElementById('accPayModal')).hide();
+        showToast('⏳ أُرسلت الدفعة للاعتماد — سند رقم ' + (res.voucherNo || '') + ' (قيد ' + (res.id || '') + ')');
+        _ledgerPendShow_('cp', _accData && _accData.client);
+        return;
+      }
       if (res && res.success) {
         bootstrap.Modal.getInstance(document.getElementById('accPayModal')).hide();
         // ⚡ (V4.17/V4.20/V4.42) تحديث محلي فوري — بلا إعادة تحميل كاملة للحساب، إضافة أو تعديل
@@ -28118,10 +28132,13 @@ function _accQuickPaySave_(btn) {
   if (!list.length) { errEl.textContent = '⚠️ أضف صفًا واحدًا على الأقل'; return; }
   var bad = list.find(function(r) { return !r.client || r.amount <= 0; });
   if (bad) { errEl.textContent = '⚠️ كل صف يحتاج اسم عميل ومبلغ صحيح — راجع الصفوف'; return; }
+  if (window._ledgerCp) { list.forEach(function (x) { x.cp = window._ledgerCp; }); window._ledgerCp = ''; }
   btn.disabled = true;
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false;
+      if (res && res.code === 'LEDGER_NEED_CP') return _ledgerPickCp_('cp', function () { _accQuickPaySave_(btn); });   // 🏛️ (V4.349)
+      if (res && res.success && res.pending) { bootstrap.Modal.getInstance(document.getElementById('accQuickPayModal')).hide(); _ledgerBulkDone_(res); return; }
       if (res && res.success) {
         bootstrap.Modal.getInstance(document.getElementById('accQuickPayModal')).hide();
         showToast('✅ سُجِّلت ' + res.count + ' دفعة عامة بنجاح');
@@ -46180,6 +46197,7 @@ function vzAccFetch() {
       // ثانٍ متتالٍ، فزمن فتح الحساب المحسوس انخفض للنصف تقريباً.
       VZ._accTransport = res.transportRuns || [];
       vzAccRender();
+      try { _ledgerPendShow_('ap', res.agent || VZ._accKey); } catch (eLp) {}   // 🏛️ (V4.349)
     })
     .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
     .getAgentAccount(window.authToken, VZ._accKey, VZ._accF);
@@ -46550,6 +46568,7 @@ function _vzParsePasteLines_(text) {
     });
 }
 function vzAccAddPay() {
+  try { _accCpAccLoad_(); } catch (eCp) {}   // 🏛️ (V4.349) قائمة الحسابات المقابلة
   var r = VZ._acc;
   var ov = document.createElement('div'); ov.className = 'vz-dlg-ov'; ov.id = 'vzPayAddOv';
   ov.innerHTML = '<div class="vz-dlg" style="width:min(600px,96vw);"><div class="vz-hd"><b>➕ دفعة/دفعات للوكيل (ريال سعودي)</b>' +
@@ -46563,6 +46582,7 @@ function vzAccAddPay() {
       '<div class="vz-fld mb-2"><label>التاريخ</label><div class="vz-date"><button type="button" class="vz-calbtn" onclick="_vzCal_(\'vzPaySDate\',null)">📅</button><input id="vzPaySDate" maxlength="10" placeholder="dd/mm/yyyy" value="' + vzEsc(VZ.today) + '"></div></div>' +
       '<div class="vz-fld mb-2"><label>المبلغ (ريال)</label><input id="vzPaySAmt" type="number"></div>' +
       '<div class="vz-fld mb-2"><label>ملاحظات</label><input id="vzPaySNotes"></div>' +
+      '<div class="vz-fld mb-2"><label>🏦 الحساب المقابل <span style="color:#dc2626">(إلزامي — تُرسل للاعتماد)</span></label><input id="vzPaySCp" list="accPayCpDL" autocomplete="off" placeholder="🔎 خزينة / بنك / عهدة…"></div>' +
       '<button class="vz-btn pri" onclick="vzAccAddPaySingleSave()">💾 حفظ الدفعة</button>' +
     '</div>' +
     '<div id="vzPayMultiBox" class="d-none">' +
@@ -46586,7 +46606,12 @@ function vzAccAddPaySingleSave() {
   var r = VZ._acc;
   var obj = { agent: r.agent, date: mfDate(vzFV('vzPaySDate')) || VZ.today, amount: mfNum(vzFV('vzPaySAmt')), currency: 'SAR', notes: vzFV('vzPaySNotes'), entryNo: vzFV('vzPaySEntry') };
   if (!obj.amount) { _showPopup('أدخِل المبلغ', 'error'); return; }
-  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت الدفعة', 'success'); vzAccFetch(); vzRefreshSoon_(); })
+  var cpv = (vzFV('vzPaySCp') || '').split(' — ')[0].trim(); if (cpv) obj.cp = cpv;   // 🏛️ (V4.349)
+  if (window._vzPayForce) { obj.force = true; window._vzPayForce = false; }
+  google.script.run.withSuccessHandler(function (res) {
+    if (res && res.dup) return _ledgerDupAsk_(res, function () { window._vzPayForce = true; vzAccAddPaySingleSave(); });
+    if (res && res.success && res.pending) { var ov0 = document.getElementById('vzPayAddOv'); if (ov0) ov0.remove(); showToast('⏳ أُرسلت الدفعة للاعتماد — سند رقم ' + (res.voucherNo || '')); _ledgerPendShow_('ap', r.agent); return; }
+    if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت الدفعة', 'success'); vzAccFetch(); vzRefreshSoon_(); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPayment(window.authToken, obj);
 }
 function _vzPayPastePreview() {
@@ -46606,7 +46631,11 @@ function vzAccAddPayMultiSave() {
   var rows = _vzParsePasteLines_(vzFV('vzPayPasteArea')).filter(function (x) { return x.amount; })
     .map(function (x) { return { date: x.date, amount: x.amount, notes: x.desc, entryNo: x.entryNo }; });
   if (!rows.length) return;
-  google.script.run.withSuccessHandler(function (res) { if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت ' + res.count + ' دفعة', 'success'); vzAccFetch(); vzRefreshSoon_(); })
+  if (window._ledgerCp) { rows.forEach(function (x) { x.cp = window._ledgerCp; }); window._ledgerCp = ''; }
+  google.script.run.withSuccessHandler(function (res) {
+    if (res && res.code === 'LEDGER_NEED_CP') return _ledgerPickCp_('ap', vzAccAddPayMultiSave);   // 🏛️ (V4.349)
+    if (res && res.success && res.pending) { var ov1 = document.getElementById('vzPayAddOv'); if (ov1) ov1.remove(); _ledgerBulkDone_(res); _ledgerPendShow_('ap', r.agent); return; }
+    if (!res || !res.success) { _showPopup((res && res.error) || 'تعذّر', 'error'); return; } document.getElementById('vzPayAddOv').remove(); _showPopup('أُضيفت ' + res.count + ' دفعة', 'success'); vzAccFetch(); vzRefreshSoon_(); })
     .withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).saveAgentPaymentsBatch(window.authToken, r.agent, rows);
 }
 function vzAccAddItem() {
@@ -53281,7 +53310,94 @@ function glCsApproveAll_(btn) {
   };
   if (miss) askConfirm_(miss + ' صف محدد بلا حساب وسيبقى ناقصاً — متابعة اعتماد ' + n + ' صف؟', go, { title: 'اعتماد', danger: false }); else go();
 }
+/* 🏛️ (V4.349) توحيد قنوات التسجيل + طابور الاعتماد (Maker-Checker) */
+function _ledgerDupAsk_(res, onForce) {
+  showElegantConfirm({ icon: '🔁', title: 'دفعة مشابهة مسجَّلة بالفعل', message: (res.error || '') + '\n\n' + (res.dups || []).map(function (d) { return '• ' + d.where + ': ' + d.ref + ' — ' + d.date + ' (' + d.status + ')' + (d.desc ? ' — ' + d.desc : ''); }).join('\n') + '\n\nلو هي دفعة مختلفة فعلاً سجّلها (تصل للمعتمِد بعلامة «تكرار محتمل»).',
+    buttons: [{ label: 'ليست مكررة — سجّلها للاعتماد', class: 'btn-warning', onClick: onForce }, { label: 'إلغاء', class: 'btn-outline-secondary', onClick: function () {} }] });
+}
+function _ledgerPickCp_(fam, retry) {
+  try { _accCpAccLoad_(); } catch (e) {}
+  var o = document.getElementById('_ledgerCpOv'); if (o) o.remove();
+  document.body.insertAdjacentHTML('beforeend', '<div id="_ledgerCpOv" dir="rtl" style="position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:2147483150;display:flex;align-items:center;justify-content:center;padding:16px;">' +
+    '<div style="background:#fff;border-radius:12px;max-width:440px;width:100%;padding:16px;"><b>🏦 الحساب المقابل (إلزامي)</b><div class="small text-muted mb-2">التسجيل المالي من الشاشات يمر بالحسابات العامة: اختر الخزينة/البنك/العهدة التي دخلت منها/خرجت إليها هذه الدفعات — تُرسل كلها للاعتماد.</div>' +
+    '<input id="_ledgerCpIn" class="form-control form-control-sm mb-2" list="accPayCpDL" autocomplete="off" placeholder="🔎 اكتب اسم الحساب"><div id="_ledgerCpErr" class="small text-danger mb-1"></div>' +
+    '<div class="d-flex gap-2 justify-content-end"><button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById(\'_ledgerCpOv\').remove()">إلغاء</button><button class="btn btn-sm btn-primary" id="_ledgerCpOk">إرسال للاعتماد</button></div></div></div>');
+  document.getElementById('_ledgerCpOk').onclick = function () {
+    var v = document.getElementById('_ledgerCpIn').value.split(' — ')[0].trim();
+    if (!v || !(window._accCpAccs || []).some(function (a) { return a.code === v; })) { document.getElementById('_ledgerCpErr').textContent = 'اختر حساباً من القائمة'; return; }
+    window._ledgerCp = v; document.getElementById('_ledgerCpOv').remove(); retry();
+  };
+}
+function _ledgerBulkDone_(res) {
+  var bad = (res.results || []).filter(function (x) { return !x.ok; }), dup = (res.results || []).filter(function (x) { return x.dupFlag; }).length;
+  _showPopup('⏳ أُرسلت ' + res.count + ' دفعة للاعتماد (سندات مسودة بالحسابات العامة)' + (dup ? '\n🔁 منها ' + dup + ' بعلامة «تكرار محتمل» للمعتمِد' : '') + (bad.length ? '\n⚠️ تعذّر ' + bad.length + ':\n' + bad.map(function (x) { return x.error; }).join('\n') : ''), bad.length ? 'warning' : 'success');
+}
+function _ledgerPendShow_(fam, party) {
+  var host = document.getElementById(fam === 'ap' ? 'vzAccBody' : 'accBody'); if (!host || !party) return;
+  google.script.run.withSuccessHandler(function (r) {
+    var box = document.getElementById('_ledgerPendBox_' + fam);
+    if (!r || !r.rows.length) { if (box) box.remove(); return; }
+    if (!box) { box = document.createElement('div'); box.id = '_ledgerPendBox_' + fam; host.parentNode.insertBefore(box, host); }
+    box.innerHTML = '<div class="alert alert-warning py-2 mb-2" style="font-size:12.5px;" dir="rtl"><b>⏳ دفعات بانتظار الاعتماد (' + r.rows.length + ')</b> — لا تدخل الرصيد قبل اعتمادها من الحسابات العامة' +
+      ' <button class="btn btn-sm btn-outline-dark py-0 ms-2" onclick="ledgerQueueOpen_()">📥 طابور الاعتماد</button>' +
+      r.rows.map(function (x) { return '<div class="gl-latin">• ' + escapeHtml_(x.date) + ' — ' + Math.abs(x.amount).toLocaleString('en-US') + ' ' + escapeHtml_(x.cur) + (x.trip ? ' — ' + escapeHtml_(x.trip) : '') + ' — سند ' + escapeHtml_(x.voucher) + ' — ' + escapeHtml_(x.counter) + ' — أدخلها ' + escapeHtml_(x.maker) + (x.dup ? ' <span style="color:#7c3aed">🔁 تكرار محتمل</span>' : '') + '</div>'; }).join('') + '</div>';
+  }).withFailureHandler(function () {}).ledgerPendingFor(window.authToken, fam, party);
+}
+var LQ = {};
+function _ledgerBanner_() {
+  var now = Date.now(); if (window._lqBanAt && now - window._lqBanAt < 60000) return _ledgerBannerDraw_(); window._lqBanAt = now;
+  google.script.run.withSuccessHandler(function (r) { window._lqCount = (r && r.n) || 0; _ledgerBannerDraw_(); }).withFailureHandler(function () {}).ledgerCount(window.authToken);
+}
+function _ledgerBannerDraw_() {
+  var box = document.getElementById('glBody'), old = document.getElementById('glLqBanner'); if (old) old.remove();
+  if (!box || !window._lqCount) return;
+  box.insertAdjacentHTML('afterbegin', '<div id="glLqBanner" class="alert alert-info py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">📥 <b>' + window._lqCount + '</b> دفعة من الشاشات بانتظار الاعتماد (Maker-Checker)<button class="btn btn-info btn-sm fw-bold ms-auto" onclick="ledgerQueueOpen_()">فتح طابور الاعتماد</button></div>');
+}
+function ledgerQueueOpen_() {
+  var o = document.getElementById('_lqOv'); if (o) o.remove();
+  document.body.insertAdjacentHTML('beforeend', '<div id="_lqOv" dir="rtl" style="position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:2147483100;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;">' +
+    '<div style="background:#fff;border-radius:12px;max-width:1150px;width:100%;padding:14px 16px;"><div class="d-flex align-items-center gap-2 mb-2 flex-wrap"><b style="font-size:16px;">📥 طابور اعتماد دفعات الشاشات (Maker-Checker)</b><span id="_lqMode" class="small"></span>' +
+    '<button class="btn btn-sm btn-outline-secondary ms-auto" onclick="document.getElementById(\'_lqOv\').remove()">✕ إغلاق</button></div><div id="_lqBody"><div class="text-center text-muted py-4">⏳</div></div></div></div>');
+  ledgerQueueLoad_();
+}
+function ledgerQueueLoad_() {
+  var b = document.getElementById('_lqBody'), E = escapeHtml_; if (!b) return;
+  google.script.run.withSuccessHandler(function (r) {
+    LQ = r;
+    var m = document.getElementById('_lqMode');
+    if (m) m.innerHTML = (r.on ? '<span class="text-success fw-bold">● التوحيد مفعّل</span>' : '<span class="text-danger fw-bold">● التوحيد موقوف (الشاشات تسجّل مباشرة)</span>') + (r.isAdmin ? ' <button class="btn btn-sm btn-outline-dark py-0" onclick="ledgerModeToggle_(' + (!r.on) + ')">' + (r.on ? 'إيقاف' : 'تفعيل') + '</button>' : '');
+    var fam = { cp: '💳 عملاء العمرة', ap: '🧑‍💼 الوكلاء' };
+    var head = '<tr><th style="width:26px"><input type="checkbox" onchange="document.querySelectorAll(\'#_lqBody ._lqChk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>الشاشة</th><th>الطرف</th><th>التاريخ</th><th>المبلغ</th><th>السند / القيد</th><th>الحساب المقابل</th><th>البيان</th><th>المُدخِل</th><th></th></tr>';
+    b.innerHTML = (r.canApprove && r.pending.length ? '<div class="d-flex gap-1 mb-2"><button class="btn btn-sm btn-success" onclick="ledgerDecideSel_(\'approve\')">✅ اعتماد المحدد</button><button class="btn btn-sm btn-outline-danger" onclick="ledgerDecideSel_(\'reject\')">❌ رفض المحدد</button></div>' : '') +
+      (r.pending.length ? '<div class="table-responsive"><table class="table table-sm" style="font-size:12.5px;"><thead>' + head + '</thead><tbody>' + r.pending.map(function (x) {
+        var self = x.maker === r.me;
+        return '<tr' + (x.dup ? ' style="background:#f5f3ff"' : '') + '><td>' + (r.canApprove && (!self || r.isAdmin) ? '<input type="checkbox" class="_lqChk" value="' + E(x.id) + '">' : '') + '</td><td>' + (fam[x.fam] || x.fam) + '</td><td>' + E(x.party) + (x.trip ? '<div class="small text-muted">' + E(x.trip) + '</div>' : '') + '</td><td class="gl-latin">' + E(x.date) + '</td>' +
+          '<td class="gl-latin fw-bold">' + (x.amount < 0 ? 'صرف ' : 'قبض ') + Math.abs(x.amount).toLocaleString('en-US') + ' ' + E(x.cur) + '</td><td class="gl-latin">سند ' + E(x.voucher) + '<div class="small">' + E(x.id) + '</div></td><td>' + E(x.counter) + '</td><td>' + E(x.desc) + (x.dup ? '<div class="small" style="color:#7c3aed">🔁 تكرار محتمل: ' + E(x.dup) + '</div>' : '') + '</td>' +
+          '<td>' + E(x.maker) + '<div class="small text-muted gl-latin">' + E(x.at) + '</div>' + (self && !r.isAdmin ? '<div class="small text-danger">لا تعتمد دفعتك بنفسك</div>' : '') + '</td><td style="white-space:nowrap">' +
+          (self || r.canApprove ? '<button class="btn btn-sm btn-outline-secondary py-0" onclick="ledgerCancel_(\'' + E(x.id) + '\')" title="سحب الدفعة قبل اعتمادها">↩️ سحب</button>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' : '<div class="alert alert-success py-2">✅ لا دفعات بانتظار الاعتماد</div>') +
+      (r.done.length ? '<details class="mt-2"><summary class="small fw-bold">آخر القرارات (' + r.done.length + ')</summary><table class="table table-sm" style="font-size:12px;"><tbody>' + r.done.map(function (x) {
+        return '<tr><td>' + E(x.status) + '</td><td>' + E(x.party) + '</td><td class="gl-latin">' + Math.abs(x.amount).toLocaleString('en-US') + ' ' + E(x.cur) + '</td><td class="gl-latin">سند ' + E(x.voucher) + '</td><td>' + E(x.maker) + ' ⇐ ' + E(x.checker) + '</td><td class="gl-latin">' + E(x.decidedAt) + '</td><td>' + E(x.reason) + '</td></tr>'; }).join('') + '</tbody></table></details>' : '');
+  }).withFailureHandler(function (e) { b.innerHTML = '<div class="text-danger p-3">❌ ' + escapeHtml_((e && e.message) || e) + '</div>'; }).ledgerQueue(window.authToken, {});
+}
+function ledgerDecideSel_(dec) {
+  var ids = Array.prototype.map.call(document.querySelectorAll('#_lqBody ._lqChk:checked'), function (c) { return c.value; });
+  if (!ids.length) { _showPopup('حدّد دفعة واحدة على الأقل', 'warning'); return; }
+  var go = function (reason) {
+    google.script.run.withSuccessHandler(function (r) {
+      var bad = r.results.filter(function (x) { return !x.ok; });
+      showToast((dec === 'approve' ? '✅ اعتُمد ' : '❌ رُفض ') + r.done + (bad.length ? ' — تعذّر ' + bad.length : ''));
+      if (bad.length) _showPopup(bad.map(function (x) { return x.id + ': ' + x.error; }).join('\n'), 'warning');
+      ledgerQueueLoad_(); try { glAfterChange(); } catch (e) {}
+    }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); }).ledgerDecide(window.authToken, ids, dec, reason || '');
+  };
+  if (dec === 'reject') { var rs = prompt('سبب الرفض (يظهر للمُدخِل):'); if (rs && rs.trim()) go(rs.trim()); return; }
+  askConfirm_('اعتماد ' + ids.length + ' دفعة؟ تُرحَّل سنداتها وتظهر بشاشاتها فوراً.', function () { go(''); }, { title: 'اعتماد', danger: false });
+}
+function ledgerCancel_(id) { askConfirm_('سحب الدفعة قبل اعتمادها (يُحذف سندها المسودة)؟', function () { google.script.run.withSuccessHandler(function () { showToast('↩️ سُحبت'); ledgerQueueLoad_(); }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); }).ledgerCancel(window.authToken, id); }, { title: 'سحب دفعة', danger: true }); }
+function ledgerModeToggle_(on) { google.script.run.withSuccessHandler(function () { showToast(on ? '🏛️ فُعِّل توحيد قنوات التسجيل' : 'أُوقف توحيد قنوات التسجيل'); ledgerQueueLoad_(); }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); }).ledgerSetMode(window.authToken, on); }
 function glPendingBanner_() {
+  try { _ledgerBanner_(); } catch (eLb) {}   // 🏛️ (V4.349)
   if (!(typeof _notifOn_ !== 'function' || _notifOn_('ui_gl_pend_banner'))) { var ob = document.getElementById('glPendBanner'); if (ob) ob.remove(); return; }   // 🔔 (V4.324)
   var box = document.getElementById('glBody'); if (!box || !GL.pendingCount || document.getElementById('glPendBanner')) return;
   box.insertAdjacentHTML('afterbegin', '<div id="glPendBanner" class="alert alert-warning py-2 d-flex align-items-center gap-2 mb-2" style="font-size:13px;">🔔 <b>' + GL.pendingCount +

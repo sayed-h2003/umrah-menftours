@@ -1512,6 +1512,7 @@ function glSaveEntry(authToken, e, post) {
       if (_glStr_(f.r[3]) === 'قيد إقفال') throw new Error('قيد إقفال السنة لا يُعدَّل يدوياً');
       if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
       if (oldSt === GL_ST_POSTED_) status = GL_ST_POSTED_;
+      var _mc2 = (oldSt === GL_ST_DRAFT_ && post && /^SCR:/.test(_glStr_(f.r[9])) && typeof _ledgerPostCheck_ === 'function') ? _ledgerPostCheck_(_glStr_(f.r[0]), session) : null;   // 🏛️ (V4.349) Maker-Checker
       if (isAuto) v.type = _glStr_(f.r[3]) || v.type;
       var _oldLines = (oldSt === GL_ST_POSTED_) ? _glLinesOf_(_glStr_(f.r[0])) : [];   // ⚡ (V4.232) للدلتا — قبل الحذف
       var _curL = _glLinesOf_(_glStr_(f.r[0])), _audB = (typeof _audSnapRows_ === 'function') ? _audSnapRows_(f.r, _curL) : null;
@@ -1540,6 +1541,7 @@ function glSaveEntry(authToken, e, post) {
       else if (/^CUST:/.test(sk)) _glCsOvrRecord_(sk, _glStr_(f.r[0]), _oldLines, w.lRows, session.username);
       var _pDrop = []; if (e.ccyAck && _pend['CCY:' + _glStr_(f.r[0])]) _pDrop.push('CCY:' + _glStr_(f.r[0])); if (_pa) _pDrop.push(sk);
       if (_pDrop.length) _glPendingDrop_(_pDrop);
+      if (_mc2) _ledgerMark_(_mc2.row, LEDGER_OK_, session.username, _mc2.self ? 'اعتماد ذاتي (مدير)' : 'رُحِّل من الحسابات العامة');
       if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(session.username, _glStr_(f.r[0]), _audB, _audSnapRows_(w.eRow, w.lRows), oldSt === GL_ST_POSTED_ ? 'تعديل قيد مرحّل' : 'تعديل قيد');
       if (_pa && _glStr_(_pa.row[2]) === 'إلغاء') _glOvrKeep_(sk, session.username);   // حُذف مصدره وحفظه المستخدم ⇒ يبقى القيد كما حُفظ
       logChange_(session.username, oldSt === GL_ST_POSTED_ ? 'تعديل قيد مرحّل' : (post ? 'تعديل وترحيل قيد' : 'تعديل قيد مسودة'), 'GL:' + f.r[0], 'القيد',
@@ -1646,6 +1648,7 @@ function glPostEntry(authToken, id) {
   try {
     var f = _glFindEntry_(_glStr_(id)); if (!f) throw new Error('القيد غير موجود');
     if (_glStr_(f.r[5]) !== GL_ST_DRAFT_) throw new Error('القيد ليس مسودة');
+    var _mc = (/^SCR:/.test(_glStr_(f.r[9])) && typeof _ledgerPostCheck_ === 'function') ? _ledgerPostCheck_(_glStr_(id), session) : null;   // 🏛️ (V4.349) Maker-Checker
     // إعادة الفحص قبل الترحيل (ربما تغيّر الحساب أو أُوقف)
     var ent = _glEntryFull_(_glStr_(id));
     _glValidate_(ent);
@@ -1653,6 +1656,7 @@ function glPostEntry(authToken, id) {
     _glSheet_('entries').getRange(f.row, 15, 1, 2).setValues([[session.username, _glNow_()]]);
     _glSetLinesStatus_([_glStr_(id)], GL_ST_POSTED_);
     logChange_(session.username, 'ترحيل قيد', 'GL:' + id, 'الحالة', GL_ST_DRAFT_, GL_ST_POSTED_);
+    if (_mc) _ledgerMark_(_mc.row, LEDGER_OK_, session.username, _mc.self ? 'اعتماد ذاتي (مدير)' : 'رُحِّل من الحسابات العامة');
     _glSyncVoucherPays_(_glStr_(id), session.username);
     try { var _pf = _glFindEntry_(_glStr_(id)); if (_pf) _glBotQ_('vch_new', _glBotWho_(_glBotEntryInfo_(_glStr_(id), _pf.r, _glLinesOf_(_glStr_(id))), session)); } catch (eB) {}   // 📲 (V4.254)
     return { success: true, id: _glStr_(id), balancesDelta: _glLineDelta_(_glLinesOf_(_glStr_(id)), 1, {}),

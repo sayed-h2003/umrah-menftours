@@ -4840,8 +4840,12 @@ function hbGlOnlyFrom_() {
   } catch (e) { return ''; }
 }
 var HB_GL_ONLY_MSG_ = 'تسجيل وتعديل الدفعات صار من البرنامج الرئيسي فقط: الحسابات العامة ← الخزينة / البنوك / العهد / القيود / 🏨 دفعات الفنادق. الدفعة تظهر هنا تلقائياً بعد حفظها هناك.';
-function hbGlOnlyGuardNew_() { var f = hbGlOnlyFrom_(); if (f) throw new Error(HB_GL_ONLY_MSG_ + ' (منذ ' + f + ')'); }
+// 🏛️ (V4.349) توحيد قنوات التسجيل: إضافة/تعديل الدفعات من برنامج الحجوزات مغلق تماماً (بأي تاريخ) — التسجيل من الحسابات العامة
+function hbLedgerClosed_() { try { return typeof _ledgerOn_ === 'function' && _ledgerOn_(); } catch (e) { return false; } }
+var HB_LEDGER_MSG_ = '🏛️ تسجيل وتعديل الدفعات من برنامج الحجوزات مغلق — سجّل سند القبض/الصرف من الحسابات العامة (يظهر بكشف الفندق فوراً بعد ترحيله)';
+function hbGlOnlyGuardNew_() { if (hbLedgerClosed_()) throw new Error(HB_LEDGER_MSG_); var f = hbGlOnlyFrom_(); if (f) throw new Error(HB_GL_ONLY_MSG_ + ' (منذ ' + f + ')'); }
 function hbGlOnlyGuardRow_(sh, id) {
+  if (hbLedgerClosed_()) throw new Error(HB_LEDGER_MSG_);
   if (/^GL:/.test(String(id || ''))) throw new Error('هذه الدفعة مسجّلة من البرنامج الرئيسي — عدّلها أو احذفها من هناك (الحسابات العامة).');
   var f = hbGlOnlyFrom_(); if (!f) return;
   var m = f.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); if (!m) return;
