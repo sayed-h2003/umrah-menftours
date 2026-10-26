@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.347";
+var APP_VERSION = "4.348";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14738,7 +14738,7 @@ function getClientAccount(authToken, client) {
   try {
     if (glLinks && typeof _glRefsFor_ === 'function' && payments.length) {
       var _cnm = (typeof _glNorm_ === 'function') ? _glNorm_(client) : client;
-      var _rf = _glRefsFor_(payments.map(function (p) { var gm = glLinks.__pay && glLinks.__pay[p.id]; return { k: p.id, eid: p.glId || (gm && gm.id) || '', sk: 'AUTO:CP:' + p.id,
+      var _rf = _glRefsFor_(payments.map(function (p) { var gm = glLinks.__pay && glLinks.__pay[p.id]; return { k: p.id, eid: p.glId || (gm && gm.id) || (typeof _reconLinkOf_ === 'function' ? _reconLinkOf_('cp:' + p.id) : '') || '', sk: 'AUTO:CP:' + p.id,   // 🔗 (V4.348) + الربط اليدوي من المطابقة
         own: function (code, a) { return !!(a && a.kind === 'client' && a.link && _glNorm_(a.link) === _cnm); } }; }));
       payments.forEach(function (p) { var x = _rf[p.id]; if (x) { p.glVch = x.voucher; p.glCp = x.cp; } });
     }
@@ -26141,7 +26141,7 @@ function getAgentAccount(authToken, agent, filters) {
   try {
     if (typeof _glRefsFor_ === 'function' && _glSSId_()) {
       var _arf = _glRefsFor_(items.map(function (x) { return { k: 'I' + x.id, eid: x.glId || '', sk: 'AUTO:AI:' + x.id, own: function (code, a) { return !!(a && a.kind === 'agent'); } }; })
-        .concat(pays.map(function (x) { return { k: 'P' + x.id, eid: x.glId || '', sk: 'AUTO:AP:' + x.id, own: function (code, a) { return !!(a && a.kind === 'agent'); } }; })));
+        .concat(pays.map(function (x) { return { k: 'P' + x.id, eid: x.glId || (typeof _reconLinkOf_ === 'function' ? _reconLinkOf_('ap:' + x.id) : '') || '', sk: 'AUTO:AP:' + x.id, own: function (code, a) { return !!(a && a.kind === 'agent'); } }; })));
       items.forEach(function (x) { var r = _arf['I' + x.id]; if (r) { x.glEntry = r.entry; x.glVch = r.voucher; x.glCp = r.cp; } });
       pays.forEach(function (x) { var r = _arf['P' + x.id]; if (r) { x.glEntry = r.entry; x.glVch = r.voucher; x.glCp = r.cp; } });
     }

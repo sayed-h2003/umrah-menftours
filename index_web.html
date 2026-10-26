@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.347  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.348  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8175,7 +8175,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.347";
+var CLIENT_APP_VERSION = "4.348";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -49655,7 +49655,7 @@ function glSubCan_(sub, cap) {
   if (!c.sub || !sub) return cap === 'view' ? true : !!c[k];
   var o = c.sub[sub]; return !!(o && o[k]);
 }
-function glReconCan_() { return { stmt: !!GL.isAdmin, sync: !!GL.isAdmin || glSubCan_('hb', 'view') }; }   // (V4.318) نفس صلاحيات الشاشتين السابقتين
+function glReconCan_() { return { pay: !!GL.isAdmin || glSubCan_('stmt', 'view'), stmt: !!GL.isAdmin, sync: !!GL.isAdmin || glSubCan_('hb', 'view') }; }   // (V4.318) نفس صلاحيات الشاشتين السابقتين
 function glSubGate_() {
   document.querySelectorAll('#glTabs .gl-tab').forEach(function (t) { var sb = GL_TAB_SUB_[t.getAttribute('data-t')]; if (sb && !t.classList.contains('gl-adm')) t.style.display = glSubCan_(sb, 'view') ? '' : 'none'; });
   var rc = document.querySelector('#glTabs .gl-tab[data-t="recon"]'), rcc = glReconCan_(); if (rc) rc.style.display = (rcc.stmt || rcc.sync) ? '' : 'none';
@@ -54476,15 +54476,16 @@ var _glReconData_ = null;
 /* ⚖️ (V4.318) شاشة مطابقة واحدة بدل شاشتين كانتا تقارنان «رصيد طرف الحجوزات مقابل الدفتر» بطريقتين: هنا قسمان واضحان
    لكلٍّ منهما سؤاله — (1) هل كشف حساب العميل ببرنامج الحجوزات = حسابه الكامل بالدفتر؟ (2) هل سُجِّلت كل أحداث الحجوزات
    بقيودها التلقائية؟ — بنفس صلاحيات الشاشتين السابقتين (الأول للمدير، الثاني لمن له صلاحية الحجوزات) */
-var GL_RC_MODES_ = [['stmt', '📄 كشف العميل مقابل الحساب العام'], ['sync', '🔄 سلامة مزامنة الحجوزات']];
+var GL_RC_MODES_ = [['pay', '🔗 مطابقة الدفعات بالقيود'], ['stmt', '📄 كشف العميل مقابل الحساب العام'], ['sync', '🔄 سلامة مزامنة الحجوزات']];
 function glRenderRecon() {
   var box = document.getElementById('glBody'), can = glReconCan_();
-  var mode = GL._rcMode || (can.stmt ? 'stmt' : 'sync');
-  if (mode === 'stmt' && !can.stmt) mode = 'sync'; if (mode === 'sync' && !can.sync) mode = 'stmt';
+  var mode = GL._rcMode || (can.pay ? 'pay' : (can.stmt ? 'stmt' : 'sync'));
+  if (!can[mode]) mode = can.pay ? 'pay' : (can.stmt ? 'stmt' : 'sync');
   GL._rcMode = mode;
   var seg = GL_RC_MODES_.filter(function (m) { return can[m[0]]; }).map(function (m) {
     return '<button class="btn btn-sm ' + (mode === m[0] ? 'btn-dark' : 'btn-outline-secondary') + '" onclick="GL._rcMode=\'' + m[0] + '\';glRenderRecon()">' + m[1] + '</button>'; }).join('');
   var head = '<div class="d-flex align-items-center gap-2 flex-wrap mb-2"><h6 class="fw-bold mb-0" style="color:#1e3d59;">⚖️ المطابقة</h6><div class="d-flex gap-1 flex-wrap">' + seg + '</div></div>';
+  if (mode === 'pay') { box.innerHTML = head + '<div id="glRpBox"></div>'; return glRpView_(); }
   if (mode === 'sync') {
     box.innerHTML = head + '<div class="gl-note">يتحقق أن <b>كل أحداث برنامج الحجوزات سُجِّلت بقيودها التلقائية</b> بالدفتر (رصيد البرنامج مقابل قيود الحجوزات وحدها). ' +
       'قد يختلف رقمه عن قسم «كشف العميل» بطبيعته لأنه لا يشمل القيود والسندات اليدوية.</div><div id="glHbBox"></div>';
@@ -54520,6 +54521,78 @@ function glSyncAll_(btn) {
     _showPopup('✅ المزامنة الشاملة\n' + out.join('\n') + (typeof vzApMirrorSync === 'function' ? '\n\nيلي ذلك ③ الوكلاء (بمعاينة)…' : ''), 'success');
     if (typeof vzApMirrorSync === 'function') setTimeout(vzApMirrorSync, 400);
     if (GL._rcMode === 'stmt') try { glReconLoad(); } catch (e0) {}
+  }
+}
+/* 🔗 (V4.348) مطابقة الدفعات بالقيود — موحّدة لكل الشاشات (عملاء العمرة · الوكلاء · الحجوزات) */
+var GLRP = { f: { fam: '', st: '', q: '' } };
+var GLRP_ST_ = { ok: ['✅ مطابقة', '#16a34a'], diff: ['⚠️ فرق', '#d97706'], noentry: ['❌ دفعة بلا قيد', '#dc2626'], nopay: ['❌ قيد بلا دفعة', '#dc2626'], void: ['⛔ قيدها ملغى', '#7f1d1d'], dup: ['🔁 مكرر محتمل', '#7c3aed'], ignored: ['⚪ لا تحتاج قيداً', '#64748b'] };
+var GLRP_FAM_ = { cp: '💳 عملاء العمرة', ap: '🧑‍💼 الوكلاء', hb: '🏨 الحجوزات' };
+function glRpView_() {
+  var b = document.getElementById('glRpBox'); if (!b) return;
+  b.innerHTML = '<div class="d-flex gap-1 flex-wrap align-items-center mb-2">' +
+    (GL.isAdmin ? '<button class="btn btn-sm btn-success fw-bold" onclick="glRpRun_(true,this)" title="يفحص كل الدفعات ويصلح الآمن تلقائياً: ربط دفعة بقيد مرشَّح وحيد مطابق تماماً · إنشاء نسخة الشاشة الناقصة لقيد · إعادة مزامنة نسخة تختلف عن قيدها">🔗 مطابقة وإصلاح بضغطة</button>' : '') +
+    '<button class="btn btn-sm btn-outline-primary" onclick="glRpRun_(false,this)">🔎 فحص فقط</button><span id="glRpLast" class="small text-muted"></span></div>' +
+    '<div class="gl-note">يربط كل دفعة بالشاشات (عملاء العمرة · الوكلاء · الحجوزات) برقم قيدها ورقم سندها بالدفتر العام، ويعرض الفروق: دفعة بلا قيد · قيد بلا دفعة بالشاشة · فرق مبلغ/تاريخ · قيد ملغى · مكرر محتمل. لكل فرق: فتح القيد وتعديله، ربط يدوي، إنشاء النسخة الناقصة، أو حذف الدفعة (للمدير بأي تاريخ).</div><div id="glRpRes"></div>';
+  glRun('glReconLast', [], function (r) { var el = document.getElementById('glRpLast'); if (el && r.last) el.textContent = 'آخر مطابقة: ' + r.last.at + ' — ' + r.last.by + ' · فروق ' + r.last.bad + ' من ' + r.last.n; });
+  if (GLRP.res) glRpRender_();
+}
+function glRpRun_(fix, btn) {
+  var o = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳ جاري الفحص…';
+  glRun('glReconRun', [{ fix: !!fix }], function (r) {
+    btn.disabled = false; btn.innerHTML = o; GLRP.res = r; glRpRender_();
+    if (fix) showToast('✅ أُصلح تلقائياً: ربط ' + r.fixed.link + ' · نسخ ' + r.fixed.mirror + ' · إعادة مزامنة ' + r.fixed.resync);
+    if (r.errors.length) _showPopup(r.errors.join('\n'), 'warning');
+  }, function (e) { btn.disabled = false; btn.innerHTML = o; _showPopup((e && e.message) || e, 'error'); });
+}
+function glRpRender_() {
+  var r = GLRP.res, box = document.getElementById('glRpRes'), E = glEsc; if (!r || !box) return;
+  var cnt = function (fam, st) { var n = 0; Object.keys(r.sum).forEach(function (k) { var p = k.split('|'); if ((!fam || p[0] === fam) && (!st || p[1] === st)) n += r.sum[k]; }); return n; };
+  var cards = Object.keys(GLRP_FAM_).map(function (f) {
+    var ok = cnt(f, 'ok'), all = cnt(f, ''), bad = all - ok - cnt(f, 'ignored');
+    return '<div class="border rounded p-2" style="min-width:170px;cursor:pointer;' + (GLRP.f.fam === f ? 'outline:2px solid #1e3d59;' : '') + '" onclick="GLRP.f.fam=GLRP.f.fam===\'' + f + '\'?\'\':\'' + f + '\';glRpRender_()"><b>' + GLRP_FAM_[f] + '</b><div class="small">' + all + ' دفعة/قيد · <span style="color:#16a34a">✅ ' + ok + '</span> · <span style="color:' + (bad ? '#dc2626' : '#64748b') + '">فروق ' + bad + '</span></div></div>';
+  }).join('');
+  var stOpts = '<option value="">كل الفروق</option>' + Object.keys(GLRP_ST_).filter(function (k) { return k !== 'ok' && k !== 'ignored'; }).map(function (k) { return '<option value="' + k + '"' + (GLRP.f.st === k ? ' selected' : '') + '>' + GLRP_ST_[k][0] + ' (' + cnt(GLRP.f.fam, k) + ')</option>'; }).join('');
+  var q = (GLRP.f.q || '').trim();
+  var rows = r.rows.filter(function (x) { return (!GLRP.f.fam || x.fam === GLRP.f.fam) && (!GLRP.f.st || x.status === GLRP.f.st) && (!q || [x.party, x.trip, x.entry, x.voucher, x.desc, String(x.amount)].join(' ').indexOf(q) >= 0); });
+  box.innerHTML = '<div class="d-flex gap-2 flex-wrap mb-2">' + cards + '</div>' +
+    '<div class="d-flex gap-1 flex-wrap mb-2"><select class="form-select form-select-sm" style="width:auto" onchange="GLRP.f.st=this.value;glRpRender_()">' + stOpts + '</select>' +
+    '<input class="form-control form-control-sm" style="width:220px" placeholder="بحث: طرف/رحلة/قيد/سند/مبلغ" value="' + E(q) + '" onchange="GLRP.f.q=this.value;glRpRender_()"><span class="small text-muted align-self-center">' + rows.length + ' صف · فُحص ' + r.total + ' (' + Math.round(r.ms / 1000) + ' ث)</span></div>' +
+    (rows.length ? '<div class="table-responsive" style="max-height:62vh;overflow:auto;"><table class="table table-sm table-hover" style="font-size:12.5px;"><thead style="position:sticky;top:0;background:#f8fafc;"><tr><th>الحالة</th><th>الشاشة</th><th>الطرف</th><th>التاريخ</th><th>المبلغ</th><th>القيد / السند</th><th>البيان / الملاحظة</th><th>الإجراء</th></tr></thead><tbody>' +
+      rows.slice(0, 800).map(function (x) { var i = r.rows.indexOf(x), st = GLRP_ST_[x.status] || [x.status, '#64748b'];
+        return '<tr><td style="white-space:nowrap;color:' + st[1] + ';font-weight:700;">' + st[0] + '</td><td>' + (GLRP_FAM_[x.fam] || x.fam) + '</td><td>' + E(x.party) + (x.trip ? '<div class="small text-muted">' + E(x.trip) + '</div>' : '') + '</td><td class="gl-latin">' + E(x.date) + '</td>' +
+          '<td class="gl-latin" style="white-space:nowrap;">' + glFmt(x.amount) + ' ' + E(x.cur) + '</td><td class="gl-latin">' + (x.entry ? '<a href="#" onclick="glShowEntry(\'' + glJs(x.entry) + '\');return false;">' + E(x.entry) + '</a>' : '—') + (x.voucher ? '<div class="small">سند ' + E(x.voucher) + '</div>' : '') + (x.how ? '<div class="small text-muted">' + E(x.how) + '</div>' : '') + '</td>' +
+          '<td>' + E(x.desc) + (x.note ? '<div class="small" style="color:' + st[1] + '">' + E(x.note) + '</div>' : '') + glRpCands_(x, i) + '</td><td style="white-space:nowrap;">' + glRpActs_(x, i) + '</td></tr>'; }).join('') + '</tbody></table></div>' + (rows.length > 800 ? '<div class="small text-muted">يُعرض أول 800 — ضيّق بالفلاتر</div>' : '')
+      : '<div class="alert alert-success py-2">✅ لا فروق بهذا الفلتر</div>');
+}
+function glRpCands_(x, i) {
+  if (!x.cands || !x.cands.length) return '';
+  return '<div class="mt-1 p-1" style="background:#eff6ff;border-radius:6px;font-size:11.5px;">قيود مرشَّحة: ' + x.cands.map(function (c) {
+    return '<button class="btn btn-sm btn-outline-primary py-0 px-1 m-1" onclick="glRpAct_(' + i + ',\'link\',\'' + glJs(c.entry) + '\')" title="' + glEsc(c.type + ' — ' + c.desc) + '">🔗 ' + glEsc(c.entry) + (c.voucher ? ' (سند ' + glEsc(c.voucher) + ')' : '') + ' · ' + glEsc(c.date) + ' · ' + glFmt(c.amount) + '</button>'; }).join('') + '</div>';
+}
+function glRpActs_(x, i) {
+  var b = [];
+  if (x.entry) b.push('<button class="btn btn-sm btn-outline-secondary py-0" onclick="glEditEntry(\'' + glJs(x.entry) + '\')" title="فتح القيد وتعديله">✏️ القيد</button>');
+  if (/^(cp|ap|hb):/.test(x.key)) {
+    if (x.status === 'noentry' || x.status === 'dup') { b.push('<button class="btn btn-sm btn-outline-primary py-0" onclick="glRpAct_(' + i + ',\'linkAsk\')" title="ربط برقم قيد تكتبه">🔗 ربط</button>'); b.push('<button class="btn btn-sm btn-outline-secondary py-0" onclick="glRpAct_(' + i + ',\'noent\')" title="تعليمها: لا تحتاج قيداً">⚪</button>'); }
+    if (x.how === 'ربط يدوي') b.push('<button class="btn btn-sm btn-outline-secondary py-0" onclick="glRpAct_(' + i + ',\'unlink\')">فك الربط</button>');
+    if (GL.isAdmin) b.push('<button class="btn btn-sm btn-outline-danger py-0" onclick="glRpAct_(' + i + ',\'delpay\')" title="حذف الدفعة من شاشتها (مدير — بأي تاريخ)">🗑️</button>');
+  } else if (x.status === 'nopay') b.push('<button class="btn btn-sm btn-outline-success py-0" onclick="glRpAct_(' + i + ',\'mirror\')" title="إنشاء نسخة الدفعة بالشاشة من القيد">➕ نسخها للشاشة</button>');
+  return b.join(' ');
+}
+function glRpAct_(i, a, entry) {
+  var x = GLRP.res.rows[i], done = function (msg) { showToast('✅ ' + msg); x.status = 'ok'; x.note = msg; glRpRender_(); };
+  var go = function (act, msg) { glRun('glReconAct', [act], function () { done(msg); }); };
+  if (a === 'link') return go({ a: 'link', key: x.key, entry: entry }, 'رُبطت بالقيد ' + entry);
+  if (a === 'linkAsk') { var v = prompt('رقم القيد المراد ربط الدفعة به:'); if (v) go({ a: 'link', key: x.key, entry: v.trim() }, 'رُبطت بالقيد ' + v.trim()); return; }
+  if (a === 'unlink') return go({ a: 'unlink', key: x.key }, 'فُك الربط');
+  if (a === 'noent') return askConfirm_('تعليم الدفعة «لا تحتاج قيداً»؟ (لن تظهر بالفروق)', function () { go({ a: 'noent', key: x.key }, 'عُلِّمت لا تحتاج قيداً'); }, { title: 'لا تحتاج قيداً', danger: false });
+  if (a === 'mirror') return go({ a: 'mirror', fam: x.fam, entry: x.entry }, 'أُنشئت نسخة الشاشة');
+  if (a === 'delpay') {
+    var del = function (mode) { glRun('glReconAct', [{ a: 'delpay', key: x.key, linkedEntry: x.entry || '', entry: mode }], function () { GLRP.res.rows.splice(i, 1); showToast('🗑️ حُذفت الدفعة' + (mode === 'void' ? ' وأُلغي قيدها' : '')); glRpRender_(); }); };
+    var btns = [{ label: x.entry ? 'حذف الدفعة فقط (يبقى القيد)' : 'نعم، احذف الدفعة', class: 'btn-danger', onClick: function () { del('keep'); } }];
+    if (x.entry) btns.push({ label: 'حذف الدفعة وإلغاء قيدها ' + x.entry, class: 'btn-outline-danger', onClick: function () { del('void'); } });
+    btns.push({ label: 'إلغاء', class: 'btn-outline-secondary', onClick: function () {} });
+    return showElegantConfirm({ icon: '🗑️', title: 'حذف دفعة (مدير — بأي تاريخ)', message: 'حذف الدفعة «' + x.party + ' — ' + glFmt(x.amount) + ' ' + x.cur + ' — ' + x.date + '» من شاشتها؟ تُحفظ نسخة قبل الحذف (تُستعاد من ⏪ التراجع الزمني) وتُسجَّل بالسجل المحصّن.', buttons: btns });
   }
 }
 function glReconLoad() {
