@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.354  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.355  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8345,7 +8345,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.354";
+var CLIENT_APP_VERSION = "4.355";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -53467,9 +53467,33 @@ function glCsSuspTbl_(g, amt) {
         '<td><a href="#" class="gl-latin" onclick="glRevOpenEntry_(\'' + glJs(x.id) + '\',this);return false;">' + glEsc(x.id) + '</a><div class="small text-muted">' + glEsc(x.accName || x.acc) + '</div></td>' +
         '<td><div class="d-flex gap-1 align-items-center">' + glAccInput('glCsSAcc', '', '') + glCsSplitBtn_({}) + '</div>' + glCsSplitBox_({}) + (x.sugg && x.sugg.length ? '<div class="d-flex flex-wrap gap-1 mt-1">' + x.sugg.map(function (sg) {
           return '<button class="btn btn-sm py-0 px-2" style="font-size:10.5px;background:#eef2ff;border-radius:999px;" onclick="var tr=this.closest(\'tr\'),i=tr.querySelector(\'.glCsSAcc\');i.dataset.code=\'' + glJs(sg.code) + '\';i.value=\'' + glJs(sg.code + ' — ' + sg.name) + '\';tr.querySelector(\'.glCsSpk\').checked=true">' + glEsc(sg.name) + '</button>';
-        }).join('') + '</div>' : '') + '</td></tr>';
+        }).join('') + '</div>' : '') + glCsBkSug_(x, g, R) + '</td></tr>';
     }).join('') + '</tbody></table></div>' +
     (R.canApprove ? '<div class="d-flex justify-content-end mt-1"><button class="btn btn-warning btn-sm fw-bold" onclick="glCsRepoint_(this,\'' + glJs(g.code) + '\')">✅ نقل المحدد لحسابه الحقيقي</button></div>' : '') + '</div>';
+}
+/* 🏨 (V4.355) الحجز المطابق للمبلغ المعلق (نفس المبلغ تقريباً + تاريخ دخول قريب) ⇒ ربط بضغطة واحدة: ينقل القيد نفسه لحساب الفندق/العميل */
+function glCsBkSug_(x, g, R) {
+  var L = x.bk || []; if (!L.length) return '';
+  return '<div class="mt-1" style="border:1px dashed #0e7490;border-radius:8px;padding:4px 6px;background:#ecfeff;">' +
+    '<div class="small fw-bold" style="color:#0e7490;">🏨 حجز مطابق مقترح</div>' + L.map(function (b) {
+      var d = Math.abs(b.diff) < 0.01 ? '<span style="color:#166534;">✔ نفس المبلغ</span>' : '<span style="color:#92400e;">فرق ' + glFmt(Math.abs(b.diff)) + ' ر.س</span>';
+      var info = '<div style="font-size:11px;text-align:right;">' + glEsc(b.label) + ' — <b class="gl-latin">' + glFmt(b.sar) + '</b> ر.س · ' + d + (b.days ? ' · بفارق ' + b.days + ' يوم' : '') +
+        (b.entry ? ' · قيد <span class="gl-latin">' + glEsc(b.entry) + '</span>' : ' · <span style="color:#b91c1c;">لا قيد للحجز بعد</span>') + '</div>';
+      if (b.unmapped) return info + '<div style="font-size:11px;color:#b91c1c;">⚠️ «' + glEsc(b.name) + '» غير مربوط بحساب — اربطه من 🏨 ربط برنامج الحجوزات ← 🗂️ خريطة الحسابات ثم أعد فتح هذه النافذة</div>';
+      return info + (R.canApprove ? '<button class="btn btn-sm py-0 px-2 mt-1 fw-bold" style="font-size:11px;background:#0e7490;color:#fff;border-radius:999px;" onclick="glCsBkLink_(this,\'' + glJs(g.code) + '\',' + (+x.row) + ',\'' + glJs(b.code) + '\',\'' + glJs(b.name) + '\')">🔗 ربط بهذا الحجز ⇒ ' + glEsc(b.name) + '</button>' : '');
+    }).join('<hr class="my-1">') + '</div>';
+}
+function glCsBkLink_(btn, code, row, acc, name) {
+  askConfirm_('نقل هذا المبلغ المعلق (نفس القيد) إلى حساب «' + name + '»؟ يخرج من «متعلقات» ويظهر بكشف الحساب مقابل الحجز.', function () {
+    btn.disabled = true; btn.innerHTML = '⏳ جاري الربط…';
+    glRun('glCsApproveAll', [[{ code: code, items: [{ row: row, repoint: 1, account: acc }] }]], function (res) {
+      var pr = (res && res.problems) || [];
+      if (pr.length) _showPopup(pr.map(function (p) { return 'صف ' + p.row + ': ' + p.msg; }).join('\n'), 'warning');
+      else showToast('✅ رُبط المبلغ بحساب ' + name);
+      try { glApplyDelta_(res); } catch (e) {}
+      glCsPendDlg(false);
+    }, function (e) { btn.disabled = false; btn.innerHTML = '🔗 ربط بهذا الحجز'; _showPopup((e && e.message) || e, 'error'); });
+  }, { title: 'ربط بالحجز', icon: '🏨', okLabel: 'ربط' });
 }
 function glCsRepoint_(btn, code) {
   var items = [], miss = 0, bad = [];

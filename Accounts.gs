@@ -5411,7 +5411,54 @@ function glCsPendAll(authToken, force) {
       if ((r.pending && r.pending.length) || (r.susp && r.susp.length)) groups.push({ code: code, name: (accM[code] || {}).name || code, currency: (r.account || {}).currency || '', url: (r.sheet || {}).url || '', rows: r.pending || [], susp: r.susp || [] });
     } catch (e) { errs.push(((accM[code] || {}).name || code) + ': ' + e.message); }
   });
+  try { _glCsSuspBkSugg_(groups); } catch (eBk) { Logger.log('susp bk sugg: ' + eBk.message); }   // 🏨 (V4.355)
   return { success: true, groups: groups, errors: errs, canApprove: _sessionHasPerm_(session, 'admin') || _sessionHasPerm_(session, 'gl.edit'), csPend: _glCsPendTotal_(), suspAccs: _glCsSuspAccs_() };
+}
+/* 🏨 (V4.355) اقتراح الحجز المطابق لكل مبلغ معلق: صادر ⇒ تكلفة الحجز على المورد/الفندق · وارد ⇒ سعر البيع على العميل.
+   المطابقة بالمعادل بالريال (فارق ≤ 2% أو 5 ريال للريال، ≤ 4% لعملة أخرى بسعر صرف تقريبي) وتاريخ دخول خلال ±30 يوماً.
+   أفضل 3 اقتراحات لكل صف (الأقرب مبلغاً ثم تاريخاً) — الحساب المقترح هو حساب الطرف المربوط بخريطة الحسابات. */
+var GL_SUSP_BK_DAYS_ = 30;
+function _glCsSuspBkSugg_(groups) {
+  var any = (groups || []).some(function (g) { return g.susp && g.susp.length; });
+  if (!any || !_glHbOn_()) return;
+  var H = _glHbRead_(), map = _glHbMap_(), accs = _glAccounts_().map, rates = _glRates_(), ents = _glHbEntryIds_();
+  var dDay = function (s) { var k = _glDKey_(_glDate_(s)); return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : null; };
+  var side = function (name, wantSale) {
+    var m = map[_glHbKey_(name)];
+    if (!m || !GL_HB_TYPES_[m.type]) return { code: '', name: name, unmapped: 1 };   // اسم جديد غير مربوط ⇒ يُقترح مع تنبيه الربط أولاً
+    if (!m.code) return { code: '', name: name, unmapped: 1 };
+    var a = accs[m.code]; if (!a || a.isGroup || a.active === false) return null;
+    var k = GL_HB_TYPES_[m.type].kind; if (wantSale ? k !== 'client' : k !== 'supplier') return null;
+    return { code: m.code, name: a.name };
+  };
+  var cands = { out: [], in: [] };
+  H.bookings.forEach(function (b) {
+    if (b.status === 'لاغي') return;
+    var day = dDay(b.ci); if (day === null) return;
+    var e = ents['AUTO:HB:' + b.key], ref = b.hotelRef || b.inner || ('صف ' + b.row);
+    var lbl = 'حجز ' + ref + ' · ' + b.hotel + ' · دخول ' + String(b.ci || '').slice(0, 5);
+    var sp = b.supplier && b.cost.hasPrice && b.cost.value > 0 ? side(b.supplier, false) : null;
+    if (sp) cands.out.push({ code: sp.code, name: sp.name, unmapped: sp.unmapped || 0, sar: b.cost.value, day: day, label: lbl + ' · ' + b.client, entry: e ? e.id : '', key: b.key });
+    var cl = b.client && b.sale.hasPrice && b.sale.value > 0 ? side(b.client, true) : null;
+    if (cl) cands.in.push({ code: cl.code, name: cl.name, unmapped: cl.unmapped || 0, sar: b.sale.value, day: day, label: lbl + (b.supplier ? ' · ' + b.supplier : ''), entry: e ? e.id : '', key: b.key });
+  });
+  var toSar = function (amt, cur) {
+    cur = _glCur_(cur || 'SAR');
+    if (cur === 'SAR') return amt;
+    var sr = rates.SAR || 0; if (!sr) return null;
+    return cur === 'EGP' ? amt / sr : cur === 'USD' ? amt * (rates.USD || 0) / sr : null;
+  };
+  groups.forEach(function (g) {
+    (g.susp || []).forEach(function (x) {
+      var amt = x.outAmt || x.inAmt, cur = _glCur_(x.cur || g.currency || 'SAR'), sar = toSar(amt, cur), day = dDay(x.date);
+      if (!amt || sar === null || day === null) return;
+      var tol = cur === 'SAR' ? Math.max(5, sar * 0.02) : sar * 0.04;
+      var hits = (x.outAmt ? cands.out : cands.in).filter(function (c) { return Math.abs(c.sar - sar) <= tol && Math.abs(c.day - day) <= GL_SUSP_BK_DAYS_; })
+        .map(function (c) { return { code: c.code, name: c.name, unmapped: c.unmapped, label: c.label, entry: c.entry, key: c.key, sar: _glR2_(c.sar), diff: _glR2_(sar - c.sar), days: Math.abs(c.day - day), exact: Math.abs(c.sar - sar) < 0.01 && cur === 'SAR' }; })
+        .sort(function (a, b) { return (a.unmapped ? 1 : 0) - (b.unmapped ? 1 : 0) || Math.abs(a.diff) - Math.abs(b.diff) || a.days - b.days; });
+      if (hits.length) x.bk = hits.slice(0, 3);
+    });
+  });
 }
 // اعتماد دفعة واحدة لصفوف عدة شيتات: [{code, items:[{row, account, desc?}]}] — البيان المعدَّل يحلّ محل بيان الصف بالقيد
 function glCsApproveAll(authToken, groups) {
