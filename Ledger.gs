@@ -6,7 +6,7 @@
      الحساب المقابل (خزينة/بنك/عهدة/…) من دليل الحسابات.
    • الدفعة من الشاشة لا تُكتب بالشاشة مباشرة: تُنشأ «سند قبض/صرف» مسودة برقم سند بالحسابات العامة + سطر بطابور الاعتماد.
      عند الاعتماد يُرحَّل السند وتظهر الدفعة بشاشتها فوراً (نفس مرآة V4.330) — وعند الرفض يُحذف السند (بنسخة قبله).
-   • فحص التكرار الذكي قبل الإرسال: نفس الطرف + نفس المبلغ والعملة + تاريخ ±3 أيام (بالدفتر — مرحّل أو مسودة — وبالشاشة).
+   • فحص التكرار الذكي قبل الإرسال: نفس الطرف + نفس المبلغ والعملة + نفس اليوم (V4.352) (بالدفتر — مرحّل أو مسودة — وبالشاشة).
      المكرر المحتمل يحتاج تأكيداً صريحاً، ويُعلَّم بالطابور ليراه المعتمِد.
    • Maker-Checker: لا يعتمد المُدخِل دفعته بنفسه (إلا المدير ويُسجَّل «اعتماد ذاتي»)، والاعتماد لصاحب صلاحية الاعتماد.
    • التسجيل من برنامج الحجوزات مغلق تماماً (إضافة/تعديل الدفعات) — يبقى الحذف القسري للمدير من المطابقة.
@@ -41,7 +41,7 @@ function _ledgerPartyAcc_(fam, party, company) {
 // 🔁 فحص التكرار: بالدفتر (مرحّل/مسودة) على نفس حساب الطرف + بالشاشة
 function _ledgerDups_(fam, acc, party, amount, cur, date) {
   var out = [], dk = _glDKey_(date), day = function (k) { return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : 0; }, pd = day(dk);
-  var near = function (d) { var k = _glDKey_(_glDate_(d)); return k && Math.abs(day(k) - pd) <= 3; };
+  var near = function (d) { var k = _glDKey_(_glDate_(d)); return k && k === dk; };   // (V4.352) نفس اليوم فقط
   var E = {}; _glRows_('entries').forEach(function (r) { E[_glStr_(r[0])] = r; });
   _glRows_('lines').forEach(function (l) {
     if (_glStr_(l[4]) !== acc.code) return;
@@ -78,7 +78,7 @@ function _ledgerSubmit_(session, fam, p) {
   var pA = _ledgerPartyAcc_(fam, party, p.company);
   if (pA.code === cpCode) throw new Error('الحساب المقابل هو نفس حساب الطرف');
   var dups = _ledgerDups_(fam, pA, party, amount, cur, date);
-  if (dups.length && !p.force) return { success: false, dup: true, dups: dups, error: '🔁 دفعة مشابهة مسجَّلة بالفعل (نفس الطرف والمبلغ خلال 3 أيام) — راجعها أو أكّد التسجيل' };
+  if (dups.length && !p.force) return { success: false, dup: true, dups: dups, error: '🔁 دفعة مشابهة مسجَّلة بالفعل (نفس الطرف والمبلغ في نفس اليوم) — راجعها أو أكّد التسجيل' };
   var dirIn = fam === 'ap' ? p.dir === 'in' : p.dir !== 'out';   // عميل: قبض افتراضياً · وكيل: صرف افتراضياً
   var type = dirIn ? 'سند قبض' : 'سند صرف', fx = _glFxDailyMap_(), rate = cur === 'EGP' ? 1 : _glFxRateAt_(cur, date, fx).rate;
   var desc = _glStr_(p.desc) || ((dirIn ? 'دفعة من ' : 'دفعة إلى ') + party);
@@ -162,7 +162,7 @@ function _ledgerMark_(row, status, user, reason) {
 function ledgerDecide(authToken, ids, decision, reason) {
   var session = requireAuth_(authToken), out = [], user = session.username;
   ids = (Array.isArray(ids) ? ids : [ids]).map(_glStr_).filter(Boolean);
-  if (decision === 'reject' && !_glStr_(reason)) throw new Error('سبب الرفض مطلوب');
+  // (V4.352) سبب الرفض اختياري
   ids.forEach(function (id) {
     try {
       var chk = _ledgerPostCheck_(id, session); if (!chk) throw new Error('ليس بانتظار الاعتماد');
