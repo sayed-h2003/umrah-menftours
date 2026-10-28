@@ -137,8 +137,7 @@ function _audFail_(err) {
     if (!c.get('aud_alerted')) {
       c.put('aud_alerted', '1', 3600);
       var al = '🛡️ تنبيه: تعذّرت كتابة سجل التتبع المحصّن (' + msg + ') — عمليات الحفظ موقوفة حتى يعود السجل.';
-      try { if (typeof sendTelegramMessage_ === 'function') sendTelegramMessage_(al); } catch (eG) {}
-      try { _audAnchorSend_(al.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')); } catch (eA) {}   // (V4.360) وجروب الحسابات أيضاً
+      try { _audAnchorSend_(al.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')); } catch (eA) {}   // (V4.361) لجروب الحسابات فقط
     }
   } catch (e) {}
 }
