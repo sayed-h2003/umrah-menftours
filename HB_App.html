@@ -324,7 +324,7 @@
   #page-statement .action-group-entry button:hover { background:#7d5a2c; color:#fff; }
   @media (max-width:700px){ #page-statement .action-bar{ flex-direction:column; align-items:stretch; } #page-statement .action-group{ justify-content:space-between; } }
 
-  /* ===== كل الحجوزات / متابعة الأرصدة / استيراد الدفعات / الإعدادات ===== */
+  /* ===== كل الحجوزات / متابعة الأرصدة / الإعدادات ===== */
   .stat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:18px; }
   .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:9px 12px; box-shadow:var(--shadow); }
   .stat .k { font-size:.68rem; color:var(--ink-dim); font-weight:700; margin-bottom:3px; }
@@ -764,9 +764,6 @@
   .status-pill { font-size:.66rem; font-weight:700; padding:3px 9px; border-radius:999px; }
   .status-pill.pending { background:var(--warn-soft); color:var(--warn); }
   .status-pill.done { background:var(--ok-soft); color:var(--ok); }
-  .import-log { margin-top:12px; border-radius:9px; padding:10px 12px; font-size:.8rem; font-weight:700; display:none; }
-  .import-log.ok { display:block; background:var(--ok-soft); color:var(--ok); border:1px solid var(--ok); }
-  .import-log.err { display:block; background:var(--bad-soft); color:var(--bad); border:1px solid var(--bad); }
 
   .dir-badge { font-size:.68rem; font-weight:700; padding:3px 9px; border-radius:999px; white-space:nowrap; }
   .dir-badge.dir-in { background:var(--ok-soft); color:var(--ok); }
@@ -1345,7 +1342,6 @@
       <button data-page="payments">كل المدفوعات</button>
       <button data-page="statsReport">📊 الإحصائيات</button>
       <button data-page="clientPortal">🔗 بوابة العملاء</button>
-      <button data-page="import">استيراد الدفعات</button>
       <button data-page="changelog">📜 سجل التعديلات</button>
       <button data-page="users">👤 المستخدمون</button>
       <button data-page="settings">⚙ الإعدادات</button>
@@ -1856,36 +1852,6 @@
   </div></div>
 </div>
 
-<!-- ============================================================ -->
-<!-- صفحة: استيراد الدفعات -->
-<!-- ============================================================ -->
-<section class="app-page" id="page-import">
-  <div class="shell" style="padding-top:15px;">
-  <h1 class="gpage-title">استيراد الدفعات السابقة</h1>
-  <div class="gpanel">
-    <p style="margin:0;font-size:.82rem;color:var(--ink-dim);line-height:1.7;">
-      يفحص النظام كل ورقة عميل/مورد قديمة ويجمع الدفعات المسجلة فيها (نطاق U6:Y5000) لعرضها هنا قبل نقلها إلى "سجل الدفعات" المركزي.
-      العملية <b>لا تحذف ولا تعدّل</b> أي شيء في الأوراق الأصلية — نسخ فقط.</p>
-  </div>
-
-  <div class="search-wrap"><input type="text" id="sheetSearch" placeholder="ابحث عن اسم حساب..."><div class="search-list" id="sheetSearchList"></div></div>
-
-  <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-    <button class="gbtn ghost" id="scanBtn">فحص الأوراق</button>
-    <button class="gbtn ghost" id="selectAllBtn">تحديد الكل</button>
-    <button class="gbtn ghost" id="deselectAllBtn">إلغاء تحديد الكل</button>
-    <span class="gspacer"></span>
-    <button class="gbtn ghost" id="syncLegacyBtn" title="يجلب فقط أي دفعات جديدة أُضيفت في الأوراق القديمة التي سبق استيرادها من قبل، بدون تكرار">↻ مزامنة الدفعات القديمة الآن</button>
-    <button class="gbtn" id="importBtn">استيراد المحدّد</button>
-  </div>
-
-  <table class="imp">
-    <thead><tr><th></th><th>اسم الورقة (عميل/مورد)</th><th>الدور المكتشف</th><th>عدد الدفعات</th><th>الإجمالي</th><th>الحالة</th></tr></thead>
-    <tbody id="impTbody"><tr><td colspan="6" class="empty-state">اضغط "فحص الأوراق" لبدء البحث عن دفعات قديمة</td></tr></tbody>
-  </table>
-  <div class="import-log" id="importLog"></div>
-  </div>
-</section>
 
 <!-- ============================================================ -->
 <!-- صفحة: الإعدادات -->
@@ -3178,7 +3144,7 @@ window.PERF_ = (function () {
   var SLOW_MS = 180000;
   var SLOW_FNS = {
     generateSharePdf:1, portalGenerateReportPdf:1, getUnifiedStatement:1,
-    respondPortalRequest:1, appendBookingFromForm:1, importLegacyPayments:1,
+    respondPortalRequest:1, appendBookingFromForm:1,
     refreshBookingsNow:1, getPartyBalancesAsOf:1, searchBookings:1, registerBookingsBulk:1,
     registerTelegramWebhook:1, telegramTestMessage:1, telegramDiscoverChat:1, testTelegramWebhookUrl:1, getTelegramBotLog:1, enableTelegramPolling:1, pollTelegramNow:1,
     telegramRunDigestNow:1, telegramDiagnose:1, renamePartyEverywhere:1, hbGlAccLinkSave:1, hbGlAccList:1
@@ -3188,7 +3154,7 @@ window.PERF_ = (function () {
   var WRITE_FNS = {
     registerPayment:1, deletePayment:1, editBookingField:1, editBookingFields:1,
     respondPortalRequest:1, appendBookingFromForm:1, registerBookingQaid:1,
-    saveAccountProfile:1, importLegacyPayments:1, createUser:1, updateUser:1,
+    saveAccountProfile:1, createUser:1, updateUser:1,
     renamePartyEverywhere:1, addStaffRequestMessage:1, saveTelegramSettings:1,
     saveTelegramBotUser:1, registerBookingsBulk:1, registerPaymentsBatch:1, hbGlAccLinkSave:1,
     registerLinkedPayment:1, registerManualEntry:1, deleteAccount:1
@@ -3374,7 +3340,7 @@ var WIN_MIN_ = {};        // key → { label, ctx, scrollY }
 var WIN_LAST_ = null;     // آخر شاشة نشطة قبل التصغير — نعود إليها
 var PAGE_LABELS_ = {
   statement: 'كشف حساب', arrivals: 'متابعة الأرصدة', bookings: 'كل الحجوزات',
-  payments: 'كل المدفوعات', statsReport: 'الإحصائيات', clientPortal: 'بوابة العملاء', import: 'استيراد الدفعات',
+  payments: 'كل المدفوعات', statsReport: 'الإحصائيات', clientPortal: 'بوابة العملاء',
   changelog: 'سجل التعديلات', users: 'المستخدمون', settings: 'الإعدادات'
 };
 // سياق مختصر يميّز التبويب: اسم العميل في كشف الحساب، عدد النتائج في الحجوزات... إلخ
@@ -3470,7 +3436,6 @@ function showPage(key, restore) {
     if (key === 'arrivals') initArrivalsPage();
     if (key === 'bookings') initBookingsPage();
     if (key === 'payments') initPaymentsPage();
-    if (key === 'import') initImportPage();
     if (key === 'settings') initSettingsPage();
     if (key === 'statement') initStatementPage();
     if (key === 'users') initUsersPage();
@@ -3578,7 +3543,7 @@ function applyDefaultBookingFilters_() {
 /* ============================================================ */
 var SESSION_TOKEN_KEY_ = 'hb_session_token';   // (H4) لا يختلط بجلسة برنامج العمرة
 var currentSessionToken = null, currentUser = null;
-var SCREEN_LABELS_ = { statement: 'كشف حساب', bookings: 'كل الحجوزات', arrivals: 'متابعة الأرصدة', balancesReport: 'بيان الأرصدة بتاريخ محدد', statsReport: 'الإحصائيات', payments: 'كل المدفوعات', clientPortal: 'بوابة العملاء', import: 'استيراد الدفعات', settings: 'الإعدادات', changelog: 'سجل التعديلات' };
+var SCREEN_LABELS_ = { statement: 'كشف حساب', bookings: 'كل الحجوزات', arrivals: 'متابعة الأرصدة', balancesReport: 'بيان الأرصدة بتاريخ محدد', statsReport: 'الإحصائيات', payments: 'كل المدفوعات', clientPortal: 'بوابة العملاء', settings: 'الإعدادات', changelog: 'سجل التعديلات' };
 
 // ==========================================================
 // مزامنة تفضيلات الواجهة الشخصية (تخصيص/عرض/ترتيب أعمدة الجداول + حالة الفرز) بحساب
@@ -3791,9 +3756,9 @@ function onAuthSuccess_(token, user, sessionMinutes) {
 }
 function _hbEmbedded_() { try { return typeof HB_EMBED !== 'undefined' && HB_EMBED; } catch (e) { return false; } }
 
-// "users" و"import" (استيراد/مزامنة الدفعات القديمة) وصولهما محكوم بالدور فقط (مدير)،
+// "users" وصولها محكوم بالدور فقط (مدير) — (V4.363) حُذفت شاشة «استيراد الدفعات» الانتقالية،
 // وليسا صلاحية عادية قابلة للتفعيل لمستخدم بعينه — نفس القيد مطبَّق على الخادم أيضًا
-function isRoleOnlyScreen_(key) { return key === 'users' || key === 'import'; }
+function isRoleOnlyScreen_(key) { return key === 'users'; }
 var PERM_LEVELS_CLIENT_ = ['none', 'view', 'add', 'edit', 'delete'];
 function permLevelRank_(level) {
   var i = PERM_LEVELS_CLIENT_.indexOf(level);
@@ -3853,7 +3818,7 @@ function applyBookingEditFinanceVisibility_() {
 var MOBILE_TAB_ORDER_ = ['statement', 'bookings', 'arrivals', 'payments'];
 var MOBILE_TAB_ICONS_ = {
   statement: '📊', bookings: '🛏', arrivals: '💰', payments: '💵', statsReport: '📈',
-  clientPortal: '🔗', import: '📥', changelog: '📜', users: '👤', settings: '⚙'
+  clientPortal: '🔗', changelog: '📜', users: '👤', settings: '⚙'
 };
 function allowedNavButtons_() {
   return Array.prototype.slice.call(document.querySelectorAll('#navLinks button[data-page]'))
@@ -4242,7 +4207,7 @@ function startApp_() {
     }, 180000);
   }
 
-  var wanted = ['statement','bookings','arrivals','payments','import','settings','users','statsReport','clientPortal','changelog'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';
+  var wanted = ['statement','bookings','arrivals','payments','settings','users','statsReport','clientPortal','changelog'].indexOf(INITIAL_PAGE) !== -1 ? INITIAL_PAGE : 'statement';
   if (isScreenAllowed_(wanted)) {
     showPage(wanted);
   } else {
@@ -7529,7 +7494,6 @@ function initBookingsPage() {
 
   document.getElementById('searchBtn').addEventListener('click', runSearch);
   document.getElementById('resetBtn').addEventListener('click', resetAllBookingFilters);
-  document.getElementById('syncLegacyBtn').addEventListener('click', runSyncLegacyPayments);
   document.getElementById('bookingsCollapseBtn').addEventListener('click', function () {
     document.getElementById('bookingsFiltersWrap').classList.toggle('collapsed');
   });
@@ -9357,101 +9321,6 @@ function shareArrivalsSummaryImage_() {
     shareSafeName_('balancesSummary', ''));
 }
 
-/* ============================================================ */
-/* صفحة: استيراد الدفعات */
-/* ============================================================ */
-var lastScan = [];
-function initImportPage() {
-  document.getElementById('scanBtn').addEventListener('click', scanImportSheets);
-  document.getElementById('selectAllBtn').addEventListener('click', function() { document.querySelectorAll('.rowChk:not(:disabled)').forEach(function(b){ b.checked = true; }); });
-  document.getElementById('deselectAllBtn').addEventListener('click', function() { document.querySelectorAll('.rowChk:not(:disabled)').forEach(function(b){ b.checked = false; }); });
-  document.getElementById('importBtn').addEventListener('click', runImportSelected);
-  document.getElementById('syncLegacyBtn').addEventListener('click', runSyncLegacyPayments);
-
-  var searchInput = document.getElementById('sheetSearch');
-  var searchList = document.getElementById('sheetSearchList');
-  function applyRowFilter(term) {
-    var t = term.trim().toLowerCase();
-    document.querySelectorAll('#impTbody tr').forEach(function(tr) {
-      var nameCell = tr.querySelector('td.name');
-      if (!nameCell) return;
-      tr.style.display = (!t || nameCell.textContent.toLowerCase().indexOf(t) !== -1) ? '' : 'none';
-    });
-  }
-  searchInput.addEventListener('input', function () {
-    var v = this.value.trim().toLowerCase();
-    applyRowFilter(this.value);
-    if (!v) { searchList.style.display = 'none'; return; }
-    var names = lastScan.map(function(r){ return r.sheetName; }).filter(function(n){ return n.toLowerCase().indexOf(v) !== -1; }).slice(0, 20);
-    if (names.length === 0) { searchList.innerHTML = '<div class="search-item text-muted">لا توجد نتائج</div>'; searchList.style.display = 'block'; return; }
-    searchList.innerHTML = names.map(function(n){ return '<div class="search-item" data-name="' + n.replace(/"/g,'&quot;') + '">' + n + '</div>'; }).join('');
-    searchList.style.display = 'block';
-    searchList.querySelectorAll('.search-item').forEach(function(item) {
-      item.addEventListener('mousedown', function(e) { e.preventDefault(); searchInput.value = item.dataset.name; applyRowFilter(item.dataset.name); searchList.style.display = 'none'; });
-    });
-  });
-  document.addEventListener('click', function(e) { if (!e.target.closest('.search-wrap')) searchList.style.display = 'none'; });
-
-  scanImportSheets();
-}
-
-function impRoleLabel(role) {
-  if (role === 'client') return 'عميل';
-  if (role === 'supplier') return 'مورد';
-  if (role === 'both') return '⚠ عميل ومورد معًا';
-  return '⚠ غير معروف';
-}
-function impRowHtml(r) {
-  return '<tr><td><input type="checkbox" class="rowChk" value="' + escapeHtml(r.sheetName) + '" ' + (r.imported ? 'disabled' : 'checked') + '></td>' +
-    '<td class="name">' + escapeHtml(r.sheetName) + '</td>' +
-    '<td><span class="role-tag2 ' + r.role + '">' + impRoleLabel(r.role) + '</span></td>' +
-    '<td class="num">' + r.count + '</td><td class="num">' + fmtNum(r.total) + '</td>' +
-    '<td>' + (r.imported ? '<span class="status-pill done">تم النقل ✓</span>' : '<span class="status-pill pending">لم يُنقل بعد</span>') + '</td></tr>';
-}
-function scanImportSheets() {
-  document.getElementById('impTbody').innerHTML = '<tr><td colspan="6" class="empty-state">جارِ الفحص...</td></tr>';
-  google.script.run.withSuccessHandler(function(list) {
-    lastScan = list || [];
-    var tbody = document.getElementById('impTbody');
-    if (lastScan.length === 0) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">لا توجد دفعات قديمة مكتشفة في أي ورقة</td></tr>'; return; }
-    tbody.innerHTML = lastScan.map(impRowHtml).join('');
-  }).withFailureHandler(function(e) {
-    document.getElementById('impTbody').innerHTML = '<tr><td colspan="6" class="empty-state">خطأ: ' + e.message + '</td></tr>';
-  }).scanLegacyPaymentSheets(currentSessionToken);
-}
-function runImportSelected() {
-  var names = Array.prototype.map.call(document.querySelectorAll('.rowChk:checked'), function(b){ return b.value; });
-  if (names.length === 0) { alert('اختر ورقة واحدة على الأقل'); return; }
-  var btn = document.getElementById('importBtn');
-  guardOnce(btn, function(done) {
-    google.script.run.withSuccessHandler(function(res) {
-      done();
-      var log = document.getElementById('importLog');
-      if (!res.ok) { log.className = 'import-log err'; log.textContent = 'فشل الاستيراد: ' + res.error; return; }
-      log.className = 'import-log ok';
-      log.textContent = 'تم استيراد ' + res.imported + ' دفعة من ' + res.sheets + ' ورقة بنجاح. لم يتم حذف أو تعديل أي بيانات في الأوراق الأصلية.';
-      scanImportSheets();
-    }).withFailureHandler(function(e) { done(); var log = document.getElementById('importLog'); log.className = 'import-log err'; log.textContent = 'خطأ: ' + e.message; }).importLegacyPayments(names, currentSessionToken);
-  });
-}
-
-// يجلب فقط الدفعات الجديدة المُضافة في الأوراق القديمة السابق استيرادها (بدون تكرار)
-function runSyncLegacyPayments() {
-  var btn = document.getElementById('syncLegacyBtn');
-  guardOnce(btn, function(done) {
-    btn.textContent = 'جارِ المزامنة...';
-    google.script.run.withSuccessHandler(function(res) {
-      done(); btn.textContent = '↻ مزامنة الدفعات القديمة الآن';
-      var log = document.getElementById('importLog');
-      if (!res.ok) { log.className = 'import-log err'; log.textContent = 'فشلت المزامنة: ' + res.error; return; }
-      log.className = 'import-log ok';
-      log.textContent = res.added > 0
-        ? 'تمت المزامنة: أُضيفت ' + res.added + ' دفعة جديدة من ' + res.sheets + ' ورقة.'
-        : 'تمت المزامنة: لا توجد دفعات جديدة لم تُستورد بعد.';
-      scanImportSheets();
-    }).withFailureHandler(function(e) { done(); btn.textContent = '↻ مزامنة الدفعات القديمة الآن'; var log = document.getElementById('importLog'); log.className = 'import-log err'; log.textContent = 'خطأ: ' + e.message; }).syncLegacyPayments(currentSessionToken);
-  });
-}
 
 /* ============================================================ */
 /* صفحة: الإعدادات */
