@@ -1459,6 +1459,7 @@
         </div>
 
         <div id="warningsBox" class="price-warning-box" style="display:none;"></div>
+        <div id="hbLedPendBox" style="display:none;margin:8px 0;padding:8px 12px;border:1px dashed #f59e0b;border-radius:10px;background:#fffbeb;"></div>
 
         <div class="row g-2 mb-3">
             <div class="col-md-3"><div class="summary-card"><div class="card-title">إجمالي المدين</div><div id="sum-debit" class="card-value text-debit">0</div></div></div>
@@ -2491,7 +2492,7 @@
       <div class="mb-1"><label class="small fw-bold mb-1">البيان</label><input type="text" id="pNote" class="form-control form-control-sm"></div>
       <!-- (7.15.0) البيانات المحاسبية للدفعة — تظهر فقط بعد ربط البرنامج بالحسابات العامة -->
       <div id="pGlBox" class="mt-2 p-2" style="display:none;border:1px dashed #cbd5e1;border-radius:8px;background:#f8fafc;">
-        <div class="small fw-bold mb-1">🏦 الحساب النقدي (للحسابات العامة) <span class="text-muted fw-normal">— اختياري</span></div>
+        <div class="small fw-bold mb-1">🏦 الحساب النقدي (للحسابات العامة) <span class="text-muted fw-normal" id="pGlOpt">— اختياري</span><span id="pGlReq" style="display:none;color:#b45309;">— إلزامي: الدفعة تُسجَّل سنداً بانتظار الاعتماد</span></div>
         <select id="pGlCash" class="form-select form-select-sm mb-1" onchange="glPayCashChanged_()"></select>
         <div class="d-flex gap-1 align-items-center">
           <select id="pGlCur" class="form-select form-select-sm" style="width:90px;" onchange="glPayCurChanged_()"><option value="SAR">ريال</option><option value="EGP">جنيه</option><option value="USD">دولار</option></select>
@@ -2518,6 +2519,11 @@
         </div>
         <div class="col-md-4"><label class="small fw-bold mb-1">التاريخ (لكل الدفعات)</label><input type="text" id="bDate" class="form-control form-control-sm" placeholder="DD/MM/YYYY" onblur="formatDateExcel(this)"></div>
         <div class="col-md-4"><label class="small fw-bold mb-1">البيان الافتراضي</label><input type="text" id="bNote" class="form-control form-control-sm"></div>
+      </div>
+      <!-- 🏛️ (V4.357) الحساب المقابل لكل الدفعات — يظهر عند التسجيل عبر طابور الاعتماد -->
+      <div id="bGlBox" class="mb-2 p-2" style="display:none;border:1px dashed #f59e0b;border-radius:8px;background:#fffbeb;">
+        <div class="small fw-bold mb-1">🏦 الحساب المقابل لكل الدفعات (خزينة/بنك/عهدة بالريال) — إلزامي: كل دفعة تُسجَّل سنداً بانتظار الاعتماد</div>
+        <select id="bGlCash" class="form-select form-select-sm"></select>
       </div>
       <div id="batchRows"></div>
       <button type="button" class="btn btn-sm btn-outline-secondary mt-1" onclick="addBatchRow()">+ إضافة سطر</button>
@@ -2584,10 +2590,17 @@
         <input type="text" id="apName" class="form-control form-control-sm">
         <div class="small text-muted mt-1">تعديل الاسم هنا يُحدِّثه في كل حجوزاته بملف المصدر وفي سجل دفعاته تلقائيًا عند الحفظ.</div>
       </div>
-      <div class="mb-2">
+      <div class="mb-2" id="apCodeWrap" style="display:none;">
         <label class="small fw-bold mb-1">كود الحساب</label>
         <input type="text" id="apCode" class="form-control form-control-sm" dir="ltr" placeholder="— بلا كود بعد —">
         <div class="small text-muted mt-1">يظهر في كشف الحساب وفي اسم ملف الـPDF عند الطباعة/المشاركة. يجب أن يكون فريدًا لكل حساب. يمكن توليد أكواد تسلسلية لكل الحسابات دفعة واحدة عبر دالة <code>generateAccountCodes</code> من محرر Apps Script.</div>
+      </div>
+      <!-- 🔗 (V4.357) الحساب العام: اختيار حساب من دليل الحسابات = ربط هذا الحساب الفندقي به + مزامنة فورية -->
+      <div class="mb-2" id="apGlWrap">
+        <label class="small fw-bold mb-1">الحساب العام (كود الحساب)</label>
+        <div class="autocomplete-wrap"><input type="text" id="apGlAcc" class="form-control form-control-sm" autocomplete="off" placeholder="ابحث بكود أو اسم الحساب بالحسابات العامة…"><div class="autocomplete-list" id="apGlAccSug"></div></div>
+        <div class="small mt-1" id="apGlInfo"></div>
+        <div class="small text-muted mt-1">اختيار الحساب يربط هذا الحساب الفندقي بالحساب العام ويُزامنهما تلقائياً عند الحفظ: تُسجَّل حجوزاته ودفعاته بالحسابات العامة على هذا الحساب، وتظهر قيود الحساب العام (السداد من الخزينة/العهدة…) بهذا الكشف. امسح الحقل لفك الربط.</div>
       </div>
       <div class="mb-2">
         <label class="small fw-bold mb-1 d-block">تصنيف الحساب</label>
@@ -3145,7 +3158,7 @@ if (HB_EMBED) {
     respondPortalRequest:1, appendBookingFromForm:1, importLegacyPayments:1,
     refreshBookingsNow:1, getPartyBalancesAsOf:1, searchBookings:1, registerBookingsBulk:1,
     registerTelegramWebhook:1, telegramTestMessage:1, telegramDiscoverChat:1, testTelegramWebhookUrl:1, getTelegramBotLog:1, enableTelegramPolling:1, pollTelegramNow:1,
-    telegramRunDigestNow:1, telegramDiagnose:1, renamePartyEverywhere:1
+    telegramRunDigestNow:1, telegramDiagnose:1, renamePartyEverywhere:1, hbGlAccLinkSave:1, hbGlAccList:1
   };
   // دوال تكتب في البيانات: لا يصح أن نقول لها "أعد المحاولة" عند انتهاء المهلة — الخادم قد
   // يكون أتمّها فعلًا، وإعادتها تُنتج دفعة/حجزًا مكرَّرًا
@@ -3154,7 +3167,7 @@ if (HB_EMBED) {
     respondPortalRequest:1, appendBookingFromForm:1, registerBookingQaid:1,
     saveAccountProfile:1, importLegacyPayments:1, createUser:1, updateUser:1,
     renamePartyEverywhere:1, addStaffRequestMessage:1, saveTelegramSettings:1,
-    saveTelegramBotUser:1, registerBookingsBulk:1, registerPaymentsBatch:1,
+    saveTelegramBotUser:1, registerBookingsBulk:1, registerPaymentsBatch:1, hbGlAccLinkSave:1,
     registerLinkedPayment:1, registerManualEntry:1, deleteAccount:1
   };
   // دوال تُرجع دائمًا كائنًا/مصفوفة عند النجاح — فإذا عاد null فهو ردّ ضائع يستحق إعادة محاولة
@@ -4518,6 +4531,7 @@ function loadData() {
     document.getElementById('v-code-line').style.display = res.accountCode ? '' : 'none';
     document.getElementById('v-code').textContent = res.accountCode || '';
 
+    hbLedgerPendLoad_(res.party);   // 🏛️ (V4.357) دفعات هذا الطرف بانتظار الاعتماد
     var warnBox = document.getElementById('warningsBox');
     if (res.warnings && res.warnings.length > 0) {
       warnBox.style.display = 'block';
@@ -5215,6 +5229,7 @@ function openPaymentModal() {
   glPayFormFill_(null);
   showDirWarn_('pDirWarn', '');
   ensurePartyRoleMap_(applyPDirDefault_);
+  hbLedgerStateLoad_();
   paymentModalEl.show();
 }
 function openBatchModal() {
@@ -5225,7 +5240,47 @@ function openBatchModal() {
   showDirWarn_('bDirWarn', '');
   addBatchRow(); addBatchRow();
   document.getElementById('bSaveBtn').onclick = function () { saveBatch(); };
+  hbLedgerStateLoad_();
   batchModalEl.show();
+}
+/* ---------- 🏛️ (V4.357) دفعات كشف الفندق عبر طابور الاعتماد (نفس آلية حسابات عملاء العمرة) ---------- */
+var HBL_ = { on: false, allowed: true, why: '' };
+function hbLedgerStateLoad_(cb) {
+  if (!currentSessionToken) return;
+  google.script.run.withSuccessHandler(function (r) { HBL_ = r || HBL_; hbLedgerApplyUi_(); if (cb) cb(); }).withFailureHandler(function () {}).hbLedgerState(currentSessionToken);
+}
+function hbLedgerApplyUi_() {
+  var on = !!(HBL_.on && HBL_.allowed);
+  var req = document.getElementById('pGlReq'), opt = document.getElementById('pGlOpt'), box = document.getElementById('pGlBox');
+  if (req) req.style.display = on ? '' : 'none'; if (opt) opt.style.display = on ? 'none' : '';
+  if (box && on && GLL.linked) box.style.display = '';
+  var bb = document.getElementById('bGlBox');
+  if (bb) { bb.style.display = on && GLL.linked ? '' : 'none'; if (on && GLL.linked && !document.getElementById('bGlCash').options.length) document.getElementById('bGlCash').innerHTML = glPayCashOptions_(''); }
+}
+// نتيجة تسجيل دفعة: بانتظار الاعتماد / تكرار محتمل يحتاج تأكيداً / الحساب المقابل ناقص — true لو عولجت هنا
+function hbPayLedgerRes_(res, resend, party) {
+  if (res && res.pending && res.ok) { showToast(res.message || '⏳ بانتظار الاعتماد'); hbLedgerPendLoad_(party); return true; }
+  if (res && !res.ok && res.dup) {
+    var lst = (res.dups || []).map(function (d) { return '• ' + d.where + ': ' + d.ref + ' — ' + d.date + (d.desc ? ' — ' + d.desc : ''); }).join('\n');
+    if (confirm('🔁 دفعة مشابهة مسجَّلة بالفعل (نفس الطرف والمبلغ في نفس اليوم):\n' + lst + '\n\nتسجيلها رغم ذلك؟ (تصل للمعتمِد بعلامة «تكرار محتمل»)')) resend();
+    return true;
+  }
+  if (res && !res.ok && res.code === 'LEDGER_NEED_CP') { alert('اختر الحساب المقابل (الخزينة/البنك/العهدة) من «الحساب النقدي» — الدفعة تُسجَّل سنداً بانتظار الاعتماد'); return true; }
+  return false;
+}
+// صندوق «دفعات بانتظار الاعتماد» بكشف الطرف
+function hbLedgerPendLoad_(party) {
+  var box = document.getElementById('hbLedPendBox'); if (!box) return;
+  party = party || document.getElementById('customer').value;
+  if (!party || !currentSessionToken) { box.style.display = 'none'; return; }
+  google.script.run.withSuccessHandler(function (r) {
+    var rows = (r && r.rows) || [];
+    if (!rows.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = '';
+    box.innerHTML = '<div style="font-weight:800;color:#92400e;margin-bottom:4px;">⏳ دفعات بانتظار الاعتماد (' + rows.length + ') — تظهر بالكشف بعد اعتمادها من الحسابات العامة</div>' +
+      rows.map(function (x) { return '<div style="font-size:.8rem;">• ' + escapeHtml(x.date) + ' — <b style="direction:ltr;display:inline-block;">' + fmtNum(Math.abs(x.amount)) + ' ' + escapeHtml(x.cur || '') + '</b> ' + (x.amount < 0 ? 'صرف' : 'قبض') +
+        ' — سند ' + escapeHtml(x.voucher || x.id) + ' — ' + escapeHtml(x.counter || '') + ' — بواسطة ' + escapeHtml(x.maker || '') + (x.dup ? ' <span style="color:#b91c1c;">🔁 تكرار محتمل</span>' : '') + '</div>'; }).join('');
+  }).withFailureHandler(function () {}).hbLedgerPending(currentSessionToken, party);
 }
 
 // نداءات مشتركة لبناء إجراءات تراجع/إعادة الدفعات (إضافة/حذف)
@@ -5261,8 +5316,13 @@ function savePayment(andNew) {
     };
     Object.assign(payload, glPayFormVals_());
     if (!payload.partyName) { alert('اختر اسم الطرف'); done(); return; }
-    google.script.run.withSuccessHandler(function(res) {
+    var send = function () { google.script.run.withSuccessHandler(function(res) {
       done();
+      // 🏛️ (V4.357) طابور الاعتماد
+      if (hbPayLedgerRes_(res, function () { payload.force = true; send(); }, payload.partyName)) {
+        if (res && res.pending) { if (andNew) { document.getElementById('pAmount').value = ''; document.getElementById('pQaid').value = ''; } else paymentModalEl.hide(); }
+        return;
+      }
       if (!res.ok) return alert("فشل تسجيل الدفعة: " + res.error);
       var refresh = function () { if (cacheData) loadData(); };
       pushUndo_({
@@ -5273,7 +5333,8 @@ function savePayment(andNew) {
       if (andNew) { document.getElementById('pAmount').value = ''; document.getElementById('pQaid').value = ''; loadPartyList(); }
       else { paymentModalEl.hide(); }
       refresh();
-    }).withFailureHandler(function(e) { done(); alert("خطأ: " + e.message); }).registerPayment(payload, currentSessionToken);
+    }).withFailureHandler(function(e) { done(); alert("خطأ: " + e.message); }).registerPayment(payload, currentSessionToken); };
+    send();
   });
 }
 
@@ -5397,8 +5458,10 @@ function saveBatch() {
       if (party && amount) rows.push({ partyName: party, amount: amount, note: note, date: dateIso });
     });
     if (rows.length === 0) { alert('أضف دفعة واحدة على الأقل'); done(); return; }
+    if (!hbBatchCash_(rows)) { done(); return; }   // 🏛️ (V4.357)
     google.script.run.withSuccessHandler(function(res) {
       done();
+      if (res && res.pending) { alert(res.message || ('⏳ ' + res.count + ' دفعة بانتظار الاعتماد')); if (res.ok) { batchModalEl.hide(); hbLedgerPendLoad_(); } return; }
       if (!res.ok) return alert('فشل الحفظ: ' + res.error);
       alert('تم حفظ ' + res.saved + ' دفعة بنجاح' + (res.skipped ? (' (تخطي ' + res.skipped + ' سطر ناقص)') : ''));
       batchModalEl.hide();
@@ -5408,6 +5471,16 @@ function saveBatch() {
   });
 }
 
+// 🏛️ (V4.357) الحساب المقابل لكل سطور الدفعات المتعددة (طابور الاعتماد) — false لو ناقص
+function hbBatchCash_(rows) {
+  if (!(HBL_.on && HBL_.allowed)) return true;
+  var sel = document.getElementById('bGlCash'), cash = sel ? sel.value : '';
+  if (!cash) { alert('اختر الحساب المقابل لكل الدفعات (خزينة/بنك/عهدة)'); return false; }
+  var o = sel.selectedOptions[0], c = (o && o.getAttribute('data-cur')) || 'SAR';
+  if (c !== 'SAR') { alert('الحساب المقابل للدفعات المتعددة يجب أن يكون بالريال — للعملات الأخرى سجّل كل دفعة على حدة'); return false; }
+  rows.forEach(function (r) { r.glCash = cash; r.glCur = 'SAR'; });
+  return true;
+}
 function openNewPartyModal() { beNewPartyTargetInput_ = null; document.getElementById('npName').value = ''; document.getElementById('npRole').value = 'client'; newPartyModalEl.show(); }
 function saveNewParty() {
   var btn = document.getElementById('npSaveBtn');
@@ -5518,15 +5591,17 @@ function saveLinkedPayment() {
     };
     if (!payload.fromParty || !payload.toParty) { alert('اختر الطرفين'); done(); return; }
     if (payload.fromParty === payload.toParty) { alert('يجب أن يكون الطرفان مختلفين'); done(); return; }
-    google.script.run.withSuccessHandler(function (res) {
+    var send = function () { google.script.run.withSuccessHandler(function (res) {
       done();
+      if (hbPayLedgerRes_(res, function () { payload.force = true; send(); }, payload.fromParty)) { if (res && res.pending) linkedPaymentModalEl.hide(); return; }   // 🏛️ (V4.357)
       if (!res.ok) return alert('فشل الحفظ: ' + res.error);
       linkedPaymentModalEl.hide();
       showToast('تم تسجيل الدفعتين بنجاح');
       loadPartyList();
       if (cacheData) loadData();
       if (document.getElementById('page-payments').classList.contains('active')) searchAllPayments();
-    }).withFailureHandler(function (e) { done(); alert('خطأ: ' + e.message); }).registerLinkedPayment(payload, currentSessionToken);
+    }).withFailureHandler(function (e) { done(); alert('خطأ: ' + e.message); }).registerLinkedPayment(payload, currentSessionToken); };
+    send();
   });
 }
 
@@ -5606,6 +5681,7 @@ function openPaymentModalFromPayments() {
   glPayFormFill_(null);
   showDirWarn_('pDirWarn', '');
   ensurePartyRoleMap_(applyPDirDefault_);
+  hbLedgerStateLoad_();
   paymentModalEl.show();
 }
 
@@ -5643,6 +5719,7 @@ function openBatchModalFromPayments() {
   showDirWarn_('bDirWarn', '');
   addBatchRow(); addBatchRow();
   document.getElementById('bSaveBtn').onclick = function () { saveBatchFromPayments(); };
+  hbLedgerStateLoad_();
   batchModalEl.show();
 }
 function saveBatchFromPayments() {
@@ -5659,8 +5736,10 @@ function saveBatchFromPayments() {
       if (party && amount) rows.push({ partyName: party, amount: amount, note: note, date: dateIso });
     });
     if (rows.length === 0) { alert('أضف دفعة واحدة على الأقل'); done(); return; }
+    if (!hbBatchCash_(rows)) { done(); return; }   // 🏛️ (V4.357)
     google.script.run.withSuccessHandler(function(res) {
       done();
+      if (res && res.pending) { alert(res.message || ('⏳ ' + res.count + ' دفعة بانتظار الاعتماد')); if (res.ok) batchModalEl.hide(); return; }
       if (!res.ok) return alert('فشل الحفظ: ' + res.error);
       alert('تم حفظ ' + res.saved + ' دفعة' + (res.skipped ? ' (تخطي ' + res.skipped + ')' : ''));
       batchModalEl.hide();
@@ -6215,6 +6294,44 @@ function openAccountProfileModalFor_(name, onSaved) {
     renderApTypeSeg_();
     renderApRoleSeg_();
   }).getAccountProfile(currentSessionToken, name);
+  apGlOpen_(name);
+}
+/* 🔗 (V4.357) ربط الحساب الفندقي بحساب عام من «بيانات الحساب» */
+var AP_GL_ = { labels: null, byCode: {}, orig: '', off: false, wired: false };
+function apGlLabel_(a) { return a.code + ' — ' + a.name + (a.cur ? ' (' + a.cur + ')' : ''); }
+function apGlCodeOf_(v) { var m = String(v || '').trim().match(/^(\d{2,})/); return m ? m[1] : ''; }
+function apGlInfo_(html) { document.getElementById('apGlInfo').innerHTML = html; }
+function apGlOpen_(name) {
+  AP_GL_.orig = ''; document.getElementById('apGlAcc').value = '';
+  apGlInfo_('<span style="color:var(--ink-dim);">⏳ جارِ قراءة الربط…</span>');
+  if (!AP_GL_.wired) {
+    AP_GL_.wired = true;
+    wireAutocomplete('apGlAcc', 'apGlAccSug', function () { return AP_GL_.labels || []; }, function (lbl) { apGlPicked_(apGlCodeOf_(lbl)); });
+    document.getElementById('apGlAcc').addEventListener('change', function () { apGlPicked_(apGlCodeOf_(this.value)); });
+  }
+  if (!AP_GL_.labels) google.script.run.withSuccessHandler(function (r) {
+    AP_GL_.labels = []; AP_GL_.byCode = {};
+    ((r && r.accounts) || []).forEach(function (a) { AP_GL_.byCode[a.code] = a; AP_GL_.labels.push(apGlLabel_(a)); });
+  }).withFailureHandler(function () { AP_GL_.labels = []; }).hbGlAccList(currentSessionToken);
+  google.script.run.withSuccessHandler(function (r) {
+    if (apEditingName_ !== name) return;
+    AP_GL_.off = !!(r && r.off);
+    document.getElementById('apGlWrap').style.display = AP_GL_.off ? 'none' : '';
+    document.getElementById('apCodeWrap').style.display = AP_GL_.off ? '' : 'none';
+    if (AP_GL_.off) return;
+    if (r && r.linked) {
+      AP_GL_.orig = r.code;
+      document.getElementById('apGlAcc').value = r.code + ' — ' + r.accName;
+      apGlInfo_('<span style="color:var(--ok);font-weight:700;">✅ مربوط بالحساب العام ' + escapeHtml(r.code) + ' — ' + escapeHtml(r.accName) + (r.type ? ' <span style="color:var(--ink-dim);font-weight:400;">(' + escapeHtml(r.type) + ')</span>' : '') + '</span>');
+    } else apGlInfo_('<span style="color:var(--warn,#b45309);font-weight:700;">⚠️ غير مربوط بالحسابات العامة — حجوزاته ودفعاته لا تُسجَّل هناك حتى تختار حسابه</span>');
+  }).withFailureHandler(function (e) { apGlInfo_('<span style="color:var(--bad);">تعذّر قراءة الربط: ' + escapeHtml(e.message) + '</span>'); }).hbGlAccLink(currentSessionToken, name);
+}
+function apGlPicked_(code) {
+  if (!code) { if (AP_GL_.orig) apGlInfo_('<span style="color:var(--bad);font-weight:700;">سيُفك الربط بالحساب العام ' + escapeHtml(AP_GL_.orig) + ' عند الحفظ</span>'); return; }
+  var a = AP_GL_.byCode[code];
+  if (!a) { apGlInfo_('<span style="color:var(--bad);">الكود ' + escapeHtml(code) + ' غير موجود بدليل الحسابات (حساب فرعي نشط)</span>'); return; }
+  if (code === AP_GL_.orig) return;
+  apGlInfo_('<span style="color:#1d4ed8;font-weight:700;">🔗 سيُربط بـ ' + escapeHtml(apGlLabel_(a)) + ' ويُزامَن عند الحفظ</span>');
 }
 var apOnSaved_ = null;
 
@@ -6234,7 +6351,28 @@ function saveAccountProfileModal_() {
     salesAgent: document.getElementById('apSalesAgent').value.trim(),
     code: document.getElementById('apCode').value.trim()
   };
-  var btn = document.getElementById('apSaveBtn'); btn.disabled = true;
+  var btn = document.getElementById('apSaveBtn');
+  // 🔗 (V4.357) الحساب العام: كود الحساب = كود الحساب العام المربوط (يظهر بالكشف واسم ملف الـPDF)
+  if (!AP_GL_.off && document.getElementById('apGlWrap').style.display !== 'none') {
+    var glTxt = document.getElementById('apGlAcc').value.trim(), glCode = apGlCodeOf_(glTxt);
+    if (glTxt && (!glCode || (AP_GL_.labels && !AP_GL_.byCode[glCode] && glCode !== AP_GL_.orig))) { alert('اختر الحساب العام من القائمة (ابحث بالكود أو الاسم)'); return; }
+    if (glCode) { payload.code = glCode; payload.codeFromGl = true; }
+    if (glCode !== AP_GL_.orig) {
+      btn.disabled = true; btn.innerHTML = '⏳ ربط ومزامنة…';
+      google.script.run.withSuccessHandler(function (r) {
+        btn.innerHTML = 'حفظ';
+        var msg = glCode ? '🔗 رُبط بالحساب العام ' + glCode + (r && r.sync ? ' · قيود جديدة ' + (r.sync.created || 0) + ' · معدّلة ' + (r.sync.updated || 0) : '') + (r && r.mirrored ? ' · نُسخ للكشف ' + r.mirrored : '') + (r && r.deferred ? ' · المزامنة خلال دقيقة' : '') : '🔗 فُك الربط بالحساب العام';
+        showToast(msg);
+        AP_GL_.orig = glCode; apSaveProfileNow_(payload, btn);
+      }).withFailureHandler(function (e) { btn.disabled = false; btn.innerHTML = 'حفظ'; alert('تعذّر الربط: ' + e.message); }).hbGlAccLinkSave(currentSessionToken, apEditingName_, glCode);
+      return;
+    }
+  }
+  apSaveProfileNow_(payload, btn);
+}
+function apSaveProfileNow_(payload, btn) {
+  var newName = payload.name;
+  btn.disabled = true;
   google.script.run.withSuccessHandler(function (res) {
     btn.disabled = false;
     if (!res.ok) { alert('فشل الحفظ: ' + res.error); return; }

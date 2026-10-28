@@ -4858,7 +4858,7 @@ function hbGlOnlyGuardRow_(sh, id) {
 function registerPayment(payment, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'add');
-    hbGlOnlyGuardNew_();
+    if (hbPayRoute_(actingUser) === 'ledger') return hbLedgerSubmitPay_(actingUser, payment);   // 🏛️ (V4.357) سند مسودة + طابور الاعتماد
     if (!payment.partyName) throw new Error('اسم الطرف مطلوب');
     var amount = parseAmountLoose_(payment.amount);
     if (!amount || amount <= 0) throw new Error('المبلغ غير صحيح');
@@ -4924,7 +4924,7 @@ function linkedPaymentNote_(rawNote, otherParty, dir) {
 function registerLinkedPayment(payload, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'add');
-    hbGlOnlyGuardNew_();
+    if (hbPayRoute_(actingUser) === 'ledger') return hbLedgerSubmitLinked_(actingUser, payload);   // 🏛️ (V4.357)
     var fromParty = (payload.fromParty || '').toString().trim();
     var toParty = (payload.toParty || '').toString().trim();
     if (!fromParty || !toParty) throw new Error('الطرفان مطلوبان');
@@ -4969,7 +4969,7 @@ function registerLinkedPayment(payload, token) {
 function registerPaymentsBatch(direction, rows, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'add');
-    hbGlOnlyGuardNew_();
+    if (hbPayRoute_(actingUser) === 'ledger') return hbLedgerSubmitBatch_(actingUser, direction, rows);   // 🏛️ (V4.357)
     if (!rows || rows.length === 0) throw new Error('لا توجد دفعات لتسجيلها');
     var sh = ensurePaymentsSheet_();
     var now = new Date();
@@ -5446,6 +5446,8 @@ function saveAccountProfile(token, payload) {
       for (var j = 1; j < data.length; j++) {
         if (j + 1 === rowIdx) continue;
         if ((data[j][6] || '').toString().trim().toLowerCase() === code.toLowerCase()) {
+          // 🔗 (V4.357) الكود من الحساب العام المربوط: حساب عام واحد قد يُربط به أكثر من اسم فندقي ⇒ يبقى الكود السابق بلا رفض
+          if (payload.codeFromGl) { code = rowIdx > 0 ? (data[rowIdx - 1][6] || '').toString().trim() : ''; break; }
           throw new Error('الكود "' + code + '" مستخدَم بالفعل للحساب "' + (data[j][0] || '') + '" — اختر كودًا آخر');
         }
       }

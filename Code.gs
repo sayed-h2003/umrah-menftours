@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.356";
+var APP_VERSION = "4.357";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14821,10 +14821,13 @@ function setAccDisplayName(authToken, client, trip, displayName) {
   return { success: false, error: 'تعذر الوصول لبيانات الحساب' };
 }
 
+// 🛂 (V4.357) نمط ثالث «تأشيرة وباركود»: حساب الرحلة = بند واحد «تأشيرة وباركود» بعدد معتمري العميل × سعره الساري (أسعار العميل
+// بفترات) — يُحدَّث تلقائياً مع كل تغيير بالكشف، وتعديله يدوياً لرحلة بعينها يُحترم (يصبح «معدّل»)
+var ACC_MODE_VZ_ = 'تأشيرة وباركود';
 function setAccMode(authToken, client, trip, mode) {
   var session = _accPerm_(authToken, 'edit');
   client = String(client || '').trim(); trip = String(trip || '').trim();
-  mode = (mode === 'بنود') ? 'بنود' : 'برنامج';
+  mode = (mode === 'بنود' || mode === ACC_MODE_VZ_) ? mode : 'برنامج';
   _accEnsureMeta_(authToken, client, trip, session.username);
   var mSh = _accSheet_(ACC_META_SHEET, ACC_META_HEADERS);
   var vals = mSh.getRange(2, 1, mSh.getLastRow() - 1, ACC_META_HEADERS.length).getValues();
@@ -14834,6 +14837,8 @@ function setAccMode(authToken, client, trip, mode) {
       mSh.getRange(i + 2, 3).setValue(mode);
       mSh.getRange(i + 2, 6, 1, 2).setValues([[session.username, new Date()]]);
       logChange_(session.username, 'تغيير نمط حساب رحلة', client, trip, old, mode);
+      // (V4.357) نمط «تأشيرة وباركود» يُنشئ بنده فوراً (والتحويل منه يحذف بنده التلقائي) — مزامنة حسابات الرحلة
+      if (mode === ACC_MODE_VZ_ || old === ACC_MODE_VZ_) { try { _syncTripAccounts_(authToken, trip, session.username); } catch (eS) { Logger.log('setAccMode sync: ' + eS.message); } return { success: true, reload: true }; }
       return { success: true };
     }
   }
@@ -15989,13 +15994,16 @@ function _syncTripAccounts_(authToken, trip, username) {
   // ⚡ قراءة كشف المعتمرين مرة واحدة — بيُستخدَم لتجميع كل الأعداد لكل عميل بلا استعلامات متكررة
   var pRowsAll = pSheet.getRange(2, 1, pSheet.getLastRow() - 1, pSheet.getLastColumn()).getValues();
 
-  var clients = {}, clientOrder = [];
+  var clients = {}, clientOrder = [], vzCount = {};
   pRowsAll.forEach(function(r) {
     if (String(P(r, 'tripName') || '').trim() !== trip) return;
     var cl = String(P(r, 'client') || '').trim();
     if (!cl || cl.indexOf('المشرف') === 0) return;
     if (!(cl in clients)) { clients[cl] = true; clientOrder.push(cl); }
+    vzCount[cl] = (vzCount[cl] || 0) + 1;   // 🛂 (V4.357) عدد معتمري العميل بالرحلة (نمط «تأشيرة وباركود»)
   });
+  var _vzDep = null;   // تاريخ سفر الرحلة (لسعر الفترة) — يُقرأ مرة عند أول عميل بنمط «تأشيرة وباركود»
+  var vzDepDate = function () { if (_vzDep === null) { _vzDep = ''; try { _vzDep = ((_accClientStatsIdx_().t || {})[trip] || {}).departDate || ''; } catch (eD) {} } return _vzDep; };
 
   // نمط حساب كل (عميل × هذه الرحلة) من الميتا — الافتراضي «برنامج»
   var mShR = _accSheet_(ACC_META_SHEET, ACC_META_HEADERS);
@@ -16024,7 +16032,32 @@ function _syncTripAccounts_(authToken, trip, username) {
     var hasManual = false, synced = false;
     var idxs = idxByClient[client + '|' + trip] || [];
 
-    if (mode !== 'بنود' && tripApplied) {
+    if (mode === ACC_MODE_VZ_) {
+      // 🛂 (V4.357) بند واحد «تأشيرة وباركود»: العدد = معتمرو العميل بالرحلة، السعر = سعر العميل الساري بتاريخ السفر
+      // (بلا سعر مثبَّت ⇒ يبقى سعر الصف كما هو). بنود الأنماط الأخرى التلقائية تُحذف، واليدوية و«معدّل» لا تُلمس
+      synced = true;
+      var vzN = vzCount[client] || 0, vzP = null, haveVz = false;
+      try { vzP = _accClientPriceAt_(_accClientPricing_(client), ACC_MODE_VZ_, vzDepDate()); } catch (eP) { vzP = null; }
+      idxs.forEach(function(i) {
+        var r = itemVals[i], flag = String(r[17] || ''), isVz = _accBondKey_(String(r[3] || '')) === ACC_MODE_VZ_;
+        if (flag === 'معدّل') hasManual = true;
+        if (flag === 'نعم') {
+          if (isVz && !haveVz) {
+            haveVz = true;
+            var np = vzP !== null ? vzP : _accNum_(r[7]);
+            if (_accNum_(r[6]) !== vzN || _accNum_(r[7]) !== np || String(r[5] || 'EGP') !== 'EGP') {
+              r[5] = 'EGP'; r[6] = vzN; r[7] = np; r[8] = Math.round(vzN * np * 100) / 100; r[13] = username; r[14] = now;
+              updatedRows[i] = true; updated++;
+            }
+          } else if (!(_accIsProgDisc_(r) && _accNum_(r[8]))) { toDelete[i] = true; removed++; }
+        } else if (isVz) haveVz = true;   // بند يدوي/معدّل بنفس الاسم ⇒ لا يُضاف بند تلقائي ثانٍ
+      });
+      if (!haveVz && vzN > 0) {
+        var vp = vzP !== null ? vzP : 0;
+        newRows.push([_accId_('I'), client, trip, ACC_MODE_VZ_, 'كبير', 'EGP', vzN, vp, Math.round(vzN * vp * 100) / 100, 'لا', '', username, now, '', '', '', '', 'نعم', '', 'لا']);
+        created++;
+      }
+    } else if (mode !== 'بنود' && tripApplied) {
       synced = true;
       var breakdown = _accClientBreakdown_(client, trip);
       var desired = {}, order = [];

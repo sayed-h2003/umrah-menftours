@@ -17,6 +17,34 @@ var LEDGER_PEND_ = 'بانتظار الاعتماد', LEDGER_OK_ = 'معتمد',
 var LEDGER_NEED_CP_MSG_ = '⚠️ الحساب المقابل إلزامي (خزينة/بنك/عهدة… من دليل الحسابات) — التسجيل المالي من الشاشات يمر بالحسابات العامة واعتمادها';
 
 function _ledgerOn_() { try { return !!_glSSId_() && _glSettings_().ledger_central !== 'لا'; } catch (e) { return false; } }
+/* ⚙️ (V4.357) التسجيل من الشاشات لكل شاشة على حدة (إعداد المدير ledger_scr):
+   {cp|ap|hb: {on: true|false, users: [أسماء الدخول]}} — on=false ⇒ التسجيل من هذه الشاشة موقوف (من الحسابات العامة فقط)
+   users فارغة ⇒ كل من له صلاحية الإضافة بالشاشة · غير فارغة ⇒ هؤلاء فقط (المدير مسموح دائماً) */
+var LEDGER_FAMS_ = { cp: 'حسابات عملاء العمرة', ap: 'حسابات الوكلاء', hb: 'حجوزات الفنادق' };
+function _ledgerScrCfg_() {
+  var o = {}; try { o = JSON.parse(_glSettings_().ledger_scr || '{}') || {}; } catch (e) { o = {}; }
+  var out = {};
+  Object.keys(LEDGER_FAMS_).forEach(function (f) {
+    var c = o[f] || {};
+    out[f] = { on: c.on !== false, users: (Array.isArray(c.users) ? c.users : []).map(_glStr_).filter(Boolean) };
+  });
+  return out;
+}
+// {ok, why} — admin: مدير (يُسمح له دائماً)
+function _ledgerScrAllowed_(fam, username, admin) {
+  var c = _ledgerScrCfg_()[fam]; if (!c) return { ok: true };
+  if (!c.on) return { ok: false, why: '⛔ تسجيل الدفعات من شاشة «' + LEDGER_FAMS_[fam] + '» موقوف من الإعدادات — سجّلها من الحسابات العامة' };
+  if (admin || !c.users.length) return { ok: true };
+  var u = _glNorm_(username);
+  if (c.users.some(function (x) { return _glNorm_(x) === u; })) return { ok: true };
+  return { ok: false, why: '⛔ غير مسموح لك بتسجيل الدفعات من شاشة «' + LEDGER_FAMS_[fam] + '» — يسجّلها المستخدمون المحددون بالإعدادات أو من الحسابات العامة' };
+}
+// session: جلسة البرنامج الرئيسي، أو كائن من برنامج الحجوزات {username, _hb:true, hbAdmin}
+function _ledgerScrCheck_(fam, session) {
+  var admin = session && session._hb ? !!session.hbAdmin : (typeof _glIsAdmin_ === 'function' && session ? _glIsAdmin_(session) : false);
+  var a = _ledgerScrAllowed_(fam, session && session.username, admin);
+  if (!a.ok) throw new Error(a.why);
+}
 function _ledgerSheet_() {
   var ss = _glSS_(), sh = ss.getSheetByName(LEDGER_Q_.name);
   if (!sh) {
@@ -32,6 +60,11 @@ function _ledgerRows_() {
 }
 // حساب الطرف بدليل الحسابات (عميل: فئة عميل + «مرتبط بـ» = اسمه · وكيل: فئة وكيل — يُفضَّل الحساب الفرعي لشركته)
 function _ledgerPartyAcc_(fam, party, company) {
+  if (fam === 'hb') {   // 🏨 (V4.357) طرف فندقي: حسابه من خريطة أسماء برنامج الحجوزات (أو ربطه من «بيانات الحساب» بالكشف)
+    var m = _glHbMap_()[_glHbKey_(party)], a = m && m.code ? _glAccounts_().map[m.code] : null;
+    if (!a || a.isGroup || a.active === false) throw new Error('الحساب الفندقي «' + party + '» غير مربوط بحساب بالحسابات العامة — اربطه من «بيانات الحساب» بكشف الحساب (الحساب العام) ثم أعد التسجيل');
+    return a;
+  }
   var k = _glNorm_(party), kind = fam === 'ap' ? 'agent' : 'client';
   var list = _glAccounts_().list.filter(function (a) { return !a.isGroup && a.active !== false && a.kind === kind && a.link && _glNorm_(a.link) === k; });
   if (!list.length) throw new Error('لا يوجد حساب بدليل الحسابات مرتبط بـ«' + party + '» (' + (kind === 'agent' ? 'وكيل' : 'عميل') + ') — أنشئه أو اربطه من دليل الحسابات أولاً');
@@ -56,6 +89,12 @@ function _ledgerDups_(fam, acc, party, amount, cur, date) {
         if (_glNorm_(r[1]) !== _glNorm_(party) || Math.abs(_glNum_(r[5]) - amount) > 0.5 || (_glStr_(r[6]) || 'EGP') !== cur || !near(r[4]) || /⟦src:gl-/.test(_glStr_(r[8]))) return;
         out.push({ where: 'شاشة حسابات العملاء', ref: _glStr_(r[0]), date: _glDate_(r[4]), status: 'دفعة', desc: _glStr_(r[8]) });
       });
+    } else if (fam === 'hb') {   // 🏨 (V4.357) سجل دفعات برنامج الحجوزات
+      var hs = ensurePaymentsSheet_(), hn = hs.getLastRow(), pk = normalizeName_(party);
+      if (hn >= 2) hs.getRange(2, 1, hn - 1, 8).getValues().forEach(function (r) {
+        if (normalizeName_(r[1]) !== pk || Math.abs(_glNum_(r[3]) - amount) > 0.5 || !near(r[0])) return;
+        out.push({ where: 'كشف الفندق', ref: _glStr_(r[7]).slice(0, 12), date: _glDate_(r[0]), status: _glStr_(r[2]), desc: _glStr_(r[4]) });
+      });
     } else {
       _vzReadPays_('').forEach(function (p) {
         if (_glNorm_(p.agent) !== _glNorm_(party) || Math.abs(p.amount - amount) > 0.5 || (p.currency || 'SAR') !== cur || !near(p.date) || /⟦src:gl-/.test(p.notes)) return;
@@ -74,17 +113,27 @@ function _ledgerSubmit_(session, fam, p) {
   var cpCode = _glStr_(p.cp); if (!cpCode) return { success: false, code: 'LEDGER_NEED_CP', error: LEDGER_NEED_CP_MSG_ };
   var accs = _glAccounts_().map, cpA = accs[cpCode];
   if (!cpA || cpA.isGroup || cpA.active === false) throw new Error('الحساب المقابل ' + cpCode + ' غير صالح (اختر حساباً فرعياً نشطاً)');
-  if (cpA.currency && cpA.currency !== cur && /^(safe|bank|custody)$/.test(cpA.kind || '')) throw new Error('الحساب المقابل «' + cpA.name + '» بعملة ' + cpA.currency + ' والدفعة بعملة ' + cur);
+  if (cpA.currency && cpA.currency !== _glCur_(p.cashCur || cur) && /^(safe|bank|custody)$/.test(cpA.kind || '')) throw new Error('الحساب المقابل «' + cpA.name + '» بعملة ' + cpA.currency + ' والدفعة بعملة ' + cur);
   var pA = _ledgerPartyAcc_(fam, party, p.company);
   if (pA.code === cpCode) throw new Error('الحساب المقابل هو نفس حساب الطرف');
   var dups = _ledgerDups_(fam, pA, party, amount, cur, date);
   if (dups.length && !p.force) return { success: false, dup: true, dups: dups, error: '🔁 دفعة مشابهة مسجَّلة بالفعل (نفس الطرف والمبلغ في نفس اليوم) — راجعها أو أكّد التسجيل' };
-  var dirIn = fam === 'ap' ? p.dir === 'in' : p.dir !== 'out';   // عميل: قبض افتراضياً · وكيل: صرف افتراضياً
+  var dirIn = (fam === 'ap' || fam === 'hb') ? p.dir === 'in' : p.dir !== 'out';   // عميل: قبض افتراضياً · وكيل/فندق: حسب الاتجاه
   var type = dirIn ? 'سند قبض' : 'سند صرف', fx = _glFxDailyMap_(), rate = cur === 'EGP' ? 1 : _glFxRateAt_(cur, date, fx).rate;
   var desc = _glStr_(p.desc) || ((dirIn ? 'دفعة من ' : 'دفعة إلى ') + party);
   var trip = fam === 'cp' ? (_glStr_(p.trip) || '') : '';
   var partyLine = { account: pA.code, debit: dirIn ? 0 : amount, credit: dirIn ? amount : 0, currency: cur, rate: rate, trip: trip === 'عام' ? '' : trip, company: _glStr_(p.company), desc: desc };
   var cashLine = { account: cpCode, debit: dirIn ? amount : 0, credit: dirIn ? 0 : amount, currency: cur, rate: rate, desc: desc };
+  // 💱 (V4.357) الحساب المقابل بعملة أخرى (مثل خزينة بالجنيه لسداد فندق بالريال): سطر الطرف بعملته، والنقدية بمبلغها
+  // الفعلي بعملتها (cashCur/cashAmt) — وسعر النقدية يُحسب بدقة بحيث يتساوى المعادل بالجنيه
+  var cCur = p.cashCur ? _glCur_(p.cashCur) : cur, cAmt = _glR2_(_glNum_(p.cashAmt));
+  if (cCur !== cur) {
+    if (!(cAmt > 0)) throw new Error('أدخل المبلغ بعملة الحساب المقابل (' + cCur + ')');
+    var baseAmt = amount * rate;
+    cashLine.currency = cCur; cashLine.debit = dirIn ? cAmt : 0; cashLine.credit = dirIn ? 0 : cAmt;
+    cashLine.rate = cCur === 'EGP' ? 1 : baseAmt / cAmt; cashLine.exact = true;
+    if (cCur === 'EGP') { partyLine.rate = cAmt / amount; partyLine.exact = true; }
+  }
   var e = { date: date, type: type, desc: desc, ref: 'SCR:' + fam, company: _glStr_(p.company), lines: [cashLine, partyLine] };
   var lock = _glLock_(); lock.waitLock(30000);
   try {
@@ -97,7 +146,7 @@ function _ledgerSubmit_(session, fam, p) {
     q.getRange(q.getLastRow() + 1, 1, 1, LEDGER_Q_.headers.length).setValues([[id, fam, party, trip, date, dirIn ? amount : -amount, cur, user, _glNow_(),
       dups.length ? dups.map(function (d) { return d.where + ': ' + d.ref + ' ' + d.date; }).join(' · ') : '', LEDGER_PEND_, '', '', '', vno, cpA.code + ' — ' + cpA.name]]);
     if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(user, id, null, _audSnapRows_(w.eRow, w.lRows), 'دفعة من شاشة ⇒ طابور الاعتماد');
-    logChange_(user, 'دفعة من الشاشة بانتظار الاعتماد', 'GL:' + id, fam === 'ap' ? 'حسابات الوكلاء' : 'حسابات العملاء', '-', party + ' — ' + amount + ' ' + cur + ' — سند ' + vno + (dups.length ? ' (⚠️ تكرار محتمل)' : ''));
+    logChange_(user, 'دفعة من الشاشة بانتظار الاعتماد', 'GL:' + id, LEDGER_FAMS_[fam] || fam, '-', party + ' — ' + amount + ' ' + cur + ' — سند ' + vno + (dups.length ? ' (⚠️ تكرار محتمل)' : ''));
     try { _glBotQ_('vch_new', _glBotWho_(_glBotEntryInfo_(id, w.eRow, w.lRows), session)); } catch (eB) {}
     return { success: true, pending: true, id: id, voucherNo: vno, dupFlag: dups.length > 0 };
   } finally { _glUnlock_(lock); }
@@ -105,6 +154,7 @@ function _ledgerSubmit_(session, fam, p) {
 // تسجيل من الشاشات (يُستدعى من saveAccPayment / saveAgentPayment وأخواتها عند تفعيل التوحيد)
 function _ledgerFromScreen_(session, fam, rows, opts) {
   opts = opts || {};
+  _ledgerScrCheck_(fam, session);   // ⚙️ (V4.357) التسجيل من هذه الشاشة مفعّل ولهذا المستخدم؟
   var res = [], need = rows.some(function (r) { return !_glStr_(r.cp); });
   if (need) return { success: false, code: 'LEDGER_NEED_CP', error: LEDGER_NEED_CP_MSG_ };
   for (var i = 0; i < rows.length; i++) {
@@ -213,6 +263,31 @@ function ledgerCancel(authToken, id) {
     logChange_(session.username, 'سحب دفعة شاشة قبل الاعتماد', 'GL:' + id, '-', '-', '-');
   } finally { _glUnlock_(lock); }
   return { success: true };
+}
+// ⚙️ (V4.357) إعداد التسجيل من الشاشات (للمدير): الحالة + قائمة المستخدمين للاختيار
+function ledgerScrGet(authToken) {
+  var s = requireAuth_(authToken); if (!_glIsAdmin_(s)) throw new Error('للمدير فقط');
+  var users = [];
+  try {
+    var sh = getSpreadsheet_().getSheetByName('Users');
+    if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues().forEach(function (r) {
+      var u = _glStr_(r[0]); if (u && r[3] !== false && String(r[3]).toUpperCase() !== 'FALSE') users.push({ u: u, name: _glStr_(r[2]) || u });
+    });
+  } catch (e) {}
+  return { success: true, on: _ledgerOn_(), cfg: _ledgerScrCfg_(), fams: LEDGER_FAMS_, users: users };
+}
+function ledgerScrSet(authToken, cfg) {
+  var s = requireAuth_(authToken); if (!_glIsAdmin_(s)) throw new Error('للمدير فقط');
+  var old = _ledgerScrCfg_(), out = {};
+  Object.keys(LEDGER_FAMS_).forEach(function (f) {
+    var c = (cfg || {})[f] || {};
+    out[f] = { on: c.on !== false, users: (Array.isArray(c.users) ? c.users : []).map(_glStr_).filter(Boolean).slice(0, 200) };
+  });
+  var lock = _glLock_(); lock.waitLock(30000);
+  try { _glSetSetting_('ledger_scr', JSON.stringify(out)); } finally { _glUnlock_(lock); }
+  var txt = function (o) { return Object.keys(LEDGER_FAMS_).map(function (f) { return LEDGER_FAMS_[f] + ': ' + (o[f].on ? 'مفعّل' : 'موقوف') + (o[f].users.length ? ' (' + o[f].users.join('، ') + ')' : ''); }).join(' · '); };
+  logChange_(s.username, 'إعداد التسجيل من الشاشات', 'GL:SETTINGS', 'ledger_scr', txt(old), txt(out));
+  return { success: true, cfg: out };
 }
 function ledgerSetMode(authToken, on) {
   var s = requireAuth_(authToken); if (!_glIsAdmin_(s)) throw new Error('للمدير فقط');

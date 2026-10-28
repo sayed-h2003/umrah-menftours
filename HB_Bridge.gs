@@ -390,3 +390,147 @@ function hbUserSaveFromMain(authToken, username, p) {
     return { success: true, created: created };
   } finally { lock.releaseLock(); }
 }
+
+/* ---------- 🏛️ (V4.357) دفعات برنامج الحجوزات عبر طابور الاعتماد (نفس آلية حسابات عملاء العمرة) ----------
+   عند تفعيل «توحيد قنوات التسجيل» (ledger_central): الدفعة من كشف الفندق لا تُكتب بسجل الدفعات مباشرة — يُنشأ سند
+   قبض/صرف مسودة بالحسابات العامة (الحساب المقابل إلزامي + فحص تكرار نفس اليوم) ويدخل طابور الاعتماد (Maker-Checker).
+   عند الاعتماد يُرحَّل وتظهر الدفعة بكشف الفندق فوراً (مرآة V4.344). التسجيل من هذه الشاشة يتحكم فيه المدير من
+   إعداد «التسجيل من الشاشات» (تفعيل/إيقاف + مستخدمون محددون). البنود اليدوية بالكشف تبقى مغلقة (قيد يومية من الحسابات). */
+function hbPayRoute_(actingUser) {
+  if (!hbLedgerClosed_()) { var f = hbGlOnlyFrom_(); if (f) throw new Error(HB_GL_ONLY_MSG_ + ' (منذ ' + f + ')'); return ''; }
+  var a = _ledgerScrAllowed_('hb', actingUser.username, actingUser.role === 'admin');
+  if (!a.ok) throw new Error(a.why || HB_LEDGER_MSG_);
+  return 'ledger';
+}
+function hbLedgerSess_(u) { return { username: u.username, fullName: u.displayName || u.username, _hb: true, hbAdmin: u.role === 'admin' }; }
+function hbPayDmy_(v) {
+  if (!v) return '';
+  var m = !(v instanceof Date) && String(v).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);   // yyyy-mm-dd من نموذج الدفعة
+  if (m) return ('0' + m[3]).slice(-2) + '/' + ('0' + m[2]).slice(-2) + '/' + m[1];
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(String(v))) return String(v);
+  var d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? String(v) : Utilities.formatDate(d, 'GMT+3', 'dd/MM/yyyy');
+}
+function hbLedgerOut_(r) {
+  if (r && r.success) return { ok: true, pending: true, id: r.id, voucherNo: r.voucherNo, dupFlag: !!r.dupFlag,
+    message: '⏳ سُجّلت كسند ' + (r.voucherNo || '') + ' بانتظار الاعتماد — تظهر بالكشف بعد اعتمادها' };
+  return { ok: false, dup: !!(r && r.dup), dups: (r && r.dups) || [], code: (r && r.code) || '', error: (r && r.error) || 'تعذّر التسجيل' };
+}
+function hbLedgerPayArgs_(payment) {
+  var cur = String(payment.glCur || 'SAR').toUpperCase();
+  return { party: String(payment.partyName || '').trim(), date: hbPayDmy_(payment.date), amount: parseAmountLoose_(payment.amount), currency: 'SAR',
+    desc: String(payment.note || '').trim() ? String(payment.note).trim() + ' — ' + String(payment.partyName || '').trim() : '',
+    cp: String(payment.glCash || '').trim(), dir: payment.direction === 'in' ? 'in' : 'out', force: !!payment.force,
+    cashCur: cur !== 'SAR' ? cur : '', cashAmt: cur !== 'SAR' ? payment.glAmount : '' };
+}
+function hbLedgerSubmitPay_(actingUser, payment) {
+  try { return hbLedgerOut_(_ledgerSubmit_(hbLedgerSess_(actingUser), 'hb', hbLedgerPayArgs_(payment))); }
+  catch (e) { return { ok: false, error: e.message }; }
+}
+// دفعة مزدوجة (طرف دفع لطرف آخر مباشرة): سند واحد بين حسابي الطرفين بالحسابات العامة — لا نقدية
+function hbLedgerSubmitLinked_(actingUser, payload) {
+  try {
+    var from = String(payload.fromParty || '').trim(), to = String(payload.toParty || '').trim();
+    if (!from || !to) throw new Error('الطرفان مطلوبان');
+    if (from === to) throw new Error('يجب أن يكون الطرفان مختلفين');
+    var toAcc = _ledgerPartyAcc_('hb', to);
+    var note = String(payload.note || '').trim() || 'تحويل';
+    return hbLedgerOut_(_ledgerSubmit_(hbLedgerSess_(actingUser), 'hb', { party: from, date: hbPayDmy_(payload.date), amount: parseAmountLoose_(payload.amount), currency: 'SAR',
+      desc: 'دفعة مزدوجة: ' + note + ' — من ' + from + ' إلى ' + to, cp: toAcc.code, dir: 'in', force: !!payload.force }));
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+// عدة دفعات بنفس الاتجاه: rows = [{partyName, amount, note, date, glCash, glCur, glAmount}]
+function hbLedgerSubmitBatch_(actingUser, direction, rows) {
+  var sess = hbLedgerSess_(actingUser), res = [], okN = 0;
+  (rows || []).forEach(function (r) {
+    try {
+      var out = hbLedgerOut_(_ledgerSubmit_(sess, 'hb', hbLedgerPayArgs_(Object.assign({}, r, { direction: direction, force: true }))));
+      res.push(Object.assign({ party: r.partyName }, out)); if (out.ok) okN++;
+    } catch (e) { res.push({ party: r.partyName, ok: false, error: e.message }); }
+  });
+  var bad = res.filter(function (x) { return !x.ok; });
+  return { ok: okN > 0, pending: true, count: okN, results: res,
+    message: '⏳ ' + okN + ' دفعة بانتظار الاعتماد' + (bad.length ? ' · تعذّر ' + bad.length + ': ' + bad.map(function (x) { return x.party + ' (' + x.error + ')'; }).join('، ') : ''),
+    error: okN ? '' : ((bad[0] || {}).error || 'تعذّر التسجيل') };
+}
+// حالة التسجيل لكشف الفندق: هل الطابور مفعّل؟ وهل مسموح لهذا المستخدم؟
+function hbLedgerState(token) {
+  var u = requireSession_(token);
+  var on = hbLedgerClosed_(), a = on ? _ledgerScrAllowed_('hb', u.username, u.role === 'admin') : { ok: true };
+  return { on: on, allowed: !!a.ok, why: a.why || '' };
+}
+// الدفعات بانتظار الاعتماد لطرف فندقي (تظهر بكشفه)
+function hbLedgerPending(token, party) {
+  requirePermission_(token, 'payments', 'view');
+  if (!hbLedgerClosed_()) return { ok: true, rows: [] };
+  var k = _glNorm_(party);
+  return { ok: true, rows: _ledgerRows_().filter(function (x) { return _glStr_(x.r[10]) === LEDGER_PEND_ && _glStr_(x.r[1]) === 'hb' && _glNorm_(x.r[2]) === k; })
+    .map(function (x) { var r = x.r; return { id: _glStr_(r[0]), date: _glDate_(r[4]), amount: _glNum_(r[5]), cur: _glStr_(r[6]), maker: _glStr_(r[7]), voucher: _glStr_(r[14]), counter: _glStr_(r[15]), dup: _glStr_(r[9]) }; }) };
+}
+
+/* ---------- 🔗 (V4.357) ربط الحساب الفندقي بحساب عام مباشرة من «بيانات الحساب» ----------
+   حقل «الحساب العام» ببيانات الحساب: اختيار حساب فرعي من دليل الحسابات بالبحث ⇒ يُكتب الربط بخريطة أسماء برنامج
+   الحجوزات (نفس GL_HB_Map — النوع يُستنتج من مجموعة الحساب) ⇒ مزامنة فورية: قيود حجوزات/دفعات الطرف بالحسابات العامة،
+   وقيود الحسابات العامة على الحساب تُنسخ لكشف الفندق. والحساب المربوط يظهر بكوده واسمه. */
+function hbGlTypeForAcc_(code, cur) {
+  if (cur && GL_HB_TYPES_[cur] && GL_HB_TYPES_[cur].parent && code.indexOf(GL_HB_TYPES_[cur].parent) === 0) return cur;
+  var best = '', len = 0;
+  Object.keys(GL_HB_TYPES_).forEach(function (t) { var p = GL_HB_TYPES_[t].parent; if (p && code.indexOf(p) === 0 && p.length > len) { best = t; len = p.length; } });
+  if (best) return best;
+  var a = _glAccounts_().map[code] || {};
+  return a.kind === 'client' ? 'عميل' : a.kind === 'custody' ? 'عهدة' : 'مورد';
+}
+function hbGlAccLink(token, name) {
+  requirePermission_(token, 'statement', 'view');
+  name = String(name || '').trim();
+  if (typeof _glHbOn_ !== 'function' || !_glSSId_()) return { ok: true, linked: false, off: true };
+  var m = _glHbMap_()[_glHbKey_(name)], a = m && m.code ? _glAccounts_().map[m.code] : null;
+  return { ok: true, linked: !!a, code: a ? a.code : '', accName: a ? a.name : '', type: m ? m.type : '', ignored: !!(m && m.type === 'تجاهل') };
+}
+// قائمة الحسابات الفرعية النشطة للاختيار (كل الدليل — مرتبة: موردو/عملاء الحجوزات أولاً)
+function hbGlAccList(token) {
+  requirePermission_(token, 'statement', 'view');
+  var pref = {}; Object.keys(GL_HB_TYPES_).forEach(function (t) { var p = GL_HB_TYPES_[t].parent; if (p) pref[p] = 1; });
+  var out = _glAccounts_().list.filter(function (a) { return !a.isGroup && a.active !== false && !a._virtual && a.kind !== 'fx'; })
+    .map(function (a) { var hb = Object.keys(pref).some(function (p) { return a.code.indexOf(p) === 0; }); return { code: a.code, name: a.name, kind: a.kind || '', cur: a.currency || '', hb: hb }; });
+  out.sort(function (x, y) { return (y.hb - x.hb) || (x.code < y.code ? -1 : 1); });
+  return { ok: true, accounts: out };
+}
+function hbGlAccLinkSave(token, name, code) {
+  var user = requirePermission_(token, 'statement', 'edit');
+  name = String(name || '').trim(); code = String(code || '').trim();
+  if (!name) throw new Error('اسم الحساب مطلوب');
+  if (!_glSSId_()) throw new Error('الحسابات العامة غير مُجهَّزة');
+  var who = user.username || 'الحجوزات', res = { ok: true, code: code };
+  var lock = _glLock_(); lock.waitLock(60000);
+  try {
+    _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; _GL_HB_MEMO_ = null;
+    var accs = _glAccounts_(), map = _glHbMap_(), k = _glHbKey_(name), old = map[k], now = _glNow_();
+    if (code) {
+      var a = accs.map[code];
+      if (!a) throw new Error('الحساب ' + code + ' غير موجود بدليل الحسابات');
+      if (a.isGroup) throw new Error('«' + a.name + '» حساب تجميعي — اختر حساباً فرعياً');
+      if (a.active === false) throw new Error('«' + a.name + '» حساب موقوف');
+      map[k] = { name: name, type: hbGlTypeForAcc_(code, old && old.type), code: code, link: (old && old.link) || '', notes: (old && old.notes) || 'ربط من بيانات الحساب ببرنامج الحجوزات', by: who, at: now };
+      res.accName = a.name; res.type = map[k].type;
+    } else if (old) delete map[k];
+    _glHbWriteAll_('hbmap', Object.keys(map).map(function (x) { var m = map[x]; return [m.name, m.type, m.code, m.link || '', m.notes || '', m.by || who, m.at || now]; }));
+    logChange_(who, 'ربط حساب فندقي بحساب عام', 'GL:hb', name, old && old.code ? old.code : '-', code ? code + ' — ' + res.accName : '(فك الربط)');
+  } finally { _glUnlock_(lock); }
+  // مزامنة فورية: قيود حجوزات ودفعات هذا الطرف ⇒ ثم نسخ قيود الحساب العام لكشف الفندق
+  if (code) {
+    try {
+      var lk = _glLock_();
+      if (lk.tryLock(90000)) {
+        try {
+          _GL_HB_MEMO_ = null; _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
+          var r = _glAutoRun_(who, false, { onlyRx: /^AUTO:HB[PL]?:|^AUTO:HBOPEN$/ });
+          res.sync = { created: r.created, updated: r.updated, voided: r.voided, pending: r.pending };
+          try { var mr = _glHbMirrorAll_(name); res.mirrored = (mr && mr.mirrored) || 0; } catch (eM) { res.mirrorError = eM.message; }
+          try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eI) {}
+        } finally { _glUnlock_(lk); }
+      } else { _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1); hbGlLiveMark_('إعادة تسمية طرف'); res.deferred = true; }
+    } catch (eS) { res.syncError = eS.message; }
+  }
+  return res;
+}
