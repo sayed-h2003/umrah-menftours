@@ -7,10 +7,61 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.359  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.360  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
+/* ⏱️ (V4.360) قياس زمن كل نداء خادم (الذهاب والإياب كما يشعر به المستخدم) — يُجمَّع ويُرسل كل 5 دقائق بنداء واحد
+   perfReport. الغلاف لا يغيّر أي سلوك: نفس المعالجات ونفس الوسائط، ويقيس فقط. */
+window.PERF_ = (function () {
+  var D = {}, on = true, timer = null;
+  function add(fn, ms, ok) {
+    if (!on || !fn || fn === 'perfReport') return;
+    var a = D[fn] || (D[fn] = [fn, 0, 0, 0, 0, 0]);
+    a[1]++; a[2] += ms; if (ms > a[3]) a[3] = ms; if (ms > 3000) a[4]++; if (!ok) a[5]++;
+  }
+  function flush() {
+    var items = Object.keys(D).map(function (k) { return D[k]; });
+    if (!items.length || !on || !window.authToken || !window.gsrNative_) return;
+    D = {};
+    try {
+      window.gsrNative_.withSuccessHandler(function (r) { if (r && r.on === false) on = false; })
+        .withFailureHandler(function () {}).perfReport(window.authToken, 'main', items);
+    } catch (e) {}
+  }
+  function start() {
+    if (timer) return;
+    timer = setInterval(flush, 300000);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
+  }
+  return { add: add, flush: flush, start: start, _d: function () { return D; } };
+})();
+(function () {
+  try {
+    if (!(window.google && google.script && google.script.run)) return;
+    var native = google.script.run;
+    window.gsrNative_ = native;
+    var mk = function (onS, onF, uo, hasUo) {
+      return new Proxy({}, {
+        get: function (t, k) {
+          if (k === 'withSuccessHandler') return function (f) { return mk(f, onF, uo, hasUo); };
+          if (k === 'withFailureHandler') return function (f) { return mk(onS, f, uo, hasUo); };
+          if (k === 'withUserObject') return function (u) { return mk(onS, onF, u, true); };
+          if (typeof k !== 'string') return undefined;
+          return function () {
+            var t0 = Date.now(), r = native
+              .withSuccessHandler(function (res, u) { window.PERF_.add(k, Date.now() - t0, true); if (onS) return onS(res, u); })
+              .withFailureHandler(function (err, u) { window.PERF_.add(k, Date.now() - t0, false); if (onF) return onF(err, u); console.error(k, err); });
+            if (hasUo) r = r.withUserObject(uo);
+            return r[k].apply(r, arguments);
+          };
+        }
+      });
+    };
+    Object.defineProperty(google.script, 'run', { configurable: true, get: function () { return mk(null, null, undefined, false); } });
+    window.PERF_.start();
+  } catch (e) { /* لو تعذّر الاستبدال يبقى السلوك الأصلي بلا قياس */ }
+})();
 window.__BOOT_STEPS = [];
 window.__BOOT_T0 = new Date().getTime();
 window.__step = function (name, extra) {
@@ -2914,6 +2965,17 @@ input[type="date"]:not(:focus):not(:valid) {
       </div>
     </div>
     <div id="svcBody-ledgerScr" class="d-none border-top"><div class="p-3" id="ledgerScrBox"><div class="text-muted small">⏳</div></div></div>
+  </div>
+
+  <!-- ⏱️ (V4.360) قياس الأداء -->
+  <div class="card shadow-sm border-0 mb-2" id="svcCard-perf">
+    <div class="card-header bg-white border-0 py-2 px-3" style="cursor:pointer;" onclick="toggleService('perf')">
+      <div class="d-flex justify-content-between align-items-center">
+        <span class="fw-bold" style="font-size:14px;">⏱️ قياس الأداء — أبطأ العمليات</span>
+        <div class="d-flex align-items-center gap-2"><span class="badge rounded-pill bg-secondary small">مدير</span><i id="svcIcon-perf" class="fas fa-chevron-down text-muted" style="font-size:11px;"></i></div>
+      </div>
+    </div>
+    <div id="svcBody-perf" class="d-none border-top"><div class="p-3" id="perfBox"><div class="text-muted small">⏳</div></div></div>
   </div>
 
   <!-- مدة الجلسة -->
@@ -8361,7 +8423,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.359";
+var CLIENT_APP_VERSION = "4.360";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -10043,6 +10105,7 @@ function toggleService(key) {
       return;
     }
     if (key === 'ledgerScr') { ledgerScrLoad_('ledgerScrBox'); return; }   // 🏛️ (V4.357)
+    if (key === 'perf') { perfLoad_(1); return; }   // ⏱️ (V4.360)
     if (key === 'bookingsSortDefault') {
       loadBookingsSortDefaultSetting();
       return;
@@ -53719,6 +53782,50 @@ function ledgerScrOpen_() {
     '<div style="background:#fff;border-radius:12px;max-width:820px;width:100%;padding:14px 16px;"><div class="d-flex align-items-center gap-2 mb-2"><b style="font-size:16px;">⚙️ تسجيل الدفعات من الشاشات</b>' +
     '<button class="btn btn-sm btn-outline-secondary ms-auto" onclick="document.getElementById(\'_lsOv\').remove()">✕ إغلاق</button></div><div id="_lsBody"></div></div></div>');
   ledgerScrLoad_('_lsBody');
+}
+// ⏱️ (V4.360) شاشة «أبطأ العمليات» للمدير
+var PERF_DAYS_ = 1;
+function perfLoad_(days) {
+  PERF_DAYS_ = days || PERF_DAYS_;
+  var box = document.getElementById('perfBox'); if (!box) return;
+  try { if (window.PERF_) window.PERF_.flush(); } catch (e) {}
+  box.innerHTML = '<div class="text-muted small">⏳ جارٍ التحميل…</div>';
+  google.script.run.withSuccessHandler(function (r) { perfRender_(r); })
+    .withFailureHandler(function (e) { box.innerHTML = '<div class="text-danger small">❌ ' + escapeHtml_(e.message || e) + '</div>'; })
+    .perfTop(window.authToken, { days: PERF_DAYS_ });
+}
+function _perfMs_(ms) { ms = +ms || 0; return ms >= 1000 ? (ms / 1000).toFixed(ms >= 10000 ? 0 : 1) + ' ث' : ms + ' ms'; }
+function _perfCls_(ms) { return ms >= 3000 ? 'text-danger fw-bold' : ms >= 1500 ? 'text-warning fw-bold' : 'text-success'; }
+function perfRender_(r) {
+  var box = document.getElementById('perfBox'); if (!box) return;
+  if (!r || !r.success) { box.innerHTML = '<div class="text-danger small">تعذّر التحميل</div>'; return; }
+  var tbl = function (rows, cols, empty) {
+    if (!rows || !rows.length) return '<div class="text-muted small mb-3">' + empty + '</div>';
+    return '<div class="table-responsive mb-3"><table class="table table-sm table-bordered small mb-0" style="font-size:12px;"><thead class="table-light"><tr>' +
+      cols.map(function (c) { return '<th>' + c[0] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (x, i) { return '<tr>' + cols.map(function (c) { return '<td>' + c[1](x, i) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+  };
+  var fnC = function (x) { return '<code dir="ltr">' + escapeHtml_(x.fn) + '</code>' + (x.app ? ' <span class="text-muted">· ' + escapeHtml_(x.app) + '</span>' : ''); };
+  var avgC = function (x) { return '<span class="' + _perfCls_(x.avg) + '">' + _perfMs_(x.avg) + '</span>'; };
+  var maxC = function (x) { return '<span class="' + _perfCls_(x.max) + '">' + _perfMs_(x.max) + '</span>'; };
+  var colsC = [['#', function (x, i) { return i + 1; }], ['العملية', fnC], ['المرات', function (x) { return x.n; }], ['المتوسط', avgC], ['الأقصى', maxC],
+    ['الوقت الكلي', function (x) { return _perfMs_(x.tot); }], ['> 3ث', function (x) { return x.slow || ''; }],
+    ['أخطاء', function (x) { return x.err ? '<span class="text-danger">' + x.err + '</span>' : ''; }]];
+  var colsS = [['#', function (x, i) { return i + 1; }], ['الدالة', fnC], ['مرات البطء', function (x) { return x.n; }], ['المتوسط', avgC], ['الأقصى', maxC],
+    ['أخطاء', function (x) { return x.err || ''; }]];
+  var btn = function (d, t) { return '<button type="button" class="btn btn-sm ' + (PERF_DAYS_ === d ? 'btn-primary' : 'btn-outline-primary') + '" onclick="perfLoad_(' + d + ')">' + t + '</button>'; };
+  box.innerHTML =
+    '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">' + btn(1, 'اليوم') + btn(7, '7 أيام') + btn(30, '30 يوماً') +
+      '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="perfLoad_()">↺ تحديث</button>' +
+      '<label class="form-check form-switch small mb-0 ms-auto"><input class="form-check-input" type="checkbox" ' + (r.on ? 'checked' : '') + ' onchange="perfToggle_(this)"> القياس مفعّل</label></div>' +
+    '<div class="text-muted small mb-2">الزمن كما يشعر به المستخدم (من الضغط حتى وصول الرد) — من ' + (r.reports || 0) + ' دفعة قياس لـ ' + (r.users || 0) + ' مستخدم. الدوال المقيسة على الخادم: ' + (r.wrapped || 0) + '.</div>' +
+    '<h6 class="fw-bold mt-2">🐢 الأكثر استهلاكاً للوقت (المرات × الزمن)</h6>' + tbl(r.byTotal, colsC, 'لا توجد قياسات بعد — تظهر بعد دقائق من الاستخدام.') +
+    '<h6 class="fw-bold">⏳ الأبطأ في المتوسط (3 مرات على الأقل)</h6>' + tbl(r.byAvg, colsC, '—') +
+    '<h6 class="fw-bold">🖥️ الخادم — نداءات تجاوزت ' + _perfMs_(r.slowMs) + ' (آخر 6 ساعات)</h6>' + tbl(r.server, colsS, 'لا نداءات بطيئة مسجّلة.');
+}
+function perfToggle_(el) {
+  google.script.run.withSuccessHandler(function () { perfLoad_(); })
+    .withFailureHandler(function (e) { el.checked = !el.checked; alert(e.message || e); }).perfSetOn(window.authToken, !!el.checked);
 }
 function ledgerScrLoad_(boxId) {
   var b = document.getElementById(boxId); if (!b) return;

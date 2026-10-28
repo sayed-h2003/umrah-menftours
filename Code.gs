@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.359";
+var APP_VERSION = "4.360";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -993,7 +993,7 @@ function uploadAndParseTicketManual(authToken, base64Data, fileName, tempOldFile
 
     // حذف الملف المؤقت القديم لو موجود
     if (tempOldFileId) {
-      try { DriveApp.getFileById(tempOldFileId).setTrashed(true); } catch(e) {}
+      try { _driveSafeTrash_(tempOldFileId); } catch(e) {}   // 🔒 (V4.360)
     }
 
     var tempName = 'TEMP_' + new Date().getTime() + '_' + fileName;
@@ -2050,10 +2050,7 @@ function deleteTicketFile(authToken, fileId) {
       };
     }
 
-    var file =
-      DriveApp.getFileById(fileId);
-
-    file.setTrashed(true);
+    _driveSafeTrash_(fileId);   // 🔒 (V4.360) لا شيتات/مستندات/مجلدات
 
     return {
 
@@ -3594,6 +3591,21 @@ function getWebAppUrl(authToken) {
  * @param {string} portVal القيمة الخام
  * @param {string} which 'arrival' أو 'departure'
  */
+// 🔒 (V4.360) قيمة تُدرج داخل <script> في قالب: JSON مع تهريب < و> و& وفواصل الأسطر الخاصة — فلا يكسر نص مثل </script> السكربت
+function _jsonForScript_(v) {
+  return String(JSON.stringify(v === undefined ? null : v)).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+// 🔒 (V4.360) نسخة من بيانات الإشعار بنصوص مهرّبة لإدراجها في HTML (حقول الحجز يدخلها الموظفون والبوت)
+function _printSafeObj_(b) {
+  var o = {};
+  Object.keys(b || {}).forEach(function (k) {
+    var v = b[k];
+    if (typeof v !== 'string') { o[k] = v; return; }
+    if (/Json$/.test(k)) { o[k] = v; return; }   // نص JSON يُحلَّل لاحقاً — لا يُهرَّب
+    o[k] = v.replace(/&(?!(amp|lt|gt|quot|#39);)/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  });
+  return o;
+}
 function _printEsc_(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function _portSaudiSide_(portVal, which) {
   var s = String(portVal || "").trim();
@@ -3606,6 +3618,7 @@ function _portSaudiSide_(portVal, which) {
 }
 
 function buildBookingNoticeHtml_(b, asFragment) {
+  b = _printSafeObj_(b);   // 🔒 (V4.360) كل حقول الحجز النصية مهرّبة قبل بناء HTML
 
   function getAirline(flightNo) {
     if (!flightNo) return "طيران";
@@ -6695,6 +6708,19 @@ var _TZ_MEMO_;
 function _tz_() {
   if (_TZ_MEMO_ === undefined) { try { _TZ_MEMO_ = Session.getScriptTimeZone(); } catch (e) { _TZ_MEMO_ = 'Asia/Riyadh'; } }
   return _TZ_MEMO_;
+}
+// 🔒 (V4.360) نقل ملف Drive للمهملات بمعرّف قادم من الواجهة: لا يُسمح أبداً بملفات جوجل (شيتات/مستندات/مجلدات —
+//   أي ملفات البيانات نفسها)، ومع folderId يجب أن يكون الملف داخل ذلك المجلد (ملفات المشاركة المؤقتة).
+function _driveSafeTrash_(fileId, folderId) {
+  var f = DriveApp.getFileById(String(fileId || '').trim());
+  if (/^application\/vnd\.google-apps\./.test(String(f.getMimeType() || ''))) throw new Error('🔒 لا يُسمح بحذف هذا النوع من الملفات');
+  if (folderId) {
+    var ok = false, it = f.getParents();
+    while (it.hasNext()) { if (it.next().getId() === folderId) { ok = true; break; } }
+    if (!ok) throw new Error('🔒 الملف ليس من ملفات المشاركة المؤقتة');
+  }
+  f.setTrashed(true);
+  return true;
 }
 /* 🗑️ (V4.186) حذف ملف من جوجل درايف نهائياً (بلا المرور بسلة المهملات) — Drive.Files.remove بخدمة
    Drive المتقدمة يحذف الملف مباشرةً فتُسترَد مساحته فوراً، بعكس setTrashed(true) الذي يُبقيه بالسلة
@@ -10440,7 +10466,7 @@ function deleteBookingAttachmentFile(authToken, fileIdOrUrl) {
   var id = (raw.indexOf('/') >= 0 || raw.indexOf('http') === 0) ? extractDriveFileId_(raw) : raw;
   if (!id) return { success: false, error: 'تعذّر استخراج معرّف الملف' };
   try {
-    DriveApp.getFileById(id).setTrashed(true);
+    _driveSafeTrash_(id);   // 🔒 (V4.360)
     return { success: true };
   } catch (e) {
     return { success: false, error: 'تعذّر حذف الملف: ' + e.message };
@@ -10680,7 +10706,7 @@ function deleteSharedBookingFile(authToken, fileId) {
   if (!fileId) return { success: false };
   try {
     requireAuth_(authToken);
-    DriveApp.getFileById(fileId).setTrashed(true);
+    _driveSafeTrash_(fileId, _ensureTempShareFolder_().getId());   // 🔒 (V4.360) ملفات المشاركة المؤقتة فقط
     return { success: true };
   } catch (e) {
     return { success: false, message: e.message };

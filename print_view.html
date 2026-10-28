@@ -80,19 +80,19 @@ function showDebugError(msg) {
 
 // 🩺 (V4.215) تشخيص الطباعة من الخادم — يظهر في Console (F12)
 try {
-  var _pd_ = <?!= JSON.stringify(printDiag || []) ?>;
+  var _pd_ = <?!= _jsonForScript_(printDiag || []) ?>;
   console.log('🖨️ [PRINT] تشخيص الخادم:\n  ' + _pd_.join('\n  '));
 } catch (e) { console.warn('🖨️ [PRINT] تعذّر قراءة التشخيص', e); }
 var bookingId = null;
 var isInvalidLink = false;
 // 📄 (V4.160) رمز الطباعة — تُطلب به بايتات مرفقات PDF (لا توجد جلسة تطبيق بهذه الصفحة)
 var _printToken_ = '';
-try { _printToken_ = <?!= JSON.stringify(printToken) ?>; } catch (e) { _printToken_ = ''; }
+try { _printToken_ = <?!= _jsonForScript_(printToken) ?>; } catch (e) { _printToken_ = ''; }
 window._printToken_ = _printToken_;
 
 try {
-  isInvalidLink = <?!= JSON.stringify(invalidLink) ?>;
-  bookingId = <?!= JSON.stringify(id) ?>;
+  isInvalidLink = <?!= _jsonForScript_(invalidLink) ?>;
+  bookingId = <?!= _jsonForScript_(id) ?>;
   if (typeof bookingId === 'string') {
     bookingId = bookingId.replace(/["']/g, '').trim();
   }

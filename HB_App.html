@@ -3144,9 +3144,32 @@ if (HB_EMBED) {
 /* الطابور لو ضاعت استجابة نهائيًا. يعمل بشفافية تامة على           */
 /* google.script.run بدون تعديل أي موضع نداء في الكود.             */
 /* ============================================================ */
+/* ⏱️ (V4.360) قياس زمن كل نداء خادم (من خروجه من الطابور حتى الرد) — يُرسل كل 5 دقائق بنداء واحد perfReport */
+window.PERF_ = (function () {
+  var D = {}, on = true, timer = null;
+  function add(fn, ms, ok) {
+    if (!on || !fn || fn === 'perfReport') return;
+    var a = D[fn] || (D[fn] = [fn, 0, 0, 0, 0, 0]);
+    a[1]++; a[2] += ms; if (ms > a[3]) a[3] = ms; if (ms > 3000) a[4]++; if (!ok) a[5]++;
+  }
+  function flush() {
+    var items = Object.keys(D).map(function (k) { return D[k]; });
+    var tok = (typeof currentSessionToken !== 'undefined') ? currentSessionToken : null;
+    if (!items.length || !on || !tok || !window.gsrNative_) return;
+    D = {};
+    try {
+      window.gsrNative_.withSuccessHandler(function (r) { if (r && r.on === false) on = false; })
+        .withFailureHandler(function () {}).perfReport(tok, 'hb', items);
+    } catch (e) {}
+  }
+  timer = setInterval(flush, 300000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') flush(); });
+  return { add: add, flush: flush, _d: function () { return D; } };
+})();
 (function () {
   if (!(window.google && google.script && google.script.run)) return;
   var native = google.script.run;               // النسخة الأصلية (تُلتقط قبل الاستبدال)
+  window.gsrNative_ = native;                     // ⏱️ (V4.360) لإرسال القياسات خارج الطابور
   var queue = [];
   var busy = false;
   var WATCHDOG_MS = 60000;                       // أقصى انتظار لنداء واحد قبل اعتباره مفقودًا
@@ -3204,12 +3227,13 @@ if (HB_EMBED) {
     if (busy) return;
     var job = queue.shift();
     if (!job) return;
-    busy = true; job._done = false; inflight = job;
+    busy = true; job._done = false; inflight = job; job._t0 = Date.now();
 
     function settle(kind, val) {
       if (job._done) return;                     // حماية من ازدواج (مؤقّت الحماية + استجابة حقيقية)
       job._done = true;
       if (job._timer) clearTimeout(job._timer);
+      try { if (window.PERF_ && job._t0) window.PERF_.add(job.fn, Date.now() - job._t0, kind === 'ok'); } catch (eP) {}   // ⏱️ (V4.360)
       busy = false; inflight = null;
       if (kind === 'ok') {
         if (val === null && !job._retried && RETRY_ON_NULL[job.fn]) {
@@ -5066,7 +5090,7 @@ function renderTable(res) {
       date: '<td data-col="date">' + r.dateDisp + '</td>',
       checkIn: '<td data-col="checkIn">' + escapeHtml(r.checkIn || '') + '</td>',
       checkOut: '<td data-col="checkOut">' + escapeHtml(r.checkOut || '') + '</td>',
-      note: '<td data-col="note" class="desc">' + r.note + (r.legacyImported ? ' <span class="legacy-badge" title="مستورد من الشيت القديم">📥</span>' : '') + '</td>',
+      note: '<td data-col="note" class="desc">' + escapeHtml(r.note) + (r.legacyImported ? ' <span class="legacy-badge" title="مستورد من الشيت القديم">📥</span>' : '') + '</td>',
       debit: '<td data-col="debit">' + (r.debit == null ? '' : r.debit) + '</td>',
       credit: '<td data-col="credit">' + (r.credit == null ? '' : r.credit) + '</td>',
       balance: '<td data-col="balance" class="' + (r.balance && r.balance.indexOf('دائن') !== -1 ? 'text-credit-cell' : (r.balance ? 'text-debit-cell' : '')) + '">' + (r.balance == null ? '' : r.balance) + '</td>',

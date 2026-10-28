@@ -134,7 +134,12 @@ function _audFail_(err) {
   try { CacheService.getScriptCache().put('aud_st', 'fail', 600); } catch (e) {}
   try {   // تنبيه الإدارة مرة كل ساعة على الأكثر
     var c = CacheService.getScriptCache();
-    if (!c.get('aud_alerted')) { c.put('aud_alerted', '1', 3600); if (typeof sendTelegramMessage_ === 'function') sendTelegramMessage_('🛡️ تنبيه: تعذّرت كتابة سجل التتبع المحصّن (' + msg + ') — عمليات الحفظ موقوفة حتى يعود السجل.'); }
+    if (!c.get('aud_alerted')) {
+      c.put('aud_alerted', '1', 3600);
+      var al = '🛡️ تنبيه: تعذّرت كتابة سجل التتبع المحصّن (' + msg + ') — عمليات الحفظ موقوفة حتى يعود السجل.';
+      try { if (typeof sendTelegramMessage_ === 'function') sendTelegramMessage_(al); } catch (eG) {}
+      try { _audAnchorSend_(al.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')); } catch (eA) {}   // (V4.360) وجروب الحسابات أيضاً
+    }
   } catch (e) {}
 }
 function _audQKeys_() {

@@ -534,3 +534,16 @@ function hbGlAccLinkSave(token, name, code) {
   }
   return res;
 }
+
+// 🧪 (V4.360) زر «اختبار الرابط» في إعدادات بوت الحجوزات (HB_App: tgHookTestBtn) — كان يستدعي دالة غير موجودة.
+//   يختبر رابط الويب هوك (المكتوب في الحقل أو المحفوظ) دون تسجيله. ok=0 (لا false) = اكتمل الاختبار والنتيجة فشل،
+//   فتعرضها الواجهة كسطر أحمر برمز HTTP بدل «تعذّر الاختبار».
+function testTelegramWebhookUrl(token, baseUrl) {
+  try {
+    requireAdmin_(token);
+    var url = tgWebhookUrl_(baseUrl && String(baseUrl).trim() ? tgExecBase_(baseUrl) : '');
+    if (!/^https:\/\//.test(url)) throw new Error('تعذّر تحديد رابط النشر — الصق رابط /exec في الحقل.');
+    var r = tgSelfTestWebhook_(url);
+    return safeReturn_({ ok: r.ok ? true : 0, code: r.code, location: r.location || '', verdict: r.verdict || '' });
+  } catch (e) { return { ok: false, error: e.message }; }
+}

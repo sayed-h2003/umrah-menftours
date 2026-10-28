@@ -1872,6 +1872,7 @@ function getAppBaseUrl_() {
 // وتجنّب مشكلة رابط جوجل المعزول (googleusercontent.com) في التنقل بين الصفحات القديمة.
 function hbDoGet_(e) {
   var initialPage = (e && e.parameter && (e.parameter.hp || (e.parameter.page !== 'hotels' ? e.parameter.page : ''))) || 'statement';
+  initialPage = String(initialPage).replace(/[^A-Za-z]/g, '').slice(0, 40) || 'statement';   // 🔒 (V4.360) يُدرج داخل <script> — أحرف لاتينية فقط (منع الحقن)
   // بوابة العملاء: صفحة عميل منفصلة تمامًا (Portal.html) لا تحمل أي كود أو دوال للواجهة
   // الإدارية — الرابط عام لا يحمل هوية أي عميل (فمشاركته لا تسرّب شيئًا)، والدخول يتطلب كود
   // العميل + كلمة مروره، ويُصدَّر رمز جلسة موقَّع (HMAC) يقصر الوصول على حجوزات هذا العميل فقط
@@ -2034,7 +2035,7 @@ function deleteSharedFile(token, fileId) {
   if (!fileId) return { ok: false };
   try {
     requireSession_(token);
-    DriveApp.getFileById(fileId).setTrashed(true);
+    _driveSafeTrash_(fileId, ensureTempShareFolder_().getId());   // 🔒 (V4.360) ملفات المشاركة المؤقتة فقط
     return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
 }
@@ -2994,7 +2995,7 @@ function portalDeleteSharedFile(ptoken, fileId) {
   if (!fileId) return { ok: false };
   try {
     verifyPortalToken_(ptoken);
-    DriveApp.getFileById(fileId).setTrashed(true);
+    _driveSafeTrash_(fileId, ensureTempShareFolder_().getId());   // 🔒 (V4.360) عميل البوابة لا يحذف إلا ملف مشاركة مؤقت
     return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
 }

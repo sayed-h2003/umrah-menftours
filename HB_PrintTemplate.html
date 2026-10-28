@@ -136,7 +136,7 @@
                 appendTr('<tr class="opening-row">' + cellsFor(cols, { note: 'رصيد أول المدة', debit: '0', credit: '0', balance: data.opening }) + '</tr>');
                 data.rows.forEach(function (r) {
                     var cls = r.excluded ? 'excluded-row' : '';
-                    var rowMap = { qaid: r.qaid || '', ref: r.ref || '', date: r.dateDisp, note: r.note,
+                    var rowMap = { qaid: escHtml_(r.qaid || ''), ref: escHtml_(r.ref || ''), date: escHtml_(r.dateDisp), note: escHtml_(r.note),   // 🔒 (V4.360)
                         debit: r.debit == null ? '' : r.debit, credit: r.credit == null ? '' : r.credit,
                         balance: r.balance == null ? '' : r.balance };
                     appendTr('<tr class="' + cls + '">' + cellsFor(cols, rowMap) + '</tr>');
