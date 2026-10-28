@@ -207,13 +207,22 @@ function _audEntryDiff_(user, id, before, after, action) {
 }
 
 /* ---------- ⚓ المرساة اليومية ---------- */
+// ⚓ (V4.359) المرساة تُرسل لجروب الحسابات فقط (إعدادات بوت الحسابات) — لا للجروب العام. بلا جروب حسابات مفعّل لا تُرسل،
+//   ويُسجَّل السبب في ورقة المراسي (المرساة نفسها تُحفظ دائماً).
+function _audAnchorSend_(html) {
+  if (typeof _glBotCfg_ !== 'function' || typeof _glBotSend_ !== 'function') return 'لم تُرسل: بوت الحسابات غير متاح';
+  var c = _glBotCfg_();
+  if (!c.enabled || !c.chatId) return 'لم تُرسل: جروب الحسابات غير مفعّل بالإعدادات';
+  _glBotSend_(c.chatId, html);
+  return 'تليجرام — جروب الحسابات';
+}
 function audAnchorCron() {
   try {
     try { _audFlushQ_(120000); } catch (eF) { _audFail_(eF); }
     var sh = _audSheet_('Trail'), head = _audHead_(sh), an = _audSheet_('Anchors');
     var day = Utilities.formatDate(new Date(), (typeof _tz_ === 'function' && _tz_()) || 'Asia/Riyadh', 'yyyy-MM-dd');
-    var sent = 'تليجرام';
-    try { if (typeof sendTelegramMessage_ === 'function') sendTelegramMessage_('⚓ مرساة سجل التتبع ' + day + '\nآخر تسلسل: ' + head.seq + '\nالبصمة: `' + head.hash + '`'); } catch (e) { sent = 'تعذّر الإرسال: ' + e.message; }
+    var sent;
+    try { sent = _audAnchorSend_('⚓ <b>مرساة سجل التتبع</b> ' + day + '\nآخر تسلسل: ' + head.seq + '\nالبصمة: <code>' + head.hash + '</code>'); } catch (e) { sent = 'تعذّر الإرسال: ' + e.message; }
     var at = an.getLastRow() + 1, rg = an.getRange(at, 1, 1, 5); rg.setNumberFormat('@');
     rg.setValues([[day, String(head.seq), head.hash, sent, _audTs_()]]);
   } catch (e) { Logger.log('audAnchorCron: ' + e.message); }
