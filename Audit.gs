@@ -134,7 +134,7 @@ function _audFail_(err) {
   try { CacheService.getScriptCache().put('aud_st', 'fail', 600); } catch (e) {}
   try {   // تنبيه الإدارة مرة كل ساعة على الأكثر
     var c = CacheService.getScriptCache();
-    if (!c.get('aud_alerted')) { c.put('aud_alerted', '1', 3600); if (typeof sendTelegramMessage === 'function') sendTelegramMessage('🛡️ تنبيه: تعذّرت كتابة سجل التتبع المحصّن (' + msg + ') — عمليات الحفظ موقوفة حتى يعود السجل.'); }
+    if (!c.get('aud_alerted')) { c.put('aud_alerted', '1', 3600); if (typeof sendTelegramMessage_ === 'function') sendTelegramMessage_('🛡️ تنبيه: تعذّرت كتابة سجل التتبع المحصّن (' + msg + ') — عمليات الحفظ موقوفة حتى يعود السجل.'); }
   } catch (e) {}
 }
 function _audQKeys_() {
@@ -213,7 +213,7 @@ function audAnchorCron() {
     var sh = _audSheet_('Trail'), head = _audHead_(sh), an = _audSheet_('Anchors');
     var day = Utilities.formatDate(new Date(), (typeof _tz_ === 'function' && _tz_()) || 'Asia/Riyadh', 'yyyy-MM-dd');
     var sent = 'تليجرام';
-    try { if (typeof sendTelegramMessage === 'function') sendTelegramMessage('⚓ مرساة سجل التتبع ' + day + '\nآخر تسلسل: ' + head.seq + '\nالبصمة: `' + head.hash + '`'); } catch (e) { sent = 'تعذّر الإرسال: ' + e.message; }
+    try { if (typeof sendTelegramMessage_ === 'function') sendTelegramMessage_('⚓ مرساة سجل التتبع ' + day + '\nآخر تسلسل: ' + head.seq + '\nالبصمة: `' + head.hash + '`'); } catch (e) { sent = 'تعذّر الإرسال: ' + e.message; }
     var at = an.getLastRow() + 1, rg = an.getRange(at, 1, 1, 5); rg.setNumberFormat('@');
     rg.setValues([[day, String(head.seq), head.hash, sent, _audTs_()]]);
   } catch (e) { Logger.log('audAnchorCron: ' + e.message); }

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.357  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.358  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -3057,6 +3057,11 @@ input[type="date"]:not(:focus):not(:valid) {
         <p class="text-muted small mb-2">تقرير تحركات الغد اليومي (نفس التنبيه القائم) — أرسله لأكثر من جروب، وحدِّد لكل جروب الشركات التي يخصه أو اختر «كل الشركات» فيستقبل كل الحركات. جروب بلا حركات تخصه ذلك اليوم لا يُرسَل له شيء.</p>
         <div id="tgAlertGroupsArea" class="mb-2"></div>
         <button class="btn btn-outline-primary btn-sm mb-3" onclick="_tgAlertAddGroupRow_()">➕ إضافة جروب</button>
+        <div class="border rounded p-2 mb-3" style="background:#fff8e1;">
+          <label class="small fw-bold mb-1" for="tgMainChats">🔒 محادثات مسموح لها ببوت الأوامر (إضافة لجروبات التنبيهات وبوت الإشعارات والإعاشة)</label>
+          <textarea id="tgMainChats" class="form-control form-control-sm" rows="2" dir="ltr" placeholder="123456789, -1001234567890, username"></textarea>
+          <div class="text-muted small mt-1">معرّف محادثة أو مستخدم أو اسم مستخدم — مفصولة بفاصلة أو سطر. أي محادثة أخرى يرد عليها البوت «غير مصرَّح» مع معرّفها (والأمر /id يعرض المعرّف).</div>
+        </div>
         <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-success btn-sm" onclick="saveTgAlertCfg(this)">💾 حفظ الجروبات</button>
           <button class="btn btn-warning btn-sm fw-bold" onclick="testTgAlertRun(this)" title="إرسال رسالة اختبار فعلية لكل جروب مضبوط">🧪 اختبار الإرسال</button>
@@ -8356,7 +8361,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.357";
+var CLIENT_APP_VERSION = "4.358";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -10470,6 +10475,7 @@ function loadTgAlertCfg(preCompanies, preGroups) {   // ⚡ (V4.297/U2) إمكا
   var render = function(res) {
         if (!res || !res.success) { area.innerHTML = '<div class="text-danger small">تعذر تحميل الإعدادات</div>'; return; }
         area.innerHTML = '';
+        var mcEl = document.getElementById('tgMainChats'); if (mcEl) mcEl.value = res.mainChats || '';
         (res.groups || []).forEach(function(g) { _tgAlertAddGroupRow_(g); });
         if (!(res.groups || []).length) {
           area.innerHTML = '<div class="text-muted small mb-1">لا توجد جروبات بعد — اضغط "إضافة جروب".' +
@@ -10546,7 +10552,7 @@ function saveTgAlertCfg(btn) {
       else showSvcResult('tgAlerts', '❌ ' + ((res && res.error) || 'فشل الحفظ'), false);
     })
     .withFailureHandler(function(err) { btn.disabled = false; btn.innerHTML = orig; showSvcResult('tgAlerts', '❌ ' + (err.message || err), false); })
-    .saveTgAlertGroups(window.authToken, groups);
+    .saveTgAlertGroups(window.authToken, groups, (document.getElementById('tgMainChats') || {}).value);
 }
 
 function testTgAlertRun(btn) {

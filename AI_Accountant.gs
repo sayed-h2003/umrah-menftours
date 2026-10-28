@@ -404,7 +404,7 @@ var AI_EXEC_ = {
   trips: function (a, x) {
     if (!_aiCan_(x.session, 'trips.view') && !_aiCan_(x.session, 'accounts.view')) throw new Error('لا تملك صلاحية الرحلات');
     var q = String(a.query || '').trim(), from = _aiDate_(a.from), to = _aiDate_(a.to), N = Math.min(60, parseInt(a.limit, 10) || 20);
-    var all = getCachedData('trips_list_cache') || getTripsList(x.token) || [], key = function (d) { return _glDKey_(d) || ''; };
+    var all = getCachedData_('trips_list_cache') || getTripsList(x.token) || [], key = function (d) { return _glDKey_(d) || ''; };
     var names = null; if (q) { names = {}; (_tgFltFindTrips_(q) || []).forEach(function (t) { names[t.name] = 1; }); all.forEach(function (t) { if (t.tripRef && String(t.tripRef).toUpperCase() === q.toUpperCase()) names[t.name] = 1; }); }
     var rows = all.filter(function (t) {
       if (names && !names[t.name]) return false;

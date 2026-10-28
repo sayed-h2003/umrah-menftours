@@ -338,7 +338,7 @@ function hbRememberExecUrl_() {
   } catch (e) { Logger.log('hbRememberExecUrl_: ' + e.message); }
 }
 // تشخيص من المحرر: يطبع وضع البوت والرابط المتوقع وحالة الويب هوك كما يراها تليجرام
-function hbBotStatus() {
+function hbBotStatus_() {
   var p = PropertiesService.getScriptProperties();
   var r = { mode: tgBotMode_() || '(متوقف)', hasToken: !!tgToken_(), savedExecUrl: p.getProperty(TG_PROP_HOOKURL_) || '(لم يُحفظ — افتح برنامج العمرة من رابطه مرة)',
     expected: tgWebhookUrl_(), telegram: tgWebhookHealth_() };

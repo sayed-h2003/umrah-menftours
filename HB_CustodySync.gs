@@ -453,7 +453,7 @@ function custodySyncTick_() {
 }
 
 // زر يدوي للمزامنة الفورية من محرر Apps Script بعد أي تعديل جماعي على شيت العهد
-function syncCustodyNow() {
+function syncCustodyNow_() {
   var res = syncCustodySheets();
   Logger.log(JSON.stringify(res));
   return res;

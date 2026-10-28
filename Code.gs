@@ -31,7 +31,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.357";
+var APP_VERSION = "4.358";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -54,9 +54,16 @@ function onOpen() {
 
     .addToUi();
 }
+// 🔒 (V4.358) عناصر قائمة الشيت: غلاف لصاحب السكربت فقط — الدوال الفعلية صارت خاصة (تنتهي بـ _) فلا تُستدعى من المتصفح
+//   مباشرة؛ الواجهة تستدعيها عبر runAdminSetupAction بعد التحقق من الجلسة والصلاحية.
+function setupDailyAlertTrigger() { requireScriptOwner_(); return setupDailyAlertTrigger_(); }
+function testSendAlerts() { requireScriptOwner_(); return testSendAlerts_(); }
+function clearAllCacheManual() { requireScriptOwner_(); return clearAllCacheManual_(); }
+function testTelegramNow() { requireScriptOwner_(); return testTelegramNow_(); }
+function setupTelegramDailyTrigger() { requireScriptOwner_(); return setupTelegramDailyTrigger_(); }
 
-function clearAllCacheManual() {
-  clearAllCache();
+function clearAllCacheManual_() {
+  clearAllCache_();
   SpreadsheetApp.getUi().alert('✅ تم مسح الـ Cache بنجاح. سيتم إعادة تحميل البيانات من الشيت عند الطلب التالي.');
 }
 
@@ -121,7 +128,7 @@ if (bookingId) {
 try {
 
   var data =
-    getPrintDataForView(bookingId);
+    getPrintDataForView_(bookingId);
 
   _pdiag.push('getPrintDataForView: ' + (data ? (data.id ? 'OK id=' + data.id : 'بلا id — ' + (data.error || JSON.stringify(data).slice(0, 200))) : 'null'));
   if (data && !data.id) {
@@ -260,7 +267,7 @@ function getSpreadsheet_() {
 
 
 
-function setupSmartSystem() {
+function setupSmartSystem_() {
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
 
@@ -268,8 +275,8 @@ function setupSmartSystem() {
   // إنشاء الأوراق الأساسية
   // =====================================================
 
-  createSheetIfNotExist(ss, "Bookings");
-  createSheetIfNotExist(ss, "Agents_Settings");
+  createSheetIfNotExist_(ss, "Bookings");
+  createSheetIfNotExist_(ss, "Agents_Settings");
 
   // =====================================================
   // تجهيز شيت الحجوزات
@@ -510,12 +517,12 @@ function setupSmartSystem() {
   ensureMovementsSheet_();
 
   // ===== شيتا الرحلات والمعتمرين (Trips/Pilgrims) + المستخدمين وحساب admin (Users) =====
-  // setupSmartSystem هي الدالة الوحيدة المرئية والقابلة للتشغيل مباشرة من محرر Apps Script
+  // setupSmartSystem_ هي الدالة الوحيدة المرئية والقابلة للتشغيل مباشرة من محرر Apps Script
   // (أي دالة تنتهي بـ "_" مثل setupCompleteSystem_/setupTripsSystem_ لا تظهر في قائمة "تشغيل" هناك) —
   // فتوحيداً لكل إنشاء الأوراق داخل "دالة التأسيس" الوحيدة التي يستطيع أي شخص إيجادها وتشغيلها،
   // نستدعي هنا كل الدوال المتبقية أيضاً (كلها idempotent ولا تمسّ شيتاً أو صفاً موجوداً بالفعل).
   try { setupTripsSystem_(); } catch (eTrips) { Logger.log('setupSmartSystem: setupTripsSystem_ failed: ' + eTrips); }
-  try { setupUsersSystem(); } catch (eUsers) { Logger.log('setupSmartSystem: setupUsersSystem failed: ' + eUsers); }
+  try { setupUsersSystem_(); } catch (eUsers) { Logger.log('setupSmartSystem: setupUsersSystem failed: ' + eUsers); }
 
   // ⚡ (V4.53) ترحيل شامل بطلب صريح — بلا فقدان بيانات:
   // (1) توسيع أعمدة Bookings إذا كان الشيت القديم يفتقد أعمدة أُضيفت بإصدارات لاحقة (مثل «مقاطع نقل إضافية»)
@@ -593,7 +600,7 @@ function ensureMovementsSheet_() {
 
 
 
-function createSheetIfNotExist(ss, name) {
+function createSheetIfNotExist_(ss, name) {
 
   var sheet = ss.getSheetByName(name);
 
@@ -1512,7 +1519,7 @@ function extractAirportCode_(text, airportsMap) {
    FINALIZE TEMP TICKET
 ================================ */
 
-function finalizeTicketFile(
+function finalizeTicketFile_(
 
   tempFileId,
 
@@ -1649,7 +1656,7 @@ function finalizeTicketFile(
 // (كانت معرّفة محليًا داخل analyzeTicketTextServer فقط — تم رفعها لتصبح دالة عامة
 //  قابلة للاختبار وإعادة الاستخدام، بدون أي تغيير في المنطق الداخلي)
 // ===============================
-function convertDate(dateStr, fullText) {
+function convertDate_(dateStr, fullText) {
 
   if (!dateStr) return "";
 
@@ -1758,9 +1765,9 @@ function convertDate(dateStr, fullText) {
 
 // ===============================
 // تحويل الوقت من صيغة "HHMM" إلى "HH:MM"
-// (كانت معرّفة محليًا داخل analyzeTicketTextServer فقط — نفس ملاحظة convertDate أعلاه)
+// (كانت معرّفة محليًا داخل analyzeTicketTextServer فقط — نفس ملاحظة convertDate_ أعلاه)
 // ===============================
-function convertTime(timeStr) {
+function convertTime_(timeStr) {
 
   if (!timeStr) return "";
 
@@ -1934,7 +1941,7 @@ function _analyzeTicketTextCore_(rawText) {
       }
     });
 
-    // convertDate() و convertTime() أصبحتا دالتين عامتين (top-level) فوق هذه الدالة مباشرة —
+    // convertDate_() و convertTime_() أصبحتا دالتين عامتين (top-level) فوق هذه الدالة مباشرة —
     // بعد ما كانتا معرّفتين محليًا هنا فقط، وهو اللي كان بيمنع اختبارهما من TEST_SUITE
     // (استدعاء دالة محلية من خارج الدالة الأم بيرمي "is not defined"). السلوك هنا لم يتغيّر.
 
@@ -1946,11 +1953,11 @@ function _analyzeTicketTextCore_(rawText) {
 
       arrivalDate:
         arrivalFlight ?
-        convertDate(arrivalFlight.date) : "",
+        convertDate_(arrivalFlight.date) : "",
 
       arrivalTime:
         arrivalFlight ?
-        convertTime(arrivalFlight.arrivalTime) : "",
+        convertTime_(arrivalFlight.arrivalTime) : "",
 
       arrivalFlight:
         arrivalFlight ?
@@ -1967,11 +1974,11 @@ function _analyzeTicketTextCore_(rawText) {
 
       departureDate:
         departureFlight ?
-        convertDate(departureFlight.date) : "",
+        convertDate_(departureFlight.date) : "",
 
       departureTime:
         departureFlight ?
-        convertTime(departureFlight.departureTime) : "",
+        convertTime_(departureFlight.departureTime) : "",
 
       departureFlight:
         departureFlight ?
@@ -2218,10 +2225,10 @@ if (
  * ⚠️ لا تُعدّل ترتيب الأعمدة في rowValues بدون تحديث BOOKING_FIELD_LABELS_ بنفس الترتيب،
  *    وإلا هيبوظ سجل التعديلات (بيعتمد على تطابق index الحقول بين الاتنين)
  */
-// 🛡️ حل جذري: الدالة بالكامل ملفوفة بـ try/catch. أي استثناء من أي كود داخلها (validateMovementsLogic،
-// buildAllMovements، أو أي إضافة مستقبلية) يرجع دائماً { success:false, error:... } نظيف بدل أي احتمال
+// 🛡️ حل جذري: الدالة بالكامل ملفوفة بـ try/catch. أي استثناء من أي كود داخلها (validateMovementsLogic_،
+// buildAllMovements_، أو أي إضافة مستقبلية) يرجع دائماً { success:false, error:... } نظيف بدل أي احتمال
 // لانهيار غير مُعالَج يفوّت withFailureHandler في الواجهة برسالة تقنية غير مفهومة أو بلا رسالة إطلاقاً —
-// هذا يضمن أن رسالة validateMovementsLogic التفصيلية تصل دائماً للمستخدم مهما تغيّر الكود مستقبلاً
+// هذا يضمن أن رسالة validateMovementsLogic_ التفصيلية تصل دائماً للمستخدم مهما تغيّر الكود مستقبلاً
 // 🔢 (V4.47/V4.49/V4.50) رقم الإشعار الجديد يُحتَسَب دائماً كأقصى رقم موجود في شيت Bookings + 1،
 // تحت قفل ذري (LockService) لحماية التزامن. لا يعتمد أبداً على عدّاد محفوظ خارجي فيبقى الرقم متطابقاً
 // مع ما هو في الشيت لحظياً حتى بعد أي حذف أو تعديل يدوي مباشر على الشيت — بطلب صريح.
@@ -2272,7 +2279,7 @@ function _saveBookingToServer_impl_(authToken, bookingData) {
   // التحقق الذكي قبل الحفظ — إشعار الوصول الفعلي: صارم بخصوص وجود تواريخ الوصول/المغادرة
   // (بعكس المسودة، البيانات هنا يُفترض اكتمالها بالكامل)
   bookingData.__strictDates__ = true;
-  var validationError = validateMovementsLogic(bookingData);
+  var validationError = validateMovementsLogic_(bookingData);
   if (validationError) {
     // 🎯 error: نص مسطّح للتوافق مع أي كود قديم يقرأ res.error كنص مباشرة (لا يزال يعمل كما هو)
     // errorDetails: نفس الخطأ لكن بشكل مُهيكَل (title/detail/meta) تستخدمه الواجهة الجديدة لعرض
@@ -2326,7 +2333,7 @@ if (
 
 ) {
 
-  var finalized = finalizeTicketFile(
+  var finalized = finalizeTicketFile_(
 
     bookingData.ticketFileId,
 
@@ -2485,8 +2492,8 @@ if (
   // =====================================
   var movementsSheet = ss.getSheetByName("Movements");
   if (movementsSheet) {
-    deleteBookingMovements(finalId);
-    var allMovements = buildAllMovements(bookingData);
+    deleteBookingMovements_(finalId);
+    var allMovements = buildAllMovements_(bookingData);
 
     if (allMovements.length > 0) {
       var rows = [];
@@ -2515,7 +2522,7 @@ if (
 
   // 🐛 (V4.48) مسح الـ Cache هنا فقط — بعد كتابة الصف فعليًا بالشيت — انظر التعليق أعلى الدالة
   SpreadsheetApp.flush();
-  clearAllCache();
+  clearAllCache_();
 
   Logger.log('⏱️ saveBookingToServer(#' + finalId + '): ' + (new Date().getTime() - _perfStart) + 'ms');
   return { success: true, id: finalId };
@@ -2528,7 +2535,7 @@ if (
 // تفاصيل + بيانات الحركة المعنية) بدل alert() مسطّح. كل قاعدة تحقق وكل رسالة موجودة سابقاً باقية
 // تماماً بدون أي تغيير في المنطق — فقط طريقة تغليف النتيجة تغيّرت. دالة _err_ في الأسفل هي نقطة
 // التجميع الوحيدة لبناء كائن الخطأ، فأي إضافة مستقبلية لأنواع أخطاء جديدة تمر من نفس المكان
-function validateMovementsLogic(data) {
+function validateMovementsLogic_(data) {
 
   // يبني كائن الخطأ المُهيكَل بشكل موحّد لكل نقاط الفشل في الدالة
   function _err_(code, title, detail, meta) {
@@ -2907,7 +2914,7 @@ function _fmtDT_(d) {
 }
 
 
-// ملاحظة: getAllBookings و getAllMovements تم نقلهما إلى قسم Cache أعلاه
+// ملاحظة: getAllBookings_ و getAllMovements_ تم نقلهما إلى قسم Cache أعلاه
 
 
 // 1. تعديل دالة جلب القوائم المنسدلة لتقرأ من ورقة Agents_Settings المحددة لديك
@@ -2915,7 +2922,7 @@ function loadDropdownsData(authToken) {
   requireAuth_(authToken);
 
   // قراءة من Cache أولاً
-  var cached = getCachedData('dropdowns_cache');
+  var cached = getCachedData_('dropdowns_cache');
   if (cached) return cached;
 
 
@@ -2942,7 +2949,7 @@ function loadDropdownsData(authToken) {
   companies = companies.filter(function(item, pos) { return companies.indexOf(item) == pos; });
   
   var result = { agents: agents, companies: companies };
-  setCachedData('dropdowns_cache', result);   // ← كتابة الـ Cache
+  setCachedData_('dropdowns_cache', result);   // ← كتابة الـ Cache
   return result;
 }
 
@@ -2955,7 +2962,7 @@ function toggleApprovalStatus(authToken, id, newStatus) {
   // الحقول الإلزامية المعرَّفة في الإعدادات + منطقية التحركات بالوضع الصارم للتواريخ.
   // أي فشل يمنع الاعتماد ويعيد سبب الرفض للواجهة (لا يتغير شيء عند إلغاء الاعتماد).
   if (newStatus === "معتمد") {
-    var allBookings = getAllBookings(); // نفس التطبيع المرسل للواجهة (تواريخ dd/mm/yyyy وأوقات HH:mm)
+    var allBookings = getAllBookings_(); // نفس التطبيع المرسل للواجهة (تواريخ dd/mm/yyyy وأوقات HH:mm)
     var bk = null;
     for (var b = 0; b < allBookings.length; b++) {
       if (allBookings[b].id && allBookings[b].id.toString() === id.toString()) { bk = allBookings[b]; break; }
@@ -2968,7 +2975,7 @@ function toggleApprovalStatus(authToken, id, newStatus) {
     if (requiredCheck) approveErrors.push(requiredCheck);
 
     bk.__strictDates__ = true;
-    var validationError = validateMovementsLogic(bk);
+    var validationError = validateMovementsLogic_(bk);
     if (validationError) approveErrors.push(validationError.title + ': ' + validationError.detail);
 
     if (approveErrors.length) {
@@ -2987,7 +2994,7 @@ function toggleApprovalStatus(authToken, id, newStatus) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][1] && data[i][1].toString() === id.toString()) {
       sheet.getRange(i + 1, 1).setValue(newStatus);
-      clearAllCache(); // امسح الـ Cache بعد التعديل
+      clearAllCache_(); // امسح الـ Cache بعد التعديل
       return { success: true };
     }
   }
@@ -3017,11 +3024,11 @@ function deleteBookingRecord(authToken, id) {
       var client = B(data[i], 'client') || "";
 
       sheet.deleteRow(i + 1);
-      deleteBookingMovements(id);
+      deleteBookingMovements_(id);
       // 🔧 (V4.50) فرض تطبيق الحذف فوراً قبل مسح الـ Cache — بدونه القراءة التالية قد تعيد الصف
       // من قراءة متزامنة بدأت قبل flush
       SpreadsheetApp.flush();
-      clearAllCache();
+      clearAllCache_();
 
       logChange_(session.username, "حذف إشعار", id, "-", "-",
         "تم حذف إشعار الوصول رقم " + id + " (" + company + " - " + client + ") نهائياً مع كل تحركاته");
@@ -3043,7 +3050,7 @@ function deleteBookingRecord(authToken, id) {
 
 
 
-function cleanMovementTime(timeVal) {
+function cleanMovementTime_(timeVal) {
 
   if (!timeVal) return "00:00";
 
@@ -3081,7 +3088,7 @@ function cleanMovementTime(timeVal) {
 function searchBookingsAdvanced(authToken, filters) {
   requireAuth_(authToken);
 
-  var allMovements = getAllMovements();
+  var allMovements = getAllMovements_();
 
   var results = [];
 
@@ -3317,7 +3324,7 @@ function _deriveStaySegments_(b) {
   return { derived: true, segments: segs, transfers: transfers, others: others, firstCity: start, lastCity: cur };
 }
 
-function buildAllMovements(bookingData) {
+function buildAllMovements_(bookingData) {
 
   var movements = [];
 
@@ -3527,7 +3534,7 @@ function buildAllMovements(bookingData) {
 }
 
 
-function deleteBookingMovements(bookingId) {
+function deleteBookingMovements_(bookingId) {
 
   var sheet =
     SpreadsheetApp
@@ -3550,7 +3557,7 @@ function deleteBookingMovements(bookingId) {
 
 
 
-// getAllMovements تم نقلها إلى قسم Cache أعلاه
+// getAllMovements_ تم نقلها إلى قسم Cache أعلاه
 
 
 
@@ -3660,7 +3667,7 @@ function buildBookingNoticeHtml_(b, asFragment) {
   var lastCity  = _singleCity ? (_singleCity === "مكة" ? "مكة المكرمة" : "المدينة المنورة") : ((b.direction === "مكة أولاً") ? "المدينة المنورة" : "مكة المكرمة");
   var firstHotel = _singleCity ? (_singleCity === "مكة" ? (b.makkahHotel || "غير محدد") : (b.madinahHotel || "غير محدد")) : ((b.direction === "مكة أولاً") ? (b.makkahHotel || "غير محدد") : (b.madinahHotel || "غير محدد"));
   var lastHotel  = _singleCity ? firstHotel : ((b.direction === "مكة أولاً") ? (b.madinahHotel || "غير محدد") : (b.makkahHotel || "غير محدد"));
-  // 🛡️ fmtDate() في getPrintDataForView تُرجع "-" (وليس "") للخانة الفارغة — لو اعتمدنا على || مباشرة
+  // 🛡️ fmtDate() في getPrintDataForView_ تُرجع "-" (وليس "") للخانة الفارغة — لو اعتمدنا على || مباشرة
   // فإن "-" نص غير فارغ (truthy) فيفشل السقوط التلقائي لتاريخ خروج الفندق عند ترك الحقل الاختياري
   // فارغاً، فيختفي التحرك الداخلي من الإشعار المطبوع بالكامل. لازم استبعاد "-" صراحة هنا.
   var _hasTransferDate = b.internalTransferDate && b.internalTransferDate !== "-";
@@ -3955,7 +3962,7 @@ function buildBookingNoticeHtml_(b, asFragment) {
   return '<html dir="rtl" lang="ar"><head><meta charset="UTF-8">' + css + '</head><body><div style="padding:8mm;">' + body + '</div></body></html>';
 }
 
-function getPrintDataForView(bookingId) {
+function getPrintDataForView_(bookingId) {
   try {
     var ss = getSpreadsheet_();
     var sheet = ss.getSheetByName("Bookings");
@@ -4003,7 +4010,7 @@ function getPrintDataForView(bookingId) {
     try { extra = JSON.parse(B(row, 'extraMovements') || "[]"); } catch(e) {}
 
 var companyLogo =
-  getCompanyLogoBase64(
+  getCompanyLogoBase64_(
     B(row, 'company') || ""
   );
 
@@ -4069,7 +4076,7 @@ return {
 function generateMergedPdf(authToken, bookingId) {
   requireAuthOrPrintToken_(authToken);
 
-  var data = getPrintDataForView(bookingId);
+  var data = getPrintDataForView_(bookingId);
 
   if (!data) {
 
@@ -4538,7 +4545,7 @@ function getAgentByCompany(authToken, companyName) {
   var cleanTarget = companyName.toString().trim();
 
   // نحاول أولاً من الكاش الموحّد (نفس البيانات المستخدمة في شاشة الإعدادات)
-  var cached = getCachedData('agents_cache');
+  var cached = getCachedData_('agents_cache');
   if (cached) {
     for (var c = 0; c < cached.length; c++) {
       if (cached[c].company && cached[c].company.toString().trim() === cleanTarget) {
@@ -4586,7 +4593,7 @@ function getAgentByCompany(authToken, companyName) {
  * محرك البحث والفرز الديناميكي — يدعم فلترة بالنص + المدن + الفترات الزمنية معاً.
  * 📞 يُستدعى من: executeDynamicSearch() في index_web.html (شاشة الفرز والبحث)
  *    بتُطلَق تلقائياً عند أي تغيير في أي فلتر (بدون الحاجة لضغط "إنشاء التقرير")
- * ملاحظة: هذه منفصلة تماماً عن buildAllMovements/getAllMovements (بحث الحجوزات مش التحركات)
+ * ملاحظة: هذه منفصلة تماماً عن buildAllMovements_/getAllMovements_ (بحث الحجوزات مش التحركات)
  */
 function searchDynamicBookings(authToken, filters) {
   requireAuth_(authToken);
@@ -4715,7 +4722,7 @@ function searchDynamicBookings(authToken, filters) {
   ) {
 
     value =
-      formatSheetTime(
+      formatSheetTime_(
         value
       );
   }
@@ -4998,7 +5005,7 @@ function searchDynamicBookings(authToken, filters) {
 ========================== */
 
 
-function parseDate(dateStr) {
+function parseDate_(dateStr) {
 
   if (!dateStr)
     return null;
@@ -5021,7 +5028,7 @@ function parseDate(dateStr) {
 
 
 
-function formatSheetTime(value) {
+function formatSheetTime_(value) {
 
   if (
     value === null ||
@@ -5854,7 +5861,7 @@ function deleteTempFile(authToken, fileId){
 }
 
 
-function getCompanyLogoBase64(companyName) {
+function getCompanyLogoBase64_(companyName) {
 
   try {
 
@@ -5926,7 +5933,7 @@ function getCompanyLogoBase64(companyName) {
 // نظام إدارة المستخدمين والصلاحيات
 // ==========================================
 
-function setupUsersSystem(adminPassword) {
+function setupUsersSystem_(adminPassword) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetName = "Users";
   var sheet = ss.getSheetByName(sheetName);
@@ -5969,12 +5976,26 @@ function setupUsersSystem(adminPassword) {
 // دالة الاستدعاء من واجهة الإعدادات
 function setupUsersSystemFromUI(authToken, adminPassword) {
   requireAdminPermission_(authToken);
-  var result = setupUsersSystem(adminPassword ? adminPassword.trim() : null);
+  var result = setupUsersSystem_(adminPassword ? adminPassword.trim() : null);
   return { success: result.startsWith('✅'), message: result };
 }
 
 
+// 🔒 (V4.358) حد محاولات الدخول الفاشلة (لبرنامج العمرة وبرنامج الحجوزات وبوابة العملاء): 5 محاولات خاطئة لنفس
+//   الاسم خلال 15 دقيقة ⇒ يُقفل الدخول بهذا الاسم 15 دقيقة. الدخول الصحيح يمسح العدّاد.
+var SEC_LOGIN_MAX_ = 5, SEC_LOGIN_WIN_ = 900;
+function _secLoginKey_(scope, id) { return 'lgf_' + scope + '_' + Utilities.base64EncodeWebSafe(String(id || '').trim().toLowerCase()).slice(0, 180); }
+function _secLoginCheck_(scope, id) {
+  var n = 0; try { n = +CacheService.getScriptCache().get(_secLoginKey_(scope, id)) || 0; } catch (e) {}
+  if (n >= SEC_LOGIN_MAX_) throw new Error('🔒 محاولات دخول خاطئة كثيرة — الدخول بهذا الاسم موقوف 15 دقيقة');
+}
+function _secLoginFail_(scope, id) {
+  try { var c = CacheService.getScriptCache(), k = _secLoginKey_(scope, id); c.put(k, String((+c.get(k) || 0) + 1), SEC_LOGIN_WIN_); } catch (e) {}
+}
+function _secLoginOk_(scope, id) { try { CacheService.getScriptCache().remove(_secLoginKey_(scope, id)); } catch (e) {} }
+
 function loginUser(username, password, remember) {
+  try { _secLoginCheck_('u', username); } catch (eLk) { return { success: false, error: eLk.message }; }
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Users");
   var data = sheet.getDataRange().getValues();
@@ -5991,6 +6012,7 @@ function loginUser(username, password, remember) {
       if (isActive === false || String(isActive).toLowerCase() === "false") {
         return { success: false, error: "هذا الحساب معطّل، يرجى مراجعة مسؤول النظام" };
       }
+      _secLoginOk_('u', username);
 
       // إرجاع كائن بسيط جداً
       var sessionToken = createSession_(username, data[i][2], userPermissions);
@@ -6012,6 +6034,7 @@ function loginUser(username, password, remember) {
       };
     }
   }
+  _secLoginFail_('u', username);
   return { success: false, error: "خطأ في البيانات" };
 }
 
@@ -6117,7 +6140,7 @@ function requireSettingsBasicPermission_(authToken) {
 function getAllUsersForAdmin(authToken) {
   requireAdminPermission_(authToken);
 
-  var cached = getCachedData('users_cache');
+  var cached = getCachedData_('users_cache');
   if (cached) return cached;
 
   var ss = getSpreadsheet_();
@@ -6137,7 +6160,7 @@ function getAllUsersForAdmin(authToken) {
       permissions: data[i][4]
     });
   }
-  setCachedData('users_cache', result);
+  setCachedData_('users_cache', result);
   return result;
 }
 
@@ -6172,7 +6195,7 @@ function addNewUser(authToken, newUsername, newPassword, fullName, permissions) 
     permissions || ""
   ]);
 
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -6188,7 +6211,7 @@ function changeUserPassword(authToken, targetRow, newPassword) {
   var sheet = ss.getSheetByName("Users");
   sheet.getRange(targetRow, 2).setValue(hashPassword_(newPassword));
 
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -6204,7 +6227,7 @@ function setUserActiveStatus(authToken, targetRow, isActive) {
   var sheet = ss.getSheetByName("Users");
   sheet.getRange(targetRow, 4).setValue(isActive === true);
 
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -6255,7 +6278,7 @@ function deleteUserAccount(authToken, targetRow, expectedUsername) {
   sheet.deleteRow(targetRow);
 
   logChange_(session.username, "حذف مستخدم", targetUsername, "-", "-", "تم حذف الحساب نهائياً");
-  clearAllCache();
+  clearAllCache_();
 
   return { success: true };
 }
@@ -6268,7 +6291,7 @@ function updateUserPermissions(authToken, targetRow, newPermissions) {
   var sheet = ss.getSheetByName("Users");
   _clearUsersPermsValidation_(sheet); // إزالة قاعدة التحقق القديمة التي ترفض رموز الصلاحيات الجديدة (screen.cap)
   sheet.getRange(targetRow, 5).setValue(newPermissions || "");
-  clearAllCache();
+  clearAllCache_();
   // 🔄 (V4.108) لو الأدمن يعدّل صلاحيات حسابه هو نفسه، حدِّث جلسته النشطة فوراً بنفس التوكن —
   // بدون هذا كانت الجلسة المفتوحة تحتفظ بالصلاحيات القديمة المخزَّنة وقت الدخول (CacheService)
   // فتظل كل الشاشات المُضافة حديثاً تُظهر "لا تملك صلاحية" رغم نجاح الحفظ، حتى يخرج ويدخل من جديد.
@@ -6305,7 +6328,7 @@ function updateUsername(authToken, targetRow, newUsername) {
   var sheet = ss.getSheetByName("Users");
   var lastRow = sheet.getLastRow();
   var oldUsername = String(sheet.getRange(targetRow, 1).getValue() || "").trim();
-  if (oldUsername === newUsername) { clearAllCache(); return { success: true, unchanged: true }; }
+  if (oldUsername === newUsername) { clearAllCache_(); return { success: true, unchanged: true }; }
 
   // منع التكرار مع أي مستخدم آخر
   if (lastRow >= 2) {
@@ -6323,7 +6346,7 @@ function updateUsername(authToken, targetRow, newUsername) {
     var session = validateSession_(authToken);
     logChange_((session && session.username) || "admin", "تعديل اسم مستخدم", oldUsername, "اسم المستخدم", oldUsername, newUsername);
   } catch (e) {}
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -6337,7 +6360,7 @@ function updateUserFullName(authToken, targetRow, newFullName) {
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Users");
   var oldFullName = String(sheet.getRange(targetRow, 3).getValue() || "").trim();
-  if (oldFullName === newFullName) { clearAllCache(); return { success: true, unchanged: true }; }
+  if (oldFullName === newFullName) { clearAllCache_(); return { success: true, unchanged: true }; }
 
   sheet.getRange(targetRow, 3).setValue(newFullName);
   try {
@@ -6345,7 +6368,7 @@ function updateUserFullName(authToken, targetRow, newFullName) {
     var uname = String(sheet.getRange(targetRow, 1).getValue() || "").trim();
     logChange_((session && session.username) || "admin", "تعديل اسم مستخدم", uname, "الاسم الكامل", oldFullName, newFullName);
   } catch (e) {}
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -6864,7 +6887,7 @@ function updateFolderSetting_(key, newName, newFolderId) {
 // أقصى عدد أجزاء نتوقعه عمليًا (يُستخدم لتنظيف مفاتيح الأجزاء القديمة عند الكتابة فوقها)
 var _CACHE_MAX_CHUNKS_ = 30;
 
-function getCachedData(key) {
+function getCachedData_(key) {
   try {
     var cache = CacheService.getScriptCache();
     var isChunked = cache.get(key + '_chunked');
@@ -6903,7 +6926,7 @@ function getCachedData(key) {
   return null;
 }
 
-function setCachedData(key, data) {
+function setCachedData_(key, data) {
   try {
     var cache = CacheService.getScriptCache();
     var json = JSON.stringify(data);
@@ -6945,14 +6968,14 @@ function setCachedData(key, data) {
 
 /* 🧹 (V4.177) مسح مفتاح كاش واحد مسحاً كاملاً — شاملاً صيغته المجزَّأة (chunked).
    🐛 السبب الجذري لمشكلة «الحفظ يُطبَّق ثم ترجع القيم القديمة بعد ثوانٍ»:
-   setCachedData يحفظ البيانات الأكبر من 90KB مجزّأةً تحت مفاتيح key_chunked/key_count/key_0..n
+   setCachedData_ يحفظ البيانات الأكبر من 90KB مجزّأةً تحت مفاتيح key_chunked/key_count/key_0..n
    ولا يكتب المفتاح المجرَّد (key) إطلاقاً — بل يحذفه (انظر أعلاه)، وgetCachedData يفحص
    key_chunked أولاً ويُعيد تجميع الأجزاء. وبيانات شاشتَي ملفات الوزارة ومتابعة الوكلاء أكبر
    بكثير من 90KB فتُخزَّن دائماً بالصيغة المجزَّأة. لذلك كان cache.remove(key) المجرَّد — المستخدَم
    بكل دوال إبطال الكاش — لا يمسح شيئاً على الإطلاق: تبقى كل الأجزاء وعلامة _chunked حيّة،
    فيُعيد أول تحميل بعد الحفظ نفس النسخة القديمة تماماً فتُستبدل بها البيانات المحدَّثة بالشاشة.
-   هذه الدالة تمسح المفتاح بكل صيغه في نداء removeAll واحد (نفس ما يفعله clearAllCache أصلاً). */
-function clearCachedData(key) {
+   هذه الدالة تمسح المفتاح بكل صيغه في نداء removeAll واحد (نفس ما يفعله clearAllCache_ أصلاً). */
+function clearCachedData_(key) {
   try {
     var keys = [key, key + '_chunked', key + '_count'];
     for (var i = 0; i < _CACHE_MAX_CHUNKS_; i++) keys.push(key + '_' + i);
@@ -6962,7 +6985,7 @@ function clearCachedData(key) {
   }
 }
 
-// مفاتيح الـ Cache المركزية (تُستخدم في clearAllCache وكل دالة تضع بيانات في الـ Cache)
+// مفاتيح الـ Cache المركزية (تُستخدم في clearAllCache_ وكل دالة تضع بيانات في الـ Cache)
 var ALL_CACHE_KEYS = [
   'bookings_cache',
   'movements_cache',
@@ -6982,7 +7005,7 @@ var ALL_CACHE_KEYS = [
                          // فيظل ربط الوكيل بالشركة (زر إعدادات الوكيل) قديماً في هذه الشاشة حتى تنتهي صلاحية الكاش تلقائياً
 ];
 
-function clearAllCache() {
+function clearAllCache_() {
   try {
     var cache = CacheService.getScriptCache();
     // ⚡ مسح كل المفاتيح (الأساسية + chunked/count + كل الأجزاء) في نداء removeAll واحد
@@ -7002,13 +7025,13 @@ function clearAllCache() {
 // نقطة دخول جديدة للمتصفح فقط - تتحقق من الجلسة ثم تستدعي الدالة الأصلية كما هي بدون أي تعديل عليها
 function clearAllCacheAuth(authToken) {
   requireAuth_(authToken);
-  return clearAllCache();
+  return clearAllCache_();
 }
 
-// نسخة محسّنة من getAllBookings مع Cache
-function getAllBookings() {
+// نسخة محسّنة من getAllBookings_ مع Cache
+function getAllBookings_() {
   // حاول قراءة من Cache أولاً
-  var cached = getCachedData('bookings_cache');
+  var cached = getCachedData_('bookings_cache');
   if (cached) {
     return cached;
   }
@@ -7136,20 +7159,20 @@ function getAllBookings() {
 
   var result = list.reverse();
   // احفظ في Cache
-  setCachedData('bookings_cache', result);
+  setCachedData_('bookings_cache', result);
   return result;
 }
 
 // نقطة دخول جديدة للمتصفح فقط - الدالة الأصلية تبقى بلا أي تعديل وتستمر بالعمل داخلياً كما كانت
 function getAllBookingsAuth(authToken) {
   requireAuth_(authToken);
-  return getAllBookings();
+  return getAllBookings_();
 }
 
-// نسخة محسّنة من getAllMovements مع Cache
-function getAllMovements() {
+// نسخة محسّنة من getAllMovements_ مع Cache
+function getAllMovements_() {
   // حاول قراءة من Cache أولاً
-  var cached = getCachedData('movements_cache');
+  var cached = getCachedData_('movements_cache');
   if (cached) {
     return cached;
   }
@@ -7177,7 +7200,7 @@ function getAllMovements() {
       status: data[i][0] ? data[i][0].toString() : "",
       bookingId: data[i][1].toString(),
       movementDate: formatDateString(data[i][2]),
-      movementTime: cleanMovementTime(data[i][3]),
+      movementTime: cleanMovementTime_(data[i][3]),
       movementType: data[i][4] ? data[i][4].toString().trim() : "",
       agent: data[i][5] ? data[i][5].toString() : "",
       company: data[i][6] ? data[i][6].toString() : "",
@@ -7193,21 +7216,21 @@ function getAllMovements() {
   // أي نداء سيرفر إضافي، مع زر تبديل لإظهار الباقي أيضاً
   try {
     var _byId = {};
-    getAllBookings().forEach(function(b) { _byId[b.id] = b; });
+    getAllBookings_().forEach(function(b) { _byId[b.id] = b; });
     result.forEach(function(m) { m.hasTransport = _tgHasTransport_(m, _byId); });
   } catch (e) {
     result.forEach(function(m) { m.hasTransport = true; }); // تعذّر التوسيم — لا نُخفي شيئاً افتراضياً
   }
 
   // احفظ في Cache
-  setCachedData('movements_cache', result);
+  setCachedData_('movements_cache', result);
   return result;
 }
 
 // نقطة دخول جديدة للمتصفح فقط - الدالة الأصلية تبقى بلا أي تعديل وتستمر بالعمل داخلياً كما كانت
 function getAllMovementsAuth(authToken) {
   requireAuth_(authToken);
-  return getAllMovements();
+  return getAllMovements_();
 }
 
 /* ============================================================
@@ -7229,9 +7252,9 @@ function getAppBootstrap(authToken) {
   put('dropdowns', function () { return loadDropdownsData(authToken); });
   put('online', function () { return heartbeatOnline(authToken); });
   put('version', function () { return getAppVersion(); });
-  put('bookings', function () { return getCachedData('bookings_cache'); });
-  put('movements', function () { return getCachedData('movements_cache'); });
-  put('trips', function () { return getCachedData('trips_list_cache'); });
+  put('bookings', function () { return getCachedData_('bookings_cache'); });
+  put('movements', function () { return getCachedData_('movements_cache'); });
+  put('trips', function () { return getCachedData_('trips_list_cache'); });
   return { success: true, parts: parts, serverMs: Date.now() - t0 };
 }
 
@@ -7258,8 +7281,8 @@ function _notificationEmail_() { return _sp_('NOTIFICATION_EMAILS'); }
 /**
  * يبني ويرسل تقرير التنبيه اليومي بالبريد (وصول/مغادرة اليوم والغد).
  * 📞 يُستدعى من:
- *   - Trigger زمني يومي (يُضبط عبر setupDailyAlertTrigger — الساعة تُقرأ من EMAIL_ALERT_HOUR)
- *   - testSendAlerts() يدوياً من شاشة الإعدادات (زر "اختبار الإرسال الآن")
+ *   - Trigger زمني يومي (يُضبط عبر setupDailyAlertTrigger_ — الساعة تُقرأ من EMAIL_ALERT_HOUR)
+ *   - testSendAlerts_() يدوياً من شاشة الإعدادات (زر "اختبار الإرسال الآن")
  * ⚠️ Apps Script بينادي عليها بالاسم كسلسلة نصية (ScriptApp.newTrigger('sendArrivalAlerts'))،
  *    فلو غيّرت اسم الدالة لازم تُعيد ضبط الـ Trigger من شاشة الإعدادات وإلا هيفضل بيحاول ينادي اسم غير موجود
  */
@@ -7272,7 +7295,7 @@ function sendArrivalAlerts() {
 
     // 🚫 (V4.71) نفس فلتر تنبيهات تيليجرام — استبعاد التحركات بشركة نقل أو عدد باصات = «النقل بمعرفة العميل»
     const movements =
-      _tgAlertableMovements_(getAllMovements());
+      _tgAlertableMovements_(getAllMovements_());
 
     const now =
       new Date();
@@ -7389,7 +7412,7 @@ ${tomorrowMovements.length}
     `;
 
     body +=
-      buildMovementAlertTable(
+      buildMovementAlertTable_(
         tomorrowMovements
       );
 
@@ -7465,7 +7488,7 @@ ${tomorrowMovements.length}
   }
 }
 
-function buildMovementAlertTable(
+function buildMovementAlertTable_(
   rows
 ){
 
@@ -7596,7 +7619,7 @@ function buildMovementAlertTable(
 
 
 // دالة لإنشاء التريجر التلقائي اليومي
-function setupDailyAlertTrigger() {
+function setupDailyAlertTrigger_() {
   // احذف أي تريجر قديم للدالة نفسها
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === 'sendArrivalAlerts') {
@@ -7618,7 +7641,7 @@ function setupDailyAlertTrigger() {
 }
 
 // دالة اختبار التنبيهات يدوياً
-function testSendAlerts() {
+function testSendAlerts_() {
   try {
     var result = sendArrivalAlerts();
     if (result.error) {
@@ -7644,7 +7667,7 @@ var TELEGRAM_CONFIG = {
   get chatId() { return _sp_('TELEGRAM_CHAT_ID'); }
 };
 
-// 📣 (V4.18) نفس منطق sendTelegramMessage لكن لأي chatId — أساس تعدد جروبات تنبيهات الحركات
+// 📣 (V4.18) نفس منطق sendTelegramMessage_ لكن لأي chatId — أساس تعدد جروبات تنبيهات الحركات
 function _tgSendMarkdownTo_(chatId, message) {
   try {
     var url = "https://api.telegram.org/bot" + TELEGRAM_CONFIG.token + "/sendMessage";
@@ -7660,7 +7683,7 @@ function _tgSendMarkdownTo_(chatId, message) {
   }
 }
 
-function sendTelegramMessage(message) {
+function sendTelegramMessage_(message) {
   try {
     var url = "https://api.telegram.org/bot" +
               TELEGRAM_CONFIG.token + "/sendMessage";
@@ -7706,7 +7729,7 @@ function _tgMovementLabel_(type) {
   return '';
 }
 // 🚌 (V4.123) الشرط المشترك لـ"له نقل فعلي" (وكيل + باصات) — مُستخرَج هنا ليُستخدم في مكانين:
-// فلترة تنبيهات تليجرام (كما كان)، وتوسيم كل تحرك بحقل hasTransport في getAllMovements حتى
+// فلترة تنبيهات تليجرام (كما كان)، وتوسيم كل تحرك بحقل hasTransport في getAllMovements_ حتى
 // تقدر شاشة لوحة التحكم تعرض نفس تصفية تليجرام افتراضياً بدون أي نداء سيرفر إضافي
 function _tgHasTransport_(m, byId) {
   var b = byId[String(m.bookingId)];
@@ -7723,7 +7746,7 @@ function _tgHasTransport_(m, byId) {
 function _tgAlertableMovements_(movements) {
   var byId = {};
   try {
-    getAllBookings().forEach(function(b) { byId[b.id] = b; });
+    getAllBookings_().forEach(function(b) { byId[b.id] = b; });
   } catch (e) { return movements; } // تعذّر جلب الإشعارات — لا نُسقط التنبيهات كلها بسبب الفلتر
   return movements.filter(function(m) { return _tgHasTransport_(m, byId); });
 }
@@ -7743,9 +7766,10 @@ function _tgAlertCfg_() {
 }
 function getTgAlertGroups(authToken) {
   requireAuth_(authToken);
-  return { success: true, groups: _tgAlertCfg_().groups, legacyChatId: TELEGRAM_CONFIG.chatId || '' };
+  return { success: true, groups: _tgAlertCfg_().groups, legacyChatId: TELEGRAM_CONFIG.chatId || '',
+    mainChats: PropertiesService.getScriptProperties().getProperty(TG_MAIN_EXTRA_PROP_) || '' };
 }
-function saveTgAlertGroups(authToken, groups) {
+function saveTgAlertGroups(authToken, groups, mainChats) {
   var session = requireAdminPermission_(authToken);
   var clean = [];
   (Array.isArray(groups) ? groups : []).forEach(function(g) {
@@ -7756,6 +7780,11 @@ function saveTgAlertGroups(authToken, groups) {
   });
   PropertiesService.getScriptProperties().setProperty('TG_ALERT_CFG', JSON.stringify({ groups: clean }));
   logChange_(session.username, 'تعديل جروبات تنبيهات التليجرام', '-', 'TG_ALERT_CFG', '-', clean.length + ' جروب');
+  if (mainChats !== undefined && mainChats !== null) {   // 🔒 (V4.358) محادثات إضافية مسموح لها ببوت الأوامر
+    var mc = _tgMainExtraList_(mainChats).join('\n');
+    PropertiesService.getScriptProperties().setProperty(TG_MAIN_EXTRA_PROP_, mc);
+    logChange_(session.username, 'تعديل المحادثات المسموح لها ببوت التليجرام', '-', TG_MAIN_EXTRA_PROP_, '-', mc.replace(/\n/g, '، ') || '(فارغة)');
+  }
   return { success: true, groups: clean };
 }
 // 🧪 اختبار فوري: يرسل رسالة تجربة لكل جروب مضبوط ويرجع نتيجة كل واحد
@@ -7778,7 +7807,7 @@ function sendTelegramArrivalAlerts() {
   // 🔕 (V4.125) مفتاح التفعيل من قسم التنبيهات بشاشة الإعدادات
   if (!_notifEnabled_('tg_tomorrow')) { Logger.log('tg_tomorrow alert disabled from settings'); return { sent: 0, disabled: true }; }
   try {
-    var movements = _tgAlertableMovements_(getAllMovements());
+    var movements = _tgAlertableMovements_(getAllMovements_());
     var now       = new Date();
 
     function fmt(d) {
@@ -7854,11 +7883,11 @@ function sendTelegramArrivalAlerts() {
   }
 }
 
-function testTelegramNow() {
+function testTelegramNow_() {
   if (!TELEGRAM_CONFIG.token) return '❌ لم يتم ضبط توكن البوت في الإعدادات';
   if (!TELEGRAM_CONFIG.chatId) return '❌ لم يتم ضبط Chat ID في الإعدادات';
   try {
-    var result = sendTelegramMessage(
+    var result = sendTelegramMessage_(
       "✅ *اختبار نظام تيليجرام*\n" +
       "🕋 نظام إشعارات رحلات العمرة\n" +
       "📅 " + Utilities.formatDate(new Date(), _tz_() || "Asia/Riyadh", "dd/MM/yyyy HH:mm") + "\n" +
@@ -7875,7 +7904,7 @@ function testTelegramNow() {
 }
 
 
-function setupTelegramDailyTrigger() {
+function setupTelegramDailyTrigger_() {
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === 'sendTelegramArrivalAlerts') {
       ScriptApp.deleteTrigger(t);
@@ -7896,6 +7925,39 @@ function setupTelegramDailyTrigger() {
 }
 
 
+
+// 🔒 (V4.358) بوت الأوامر الرئيسي (القائمة، التحركات والوصول، البحث عن معتمر، جوال المشرف، مطابقة البرنت) كان يجيب
+//   أي محادثة تراسله. الآن يجيب فقط: جروبات التنبيهات + جروب التنبيه القديم + جروبات بوت الإشعارات وبوت الإعاشة +
+//   مستخدمي بوت الإعاشة المصرَّح لهم بالخاص + قائمة إضافية (معرّف محادثة/مستخدم أو اسم مستخدم) من الإعدادات.
+//   الأمر /id يبقى متاحاً للجميع ليعرف صاحب المحادثة معرّفها ويرسله للإدارة.
+var TG_MAIN_EXTRA_PROP_ = 'TG_MAIN_EXTRA_CHATS';
+function _tgMainExtraList_(raw) {
+  return String(raw || '').split(/[\s,،;]+/).map(function (x) { return x.trim().replace(/^@/, '').toLowerCase(); }).filter(String);
+}
+function _tgMainChatAllowed_(chatId, from) {
+  var id = String(chatId == null ? '' : chatId).trim(); if (!id) return false;
+  var ok = {};
+  var add = function (v) { v = String(v == null ? '' : v).trim().toLowerCase(); if (v) ok[v] = 1; };
+  try { (_tgAlertCfg_().groups || []).forEach(function (g) { add(g.chatId); }); } catch (e1) {}
+  try { add(TELEGRAM_CONFIG.chatId); } catch (e2) {}
+  try { (_tgbnCfg_().groups || []).forEach(function (g) { add(g.chatId); }); } catch (e3) {}
+  var cc = null; try { cc = _tgccCfg_(); (cc.groups || []).forEach(function (g) { add(g.chatId); }); } catch (e4) {}
+  try { _tgMainExtraList_(PropertiesService.getScriptProperties().getProperty(TG_MAIN_EXTRA_PROP_)).forEach(add); } catch (e5) {}
+  if (ok[id.toLowerCase()]) return true;
+  if (from && Number(id) > 0) {   // محادثة خاصة: بمعرّف المستخدم أو اسمه
+    if (ok[String(from.id)] || (from.username && ok[String(from.username).toLowerCase()])) return true;
+    try { if (cc && cc.enabled && !cc.acceptEveryone && (cc.allowedUsers || []).some(function (u) { return u === String(from.id) || u === String(from.username || ''); })) return true; } catch (e6) {}
+  }
+  return false;
+}
+function _tgMainDeny_(chatId) {
+  try {
+    var c = CacheService.getScriptCache(), k = 'tgdeny_' + chatId;
+    if (c.get(k)) return;   // تنبيه واحد كل 6 ساعات للمحادثة
+    c.put(k, '1', 21600);
+    sendTelegramMessageDirect_(chatId, '⛔ هذه المحادثة غير مصرَّح لها باستخدام البوت.\nمعرّفها: <code>' + chatId + '</code>\nأرسله للإدارة لإضافته من: الإعدادات ← تنبيهات تيليجرام ← «محادثات مسموح لها ببوت الأوامر».');
+  } catch (e) {}
+}
 function doPost(e) {
   var chatId = null; // مُعرَّف مبكرًا حتى يكون متاحًا في catch مهما كان موضع الخطأ
   // 🏨 (V4.211-H4) بوت برنامج الحجوزات: رابط الويب هوك الخاص به يحمل سرّه في ?tghook= — يُعالَج هناك كما هو
@@ -7945,7 +8007,7 @@ function doPost(e) {
         try {
           _tgbnHandleCallback_(cq);
         } catch (bnErr) {
-          sendTelegramMessageDirect(chatId, "❌ <b>حدث خطأ في بوت تسجيل الإشعارات:</b>\n<code>" + bnErr.toString() + "</code>");
+          sendTelegramMessageDirect_(chatId, "❌ <b>حدث خطأ في بوت تسجيل الإشعارات:</b>\n<code>" + bnErr.toString() + "</code>");
         }
         return;
       }
@@ -7955,7 +8017,7 @@ function doPost(e) {
         try {
           _tgccHandleCallback_(cq);
         } catch (ccErr3) {
-          sendTelegramMessageDirect(chatId, "❌ <b>حدث خطأ في بوت اتفاقيات الإعاشة:</b>\n<code>" + ccErr3.toString() + "</code>");
+          sendTelegramMessageDirect_(chatId, "❌ <b>حدث خطأ في بوت اتفاقيات الإعاشة:</b>\n<code>" + ccErr3.toString() + "</code>");
         }
         return;
       }
@@ -7963,19 +8025,22 @@ function doPost(e) {
       if (callbackData === 'cc_start') {
         try {
           var ccCfg2 = _tgccCfg_();
-          if (!ccCfg2.enabled) { sendTelegramMessageDirect(chatId, "⚠️ ميزة اتفاقيات الإعاشة غير مفعَّلة حالياً — راجع الإدارة."); return; }
-          if (!_tgccIsAllowed_(ccCfg2, chatId, { from: cq.from })) { sendTelegramMessageDirect(chatId, "⛔ غير مصرَّح لك باستخدام اتفاقيات الإعاشة من هذه المحادثة."); return; }
+          if (!ccCfg2.enabled) { sendTelegramMessageDirect_(chatId, "⚠️ ميزة اتفاقيات الإعاشة غير مفعَّلة حالياً — راجع الإدارة."); return; }
+          if (!_tgccIsAllowed_(ccCfg2, chatId, { from: cq.from })) { sendTelegramMessageDirect_(chatId, "⛔ غير مصرَّح لك باستخدام اتفاقيات الإعاشة من هذه المحادثة."); return; }
           _tgccShowMainMenu_(ccCfg2.token, chatId);
         } catch (ccErr4) {
-          sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + ccErr4.toString() + "</code>");
+          sendTelegramMessageDirect_(chatId, "❌ <b>خطأ:</b>\n<code>" + ccErr4.toString() + "</code>");
         }
         return;
       }
 
+      // 🔒 (V4.358) بقية أزرار البوت للمحادثات المصرَّح لها فقط
+      if (!_tgMainChatAllowed_(chatId, cq.from)) { _tgMainDeny_(chatId); return; }
+
       // ✈️ (V4.257) مطابقة برنت الطيران
       if (callbackData === 'flt_start' || callbackData === 'fltq_cancel' || callbackData === 'fltpdf' || callbackData.indexOf('flttrip:') === 0) {
         try { _tgFltOnCallback_(cq); }
-        catch (fltErr) { sendTelegramMessageDirect(chatId, "❌ <b>خطأ في مطابقة البرنت:</b>\n<code>" + fltErr.toString() + "</code>"); }
+        catch (fltErr) { sendTelegramMessageDirect_(chatId, "❌ <b>خطأ في مطابقة البرنت:</b>\n<code>" + fltErr.toString() + "</code>"); }
         return;
       }
       // 📅 (V4.109) زر «تحركات بتاريخ معيّن» — يبدأ محادثة قصيرة تنتظر التاريخ من المستخدم
@@ -7984,13 +8049,13 @@ function doPost(e) {
           _tgMoveSetState_(chatId, cq.from.id, { step: 'awaitingDate' });
           _tgbnSend_(chatId, "📅 اكتب <b>التاريخ</b> المطلوب معرفة تحركاته.\nيقبل الصيغة القصيرة مثل <code>12/9</code> (تُكمَّل السنة الحالية تلقائياً) أو الكاملة <code>12/9/2026</code>.", [[{ text: '✖️ إلغاء', callback_data: 'mvq_cancel' }]]);
         } catch (mvErr) {
-          sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + mvErr.toString() + "</code>");
+          sendTelegramMessageDirect_(chatId, "❌ <b>خطأ:</b>\n<code>" + mvErr.toString() + "</code>");
         }
         return;
       }
       if (callbackData === 'mvq_cancel') {
         _tgMoveClearState_(chatId, cq.from.id);
-        sendTelegramMessageDirect(chatId, "✔️ تم الإلغاء.");
+        sendTelegramMessageDirect_(chatId, "✔️ تم الإلغاء.");
         return;
       }
 
@@ -7999,25 +8064,25 @@ function doPost(e) {
       if (callbackData === 'srch_start') {
         try {
           _tgSrchSetState_(chatId, cq.from.id);
-          sendTelegramMessageDirect(chatId,
+          sendTelegramMessageDirect_(chatId,
             "🔎 <b>ابحث عن معتمر</b>\nاكتب <b>اسم المعتمر</b> (ولو جزءاً منه أو تقريبياً) أو <b>رقم جوازه</b>، " +
             "أو أرسل مباشرة <b>صورة الجواز أو التأشيرة</b> وسأستخلص منها الاسم والجواز وأبحث عنهما فوراً.\n\n" +
             "💡 يمكنك أيضاً البحث مباشرة بصيغة: <code>بحث: اسم المعتمر</code> بلا حاجة لهذا الزر.");
         } catch (srchErr) {
-          sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + srchErr.toString() + "</code>");
+          sendTelegramMessageDirect_(chatId, "❌ <b>خطأ:</b>\n<code>" + srchErr.toString() + "</code>");
         }
         return;
       }
       if (callbackData === 'srchq_cancel') {
         _tgSrchClearState_(chatId, cq.from.id);
-        sendTelegramMessageDirect(chatId, "✔️ تم الإلغاء.");
+        sendTelegramMessageDirect_(chatId, "✔️ تم الإلغاء.");
         return;
       }
       // 📱 (V4.158) زر «تسجيل جوال مشرف» — محادثة قصيرة: اسم تقريبي + رقم جوال بنص حر، ثم مراجعة
       // المطابقة من واقع البيانات المسجَّلة (اسم المشرف ورحلته الجارية أو أحدثها) قبل الاعتماد
       if (callbackData === 'supph_start') {
         _tgSupSetState_(chatId, cq.from.id);
-        sendTelegramMessageDirect(chatId,
+        sendTelegramMessageDirect_(chatId,
           "📱 <b>تسجيل جوال مشرف</b>\nاكتب <b>اسم المشرف</b> (ولو تقريبياً) و<b>رقم جواله السعودي</b> في رسالة واحدة بأي ترتيب.\n\n" +
           "مثال: <code>ابو محمد 0551234567</code>",
           [[{ text: '✖️ إلغاء', callback_data: 'supphq_cancel' }]]);
@@ -8025,7 +8090,7 @@ function doPost(e) {
       }
       if (callbackData === 'supphq_cancel') {
         _tgSupClearState_(chatId, cq.from.id);
-        sendTelegramMessageDirect(chatId, "✔️ تم الإلغاء.");
+        sendTelegramMessageDirect_(chatId, "✔️ تم الإلغاء.");
         return;
       }
       if (callbackData.indexOf('supph:') === 0 || callbackData.indexOf('supphok:') === 0) {
@@ -8033,16 +8098,16 @@ function doPost(e) {
           var _spP = callbackData.split(':');
           var _spCand = _tgSupLoadCand_(chatId, _spP[1], parseInt(_spP[2], 10));
           if (!_spCand) {
-            sendTelegramMessageDirect(chatId, "⚠️ انتهت صلاحية هذا الطلب. ابدأ من جديد بزر «تسجيل جوال مشرف».");
+            sendTelegramMessageDirect_(chatId, "⚠️ انتهت صلاحية هذا الطلب. ابدأ من جديد بزر «تسجيل جوال مشرف».");
           } else if (callbackData.indexOf('supphok:') === 0) {
-            sendTelegramMessageDirect(chatId, _tgSupSaveMobile_(_spCand));
+            sendTelegramMessageDirect_(chatId, _tgSupSaveMobile_(_spCand));
           } else {
-            sendTelegramMessageDirect(chatId, _tgSupReviewMsg_(_spCand),
+            sendTelegramMessageDirect_(chatId, _tgSupReviewMsg_(_spCand),
               [[{ text: '✅ اعتماد وتسجيل', callback_data: 'supphok:' + _spP[1] + ':' + _spP[2] },
                 { text: '❌ إلغاء', callback_data: 'supphq_cancel' }]]);
           }
         } catch (spErr) {
-          sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء تسجيل جوال المشرف:</b>\n<code>" + spErr.toString() + "</code>");
+          sendTelegramMessageDirect_(chatId, "❌ <b>خطأ أثناء تسجيل جوال المشرف:</b>\n<code>" + spErr.toString() + "</code>");
         }
         return;
       }
@@ -8053,24 +8118,24 @@ function doPost(e) {
           var _srchSid = _srchParts[1], _srchIdx = parseInt(_srchParts[2], 10);
           var _srchPerson = _tgSrchLoadResult_(chatId, _srchSid, _srchIdx);
           if (!_srchPerson) {
-            sendTelegramMessageDirect(chatId, "⚠️ انتهت صلاحية نتائج هذا البحث. أعد البحث من جديد.");
+            sendTelegramMessageDirect_(chatId, "⚠️ انتهت صلاحية نتائج هذا البحث. أعد البحث من جديد.");
           } else {
-            sendTelegramMessageDirect(chatId, _tgPilgrimDetailMsg_(_srchPerson, cq.from));
+            sendTelegramMessageDirect_(chatId, _tgPilgrimDetailMsg_(_srchPerson, cq.from));
           }
         } catch (srchErr2) {
-          sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء عرض بيانات المعتمر:</b>\n<code>" + srchErr2.toString() + "</code>");
+          sendTelegramMessageDirect_(chatId, "❌ <b>خطأ أثناء عرض بيانات المعتمر:</b>\n<code>" + srchErr2.toString() + "</code>");
         }
         return;
       }
 
       // تنفيذ جلب التقارير مع حماية كشف الأخطاء
       try {
-        if (callbackData === 'moves_today')      sendTelegramArrivalAlerts_Custom('today', chatId, cq.from);
-        if (callbackData === 'moves_tomorrow')   sendTelegramArrivalAlerts_Custom('tomorrow', chatId, cq.from);
-        if (callbackData === 'arrival_today')    sendTelegramBookings_Custom('today', chatId, cq.from);
-        if (callbackData === 'arrival_tomorrow') sendTelegramBookings_Custom('tomorrow', chatId, cq.from);
+        if (callbackData === 'moves_today')      sendTelegramArrivalAlerts_Custom_('today', chatId, cq.from);
+        if (callbackData === 'moves_tomorrow')   sendTelegramArrivalAlerts_Custom_('tomorrow', chatId, cq.from);
+        if (callbackData === 'arrival_today')    sendTelegramBookings_Custom_('today', chatId, cq.from);
+        if (callbackData === 'arrival_tomorrow') sendTelegramBookings_Custom_('tomorrow', chatId, cq.from);
       } catch (innerError) {
-        sendTelegramMessageDirect(chatId, "❌ <b>فشل جلب البيانات بسبب خطأ داخلي:</b>\n<code>" + innerError.toString() + "</code>");
+        sendTelegramMessageDirect_(chatId, "❌ <b>فشل جلب البيانات بسبب خطأ داخلي:</b>\n<code>" + innerError.toString() + "</code>");
       }
       return;
     }
@@ -8085,23 +8150,33 @@ function doPost(e) {
 
     // 🆔 أمر مساعد للإعداد: يعرض معرّف المحادثة الحالية لنسخه في شاشة الإعدادات
     if (cmd === '/id') {
-      sendTelegramMessageDirect(chatId, "🆔 <b>معرّف هذه المحادثة:</b>\n<code>" + chatId + "</code>\n\nانسخ هذا الرقم وضعه في شاشة الإعدادات ← بوت تسجيل الإشعارات.");
+      sendTelegramMessageDirect_(chatId, "🆔 <b>معرّف هذه المحادثة:</b>\n<code>" + chatId + "</code>\n\nانسخ هذا الرقم وضعه في شاشة الإعدادات ← بوت تسجيل الإشعارات.");
+      return;
+    }
+
+    // 🔒 (V4.358) بقية الأوامر والمحادثات للمحادثات المصرَّح لها فقط — مع إبقاء بوت الإعاشة لمن يسمح له إعداده
+    if (!_tgMainChatAllowed_(chatId, msg.from)) {
+      try {
+        var ccDeny = _tgccCfg_();
+        if (ccDeny.enabled && _tgccIsAllowed_(ccDeny, chatId, msg)) { _tgccDispatchMessage_(msg); return; }
+      } catch (ccDenyErr) { Logger.log('TGCC (غير مصرَّح للبوت الرئيسي): ' + ccDenyErr); }
+      if (cmd === '/menu' || cmd === '/start' || (text && text.charAt(0) === '/')) _tgMainDeny_(chatId);
       return;
     }
 
     // 2️⃣ استدعاء دالة القائمة عند كتابة /menu أو /start
     if (cmd === '/menu' || cmd === '/start') {
-      sendTelegramMenu(chatId);
+      sendTelegramMenu_(chatId);
       return;
     }
 
     // ✈️ (V4.257) «مطابقة برنت» أو /fltcheck يبدأ المحادثة، وأي رسالة داخلها (صورة/PDF/نص/اسم رحلة) تُعالَج هنا
     if (msg.from && (cmd === '/fltcheck' || /^مطابق[ةه]\s*(ال)?برنت$/.test(text))) {
-      try { _tgFltStart_(chatId, msg.from); } catch (fltE1) { sendTelegramMessageDirect(chatId, "❌ <code>" + fltE1.toString() + "</code>"); }
+      try { _tgFltStart_(chatId, msg.from); } catch (fltE1) { sendTelegramMessageDirect_(chatId, "❌ <code>" + fltE1.toString() + "</code>"); }
       return;
     }
     try { if (_tgFltOnMessage_(msg)) return; }
-    catch (fltE2) { if (msg.from) _tgFltClear_(chatId, msg.from.id); sendTelegramMessageDirect(chatId, "❌ <b>خطأ في مطابقة البرنت:</b>\n<code>" + fltE2.toString() + "</code>"); return; }
+    catch (fltE2) { if (msg.from) _tgFltClear_(chatId, msg.from.id); sendTelegramMessageDirect_(chatId, "❌ <b>خطأ في مطابقة البرنت:</b>\n<code>" + fltE2.toString() + "</code>"); return; }
 
     // 🔎 (V4.138) البحث المباشر بصيغة «بحث: الاسم أو رقم الجواز» — يعمل في أي وقت بلا حاجة لمحادثة
     // 🔎 (V4.140) تقبل «بحث: ...» و«بحث : ...» و«بحث ...» بلا نقطتين أيضاً — بشرط فاصل حقيقي
@@ -8112,7 +8187,7 @@ function doPost(e) {
         if (msg.from) _tgSrchClearState_(chatId, msg.from.id); // إلغاء أي محادثة بحث معلَّقة لهذا المستخدم
         _tgRunSearch_(chatId, srchDirect[1], msg.from);
       } catch (srchErr3) {
-        sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث:</b>\n<code>" + srchErr3.toString() + "</code>");
+        sendTelegramMessageDirect_(chatId, "❌ <b>خطأ أثناء البحث:</b>\n<code>" + srchErr3.toString() + "</code>");
       }
       return;
     }
@@ -8127,7 +8202,7 @@ function doPost(e) {
         try {
           _tgRunSearchByImage_(chatId, _srchFileId, msg.from);
         } catch (srchImgErr) {
-          sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء استخلاص الصورة:</b>\n<code>" + srchImgErr.toString() + "</code>");
+          sendTelegramMessageDirect_(chatId, "❌ <b>خطأ أثناء استخلاص الصورة:</b>\n<code>" + srchImgErr.toString() + "</code>");
         }
         _tgSrchClearState_(chatId, msg.from.id);
         return;
@@ -8137,7 +8212,7 @@ function doPost(e) {
       try {
         _tgRunSearch_(chatId, text, msg.from);
       } catch (srchErr4) {
-        sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث:</b>\n<code>" + srchErr4.toString() + "</code>");
+        sendTelegramMessageDirect_(chatId, "❌ <b>خطأ أثناء البحث:</b>\n<code>" + srchErr4.toString() + "</code>");
       }
       return;
     }
@@ -8149,7 +8224,7 @@ function doPost(e) {
       try {
         _tgSupRunMatch_(chatId, text, msg.from);
       } catch (supErr) {
-        sendTelegramMessageDirect(chatId, "❌ <b>خطأ أثناء البحث عن المشرف:</b>\n<code>" + supErr.toString() + "</code>");
+        sendTelegramMessageDirect_(chatId, "❌ <b>خطأ أثناء البحث عن المشرف:</b>\n<code>" + supErr.toString() + "</code>");
       }
       return;
     }
@@ -8168,7 +8243,7 @@ function doPost(e) {
         }
       } catch (mvErr) {
         _tgMoveClearState_(chatId, msg.from.id);
-        sendTelegramMessageDirect(chatId, "❌ <b>خطأ:</b>\n<code>" + mvErr.toString() + "</code>");
+        sendTelegramMessageDirect_(chatId, "❌ <b>خطأ:</b>\n<code>" + mvErr.toString() + "</code>");
       }
       return;
     }
@@ -8191,7 +8266,7 @@ function doPost(e) {
         }
       }
     } catch (ccErr5) {
-      sendTelegramMessageDirect(chatId, "❌ <b>حدث خطأ في بوت اتفاقيات الإعاشة:</b>\n<code>" + ccErr5.toString() + "</code>");
+      sendTelegramMessageDirect_(chatId, "❌ <b>حدث خطأ في بوت اتفاقيات الإعاشة:</b>\n<code>" + ccErr5.toString() + "</code>");
       return;
     }
 
@@ -8199,18 +8274,18 @@ function doPost(e) {
     try {
       _tgbnDispatchMessage_(msg);
     } catch (dspErr) {
-      sendTelegramMessageDirect(chatId, "❌ <b>حدث خطأ في بوت تسجيل الإشعارات:</b>\n<code>" + dspErr.toString() + "</code>");
+      sendTelegramMessageDirect_(chatId, "❌ <b>حدث خطأ في بوت تسجيل الإشعارات:</b>\n<code>" + dspErr.toString() + "</code>");
     }
 
   } catch (err) {
     if (chatId) {
-      sendTelegramMessageDirect(chatId, "❌ <b>خطأ رئيسي في السكربت:</b>\n<code>" + err.toString() + "</code>");
+      sendTelegramMessageDirect_(chatId, "❌ <b>خطأ رئيسي في السكربت:</b>\n<code>" + err.toString() + "</code>");
     }
   }
 }
 
 // 📱 دالة إرسال لوحة الأزرار الأربعة (بصيغة HTML الآمنة لمنع الاختفاء)
-function sendTelegramMenu(chatId) {
+function sendTelegramMenu_(chatId) {
   var token = TELEGRAM_CONFIG.token;
   var url = "https://api.telegram.org/bot" + token + "/sendMessage";
   
@@ -8251,8 +8326,8 @@ function sendTelegramMenu(chatId) {
 }
 
 // ⚡ دالة مرنة لجلب تحركات أي يوم (معدلة بصيغة HTML)
-function sendTelegramArrivalAlerts_Custom(type, chatId, from) {
-  var movements = _tgAlertableMovements_(getAllMovements());
+function sendTelegramArrivalAlerts_Custom_(type, chatId, from) {
+  var movements = _tgAlertableMovements_(getAllMovements_());
   var now = new Date();
   var targetStr = "";
   var title = "";
@@ -8286,12 +8361,12 @@ function sendTelegramArrivalAlerts_Custom(type, chatId, from) {
     });
   }
   
-  sendTelegramMessageDirect(chatId, msg);
+  sendTelegramMessageDirect_(chatId, msg);
 }
 
 // ⚡ دالة مرنة لجلب وصولات المعتمرين (معدلة بصيغة HTML)
-function sendTelegramBookings_Custom(type, chatId, from) {
-  var bookings = getAllBookings();
+function sendTelegramBookings_Custom_(type, chatId, from) {
+  var bookings = getAllBookings_();
   var now = new Date();
   var targetStr = "";
   var title = "";
@@ -8323,12 +8398,12 @@ function sendTelegramBookings_Custom(type, chatId, from) {
     });
   }
   
-  sendTelegramMessageDirect(chatId, msg);
+  sendTelegramMessageDirect_(chatId, msg);
 }
 
 // دالة الإرسال المباشر (معدلة بصيغة HTML)
 // buttons (اختياري، V4.140): مصفوفة صفوف أزرار [[{text,callback_data}, ...], ...] — لإرفاق لوحة تفاعلية
-function sendTelegramMessageDirect(chatId, text, buttons) {
+function sendTelegramMessageDirect_(chatId, text, buttons) {
   var token = TELEGRAM_CONFIG.token;
   var url = "https://api.telegram.org/bot" + token + "/sendMessage";
   var payload = { "chat_id": chatId, "text": text, "parse_mode": "HTML" };
@@ -10224,12 +10299,12 @@ function getLatestDataFromServer(authToken) {
   requireAuth_(authToken);
 
   return {
-    bookings: getAllBookings(),
-    movements: getAllMovements()
+    bookings: getAllBookings_(),
+    movements: getAllMovements_()
   };
 }
 
-function verifyMyGeminiKey() {
+function verifyMyGeminiKey_() {
   var keys = _geminiKeys_();
   if (!keys.length) return '❌ لم يتم ضبط أي مفتاح Gemini في الإعدادات';
 
@@ -10390,7 +10465,7 @@ function getDriveFileBase64(authToken, fileId) {
 function getPrintAttachmentBase64(printToken, fileId) {
   var bookingId = resolvePrintAccessToken_(String(printToken || ''));
   if (!bookingId) return { success: false, error: 'رابط الطباعة غير صالح' };
-  var data = getPrintDataForView(bookingId);
+  var data = getPrintDataForView_(bookingId);
   if (!data || !data.id) return { success: false, error: 'تعذر العثور على بيانات الإشعار' };
   fileId = String(fileId || '').trim();
   var allowed = {};
@@ -10417,7 +10492,7 @@ function getPrintAttachmentBase64(printToken, fileId) {
    الـHTML هنا هو المتصفّح (لأنه وحده يستطيع تحويل صفحات PDF إلى صور عبر pdf.js). */
 function createBookingPdfFromHtml(authToken, bookingId, html) {
   requireAuth_(authToken);
-  var data = getPrintDataForView(bookingId);
+  var data = getPrintDataForView_(bookingId);
   if (!data || data.error || !data.id) throw new Error((data && data.error) || 'تعذر العثور على بيانات الإشعار');
   if (data.status !== 'معتمد') throw new Error('لا يمكن مشاركة إشعار غير معتمد. يرجى اعتماد الإشعار أولاً.');
   html = String(html || '');
@@ -10530,7 +10605,7 @@ function buildBookingExtraSections_(data) {
 function generateBookingPdfForShare(authToken, bookingId) {
   requireAuth_(authToken);
 
-  var data = getPrintDataForView(bookingId);
+  var data = getPrintDataForView_(bookingId);
   if (!data || data.error || !data.id) {
     throw new Error(data && data.error ? data.error : 'تعذر العثور على بيانات الإشعار');
   }
@@ -10583,7 +10658,7 @@ function generateBookingPdfForShare(authToken, bookingId) {
 // خام بلا أي تحويل PDF أو رفع لـDrive — يُستخدَم لتصدير الإشعار كصورة HD في الواجهة (iframe محلي)
 function getBookingNoticeHtmlForImage(authToken, bookingId) {
   requireAuth_(authToken);
-  var data = getPrintDataForView(bookingId);
+  var data = getPrintDataForView_(bookingId);
   if (!data || data.error || !data.id) {
     throw new Error(data && data.error ? data.error : 'تعذر العثور على بيانات الإشعار');
   }
@@ -10624,7 +10699,7 @@ function deleteSharedBookingFile(authToken, fileId) {
 function getCompaniesSettings(authToken) {
   requireSettingsBasicPermission_(authToken);
 
-  var cached = getCachedData('agents_cache');
+  var cached = getCachedData_('agents_cache');
   if (cached) return cached;
 
   var ss = getSpreadsheet_();
@@ -10648,7 +10723,7 @@ function getCompaniesSettings(authToken) {
       licence: String(data[i][3] || "").trim()
     });
   }
-  setCachedData('agents_cache', result);
+  setCachedData_('agents_cache', result);
   return result;
 }
 
@@ -10678,7 +10753,7 @@ function saveCompanySetting(authToken, targetRow, agent, company, logoUrl, licen
     logChange_(session.username, "إضافة شركة جديدة", company, "-", "-", company + " / " + (agent || ""));
   }
 
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -10692,7 +10767,7 @@ function deleteCompanySetting(authToken, targetRow, companyName) {
   sheet.deleteRow(targetRow);
 
   logChange_(session.username, "حذف شركة", companyName || "-", "-", companyName || "-", "-");
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -11148,7 +11223,7 @@ function saveSystemSettings(authToken, settings) {
         var emailActive = ScriptApp.getProjectTriggers().some(function(t) {
           return t.getHandlerFunction() === 'sendArrivalAlerts';
         });
-        if (emailActive) setupDailyAlertTrigger();
+        if (emailActive) setupDailyAlertTrigger_();
       } catch(e) {}
     }
   }
@@ -11163,7 +11238,7 @@ function saveSystemSettings(authToken, settings) {
         var tgActive = ScriptApp.getProjectTriggers().some(function(t) {
           return t.getHandlerFunction() === 'sendTelegramArrivalAlerts';
         });
-        if (tgActive) setupTelegramDailyTrigger();
+        if (tgActive) setupTelegramDailyTrigger_();
       } catch(e) {}
     }
   }
@@ -11208,7 +11283,7 @@ function updateFolderSettingFromUI(authToken, key, newName, newFolderId) {
   logChange_(session.username, "تعديل مجلد Drive", key, "مجلد " + key,
     "-", newName || newFolderId || "-");
   // مسح الـ Cache عند تغيير المجلدات لأن بعض البيانات قد تتأثر
-  clearAllCache();
+  clearAllCache_();
   return result;
 }
 
@@ -11258,7 +11333,7 @@ function addBusPriceColumns_() {
     .setFontWeight("bold")
     .setHorizontalAlignment("center");
 
-  clearAllCache();
+  clearAllCache_();
   return { success: true, message: "تمت إضافة الأعمدة: " + toAdd.join('، ') };
 }
 
@@ -11267,18 +11342,18 @@ function runAdminSetupAction(authToken, actionName) {
 
   // basic:true = إجراء متاح أيضاً لصاحب صلاحية «الإعدادات الأساسية» (تفعيل/اختبار التنبيه اليومي فقط)
   var allowedActions = {
-    'setupSmartSystem': { fn: setupSmartSystem, label: 'إنشاء/تحديث هيكل الشيت الأساسي' },
-    'setupUsersSystem': { fn: setupUsersSystem, label: 'إنشاء نظام المستخدمين' },
-    'setupDailyAlertTrigger': { fn: setupDailyAlertTrigger, label: 'تفعيل التنبيه اليومي بالبريد', basic: true },
-    'setupTelegramDailyTrigger': { fn: setupTelegramDailyTrigger, label: 'تفعيل التنبيه اليومي في تيليجرام', basic: true },
-    'testSendAlerts': { fn: testSendAlerts, label: 'اختبار إرسال تنبيه البريد الآن', basic: true },
-    'testTelegramNow': { fn: testTelegramNow, label: 'اختبار إرسال تنبيه تيليجرام الآن', basic: true },
-    'clearAllCacheManual': { fn: clearAllCacheManual, label: 'مسح الذاكرة المؤقتة (Cache)' },
-    'verifyMyGeminiKey': { fn: verifyMyGeminiKey, label: 'التحقق من صلاحية مفتاح Gemini' },
-    'setupTelegramWebhook': { fn: setupTelegramWebhook, label: 'تفعيل Webhook تيليجرام التفاعلي' },
-    'setTelegramBotCommands': { fn: setTelegramBotCommands, label: 'تثبيت قائمة الأوامر (زر Menu) بالبوت' },
-    'removeTelegramWebhook': { fn: removeTelegramWebhook, label: 'إلغاء Webhook تيليجرام' },
-    'getTelegramWebhookInfo': { fn: getTelegramWebhookInfo, label: 'التحقق من حالة Webhook تيليجرام' },
+    'setupSmartSystem': { fn: setupSmartSystem_, label: 'إنشاء/تحديث هيكل الشيت الأساسي' },
+    'setupUsersSystem': { fn: setupUsersSystem_, label: 'إنشاء نظام المستخدمين' },
+    'setupDailyAlertTrigger': { fn: setupDailyAlertTrigger_, label: 'تفعيل التنبيه اليومي بالبريد', basic: true },
+    'setupTelegramDailyTrigger': { fn: setupTelegramDailyTrigger_, label: 'تفعيل التنبيه اليومي في تيليجرام', basic: true },
+    'testSendAlerts': { fn: testSendAlerts_, label: 'اختبار إرسال تنبيه البريد الآن', basic: true },
+    'testTelegramNow': { fn: testTelegramNow_, label: 'اختبار إرسال تنبيه تيليجرام الآن', basic: true },
+    'clearAllCacheManual': { fn: clearAllCacheManual_, label: 'مسح الذاكرة المؤقتة (Cache)' },
+    'verifyMyGeminiKey': { fn: verifyMyGeminiKey_, label: 'التحقق من صلاحية مفتاح Gemini' },
+    'setupTelegramWebhook': { fn: setupTelegramWebhook_, label: 'تفعيل Webhook تيليجرام التفاعلي' },
+    'setTelegramBotCommands': { fn: setTelegramBotCommands_, label: 'تثبيت قائمة الأوامر (زر Menu) بالبوت' },
+    'removeTelegramWebhook': { fn: removeTelegramWebhook_, label: 'إلغاء Webhook تيليجرام' },
+    'getTelegramWebhookInfo': { fn: getTelegramWebhookInfo_, label: 'التحقق من حالة Webhook تيليجرام' },
     'addBusPriceColumns': { fn: addBusPriceColumns_, label: 'إضافة عمودي سعر الباص وقيمة التشغيلة' },
     'setupTripsSystem': { fn: setupTripsSystem_, label: 'إنشاء شيتات نظام الرحلات وكشوف المعتمرين' },
     'setupCompleteSystem': { fn: setupCompleteSystem_, label: 'التأسيس الكامل (كل الهياكل دفعة واحدة — آمن ولا يمسح بيانات)' },
@@ -11321,9 +11396,9 @@ function runAdminSetupAction(authToken, actionName) {
 
 /**
  * التأسيس الكامل بخطوة واحدة: يشغّل كل دوال إنشاء/ترحيل الهياكل بالترتيب — كل الأوراق المطلوبة
- * (Bookings/Agents_Settings/Movements/AuditLog عبر setupSmartSystem، Trips/Pilgrims عبر setupTripsSystem_،
- * Users + حساب admin افتراضي عبر setupUsersSystem) على آخر وضع (رؤوس/أعمدة قانونية محدَّثة)، بخطوة واحدة.
- * كلها تستخدم createSheetIfNotExist/فحص وجود الشيت وفحص الرؤوس والترحيل الذاتي — لا تُنشئ شيتاً موجوداً
+ * (Bookings/Agents_Settings/Movements/AuditLog عبر setupSmartSystem_، Trips/Pilgrims عبر setupTripsSystem_،
+ * Users + حساب admin افتراضي عبر setupUsersSystem_) على آخر وضع (رؤوس/أعمدة قانونية محدَّثة)، بخطوة واحدة.
+ * كلها تستخدم createSheetIfNotExist_/فحص وجود الشيت وفحص الرؤوس والترحيل الذاتي — لا تُنشئ شيتاً موجوداً
  * ولا تمسح أي صف بيانات، وحساب admin يُنشأ فقط إن لم يكن موجوداً أصلاً. إعادة تشغيلها في أي وقت آمنة تماماً.
  */
 function setupCompleteSystem_() {
@@ -11339,20 +11414,20 @@ function setupCompleteSystem_() {
       else done.push('⚠️ ' + label + ': ' + (e.message || e));
     }
   };
-  step('الهيكل الأساسي (Bookings/Agents_Settings/Movements/AuditLog)', setupSmartSystem);
+  step('الهيكل الأساسي (Bookings/Agents_Settings/Movements/AuditLog)', setupSmartSystem_);
   step('نظام الرحلات وكشوف المعتمرين (Trips/Pilgrims)', setupTripsSystem_);
   // شيت المستخدمين + حساب admin افتراضي (idempotent: لا يُنشئ شيئاً لو Users موجود بالفعل)
-  step('نظام المستخدمين وحساب admin', function() { return setupUsersSystem(); });
+  step('نظام المستخدمين وحساب admin', function() { return setupUsersSystem_(); });
   step('أعمدة سعر الباص وقيمة التشغيلة', addBusPriceColumns_);
   // ترحيل الرؤوس الذاتي يحدث تلقائياً عند أول قراءة — نُحفّزه هنا
   step('ترحيل رؤوس الرحلات/المعتمرين', function() { _getTripsSheet_(); _getPilgrimsSheet_(); });
-  clearAllCache();
+  clearAllCache_();
   return done.join('\n');
 }
 
 /**
  * تنظيف الملفات المؤقتة: يرسل إلى المهملات كل ملفات مجلد TEMP الأقدم من عتبة زمنية (افتراضي 6 ساعات).
- * التذاكر المعتمدة تُنقل خارج TEMP عند finalizeTicketFile فلا تتأثر. آمن للتشغيل المتكرر/المجدول.
+ * التذاكر المعتمدة تُنقل خارج TEMP عند finalizeTicketFile_ فلا تتأثر. آمن للتشغيل المتكرر/المجدول.
  */
 function cleanupTempFiles_(maxAgeHours) {
   // 🛡️ maxAgeHours قد تصل ككائن حدث Trigger (وليس رقماً) عند التشغيل التلقائي المُجدوَل — Number(كائن)
@@ -11407,7 +11482,7 @@ function cleanupTempFiles_(maxAgeHours) {
  * ⏰ تفعيل مؤقّت يومي يشغّل تنظيف الملفات المؤقتة تلقائياً (Idempotent — لا يكرّر المؤقّت).
  */
 function setupTempCleanupTrigger_() {
-  return setTempCleanupSchedule({ frequency: 'daily', hour: 3 });
+  return setTempCleanupSchedule_({ frequency: 'daily', hour: 3 });
 }
 
 var _WEEK_DAYS_ = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
@@ -11418,7 +11493,7 @@ var _WEEK_DAYS_AR_ = ['الأحد', 'الإثنين', 'الثلاثاء', 'ال�
  * يحذف أي مؤقّت سابق لنفس الدالة أولاً حتى لا تتكرر المؤقّتات.
  * @param {Object} cfg { frequency:'daily'|'weekly', hour:0-23, weekDay:0-6 }
  */
-function setTempCleanupSchedule(cfg) {
+function setTempCleanupSchedule_(cfg) {
   cfg = cfg || {};
   var freq = cfg.frequency === 'weekly' ? 'weekly' : 'daily';
   var hour = Math.max(0, Math.min(23, Number(cfg.hour) >= 0 ? Number(cfg.hour) : 3));
@@ -11455,7 +11530,7 @@ function getTempCleanupStatus(authToken) {
 /** غلاف مُصادَق لضبط الجدولة من الواجهة */
 function setTempCleanupScheduleAuth(authToken, cfg) {
   requireAdminPermission_(authToken);
-  var msg = setTempCleanupSchedule(cfg);
+  var msg = setTempCleanupSchedule_(cfg);
   return { success: true, message: msg, status: getTempCleanupStatus(authToken) };
 }
 
@@ -11574,6 +11649,7 @@ function _backupSpreadsheet_(reason) {
 }
 
 function DANGER_resetAllDataForNewClient(confirmText) {
+  requireScriptOwner_();   // 🔒 (V4.358) من محرر السكربت بواسطة صاحبه فقط
   if (String(confirmText || "").trim() !== "امسح كل البيانات نهائيا") {
     throw new Error('للحماية: مرّر النص "امسح كل البيانات نهائيا" حرفياً كوسيط لتأكيد المسح.');
   }
@@ -11595,7 +11671,7 @@ function DANGER_resetAllDataForNewClient(confirmText) {
     var files = folder.getFiles();
     while (files.hasNext()) { files.next().setTrashed(true); tempTrashed++; }
   } catch (e) {}
-  clearAllCache();
+  clearAllCache_();
   var msg = 'تم تصفير: ' + (cleared.length ? cleared.join("، ") : "لا صفوف") + ' — وحُذف ' + tempTrashed + ' ملف مؤقت.' +
     (backupUrl ? ('\n📦 نسخة احتياطية كاملة قبل المسح: ' + backupUrl) : '\n⚠️ تعذّر إنشاء نسخة احتياطية.');
   Logger.log(msg);
@@ -11617,7 +11693,7 @@ function DANGER_resetAllDataForNewClient(confirmText) {
  * تفعيل Webhook تيليجرام — يربط البوت بـ URL الـ Web App تلقائياً
  * يُستدعى من شاشة الإعدادات بضغطة واحدة
  */
-function setupTelegramWebhook() {
+function setupTelegramWebhook_() {
   var token = TELEGRAM_CONFIG.token;
   if (!token) {
     return "❌ لم يتم ضبط توكن بوت تيليجرام في الإعدادات";
@@ -11657,7 +11733,7 @@ function setupTelegramWebhook() {
 /* 📋 (V4.162) تثبيت قائمة أوامر البوت (زر Menu بجوار مربع الكتابة، كما في بوتات تليجرام
    الجاهزة) — يستدعي setMyCommands بقائمة الأوامر المدعومة فعلياً بـdoPost، ثم setChatMenuButton
    لضمان ظهور الزر بشكله "Menu" الثابت بدل أيقونة "/" الافتراضية. يُشغَّل مرة واحدة من الإعدادات. */
-function setTelegramBotCommands() {
+function setTelegramBotCommands_() {
   var token = TELEGRAM_CONFIG.token;
   if (!token) return "❌ لم يتم ضبط توكن بوت تيليجرام في الإعدادات";
 
@@ -11692,7 +11768,7 @@ function setTelegramBotCommands() {
 /**
  * إلغاء Webhook تيليجرام — يُستخدم عند نقل النظام لنسخة جديدة
  */
-function removeTelegramWebhook() {
+function removeTelegramWebhook_() {
   var token = TELEGRAM_CONFIG.token;
   if (!token) return "❌ لم يتم ضبط توكن بوت تيليجرام";
 
@@ -11713,7 +11789,7 @@ function removeTelegramWebhook() {
 /**
  * التحقق من حالة Webhook الحالية
  */
-function getTelegramWebhookInfo() {
+function getTelegramWebhookInfo_() {
   var token = TELEGRAM_CONFIG.token;
   if (!token) return "❌ لم يتم ضبط توكن بوت تيليجرام";
 
@@ -12360,7 +12436,7 @@ function _tripSnapApply_(trip, state, keepElsewhere) {
   return mine.length;
 }
 function _tripAfterRestore_(trip, user, label) {
-  try { clearAllCache(); } catch (e) {}
+  try { clearAllCache_(); } catch (e) {}
   try { _syncTripAccounts_(null, trip, user); } catch (e1) {}
   _tripSnapTake_(trip, user, label);
 }
@@ -12860,35 +12936,35 @@ var TEST_SUITE = [
     }
   },
 
-  // ---------- convertDate (تحويل تاريخ GDS من صيغة "14AUG" إلى dd/mm/yyyy — يُستخدم في تحليل التذاكر) ----------
+  // ---------- convertDate_ (تحويل تاريخ GDS من صيغة "14AUG" إلى dd/mm/yyyy — يُستخدم في تحليل التذاكر) ----------
   {
     name: 'convertDate: يحوّل "14AUG" مع سنة صريحة في النص المحيط إلى dd/mm/yyyy الصحيح',
     fn: function() {
-      var result = convertDate('14AUG', 'some text mentioning year 2026 here');
+      var result = convertDate_('14AUG', 'some text mentioning year 2026 here');
       return assertEqual_(result, '14/08/2026');
     }
   },
   {
     name: 'convertDate: نص بدون تاريخ صالح (فارغ) يرجع نص فارغ',
     fn: function() {
-      return assertEqual_(convertDate(''), '');
+      return assertEqual_(convertDate_(''), '');
     }
   },
   {
     name: 'convertDate: نص لا يحتوي رقم+شهر مختصر يُرجَع كما هو دون تعديل',
     fn: function() {
-      return assertEqual_(convertDate('غير معروف'), 'غير معروف');
+      return assertEqual_(convertDate_('غير معروف'), 'غير معروف');
     }
   },
 
-  // ---------- getCachedData/setCachedData (إصلاح الكاش المجزّأ) ----------
+  // ---------- getCachedData_/setCachedData_ (إصلاح الكاش المجزّأ) ----------
   {
     name: 'setCachedData/getCachedData: بيانات صغيرة (غير مجزّأة) ترجع كما هي',
     fn: function() {
       var testKey = '_test_cache_small_';
       var data = { hello: 'world', arr: [1,2,3] };
-      setCachedData(testKey, data);
-      var result = getCachedData(testKey);
+      setCachedData_(testKey, data);
+      var result = getCachedData_(testKey);
       CacheService.getScriptCache().remove(testKey);
       return assertEqual_(result, data, 'بيانات صغيرة يجب أن ترجع مطابقة تماماً بعد التخزين');
     }
@@ -12902,8 +12978,8 @@ var TEST_SUITE = [
       for (var i = 0; i < 3000; i++) {
         bigArray.push({ id: i, name: 'عنصر رقم ' + i, note: 'نص تجريبي لاختبار التجزئة رقم ' + i });
       }
-      setCachedData(testKey, bigArray);
-      var result = getCachedData(testKey);
+      setCachedData_(testKey, bigArray);
+      var result = getCachedData_(testKey);
       var isChunked = CacheService.getScriptCache().get(testKey + '_chunked');
       // تنظيف مفاتيح الاختبار بعد التحقق
       CacheService.getScriptCache().removeAll([testKey, testKey + '_chunked', testKey + '_count']);
@@ -12921,13 +12997,13 @@ var TEST_SUITE = [
       var testKey = '_test_cache_switch_';
       var bigArray = [];
       for (var i = 0; i < 3000; i++) bigArray.push({ id: i, note: 'نص طويل نسبياً رقم ' + i + ' '.repeat(5) });
-      setCachedData(testKey, bigArray); // أول مرة: مجزّأة
+      setCachedData_(testKey, bigArray); // أول مرة: مجزّأة
 
       var smallData = { small: true };
-      setCachedData(testKey, smallData); // ثاني مرة: صغيرة (فوق نفس المفتاح)
+      setCachedData_(testKey, smallData); // ثاني مرة: صغيرة (فوق نفس المفتاح)
 
       var chunkedFlagAfter = CacheService.getScriptCache().get(testKey + '_chunked');
-      var result = getCachedData(testKey);
+      var result = getCachedData_(testKey);
 
       CacheService.getScriptCache().remove(testKey);
       return assertTrue_(chunkedFlagAfter === null && result && result.small === true,
@@ -13192,6 +13268,7 @@ var TEST_SUITE = [
  * @return {Object} { total, passed, failed, results: [{name, passed, error}] }
  */
 function runAllTests() {
+  requireScriptOwner_();   // 🔒 (V4.358) من محرر السكربت بواسطة صاحبه فقط
   var results = [];
   var passed = 0, failed = 0;
 
@@ -13558,7 +13635,7 @@ function getTripsList(authToken) {
   requireAuth_(authToken);
 
   // ⚡ كاش: قائمة الرحلات تقرأ 3 شيتات (Trips/Pilgrims/Bookings) — تُمسح تلقائياً مع أي حفظ/حذف
-  var _cachedTrips = getCachedData('trips_list_cache');
+  var _cachedTrips = getCachedData_('trips_list_cache');
   if (_cachedTrips) return _cachedTrips;
 
   var sheet = _getTripsSheet_();
@@ -13728,7 +13805,7 @@ function getTripsList(authToken) {
       }
     });
   }
-  setCachedData('trips_list_cache', result);
+  setCachedData_('trips_list_cache', result);
   return result;
 }
 
@@ -13781,7 +13858,7 @@ function getClientTripStats(authToken, clientName) {
   if (!clientName) throw new Error('اسم العميل مطلوب');
 
   // ⚡ (V4.199) بدل قراءة كشف المعتمرين وشيت الرحلات كاملين (كل الأعمدة) مع كل فتح حساب/حفظ، يُبنى فهرس
-  // واحد لكل العملاء مرة واحدة ويُخزَّن مؤقتاً (يُبطَّل تلقائياً مع أي تعديل بالكشوف عبر clearAllCache)
+  // واحد لكل العملاء مرة واحدة ويُخزَّن مؤقتاً (يُبطَّل تلقائياً مع أي تعديل بالكشوف عبر clearAllCache_)
   var idx = _accClientStatsIdx_();
   var src = idx.c[clientName] || {};
   var byTrip = {}, noTripCount = idx.n[clientName] || 0;
@@ -13812,7 +13889,7 @@ function getClientTripStats(authToken, clientName) {
 // نفس قواعد العدّ السابقة حرفياً (صفوف بلا اسم تُتجاهل، بلا رحلة ⇒ noTripCount، النوع طفل/رضيع/غير ذلك كبير)
 function _accClientStatsIdx_() {
   if (_accClientStatsIdx_._m) return _accClientStatsIdx_._m;
-  var cached = getCachedData('acc_client_stats_idx_v2');   // (V4.320) v2: + كود كل رحلة (r)
+  var cached = getCachedData_('acc_client_stats_idx_v2');   // (V4.320) v2: + كود كل رحلة (r)
   if (cached && cached.c && cached.t && cached.n && cached.r) return (_accClientStatsIdx_._m = cached);
   var byClient = {}, noTrip = {}, tripSeen = {};
   var pSheet = _getPilgrimsSheet_();
@@ -13860,12 +13937,12 @@ function _accClientStatsIdx_() {
   var idx = { c: byClient, n: noTrip, t: trips, r: refs };
   try {
     // حد أمان لحجم الكاش (30 جزءاً × 80KB) — لو تجاوزه يُستخدم الفهرس داخل هذا الطلب فقط بلا تخزين
-    if (JSON.stringify(idx).length < 2300000) setCachedData('acc_client_stats_idx_v2', idx);
+    if (JSON.stringify(idx).length < 2300000) setCachedData_('acc_client_stats_idx_v2', idx);
   } catch (eC) {}
   return (_accClientStatsIdx_._m = idx);
 }
 // يُستدعى بعد أي كتابة بكشف المعتمرين داخل نفس الطلب (نادراً) لإعادة بناء الفهرس
-function _accClientStatsIdxReset_() { _accClientStatsIdx_._m = null; clearCachedData('acc_client_stats_idx_v2'); }
+function _accClientStatsIdxReset_() { _accClientStatsIdx_._m = null; clearCachedData_('acc_client_stats_idx_v2'); }
 
 /* ============================================================
    💰 حسابات العملاء (V4.00)
@@ -14109,7 +14186,7 @@ function saveNotifSettings(authToken, settings) {
   });
   PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(clean));
   _NOTIF_MEMO_ = null;
-  try { clearCachedData(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}   // 🔔 (V4.324) تنبيهات الجرس المعطَّلة تختفي من القائمة فوراً
+  try { clearCachedData_(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}   // 🔔 (V4.324) تنبيهات الجرس المعطَّلة تختفي من القائمة فوراً
   var offList = Object.keys(clean);
   logChange_(session.username, 'تعديل إعدادات التنبيهات', 'الإعدادات', 'التنبيهات المعطَّلة', '-',
     offList.length ? offList.join(', ') : 'لا يوجد (الكل مُفعَّل)');
@@ -14155,7 +14232,7 @@ function saveAlertCenter(authToken, map) {
     NOTIF_TYPES_.forEach(function (t) { var v = plain.hasOwnProperty(t.key) ? plain[t.key] : cur[t.key] !== false; if (!v) next[t.key] = false; if (v !== (cur[t.key] !== false)) changed.push(t.key + (v ? ' ✔' : ' ✘')); });
     PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(next));
     _NOTIF_MEMO_ = null;
-    try { clearCachedData(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}
+    try { clearCachedData_(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}
     if (Object.keys(hb).length && typeof tgSetEventFlags_ === 'function') { var nh = tgSetEventFlags_(hb); if (nh) changed.push('بوت الحجوزات: ' + nh); }
     if (Object.keys(gl).length && typeof _glBotSetEventFlags_ === 'function') { var ng = _glBotSetEventFlags_(gl); if (ng) changed.push('بوت الحسابات: ' + ng); }
     if (map.hasOwnProperty('custody:notify') && typeof getCustodyState_ === 'function') {
@@ -14173,7 +14250,7 @@ function _notifPush_(type, message, client, trip, perm, username) {
   try {
     var sh = _accSheet_(NOTIF_SHEET, NOTIF_HEADERS);
     sh.appendRow([_accId_('N'), type, message, client || '', trip || '', perm || '', 'لا', username || '', new Date()]);
-    clearCachedData(NOTIF_CACHE_KEY);   // ⚡ (V4.177) تنبيه جديد — أبطل الكاش ليظهر فوراً
+    clearCachedData_(NOTIF_CACHE_KEY);   // ⚡ (V4.177) تنبيه جديد — أبطل الكاش ليظهر فوراً
   } catch (e) { Logger.log('notif push failed: ' + e); }
 }
 
@@ -14188,7 +14265,7 @@ function _notifVerBump_() { try { CacheService.getScriptCache().put('notif_ver',
 function _notifVer_() { try { return CacheService.getScriptCache().get('notif_ver') || ''; } catch (e) { return ''; } }
 function getNotifications(authToken) {
   var session = requireAuth_(authToken);
-  var vals = getCachedData(NOTIF_CACHE_KEY);
+  var vals = getCachedData_(NOTIF_CACHE_KEY);
   if (!vals) {
     var sh = _accSheet_(NOTIF_SHEET, NOTIF_HEADERS);
     if (sh.getLastRow() < 2) return { success: true, notifications: [] };
@@ -14199,7 +14276,7 @@ function getNotifications(authToken) {
       c[8] = (c[8] instanceof Date) ? Utilities.formatDate(c[8], _tz_(), 'dd/MM/yyyy HH:mm') : String(c[8] || '');
       return c;
     });
-    setCachedData(NOTIF_CACHE_KEY, vals);
+    setCachedData_(NOTIF_CACHE_KEY, vals);
     _notifVerBump_();
   }
   var out = [];
@@ -14223,7 +14300,7 @@ function markNotificationRead(authToken, id) {
   if (sh.getLastRow() < 2) return { success: true };
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
   for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0]) === String(id)) { sh.getRange(i + 2, 7).setValue('نعم'); clearCachedData(NOTIF_CACHE_KEY); return { success: true }; }
+    if (String(vals[i][0]) === String(id)) { sh.getRange(i + 2, 7).setValue('نعم'); clearCachedData_(NOTIF_CACHE_KEY); return { success: true }; }
   }
   return { success: false };
 }
@@ -14240,7 +14317,7 @@ function markAllNotificationsRead(authToken) {
     return [visible ? 'نعم' : r[6]];
   });
   sh.getRange(2, 7, col7.length, 1).setValues(col7);
-  clearCachedData(NOTIF_CACHE_KEY);   // ⚡ (V4.177)
+  clearCachedData_(NOTIF_CACHE_KEY);   // ⚡ (V4.177)
   return { success: true };
 }
 
@@ -14250,7 +14327,7 @@ function deleteNotification(authToken, id) {
   if (sh.getLastRow() < 2) return { success: true };
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
   for (var i = 0; i < vals.length; i++) {
-    if (String(vals[i][0]) === String(id)) { sh.deleteRow(i + 2); clearCachedData(NOTIF_CACHE_KEY); return { success: true }; }
+    if (String(vals[i][0]) === String(id)) { sh.deleteRow(i + 2); clearCachedData_(NOTIF_CACHE_KEY); return { success: true }; }
   }
   return { success: false };
 }
@@ -17194,7 +17271,7 @@ function _accClientHousing_(client, trip) {
   // لأسماء الفنادق وعدد الليالي وبيان التذاكر (خط السير والخطوط)
   var notice = null;
   try {
-    var bks = getAllBookings();
+    var bks = getAllBookings_();
     for (var bi = 0; bi < bks.length; bi++) {
       if (String(bks[bi].tripName || '').trim() === trip) { notice = bks[bi]; break; }
     }
@@ -17894,7 +17971,7 @@ function saveTrip(authToken, targetRow, tripData) {
   // 🔄 مزامنة الرحلة → الإشعار المرتبط (لا توقف الحفظ لو فشلت)
   try { _propagateTripChangesToBooking_(name); } catch (e) { Logger.log('propagate trip→booking failed: ' + e); }
 
-  clearAllCache(); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
+  clearAllCache_(); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
   _tripSnapTake_(name, session.username, targetRow ? 'تعديل بيانات الرحلة' : 'إنشاء الرحلة');   // ↩️ (V4.343)
   return { success: true, madinahNights: madinahNights, makkahNights: makkahNights };
 }
@@ -17949,7 +18026,7 @@ function _propagateBookingChangesToTrip_(bookingId, bookingData) {
       if (bookingData.arrivalDate)   setT(rowIdx, 'departDate', bookingData.arrivalDate);
       if (bookingData.departureDate) setT(rowIdx, 'returnDate', bookingData.departureDate);
       if (bookingData.direction)     setT(rowIdx, 'direction', bookingData.direction);
-      clearAllCache();
+      clearAllCache_();
       return;
     }
   }
@@ -18065,7 +18142,7 @@ function _propagateTripChangesToBooking_(tripName) {
       if (_makN !== "" && _makN !== null && _makN !== undefined) setB(rowIdx, 'makkahNights', _makN); // ليالي مكة
       if (_dir) setB(rowIdx, 'direction', _dir); // اتجاه الإقامة
       flushB(rowIdx);   // ⚡ (V4.177) كتابة واحدة مجمَّعة بدل ~22 نداء منفصلاً — انظر تعليق setB
-      clearAllCache();
+      clearAllCache_();
       return true;
     }
   }
@@ -18180,7 +18257,7 @@ function adoptBookingGroupToTrip(authToken, tripName, group) {
   };
   if (!groups[group]) return { success: false, error: "مجموعة غير معروفة" };
   groups[group]();
-  clearAllCache();
+  clearAllCache_();
   logChange_(session.username, 'اعتماد بيانات إشعار على رحلة', tripName, group, '-', 'من الإشعار #' + cmp.bookingId);
   return { success: true };
 }
@@ -18252,7 +18329,7 @@ function runOneTimeReconciliation(authToken) {
     }
   }
 
-  clearAllCache();
+  clearAllCache_();
   return { tripsUpdated: tripsUpdated, bookingsUpdated: bookingsUpdated, conflicts: conflicts };
 }
 
@@ -18283,7 +18360,7 @@ function deleteTrip(authToken, targetRow) {
   var name = String(sheet.getRange(Number(targetRow), 1).getValue() || "").trim();
   sheet.deleteRow(Number(targetRow));
   logChange_(session.username, "حذف", name, "حذف رحلة", name, "-");
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -18301,7 +18378,7 @@ function _renameTripInBookings_(oldName, newName) {
     for (var i = 0; i < values.length; i++) {
       if (String(values[i][0] || "").trim() === oldName) { values[i][0] = newName; changed = true; }
     }
-    if (changed) { range.setValues(values); clearAllCache(); }
+    if (changed) { range.setValues(values); clearAllCache_(); }
   } catch (e) { Logger.log('_renameTripInBookings_ failed: ' + e); }
 }
 
@@ -18404,7 +18481,7 @@ function _cascadeClientRename_(oldName, newName) {
   n += _renameInSheetCol_('Bookings', 'العميل', oldName, newName);               // إشعارات الوصول
   n += _renameInSheetCol_(MF_SHEET, 'العميل', oldName, newName);                 // ملفات الوزارة (لو الاسم مفرد)
   n += _renameInJsonCol_(MF_SHEET, 'بنود العميل (JSON)', oldName, newName, 'name');
-  try { clearAllCache(); } catch (e) {}
+  try { clearAllCache_(); } catch (e) {}
   try { _mfClearBootstrapCache_(); } catch (e) {}
   return n;
 }
@@ -18420,7 +18497,7 @@ function _cascadeTripRename_(oldName, newName) {
   n += _renameInSheetCol_(HOUSING_NOTES_SHEET_, 'الرحلات', oldName, newName);
   // مجموعات الدمج تحفظ الرحلات كمصفوفة نصوص JSON
   n += _renameInJsonCol_(ACC_MERGE_SHEET, 'الرحلات (JSON)', oldName, newName, null);
-  try { clearAllCache(); } catch (e) {}
+  try { clearAllCache_(); } catch (e) {}
   try { _mfClearBootstrapCache_(); } catch (e) {}
   return n;
 }
@@ -18464,7 +18541,7 @@ function saveTripDraft(authToken, draft) {
   var name = String(draft.tripName || "").trim();
   if (!name) throw new Error("اسم الرحلة مطلوب");
 
-  // 🛡️ حل الفجوة الجذرية: validateMovementsLogic لم يكن يُستدعى إطلاقاً من مسار حفظ المسودة —
+  // 🛡️ حل الفجوة الجذرية: validateMovementsLogic_ لم يكن يُستدعى إطلاقاً من مسار حفظ المسودة —
   // فأي تحرك غير منطقي (زي مزارات المدينة أثناء الإقامة بمكة) كان يُحفَظ بصمت تام بلا أي تحقق،
   // لأن الفحص كله كان مقصوراً على saveBookingToServer (إشعار الوصول النهائي) فقط. وضع التساهل
   // الافتراضي (__strictDates__ غير مُفعَّل) يسمح للمسودة بعدم وجود تواريخ أساسية بعد كما هو متوقَّع،
@@ -18472,7 +18549,7 @@ function saveTripDraft(authToken, draft) {
   // نمط بقية أخطاء هذه الدالة، ويلتقطه withFailureHandler الموجود بالفعل في الواجهة
   // 🎯 الخطأ المُهيكَل يُرسَل مُرمَّزاً بعلامة "MVERR::" + JSON حتى تقدر الواجهة تكتشفه وتبني منه
   // نافذة تنبيه غنية — ولو فشل تحليله لأي سبب، الرسالة الأصلية النصية تبقى مقروءة كما هي كـ fallback
-  var draftMovementsError = validateMovementsLogic(draft);
+  var draftMovementsError = validateMovementsLogic_(draft);
   if (draftMovementsError) {
     throw new Error('MVERR::' + JSON.stringify(draftMovementsError));
   }
@@ -18575,7 +18652,7 @@ function saveTripDraft(authToken, draft) {
   // 🔄 مزامنة المسودة → الإشعار المرتبط (لا توقف الحفظ لو فشلت)
   try { _propagateTripChangesToBooking_(name); } catch (e) { Logger.log('propagate draft→booking failed: ' + e); }
 
-  clearAllCache(); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
+  clearAllCache_(); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
   return { success: true, tripName: name };
 }
 
@@ -18635,7 +18712,7 @@ function addClientRecord(authToken, name, mobile, notes, force) {
     }
   }
   sheet.appendRow([name, String(mobile || '').trim(), String(notes || '').trim()]);
-  clearCachedData('mf_ref_lists_cache');   // ⚡ (V4.193) قائمة العملاء المرجعية لشاشتي الوزارة والوكلاء
+  clearCachedData_('mf_ref_lists_cache');   // ⚡ (V4.193) قائمة العملاء المرجعية لشاشتي الوزارة والوكلاء
   return { success: true, client: { name: name, mobile: String(mobile || '').trim(), notes: String(notes || '').trim() } };
 }
 
@@ -18672,7 +18749,7 @@ function deleteClientRecord(authToken, row) {
     withoutTripRows.forEach(function(rn) { pSheet.deleteRow(rn); });
   }
   sheet.deleteRow(row);
-  clearAllCache();
+  clearAllCache_();
   logChange_(session.username, 'حذف عميل', name, '-', '-', withoutTripRows.length ? ('حُذف معه ' + withoutTripRows.length + ' معتمر بدون رحلة') : '-');
   return { success: true, deletedPilgrims: withoutTripRows.length };
 }
@@ -18731,7 +18808,7 @@ function updateClientRecord(authToken, row, newName, mobile, notes) {
     renamedCount += _cascadeClientRename_(oldName, newName);
   }
 
-  clearCachedData('mf_ref_lists_cache');   // ⚡ (V4.193) قائمة العملاء المرجعية
+  clearCachedData_('mf_ref_lists_cache');   // ⚡ (V4.193) قائمة العملاء المرجعية
   return { success: true, renamedCount: renamedCount };
 }
 
@@ -19174,7 +19251,7 @@ function getGlobalPilgrimsRegistry(authToken) {
   requireAuth_(authToken);
 
   // ⚡ كاش السجل العام — يُمسح مع أي تعديل على المعتمرين/الكشوف
-  var _cachedReg = getCachedData('registry_cache');
+  var _cachedReg = getCachedData_('registry_cache');
   if (_cachedReg) return _cachedReg;
 
   var pSheet = _getPilgrimsSheet_();
@@ -19242,7 +19319,7 @@ function getGlobalPilgrimsRegistry(authToken) {
 
   var list = order.map(function(k) { return byKey[k]; });
   var _regResult = { pilgrims: list, total: list.length };
-  setCachedData('registry_cache', _regResult);
+  setCachedData_('registry_cache', _regResult);
   return _regResult;
 }
 
@@ -19285,7 +19362,7 @@ function saveGlobalPilgrim(authToken, p) {
       });
     });
     logChange_(session.username, "تحديث معتمر (السجل العام)", name, "معتمر", "-", "عدد الصفوف: " + matches.length);
-    clearAllCache();
+    clearAllCache_();
     return { success: true, existed: true, updatedRows: matches.length };
   }
 
@@ -19302,7 +19379,7 @@ function saveGlobalPilgrim(authToken, p) {
   vals[PILGRIMS_COL_.pid] = 'P' + new Date().getTime().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
   sheet.appendRow(_buildRowByName_(C, width, vals));
   logChange_(session.username, "تسجيل معتمر بالسجل العام", name, "معتمر", "-", "بدون رحلة");
-  clearAllCache();
+  clearAllCache_();
   return { success: true, existed: false };
 }
 
@@ -19366,7 +19443,7 @@ function assignPilgrimToTrip(authToken, passportOrName, tripName, force) {
     sheet.appendRow(_buildRowByName_(C, width, vals));
   }
   logChange_(session.username, "تخصيص معتمر لرحلة", String(P(template, 'name')), "معتمر", "-", tripName);
-  clearAllCache();
+  clearAllCache_();
   return { success: true };
 }
 
@@ -19498,7 +19575,7 @@ function movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force, skip
 
   logChange_(session.username, "نقل معتمر بين رحلتين", movedNames.join("، "), "معتمر",
              fromTrip, toTrip + " (عدد: " + movedNames.length + ")");
-  clearAllCache();
+  clearAllCache_();
   if (!skipAcc) { _tripSnapTake_(fromTrip, session.username, 'نقل معتمر إلى «' + toTrip + '»: ' + movedNames.join('، ')); _tripSnapTake_(toTrip, session.username, 'استلام معتمر من «' + fromTrip + '»: ' + movedNames.join('، ')); }   // ↩️ (V4.343)
   // 💵 (V4.343) حسابات العملاء تتبع النقل تلقائياً (بلا قرار معلّق): انظر _accAfterPilgrimsMoved_
   var accNote = '';
@@ -19574,7 +19651,7 @@ function movePilgrimsBulk(authToken, idents, fromTrip, toTrip, force) {
       }
     } catch (e) { errors.push((ident.name || "?") + ": " + (e.message || e)); }
   });
-  clearAllCache();
+  clearAllCache_();
   var accNoteB = '';
   if (movedTotal) { _tripSnapTake_(String(fromTrip || '').trim(), bulkSess.username, 'نقل ' + movedTotal + ' معتمر إلى «' + toTrip + '»'); _tripSnapTake_(String(toTrip || '').trim(), bulkSess.username, 'استلام ' + movedTotal + ' معتمر من «' + fromTrip + '»'); }   // ↩️ (V4.343)
   if (movedTotal) { try { accNoteB = _accAfterPilgrimsMoved_(Object.keys(movedClientsAll), String(fromTrip || '').trim(), String(toTrip || '').trim(), bulkSess.username, authToken).note; } catch (eAccB) { Logger.log('acc after bulk move: ' + eAccB.message); } }
@@ -19593,7 +19670,7 @@ function assignPilgrimsBulk(authToken, keys, tripName, force) {
       else if (res && res.error) errors.push(k + ": " + res.error);
     } catch (e) { errors.push(k + ": " + (e.message || e)); }
   });
-  clearAllCache();
+  clearAllCache_();
   return { success: errors.length === 0, assigned: assigned, errors: errors };
 }
 
@@ -19626,7 +19703,7 @@ function deleteGlobalPilgrims(authToken, keys) {
   });
   sheet.getRange(2, 1, lastRow - 1, width).clearContent();
   if (kept.length) sheet.getRange(2, 1, kept.length, width).setValues(kept);
-  clearAllCache();
+  clearAllCache_();
   logChange_(session.username, "حذف مجمّع من سجل المعتمرين", keys.join("، "), "معتمر", "-", "صفوف: " + removed);
   return { success: true, removed: removed };
 }
@@ -19794,9 +19871,9 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
   try { _pushKashfChangeNotifications_(tripName, oldThisTrip, pilgrims, C, session.username); }
   catch (eNotif) { Logger.log('kashf change notifications failed: ' + eNotif); }
 
-  // ⚡ (V4.322) كان clearAllCache() يمسح كل كاش البرنامج فيُجبر كل مستخدم آخر على قراءة باردة ثقيلة (التأشيرات/الرحلات/الوزارة…)
+  // ⚡ (V4.322) كان clearAllCache_() يمسح كل كاش البرنامج فيُجبر كل مستخدم آخر على قراءة باردة ثقيلة (التأشيرات/الرحلات/الوزارة…)
   // عند أول فتح شاشة بعد أي حفظ كشف. الكشف يؤثر فقط على قائمة الرحلات (المقاعد/الجاهزية) والسجل العام وفهرس أعداد العملاء.
-  ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'].forEach(function (k) { try { clearCachedData(k); } catch (eC) {} });
+  ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'].forEach(function (k) { try { clearCachedData_(k); } catch (eC) {} });
 
   // 💵 (V4.12) مزامنة حسابات العملاء تلقائياً لو للرحلة تسعير مفعَّل («تطبيق» ضُغط من قبل):
   // معتمرون جدد/تغيّر مستوى أو تسكين ← تتحدث البنود التلقائية فوراً، والمعدّلة يدوياً لا تُمس.
@@ -20592,7 +20669,7 @@ function getStatsData(authToken) {
   // فلا يحدث أي احتساب مزدوج. التطابق محفوظ: الإجمالي = مجموع كل توزيع كما كان.
   var unlinkedNoticePax = 0;
   try {
-    getAllBookings().forEach(function(b) {
+    getAllBookings_().forEach(function(b) {
       var tn = String(b.tripName || '').trim();
       // 🔗 (V4.16) مرتبط برحلة موجودة — بالاسم (المسار المعتاد) أو بمعرّف الإشعار (لو أُعيدت تسمية
       // الرحلة بعد الربط فاختلف اسمها الحالي عن الاسم المخزَّن بصف الإشعار وقت الإنشاء)
@@ -23079,14 +23156,14 @@ function _mfDataVer_() {
 function getMinistryBootstrap(authToken) {
   var _t0 = Date.now();   // ⏱️ (V4.186) قياس زمن البناء بالخادم — يظهر بـConsole المتصفح للتقييم الدقيق
   var session = _mfPerm_(authToken, 'view');
-  var shared = getCachedData(MF_BOOTSTRAP_CACHE_KEY);
+  var shared = getCachedData_(MF_BOOTSTRAP_CACHE_KEY);
   var _verAtStart = _mfDataVer_(), _built = false;
   if (!shared) {
     _built = true;
     shared = _mfBuildSharedBootstrap_();
     // 🐛 (V4.172) لا نكتب بالكاش إلا لو لم يقع أي حفظ (_mfClearBootstrapCache_) أثناء هذا البناء —
     // وإلا فهذا البناء قرأ بيانات قديمة جزئياً ولا يجوز أن "يُحيي" الكاش بنسخة تسبق الحفظ الأحدث
-    if (_mfDataVer_() === _verAtStart) setCachedData(MF_BOOTSTRAP_CACHE_KEY, shared);
+    if (_mfDataVer_() === _verAtStart) setCachedData_(MF_BOOTSTRAP_CACHE_KEY, shared);
   }
   var out = {};
   for (var k in shared) out[k] = shared[k];
@@ -23139,14 +23216,14 @@ function _mfBuildSharedBootstrap_() {
 // وحساب القواعد والأرصدة لكل ملف) لمجرد هذه القوائم الثلاث عندما يكون كاش الوزارة بارداً
 // ⚡ (V4.193) القوائم المرجعية (الشركات/الرحلات/العملاء) تتغير نادراً، لكنها كانت تُقرأ من 3 شيتات (منها
 // شيت الرحلات كاملاً) مع كل إعادة بناء لبيانات ملفات الوزارة — أي بعد كل حفظ ملف. صارت مخزَّنة مؤقتاً
-// بمفتاح مستقل لا يُمسح مع حفظ ملف مراجعة، ويُمسح فقط مع أي تعديل للرحلات/الشركات/العملاء (clearAllCache
+// بمفتاح مستقل لا يُمسح مع حفظ ملف مراجعة، ويُمسح فقط مع أي تعديل للرحلات/الشركات/العملاء (clearAllCache_
 // التي تستدعيها كل عمليات حفظ الرحلات والشركات وحذف العملاء، + إضافة/تعديل عميل صراحةً).
 var MF_REF_CACHE_KEY = 'mf_ref_lists_cache';
 function _mfBuildRefLists_() {
-  var cached = getCachedData(MF_REF_CACHE_KEY);
+  var cached = getCachedData_(MF_REF_CACHE_KEY);
   if (cached && cached.trips) return cached;
   var fresh = _mfBuildRefListsRaw_();
-  try { setCachedData(MF_REF_CACHE_KEY, fresh); } catch (e) {}
+  try { setCachedData_(MF_REF_CACHE_KEY, fresh); } catch (e) {}
   return fresh;
 }
 function _mfBuildRefListsRaw_() {
@@ -23206,8 +23283,8 @@ function _mfBuildRefListsRaw_() {
 }
 // تُستدعى بعد أي حفظ/حذف في شاشة مراجعة ملفات الوزارة حتى لا يرى المستخدمون بيانات قديمة من الكاش
 function _mfClearBootstrapCache_() {
-  clearCachedData(MF_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData
-  clearCachedData(MF_TRIP_LINKS_CACHE_KEY);  // ⚡ (V4.178) كاش روابط الرحلة⇄الملف يتغيّر مع كل حفظ ملف
+  clearCachedData_(MF_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData_
+  clearCachedData_(MF_TRIP_LINKS_CACHE_KEY);  // ⚡ (V4.178) كاش روابط الرحلة⇄الملف يتغيّر مع كل حفظ ملف
   _mfBumpVer_();
 }
 
@@ -23969,14 +24046,14 @@ function getMinistryFileHistory(authToken, id) {
 // ⚡ (V4.178) كاش النتيجة كاملةً — كانت هذه الدالة تُنفَّذ بعد *كل* حفظ ملف وزارة (يستدعيها العميل
 // في ذيل mfApplySaved) وعند كل فتح لشاشة الرحلات/الوزارة، وتقرأ شيت الملفات + شيت الرحلات بالكامل
 // (5 إلى 26 ثانية بسجلات التنفيذ). محتواها لا يعتمد على المستخدم (عدا فحص الصلاحية أول الدالة)،
-// فنُخزِّنه ونُبطله فوراً مع أي حفظ ملف وزارة (_mfClearBootstrapCache_) أو حفظ رحلة (clearAllCache).
+// فنُخزِّنه ونُبطله فوراً مع أي حفظ ملف وزارة (_mfClearBootstrapCache_) أو حفظ رحلة (clearAllCache_).
 var MF_TRIP_LINKS_CACHE_KEY = 'ministry_trip_links_cache';
 function getMinistryTripLinks(authToken) {
   var session = requireAuth_(authToken);
   if (!_sessionHasPerm_(session, 'ministry.view') && !_sessionHasPerm_(session, 'trips.view')) {
     return { success: true, links: {}, alerts: [] };
   }
-  var _cachedTL = getCachedData(MF_TRIP_LINKS_CACHE_KEY);
+  var _cachedTL = getCachedData_(MF_TRIP_LINKS_CACHE_KEY);
   if (_cachedTL) return _cachedTL;
   var files = _mfReadAll_();
   var links = {}, alerts = [];
@@ -24030,7 +24107,7 @@ function getMinistryTripLinks(authToken) {
     }
   } catch (e) {}
   var _outTL = { success: true, links: links, alerts: alerts, tripInfo: tripInfo, byBooking: byBooking };
-  setCachedData(MF_TRIP_LINKS_CACHE_KEY, _outTL);
+  setCachedData_(MF_TRIP_LINKS_CACHE_KEY, _outTL);
   return _outTL;
 }
 
@@ -24520,12 +24597,12 @@ function _tgSupRunMatch_(chatId, text, from) {
   // اسم المشرف = ما تبقّى بعد نزع الرقم وأي رموز
   var namePart = String(text).replace(/(?:\+?966|00966)?\d[\d\s\-]{6,}/g, ' ').replace(/\s+/g, ' ').trim();
   if (!/^05\d{8}$/.test(mobile)) {
-    sendTelegramMessageDirect(chatId, "⚠️ لم أتعرّف على رقم جوال سعودي صحيح بالرسالة.\nاكتب الاسم والرقم معاً، مثال: <code>ابو محمد 0551234567</code>",
+    sendTelegramMessageDirect_(chatId, "⚠️ لم أتعرّف على رقم جوال سعودي صحيح بالرسالة.\nاكتب الاسم والرقم معاً، مثال: <code>ابو محمد 0551234567</code>",
       [[{ text: '🔁 إعادة المحاولة', callback_data: 'supph_start' }]]);
     return;
   }
   if (!namePart) {
-    sendTelegramMessageDirect(chatId, "⚠️ اكتب اسم المشرف مع الرقم (ولو تقريبياً).",
+    sendTelegramMessageDirect_(chatId, "⚠️ اكتب اسم المشرف مع الرقم (ولو تقريبياً).",
       [[{ text: '🔁 إعادة المحاولة', callback_data: 'supph_start' }]]);
     return;
   }
@@ -24540,11 +24617,11 @@ function _tgSupRunMatch_(chatId, text, from) {
   });
   var names = Object.keys(byName);
   if (!names.length) {
-    sendTelegramMessageDirect(chatId, "🔍 لا يوجد مشرف مسجَّل يطابق «<b>" + _tgbnEsc_(namePart) + "</b>».\nتأكد من الاسم أو سجّله من شاشة الرحلة أولاً.");
+    sendTelegramMessageDirect_(chatId, "🔍 لا يوجد مشرف مسجَّل يطابق «<b>" + _tgbnEsc_(namePart) + "</b>».\nتأكد من الاسم أو سجّله من شاشة الرحلة أولاً.");
     return;
   }
   if (names.length > 20) {
-    sendTelegramMessageDirect(chatId, "🔍 النتائج كثيرة (" + names.length + "). اكتب اسماً أدقّ.");
+    sendTelegramMessageDirect_(chatId, "🔍 النتائج كثيرة (" + names.length + "). اكتب اسماً أدقّ.");
     return;
   }
   var cands = names.map(function (n) {
@@ -24558,7 +24635,7 @@ function _tgSupRunMatch_(chatId, text, from) {
   var sid = Utilities.getUuid().replace(/-/g, '').substring(0, 8);
   CacheService.getScriptCache().put(_tgSupCandKey_(chatId, sid), JSON.stringify(cands), 600);
   if (cands.length === 1) {
-    sendTelegramMessageDirect(chatId, _tgSupReviewMsg_(cands[0]),
+    sendTelegramMessageDirect_(chatId, _tgSupReviewMsg_(cands[0]),
       [[{ text: '✅ اعتماد وتسجيل', callback_data: 'supphok:' + sid + ':0' },
         { text: '❌ إلغاء', callback_data: 'supphq_cancel' }]]);
     return;
@@ -24567,7 +24644,7 @@ function _tgSupRunMatch_(chatId, text, from) {
     return [{ text: (c.active ? '🟢 ' : '') + c.name + ' — ' + (c.trip || 'بلا رحلة'), callback_data: 'supph:' + sid + ':' + i }];
   });
   rows.push([{ text: '✖️ إلغاء', callback_data: 'supphq_cancel' }]);
-  sendTelegramMessageDirect(chatId, "👥 <b>" + cands.length + " مشرفاً مطابقاً</b> — اختر الصحيح لمراجعة بياناته قبل تسجيل الرقم <code>" + mobile + "</code>:\n" + _tgReqTag_(from), rows);
+  sendTelegramMessageDirect_(chatId, "👥 <b>" + cands.length + " مشرفاً مطابقاً</b> — اختر الصحيح لمراجعة بياناته قبل تسجيل الرقم <code>" + mobile + "</code>:\n" + _tgReqTag_(from), rows);
 }
 function _tgSupReviewMsg_(c) {
   return "📱 <b>مراجعة قبل الاعتماد</b>\n" +
@@ -24611,7 +24688,7 @@ function _tgSupSaveMobile_(c) {
       if (_bkId) _tgSupSyncBooking_(_bkId, _supervisorsDisplay_(list));
     } catch (eBk) { Logger.log('تعذر تحديث بيان الإشعار بجوال المشرف: ' + eBk); }
     SpreadsheetApp.flush();
-    try { clearAllCache(); } catch (eC) {}
+    try { clearAllCache_(); } catch (eC) {}
     logChange_('💠 بوت تليجرام', 'تسجيل جوال مشرف', c.trip, c.name, c.oldMobile || '-', c.mobile);
     return "✅ <b>تم التسجيل</b>\n" + (c.reqLabel ? ("👤 <b>طلب الأمر:</b> " + _tgbnEsc_(c.reqLabel) + "\n") : "") +
       "🧑‍✈️ المشرف: " + _tgbnEsc_(c.name) + "\n🧳 " + _tgbnEsc_(c.trip) + "\n📞 <code>" + _tgbnEsc_(c.mobile) + "</code>";
@@ -24826,18 +24903,18 @@ function _tgPilgrimDetailMsg_(person, from) {
 // نقطة الدخول الموحَّدة: يُشغَّل من الأمر المباشر «بحث: ...» ومن محادثة الزر معاً
 function _tgRunSearch_(chatId, query, from) {
   query = String(query || '').trim();
-  if (!query) { sendTelegramMessageDirect(chatId, '⚠️ اكتب اسم المعتمر أو رقم جوازه بعد «بحث:».'); return; }
+  if (!query) { sendTelegramMessageDirect_(chatId, '⚠️ اكتب اسم المعتمر أو رقم جوازه بعد «بحث:».'); return; }
   var people = _tgSearchPilgrim_(query);
   if (!people.length) {
-    sendTelegramMessageDirect(chatId, '🚫 لم يُعثر على معتمر مطابق لـ «' + query + '».\nجرِّب اسماً أقصر أو جزءاً من رقم الجواز.');
+    sendTelegramMessageDirect_(chatId, '🚫 لم يُعثر على معتمر مطابق لـ «' + query + '».\nجرِّب اسماً أقصر أو جزءاً من رقم الجواز.');
     return;
   }
   if (people.length === 1) {
-    sendTelegramMessageDirect(chatId, _tgPilgrimDetailMsg_(people[0], from));
+    sendTelegramMessageDirect_(chatId, _tgPilgrimDetailMsg_(people[0], from));
     return;
   }
   if (people.length > 20) {
-    sendTelegramMessageDirect(chatId, '⚠️ عدد النتائج كبير جداً (' + people.length + ') — اكتب اسماً أكثر تحديداً أو رقم الجواز كاملاً.');
+    sendTelegramMessageDirect_(chatId, '⚠️ عدد النتائج كبير جداً (' + people.length + ') — اكتب اسماً أكثر تحديداً أو رقم الجواز كاملاً.');
     return;
   }
   var sid = _tgSrchStoreResults_(chatId, people);
@@ -24861,14 +24938,14 @@ function _tgRunSearch_(chatId, query, from) {
    الاصطناعي (نفس محرك استخلاص الجوازات المستخدَم بشاشة الرحلات) ثم يبحث بهما تلقائياً. تدعم
    الصورة أكثر من مستند (جوازان جنباً إلى جنب) فتُجمَع نتائج البحث عن كل شخص مستخلَص معاً. */
 function _tgRunSearchByImage_(chatId, fileId, from) {
-  sendTelegramMessageDirect(chatId, '⏳ جاري استخلاص بيانات الجواز/التأشيرة من الصورة…');
+  sendTelegramMessageDirect_(chatId, '⏳ جاري استخلاص بيانات الجواز/التأشيرة من الصورة…');
   var fetched = _tgccFetchFileBase64_(TELEGRAM_CONFIG.token, fileId);
-  if (!fetched) { sendTelegramMessageDirect(chatId, '❌ تعذّر تحميل الملف من تليجرام.'); return; }
+  if (!fetched) { sendTelegramMessageDirect_(chatId, '❌ تعذّر تحميل الملف من تليجرام.'); return; }
   var ext;
   try { ext = _extractPassportDataCore_(fetched.data, fetched.mime); }
-  catch (e) { sendTelegramMessageDirect(chatId, '❌ خطأ أثناء الاستخلاص: ' + e.toString()); return; }
+  catch (e) { sendTelegramMessageDirect_(chatId, '❌ خطأ أثناء الاستخلاص: ' + e.toString()); return; }
   if (!ext || !ext.success || !ext.persons || !ext.persons.length) {
-    sendTelegramMessageDirect(chatId, '🚫 ' + ((ext && ext.error) || 'تعذّر استخلاص بيانات مقروءة من الصورة') + ' — جرِّب صورة أوضح، أو اكتب الاسم/الجواز مباشرة.');
+    sendTelegramMessageDirect_(chatId, '🚫 ' + ((ext && ext.error) || 'تعذّر استخلاص بيانات مقروءة من الصورة') + ' — جرِّب صورة أوضح، أو اكتب الاسم/الجواز مباشرة.');
     return;
   }
   var found = [], namesTried = [];
@@ -24881,18 +24958,18 @@ function _tgRunSearchByImage_(chatId, fileId, from) {
       if (!found.some(function (f) { return f._key === key; })) { person._key = key; found.push(person); }
     });
   });
-  if (!namesTried.length) { sendTelegramMessageDirect(chatId, '🚫 لم تحتوِ الصورة على اسم أو رقم جواز مقروء.'); return; }
+  if (!namesTried.length) { sendTelegramMessageDirect_(chatId, '🚫 لم تحتوِ الصورة على اسم أو رقم جواز مقروء.'); return; }
   var extractedLine = '📷 <b>استُخلص من الصورة:</b> ' + namesTried.join('، ') + '\n\n';
   if (!found.length) {
-    sendTelegramMessageDirect(chatId, extractedLine + '🚫 لم يُعثر على معتمر مطابق بهذه البيانات في السجلات.');
+    sendTelegramMessageDirect_(chatId, extractedLine + '🚫 لم يُعثر على معتمر مطابق بهذه البيانات في السجلات.');
     return;
   }
   if (found.length === 1) {
-    sendTelegramMessageDirect(chatId, extractedLine + _tgPilgrimDetailMsg_(found[0], from));
+    sendTelegramMessageDirect_(chatId, extractedLine + _tgPilgrimDetailMsg_(found[0], from));
     return;
   }
   if (found.length > 20) {
-    sendTelegramMessageDirect(chatId, extractedLine + '⚠️ عدد النتائج كبير جداً (' + found.length + ') — استخدم البحث بالاسم أو الجواز كاملاً بدل الصورة.');
+    sendTelegramMessageDirect_(chatId, extractedLine + '⚠️ عدد النتائج كبير جداً (' + found.length + ') — استخدم البحث بالاسم أو الجواز كاملاً بدل الصورة.');
     return;
   }
   var sid = _tgSrchStoreResults_(chatId, found);
@@ -24901,7 +24978,7 @@ function _tgRunSearchByImage_(chatId, fileId, from) {
     if (label.length > 60) label = label.substring(0, 57) + '...';
     return [{ text: label, callback_data: 'srch:' + sid + ':' + i }];
   });
-  sendTelegramMessageDirect(chatId, extractedLine + '🔎 <b>تعدَّدت المطابقات (' + found.length + ') — اختر المعتمر المطلوب:</b>\n' + _tgReqTag_(from), rows);
+  sendTelegramMessageDirect_(chatId, extractedLine + '🔎 <b>تعدَّدت المطابقات (' + found.length + ') — اختر المعتمر المطلوب:</b>\n' + _tgReqTag_(from), rows);
 }
 
 /* ==================================================================================
@@ -24973,7 +25050,7 @@ function _vzDataVer_() {
   catch (e) { return 0; }
 }
 function _vzClearCache_() {
-  clearCachedData(VZ_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData
+  clearCachedData_(VZ_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData_
   _vzBumpVer_();
 }
 
@@ -25368,7 +25445,7 @@ function xcApply(authToken, items, trips) {
           sh.getRange(row, agCol + 1).setValue(agent);
           logChange_(session.username, 'تصحيح شركة/وكيل الرحلة (مطابقة)', id, 'الشركة/الوكيل', oldCo + ' / ' + oldAg, (company || oldCo) + ' / ' + agent);
         } finally { lock.releaseLock(); }
-        try { clearAllCache(); } catch (eC) {}
+        try { clearAllCache_(); } catch (eC) {}
         res.push({ id: id, success: true });
       } catch (e) { res.push({ id: id, success: false, error: e.message }); }
     }
@@ -25490,9 +25567,9 @@ function _vzCateringByGroup_() {
 function getVisaBootstrap(authToken) {
   var _t0 = Date.now();   // ⏱️ (V4.186) قياس زمن البناء بالخادم
   var session = _vzPerm_(authToken, 'view');
-  var shared = getCachedData(VZ_BOOTSTRAP_CACHE_KEY);
+  var shared = getCachedData_(VZ_BOOTSTRAP_CACHE_KEY);
   // 🐛 (V4.164) رقم الإصدار لحظة بدء إعادة البناء — يُقارَن بعد الانتهاء (انظر التعليق أسفل
-  // setCachedData) لمنع كتابة نتيجة بُنيت من بيانات سبقت حفظاً وقع أثناء هذا البناء بالذات
+  // setCachedData_) لمنع كتابة نتيجة بُنيت من بيانات سبقت حفظاً وقع أثناء هذا البناء بالذات
   var _verAtStart = _vzDataVer_(), _built = false;
   if (!shared) {
     _built = true;
@@ -25504,7 +25581,7 @@ function getVisaBootstrap(authToken) {
     // ⚡ (V4.177) وأيضاً نفس *كاشه* لا الباني وحده: كان فتح شاشة الوكلاء يُعيد بناء بوتستراب
     // الوزارة كاملاً من الشيتات (ملفات + إيصالات + مشرفون + أرصدة + شركات + رحلات + عملاء) حتى
     // لو كان كاش الوزارة ساخناً بالفعل — وهو وحده عدة ثوانٍ من زمن البناء البالغ 18 ثانية.
-    var base = getCachedData(MF_BOOTSTRAP_CACHE_KEY);
+    var base = getCachedData_(MF_BOOTSTRAP_CACHE_KEY);
     // ⚡ (V4.186) كاش الوزارة بارد ⇒ نبني القوائم المرجعية الثلاث فقط (لا بوتستراب الوزارة كاملاً)
     if (!base) base = _mfBuildRefLists_();
     // أرصدة الوكلاء (صافي كل وكيل) من التأشيرات + البنود + الدفعات
@@ -25558,7 +25635,7 @@ function getVisaBootstrap(authToken) {
     };
     // 🐛 (V4.164) لا نكتب بالكاش إلا لو لم يقع أي حفظ (_vzClearCache_) أثناء هذا البناء بالذات —
     // وإلا فهذا البناء قرأ بيانات قديمة جزئياً ولا يجوز أن "يُحيي" الكاش بنسخة تسبق الحفظ الأحدث
-    if (_vzDataVer_() === _verAtStart) setCachedData(VZ_BOOTSTRAP_CACHE_KEY, shared);
+    if (_vzDataVer_() === _verAtStart) setCachedData_(VZ_BOOTSTRAP_CACHE_KEY, shared);
   }
   var out = {}; for (var k in shared) out[k] = shared[k];
   out.success = true; out.user = session.username;
@@ -26470,7 +26547,7 @@ function _vzAgentsSet_(base, files, items, pays) {   // نفس مصادر قائ
 }
 function _vzStCmp_(s) { return _mfStr_(s).replace(/[ً-ْـ]/g, '').replace(/[إأآٱ]/g, 'ا').replace(/\s+/g, ''); }   // «تم الارسال» = «تم الإرسال»
 function _vzListedAccounts_(files, acctMap) {
-  var base = getCachedData(MF_BOOTSTRAP_CACHE_KEY) || _mfBuildRefLists_();
+  var base = getCachedData_(MF_BOOTSTRAP_CACHE_KEY) || _mfBuildRefLists_();
   var set = _vzAgentsSet_(base, files, _vzReadItems_(''), _vzReadPays_(''));
   var seen = {}, out = [];
   // مفاتيح البنود/الدفعات (مثل «وكيل - شركة») تدخل القائمة مرة ثانية كـ«عام» ⇒ بلا تكرار، والنوع الفعلي (مشترك/منفصل) أولى
@@ -26550,7 +26627,7 @@ var VZ_HA_CITIES_    = ['مكة','المدينة'];
 var VZ_HA_STATUSES_  = ['مبدئية','مؤكَّدة','مُوقَّعة','ملغاة'];
 var VZ_HA_CACHE_KEY  = 'visa_housing_cache';
 
-function _vzHaClearCache_() { clearCachedData(VZ_HA_CACHE_KEY); try { _vzClearCache_(); } catch (e2) {} }
+function _vzHaClearCache_() { clearCachedData_(VZ_HA_CACHE_KEY); try { _vzClearCache_(); } catch (e2) {} }
 
 function _vzHaRowToObj_(r) {
   return { id: _mfStr_(r[0]), seq: _mfNum_(r[1]), agrNo: _mfStr_(r[2]), city: _mfStr_(r[3]), hotel: _mfStr_(r[4]),
@@ -27045,10 +27122,10 @@ function deleteHousingAllocation(authToken, id) {
 function sendTelegramMovementsByDate_(dateStr, chatId, from) {
   // 🔕 (V4.125) مفتاح التفعيل من قسم التنبيهات بشاشة الإعدادات
   if (!_notifEnabled_('tg_movements')) {   // 🔔 (V4.324) يُبلَّغ السائل بدل الصمت
-    try { if (chatId) sendTelegramMessageDirect(chatId, '⛔ إرسال التحركات معطَّل من «مركز التنبيهات» بإعدادات البرنامج.'); } catch (eD) {}
+    try { if (chatId) sendTelegramMessageDirect_(chatId, '⛔ إرسال التحركات معطَّل من «مركز التنبيهات» بإعدادات البرنامج.'); } catch (eD) {}
     return { sent: 0, disabled: true };
   }
-  var movements = getAllMovements();
+  var movements = getAllMovements_();
   var filtered = movements.filter(function (m) { return m.movementDate && String(m.movementDate).trim() === dateStr; });
 
   var msg = "🚌 <b>تحركات بتاريخ (" + dateStr + ")</b> 📋 العدد: (" + filtered.length + ")\n" + _tgReqTag_(from) + "━━━━━━━━━━━━━━━━━━\n";
@@ -27062,7 +27139,7 @@ function sendTelegramMovementsByDate_(dateStr, chatId, from) {
       if (i < filtered.length - 1) msg += "▪️\n";
     });
   }
-  sendTelegramMessageDirect(chatId, msg);
+  sendTelegramMessageDirect_(chatId, msg);
 }
 
 /* ============================================================
@@ -27499,7 +27576,7 @@ function _tgFltSet_(c, u, o) { try { CacheService.getScriptCache().put(_tgFltKey
 function _tgFltClear_(c, u) { try { CacheService.getScriptCache().remove(_tgFltKey_(c, u)); } catch (e) {} }
 function _tgFltStart_(chatId, from) {
   _tgFltSet_(chatId, from.id, { step: 'print' });
-  sendTelegramMessageDirect(chatId, '✈️ <b>مطابقة برنت الطيران</b>\nأرسل <b>صورة البرنت</b> أو <b>ملف PDF</b>، أو <b>الصق نص البرنت</b> مباشرة في رسالة.',
+  sendTelegramMessageDirect_(chatId, '✈️ <b>مطابقة برنت الطيران</b>\nأرسل <b>صورة البرنت</b> أو <b>ملف PDF</b>، أو <b>الصق نص البرنت</b> مباشرة في رسالة.',
     [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]);
 }
 function _tgFltTrips_() {
@@ -27532,17 +27609,17 @@ function _tgFltRun_(chatId, from, st, tripName) {
   var text = _fltSummary_(tripName, st.pnr, R, true), chunks = [], cur = '';
   text.split('\n').forEach(function (l) { if ((cur + l).length > 3600) { chunks.push(cur); cur = ''; } cur += l + '\n'; }); if (cur) chunks.push(cur);
   st.step = 'done'; st.trip = tripName; _tgFltSet_(chatId, from.id, st);
-  chunks.forEach(function (c, i) { sendTelegramMessageDirect(chatId, c, i === chunks.length - 1 ? [[{ text: '📄 تقرير PDF', callback_data: 'fltpdf' }, { text: '🔁 مطابقة أخرى', callback_data: 'flt_start' }]] : null); });
+  chunks.forEach(function (c, i) { sendTelegramMessageDirect_(chatId, c, i === chunks.length - 1 ? [[{ text: '📄 تقرير PDF', callback_data: 'fltpdf' }, { text: '🔁 مطابقة أخرى', callback_data: 'flt_start' }]] : null); });
 }
 function _tgFltPdf_(chatId, from) {
   var st = _tgFltGet_(chatId, from.id);
-  if (!st || !st.trip) { sendTelegramMessageDirect(chatId, '⚠️ انتهت صلاحية هذه المطابقة — ابدأ من جديد بـ «مطابقة برنت».'); return; }
+  if (!st || !st.trip) { sendTelegramMessageDirect_(chatId, '⚠️ انتهت صلاحية هذه المطابقة — ابدأ من جديد بـ «مطابقة برنت».'); return; }
   var R = _fltCompare_(_getTripPilgrimsCore_(st.trip), st.pax || []);
   var name = ('مطابقة برنت ' + st.trip).replace(/[\\\/:*?"<>|]/g, '-');
   var pdf = Utilities.newBlob(_fltReportHtml_(st.trip, st.pnr, R), 'text/html', name + '.html').getAs('application/pdf').setName(name + '.pdf');
   var res = UrlFetchApp.fetch('https://api.telegram.org/bot' + TELEGRAM_CONFIG.token + '/sendDocument', { method: 'post', muteHttpExceptions: true,
     payload: { chat_id: String(chatId), caption: '✈️ ' + name, document: pdf } });
-  if (res.getResponseCode() !== 200) sendTelegramMessageDirect(chatId, '❌ تعذّر إرسال PDF: ' + res.getContentText().slice(0, 200));
+  if (res.getResponseCode() !== 200) sendTelegramMessageDirect_(chatId, '❌ تعذّر إرسال PDF: ' + res.getContentText().slice(0, 200));
 }
 // رسالة أثناء محادثة المطابقة — يرجع true لو عالجها
 function _tgFltOnMessage_(msg) {
@@ -27552,25 +27629,25 @@ function _tgFltOnMessage_(msg) {
   if (st.step === 'print') {
     var fileId = msg.photo && msg.photo.length ? msg.photo[msg.photo.length - 1].file_id : (msg.document ? msg.document.file_id : null), pr = null;
     if (fileId) {
-      sendTelegramMessageDirect(chatId, '⏳ جاري قراءة البرنت…');
+      sendTelegramMessageDirect_(chatId, '⏳ جاري قراءة البرنت…');
       var f = _tgccFetchFileBase64_(TELEGRAM_CONFIG.token, fileId);
-      if (!f) { sendTelegramMessageDirect(chatId, '❌ تعذّر تحميل الملف من تليجرام — أعد الإرسال.'); return true; }
-      try { pr = _fltReadPrintFile_(f.data, f.mime); } catch (e) { sendTelegramMessageDirect(chatId, '❌ تعذّرت القراءة: ' + e.message + '\nالصق نص البرنت بدلاً من ذلك.'); return true; }
+      if (!f) { sendTelegramMessageDirect_(chatId, '❌ تعذّر تحميل الملف من تليجرام — أعد الإرسال.'); return true; }
+      try { pr = _fltReadPrintFile_(f.data, f.mime); } catch (e) { sendTelegramMessageDirect_(chatId, '❌ تعذّرت القراءة: ' + e.message + '\nالصق نص البرنت بدلاً من ذلك.'); return true; }
     } else if (text) pr = _fltParseText_(text);
     else return true;
-    if (!pr.pax.length) { sendTelegramMessageDirect(chatId, '🚫 لم أجد أسماء ركاب في البرنت. أرسل صورة أوضح أو الصق النص.', [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]); return true; }
+    if (!pr.pax.length) { sendTelegramMessageDirect_(chatId, '🚫 لم أجد أسماء ركاب في البرنت. أرسل صورة أوضح أو الصق النص.', [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]); return true; }
     _tgFltSet_(chatId, from.id, { step: 'trip', pnr: pr.pnr, pax: pr.pax });
-    sendTelegramMessageDirect(chatId, '✅ قرأت <b>' + pr.pax.length + '</b> اسماً' + (pr.pnr ? ' (PNR <code>' + pr.pnr + '</code>)' : '') + (pr.via === 'ocr' ? ' — بدون ذكاء اصطناعي' : '') +
+    sendTelegramMessageDirect_(chatId, '✅ قرأت <b>' + pr.pax.length + '</b> اسماً' + (pr.pnr ? ' (PNR <code>' + pr.pnr + '</code>)' : '') + (pr.via === 'ocr' ? ' — بدون ذكاء اصطناعي' : '') +
       '.\n\nاكتب <b>اسم الرحلة</b> أو جزءاً منه، أو <b>تاريخ سفرها</b> مثل <code>5/10</code>.', [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]);
     return true;
   }
   if (st.step === 'trip') {
     if (!text) return true;
     var list = _tgFltFindTrips_(text);
-    if (!list.length) { sendTelegramMessageDirect(chatId, '🔎 لا توجد رحلة تطابق «' + text + '» — اكتب جزءاً آخر من الاسم أو تاريخ السفر.', [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]); return true; }
+    if (!list.length) { sendTelegramMessageDirect_(chatId, '🔎 لا توجد رحلة تطابق «' + text + '» — اكتب جزءاً آخر من الاسم أو تاريخ السفر.', [[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]); return true; }
     if (list.length === 1) { _tgFltRun_(chatId, from, st, list[0].name); return true; }
     st.cands = list.map(function (t) { return t.name; }); _tgFltSet_(chatId, from.id, st);
-    sendTelegramMessageDirect(chatId, '🔎 أكثر من رحلة — اختر:', list.map(function (t, i) { return [{ text: t.name + (t.go ? ' (' + t.go + ')' : ''), callback_data: 'flttrip:' + i }]; }).concat([[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]));
+    sendTelegramMessageDirect_(chatId, '🔎 أكثر من رحلة — اختر:', list.map(function (t, i) { return [{ text: t.name + (t.go ? ' (' + t.go + ')' : ''), callback_data: 'flttrip:' + i }]; }).concat([[{ text: '✖️ إلغاء', callback_data: 'fltq_cancel' }]]));
     return true;
   }
   return false;
@@ -27579,11 +27656,11 @@ function _tgFltOnMessage_(msg) {
 function _tgFltOnCallback_(cq) {
   var d = cq.data || '', chatId = cq.message.chat.id, from = cq.from;
   if (d === 'flt_start') { _tgFltStart_(chatId, from); return true; }
-  if (d === 'fltq_cancel') { _tgFltClear_(chatId, from.id); sendTelegramMessageDirect(chatId, '✔️ تم الإلغاء.'); return true; }
+  if (d === 'fltq_cancel') { _tgFltClear_(chatId, from.id); sendTelegramMessageDirect_(chatId, '✔️ تم الإلغاء.'); return true; }
   if (d === 'fltpdf') { _tgFltPdf_(chatId, from); return true; }
   if (d.indexOf('flttrip:') === 0) {
     var st = _tgFltGet_(chatId, from.id), i = parseInt(d.split(':')[1], 10);
-    if (!st || !st.cands || !st.cands[i]) { sendTelegramMessageDirect(chatId, '⚠️ انتهت صلاحية الاختيار — ابدأ من جديد.'); return true; }
+    if (!st || !st.cands || !st.cands[i]) { sendTelegramMessageDirect_(chatId, '⚠️ انتهت صلاحية الاختيار — ابدأ من جديد.'); return true; }
     _tgFltRun_(chatId, from, st, st.cands[i]); return true;
   }
   return false;

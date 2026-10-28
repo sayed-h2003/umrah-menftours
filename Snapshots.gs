@@ -596,7 +596,7 @@ function snapApply(authToken, pid, screenKey, picks, tokens) {
   }
   if (audits.length) _audLog_(audits);
   logChange_(session.username, 'استعادة انتقائية من نقطة', 'SNAP:' + pid, S.label, P.at, done + ' تغيير' + (problems.length ? ' — تعذّر ' + problems.length : ''));
-  try { if (typeof clearAllCache === 'function') clearAllCache(); } catch (e) {}
+  try { if (typeof clearAllCache_ === 'function') clearAllCache_(); } catch (e) {}
   try { if (typeof _vzClearCache_ === 'function') _vzClearCache_(); } catch (e) {}
   return { success: true, done: done, problems: problems };
 }

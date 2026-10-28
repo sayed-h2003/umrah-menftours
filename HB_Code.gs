@@ -334,12 +334,14 @@ function login(username, password) {
   try {
     username = (username || '').toString().trim();
     if (!username || !password) throw new Error('اسم المستخدم وكلمة المرور مطلوبان');
+    _secLoginCheck_('hb', username);   // 🔒 (V4.358) حد المحاولات الخاطئة
     var sh = ensureUsersSheet_();
     var rowIdx = findUserRow_(sh, username);
-    if (rowIdx === -1) throw new Error('بيانات الدخول غير صحيحة');
+    if (rowIdx === -1) { _secLoginFail_('hb', username); throw new Error('بيانات الدخول غير صحيحة'); }
     var row = sh.getRange(rowIdx, 1, 1, 8).getValues()[0];
     if (row[6] === false) throw new Error('هذا الحساب معطَّل — تواصل مع المدير');
-    if (hbHashPassword_(password, row[2]) !== row[3]) throw new Error('بيانات الدخول غير صحيحة');
+    if (hbHashPassword_(password, row[2]) !== row[3]) { _secLoginFail_('hb', username); throw new Error('بيانات الدخول غير صحيحة'); }
+    _secLoginOk_('hb', username);
     var user = userRecordFromRow_(row);
     var minutes = getSessionDurationMinutes();
     var token = Utilities.getUuid();
@@ -1263,7 +1265,7 @@ function testSourceConnection(token) {
 // من نسخة سابقة للبرنامج كان يستدعي "syncBookingsFromSource" كل دقيقة —
 // هذه الدالة أُلغيت مع إلغاء المزامنة، فيجب حذف ذلك المُشغِّل حتى لا يفشل
 // كل دقيقة. آمنة الاستدعاء حتى لو لم يكن هناك مُشغِّل من الأساس.
-function deleteBookingsSyncTrigger() {
+function deleteBookingsSyncTrigger_() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'syncBookingsFromSource') ScriptApp.deleteTrigger(t);
   });
@@ -1279,7 +1281,7 @@ function deleteBookingsSyncTrigger() {
 // ==========================================================
 function cleanupOldSyncSetup() {
   requireScriptOwner_();   // (7.15.0) كانت عامة — أي زائر يحذف شيت "الحجوزات"
-  deleteBookingsSyncTrigger();
+  deleteBookingsSyncTrigger_();
   var ss = getSS_();
   var old = ss.getSheetByName('الحجوزات');
   if (old) ss.deleteSheet(old);
@@ -1544,7 +1546,7 @@ showSidebar();
 
 
   // تحديث ورقة قائمة اسماء العملاء
-  updateSheetLinks();
+  updateSheetLinks_();
 
   var ui = SpreadsheetApp.getUi();
 
@@ -1585,19 +1587,19 @@ function showSidebar() {
 
 
 // دالة جديدة لمعرفة الورقة النشطة حالياً
-function getActiveSheetName() {
+function getActiveSheetName_() {
   return getSS_().getActiveSheet().getName();
 }
 
 
-function getAllSheetNames() {
+function getAllSheetNames_() {
   var sheets = getSS_().getSheets();
   return sheets.map(function(sheet) {
     return sheet.getName();
   });
 }
 
-function setActiveSheet(sheetName) {
+function setActiveSheet_(sheetName) {
   var ss = getSS_();
   var sheet = ss.getSheetByName(sheetName);
   if (sheet) {
@@ -1609,7 +1611,10 @@ function setActiveSheet(sheetName) {
 
 
 
-function downloadBackup() {
+// 🔒 (V4.358) عناصر القائمة: لصاحب السكربت فقط — الدوال الفعلية خاصة
+function downloadBackup() { requireScriptOwner_(); return downloadBackup_(); }
+function saveAsPDF() { requireScriptOwner_(); return saveAsPDF_(); }
+function downloadBackup_() {
   var ss = getSS_();
   var url = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx';
   var params = {
@@ -1666,11 +1671,11 @@ function hbOnEdit_(e) {
   // يُصرِّح للسكربت شخصيًا — فكان التنبيه يصل فقط حين يُعدِّل من صرّح للسكربت (المدير عادة)
   // ويفشل بصمت تام لأي موظف آخر
   if (e && (e.changeType == 'INSERT_GRID' || e.changeType == 'REMOVE_GRID')) {
-    updateSheetLinks();
+    updateSheetLinks_();
   }
 }
 
-function updateSheetLinks() {
+function updateSheetLinks_() {
   var ss = getSS_();
   var sheet = ss.getSheetByName('القائمة');
 
@@ -1727,7 +1732,7 @@ function updateSheetLinks() {
 }
 
 
-function saveAsPDF() {
+function saveAsPDF_() {
   var sheet = getSS_().getActiveSheet();
   var range = sheet.getActiveRange();
   var spreadsheetId = getSS_().getId();
@@ -1797,7 +1802,7 @@ function saveAsPDF() {
 
 
 
-function sortSheetsByName() {
+function sortSheetsByName_() {
   const spreadsheet = getSS_();
   const sheets = spreadsheet.getSheets();
 
@@ -1817,7 +1822,7 @@ function sortSheetsByName() {
 }
 
 
-function setSheetNamesInDropdown() {
+function setSheetNamesInDropdown_() {
   const ss = getSS_();
   const sheetNames = ss.getSheets().map(sheet => sheet.getName()); // جلب أسماء الأوراق
 
@@ -2234,11 +2239,14 @@ function deleteClientPortal(token, clientName) {
 // ---- دوال جهة العميل (بلا صلاحيات النظام — رمز جلسة موقَّع فقط) ----
 function portalLogin(code, password) {
   try {
+    _secLoginCheck_('portal', code);   // 🔒 (V4.358) حد المحاولات الخاطئة
     var rec = getPortalRecordByCode_(code);
     // نفس رسالة الخطأ للكود الخاطئ وكلمة المرور الخاطئة (عدم كشف أي الكودين صحيح)
     if (!rec || rec.status !== 'نشط' || hbHashPassword_(password, rec.salt) !== rec.hash) {
+      _secLoginFail_('portal', code);
       throw new Error('الكود أو كلمة المرور غير صحيحة');
     }
+    _secLoginOk_('portal', code);
     ensurePortalSheet_().getRange(rec.rowIdx, 8).setValue(new Date());
     return safeReturn_({ ok: true, token: signPortalToken_(rec.code), clientName: rec.name, showPrices: rec.showPrices });
   } catch (e) { return { ok: false, error: e.message }; }

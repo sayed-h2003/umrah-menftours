@@ -2046,7 +2046,7 @@ function glVoucherPrint(authToken, id) {
   var nm = function (l) { var a = accs[l.account]; return a ? (a.link || a.name) : l.account; };
   var cn = []; counter.forEach(function (l) { var n = nm(l); if (cn.indexOf(n) < 0) cn.push(n); });
   var brand = _glVchBrand_(), logo = '';
-  try { logo = typeof getCompanyLogoBase64 === 'function' ? getCompanyLogoBase64(brand.vch_logo_company || e.company || '') : ''; } catch (eL) {}
+  try { logo = typeof getCompanyLogoBase64_ === 'function' ? getCompanyLogoBase64_(brand.vch_logo_company || e.company || '') : ''; } catch (eL) {}
   var vno = e.voucherNo || ((_glStr_(e.ref).match(/^(REC|PAY)-\d+$/) || [])[0]) || e.id;
   return { success: true, voucherNo: vno, entryId: e.id, type: e.type, isReceipt: isRec, date: e.date, amount: amount, currency: cur,
     counterName: cn.length > 3 ? 'أطراف متعددة (' + cn.length + ')' : cn.join(' + '), safeName: main.map(nm).join(' + '),
@@ -3935,7 +3935,7 @@ function glVchLogo(authToken, coId) {
     if (c) { lc = _glStr_(c.logo_company); lf = _glStr_(c.logo_file); }
   }
   if (lf) try { var bl = DriveApp.getFileById(lf).getBlob(); logo = 'data:' + bl.getContentType() + ';base64,' + Utilities.base64Encode(bl.getBytes()); } catch (eF) {}
-  if (!logo) try { logo = typeof getCompanyLogoBase64 === 'function' ? getCompanyLogoBase64(lc) : ''; } catch (e) {}
+  if (!logo) try { logo = typeof getCompanyLogoBase64_ === 'function' ? getCompanyLogoBase64_(lc) : ''; } catch (e) {}
   return { success: true, logo: logo };
 }
 // رفع شعار شركة إصدار (صورة) — يُحفظ بمجلد مرفقات الحسابات ويعود بمعرّف الملف
@@ -8731,7 +8731,7 @@ function _glBotLinkHelp_(chatId, needApprove) {
 function _glBotJson_(k, d) { try { var v = PropertiesService.getScriptProperties().getProperty(k), o = v ? JSON.parse(v) : d; return (Array.isArray(d) !== Array.isArray(o) || (o === null)) ? d : o; } catch (e) { return d; } }   // (V4.274) يرجع الافتراضي لو النوع المخزَّن غير المتوقع
 function _glBotJsonSave_(k, o) { PropertiesService.getScriptProperties().setProperty(k, JSON.stringify(o)); }
 function _glBotMainUsers_() {
-  var users = null; try { users = typeof getCachedData === 'function' ? getCachedData('users_cache') : null; } catch (e) {}
+  var users = null; try { users = typeof getCachedData_ === 'function' ? getCachedData_('users_cache') : null; } catch (e) {}
   if (!users) { try { var sh = getSpreadsheet_().getSheetByName('Users'); users = sh && sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues().map(function (r) { return { username: String(r[0]), fullName: String(r[2] || ''), active: r[3], permissions: r[4] }; }) : []; } catch (e2) { users = []; } }
   return users.filter(function (u) { return u && u.username; });
 }
@@ -9071,7 +9071,7 @@ function _glBotCsApprove_(code, row, acc, user) {
 }
 function _glBotUserCanGl_(username) {
   try {
-    var users = typeof getCachedData === 'function' ? getCachedData('users_cache') : null, rec = null;
+    var users = typeof getCachedData_ === 'function' ? getCachedData_('users_cache') : null, rec = null;
     if (!users) { var sh = getSpreadsheet_().getSheetByName('Users'); users = sh && sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues().map(function (r) { return { username: String(r[0]), active: r[3], permissions: r[4] }; }) : []; }
     users.forEach(function (u) { if (String(u.username).toLowerCase() === String(username).toLowerCase()) rec = u; });
     if (!rec || rec.active === false || String(rec.active) === 'FALSE') return false;
