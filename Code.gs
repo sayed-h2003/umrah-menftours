@@ -1,4 +1,6 @@
 // ملف Code.gs
+// ⏱️ (V4.364) بداية تحميل كود الخادم — Perf.gs (آخر ملف) يحسب منها زمن التحميل نفسه قبل بدء أي دالة
+var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 
 /* ============================================================================
    🧹 بروتوكول التنظيف الدوري (يُتبع بعد أي refactor أو استبدال دالة بأخرى)
@@ -31,7 +33,7 @@
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.363";
+var APP_VERSION = "4.364";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2519,7 +2521,7 @@ if (
 
   // 🐛 (V4.48) مسح الـ Cache هنا فقط — بعد كتابة الصف فعليًا بالشيت — انظر التعليق أعلى الدالة
   SpreadsheetApp.flush();
-  clearAllCache_();
+  _cacheBust_('booking');
 
   Logger.log('⏱️ saveBookingToServer(#' + finalId + '): ' + (new Date().getTime() - _perfStart) + 'ms');
   return { success: true, id: finalId };
@@ -2991,7 +2993,7 @@ function toggleApprovalStatus(authToken, id, newStatus) {
   for (var i = 1; i < data.length; i++) {
     if (data[i][1] && data[i][1].toString() === id.toString()) {
       sheet.getRange(i + 1, 1).setValue(newStatus);
-      clearAllCache_(); // امسح الـ Cache بعد التعديل
+      _cacheBust_('booking'); // امسح الـ Cache بعد التعديل
       return { success: true };
     }
   }
@@ -3025,7 +3027,7 @@ function deleteBookingRecord(authToken, id) {
       // 🔧 (V4.50) فرض تطبيق الحذف فوراً قبل مسح الـ Cache — بدونه القراءة التالية قد تعيد الصف
       // من قراءة متزامنة بدأت قبل flush
       SpreadsheetApp.flush();
-      clearAllCache_();
+      _cacheBust_('booking');
 
       logChange_(session.username, "حذف إشعار", id, "-", "-",
         "تم حذف إشعار الوصول رقم " + id + " (" + company + " - " + client + ") نهائياً مع كل تحركاته");
@@ -6208,7 +6210,7 @@ function addNewUser(authToken, newUsername, newPassword, fullName, permissions) 
     permissions || ""
   ]);
 
-  clearAllCache_();
+  _cacheBust_('users');
   return { success: true };
 }
 
@@ -6224,7 +6226,7 @@ function changeUserPassword(authToken, targetRow, newPassword) {
   var sheet = ss.getSheetByName("Users");
   sheet.getRange(targetRow, 2).setValue(hashPassword_(newPassword));
 
-  clearAllCache_();
+  _cacheBust_('users');
   return { success: true };
 }
 
@@ -6240,7 +6242,7 @@ function setUserActiveStatus(authToken, targetRow, isActive) {
   var sheet = ss.getSheetByName("Users");
   sheet.getRange(targetRow, 4).setValue(isActive === true);
 
-  clearAllCache_();
+  _cacheBust_('users');
   return { success: true };
 }
 
@@ -6291,7 +6293,7 @@ function deleteUserAccount(authToken, targetRow, expectedUsername) {
   sheet.deleteRow(targetRow);
 
   logChange_(session.username, "حذف مستخدم", targetUsername, "-", "-", "تم حذف الحساب نهائياً");
-  clearAllCache_();
+  _cacheBust_('users');
 
   return { success: true };
 }
@@ -6304,7 +6306,7 @@ function updateUserPermissions(authToken, targetRow, newPermissions) {
   var sheet = ss.getSheetByName("Users");
   _clearUsersPermsValidation_(sheet); // إزالة قاعدة التحقق القديمة التي ترفض رموز الصلاحيات الجديدة (screen.cap)
   sheet.getRange(targetRow, 5).setValue(newPermissions || "");
-  clearAllCache_();
+  _cacheBust_('users');
   // 🔄 (V4.108) لو الأدمن يعدّل صلاحيات حسابه هو نفسه، حدِّث جلسته النشطة فوراً بنفس التوكن —
   // بدون هذا كانت الجلسة المفتوحة تحتفظ بالصلاحيات القديمة المخزَّنة وقت الدخول (CacheService)
   // فتظل كل الشاشات المُضافة حديثاً تُظهر "لا تملك صلاحية" رغم نجاح الحفظ، حتى يخرج ويدخل من جديد.
@@ -6341,7 +6343,7 @@ function updateUsername(authToken, targetRow, newUsername) {
   var sheet = ss.getSheetByName("Users");
   var lastRow = sheet.getLastRow();
   var oldUsername = String(sheet.getRange(targetRow, 1).getValue() || "").trim();
-  if (oldUsername === newUsername) { clearAllCache_(); return { success: true, unchanged: true }; }
+  if (oldUsername === newUsername) { _cacheBust_('users'); return { success: true, unchanged: true }; }
 
   // منع التكرار مع أي مستخدم آخر
   if (lastRow >= 2) {
@@ -6359,7 +6361,7 @@ function updateUsername(authToken, targetRow, newUsername) {
     var session = validateSession_(authToken);
     logChange_((session && session.username) || "admin", "تعديل اسم مستخدم", oldUsername, "اسم المستخدم", oldUsername, newUsername);
   } catch (e) {}
-  clearAllCache_();
+  _cacheBust_('users');
   return { success: true };
 }
 
@@ -6373,7 +6375,7 @@ function updateUserFullName(authToken, targetRow, newFullName) {
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Users");
   var oldFullName = String(sheet.getRange(targetRow, 3).getValue() || "").trim();
-  if (oldFullName === newFullName) { clearAllCache_(); return { success: true, unchanged: true }; }
+  if (oldFullName === newFullName) { _cacheBust_('users'); return { success: true, unchanged: true }; }
 
   sheet.getRange(targetRow, 3).setValue(newFullName);
   try {
@@ -6381,7 +6383,7 @@ function updateUserFullName(authToken, targetRow, newFullName) {
     var uname = String(sheet.getRange(targetRow, 1).getValue() || "").trim();
     logChange_((session && session.username) || "admin", "تعديل اسم مستخدم", uname, "الاسم الكامل", oldFullName, newFullName);
   } catch (e) {}
-  clearAllCache_();
+  _cacheBust_('users');
   return { success: true };
 }
 
@@ -6618,7 +6620,7 @@ function heartbeatOnline(authToken) {
 function appPulse(authToken, p) {
   var session = requireAuth_(authToken); p = p || {};
   var out = { success: true };
-  if (typeof _audFlushSoft_ === 'function') _audFlushSoft_();   // 🛡️ (V4.345) تفريغ طابور السجل المحصّن بالنبضة
+  // ⚡ (V4.364) لم تعد النبضة تفرّغ طابور السجل المحصّن (كانت تفتح ملفه داخل نداء المستخدم) — يفرّغه مشغّل كل دقيقة audFlushCron وفتح شاشة السجل
   if (p.online) {
     var map = _onlinePrune_();
     map[authToken] = { username: session.username, fullName: session.fullName || session.username, ts: Date.now() };
@@ -7031,6 +7033,26 @@ var ALL_CACHE_KEYS = [
                          // فيظل ربط الوكيل بالشركة (زر إعدادات الوكيل) قديماً في هذه الشاشة حتى تنتهي صلاحية الكاش تلقائياً
 ];
 
+// ⚡ (V4.364) إبطال موجَّه: كل حفظ يمسح مفاتيح الكاش التي تتأثر به فقط (نداء removeAll واحد) بدل مسح كل الكاش — كان مسح الكل
+//   بعد أي حفظ يجبر **كل المستخدمين** على قراءة باردة لكل الشاشات (أكبر سبب للبطء المفاجئ). المسح الكامل باقٍ للعمليات النادرة
+//   الخطرة (إعادة التسمية، الحذف، التأسيس، الاستعادة) وزر «مسح الذاكرة المؤقتة».
+var CACHE_GROUPS_ = {
+  booking: ['bookings_cache', 'movements_cache', 'dashboard_cache', 'trips_list_cache', 'ministry_trip_links_cache', 'notifications_rows_cache', 'visa_bootstrap_cache', 'ministry_bootstrap_cache'],   // التأشيرات تعدّ الباصات من الإشعارات
+  trip: ['trips_list_cache', 'dashboard_cache', 'registry_cache', 'acc_client_stats_idx_v2', 'mf_ref_lists_cache', 'ministry_trip_links_cache', 'dropdowns_cache', 'bookings_cache', 'movements_cache', 'visa_bootstrap_cache', 'ministry_bootstrap_cache'],
+  pilgrims: ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'],
+  users: ['users_cache', 'dropdowns_cache'],
+  company: ['agents_cache', 'dropdowns_cache', 'mf_ref_lists_cache', 'visa_bootstrap_cache', 'ministry_bootstrap_cache'],
+  folder: ['folder_meta_cache']
+};
+function _cacheBust_(group) {
+  var base = CACHE_GROUPS_[group]; if (!base) return clearAllCache_();
+  try {
+    var keys = [];
+    base.forEach(function (key) { keys.push(key, key + '_chunked', key + '_count'); for (var i = 0; i < _CACHE_MAX_CHUNKS_; i++) keys.push(key + '_' + i); });
+    CacheService.getScriptCache().removeAll(keys);
+  } catch (e) { return clearAllCache_(); }
+  return { success: true, group: group };
+}
 function clearAllCache_() {
   try {
     var cache = CacheService.getScriptCache();
@@ -10779,7 +10801,7 @@ function saveCompanySetting(authToken, targetRow, agent, company, logoUrl, licen
     logChange_(session.username, "إضافة شركة جديدة", company, "-", "-", company + " / " + (agent || ""));
   }
 
-  clearAllCache_();
+  _cacheBust_('company');
   return { success: true };
 }
 
@@ -10793,7 +10815,7 @@ function deleteCompanySetting(authToken, targetRow, companyName) {
   sheet.deleteRow(targetRow);
 
   logChange_(session.username, "حذف شركة", companyName || "-", "-", companyName || "-", "-");
-  clearAllCache_();
+  _cacheBust_('company');
   return { success: true };
 }
 
@@ -11309,7 +11331,7 @@ function updateFolderSettingFromUI(authToken, key, newName, newFolderId) {
   logChange_(session.username, "تعديل مجلد Drive", key, "مجلد " + key,
     "-", newName || newFolderId || "-");
   // مسح الـ Cache عند تغيير المجلدات لأن بعض البيانات قد تتأثر
-  clearAllCache_();
+  _cacheBust_('folder');
   return result;
 }
 
@@ -15207,6 +15229,13 @@ function _rowVer_(r) {
   return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, s, Utilities.Charset.UTF_8)).slice(0, 12);
 }
 function _rowConflict_(by, at) { return { success: false, conflict: true, error: '⚠️ عدّل مستخدم آخر هذا السجل بعد فتحك له' + (by ? ' (' + by + (at ? ' — ' + at : '') + ')' : '') + ' — أعد فتحه لترى التعديل ثم أعد تعديلك' }; }
+// 🔒 (V4.364) دفعة منسوخة من إيصال بالحسابات العامة تحمل علامة مخفية ⟦src:gl-رقم القيد⟧ بالبيان (لا تُعرض بالشاشة). تعديل البيان
+//   من الشاشة كان يمحوها ⇒ يعامل المحرك التلقائي الدفعة كدفعة شاشة جديدة فيرحّلها مرة ثانية (AUTO:CP) فوق الإيصال نفسه. تُعاد دائماً.
+function _accKeepSrcTag_(oldDesc, newDesc) {
+  var m = String(oldDesc || '').match(/⟦src:gl-[^⟧]+⟧/);
+  newDesc = String(newDesc || '');
+  return (m && newDesc.indexOf('⟦src:gl-') === -1) ? (newDesc + ' ' + m[0]).trim() : newDesc;
+}
 function saveAccPayment(authToken, p) {
   var isEdit = !!(p && p.id);
   var session = _accPerm_(authToken, isEdit ? 'edit' : 'add');
@@ -15243,6 +15272,7 @@ function saveAccPayment(authToken, p) {
         var oldDesc = String(vals[i][8] || '');
         var cfM = oldDesc.match(/⟦cf:[a-z0-9]+⟧/i);
         var newDesc = desc + (cfM && desc.indexOf('⟦cf:') === -1 ? ' ' + cfM[0] : '');
+        newDesc = _accKeepSrcTag_(oldDesc, newDesc);   // 🔒 (V4.364) علامة نسخة إيصال الحسابات العامة تبقى ⇒ لا ترحيل مزدوج
         // 🕘 (V4.90) القيمة القديمة الحقيقية بدل «-» — لسجل تعديلات شاشة حسابات العملاء
         if (typeof _snapRowTake_ === 'function') _snapRowTake_(ACC_PAY_SHEET, String(p.id), vals[i], 'قبل تعديل دفعة', session.username);   // ⏪ (V4.346)
         var _oldAmt = _accNum_(vals[i][5]) || 0, _oldCurTxt = String(vals[i][6] || 'EGP') === 'SAR' ? 'ريال' : 'جنيه';
@@ -15288,6 +15318,7 @@ function updateAccPaymentsBulk(authToken, client, trip, list) {
     var cfM2 = oldDesc2.match(/⟦cf:[a-z0-9]+⟧/i);
     var newDesc2 = String(p.desc || '').trim();
     if (cfM2 && newDesc2.indexOf('⟦cf:') === -1) newDesc2 += ' ' + cfM2[0];
+    newDesc2 = _accKeepSrcTag_(oldDesc2, newDesc2);   // 🔒 (V4.364)
     sh.getRange(rowIdx, 5, 1, 5).setValues([[String(p.date || ''), amount, currency, '', newDesc2]]);
     n++;
   });
@@ -17997,7 +18028,7 @@ function saveTrip(authToken, targetRow, tripData) {
   // 🔄 مزامنة الرحلة → الإشعار المرتبط (لا توقف الحفظ لو فشلت)
   try { _propagateTripChangesToBooking_(name); } catch (e) { Logger.log('propagate trip→booking failed: ' + e); }
 
-  clearAllCache_(); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
+  _cacheBust_('trip'); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
   _tripSnapTake_(name, session.username, targetRow ? 'تعديل بيانات الرحلة' : 'إنشاء الرحلة');   // ↩️ (V4.343)
   return { success: true, madinahNights: madinahNights, makkahNights: makkahNights };
 }
@@ -18052,7 +18083,7 @@ function _propagateBookingChangesToTrip_(bookingId, bookingData) {
       if (bookingData.arrivalDate)   setT(rowIdx, 'departDate', bookingData.arrivalDate);
       if (bookingData.departureDate) setT(rowIdx, 'returnDate', bookingData.departureDate);
       if (bookingData.direction)     setT(rowIdx, 'direction', bookingData.direction);
-      clearAllCache_();
+      _cacheBust_('trip');
       return;
     }
   }
@@ -18168,7 +18199,7 @@ function _propagateTripChangesToBooking_(tripName) {
       if (_makN !== "" && _makN !== null && _makN !== undefined) setB(rowIdx, 'makkahNights', _makN); // ليالي مكة
       if (_dir) setB(rowIdx, 'direction', _dir); // اتجاه الإقامة
       flushB(rowIdx);   // ⚡ (V4.177) كتابة واحدة مجمَّعة بدل ~22 نداء منفصلاً — انظر تعليق setB
-      clearAllCache_();
+      _cacheBust_('trip');
       return true;
     }
   }
@@ -18283,7 +18314,7 @@ function adoptBookingGroupToTrip(authToken, tripName, group) {
   };
   if (!groups[group]) return { success: false, error: "مجموعة غير معروفة" };
   groups[group]();
-  clearAllCache_();
+  _cacheBust_('trip');
   logChange_(session.username, 'اعتماد بيانات إشعار على رحلة', tripName, group, '-', 'من الإشعار #' + cmp.bookingId);
   return { success: true };
 }
@@ -18678,7 +18709,7 @@ function saveTripDraft(authToken, draft) {
   // 🔄 مزامنة المسودة → الإشعار المرتبط (لا توقف الحفظ لو فشلت)
   try { _propagateTripChangesToBooking_(name); } catch (e) { Logger.log('propagate draft→booking failed: ' + e); }
 
-  clearAllCache_(); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
+  _cacheBust_('trip'); // ضمان تحديث قائمة الرحلات حتى لو لا يوجد إشعار مرتبط
   return { success: true, tripName: name };
 }
 
@@ -19388,7 +19419,7 @@ function saveGlobalPilgrim(authToken, p) {
       });
     });
     logChange_(session.username, "تحديث معتمر (السجل العام)", name, "معتمر", "-", "عدد الصفوف: " + matches.length);
-    clearAllCache_();
+    _cacheBust_('pilgrims');
     return { success: true, existed: true, updatedRows: matches.length };
   }
 
@@ -19405,7 +19436,7 @@ function saveGlobalPilgrim(authToken, p) {
   vals[PILGRIMS_COL_.pid] = 'P' + new Date().getTime().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
   sheet.appendRow(_buildRowByName_(C, width, vals));
   logChange_(session.username, "تسجيل معتمر بالسجل العام", name, "معتمر", "-", "بدون رحلة");
-  clearAllCache_();
+  _cacheBust_('pilgrims');
   return { success: true, existed: false };
 }
 
@@ -19469,7 +19500,7 @@ function assignPilgrimToTrip(authToken, passportOrName, tripName, force) {
     sheet.appendRow(_buildRowByName_(C, width, vals));
   }
   logChange_(session.username, "تخصيص معتمر لرحلة", String(P(template, 'name')), "معتمر", "-", tripName);
-  clearAllCache_();
+  _cacheBust_('pilgrims');
   return { success: true };
 }
 
@@ -19601,7 +19632,7 @@ function movePilgrimBetweenTrips(authToken, ident, fromTrip, toTrip, force, skip
 
   logChange_(session.username, "نقل معتمر بين رحلتين", movedNames.join("، "), "معتمر",
              fromTrip, toTrip + " (عدد: " + movedNames.length + ")");
-  clearAllCache_();
+  _cacheBust_('pilgrims');
   if (!skipAcc) { _tripSnapTake_(fromTrip, session.username, 'نقل معتمر إلى «' + toTrip + '»: ' + movedNames.join('، ')); _tripSnapTake_(toTrip, session.username, 'استلام معتمر من «' + fromTrip + '»: ' + movedNames.join('، ')); }   // ↩️ (V4.343)
   // 💵 (V4.343) حسابات العملاء تتبع النقل تلقائياً (بلا قرار معلّق): انظر _accAfterPilgrimsMoved_
   var accNote = '';
@@ -19677,7 +19708,7 @@ function movePilgrimsBulk(authToken, idents, fromTrip, toTrip, force) {
       }
     } catch (e) { errors.push((ident.name || "?") + ": " + (e.message || e)); }
   });
-  clearAllCache_();
+  _cacheBust_('pilgrims');
   var accNoteB = '';
   if (movedTotal) { _tripSnapTake_(String(fromTrip || '').trim(), bulkSess.username, 'نقل ' + movedTotal + ' معتمر إلى «' + toTrip + '»'); _tripSnapTake_(String(toTrip || '').trim(), bulkSess.username, 'استلام ' + movedTotal + ' معتمر من «' + fromTrip + '»'); }   // ↩️ (V4.343)
   if (movedTotal) { try { accNoteB = _accAfterPilgrimsMoved_(Object.keys(movedClientsAll), String(fromTrip || '').trim(), String(toTrip || '').trim(), bulkSess.username, authToken).note; } catch (eAccB) { Logger.log('acc after bulk move: ' + eAccB.message); } }
@@ -19696,7 +19727,7 @@ function assignPilgrimsBulk(authToken, keys, tripName, force) {
       else if (res && res.error) errors.push(k + ": " + res.error);
     } catch (e) { errors.push(k + ": " + (e.message || e)); }
   });
-  clearAllCache_();
+  _cacheBust_('pilgrims');
   return { success: errors.length === 0, assigned: assigned, errors: errors };
 }
 
@@ -24714,7 +24745,7 @@ function _tgSupSaveMobile_(c) {
       if (_bkId) _tgSupSyncBooking_(_bkId, _supervisorsDisplay_(list));
     } catch (eBk) { Logger.log('تعذر تحديث بيان الإشعار بجوال المشرف: ' + eBk); }
     SpreadsheetApp.flush();
-    try { clearAllCache_(); } catch (eC) {}
+    try { _cacheBust_('trip'); } catch (eC) {}
     logChange_('💠 بوت تليجرام', 'تسجيل جوال مشرف', c.trip, c.name, c.oldMobile || '-', c.mobile);
     return "✅ <b>تم التسجيل</b>\n" + (c.reqLabel ? ("👤 <b>طلب الأمر:</b> " + _tgbnEsc_(c.reqLabel) + "\n") : "") +
       "🧑‍✈️ المشرف: " + _tgbnEsc_(c.name) + "\n🧳 " + _tgbnEsc_(c.trip) + "\n📞 <code>" + _tgbnEsc_(c.mobile) + "</code>";

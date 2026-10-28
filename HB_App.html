@@ -3178,6 +3178,9 @@ window.PERF_ = (function () {
     getBookingNotes:1, getBookingDetails:1, getPortalRequests:1, getPortalBellItems:1,
     getPortalPendingCount:1, getDistinctSalesAgents:1, getDistinctHotels:1, getSuggestedSalesAgent:1, getStatsReportData:1
   };
+  // ⚡ (V4.364) قوالب الطباعة ثابتة طوال الإصدار — تُجلب مرة واحدة بالجلسة ثم من الذاكرة (القياس: 7 نداءات × 4.2 ث)
+  var MEMO_FNS = { getPrintTemplate:1, getConfirmationTemplate:1, getArrivalsReportTemplate:1, getBalancesReportTemplate:1 };
+  var memo = {};
   function jobSig_(fn, args) {
     try { return fn + '|' + JSON.stringify(args); } catch (e) { return null; }
   }
@@ -3202,6 +3205,8 @@ window.PERF_ = (function () {
       try { if (window.PERF_ && job._t0) window.PERF_.add(job.fn, Date.now() - job._t0, kind === 'ok'); } catch (eP) {}   // ⏱️ (V4.360)
       busy = false; inflight = null;
       if (kind === 'ok') {
+        window.lastServerOkTs_ = Date.now();   // ⚡ (V4.364) أي نداء ناجح يمدّد الجلسة بالخادم ⇒ لا حاجة لفحص دوري منفصل
+        if (MEMO_FNS[job.fn] && val) { var ms = jobSig_(job.fn, job.args); if (ms) memo[ms] = val; }
         if (val === null && !job._retried && RETRY_ON_NULL[job.fn]) {
           job._retried = true; queue.unshift(job); pump(); return; // رد فارغ = أعد المحاولة مرة
         }
@@ -3251,6 +3256,10 @@ window.PERF_ = (function () {
         if (typeof prop !== 'string') return undefined;
         return function () {                       // أي اسم آخر = استدعاء دالة خادم → يُدرَج في الطابور
           var args = Array.prototype.slice.call(arguments);
+          if (MEMO_FNS[prop]) {
+            var msig = jobSig_(prop, args);
+            if (msig && memo[msig] !== undefined) { var mv = memo[msig]; setTimeout(function () { try { if (onS) onS(mv); } catch (e) {} }, 0); return; }
+          }
           if (COALESCE_FNS[prop]) {
             var sig = jobSig_(prop, args);
             if (sig) {
@@ -3941,6 +3950,10 @@ function scheduleSessionRefresh_() {
     // فتتراكم على نفس السكربت (Apps Script يسلسل التنفيذات لنفس المستخدم)، ويطول الوقت
     // لعشرات الثواني. الجلسة مغطاة بالفعل بأي نداء خادم فعلي أثناء الاستخدام
     if (document.hidden) return;
+    // ⚡ (V4.364) القياس: checkSession ≈ 4.5 ث وكانت تحجز الطابور أمام ضغطة المستخدم. تُتخطّى لو نجح أي نداء خلال 4 دقائق
+    //   (الجلسة ممدَّدة به أصلاً)، ولا تُرسل إلا والطابور فارغ
+    if (Date.now() - (window.lastServerOkTs_ || 0) < 4 * 60000) return;
+    if (window.gsrIsIdle_ && !gsrIsIdle_()) return;
     // checkSession لا ترمي استثناءً أبدًا (تعيد {ok:false} بهدوء) فلا يلتقطها الاعتراض العام
     // أعلاه — لذلك تُستدعى handleSessionExpired_ هنا صراحةً لنفس مسار الخروج الكامل الموحَّد
     google.script.run.withSuccessHandler(function (res) {
@@ -4000,9 +4013,14 @@ document.addEventListener('click', function (e) {
 // الجلسة بكثير، والمؤقتات (setInterval) تتباطأ أو تتجمّد أثناء الإخفاء في أغلب المتصفحات —
 // فحص فوري عند العودة يلتقط جلسة منتهية بالفعل (أو اقتراب انتهائها) بدل انتظار الدورة
 // التالية للمؤقت المتجمِّد، فيسبق أي ضغطة أولى للمستخدم فور عودته
+var hbHiddenAt_ = 0;
 document.addEventListener('visibilitychange', function () {
-  if (document.hidden || !currentSessionToken) return;
+  if (document.hidden) { hbHiddenAt_ = Date.now(); return; }
+  if (!currentSessionToken) return;
   if (idleCheckTimer_) checkIdleState_();
+  // ⚡ (V4.364) لا فحص عند كل عودة للتبويب (تبديل التطبيقات على الجوال كان يرسل نداءً كل مرة) — فقط بعد غياب دقيقتين فأكثر
+  //   ولم ينجح نداء خلال آخر دقيقتين
+  if (Date.now() - (hbHiddenAt_ || 0) < 2 * 60000 || Date.now() - (window.lastServerOkTs_ || 0) < 2 * 60000) return;
   google.script.run.withSuccessHandler(function (res) {
     if (!res || !res.ok) handleSessionExpired_();
     else if (res.sessionMinutes) SESSION_MINUTES_ = res.sessionMinutes;

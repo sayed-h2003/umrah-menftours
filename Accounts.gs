@@ -4565,6 +4565,69 @@ function glCpDelete(authToken, payIds) {
   } finally { _glUnlock_(lock); }
 }
 
+/* 🔎 (V4.364) دفعات عملاء منسوخة من إيصال بالحسابات العامة فقدت علامتها المخفية ⟦src:gl-…⟧ (تعديل البيان من الشاشة قبل V4.364)
+   فرحّلها المحرك التلقائي مرة ثانية كقيد AUTO:CP فوق الإيصال نفسه ⇒ رصيد العميل مخصوم مرتين.
+   الكشف: دفعة بلا علامة لها قيد AUTO:CP مرحّل + إيصال (قيد غير تلقائي) على حساب نفس العميل بنفس التاريخ والمبلغ والعملة
+   لا تحمل علامته أي دفعة أخرى. الإصلاح: إعادة العلامة للدفعة ⇒ المزامنة تُلغي القيد المكرر (AUTO:CP) وتبقى الدفعة نسخة الإيصال. */
+function _glCpSrcLostFind_() {
+  var accs = _glAccounts_().map, cliAcc = {};
+  Object.keys(accs).forEach(function (c) { var a = accs[c]; if (a && a.kind === 'client' && a.link) cliAcc[c] = a.link; });
+  var ents = _glRows_('entries'), byId = {}, autoCp = {};
+  ents.forEach(function (r) {
+    var e = _glEntryObj_(r); if (e.status !== GL_ST_POSTED_) return;
+    byId[e.id] = e;
+    var m = /^AUTO:CP:(.+)$/.exec(e.sourceKey); if (m) autoCp[m[1]] = e.id;
+  });
+  var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS), last = sh.getLastRow(), data = last >= 2 ? sh.getRange(2, 1, last - 1, ACC_PAY_HEADERS.length).getValues() : [];
+  var tagged = {};   // رقم القيد|العميل ⇒ له نسخة بعلامتها
+  data.forEach(function (r) { var m = /⟦src:gl-([^⟧]+)⟧/.exec(_glStr_(r[8])); if (m) tagged[m[1] + '|' + _glStr_(r[1])] = 1; });
+  var vk = {};   // العميل|التاريخ|المبلغ|العملة ⇒ [إيصالات]
+  _glRows_('lines').forEach(function (r) {
+    var l = _glLineObj_(r), e = byId[l.entryId]; if (!e || /^AUTO:/.test(e.sourceKey) || !cliAcc[l.account]) return;
+    var ca = _glCpAmtOf_(l); if (!ca.amt) return;
+    var k = cliAcc[l.account] + '|' + e.date + '|' + _glR2_(ca.amt) + '|' + ca.cur;
+    (vk[k] = vk[k] || []).push(e);
+  });
+  var out = [], used = {};
+  data.forEach(function (r, i) {
+    var pid = _glStr_(r[0]), desc = _glStr_(r[8]);
+    if (!pid || /⟦(src|cf):/.test(desc) || !autoCp[pid] || _glStr_(r[3]) === 'تحويل') return;
+    var k = _glStr_(r[1]) + '|' + _glDate_(r[4]) + '|' + _glR2_(_glNum_(r[5])) + '|' + (_glStr_(r[6]) || 'EGP');
+    var cands = (vk[k] || []).filter(function (e) { return !tagged[e.id + '|' + _glStr_(r[1])] && !used[e.id + '|' + _glStr_(r[1])]; });
+    if (!cands.length) return;
+    var v = cands[0]; used[v.id + '|' + _glStr_(r[1])] = 1;
+    out.push({ pid: pid, row: i + 2, client: _glStr_(r[1]), trip: _glStr_(r[2]), date: _glDate_(r[4]), amount: _glNum_(r[5]), cur: _glStr_(r[6]) || 'EGP', desc: desc,
+      entryId: v.id, voucherNo: _glStr_(v.ref), voucherDesc: v.desc, autoEntry: autoCp[pid] });
+  });
+  return out;
+}
+function glCpSrcLostScan(authToken) {
+  _glAdminPerm_(authToken);
+  return { success: true, rows: _glCpSrcLostFind_() };
+}
+function glCpSrcLostFix(authToken, pids) {
+  var session = _glAdminPerm_(authToken), user = session.username, want = {};
+  (pids || []).forEach(function (p) { want[_glStr_(p)] = 1; });
+  var lock = _glLock_(), fixed = [], res = null; lock.waitLock(60000);
+  try {
+    var list = _glCpSrcLostFind_().filter(function (x) { return want[x.pid]; });
+    if (!list.length) return { success: true, fixed: 0, voided: 0 };
+    if (typeof _snapPreRisk_ === 'function') { try { _snapPreRisk_('إصلاح دفعات رُحِّلت مرتين', user); } catch (eS) {} }
+    var sh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
+    list.forEach(function (x) {
+      var cell = sh.getRange(x.row, 1, 1, 9), v = cell.getValues()[0];
+      if (_glStr_(v[0]) !== x.pid) return;   // تغيّر موضع الصف — يُتخطّى بأمان
+      if (typeof _snapRowTake_ === 'function') _snapRowTake_(ACC_PAY_SHEET, x.pid, sh.getRange(x.row, 1, 1, ACC_PAY_HEADERS.length).getValues()[0], 'قبل إصلاح الترحيل المزدوج', user);
+      sh.getRange(x.row, 9).setValue((_glStr_(v[8]) + ' ⟦src:gl-' + x.entryId + '⟧').trim());
+      fixed.push(x);
+    });
+    logChange_(user, 'إصلاح دفعات رُحِّلت مرتين', 'GL:AUTO:CP', fixed.length + ' دفعة', '-', fixed.map(function (x) { return x.pid + '→' + x.entryId + ' (يُلغى ' + x.autoEntry + ')'; }).join('، ').slice(0, 1500));
+    // المزامنة تُلغي قيود AUTO:CP التي لم يعد مصدرها دفعة شاشة (الدفعة صارت نسخة الإيصال) — إصلاح صريح من المدير ⇒ مباشرة
+    var only = {}; fixed.forEach(function (x) { only['AUTO:CP:' + x.pid] = 1; });
+    if (fixed.length) try { res = _glAutoRun_(user, false, { bypass: true, onlyKeys: only, scope: 'cp' }); } catch (eA) { Logger.log('srclost sync: ' + eA.message); }
+  } finally { _glUnlock_(lock); }
+  return { success: true, fixed: fixed.length, voided: res ? (res.voided || 0) : 0, pending: res ? (res.pending || 0) : 0 };
+}
 // 🔁 إيصال استلام/صرف على حساب عميل بالحسابات العامة ⇒ دفعة بشاشة حسابات العملاء (عامة، أو على الرحلة لو حُددت بالإيصال
 // وللعميل بنود بها) بعلامة مخفية ⟦src:gl-رقم القيد⟧ — تُحدَّث مع تعديل الإيصال وتُحذف بإلغائه/حذفه، ولا تُقيَّد مرة ثانية
 function _glSyncVoucherPays_(entryId, user, pre) {

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.363  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.364  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -6877,7 +6877,7 @@ function _pulseStart_() {
 function _pulseTick_(force) {
   if (!window.authToken || _PULSE_.busy) return;
   if (!_tsShouldPulse_(force)) return;   // 🗂️ (V4.350) تبويب واحد فقط (القائد) ينبض ويبث النتيجة للبقية
-  var now = Date.now(), gap = _tsAnyVisible_() ? 60000 : 110000;
+  var now = Date.now(), gap = _tsAnyVisible_() ? 90000 : 180000;   // ⚡ (V4.364) كانت 60/110 ث — كل نبضة ≈ 6 ث تشغيل (القياس)
   if (force ? (now - _PULSE_.last < 8000 && _PULSE_.notifVer) : (now - _PULSE_.last < gap)) return;
   _PULSE_.last = now; _PULSE_.busy = true;
   var vis = _tsAnyVisible_(), bell = document.getElementById('notifBellWrap');
@@ -8423,7 +8423,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.363";
+var CLIENT_APP_VERSION = "4.364";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -24415,8 +24415,30 @@ var _auditFilterDebounce = null;
 
 // تُستدعى من كل حقول الفلترة — نصية بـdebounce، والباقي (قوائم/تواريخ/شيك بوكس) فوري
 function applyAuditLogFilters() {
+  // ⚡ (V4.364) كان كل حرف يُطلق إعادة تحميل كاملة من الخادم بعد 250ms (القياس: 23 نداءً × 7 ث). الآن: تصفية فورية لما حُمِّل
+  //   بالمتصفح، ثم نداء واحد للخادم بعد توقف الكتابة 1.2 ث (لجلب ما قد يكون خارج آخر 500 سطر)
+  _auditLocalFilter_();
   clearTimeout(_auditFilterDebounce);
-  _auditFilterDebounce = setTimeout(loadAuditLogTable, 250);
+  _auditFilterDebounce = setTimeout(loadAuditLogTable, 1200);
+}
+var _AUDIT_LAST_ = null, _AUDIT_LAST_KEY_ = '';
+function _auditBaseKey_() {   // الفلاتر التي تُطبَّق بالخادم فقط — النسخة المحلية صالحة ما دامت لم تتغير
+  var v = function (id) { var el = document.getElementById(id); return el ? (el.type === 'checkbox' ? String(el.checked) : String(el.value || '').trim()) : ''; };
+  return [v('auditFilterScreen'), v('auditFilterFromDate'), v('auditFilterToDate'), v('auditFilterShowLoginLogout')].join('|');
+}
+function _auditLocalFilter_() {
+  if (!_AUDIT_LAST_ || _AUDIT_LAST_KEY_ !== _auditBaseKey_()) return;
+  var v = function (id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+  var ent = v('auditFilterEntity'), rid = v('auditFilterRecordId'), usr = v('auditFilterUsername'), act = v('auditFilterAction');
+  var rows = _AUDIT_LAST_.filter(function (e) {
+    if (rid && String(e.recordId || '').indexOf(rid) < 0) return false;
+    if (usr && String(e.username || '').indexOf(usr) < 0) return false;
+    if (act && String(e.action || '').indexOf(act) < 0) return false;
+    if (ent && [e.recordId, e.field, e.oldValue, e.newValue].join(' ').indexOf(ent) < 0) return false;
+    return true;
+  });
+  var tbody = document.getElementById('auditLogTableBody'); if (!tbody) return;
+  tbody.innerHTML = rows.length ? _auditRowsHtml_(rows, { global: true }) : '<tr><td colspan="6" class="text-center text-muted py-5">⏳ لا مطابقة فيما حُمِّل — جارٍ البحث بالخادم…</td></tr>';
 }
 
 // 🔗 خريطة الفلاتر المتتالية: كل شاشة تُظهر قائمة عملياتها الخاصة
@@ -24778,7 +24800,6 @@ function snapAccRestore_(delId, btn) {
 }
 function loadAuditLogTable() {
   var tbody = document.getElementById('auditLogTableBody');
-  tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">⏳ جاري التحميل...</td></tr>';
   _ensureAuditEntityList(); // تعبئة قائمة الاقتراح (معتمرون/جوازات/رحلات) مرة واحدة
 
   var _entityEl = document.getElementById('auditFilterEntity');
@@ -24795,9 +24816,13 @@ function loadAuditLogTable() {
 
   renderAuditActiveFilters(filters);
   _highlightAuditFilters();
+  if (_AUDIT_LAST_ && _AUDIT_LAST_KEY_ === _auditBaseKey_()) _auditLocalFilter_(); else tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">⏳ جاري التحميل...</td></tr>';
+  var _reqN = (loadAuditLogTable._n = (loadAuditLogTable._n || 0) + 1);
 
   google.script.run
     .withSuccessHandler(function (rows) {
+      if (_reqN !== loadAuditLogTable._n) return;   // ردّ قديم تجاوزه طلب أحدث
+      if (!filters.entity && !filters.recordId && !filters.username && !filters.action) { _AUDIT_LAST_ = rows || []; _AUDIT_LAST_KEY_ = _auditBaseKey_(); }
       if (!rows || !rows.length) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">لا توجد سجلات مطابقة</td></tr>';
         return;
@@ -48600,11 +48625,11 @@ function openHotelsApp_() {
   }).hotelsHandoff(window.authToken);
 }
 // ⚡ (V4.252) نداءات القراءة فقط — أي نداء غيرها (حفظ/ترحيل/حذف/مزامنة…) يمسح كاش الكشوف بالواجهة ويُسخّن كاش الخادم
-var GL_RO_RX_ = /^gl(BankPending|PartyBalances|Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbSeasonPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk)$/;
+var GL_RO_RX_ = /^gl(BankPending|PartyBalances|Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbSeasonPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk|AccountDeletePreview|BotLinkList|BotLinkPend|CpSrcLostScan|DupScan|FindDupEntryIds|FindOrphanEntries|OpeningInfo|ReconLast|AccDeletedList)$/;
 function glDataChanged_() {
   GL._chg = (GL._chg || 0) + 1;   // 📑 (V4.324) تبويب حسابات مُوقَف يُحدَّث عند العودة له لو تغيّرت البيانات
   GL._stCache = {};
-  clearTimeout(GL._warmT); GL._warmT = setTimeout(function () { try { google.script.run.withSuccessHandler(function () {}).withFailureHandler(function () {}).glWarm(window.authToken); } catch (e) {} }, 400);
+  // ⚡ (V4.364) أُلغي نداء glWarm بعد كل حفظ: القياس أظهر 11 نداءً × 6 ث تتزاحم مع إعادة التحميل التي تليه مباشرة (وهي نفسها تبني الكاش)
 }
 function glRun(fn, args, ok, fail) {
   if (!GL_RO_RX_.test(fn)) { var ok0 = ok; ok = function (res) { glDataChanged_(); if (res && res.mirQ) glMirFlushSoon_(); if (ok0) ok0(res); }; }
@@ -53912,6 +53937,7 @@ function perfRender_(r) {
       '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="perfLoad_()">↺ تحديث</button>' +
       '<label class="form-check form-switch small mb-0 ms-auto"><input class="form-check-input" type="checkbox" ' + (r.on ? 'checked' : '') + ' onchange="perfToggle_(this)"> القياس مفعّل</label></div>' +
     '<div class="text-muted small mb-2">الزمن كما يشعر به المستخدم (من الضغط حتى وصول الرد) — من ' + (r.reports || 0) + ' دفعة قياس لـ ' + (r.users || 0) + ' مستخدم. الدوال المقيسة على الخادم: ' + (r.wrapped || 0) + '.</div>' +
+    (r.boot && r.boot.n ? '<div class="alert alert-light border small py-2 mb-2">🚀 <b>زمن تحميل كود الخادم</b> قبل أن تبدأ أي دالة (عيّنة من ' + r.boot.n + ' تنفيذ، آخر 6 ساعات): المتوسط <span class="' + _perfCls_(r.boot.avg) + '">' + _perfMs_(r.boot.avg) + '</span> · الأقصى ' + _perfMs_(r.boot.max) + ' — جزء من الزمن الثابت لكل نداء.</div>' : '') +
     '<h6 class="fw-bold mt-2">🐢 الأكثر استهلاكاً للوقت (المرات × الزمن)</h6>' + tbl(r.byTotal, colsC, 'لا توجد قياسات بعد — تظهر بعد دقائق من الاستخدام.') +
     '<h6 class="fw-bold">⏳ الأبطأ في المتوسط (3 مرات على الأقل)</h6>' + tbl(r.byAvg, colsC, '—') +
     '<h6 class="fw-bold">🖥️ الخادم — نداءات تجاوزت ' + _perfMs_(r.slowMs) + ' (آخر 6 ساعات)</h6>' + tbl(r.server, colsS, 'لا نداءات بطيئة مسجّلة.');
@@ -54048,6 +54074,7 @@ function glCpDlg() {
       '<span class="text-muted small">حدِّد الحساب أمام الدفعة، علّم المربع، ثم:</span>' +
       (GL.can.edit ? '<button class="btn btn-success btn-sm fw-bold ms-auto" onclick="glCpSave_(this)">💾 حفظ توجيه المحدد</button>' +
         '<button class="btn btn-outline-danger btn-sm" onclick="glCpDel_(this)">🗑️ حذف المحدد</button><button class="btn btn-outline-dark btn-sm" onclick="glDupDlg_()">🔍 المكرر والمتقابل</button>' : '') +
+      (GL.isAdmin ? '<button class="btn btn-outline-danger btn-sm" onclick="glSrcLostDlg_()" title="دفعات منسوخة من إيصال فقدت علامتها فرُحِّلت مرة ثانية">🔁 رُحِّلت مرتين؟</button>' : '') +
       '</div><div id="glCpBox"></div>';
     GL._cpRows = rows;
     glDlg('💵 توجيه دفعات العملاء (نقدية تحت التسوية)', h, 1120); glCpDraw_();
@@ -54900,6 +54927,35 @@ function glHbDeleteSelected_(btn) {
       showToast('🗑️ حُذفت ' + res.n + ' دفعة'); glHbLoad(true);   // أرقام الصفوف تتغير بعد الحذف ⇒ إعادة قراءة
     }, function (e) { btn.disabled = false; _showPopup(e.message || e, 'error'); });
   }, { title: 'حذف دفعات', icon: '🗑️', yesLabel: 'حذف', danger: true });
+}
+/* 🔁 (V4.364) دفعات عملاء منسوخة من إيصال فقدت علامتها (تعديل البيان قبل V4.364) فرُحِّلت مرة ثانية كقيد تلقائي — كشف وإصلاح (للمدير) */
+function glSrcLostDlg_() {
+  glDlg('🔁 دفعات رُحِّلت مرتين (فقدت ربطها بالإيصال)', '<div id="glSlBox" class="text-muted small py-4 text-center">⏳ جارٍ الفحص…</div>', 1100);
+  glRun('glCpSrcLostScan', [], function (res) {
+    var b = document.getElementById('glSlBox'); if (!b) return;
+    GL._sl = res.rows || [];
+    if (!GL._sl.length) { b.innerHTML = '<div class="text-success fw-bold py-3">✅ لا توجد دفعات مرحّلة مرتين.</div>'; return; }
+    b.className = '';
+    b.innerHTML = '<div class="gl-note" style="font-size:12.5px;">كل دفعة هنا نسخة من إيصال بالحسابات العامة، فقدت علامة الربط عند تعديل بيانها من شاشة العميل، فرحّلها البرنامج مرة ثانية كقيد تلقائي ⇒ <b>الرصيد مخصوم مرتين</b>. «إصلاح» يعيد الربط بالإيصال ويُلغي القيد المكرر (تؤخذ نقطة استعادة قبله).</div>' +
+      '<table class="table table-sm" style="font-size:12.5px;"><thead><tr><th><input type="checkbox" checked onchange="document.querySelectorAll(\'._slChk\').forEach(function(c){c.checked=this.checked}.bind(this))"></th><th>العميل / الرحلة</th><th>التاريخ</th><th>المبلغ</th><th>بيان الدفعة</th><th>الإيصال الأصلي</th><th>القيد المكرر (يُلغى)</th></tr></thead><tbody>' +
+      GL._sl.map(function (x) {
+        return '<tr><td><input type="checkbox" class="_slChk" value="' + glEsc(x.pid) + '" checked></td><td>' + glEsc(x.client) + '<div class="text-muted small">' + glEsc(x.trip) + '</div></td><td class="gl-latin">' + glEsc(x.date) +
+          '</td><td class="gl-latin fw-bold">' + glFmt(x.amount) + ' ' + glEsc(x.cur) + '</td><td>' + glEsc(x.desc) + '</td><td class="gl-latin">' + glEsc(x.entryId) + (x.voucherNo ? ' · ' + glEsc(x.voucherNo) : '') +
+          '<div class="text-muted small">' + glEsc(x.voucherDesc) + '</div></td><td class="gl-latin text-danger">' + glEsc(x.autoEntry) + '</td></tr>';
+      }).join('') + '</tbody></table><div class="text-end"><button class="btn btn-danger btn-sm fw-bold" onclick="glSrcLostFix_(this)">🔧 إصلاح المحدد</button></div>';
+  }, function (e) { var b = document.getElementById('glSlBox'); if (b) b.innerHTML = '<div class="text-danger">' + glEsc(e.message || e) + '</div>'; });
+}
+function glSrcLostFix_(btn) {
+  var ids = Array.prototype.map.call(document.querySelectorAll('._slChk:checked'), function (c) { return c.value; });
+  if (!ids.length) { showToast('حدّد دفعة واحدة على الأقل'); return; }
+  askConfirm_('إصلاح ' + ids.length + ' دفعة: ربطها بإيصالها وإلغاء القيد التلقائي المكرر لكل منها؟', function () {
+    btn.disabled = true; btn.textContent = '⏳';
+    glRun('glCpSrcLostFix', [ids], function (r) {
+      _showPopup('✅ أُصلحت ' + r.fixed + ' دفعة' + (r.voided ? '\nأُلغي ' + r.voided + ' قيداً مكرراً' : '') + (r.pending ? '\n' + r.pending + ' بانتظار الاعتماد' : ''), 'success');
+      try { glAfterChange(); } catch (e0) {}
+      glSrcLostDlg_();
+    }, function (e) { btn.disabled = false; btn.textContent = '🔧 إصلاح المحدد'; _showPopup(e.message || e, 'error'); });
+  }, { title: 'إصلاح الترحيل المزدوج', danger: false, yesLabel: 'نعم، أصلِح' });
 }
 /* 🔍 (V4.262) الدفعات المكررة والمتقابلة — مراجعة موحّدة ومقاصة/حذف بضغطة */
 function glDupDlg_() {

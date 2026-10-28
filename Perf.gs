@@ -53,6 +53,18 @@ function _perfInstall_() {
   return n;
 }
 try { _perfInstall_(); } catch (ePI) {}
+// 🚀 (V4.364) زمن تحميل كود الخادم: من أول سطر في Code.gs حتى هنا (آخر ملف) — يُدفع مع كل تنفيذ قبل أي دالة.
+// عيّنة 1 من 5 تنفيذات (أو كل تحميل ≥ 1.5 ث) في حلقة كاش مستقلة perf_b_N، لتبقى الكلفة ≈ صفر.
+var PERF_BOOT_RING_ = 60, _PERF_BOOT_MS_ = -1;
+try {
+  if (typeof __PERF_T0__ === 'number') {
+    _PERF_BOOT_MS_ = Date.now() - __PERF_T0__;
+    if (_PERF_BOOT_MS_ >= 1500 || Math.random() < 0.2) {
+      var _pbc_ = CacheService.getScriptCache();
+      if (_pbc_.get('perf_off') !== '1') _pbc_.put('perf_b_' + Math.floor(Math.random() * PERF_BOOT_RING_), JSON.stringify({ ms: _PERF_BOOT_MS_, at: Date.now() }), 21600);
+    }
+  }
+} catch (ePB) {}
 
 // ---------- من المتصفح: دفعة قياسات ----------
 function _perfSession_(token) {
@@ -122,9 +134,14 @@ function perfTop(token, opts) {
   });
   var server = Object.keys(srv).map(function (k) { var a = srv[k]; a.avg = Math.round(a.tot / a.n); return a; })
     .sort(function (a, b) { return b.tot - a.tot; }).slice(0, 30);
+  var bk = [], boot = { n: 0, avg: 0, max: 0 }, bt = 0;
+  for (var j = 0; j < PERF_BOOT_RING_; j++) bk.push('perf_b_' + j);
+  var gotB = {}; try { gotB = CacheService.getScriptCache().getAll(bk) || {}; } catch (e) {}
+  Object.keys(gotB).forEach(function (k) { var o = null; try { o = JSON.parse(gotB[k]); } catch (e) {} if (!o || !(o.ms >= 0)) return; boot.n++; bt += o.ms; boot.max = Math.max(boot.max, o.ms); });
+  if (boot.n) boot.avg = Math.round(bt / boot.n);
   var installed = 0; try { installed = (typeof globalThis !== 'undefined' && globalThis.__perfInstalled__) || 0; } catch (e) {}
   return { success: true, days: days, byTotal: byTot, byAvg: byAvg, server: server, reports: nRows, users: Object.keys(users).length,
-    slowMs: PERF_SLOW_MS_, wrapped: installed, on: PropertiesService.getScriptProperties().getProperty(PERF_PROP_OFF_) !== '1' };
+    slowMs: PERF_SLOW_MS_, wrapped: installed, boot: boot, on: PropertiesService.getScriptProperties().getProperty(PERF_PROP_OFF_) !== '1' };
 }
 function perfSetOn(token, on) {
   var s = _perfSession_(token);
