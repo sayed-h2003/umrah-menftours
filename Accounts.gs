@@ -1110,6 +1110,158 @@ function glAccountDelete(authToken, code, confirmText, sig) {
       voidRules: vdKeys.length, tomb: P.tombKeys.length, refs: refN, balancesDelta: delta, pendingCount: _glCpPending_(), mirQ: _GL_MIRQ_N_ };
   } finally { _glUnlock_(lock); }
 }
+/* ↩️ (V4.362) استعادة حساب حُذف من الدليل مع قيوده — تعكس glAccountDelete من نسختها بشيت GL_Deleted (برقم العملية DEL-…):
+   الحساب بنفس الكود، القيود والأسطر بنفس أرقامها، الأسطر الافتتاحية المحوَّلة لـ34 تعود لحسابها، المراجع الجانبية (الاستحقاق،
+   المرفقات، توجيه الدفعات، ربط الحجوزات ومراجعة دفعاتها، بنود الاعتماد، قواعد التعديل اليدوي)، ربط شيت العهدة/الخزينة واسمه،
+   حساب اتفاقيات الإعاشة، نسخ الدفعات بحسابات العملاء والوكلاء، البيانات المحاسبية لدفعات برنامج الحجوزات — ثم يُلغى تقاعد الكود
+   وعلامات «الطرف محذوف» وقواعد «الإلغاء اليدوي» التي أضافها الحذف. للمدير فقط · معاينة أولاً (dry) · تُرفض عند التعارض. */
+function _glDelOps_(delId) {
+  var sh = _glSheet_('deleted'), last = sh.getLastRow(), out = { hdr: null, hdrRow: 0, ops: [] };
+  if (last < 2) return out;
+  sh.getRange(2, 1, last - 1, 8).getValues().forEach(function (r, i) {
+    if (_glStr_(r[0]) !== delId) return;
+    var data = null; try { data = JSON.parse(String(r[4] || 'null')); } catch (e) { data = null; }
+    if (_glStr_(r[1]) === 'HDR') { out.hdr = { state: _glStr_(r[2]), sum: data || {}, by: _glStr_(r[6]), at: _glStr_(r[7]), code: _glStr_(r[5]) }; out.hdrRow = i + 2; return; }
+    out.ops.push({ kind: _glStr_(r[1]), key: _glStr_(r[2]), row: +r[3] || 0, data: data });
+  });
+  return out;
+}
+function glAccDeletedList(authToken) {
+  _glAdminPerm_(authToken);
+  var sh = _glSheetR_('deleted'), last = sh.getLastRow(), out = [];
+  if (last >= 2) sh.getRange(2, 1, last - 1, 8).getValues().forEach(function (r) {
+    if (_glStr_(r[1]) !== 'HDR') return;
+    var s = {}; try { s = JSON.parse(String(r[4] || '{}')) || {}; } catch (e) {}
+    out.push({ delId: _glStr_(r[0]), state: _glStr_(r[2]), code: _glStr_(r[5]), name: _glStr_(s.name), kind: _glStr_(s.kind), deleted: +s.deleted || 0, lines: +s.lines || 0,
+      moved: +s.moved || 0, voidN: +s.voidKeysN || 0, by: _glStr_(r[6]), at: _glStr_(r[7]), exists: !!_glAccounts_().map[_glStr_(r[5])] });
+  });
+  return { success: true, rows: out.reverse() };
+}
+function glAccountRestore(authToken, delId, dry) {
+  var session = _glAdminPerm_(authToken), user = session.username;
+  delId = _glStr_(delId);
+  if (!/^DEL-/.test(delId)) throw new Error('رقم عملية الحذف غير صحيح');
+  var lock = _glLock_(); lock.waitLock(60000);
+  try {
+    _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
+    var D = _glDelOps_(delId);
+    if (!D.hdr) throw new Error('لا توجد عملية حذف بهذا الرقم في GL_Deleted');
+    if (/مُستعاد/.test(D.hdr.state)) throw new Error('هذه العملية استُعيدت من قبل (' + D.hdr.state + ')');
+    if (D.hdr.state !== 'تم') throw new Error('عملية الحذف لم تكتمل (الحالة: ' + (D.hdr.state || '؟') + ') — راجع المدير');
+    var code = D.hdr.code, sum = D.hdr.sum || {}, ops = D.ops;
+    var of = function (kind, key) { return ops.filter(function (o) { return o.kind === kind && o.key === key && Array.isArray(o.data); }); };
+    var accRows = of('ROW', 'accounts'), entRows = of('ROW', 'entries'), lineRows = of('ROW', 'lines'), moveLines = of('MOVE', 'lines');
+    var conflicts = [];
+    if (!accRows.length) conflicts.push('صف الحساب نفسه غير موجود بالنسخة الاحتياطية');
+    if (_glAccounts_().map[code]) conflicts.push('يوجد الآن حساب بنفس الكود ' + code);
+    var curE = {}; _glRows_('entries').forEach(function (r) { curE[_glStr_(r[0])] = 1; });
+    entRows.forEach(function (o) { if (curE[_glStr_(o.data[0])]) conflicts.push('رقم القيد ' + _glStr_(o.data[0]) + ' مستخدم الآن لقيد آخر'); });
+    var parent = accRows.length ? _glStr_(accRows[0].data[3]) : '';
+    if (parent && !_glAccounts_().map[parent]) conflicts.push('الحساب الأب ' + parent + ' لم يعد موجوداً');
+    // الأسطر الافتتاحية المحوَّلة: نجد كل سطر بمكانه الحالي (القيد + رقم السطر + الحساب 34)
+    var lRows = _glRowsW_('lines'), lIdx = {};
+    lRows.forEach(function (r, i) { lIdx[_glStr_(r[0]) + '#' + _glStr_(r[1]) + '#' + _glStr_(r[4])] = i; });
+    var moveFix = [], moveMiss = [];
+    moveLines.forEach(function (o) {
+      var i = lIdx[_glStr_(o.data[0]) + '#' + _glStr_(o.data[1]) + '#' + GL_ACC_OPEN_DIFF_];
+      if (i === undefined) moveMiss.push(_glStr_(o.data[0]) + ' سطر ' + _glStr_(o.data[1])); else moveFix.push({ i: i, row: o.data });
+    });
+    var plan = { delId: delId, code: code, name: _glStr_(sum.name), entries: entRows.length, lines: lineRows.length, moved: moveFix.length, movedMissing: moveMiss,
+      side: {}, voidRules: 0, conflicts: conflicts, at: D.hdr.at, by: D.hdr.by };
+    ops.forEach(function (o) { if (o.kind !== 'HDR' && ['accounts', 'entries', 'lines'].indexOf(o.key) < 0) plan.side[o.key] = (plan.side[o.key] || 0) + 1; });
+    var om = _glOvrMap_(), vdOwn = Object.keys(om).filter(function (k) { return om[k].vd && String(om[k].vd.note || '').indexOf(delId) >= 0; });
+    plan.voidRules = vdOwn.length;
+    if (dry || conflicts.length) { plan.success = true; plan.dry = true; plan.ok = !conflicts.length; return plan; }
+    if (typeof _snapPreRisk_ === 'function') { try { _snapPreRisk_('قبل استعادة الحساب المحذوف ' + code + ' (' + delId + ')', user); } catch (eS) {} }
+    var app = function (key, rows) {   // إلحاق صفوف بعرض الشيت المعرّف
+      if (!rows.length) return;
+      var sh = _glSheet_(key), W = GL_SHEETS_[key].headers.length;
+      sh.getRange(sh.getLastRow() + 1, 1, rows.length, W).setValues(rows.map(function (r) { var x = r.slice(0, W); while (x.length < W) x.push(''); return x; }));
+    };
+    var byRow = function (a, b) { return a.row - b.row; };
+    // 1) الحساب ثم رؤوس القيود ثم الأسطر (والأسطر المحوَّلة تعود لحسابها)
+    app('accounts', accRows.map(function (o) { return o.data; }));
+    app('entries', entRows.sort(byRow).map(function (o) { return o.data; }));
+    if (moveFix.length) {
+      var lSh = _glSheet_('lines'), W = GL_SHEETS_.lines.headers.length;
+      moveFix.forEach(function (m) { var x = m.row.slice(0, W); while (x.length < W) x.push(''); lSh.getRange(m.i + 2, 1, 1, W).setValues([x]); });
+    }
+    app('lines', lineRows.sort(byRow).map(function (o) { return o.data; }));
+    // 2) المراجع الجانبية: الصفوف المحذوفة تُلحق، والمعدَّلة تعود لأصلها بمفتاحها
+    ['bankdue', 'attach', 'cpdir', 'pending'].forEach(function (k) { app(k, of('ROW', k).map(function (o) { return o.data; })); });
+    ['hbmap', 'hbpay'].forEach(function (k) {
+      var moved = of('MOVE', k), dels = of('ROW', k);
+      if (moved.length) {
+        var sh = _glSheet_(k), W = GL_SHEETS_[k].headers.length, cur = _glRowsWRaw_(k), at = {};
+        cur.forEach(function (r, i) { at[_glStr_(r[0]) + '|' + (k === 'hbmap' ? _glStr_(r[1]) : '')] = i; });
+        moved.forEach(function (o) {
+          var i = at[_glStr_(o.data[0]) + '|' + (k === 'hbmap' ? _glStr_(o.data[1]) : '')], x = o.data.slice(0, W); while (x.length < W) x.push('');
+          if (i === undefined) dels.push(o); else sh.getRange(i + 2, 1, 1, W).setValues([x]);
+        });
+      }
+      app(k, dels.map(function (o) { return o.data; }));
+    });
+    // قواعد التعديل اليدوي: تُحذف قواعد «الإلغاء اليدوي» التي أضافها الحذف، وتعود القواعد التي عُدِّلت لأصلها
+    var ovrOrig = of('MOVE', 'autoovr'), ovrKeys = {};
+    ovrOrig.forEach(function (o) { ovrKeys[_glStr_(o.data[0])] = 1; });
+    vdOwn.forEach(function (k) { ovrKeys[k] = 1; });
+    if (Object.keys(ovrKeys).length) {
+      var oSh = _glSheet_('autoovr'), OW = GL_SHEETS_.autoovr.headers.length, cur = _glRowsWRaw_('autoovr');
+      var keep = cur.filter(function (r) { return !ovrKeys[_glStr_(r[0])]; }).concat(ovrOrig.map(function (o) { var x = o.data.slice(0, OW); while (x.length < OW) x.push(''); return x; }));
+      var lastO = oSh.getLastRow(); if (lastO >= 2) oSh.getRange(2, 1, lastO - 1, OW).clearContent();
+      if (keep.length) oSh.getRange(2, 1, keep.length, OW).setNumberFormat('@').setValues(keep);
+    }
+    // 3) الإعدادات: ربط شيت العهدة/الخزينة + أسماؤه المتعلَّمة
+    of('ROW', 'settings').forEach(function (o) { if (o.data.length >= 2 && _glStr_(o.data[0])) _glSetSetting_(_glStr_(o.data[0]), o.data[1]); });
+    ops.forEach(function (o) {
+      if (o.kind === 'MOVE' && o.key === 'settings' && o.data && o.data.custsheet_map_removed) {
+        var m = _glCsMap_(); Object.keys(o.data.custsheet_map_removed).forEach(function (k) { m[k] = o.data.custsheet_map_removed[k]; });
+        _glSetSetting_('custsheet_map', JSON.stringify(m));
+      }
+    });
+    // 4) خارج الدفتر: حساب اتفاقيات الإعاشة · نسخ دفعات العملاء والوكلاء · البيانات المحاسبية لدفعات الحجوزات
+    var ext = ops.filter(function (o) { return o.kind === 'EXT'; }), extN = 0;
+    var catOps = ext.filter(function (o) { return o.data && !Array.isArray(o.data) && o.data.id !== undefined; });
+    if (catOps.length && typeof CATERING_SHEET !== 'undefined') {
+      try {
+        var cSh = _accSheet_(CATERING_SHEET, CATERING_HEADERS), cl = cSh.getLastRow();
+        if (cl >= 2) {
+          var cv = cSh.getRange(2, 21, cl - 1, 3).getValues(), ch = false;
+          catOps.forEach(function (o) { cv.forEach(function (r) { if (_glStr_(r[0]) === _glStr_(o.data.id)) { if (!_glStr_(r[1]) && o.data.vendorAcc === code) { r[1] = code; ch = true; } if (!_glStr_(r[2]) && o.data.targetAcc === code) { r[2] = code; ch = true; } } }); });
+          if (ch) { cSh.getRange(2, 21, cl - 1, 3).setNumberFormat('@').setValues(cv); extN += catOps.length; }
+        }
+      } catch (eC) { Logger.log('accrestore catering: ' + eC.message); }
+    }
+    var extApp = function (sh, W, rows) { if (!rows.length) return; sh.getRange(sh.getLastRow() + 1, 1, rows.length, W).setValues(rows.map(function (r) { var x = r.slice(0, W); while (x.length < W) x.push(''); return x; })); extN += rows.length; };
+    try { extApp(_accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS), ACC_PAY_HEADERS.length, ext.filter(function (o) { return o.key === ACC_PAY_SHEET && Array.isArray(o.data); }).sort(byRow).map(function (o) { return o.data; })); } catch (eP) { Logger.log('accrestore cp: ' + eP.message); }
+    try { var AS = _glApSheets_(); ['pay', 'item'].forEach(function (t) { extApp(AS[t].sh, AS[t].W, ext.filter(function (o) { return o.key === AS[t].name && Array.isArray(o.data); }).sort(byRow).map(function (o) { return o.data; })); }); } catch (eA) { Logger.log('accrestore ap: ' + eA.message); }
+    var metaRows = ext.filter(function (o) { return o.key === 'HB:البيانات المحاسبية للدفعات' && Array.isArray(o.data); }).map(function (o) { return o.data; });
+    if (metaRows.length) {
+      try { var hbId = _glSettings_().hb_ss_id, mSh = hbId ? SpreadsheetApp.openById(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null; if (mSh) extApp(mSh, 6, metaRows); } catch (eMe) { Logger.log('accrestore hb meta: ' + eMe.message); }
+    }
+    // 5) إلغاء التقاعد وعلامات «الطرف محذوف»
+    var AD = JSON.parse(JSON.stringify(_glAccDeleted_()));
+    delete AD.codes[code];
+    Object.keys(AD.tomb).forEach(function (k) { if (AD.tomb[k] && AD.tomb[k].d === delId) delete AD.tomb[k]; });
+    _glSetSetting_('acc_deleted', JSON.stringify(AD)); _GL_ACCDEL_MEMO_ = null;
+    // 6) الحالة + الكاش + المرايا + السجل
+    var now = _glNow_();
+    _glSheet_('deleted').getRange(D.hdrRow, 3).setValue('مُستعاد ' + now + ' — ' + user);
+    _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null; _GL_DEFCUR_MEMO_ = null; _GL_HB_MEMO_ = null; _glSetDrop_();
+    try { CacheService.getScriptCache().removeAll(['gll_accs', 'gll_accs2', 'gll_ents']); } catch (eCa) {}
+    try { if (extN) { _vzClearCache_(); CacheService.getScriptCache().remove(GL_AP_IDX_KEY_); } } catch (eV) {}
+    if (sum.refs && sum.refs.custsheet) { try { _glCsEnsureTrigger_(); } catch (eT) {} }
+    _glTouch_('accounts'); _glTouch_('entries'); _glTouch_('lines');
+    var hbBy = ''; try { hbBy = _glHbStaffName_(user); } catch (eN) {}
+    entRows.forEach(function (o) { try { _glMirQ_(_glStr_(o.data[0]), { notify: false, by: hbBy }); } catch (eQ) {} });
+    var txt = entRows.length + ' قيداً (' + lineRows.length + ' سطراً)' + (moveFix.length ? ' · أُعيد ' + moveFix.length + ' سطراً افتتاحياً لحسابه' : '') + (vdOwn.length ? ' · أُزيلت ' + vdOwn.length + ' قاعدة إلغاء' : '');
+    logChange_(user, 'استعادة حساب محذوف مع قيوده', 'GL:' + code, _glStr_(sum.name), delId, txt);
+    var restored = []; entRows.concat(lineRows).forEach(function (o) { restored.push(o.data); });
+    var delta = {}; try { delta = _glLineDelta_(lineRows.map(function (o) { return o.data; }), 1, {}); moveFix.forEach(function (m) { _glLineDelta_([lRows[m.i]], -1, delta); _glLineDelta_([m.row], 1, delta); }); } catch (eD) {}
+    plan.success = true; plan.dry = false; plan.ok = true; plan.ext = extN; plan.balancesDelta = delta;
+    return plan;
+  } finally { _glUnlock_(lock); }
+}
 /* 🔀 (V4.216) نقل حساب (بفروعه) لقسم آخر — الشجرة مبنية على الكود (كود الفرع يبدأ بكود أبيه)، فالنقل يعني كوداً
    جديداً تحت القسم الجديد. يُستبدل الكود القديم في كل موضع: الدليل، أسطر القيود، إعدادات القيود التلقائية، خريطة
    حجوزات الفنادق ومراجعة دفعاتها، والبيانات المحاسبية للدفعات داخل ملف برنامج الحجوزات. بصمات القيود التلقائية

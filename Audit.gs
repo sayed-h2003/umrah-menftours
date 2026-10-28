@@ -308,3 +308,125 @@ function audList(authToken, f) {
   }
   return { success: true, rows: out, total: Math.max(0, last - 1) };
 }
+
+/* ---------- 🛡️ (V4.362) عرض السجل المحصّن بتصميم «سجل التعديلات» + زر استعادة لكل عملية ---------- */
+// وقت السطر/اللقطة كمفتاح زمني ساذج قابل للمقارنة (نفس المنطقة الزمنية للنصوص المكتوبة) — يقبل Date أو نصاً بصيغتي البرنامج
+function _audNaive_(v) {
+  if (v instanceof Date) { var tz = 'Asia/Riyadh'; try { tz = (typeof _tz_ === 'function' && _tz_()) || tz; } catch (e) {} v = Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm:ss'); }
+  var s = String(v || ''), m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0));
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);   // dd/MM/yyyy HH:mm[:ss] (لقطات الرحلات)
+  if (m) return Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0));
+  return NaN;
+}
+function _audMdy_(ms) {   // mm/dd/yyyy hh:mm
+  if (isNaN(ms)) return '';
+  var d = new Date(ms), p = function (n) { return ('0' + n).slice(-2); };
+  return p(d.getUTCMonth() + 1) + '/' + p(d.getUTCDate()) + '/' + d.getUTCFullYear() + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
+}
+// فهارس اللقطات (أعمدة الرأس فقط — بلا المحتوى المضغوط) لربط كل عملية بلقطتها
+function _audUndoIdx_() {
+  var X = { ent: {}, rowk: {}, rowc: [], trip: {} };
+  try {
+    var g = _snapGlSheet_(), gl = g.getLastRow();
+    if (gl >= 2) g.getRange(2, 1, gl - 1, 5).getValues().forEach(function (v) { var id = String(v[4]); (X.ent[id] = X.ent[id] || []).push({ sid: String(v[0]), ms: _audNaive_(v[1]), by: String(v[2]), act: String(v[3]) }); });
+  } catch (e1) {}
+  try {
+    var r = _snapRowSheet_(), rl = r.getLastRow();
+    if (rl >= 2) r.getRange(2, 1, rl - 1, 6).getValues().forEach(function (v, i) {
+      var o = { sid: String(v[0]), ms: _audNaive_(v[1]), by: String(v[2]), act: String(v[3]), sheet: String(v[4]), key: String(v[5]), row: i + 2 };
+      (X.rowk[o.sheet + '|' + o.key] = X.rowk[o.sheet + '|' + o.key] || []).push(o);
+      if (typeof ACC_PAY_SHEET !== 'undefined' && o.sheet === ACC_PAY_SHEET) X.rowc.push(o);
+    });
+  } catch (e2) {}
+  try {
+    var t = _accSheet_(TRIP_SNAP_SHEET_, TRIP_SNAP_HEADERS_), tl = t.getLastRow();
+    if (tl >= 2) t.getRange(2, 1, tl - 1, 5).getValues().forEach(function (v) { var n = String(v[1] || '').trim(); (X.trip[n] = X.trip[n] || []).push({ sid: String(v[0]), ms: _audNaive_(v[2]), by: String(v[3]), act: String(v[4]) }); });
+  } catch (e3) {}
+  return X;
+}
+// أقرب لقطة لعملية (ms، المستخدم): «قبل» = لقطة مأخوذة قبل التغيير (القيود/الدفعات) · «بعد» = بعده (الرحلات)
+function _audPick_(list, ms, user, after) {
+  var best = null, bd = 1e12;
+  (list || []).forEach(function (s, i) {
+    if (isNaN(s.ms) || isNaN(ms)) return;
+    var d = after ? s.ms - ms : ms - s.ms;
+    if (d < -5000 || d > 120000) return;
+    if (user && s.by && s.by !== user) return;
+    var ad = Math.abs(d); if (ad < bd) { bd = ad; best = { s: s, i: i }; }
+  });
+  return best;
+}
+function _audUndoFor_(x, X, ms) {
+  var act = String(x[6]), rec = String(x[7]), user = String(x[2]), nv = String(x[10]);
+  if (/^حذف حساب من الدليل مع قيوده$/.test(act) && /^DEL-/.test(nv)) return { k: 'acc', id: nv, label: 'استعادة الحساب وقيوده' };
+  if (/^(تسجيل )?(دخول|خروج)|^تسجيل دخول|^تسجيل خروج|استعادة|تراجع/.test(act)) return null;
+  var m = rec.match(/^GL:(.+)$/);
+  if (m && X.ent[m[1]]) { var p = _audPick_(X.ent[m[1]], ms, user, false); if (p) return { k: 'entry', sid: p.s.sid, label: 'استعادة القيد لما قبل هذه العملية' }; }
+  m = rec.match(/^AP:(.+)$/);
+  if (m && typeof VZ_PAY_SHEET !== 'undefined' && X.rowk[VZ_PAY_SHEET + '|' + m[1]]) { var q = _audPick_(X.rowk[VZ_PAY_SHEET + '|' + m[1]], ms, user, false); if (q) return { k: 'rows', sids: [q.s.sid], label: 'استعادة الدفعة لما قبل هذه العملية' }; }
+  if (/^(تعديل دفعة حساب|تعديل دفعات حساب|حذف دفعة|حذف تحويل عملة)/.test(act) && X.rowc.length) {
+    var rsh = null; try { rsh = _snapRowSheet_(); } catch (eR) {}
+    var hits = X.rowc.filter(function (s) {
+      var d = ms - s.ms; if (isNaN(d) || d < -5000 || d > 120000 || (s.by && s.by !== user)) return false;
+      try { var v = rsh.getRange(s.row, 1, 1, rsh.getLastColumn()).getValues()[0], row = _snapUnpack_(v.slice(6)); return row && String(row[1]) === rec; } catch (eU) { return false; }   // نفس العميل
+    });
+    if (hits.length) return { k: 'rows', sids: hits.slice(0, 50).map(function (s) { return s.sid; }), client: rec, label: 'استعادة ' + (hits.length > 1 ? hits.length + ' دفعات' : 'الدفعة') + ' لما قبل هذه العملية' };
+  }
+  if (X.trip[rec]) { var t = _audPick_(X.trip[rec], ms, user, true); if (t && t.i > 0) return { k: 'trip', trip: rec, sid: t.s.sid, label: 'التراجع عن هذه العملية بالرحلة' }; }
+  return null;
+}
+// نفس صيغة getAuditLog (timestamp/username/action/recordId/field/oldValue/newValue/screen) + seq/req/type/hash + undo
+function audList2(authToken, f) {
+  var session = requireAuditLogPermission_(authToken);
+  f = f || {};
+  var canUndo = false; try { canUndo = (typeof _snapCanRestore_ === 'function' && _snapCanRestore_(authToken)) || _sessionHasPerm_(session, 'admin'); } catch (e) {}
+  if (!PropertiesService.getScriptProperties().getProperty(AUD_PROP_ID_)) return { success: true, rows: [], total: 0, canUndo: canUndo };
+  _audFlushSoft_();
+  var sh = _audSheet_('Trail'), last = sh.getLastRow(), lim = Math.min(+f.limit || 500, 2000), out = [];
+  var u = String(f.username || '').trim(), ty = String(f.type || ''), q = String(f.entity || '').trim(), rid = String(f.recordId || '').trim(), ac = String(f.action || '').trim();
+  var from = String(f.fromDate || ''), to = String(f.toDate || ''), scr = String(f.screen || ''), withLogin = !!f.showLoginLogout;
+  var row = last, CH = 3000;
+  while (row >= 2 && out.length < lim) {
+    var start = Math.max(2, row - CH + 1), vals = sh.getRange(start, 1, row - start + 1, AUD_HDR_.length).getValues();
+    for (var i = vals.length - 1; i >= 0 && out.length < lim; i--) {
+      var r = vals[i], ms = _audNaive_(r[1]), d = isNaN(ms) ? '' : new Date(ms).toISOString().slice(0, 10);
+      if (to && d && d > to) continue;
+      if (from && d && d < from) { row = 0; break; }
+      if (!withLogin && String(r[5]) === 'دخول/خروج') continue;
+      if (u && String(r[2]).indexOf(u) < 0) continue;
+      if (ty && String(r[5]) !== ty) continue;
+      if (ac && String(r[6]).indexOf(ac) < 0) continue;
+      if (rid && String(r[7]).indexOf(rid) < 0) continue;
+      if (q && [r[7], r[8], r[9], r[10]].join(' ').indexOf(q) < 0) continue;
+      var screen = 'other'; try { screen = _auditScreen_(String(r[6]), String(r[8]), String(r[7])); } catch (eS) {}
+      if (scr && !(typeof _auditScreenMatch_ === 'function' ? _auditScreenMatch_(screen, scr) : screen === scr)) continue;
+      out.push({ seq: String(r[0]), ms: ms, timestamp: _audMdy_(ms) || String(r[1]), username: String(r[2]), action: String(r[6]), recordId: String(r[7]), field: String(r[8]),
+        oldValue: String(r[9]), newValue: String(r[10]), type: String(r[5]), req: String(r[4]), sess: String(r[3]), hash: String(r[11]),
+        screen: screen, screenLabel: (typeof AUDIT_SCREEN_LABELS_ !== 'undefined' && AUDIT_SCREEN_LABELS_[screen]) || 'أخرى', _r: r });
+    }
+    if (row) row = start - 1;
+  }
+  if (canUndo && out.length) {
+    var X = _audUndoIdx_(), seenReq = {};
+    out.forEach(function (e) {
+      if (!/تعديل|حذف|إلغاء|إضافة/.test(e.type)) { delete e._r; return; }
+      var key = e.req + '|' + e.recordId;
+      if (seenReq[key]) { delete e._r; return; }   // زر واحد لكل حفظة على نفس السجل
+      seenReq[key] = 1;
+      try { var un = _audUndoFor_(e._r, X, e.ms); if (un) e.undo = un; } catch (eU) {}
+      delete e._r;
+    });
+  } else out.forEach(function (e) { delete e._r; });
+  return { success: true, rows: out, total: Math.max(0, last - 1), canUndo: canUndo };
+}
+// تنفيذ الاستعادة لعملية — كل مسار يعيد التحقق من الصلاحية بنفسه (المدير/«استعادة النسخ السابقة»/«التراجع بسجل الرحلات»)
+function audUndo(authToken, un, dry) {
+  un = un || {};
+  if (un.k === 'acc') return glAccountRestore(authToken, String(un.id || ''), !!dry);
+  if (dry) return { success: true, dry: true, ok: true };
+  if (un.k === 'entry') return glEntrySnapRestore(authToken, String(un.sid || ''));
+  if (un.k === 'rows') { var n = 0; (un.sids || []).slice(0, 50).forEach(function (sid) { snapRowRestore(authToken, String(sid)); n++; }); return { success: true, done: n }; }
+  if (un.k === 'trip') return tripUndoChange(authToken, String(un.trip || ''), String(un.sid || ''));
+  throw new Error('لا توجد استعادة تلقائية لهذا النوع من العمليات — استخدم «⏪ التراجع الزمني»');
+}

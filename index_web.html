@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.361  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.362  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8423,7 +8423,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.361";
+var CLIENT_APP_VERSION = "4.362";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -15198,19 +15198,32 @@ function _auditNormEntry_(e) {
     ts: e.timestamp != null ? e.timestamp : (e.when || ''), user: e.username != null ? e.username : (e.who || ''),
     action: e.action || '', rec: e.recordId || '', field: e.field || '',
     oldV: e.oldValue !== undefined ? e.oldValue : e.oldVal, newV: e.newValue !== undefined ? e.newValue : e.newVal,
-    screen: e.screen || '', screenLabel: e.screenLabel || ''
+    screen: e.screen || '', screenLabel: e.screenLabel || '',
+    ms: typeof e.ms === 'number' ? e.ms : undefined, undo: e.undo || null, seq: e.seq || '', hash: e.hash || '', req: e.req || '', type: e.type || ''   // 🛡️ (V4.362) السجل المحصّن
   };
+}
+// 🕒 (V4.362) mm/dd/yyyy hh:mm — يقبل «yyyy-MM-dd HH:mm[:ss]» أو «dd/MM/yyyy HH:mm» أو صيغة المتصفح الخام (Thu Oct 29 2026 …)
+function _tsMdy_(v) {
+  var s = String(v == null ? '' : v).trim(), p = function (n) { return ('0' + n).slice(-2); }, m;
+  if (!s) return '';
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/))) return m[2] + '/' + m[3] + '/' + m[1] + (m[4] ? ' ' + m[4] + ':' + m[5] : '');
+  if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/))) return p(m[2]) + '/' + p(m[1]) + '/' + m[3] + (m[4] ? ' ' + p(m[4]) + ':' + m[5] : '');
+  var MO = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };   // الصيغة الخام: الوقت كما كُتب (بلا تحويل منطقة)
+  if ((m = s.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})\s+(\d{2}):(\d{2})/)) && MO[m[1]]) return p(MO[m[1]]) + '/' + p(m[2]) + '/' + m[3] + ' ' + m[4] + ':' + m[5];
+  var d = new Date(s.replace(/\s*\([^)]*\)\s*$/, ''));
+  if (!isNaN(d.getTime())) return p(d.getMonth() + 1) + '/' + p(d.getDate()) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  return s;
 }
 // تجميع التغييرات المتتالية لنفس الحفظة (القائمة مرتبة الأحدث أولاً)
 function _auditGroup_(entries) {
   var groups = [];
   (entries || []).map(_auditNormEntry_).forEach(function (e) {
-    var g = groups[groups.length - 1], ms = _auditTsMs_(e.ts);
+    var g = groups[groups.length - 1], ms = typeof e.ms === 'number' ? e.ms : _auditTsMs_(e.ts);
     if (g && g.user === e.user && g.action === e.action && g.rec === e.rec &&
         ((isNaN(ms) && g.ts === e.ts) || (!isNaN(ms) && !isNaN(g.ms) && Math.abs(g.ms - ms) <= 3000))) {
       g.changes.push(e); return;
     }
-    groups.push({ ts: e.ts, ms: ms, user: e.user, action: e.action, rec: e.rec, screen: e.screen, screenLabel: e.screenLabel, changes: [e] });
+    groups.push({ ts: e.ts, ms: ms, user: e.user, action: e.action, rec: e.rec, screen: e.screen, screenLabel: e.screenLabel, undo: e.undo, seq: e.seq, hash: e.hash, req: e.req, type: e.type, changes: [e] });
   });
   return groups;
 }
@@ -24479,22 +24492,89 @@ function _ensureAuditEntityList() {
 var AUD = { f: {} };
 function audOpen_() {
   var ov = document.getElementById('_audOv'); if (ov) ov.remove();
+  var scrOpts = (document.getElementById('auditFilterScreen') || { innerHTML: '<option value="">كل الشاشات</option>' }).innerHTML;   // نفس قائمة شاشات «سجل التعديلات»
   document.body.insertAdjacentHTML('beforeend',
-    '<div id="_audOv" style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:2147483100;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto;" dir="rtl">' +
-    '<div style="background:#fff;border-radius:12px;max-width:1200px;width:100%;padding:14px 16px;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
-    '<div class="d-flex align-items-center gap-2 mb-2 flex-wrap"><b style="font-size:16px;">🛡️ سجل التتبع المحصّن</b><span id="_audSt" class="small text-muted">⏳</span>' +
-    '<button class="btn btn-sm btn-outline-secondary ms-auto" onclick="document.getElementById(\'_audOv\').remove()">✕ إغلاق</button></div>' +
-    '<div class="d-flex gap-1 flex-wrap mb-2" style="font-size:13px;">' +
-    '<input id="_audU" class="form-control form-control-sm" style="width:130px" placeholder="المستخدم">' +
-    '<select id="_audT" class="form-select form-select-sm" style="width:auto"><option value="">كل الأنواع</option>' +
-    ['إضافة', 'تعديل', 'حذف', 'إلغاء', 'اعتماد/ترحيل', 'استعادة', 'دخول/خروج', 'أخرى'].map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select>' +
-    '<input id="_audQ" class="form-control form-control-sm" style="width:200px" placeholder="بحث (رقم قيد/رحلة/قيمة…)">' +
-    '<input id="_audF" type="date" class="form-control form-control-sm" style="width:auto" title="من"><input id="_audTo" type="date" class="form-control form-control-sm" style="width:auto" title="إلى">' +
-    '<button class="btn btn-sm btn-primary" onclick="audLoad_()">🔎 عرض</button>' +
-    '<button class="btn btn-sm btn-outline-success" onclick="audVerify_(false)">✅ فحص السلامة</button>' +
-    '<button class="btn btn-sm btn-outline-success" onclick="audVerify_(true)" title="من أول سطر (أبطأ)">فحص كامل</button></div>' +
-    '<div id="_audBox" style="max-height:65vh;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;"></div></div></div>');
+    '<div id="_audOv" style="position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:2147483100;display:flex;align-items:flex-start;justify-content:center;padding:18px 10px;overflow:auto;" dir="rtl">' +
+    '<div style="background:#f8fafc;border-radius:12px;max-width:1280px;width:100%;padding:14px 16px;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
+    '<div class="d-flex align-items-start gap-2 mb-2 flex-wrap"><div><h4 class="fw-bold mb-0">🛡️ سجل التتبع المحصّن</h4>' +
+    '<div class="text-muted small">كل تغيير بالنظام في ملف مستقل بسلسلة بصمات لا تقبل التلاعب — مع استعادة أثر أي عملية</div><div id="_audSt" class="small text-muted mt-1">⏳</div></div>' +
+    '<div class="ms-auto d-flex gap-1"><button class="btn btn-sm btn-outline-success" onclick="audVerify_(false)">✅ فحص السلامة</button>' +
+    '<button class="btn btn-sm btn-outline-success" onclick="audVerify_(true)" title="من أول سطر (أبطأ)">فحص كامل</button>' +
+    '<button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById(\'_audOv\').remove()">✕ إغلاق</button></div></div>' +
+    '<div class="card border-0 mb-2 audit-filter-card"><div class="card-body p-2"><div class="d-flex flex-wrap align-items-center gap-2 audit-filter-row">' +
+    '<span class="audit-filter-title"><i class="fas fa-sliders-h"></i> فلترة</span>' +
+    '<div class="audit-filter-entity"><input id="_audQ" class="form-control form-control-sm audit-filter" autocomplete="off" placeholder="🔎 معتمر / رقم جواز / رحلة / قيد / قيمة…" oninput="audFilt_()"></div>' +
+    '<select id="_audScr" class="form-select form-select-sm audit-filter" style="width:auto;min-width:130px;" onchange="audLoad_()" title="الشاشة">' + scrOpts + '</select>' +
+    '<select id="_audA" class="form-select form-select-sm audit-filter" style="width:auto;min-width:130px;" onchange="audFilt_()" title="نوع العملية"><option value="">كل العمليات</option></select>' +
+    '<select id="_audT" class="form-select form-select-sm audit-filter" style="width:auto;" onchange="audLoad_()" title="التصنيف"><option value="">كل التصنيفات</option>' +
+    ['إضافة', 'تعديل', 'حذف', 'إلغاء', 'اعتماد/ترحيل', 'استعادة', 'دخول/خروج'].map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select>' +
+    '<input id="_audU" class="form-control form-control-sm audit-filter" style="width:auto;min-width:105px;" placeholder="المستخدم" oninput="audFilt_()">' +
+    '<input id="_audR" class="form-control form-control-sm audit-filter" style="width:auto;min-width:95px;" placeholder="المرجع / رقم السجل" oninput="audFilt_()">' +
+    '<input id="_audF" type="date" class="form-control form-control-sm audit-filter" style="width:auto;" title="من تاريخ" onchange="audLoad_()">' +
+    '<input id="_audTo" type="date" class="form-control form-control-sm audit-filter" style="width:auto;" title="إلى تاريخ" onchange="audLoad_()">' +
+    '<label class="audit-filter-chk mb-0" title="عرض عمليات الدخول والخروج"><input class="form-check-input m-0" type="checkbox" id="_audLL" onchange="audLoad_()"> <span class="small text-nowrap">دخول/خروج</span></label>' +
+    '</div></div></div>' +
+    '<div class="card shadow-sm border-0"><div class="card-header bg-white border-0 pt-2 pb-1"><span id="_audCnt" class="text-muted small">⏳</span></div>' +
+    '<div class="table-responsive" style="max-height:66vh;overflow:auto;"><table class="au-tbl" style="min-width:900px;"><thead id="_audHead"></thead><tbody id="_audBody"><tr><td class="text-center text-muted py-4">⏳ جاري التحميل…</td></tr></tbody></table></div></div>' +
+    '</div></div>');
   audStatus_(); audLoad_();
+}
+var AUD_ROWS_ = [], AUD_CAN_ = false;
+// التحميل من الخادم (التاريخ/الشاشة/التصنيف/الدخول) ثم الفلترة الفورية محلياً (البحث/العملية/المستخدم/المرجع)
+function audLoad_() {
+  var body = document.getElementById('_audBody'); if (!body) return;
+  body.innerHTML = '<tr><td class="text-center text-muted py-4">⏳ جاري التحميل…</td></tr>';
+  var v = function (id) { var el = document.getElementById(id); return el ? (el.type === 'checkbox' ? el.checked : el.value) : ''; };
+  var f = { screen: v('_audScr'), type: v('_audT'), fromDate: v('_audF'), toDate: v('_audTo'), showLoginLogout: v('_audLL'), limit: 800 };
+  google.script.run.withSuccessHandler(function (r) {
+    AUD_ROWS_ = (r && r.rows) || []; AUD_CAN_ = !!(r && r.canUndo);
+    var acts = {}; AUD_ROWS_.forEach(function (x) { acts[x.action] = 1; });
+    var sel = document.getElementById('_audA'), cur = sel.value;
+    sel.innerHTML = '<option value="">كل العمليات</option>' + Object.keys(acts).sort().map(function (a) { return '<option' + (a === cur ? ' selected' : '') + '>' + escapeHtml_(a) + '</option>'; }).join('');
+    audFilt_((r && r.total) || 0);
+  }).withFailureHandler(function (e) { body.innerHTML = '<tr><td class="text-danger p-3">❌ ' + escapeHtml_((e && e.message) || e) + '</td></tr>'; }).audList2(window.authToken, f);
+}
+function audFilt_(total) {
+  if (typeof total === 'number') audFilt_._t = total;
+  var q = (document.getElementById('_audQ').value || '').trim(), a = document.getElementById('_audA').value, u = (document.getElementById('_audU').value || '').trim(), rid = (document.getElementById('_audR').value || '').trim();
+  var rows = AUD_ROWS_.filter(function (x) {
+    if (a && x.action !== a) return false;
+    if (u && String(x.username).indexOf(u) < 0) return false;
+    if (rid && String(x.recordId).indexOf(rid) < 0) return false;
+    if (q && [x.recordId, x.field, x.oldValue, x.newValue, x.action].join(' ').indexOf(q) < 0) return false;
+    return true;
+  });
+  var idx = {}; AUD_ROWS_.forEach(function (x, i) { idx[x.seq] = i; });
+  var rowAct = function (g) {
+    var h = '<span class="au-rec" title="التسلسل ' + escapeHtml_(g.seq) + ' · البصمة ' + escapeHtml_(g.hash) + ' · الطلب ' + escapeHtml_(g.req) + '">#' + escapeHtml_(g.seq) + '</span>';
+    if (AUD_CAN_ && g.undo) h += ' <button type="button" class="btn btn-outline-warning btn-sm py-0 px-1" style="font-size:11px;" title="' + escapeHtml_(g.undo.label || 'استعادة') + '" onclick="audUndo_(' + idx[g.seq] + ', this)">↩️ استعادة</button>';
+    return h;
+  };
+  document.getElementById('_audHead').innerHTML = _auditHeadHtml_({ global: true, rowAct: rowAct }).replace('<th style="width:96px;">↩️</th>', '<th style="width:130px;"># · ↩️</th>');
+  document.getElementById('_audBody').innerHTML = _auditRowsHtml_(rows, { global: true, rowAct: rowAct }) || '<tr><td colspan="7" class="text-center text-muted py-4">لا سطور مطابقة</td></tr>';
+  document.getElementById('_audCnt').textContent = '📋 ' + _auditGroup_(rows).length + ' عملية (' + rows.length + ' تغيير) من آخر ' + AUD_ROWS_.length + ' سطر محمَّل — إجمالي السجل ' + (audFilt_._t || 0) + ' سطر · الأحدث أولاً';
+}
+function audUndo_(idx, btn) {
+  var x = AUD_ROWS_[idx]; if (!x || !x.undo) return;
+  var un = x.undo, go = function () {
+    btn.disabled = true; btn.textContent = '⏳';
+    google.script.run.withSuccessHandler(function (res) {
+      if (res && res.success === false) { btn.disabled = false; btn.textContent = '↩️ استعادة'; _showPopup(res.error || 'تعذّرت الاستعادة', 'error'); return; }
+      if (res && res.conflicts && res.conflicts.length) { btn.disabled = false; btn.textContent = '↩️ استعادة'; _showPopup('تعذّرت الاستعادة:\n• ' + res.conflicts.join('\n• '), 'error'); return; }
+      showToast('✅ تمت الاستعادة' + (res && res.code ? ' — الحساب ' + res.code : ''));
+      try { if (un.k === 'acc' || un.k === 'entry') glAfterChange(); } catch (e0) {}
+      audLoad_();
+    }).withFailureHandler(function (e) { btn.disabled = false; btn.textContent = '↩️ استعادة'; _showPopup((e && e.message) || e, 'error'); }).audUndo(window.authToken, un, false);
+  };
+  if (un.k === 'acc') {
+    google.script.run.withSuccessHandler(function (P) {
+      if (!P || !P.ok) { _showPopup('لا يمكن استعادة هذا الحساب:\n• ' + ((P && P.conflicts) || []).join('\n• '), 'error'); return; }
+      askConfirm_('↩️ استعادة الحساب ' + P.code + ' — ' + P.name + ' بنفس كوده، و' + P.entries + ' قيداً (' + P.lines + ' سطراً) بنفس أرقامها' + (P.moved ? '، وإعادة ' + P.moved + ' سطراً افتتاحياً لحسابه' : '') +
+        (P.voidRules ? '، وإزالة ' + P.voidRules + ' قاعدة إلغاء أضافها الحذف' : '') + '؟\nتؤخذ نقطة استعادة قبلها.', go, { title: 'استعادة حساب محذوف', danger: false, yesLabel: 'نعم، استعِد' });
+    }).withFailureHandler(function (e) { _showPopup((e && e.message) || e, 'error'); }).audUndo(window.authToken, un, true);
+    return;
+  }
+  askConfirm_((un.label || 'استعادة') + ' — «' + x.action + '» على ' + x.recordId + ' (' + x.timestamp + ' — ' + x.username + ')؟\nالحالة الحالية تُحفظ كنسخة قبل الاستعادة، فيمكن التراجع عنها.', go, { title: '↩️ استعادة', danger: false, yesLabel: 'نعم، استعِد' });
 }
 function audStatus_() {
   google.script.run.withSuccessHandler(function (r) {
@@ -24513,23 +24593,6 @@ function audSetup_(btn) {
   btn.disabled = true; btn.textContent = '⏳';
   google.script.run.withSuccessHandler(function () { showToast('✅ فُعِّل السجل المحصّن'); audStatus_(); audLoad_(); })
     .withFailureHandler(function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); }).audSetup(window.authToken);
-}
-function audLoad_() {
-  var box = document.getElementById('_audBox'); if (!box) return;
-  box.innerHTML = '<div class="text-center text-muted py-4">⏳ جاري التحميل…</div>';
-  var f = { user: document.getElementById('_audU').value, type: document.getElementById('_audT').value, q: document.getElementById('_audQ').value,
-    from: document.getElementById('_audF').value, to: document.getElementById('_audTo').value, limit: 800 };
-  google.script.run.withSuccessHandler(function (r) {
-    if (!r.rows.length) { box.innerHTML = '<div class="text-center text-muted py-4">لا سطور مطابقة</div>'; return; }
-    var e = escapeHtml_, cut = function (v) { v = String(v || ''); return v.length > 140 ? '<span title="' + e(v) + '">' + e(v.slice(0, 140)) + '…</span>' : e(v); };
-    box.innerHTML = '<table class="table table-sm table-hover mb-0" style="font-size:12px;"><thead style="position:sticky;top:0;background:#f8fafc;"><tr>' +
-      ['#', 'الوقت', 'المستخدم', 'النوع', 'العملية', 'السجل', 'الحقل', 'القديمة', 'الجديدة', 'الطلب'].map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' +
-      r.rows.map(function (x) {
-        var cls = x[5] === 'حذف' ? 'table-danger' : (x[5] === 'إضافة' ? 'table-success' : '');
-        return '<tr class="' + cls + '"><td class="gl-latin">' + e(x[0]) + '</td><td class="gl-latin" style="white-space:nowrap">' + e(x[1]) + '</td><td>' + e(x[2]) + '</td><td>' + e(x[5]) + '</td><td>' + e(x[6]) +
-          '</td><td class="gl-latin">' + e(x[7]) + '</td><td>' + e(x[8]) + '</td><td>' + cut(x[9]) + '</td><td>' + cut(x[10]) + '</td><td class="gl-latin text-muted" title="الجلسة ' + e(x[3]) + ' · البصمة ' + e(x[11]) + '">' + e(x[4]) + '</td></tr>';
-      }).join('') + '</tbody></table><div class="small text-muted p-2">يُعرض ' + r.rows.length + ' من ' + r.total + ' سطر (الأحدث أولاً) — مرّر على «الطلب» لرؤية البصمة</div>';
-  }).withFailureHandler(function (e) { box.innerHTML = '<div class="text-danger p-3">❌ ' + escapeHtml_((e && e.message) || e) + '</div>'; }).audList(window.authToken, f);
 }
 function audVerify_(full) {
   showToast('⏳ جاري فحص سلامة السلسلة…');
@@ -24556,7 +24619,7 @@ function snapEntryDlg_(id) {
   _snapRun_('glEntrySnaps', [id], function (r) {
     if (!r.snaps.length) { box.innerHTML = '<div class="text-muted p-3">لا نسخ سابقة بعد — تُحفظ نسخة تلقائياً قبل كل تعديل أو إلغاء أو حذف (من V4.346).</div>'; return; }
     box.innerHTML = r.snaps.map(function (s) {
-      return '<div class="border rounded p-2 mb-2" style="font-size:12.5px;"><div class="d-flex flex-wrap gap-2 align-items-center"><b>' + e(s.action) + '</b><span class="gl-latin text-muted">' + e(s.at) + '</span><span>— ' + e(s.by) + '</span>' +
+      return '<div class="border rounded p-2 mb-2" style="font-size:12.5px;"><div class="d-flex flex-wrap gap-2 align-items-center"><b>' + e(s.action) + '</b><span class="gl-latin text-muted">' + e(_tsMdy_(s.at)) + '</span><span>— ' + e(s.by) + '</span>' +
         '<span class="badge bg-light text-dark">' + e(s.status) + '</span><span class="gl-latin">' + e(s.date) + '</span><span class="gl-latin fw-bold">' + glFmt(s.total) + '</span>' +
         (r.canRestore ? '<button class="btn btn-sm btn-warning ms-auto py-0" onclick="snapEntryRestore_(\'' + e(s.sid) + '\', this)">↩️ استعادة هذه النسخة</button>' : '') + '</div>' +
         '<div class="text-muted">' + e(s.desc) + '</div><div class="gl-latin" style="font-size:11.5px;">' + s.lines.map(function (l) { return e(l.acc) + (l.d ? ' مدين ' + glFmt(l.d) : '') + (l.c ? ' دائن ' + glFmt(l.c) : '') + ' ' + e(l.cur); }).join(' · ') + '</div></div>';
@@ -24579,7 +24642,8 @@ function snapOpen_() {
   var box = _snapOv_('_snapOv', '⏪ التراجع الزمني');
   box.innerHTML = '<div class="d-flex gap-1 flex-wrap mb-2"><button class="btn btn-sm btn-primary" onclick="snapPointsLoad_()">🗄️ نقاط استعادة النظام</button>' +
     '<button class="btn btn-sm btn-outline-primary" onclick="snapDeletedLoad_()">🗑️ القيود المحذوفة</button>' +
-    '<button class="btn btn-sm btn-outline-primary" onclick="snapRowsLoad_()">💳 نسخ الدفعات (عملاء/وكلاء)</button></div><div id="_snapBody"></div>';
+    '<button class="btn btn-sm btn-outline-primary" onclick="snapRowsLoad_()">💳 نسخ الدفعات (عملاء/وكلاء)</button>' +
+    '<button class="btn btn-sm btn-outline-danger" onclick="snapAccDelLoad_()">🗂️ الحسابات المحذوفة</button></div><div id="_snapBody"></div>';
   snapPointsLoad_();
 }
 function snapPointsLoad_() {
@@ -24591,9 +24655,9 @@ function snapPointsLoad_() {
     if (!r.points.length) { b.innerHTML = h + '<div class="text-muted p-3">لا نقاط بعد.</div>'; return; }
     b.innerHTML = h + '<table class="table table-sm" style="font-size:12.5px;"><thead><tr><th>الوقت</th><th>النوع</th><th>السبب</th><th>بواسطة</th><th>الملفات</th><th>استعادة انتقائية</th></tr></thead><tbody>' +
       r.points.map(function (p) {
-        return '<tr><td class="gl-latin" style="white-space:nowrap">' + e(p.at) + '</td><td>' + e(p.kind) + '</td><td>' + e(p.reason) + (p.state !== 'كاملة' ? ' <span class="text-danger">' + e(p.state) + '</span>' : '') + '</td><td>' + e(p.by) + '</td><td>' +
+        return '<tr><td class="gl-latin" style="white-space:nowrap">' + e(_tsMdy_(p.at)) + '</td><td>' + e(p.kind) + '</td><td>' + e(p.reason) + (p.state !== 'كاملة' ? ' <span class="text-danger">' + e(p.state) + '</span>' : '') + '</td><td>' + e(p.by) + '</td><td>' +
           (p.files.length > 4 ? '<span class="text-muted">' + p.files.length + ' أوراق</span>' : p.files.map(function (f) { return f.url ? '<a href="' + e(f.url) + '" target="_blank" rel="noopener">' + e(f.label) + ' ↗</a>' : '<span class="text-muted">' + e(f.label) + '</span>'; }).join('<br>')) + '</td><td style="white-space:nowrap">' +
-          '<button class="btn btn-sm btn-primary py-0" onclick="snapCmp_(\'' + e(p.id) + '\',\'' + e(p.at) + '\')">🔍 مقارنة واستعادة</button></td></tr>';
+          '<button class="btn btn-sm btn-primary py-0" onclick="snapCmp_(\'' + e(p.id) + '\',\'' + e(_tsMdy_(p.at)) + '\')">🔍 مقارنة واستعادة</button></td></tr>';
       }).join('') + '</tbody></table>';
   }, b);
 }
@@ -24662,7 +24726,7 @@ function snapDeletedLoad_() {
   _snapRun_('glDeletedEntries', [], function (r) {
     if (!r.rows.length) { b.innerHTML = '<div class="text-muted p-3">لا قيود محذوفة نهائياً لها نسخة (تُحفظ من V4.346).</div>'; return; }
     b.innerHTML = '<table class="table table-sm" style="font-size:12.5px;"><thead><tr><th>القيد</th><th>النوع</th><th>التاريخ</th><th>البيان</th><th>المعادل</th><th>حُذف</th><th></th></tr></thead><tbody>' + r.rows.map(function (x) {
-      return '<tr><td class="gl-latin">' + e(x.id) + '</td><td>' + e(x.type) + '</td><td class="gl-latin">' + e(x.date) + '</td><td>' + e(x.desc) + '</td><td class="gl-latin">' + glFmt(x.total) + '</td><td class="gl-latin">' + e(x.at) + ' — ' + e(x.by) + '</td><td>' +
+      return '<tr><td class="gl-latin">' + e(x.id) + '</td><td>' + e(x.type) + '</td><td class="gl-latin">' + e(x.date) + '</td><td>' + e(x.desc) + '</td><td class="gl-latin">' + glFmt(x.total) + '</td><td class="gl-latin">' + e(_tsMdy_(x.at)) + ' — ' + e(x.by) + '</td><td>' +
         (r.canRestore ? '<button class="btn btn-sm btn-warning py-0" onclick="snapEntryRestore_(\'' + e(x.sid) + '\', this)">↩️ إعادة القيد</button>' : '') + '</td></tr>';
     }).join('') + '</tbody></table>';
   }, b);
@@ -24673,7 +24737,7 @@ function snapRowsLoad_() {
     if (!r.rows.length) { b.innerHTML = '<div class="text-muted p-3">لا نسخ دفعات بعد (تُحفظ قبل كل تعديل/حذف من V4.346).</div>'; return; }
     b.innerHTML = '<table class="table table-sm" style="font-size:12.5px;"><thead><tr><th>الوقت</th><th>العملية</th><th>بواسطة</th><th>الورقة</th><th>البيانات</th><th></th></tr></thead><tbody>' + r.rows.map(function (x) {
       var d = (x.row || []).slice(1, 9).map(function (v) { return e(String(v == null ? '' : v)); }).filter(Boolean).join(' · ');
-      return '<tr><td class="gl-latin" style="white-space:nowrap">' + e(x.at) + '</td><td>' + e(x.action) + '</td><td>' + e(x.by) + '</td><td>' + e(x.sheet === 'AgentAccounts_Payments' ? 'دفعات الوكلاء' : (x.sheet === 'ClientAccounts_Payments' ? 'دفعات العملاء' : x.sheet)) + '</td><td style="font-size:11.5px;">' + d + '</td><td>' +
+      return '<tr><td class="gl-latin" style="white-space:nowrap">' + e(_tsMdy_(x.at)) + '</td><td>' + e(x.action) + '</td><td>' + e(x.by) + '</td><td>' + e(x.sheet === 'AgentAccounts_Payments' ? 'دفعات الوكلاء' : (x.sheet === 'ClientAccounts_Payments' ? 'دفعات العملاء' : x.sheet)) + '</td><td style="font-size:11.5px;">' + d + '</td><td>' +
         (r.canRestore ? '<button class="btn btn-sm btn-warning py-0" onclick="snapRowRestore_(\'' + e(x.sid) + '\', this)">↩️ استعادة</button>' : '') + '</td></tr>';
     }).join('') + '</tbody></table>';
   }, b);
@@ -24682,6 +24746,35 @@ function snapRowRestore_(sid, btn) {
   askConfirm_('استعادة الدفعة لهذه النسخة (أو إعادتها إن حُذفت)؟', function () {
     btn.disabled = true; _snapRun_('snapRowRestore', [sid], function () { showToast('✅ استُعيدت الدفعة — حدّث شاشة الحساب'); snapRowsLoad_(); });
   }, { title: 'استعادة دفعة', danger: false });
+}
+// ↩️ (V4.362) الحسابات المحذوفة من الدليل مع قيودها — معاينة ثم استعادة كاملة (للمدير)
+function snapAccDelLoad_() {
+  var b = document.getElementById('_snapBody'), e = escapeHtml_; b.innerHTML = '<div class="text-center text-muted py-4">⏳</div>';
+  _snapRun_('glAccDeletedList', [], function (r) {
+    if (!r.rows.length) { b.innerHTML = '<div class="text-muted p-3">لا حسابات محذوفة.</div>'; return; }
+    b.innerHTML = '<div class="small text-muted mb-2">كل حساب حُذف من الدليل مع قيوده محفوظ بنسخة كاملة (برقم العملية). «استعادة» تعيده بنفس كوده وقيوده بنفس أرقامها وكل مراجعه، بعد معاينة.</div>' +
+      '<table class="table table-sm" style="font-size:12.5px;"><thead><tr><th>الوقت</th><th>الحساب</th><th>القيود</th><th>بواسطة</th><th>رقم العملية</th><th>الحالة</th><th></th></tr></thead><tbody>' +
+      r.rows.map(function (x) {
+        var done = /مُستعاد/.test(x.state);
+        return '<tr><td class="gl-latin" style="white-space:nowrap">' + e(_tsMdy_(x.at)) + '</td><td><b class="gl-latin">' + e(x.code) + '</b> — ' + e(x.name) + '</td><td class="gl-latin">' + x.deleted + ' (' + x.lines + ' سطراً)</td><td>' + e(x.by) +
+          '</td><td class="gl-latin small">' + e(x.delId) + '</td><td>' + (done ? '<span class="text-success">' + e(x.state) + '</span>' : (x.state === 'تم' ? 'محذوف' : '<span class="text-danger">' + e(x.state) + '</span>')) + '</td><td>' +
+          (!done && x.state === 'تم' ? '<button class="btn btn-sm btn-warning py-0" data-del="' + e(x.delId) + '" onclick="snapAccRestore_(this.getAttribute(\'data-del\'), this)">↩️ استعادة</button>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }, b);
+}
+function snapAccRestore_(delId, btn) {
+  _snapRun_('glAccountRestore', [delId, true], function (P) {
+    if (!P.ok) { _showPopup('لا يمكن استعادة هذا الحساب:\n• ' + (P.conflicts || []).join('\n• '), 'error'); return; }
+    askConfirm_('↩️ استعادة الحساب ' + P.code + ' — ' + P.name + ' بنفس كوده، و' + P.entries + ' قيداً (' + P.lines + ' سطراً) بنفس أرقامها' + (P.moved ? '، وإعادة ' + P.moved + ' سطراً افتتاحياً لحسابه' : '') +
+      (P.voidRules ? '، وإزالة ' + P.voidRules + ' قاعدة إلغاء أضافها الحذف' : '') + (P.movedMissing && P.movedMissing.length ? '\n⚠️ أسطر افتتاحية تغيّرت منذ الحذف ولن تُعاد: ' + P.movedMissing.join('، ') : '') + '؟\nتؤخذ نقطة استعادة قبلها.', function () {
+      btn.disabled = true; btn.textContent = '⏳';
+      _snapRun_('glAccountRestore', [delId, false], function (R) {
+        _showPopup('✅ استُعيد الحساب ' + R.code + ' — ' + R.name + '\nالقيود: ' + R.entries + ' (' + R.lines + ' سطراً)' + (R.moved ? '\nأسطر افتتاحية أُعيدت: ' + R.moved : ''), 'success');
+        try { glAfterChange(); } catch (e0) {}
+        snapAccDelLoad_();
+      });
+    }, { title: 'استعادة حساب محذوف', danger: false, yesLabel: 'نعم، استعِد' });
+  });
 }
 function loadAuditLogTable() {
   var tbody = document.getElementById('auditLogTableBody');
@@ -52621,7 +52714,7 @@ function glAccDelGo_(code, sig, n, btn) {
     btn.disabled = true;
     glRun('glAccountDelete', [code, t, sig], function (res) {
       glDlgClose();
-      _showPopup('🗑️ حُذف الحساب ' + res.code + ' — ' + res.name + (res.deleted ? '\nقيود محذوفة: ' + res.deleted + ' (' + res.lines + ' سطراً)' : '') + (res.reassigned ? '\nقيود افتتاحية حُوِّل سطره فيها لـ34: ' + res.reassigned : '') + '\nرقم عملية الحذف (للاستعادة): ' + res.delId, 'success', 'حذف حساب');
+      _showPopup('🗑️ حُذف الحساب ' + res.code + ' — ' + res.name + '\n↩️ للاستعادة: سجل التعديلات ← ⏪ التراجع الزمني ← 🗂️ الحسابات المحذوفة' + (res.deleted ? '\nقيود محذوفة: ' + res.deleted + ' (' + res.lines + ' سطراً)' : '') + (res.reassigned ? '\nقيود افتتاحية حُوِّل سطره فيها لـ34: ' + res.reassigned : '') + '\nرقم عملية الحذف (للاستعادة): ' + res.delId, 'success', 'حذف حساب');
       try { glApplyDelta_(res); } catch (e) {}
       glRefreshData(function () { glTab('coa'); });
     }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); });
