@@ -298,10 +298,10 @@ function _glNamedLock_(name) {
   };
   var take = function (ms) {
     if (_GL_NL_DEPTH_[name] > 0) { _GL_NL_DEPTH_[name]++; held = true; return true; }
-    var end = Date.now() + Math.max(0, ms || 0), wait = 150;
+    var t0 = Date.now(), end = t0 + Math.max(0, ms || 0), wait = 150;
     try {
       for (;;) {
-        if (attempt()) { _GL_NL_DEPTH_[name] = 1; held = true; return true; }
+        if (attempt()) { _GL_NL_DEPTH_[name] = 1; held = true; try { if (typeof _perfLockWait_ === 'function') _perfLockWait_(name, Date.now() - t0); } catch (eP) {} return true; }
         if (Date.now() + wait > end) return false;
         Utilities.sleep(wait); wait = Math.min(1000, Math.round(wait * 1.5));
       }
@@ -8806,7 +8806,17 @@ function _glBotFmt_(it) {
 }
 // يُستدعى كل دقيقة من مهمة بوت الحجوزات الدورية (drainTelegramQueue)
 function glBotTick_() {
+  // ⚡ (V4.365) يعمل كل دقيقة: لا نفتح ملف الحسابات لقراءة الإعدادات إلا إن كان هناك ما يُرسل (طابور غير فارغ أو ملخص يومي مستحق)
+  try {
+    var P0 = PropertiesService.getScriptProperties(), q0 = P0.getProperty('GLBOT_Q');
+    if (!q0 || q0 === '[]') {
+      var n0 = new Date(), tz0 = _tz_() || 'Africa/Cairo', day0 = Utilities.formatDate(n0, tz0, 'yyyyMMdd'), dh0 = CacheService.getScriptCache().get('glbot_dh');
+      if (P0.getProperty('GLBOT_DAILY') === day0) return;
+      if (dh0 !== null && +Utilities.formatDate(n0, tz0, 'H') < +dh0) return;
+    }
+  } catch (eQ) {}
   var c; try { if (!_glSSId_()) return; _GL_SET_MEMO_ = null; c = _glBotCfg_(); } catch (e0) { return; }
+  try { CacheService.getScriptCache().put('glbot_dh', String(c.enabled && c.chatId && c.events.daily_cash ? (+c.dailyHour || 0) : 99), 600); } catch (eD0) {}
   if (!c.enabled || !c.chatId) return;
   var P = PropertiesService.getScriptProperties(), q = [];
   try { q = JSON.parse(P.getProperty('GLBOT_Q') || '[]') || []; } catch (e) { q = []; }

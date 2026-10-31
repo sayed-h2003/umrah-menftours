@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.364  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.365  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8423,7 +8423,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.364";
+var CLIENT_APP_VERSION = "4.365";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -53936,11 +53936,94 @@ function perfRender_(r) {
     '<div class="d-flex flex-wrap gap-2 align-items-center mb-2">' + btn(1, 'اليوم') + btn(7, '7 أيام') + btn(30, '30 يوماً') +
       '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="perfLoad_()">↺ تحديث</button>' +
       '<label class="form-check form-switch small mb-0 ms-auto"><input class="form-check-input" type="checkbox" ' + (r.on ? 'checked' : '') + ' onchange="perfToggle_(this)"> القياس مفعّل</label></div>' +
+    '<div class="border rounded p-2 mb-2" style="background:#f8fafc"><div class="d-flex flex-wrap gap-2 align-items-center">' +
+      '<button type="button" class="btn btn-sm btn-outline-dark" onclick="perfSpeedTest_(this)">🧪 اختبار سرعة الاتصال</button>' +
+      '<button type="button" class="btn btn-sm btn-dark" onclick="perfDiagCopy_(this)">📋 نسخ تقرير التشخيص</button>' +
+      '<input id="perfBaseUrl" class="form-control form-control-sm" style="max-width:340px" dir="ltr" placeholder="(اختياري) رابط مشروع الاختبار الفارغ /exec" value="' + escapeHtml_(_perfLs_('perf_base_url')) + '" onchange="_perfLs_(\'perf_base_url\', this.value.trim())"></div>' +
+      '<div class="small text-muted mt-1">بعد يوم عمل عادي: اضغط «🧪 اختبار سرعة الاتصال» ثم «📋 نسخ تقرير التشخيص» والصق النص في المحادثة. التقرير يجمع كل ما يلزم (النداءات بساعات اليوم، زمن الخادم العادي، انتظار الأقفال، المشغّلات، أحجام الأوراق، نتيجة الاختبار).</div>' +
+      '<div id="perfDiagOut"></div></div>' +
     '<div class="text-muted small mb-2">الزمن كما يشعر به المستخدم (من الضغط حتى وصول الرد) — من ' + (r.reports || 0) + ' دفعة قياس لـ ' + (r.users || 0) + ' مستخدم. الدوال المقيسة على الخادم: ' + (r.wrapped || 0) + '.</div>' +
     (r.boot && r.boot.n ? '<div class="alert alert-light border small py-2 mb-2">🚀 <b>زمن تحميل كود الخادم</b> قبل أن تبدأ أي دالة (عيّنة من ' + r.boot.n + ' تنفيذ، آخر 6 ساعات): المتوسط <span class="' + _perfCls_(r.boot.avg) + '">' + _perfMs_(r.boot.avg) + '</span> · الأقصى ' + _perfMs_(r.boot.max) + ' — جزء من الزمن الثابت لكل نداء.</div>' : '') +
     '<h6 class="fw-bold mt-2">🐢 الأكثر استهلاكاً للوقت (المرات × الزمن)</h6>' + tbl(r.byTotal, colsC, 'لا توجد قياسات بعد — تظهر بعد دقائق من الاستخدام.') +
     '<h6 class="fw-bold">⏳ الأبطأ في المتوسط (3 مرات على الأقل)</h6>' + tbl(r.byAvg, colsC, '—') +
     '<h6 class="fw-bold">🖥️ الخادم — نداءات تجاوزت ' + _perfMs_(r.slowMs) + ' (آخر 6 ساعات)</h6>' + tbl(r.server, colsS, 'لا نداءات بطيئة مسجّلة.');
+}
+// 🧪📋 (V4.365) اختبار سرعة الاتصال + تقرير التشخيص المنسوخ
+var PERF_SPEED_ = null;
+function _perfLs_(k, v) { try { if (v === undefined) return localStorage.getItem(k) || ''; localStorage.setItem(k, v); } catch (e) { return ''; } return v; }
+function _perfMed_(a) { a = (a || []).filter(function (x) { return x >= 0; }).sort(function (x, y) { return x - y; }); return a.length ? a[Math.floor(a.length / 2)] : -1; }
+function _perfGsr_(fn, args) {
+  return new Promise(function (res, rej) {
+    var r = google.script.run.withSuccessHandler(res).withFailureHandler(rej); r[fn].apply(r, args);
+  });
+}
+function _perfFetchMs_(url) {
+  var t = Date.now();
+  return fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'perfping=1&_=' + t, { method: 'GET', redirect: 'follow', cache: 'no-store' })
+    .then(function (r) { return r.text(); }).then(function () { return Date.now() - t; })
+    .catch(function (e) { return 'ERR:' + String(e && e.message || e).slice(0, 60); });
+}
+async function perfSpeedTest_(btn) {
+  var out = document.getElementById('perfDiagOut'); btn.disabled = true;
+  var R = { gsr: [], boot: [], exec: [], base: [], at: new Date().toISOString() };
+  try {
+    out.innerHTML = '<div class="small text-muted mt-2">⏳ 1/3 نداءات البرنامج العادية (6 مرات متتالية)…</div>';
+    var url = '';
+    for (var i = 0; i < 6; i++) {
+      var t = Date.now(), r = await _perfGsr_('perfPing', [window.authToken, i === 0]);
+      R.gsr.push(Date.now() - t); R.boot.push(r && r.boot); if (r && r.url) url = r.url;
+    }
+    R.execUrl = url;
+    out.innerHTML = '<div class="small text-muted mt-2">⏳ 2/3 الرابط المباشر لنفس المشروع (5 مرات)…</div>';
+    if (url) for (var j = 0; j < 5; j++) R.exec.push(await _perfFetchMs_(url));
+    var base = (document.getElementById('perfBaseUrl') || {}).value || '';
+    if (base) { out.innerHTML = '<div class="small text-muted mt-2">⏳ 3/3 مشروع الاختبار الفارغ (5 مرات)…</div>'; for (var k = 0; k < 5; k++) R.base.push(await _perfFetchMs_(base.trim())); }
+  } catch (e) { R.err = String(e && e.message || e); }
+  PERF_SPEED_ = R; _perfLs_('perf_speed_last', JSON.stringify(R)); btn.disabled = false;
+  var f = function (a) { return a.length ? a.join(' · ') + ' ms (الوسيط ' + _perfMed_(a) + ')' : '—'; };
+  out.innerHTML = '<div class="small mt-2"><b>نتيجة الاختبار</b><br>📡 نداء البرنامج العادي: ' + f(R.gsr) + '<br>🔗 الرابط المباشر لنفس المشروع: ' + f(R.exec) +
+    '<br>📦 مشروع فارغ: ' + (R.base.length ? f(R.base) : 'لم يُضبط رابطه') + (R.err ? '<br><span class="text-danger">' + escapeHtml_(R.err) + '</span>' : '') + '</div>';
+}
+function _perfDiagText_(d, sp) {
+  var L = [], j = function (a) { return a.join('|'); };
+  L.push('# PERF-DIAG v' + d.v + ' | ' + d.at + ' | tz=' + d.tz + ' | days=' + d.days + ' | users=' + d.users + ' | batches=' + d.reports + ' | wrapped=' + d.wrapped + ' | on=' + d.on + ' | diagMs=' + d.ms);
+  L.push('## boot n=' + (d.boot && d.boot.n) + ' avg=' + (d.boot && d.boot.avg) + ' max=' + (d.boot && d.boot.max));
+  if (sp) L.push('## speed at=' + sp.at + '\ngsr=' + sp.gsr.join(',') + ' med=' + _perfMed_(sp.gsr) + '\nexec=' + sp.exec.join(',') + ' med=' + _perfMed_(sp.exec) + '\nbase=' + (sp.base.join(',') || '-') + ' med=' + _perfMed_(sp.base) + '\nbootOnPing=' + sp.boot.join(',') + (sp.err ? '\nerr=' + sp.err : ''));
+  else L.push('## speed (لم يُشغَّل)');
+  L.push('## client app|fn|n|avg|max|tot|slow3s|err');
+  (d.client || []).forEach(function (a) { L.push(j([a.app, a.fn, a.n, a.avg, a.max, a.tot, a.slow, a.err])); });
+  L.push('## hours h|calls|tot|avg|slow3s|users');
+  (d.hours || []).forEach(function (a) { L.push(j([a.h, a.n, a.tot, a.avg, a.slow, a.users])); });
+  L.push('## srv-sample fn|n|avg|p50|p90|max|lockWaitAvg|lockWaitN|err');
+  (d.srv || []).forEach(function (a) { L.push(j([a.fn, a.n, a.avg, a.p50, a.p90, a.max, a.lwAvg, a.lwN, a.err])); });
+  L.push('## srv-slow fn|n|avg|max|err');
+  (d.slow || []).forEach(function (a) { L.push(j([a.fn, a.n, a.avg, a.max, a.err])); });
+  L.push('## triggers\n' + (d.triggers || []).join('\n'));
+  L.push('## sheets file|name|rows|cols|maxRows|maxCols');
+  (d.sheets || []).forEach(function (a) { L.push(j([a.f, a.n, a.r, a.c, a.mr, a.mc])); });
+  L.push('## props ' + JSON.stringify(d.props || {}));
+  var nv = navigator || {}, cn = nv.connection || {};
+  L.push('## browser ua=' + (nv.userAgent || '') + ' | cores=' + (nv.hardwareConcurrency || '') + ' | mem=' + (nv.deviceMemory || '') + ' | net=' + (cn.effectiveType || '') + '/' + (cn.downlink || '') + 'Mb/' + (cn.rtt || '') + 'ms');
+  if (d.clientErr) L.push('## clientErr ' + d.clientErr);
+  return L.join('\n');
+}
+function _perfCopy_(txt) {
+  var ok = false;
+  try { var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); } catch (e) {}
+  if (!ok && navigator.clipboard) { try { navigator.clipboard.writeText(txt); ok = true; } catch (e2) {} }
+  return ok;
+}
+function perfDiagCopy_(btn) {
+  var out = document.getElementById('perfDiagOut'); btn.disabled = true; var lbl = btn.textContent; btn.textContent = '⏳ جارٍ التجميع…';
+  try { if (window.PERF_) window.PERF_.flush(); } catch (e) {}
+  var sp = PERF_SPEED_; if (!sp) { try { sp = JSON.parse(_perfLs_('perf_speed_last') || 'null'); } catch (e) {} }
+  google.script.run.withSuccessHandler(function (d) {
+    btn.disabled = false; btn.textContent = lbl;
+    var txt = _perfDiagText_(d, sp), ok = _perfCopy_(txt);
+    out.innerHTML = '<div class="small mt-2 ' + (ok ? 'text-success' : 'text-warning') + '">' + (ok ? '✅ نُسخ التقرير (' + txt.length + ' حرفاً) — الصقه في المحادثة.' : '⚠️ تعذّر النسخ التلقائي — حدّد النص بالأسفل وانسخه يدوياً.') +
+      (sp ? '' : ' (لم يُشغَّل اختبار السرعة — يُفضّل تشغيله أولاً)') + '</div><textarea class="form-control form-control-sm mt-1" rows="6" dir="ltr" readonly onclick="this.select()">' + escapeHtml_(txt) + '</textarea>';
+  }).withFailureHandler(function (e) { btn.disabled = false; btn.textContent = lbl; out.innerHTML = '<div class="text-danger small mt-2">❌ ' + escapeHtml_(e.message || e) + '</div>'; })
+    .perfDiag(window.authToken, { days: PERF_DAYS_ });
 }
 function perfToggle_(el) {
   google.script.run.withSuccessHandler(function () { perfLoad_(); })

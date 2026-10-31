@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.364";
+var APP_VERSION = "4.365";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -79,6 +79,8 @@ function clearAllCacheManual_() {
  * ⚠️ لا يوجد أي دالة تانية بتنادي doGet — دي بتتنفذ تلقائياً من منصة Apps Script فقط.
  */
 function doGet(e) {
+  // 🧪 (V4.365) اختبار سرعة الاتصال عبر الرابط مباشرة — يرجع فوراً قبل أي عمل آخر
+  if (e && e.parameter && e.parameter.perfping && typeof _perfPingOut_ === 'function') return _perfPingOut_();
 
   // 🧭 تشخيص: يثبت في سجل Executions أن هذا التنفيذ هو فعلاً من نسخة الكود التي تحمل هذا الإصدار،
   // فتقدر تتأكد إن النشر (Deploy) الفعلي محدَّث بمقارنة الرقم هنا مع V3.57 في الشريط العلوي بالمتصفح.

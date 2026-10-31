@@ -6584,23 +6584,25 @@ function tgProcessUpdate_(upd) {
   else tgLog_(upd.update_id, m.chat && m.chat.id, m.chat && m.chat.type, who, body, 'تجاهل — نوع غير مدعوم');
 }
 
+// ⏱️ (V4.365) قياس كل جزء من مهمة الدقيقة (يُسجَّل في «قياس الأداء» باسم drainTelegramQueue›الجزء إن تجاوز 0.3 ث)
+function _tgStep_(name, fn) { return (typeof _perfStep_ === 'function') ? _perfStep_('drainTelegramQueue›' + name, fn) : fn(); }
 function drainTelegramQueue() {
   // وضع السحب: نسحب التحديثات الواردة أولاً (الأوامر والأزرار والربط) ثم نُرسل الطابور.
   // في الوضع اللحظي (ويب هوك) ترجع هذه فورًا بلا أي نداء شبكة
-  try { tgPollUpdates_(); } catch (ePoll) { Logger.log('drain/poll: ' + ePoll.message); }
+  try { _tgStep_('poll', function () { tgPollUpdates_(); }); } catch (ePoll) { Logger.log('drain/poll: ' + ePoll.message); }
   // فحص خفيف (نداء شبكة واحد) كل دقيقة في وضع الويب هوك فقط — يضمن عدم بقاء التسجيل معطَّلاً
   // بصمت لأكثر من دورة واحدة مهما كان سبب العطل
-  try { tgWebhookSelfHeal_(); } catch (eHeal) { Logger.log('drain/heal: ' + eHeal.message); }
+  try { _tgStep_('heal', function () { tgWebhookSelfHeal_(); }); } catch (eHeal) { Logger.log('drain/heal: ' + eHeal.message); }
   // تفريغ دفعات تعديل الحجوزات المُجمَّعة التي انتهت مهلتها — بصرف النظر عن وضع البوت
-  try { tgFlushDueBookingEditBatches_(); } catch (eBatch) { Logger.log('drain/batch: ' + eBatch.message); }
+  try { _tgStep_('editBatch', function () { tgFlushDueBookingEditBatches_(); }); } catch (eBatch) { Logger.log('drain/batch: ' + eBatch.message); }
   // ⏳ (V4.333) طابور عمليات الحسابات: يُفرَّغ ما تبقى فيه حتى لو أُغلقت صفحة صاحبه
-  try { if (typeof glJobTick_ === 'function') glJobTick_(); } catch (eJq) { Logger.log('drain/jobq: ' + eJq.message); }
+  try { if (typeof glJobTick_ === 'function') _tgStep_('glJobs', function () { glJobTick_(); }); } catch (eJq) { Logger.log('drain/jobq: ' + eJq.message); }
   // ⚡ (V4.330) تعديلات الشيت التي لم تُرحَّل فوراً (مزامنة جارية/قفل مشغول) تُلتقط هنا خلال دقيقة
-  try { if (typeof hbGlLiveRun_ === 'function') hbGlLiveRun_(); } catch (eLive) { Logger.log('drain/hblive: ' + eLive.message); }
+  try { if (typeof hbGlLiveRun_ === 'function') _tgStep_('hbLive', function () { hbGlLiveRun_(); }); } catch (eLive) { Logger.log('drain/hblive: ' + eLive.message); }
   // مزامنة شيت العهد الخارجي (CustodySync.gs) — مُقيَّدة بمهلتها الخاصة، ولا تعمل أصلاً ما
   // لم يُضبَط شيت عهدة. الحارس typeof يمنع أي عطل لو لم يُلصَق ملف المزامنة في المشروع
-  try { if (typeof glBotTick_ === 'function') glBotTick_(); } catch (eGlb) { Logger.log('drain/glbot: ' + eGlb.message); }
-  try { if (typeof custodySyncTick_ === 'function') custodySyncTick_(); }
+  try { if (typeof glBotTick_ === 'function') _tgStep_('glBot', function () { glBotTick_(); }); } catch (eGlb) { Logger.log('drain/glbot: ' + eGlb.message); }
+  try { if (typeof custodySyncTick_ === 'function') _tgStep_('custody', function () { custodySyncTick_(); }); }
   catch (eCus) { Logger.log('drain/custody: ' + eCus.message); }
   // طابور فارغ = لا شيء نفعله: لا قفل، ولا فتح ملف الشيت، ولا قراءة ورقة
   if (!tgQueueShouldScan_()) return { ok: true, sent: 0, reason: 'الطابور فارغ' };

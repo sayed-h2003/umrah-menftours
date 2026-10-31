@@ -12,6 +12,10 @@
    ============================================================================ */
 var PERF_SLOW_MS_ = 800, PERF_RING_ = 150, PERF_SHEET_ = '⏱️ قياس الأداء', PERF_PROP_OFF_ = 'PERF_OFF';
 var _PERF_DEPTH_ = 0;
+// 🔬 (V4.365) عيّنة عامة (لا البطيء فقط): ربع النداءات تُسجَّل بزمنها + زمن انتظار الأقفال (lw) — لنعرف الزمن «العادي» لا الأسوأ فقط
+var PERF_SAMPLE_ = 0.25, PERF_ARING_ = 300, PERF_STEP_MS_ = 300, _PERF_LW_ = 0, _PERF_LWN_ = {};
+// معالجات مشغّلات تنتهي بـ _ (لا يلفّها التركيب العام) لكنها تعمل كثيراً — نقيسها أيضاً
+var PERF_EXTRA_ = ['tgHandleSheetEditInstallable_'];
 
 function _perfRec_(name, ms, failed) {
   try {
@@ -20,10 +24,26 @@ function _perfRec_(name, ms, failed) {
     c.put('perf_s_' + Math.floor(Math.random() * PERF_RING_), JSON.stringify({ f: name, ms: ms, at: Date.now(), e: failed ? 1 : 0 }), 21600);
   } catch (e) {}
 }
+// عيّنة عامة: {f, ms, lw: انتظار الأقفال ms, e}
+function _perfRecA_(name, ms, lw, failed) {
+  try {
+    var c = CacheService.getScriptCache();
+    if (c.get('perf_off') === '1') return;
+    c.put('perf_a_' + Math.floor(Math.random() * PERF_ARING_), JSON.stringify({ f: name, ms: ms, lw: lw || 0, at: Date.now(), e: failed ? 1 : 0 }), 21600);
+  } catch (e) {}
+}
+// قياس خطوة داخلية (مثل أجزاء مهمة الدقيقة): تُسجَّل في حلقة البطء باسم «الأب›الخطوة» إن تجاوزت PERF_STEP_MS_
+function _perfStep_(name, fn) {
+  var t0 = Date.now();
+  try { return fn(); }
+  finally { var ms = Date.now() - t0; if (ms >= PERF_STEP_MS_) _perfRec_(name, ms, false); }
+}
+// يُستدعى من أقفال الحسابات: كم انتظرنا قبل أخذ القفل
+function _perfLockWait_(name, ms) { if (!(ms > 0)) return; _PERF_LW_ += ms; _PERF_LWN_[name] = (_PERF_LWN_[name] || 0) + ms; }
 function _perfWrap_(name, fn) {
   var w = function () {
     if (_PERF_DEPTH_ > 0) return fn.apply(this, arguments);
-    _PERF_DEPTH_++;
+    _PERF_DEPTH_++; _PERF_LW_ = 0;
     var t0 = Date.now(), failed = false;
     try { return fn.apply(this, arguments); }
     catch (e) { failed = true; throw e; }
@@ -31,6 +51,7 @@ function _perfWrap_(name, fn) {
       _PERF_DEPTH_--;
       var ms = Date.now() - t0;
       if (ms >= PERF_SLOW_MS_) _perfRec_(name, ms, failed);
+      if (ms >= PERF_SLOW_MS_ || Math.random() < PERF_SAMPLE_) _perfRecA_(name, ms, _PERF_LW_, failed);
     }
   };
   w._perfOrig_ = fn;
@@ -49,6 +70,7 @@ function _perfInstall_() {
     if (src.indexOf('function ' + k + '(') !== 0 || src.indexOf('[native code]') >= 0) return;   // دوال المشروع المعرَّفة بالاسم فقط
     try { G[k] = _perfWrap_(k, f); n++; } catch (e) {}
   });
+  PERF_EXTRA_.forEach(function (k) { try { if (typeof G[k] === 'function' && !G[k]._perfOrig_) { G[k] = _perfWrap_(k, G[k]); n++; } } catch (e) {} });
   try { G.__perfInstalled__ = n; } catch (e) {}
   return n;
 }
@@ -151,4 +173,86 @@ function perfSetOn(token, on) {
   else { p.setProperty(PERF_PROP_OFF_, '1'); try { CacheService.getScriptCache().put('perf_off', '1', 21600); } catch (e) {} }
   try { logChange_(s.user, on ? 'تشغيل قياس الأداء' : 'إيقاف قياس الأداء', '-', 'PERF', '-', on ? 'مفعّل' : 'موقوف'); } catch (e) {}
   return { success: true, on: !!on };
+}
+
+// ---------- 🧪 (V4.365) اختبار سرعة الاتصال ----------
+// دالة فارغة تقريباً: زمن ذهابها وإيابها من المتصفح = الكلفة الثابتة لأي نداء (المنصة + تحميل الكود) بلا أي عمل
+function perfPing(token, wantUrl) {
+  _perfSession_(token);   // 🔒 لا دالة عامة بلا جلسة (V4.358) — قراءة كاش واحدة تقريباً
+  var r = { t: Date.now(), boot: _PERF_BOOT_MS_, v: (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '') };
+  if (wantUrl) { try { r.url = ScriptApp.getService().getUrl(); } catch (e) {} }
+  return r;
+}
+// نفس الاختبار عبر رابط النشر مباشرة (doGet ?perfping=1) — للمقارنة مع مشروع فارغ منشور بنفس الطريقة
+function _perfPingOut_() {
+  return ContentService.createTextOutput(JSON.stringify({ ok: 1, t: Date.now(), boot: _PERF_BOOT_MS_ })).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ---------- 📋 (V4.365) تقرير التشخيص الكامل (للمدير) ----------
+function _perfP_(arr, q) { if (!arr.length) return 0; var a = arr.slice().sort(function (x, y) { return x - y; }); return a[Math.min(a.length - 1, Math.floor(q * a.length))]; }
+function perfDiag(token, opts) {
+  var s = _perfSession_(token);
+  if (!s.admin) throw new Error('للمدير فقط');
+  opts = opts || {};
+  var t0 = Date.now(), out = { v: (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), at: new Date().toISOString(), tz: _tz_() };
+  var top = perfTop(token, { days: opts.days || 1 });
+  out.days = top.days; out.users = top.users; out.reports = top.reports; out.wrapped = top.wrapped; out.boot = top.boot; out.on = top.on;
+  // 1) نداءات المتصفح: كل الدوال (لا أعلى 30 فقط) + التوزيع على ساعات اليوم
+  var since = Date.now() - out.days * 86400000, agg = {}, hours = {};
+  try {
+    var sh = getSpreadsheet_().getSheetByName(PERF_SHEET_);
+    if (sh && sh.getLastRow() > 1) {
+      var last = sh.getLastRow(), from = Math.max(2, last - 20000 + 1);
+      sh.getRange(from, 1, last - from + 1, 4).getValues().forEach(function (r) {
+        var t = r[0] instanceof Date ? r[0].getTime() : 0; if (t < since) return;
+        var h = +Utilities.formatDate(r[0], out.tz, 'H'), H = hours[h] || (hours[h] = { n: 0, tot: 0, slow: 0, users: {} });
+        H.users[r[2]] = 1;
+        var list = []; try { list = JSON.parse(r[3] || '[]'); } catch (e) { return; }
+        list.forEach(function (x) {
+          var k = r[1] + '|' + x[0], a = agg[k] || (agg[k] = { app: String(r[1]), fn: x[0], n: 0, tot: 0, max: 0, slow: 0, err: 0 });
+          a.n += +x[1] || 0; a.tot += +x[2] || 0; a.max = Math.max(a.max, +x[3] || 0); a.slow += +x[4] || 0; a.err += +x[5] || 0;
+          H.n += +x[1] || 0; H.tot += +x[2] || 0; H.slow += +x[4] || 0;
+        });
+      });
+    }
+  } catch (e) { out.clientErr = String(e.message || e); }
+  out.client = Object.keys(agg).map(function (k) { var a = agg[k]; a.avg = a.n ? Math.round(a.tot / a.n) : 0; return a; }).sort(function (a, b) { return b.tot - a.tot; }).slice(0, 200);
+  out.hours = Object.keys(hours).map(function (h) { var H = hours[h]; return { h: +h, n: H.n, tot: H.tot, avg: H.n ? Math.round(H.tot / H.n) : 0, slow: H.slow, users: Object.keys(H.users).length }; }).sort(function (a, b) { return a.h - b.h; });
+  // 2) الخادم: العيّنة العامة (زمن عادي + انتظار الأقفال) والبطيء والخطوات الداخلية
+  var c = CacheService.getScriptCache(), ka = [];
+  for (var i = 0; i < PERF_ARING_; i++) ka.push('perf_a_' + i);
+  var got = {}; try { got = c.getAll(ka) || {}; } catch (e) {}
+  var sa = {};
+  Object.keys(got).forEach(function (k) {
+    var o = null; try { o = JSON.parse(got[k]); } catch (e) {} if (!o || !o.f) return;
+    var a = sa[o.f] || (sa[o.f] = { fn: o.f, ms: [], lw: 0, lwN: 0, err: 0 });
+    a.ms.push(o.ms); if (o.lw > 0) { a.lw += o.lw; a.lwN++; } a.err += o.e ? 1 : 0;
+  });
+  out.srv = Object.keys(sa).map(function (k) {
+    var a = sa[k], tot = a.ms.reduce(function (x, y) { return x + y; }, 0);
+    return { fn: a.fn, n: a.ms.length, avg: Math.round(tot / a.ms.length), p50: _perfP_(a.ms, 0.5), p90: _perfP_(a.ms, 0.9), max: Math.max.apply(null, a.ms), lwAvg: a.lwN ? Math.round(a.lw / a.lwN) : 0, lwN: a.lwN, err: a.err };
+  }).sort(function (a, b) { return b.n * b.avg - a.n * a.avg; });
+  out.slow = top.server;   // حلقة البطء (تشمل خطوات مهمة الدقيقة «drainTelegramQueue›…»)
+  // 3) المشغّلات
+  try { out.triggers = ScriptApp.getProjectTriggers().map(function (t) { return t.getHandlerFunction() + ' (' + String(t.getEventType()) + ')'; }); } catch (e) { out.triggers = ['تعذّر: ' + e.message]; }
+  // 4) أحجام الأوراق (الصفوف المستخدمة والقصوى — الصفوف الفارغة الزائدة تبطئ القراءة)
+  out.sheets = [];
+  var addSS = function (label, ss) {
+    try {
+      ss.getSheets().forEach(function (shx) {
+        out.sheets.push({ f: label, n: shx.getName(), r: shx.getLastRow(), c: shx.getLastColumn(), mr: shx.getMaxRows(), mc: shx.getMaxColumns() });
+      });
+    } catch (e) { out.sheets.push({ f: label, n: 'تعذّر: ' + e.message }); }
+  };
+  addSS('main', getSpreadsheet_());
+  try { if (typeof _glSSId_ === 'function' && _glSSId_() && _glSSId_() !== getSpreadsheet_().getId()) addSS('gl', SpreadsheetApp.openById(_glSSId_())); } catch (e) {}
+  // 5) خصائص السكربت (الحد 500KB) وطوابير الخلفية
+  try {
+    var P = PropertiesService.getScriptProperties().getProperties(), bytes = 0, big = [];
+    Object.keys(P).forEach(function (k) { var b = k.length + String(P[k]).length; bytes += b; if (b > 8000) big.push(k + ':' + b); });
+    out.props = { n: Object.keys(P).length, bytes: bytes, big: big, audQ: Object.keys(P).filter(function (k) { return /^AUDQ/i.test(k); }).length, glbotQ: String(P.GLBOT_Q || '[]').length };
+  } catch (e) { out.props = { err: String(e.message || e) }; }
+  try { out.execUrl = ScriptApp.getService().getUrl(); } catch (e) {}
+  out.ms = Date.now() - t0;
+  return out;
 }
