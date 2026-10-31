@@ -221,10 +221,12 @@ function hbPayEntryAct(token, payId, act, entryId) {
     try {
       _GL_SET_MEMO_ = null; _GL_ACC_MEMO_ = null; payId = String(payId || '');
       var who = (user && user.username) || 'الحجوزات';
+      var prevLink = ''; try { prevLink = String((JSON.parse(_glSettings_().hb_paylink || '{}') || {})[payId] || ''); } catch (eP) {}
       if (act === 'link') {
         var f = _glFindEntry_(String(entryId || '')); if (!f || String(f.r[5]) !== GL_ST_POSTED_) return { ok: false, error: 'القيد غير موجود أو غير مرحَّل' };
         _glHbPayMapSet_('hb_paylink', payId, String(entryId)); _glHbPayMapSet_('hb_paynoent', payId, '');
-      } else if (act === 'unlink') { _glHbPayMapSet_('hb_paylink', payId, ''); }
+        _glMirQ_(String(entryId)); if (prevLink && prevLink !== String(entryId)) _glMirQ_(prevLink);   // 🔗 (V4.366) نسخة «GL:» للقيد تُزال (الدفعة تمثّله) — والقيد السابق تعود نسخته
+      } else if (act === 'unlink') { _glHbPayMapSet_('hb_paylink', payId, ''); if (prevLink) _glMirQ_(prevLink); }
       else if (act === 'ignore') { _glHbPayMapSet_('hb_paynoent', payId, 1); }
       else if (act === 'unignore') { _glHbPayMapSet_('hb_paynoent', payId, ''); }
       else if (act === 'create') {
@@ -232,8 +234,9 @@ function hbPayEntryAct(token, payId, act, entryId) {
         if (!r || !(r.created || r.updated)) return { ok: false, error: 'لم يُنشأ قيد — تحقق من ربط الطرف بحساب (🗂️ خريطة الحسابات) ثم أعد المحاولة' };
       } else return { ok: false, error: 'إجراء غير معروف' };
       try { logChange_(who, 'ربط دفعة فندق بقيد (' + act + ')', 'GL:hbpaylink', payId, '-', String(entryId || '')); } catch (eL) {}
-      return { ok: true };
     } finally { _glUnlock_(lock); }
+    try { _glMirFlush_(30000); } catch (eF) {}   // خارج القفل: تحديث كشف الفندق فوراً
+    return { ok: true };
   } catch (e) { return { ok: false, error: e.message }; }
 }
 /* 🔍 (V4.338) تقرير الدفعات المشتبه بتكرارها (نفس الطرف والتاريخ والمبلغ) + تنفيذ قرار المستخدم (حذف/دمج/إبقاء/تجاهل) */
@@ -546,4 +549,14 @@ function testTelegramWebhookUrl(token, baseUrl) {
     var r = tgSelfTestWebhook_(url);
     return safeReturn_({ ok: r.ok ? true : 0, code: r.code, location: r.location || '', verdict: r.verdict || '' });
   } catch (e) { return { ok: false, error: e.message }; }
+}
+
+// 🔗 (V4.366) لمرة واحدة بعد النشر (من مهمة الدقيقة): كل قيد مربوط يدوياً بدفعة حجوزات يُعاد نسخه لكشف الفندق بلا الطرف المربوط
+function _glHbLinkedMirFix_() {
+  var P = PropertiesService.getScriptProperties(); if (P.getProperty('HB_LNKMIR_V4366')) return;
+  if (typeof _glHbOn_ !== 'function' || !_glHbOn_()) { P.setProperty('HB_LNKMIR_V4366', 'off'); return; }
+  var pl = {}; try { pl = JSON.parse(_glSettings_().hb_paylink || '{}') || {}; } catch (e) {}
+  var seen = {}; Object.keys(pl).forEach(function (k) { var e = String(pl[k] || ''); if (e && !seen[e]) { seen[e] = 1; _glMirQ_(e); } });
+  P.setProperty('HB_LNKMIR_V4366', String(Object.keys(seen).length));
+  if (Object.keys(seen).length) _glMirFlush_(40000);
 }

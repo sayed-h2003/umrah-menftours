@@ -7545,6 +7545,17 @@ function _glHbDupApply_(ops, delNative) {
   if (ign) { var ks = Object.keys(ign); if (ks.length > 500) { var keep = {}; ks.slice(-500).forEach(function (k) { keep[k] = 1; }); ign = keep; } _glSetSetting_('hb_dup_ign', JSON.stringify(ign)); }
   return { done: done, errors: errors };
 }
+// 🔗 (V4.366) أطراف دفعات الحجوزات المربوطة يدوياً بهذا القيد (🔗 ربط بقيد): الدفعة الأصلية تمثّل القيد بكشف الفندق ⇒ لا نسخة «GL:» ثانية لنفس الطرف
+// (كانت تظهر الدفعة مرتين بنفس رقم القيد — فحص التكرار بالمبلغ لا يلتقطها لفرق تقريب تحويل العملة)
+function _glHbLinkedParties_(entryId) {
+  var pl = {}; try { pl = JSON.parse(_glSettings_().hb_paylink || '{}') || {}; } catch (e) {}
+  var ids = {}, n = 0; Object.keys(pl).forEach(function (k) { if (String(pl[k]) === String(entryId)) { ids[k] = 1; n++; } });
+  if (!n) return {};
+  var out = {}, c = _glHbCfg_(); if (!c.ssId) return {};
+  var sh = SpreadsheetApp.openById(c.ssId).getSheetByName(c.pay); if (!sh || sh.getLastRow() < 2) return {};
+  sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues().forEach(function (r) { if (ids[_glStr_(r[7])]) out[_glHbKey_(_glStr_(r[1]))] = 1; });
+  return out;
+}
 function _glHbMirrorRows_(id, cutK, parties, fx, dup, allowConv) {
   var f = _glFindEntry_(id); if (!f) return [];
   var e = _glEntryObj_(f.r);
@@ -7557,9 +7568,11 @@ function _glHbMirrorRows_(id, cutK, parties, fx, dup, allowConv) {
   // قيد شيت عهدة قبل القطع قد يكون مسجَّلاً أصلاً بمزامنة العهدة ببرنامج الحجوزات (CUSTODY:) ⇒ يُتحقَّق منها لتفادي التكرار
   if (!dup) { try { dup = {}; var own = 'GL:' + id + ':'; (_glHbRead_().pays || []).forEach(function (p) { if (String(p.id || '').indexOf(own) === 0) return; dup[p.party + '|' + _glR2_(p.amount) + '|' + _glDKey_(p.date)] = 1; }); } catch (eD) { dup = null; } }
   parties = parties || _glHbMirrorParties_();
-  var sarRate = _glFxRateAt_('SAR', e.date, fx).rate || _glRates_().SAR || 1, out = [], skip = [], hidP = _glScrHide_();
+  var sarRate = _glFxRateAt_('SAR', e.date, fx).rate || _glRates_().SAR || 1, out = [], skip = [], hidP = _glScrHide_(), lnk = {};
+  try { lnk = _glHbLinkedParties_(id); } catch (eLk) { lnk = {}; }
   _glLinesOf_(id).map(_glLineObj_).sort(function (a, b) { return a.lineNo - b.lineNo; }).forEach(function (l) {
     var nm = parties[l.account]; if (!nm) return;
+    if (lnk[_glHbKey_(nm)]) return;   // 🔗 (V4.366) دفعة الحجوزات المربوطة بهذا القيد تمثّله لهذا الطرف
     if (hidP['hbp|' + id + '|' + _glHbKey_(nm)]) return;   // 🙈 (V4.338) حُذفت من كشف الفندق فقط بقرار المستخدم (القيد باقٍ)
     var net = _glR2_(l.debit - l.credit); if (Math.abs(net) < 0.005) return;
     if (l.currency !== 'SAR' && !allowConv) { if (skip.indexOf(nm) < 0) skip.push(nm); return; }   // 💱 (V4.305) لا تحويل تلقائي لكشف الفندق

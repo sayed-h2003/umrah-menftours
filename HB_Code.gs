@@ -5585,9 +5585,13 @@ function getUnifiedStatement_(partyName, start, end) {
     var _refsOk = false, _refs = {};   // 🔗 (V4.339) رقم القيد/السند/الطرف المقابل من الحسابات العامة لكل دفعة (نسخة قيد أو دفعة حجوزات)
     if (typeof _glHbPayRefs_ === 'function') { try { _refs = _glHbPayRefs_(pData.filter(function (p) { return normalizeName_(p[1]) === partyNorm; }).map(function (p) { return { id: p[7], link: p[9], party: partyName, date: hbRefDate_(p[0]), amount: parseFloat(p[3]) || 0, dir: p[2] }; })); _refsOk = true; } catch (eR) { _refs = {}; } }
     var glRef_ = function (pid) { return _refs[String(pid || '')] || null; };
+    // 🔗 (V4.366) دفعة حجوزات مربوطة يدوياً بقيد ⇒ نسخة «GL:» لنفس القيد بهذا الكشف مكررة (تُزال من الشيت أيضاً بالمزامنة) — لا تُحسب مرتين
+    var _lnkE = {};
+    pData.forEach(function (p) { if (normalizeName_(p[1]) !== partyNorm || /^GL:/.test(String(p[7] || ''))) return; var r0 = _refs[String(p[7] || '')]; if (r0 && r0.how === 'manual' && r0.entry) _lnkE[r0.entry] = 1; });
     if (pData.length) {
       pData.forEach(function (p) {
         if (normalizeName_(p[1]) !== partyNorm) return;
+        var _gm = /^GL:(.+):\d+$/.exec(String(p[7] || '')); if (_gm && _lnkE[_gm[1]]) return;
         var pDateObj = p[0] instanceof Date ? new Date(p[0].getTime()) : new Date(p[0]);
         if (isNaN(pDateObj.getTime())) return;
         pDateObj.setHours(0, 0, 0, 0);
@@ -6602,6 +6606,8 @@ function drainTelegramQueue() {
   // مزامنة شيت العهد الخارجي (CustodySync.gs) — مُقيَّدة بمهلتها الخاصة، ولا تعمل أصلاً ما
   // لم يُضبَط شيت عهدة. الحارس typeof يمنع أي عطل لو لم يُلصَق ملف المزامنة في المشروع
   try { if (typeof glBotTick_ === 'function') _tgStep_('glBot', function () { glBotTick_(); }); } catch (eGlb) { Logger.log('drain/glbot: ' + eGlb.message); }
+  // 🔗 (V4.366) إصلاح لمرة واحدة: دفعات حجوزات رُبطت يدوياً بقيود لها نسخ «GL:» بكشف الفندق ⇒ تظهر مرتين — تُعاد مزامنة تلك القيود فتُزال النسخ
+  try { if (typeof _glHbLinkedMirFix_ === 'function') _tgStep_('lnkFix', function () { _glHbLinkedMirFix_(); }); } catch (eLf) { Logger.log('drain/lnkFix: ' + eLf.message); }
   try { if (typeof custodySyncTick_ === 'function') _tgStep_('custody', function () { custodySyncTick_(); }); }
   catch (eCus) { Logger.log('drain/custody: ' + eCus.message); }
   // طابور فارغ = لا شيء نفعله: لا قفل، ولا فتح ملف الشيت، ولا قراءة ورقة

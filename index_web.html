@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.365  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.366  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8423,7 +8423,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.365";
+var CLIENT_APP_VERSION = "4.366";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -30675,11 +30675,14 @@ function _accGen_(trip) {
       var showN = meta.mode === 'بنود';
       body.innerHTML =
         '<div class="small text-muted mb-2">الأعداد من كشف الرحلة (👨' + res.counts.a + ' 🧒' + res.counts.c + ' 👶' + res.counts.i + ') — عدّل ما تريد وألغِ تحديد ما لا تريد إدراجه.' + (showN ? ' بنود السكن: القيمة = الغرف × الليالي × سعر الغرفة/الليلة.' : '') + '</div>' +
+        // ☑️ (V4.366) تحديد الكل / إلغاء الكل ثم الاختيار يدوياً بنداً بنداً — لكل أنواع المحاسبة
+        '<div class="d-flex align-items-center gap-2 mb-2 flex-wrap"><button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="_accGenAll_(true)">☑️ تحديد الكل</button>' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="_accGenAll_(false)">⬜ إلغاء الكل</button><span class="small text-muted" id="accGenCnt"></span></div>' +
         '<div class="table-responsive"><table class="table table-sm table-bordered align-middle" style="font-size:12.5px;">' +
-        '<thead style="background:#0f4c4c;color:#fff;"><tr><th>✔</th><th class="text-start">البيان</th>' + (showN ? '<th style="width:110px;">الفندق</th>' : '') + '<th>عملة</th><th style="width:85px;">العدد</th>' + (showN ? '<th style="width:85px;">الليالي</th>' : '') + '<th style="width:105px;">السعر</th>' + (showN ? '<th style="width:150px;">ملاحظات (تاريخ الدخول/الخروج)</th>' : '') + '</tr></thead><tbody>' +
+        '<thead style="background:#0f4c4c;color:#fff;"><tr><th><input type="checkbox" id="accGenChkAll" checked title="تحديد/إلغاء الكل" onchange="_accGenAll_(this.checked)"></th><th class="text-start">البيان</th>' + (showN ? '<th style="width:110px;">الفندق</th>' : '') + '<th>عملة</th><th style="width:85px;">العدد</th>' + (showN ? '<th style="width:85px;">الليالي</th>' : '') + '<th style="width:105px;">السعر</th>' + (showN ? '<th style="width:150px;">ملاحظات (تاريخ الدخول/الخروج)</th>' : '') + '</tr></thead><tbody>' +
         res.items.map(function(it, i) {
           return '<tr' + (it.currency === 'SAR' ? ' style="background:#faf5ff;"' : '') + '>' +
-            '<td class="text-center"><input type="checkbox" class="accgen-chk" data-i="' + i + '" checked></td>' +
+            '<td class="text-center"><input type="checkbox" class="accgen-chk" data-i="' + i + '" checked onchange="_accGenCnt_()"></td>' +
             '<td><input type="text" class="form-control form-control-sm accgen-desc" data-i="' + i + '" value="' + escapeHtml_(it.desc) + '"></td>' +
             (showN ? '<td><input type="text" class="form-control form-control-sm accgen-company" data-i="' + i + '" value="' + escapeHtml_(it.company || '') + '"></td>' : '') +
             '<td>' + _accCur_(it.currency) + '</td>' +
@@ -30688,9 +30691,16 @@ function _accGen_(trip) {
             '<td><input type="text" inputmode="decimal" lang="en" style="direction:ltr;" class="form-control form-control-sm accgen-price" data-i="' + i + '" value="' + (it.price || '') + '" onblur="_accFormulaBlur_(this)" oninput="_numInputLatin_(this)"></td>' +
             (showN ? '<td><input type="text" class="form-control form-control-sm accgen-notes" data-i="' + i + '" value="' + escapeHtml_(it.notes || '') + '"></td>' : '') + '</tr>';
         }).join('') + '</tbody></table></div>';
+      _accGenCnt_();
     })
     .withFailureHandler(function(err) { body.innerHTML = '<div class="alert alert-danger small">❌ ' + escapeHtml_(err.message || String(err)) + '</div>'; })
     .accGenerateDraft(window.authToken, (_accData && _accData.client), trip, meta.mode);
+}
+function _accGenAll_(on) { document.querySelectorAll('.accgen-chk').forEach(function (c) { c.checked = !!on; }); _accGenCnt_(); }
+function _accGenCnt_() {
+  var all = document.querySelectorAll('.accgen-chk'), n = document.querySelectorAll('.accgen-chk:checked').length, h = document.getElementById('accGenChkAll'), t = document.getElementById('accGenCnt');
+  if (h) { h.checked = all.length > 0 && n === all.length; h.indeterminate = n > 0 && n < all.length; }
+  if (t) t.textContent = 'المحدد: ' + n + ' من ' + all.length;
 }
 function _accGenInsert_(btn) {
   var toSave = [];
@@ -40758,9 +40768,13 @@ function mfAttachDateInputs() {
     el.addEventListener('blur', function (ev) {
       var typed = el.value, norm = mfDate(typed), nxt = ev && ev.relatedTarget && ev.relatedTarget.id;
       el.value = norm;
-      if (el.id && el.id.indexOf('mfF_') === 0) mfRender();
       mfDateCommit_(el, norm);
-      if (nxt) { var nx = document.getElementById(nxt); if (nx && document.activeElement !== nx) try { nx.focus(); } catch (eF) {} }   // الإعادة الرسم لا تُضيع الحقل التالي
+      // (V4.366) إعادة الرسم بعد انتهاء حدث المغادرة لا أثناءه: لو غادر الحقل لأن الشاشة نفسها يُعاد رسمها (innerHTML)، كان الرسم المتزامن هنا
+      // يحذف نفس العناصر فيفشل الرسم الأصلي بـ«The node to be removed is no longer a child of this node»
+      if (el.id && el.id.indexOf('mfF_') === 0) setTimeout(function () {
+        mfRender();
+        if (nxt) { var nx = document.getElementById(nxt); if (nx && document.activeElement !== nx) try { nx.focus(); } catch (eF) {} }   // الإعادة الرسم لا تُضيع الحقل التالي
+      }, 0);
     });
     el.addEventListener('keydown', function (e) { if (e.key === 'Enter') { el.value = mfDate(el.value); el.blur(); } });
   });
@@ -45723,7 +45737,7 @@ function vzHzCal(i, key) {
   _vzCal_('vzHz_' + key + '_' + i, function (v) { vzHzSet(i, key, v); });
 }
 // عند مغادرة حقل رقم المجموعة: نعيد رسم النموذج فتظهر أرقام اتفاقيات الإعاشة المطابقة تلقائياً (على blur فلا يُفقد التركيز أثناء الكتابة)
-function vzFormRefChanged() { if (document.getElementById('vzFormOv')) vzFormRender(); }
+function vzFormRefChanged() { setTimeout(function () { if (document.getElementById('vzFormOv')) vzFormRender(); }, 0); }   // (V4.366) خارج حدث المغادرة — انظر mfAttachDateInputs
 // 📝 (V4.164) أي تعديل يدوي لبنود العميل يُعلِّم المجموعة كمُعدَّلة يدوياً — فلا يستبدلها تغيير
 // الرحلة أو اعتماد الأسماء لاحقاً بقيمة افتراضية بعد ذلك
 function vzBdAdd() { VZ._draft.breakdown = VZ._draft.breakdown || []; VZ._draft.breakdown.push({ name: '', count: 0 }); VZ._draft._breakdownManual = true; vzBdRender(); }
@@ -54010,7 +54024,8 @@ function _perfDiagText_(d, sp) {
 function _perfCopy_(txt) {
   var ok = false;
   try { var ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); } catch (e) {}
-  if (!ok && navigator.clipboard) { try { navigator.clipboard.writeText(txt); ok = true; } catch (e2) {} }
+  // (V4.366) writeText ترفض («Document is not focused») بوعد — يُلتقط ولا يُعتمد عليه؛ النص يبقى بالمربع للنسخ اليدوي
+  if (!ok && navigator.clipboard && document.hasFocus()) { try { navigator.clipboard.writeText(txt).catch(function () {}); } catch (e2) {} }
   return ok;
 }
 function perfDiagCopy_(btn) {

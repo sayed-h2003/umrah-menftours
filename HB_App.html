@@ -5417,7 +5417,7 @@ function deletePaymentRow(id) {
 }
 // 🗑️ (V4.330) الدفعة المنسوخة من الحسابات العامة/اللاحقة لتاريخ القطع يرفض حذفها الخادم عادةً — المدير فقط يستطيع حذفها قسراً هنا لضبط الأرصدة
 function hbForceDelPay_(id, res, retry) {
-  if (res && /البرنامج الرئيسي/.test(String(res.error || '')) && currentUser && currentUser.role === 'admin') {
+  if (res && /البرنامج الرئيسي|الدفعات من برنامج الحجوزات مغلق/.test(String(res.error || '')) && currentUser && currentUser.role === 'admin') {   // (V4.366) + رسالة توحيد القنوات
     if (confirm('⚠️ ' + res.error + '\n\nهل تريد حذف هذه الدفعة من برنامج الحجوزات فقط قسراً (لضبط الرصيد: مكررة أو مزامَنة بالخطأ)؟\n• قيدها بالحسابات العامة لا يُحذف من هنا.\n• قد تعود نسختها لو أُعيد حفظ قيدها بالحسابات العامة.')) retry();
     return true;
   }
