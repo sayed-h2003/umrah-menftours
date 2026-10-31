@@ -1160,6 +1160,7 @@ function invalidateSourceCache_() {
   try { SpreadsheetApp.flush(); } catch (e) { Logger.log('flush: ' + e.message); }
   SRC_MEMO_ = null;
   PropertiesService.getScriptProperties().setProperty('SRC_CACHE_VER', String(Date.now()));
+  try { if (typeof _dvBump_ === 'function') _dvBump_(['hb']); } catch (eDv) {}   // ⚡ (V4.367) بصمة الواجهة اللحظية
 }
 
 function dateReplacer_(key, value) {
@@ -4637,7 +4638,10 @@ function ensurePaymentsSheet_() {
 // قراءة كل صفوف الدفعات مرة واحدة لكل تنفيذ (memo) — كشف الحساب كان يقرأ الشيت 3 مرات في
 // النداء الواحد (مرة للحركات، مرة للرصيد التراكمي، ومرة داخل ensurePaymentsSheet_)
 var PAYMENTS_MEMO_ = null;
-function invalidatePaymentsMemo_() { PAYMENTS_MEMO_ = null; }
+function invalidatePaymentsMemo_() {
+  PAYMENTS_MEMO_ = null;
+  try { if (typeof _dvBump_ === 'function') _dvBump_(['hb']); } catch (eDv) {}   // ⚡ (V4.367) كل استدعاءاتها بعد كتابة دفعات
+}
 function getPaymentsRowsCached_() {
   if (PAYMENTS_MEMO_) return PAYMENTS_MEMO_;
   var sh = ensurePaymentsSheet_();

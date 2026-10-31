@@ -6891,6 +6891,7 @@ function _pulseTick_(force) {
     .appPulse(window.authToken, { online: true, notif: canNotif, notifVer: _PULSE_.notifVer, gl: vis, glSince: since });
 }
 function _pulseApply_(r, since) {
+    if (r.dv && window.LF_) { try { LF_.learn(r.dv); } catch (eLf) {} }   // ⚡ (V4.367) بصمات البيانات مع النبضة الموحّدة
     if (r.online != null) { var el = document.getElementById('onlineUsersCount'); if (el) el.textContent = r.online; }
     if (r.notifications) { window._notifCache = r.notifications; _PULSE_.notifVer = r.notifVer || ''; try { _notifRenderBadge_(); } catch (e) {} }
     if (r.gl && typeof _glKickHandle_ === 'function') _glKickHandle_(r.gl, since);
@@ -6957,6 +6958,7 @@ function _tsOnMsg_(m) {
   if (m.t === 'leader') { TABSYNC.leaderSeen = Date.now(); return; }
   if (m.t === 'pulseNow') { if (TABSYNC.leader) { _PULSE_.last = 0; _pulseTick_(true); } return; }
   if (m.t === 'pulse') { TABSYNC.leaderSeen = TABSYNC.lastPulseRx = Date.now(); if (window.authToken && m.r) _pulseApply_(m.r, m.since); return; }
+  if (m.t === 'lfdv') { TABSYNC.leaderSeen = Date.now(); if (window.authToken && m.dv && window.LF_) LF_.learn(m.dv); return; }   // ⚡ (V4.367) بصمات البيانات من التبويب القائد
   if (m.t === 'logout') { if (window.authToken) { try { _sessToLogin_('سُجِّل الخروج من تبويب آخر بنفس المتصفح.'); } catch (e) {} } return; }
   if (m.t === 'login') { if (!window.authToken && m.token) { try { location.reload(); } catch (e) {} } return; }
   if (m.t === 'token') { var cu = window.currentUser || {}; if (m.token && window.authToken && m.user && cu.username === m.user && window.authToken !== m.token) { window.authToken = m.token; } return; }
@@ -7250,6 +7252,493 @@ function _runExec_(getReal, st, fn, args, attempt, busyN) {
     Object.defineProperty(google.script, 'run', { configurable: true, get: function () { return mk({}); } });
   } catch (e) { console.warn('session resume wrapper', e); }
 })();
+
+/* ============================================================================
+   ⚡ (V4.367) الواجهة اللحظية — طبقة LF_ (Local-First) بالمتصفح
+   ----------------------------------------------------------------------------
+   كل نداء للخادم يكلّف ≈ 4 ثوانٍ ثابتة (القياس)، فالشاشات لا تنتظر الخادم بعد الآن:
+   • عرض فوري: آخر نسخة من بيانات الشاشة محفوظة في IndexedDB (umrah-lf) وتُعرض فوراً، ثم يُسأل الخادم بالخلفية
+     بالبصمة (lfFetch): لم يتغيّر شيء ⇒ رد صغير «نفسها»؛ تغيّر ⇒ البيانات الجديدة وتُحدَّث الشاشة تلقائياً.
+   • بصمات المجموعات (dv): النبضة الذكية (lfPoll — التبويب القائد فقط، 20 ث والمستخدم نشط / 60 ث خامل / لا شيء والتبويبات
+     مخفية) تعرف أي مجموعة تغيّرت عند أي مستخدم ⇒ الشاشة المفتوحة المعنية تُحدّث نفسها (الأسطر المتغيّرة فقط).
+   • الرموز مرتّبة زمنياً (تبدأ بالوقت) فلا يعيد ردٌّ متأخر الحالة للوراء.
+   • المفتاح = الإصدار + المستخدم + الدالة + المعاملات (رمز الجلسة مستبعد) ⇒ لا خلط بين مستخدمين أو إصدارين.
+   • عرض «مؤكَّد الحداثة» فقط للنداءات العادية (الفحوص والقرارات): نسخة بصمات مجموعاتها = آخر بصمات معروفة من
+     نبضة حديثة؛ غير ذلك ⇒ الخادم كالمعتاد. الكتابة المحلية تعلّم مجموعاتها «متغيّرة» حتى تصل بصماتها الجديدة.
+   • منع التكرار: نداءان متطابقان (نفس الدالة والمعاملات) أثناء انتظار الأول ⇒ نداء واحد للخادم، وكل معالج
+     يتسلّم نسخة مستقلة من النتيجة (الضغطة المكررة على «حفظ» لا تحفظ مرتين ولا تعلّق الشاشة).
+   • الأرصدة والقيود والاعتمادات: لا تمر من هنا إطلاقاً (ليست بالقائمة) — دائماً من الخادم مباشرة.
+   ============================================================================ */
+var LF_ = (function () {
+  var READ = {   // = LF_READ_ بالخادم (LiveSync.gs)
+    getTripsList: ['trips', 'bookings', 'ministry', 'pilgrims'], getTripPilgrims: ['pilgrims', 'trips'],
+    getAllMovementsAuth: ['movements', 'bookings'], getGlobalPilgrimsRegistry: ['pilgrims', 'trips'],
+    getAllBookingsAuth: ['bookings', 'trips'], getVisaBootstrap: ['visa', 'trips', 'dropdowns', 'gl'],
+    getVisaTripLinks: ['visa', 'trips'], getMinistryBootstrap: ['ministry', 'trips', 'dropdowns', 'gl'],
+    getMinistryTripLinks: ['ministry', 'trips', 'bookings'], loadDropdownsData: ['dropdowns'], getUnifiedStatement: ['hb', 'gl']
+  };
+  var ALLG = ['bookings', 'movements', 'trips', 'pilgrims', 'visa', 'ministry', 'dropdowns', 'hb', 'gl'];
+  var NODEDUPE = { perfPing: 1, perfReport: 1, lfPoll: 1, lfFetch: 1, glJobStatus: 1, appPulse: 1, heartbeatOnline: 1, presencePing: 1, logoutUserSession: 1, loginUser: 1, resumeSession: 1 };
+  var RO_RX = /^(get|list|load|search|fetch|peek|preview|check|lf|perf|find|count|read|calc|export|print|generatePrint|glList|glGet|glBootstrap|glStatement|glTreasury|glBank|glPending|glAcc(Deleted)?List|glClient|glParty|glWarm|glLinkConfig|glHb(State|PartyCode)|glVchLogo|glIncome|glBalance|ledgerCount|ledgerScrGet|audList|audStatus|snapPoints|getOnline)/;
+  var S = {
+    mem: {}, db: null, dbWait: null, dbOff: false,
+    dv: {}, dvAt: 0, dirtyG: {}, infl: {}, subs: {}, puts: 0, fk: {}, again: {}, epoch: 0, skipK: null,
+    lastAct: Date.now(), pollT: null, pollBusy: false, lastPoll: 0, lastSafety: 0, wired: false
+  };
+  var api = { morphing: false, READ: READ };
+
+  /* ---------- أدوات ---------- */
+  function now() { return Date.now(); }
+  function ver() { try { return String(CLIENT_APP_VERSION || ''); } catch (e) { return ''; } }
+  function user() { var u = window.currentUser || {}; return String(u.username || ''); }
+  function isTok(a) { return typeof a === 'string' && !!a && (a === window.authToken || (typeof _TOK_RX_ !== 'undefined' && _TOK_RX_.test(a))); }
+  function normArgs(args) { return (args || []).map(function (a) { return isTok(a) ? '§T' : a; }); }
+  // JSON مستقر للمعاملات — يرفض (null) أي معامل غير قابل للتسلسل (نموذج/ملف/عنصر DOM) فلا يُدمَج ولا يُخزَّن
+  function sjson(x) {
+    try {
+      return JSON.stringify(x, function (k, v) {
+        if (v && typeof v === 'object' && (v.nodeType || (typeof Blob !== 'undefined' && v instanceof Blob))) throw new Error('nonplain');
+        return v;
+      });
+    } catch (e) { return null; }
+  }
+  function key(fn, args) { var j = sjson(normArgs(args)); return j === null || !user() ? null : 'lf|' + ver() + '|' + user() + '|' + fn + '|' + j; }
+  function clone(d) { try { return d === undefined ? d : JSON.parse(JSON.stringify(d)); } catch (e) { return d; } }
+  // بصمة بالمتصفح (FNV-1a) لمقارنة نسختين بلا خادم (مسار نداء الإقلاع)
+  function csig(d) {
+    var s; try { s = JSON.stringify(d); } catch (e) { return ''; }
+    if (s == null) return '';
+    var h = 0x811c9dc5; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
+    return s.length + ':' + h.toString(36);
+  }
+  function cacheable(d) {
+    if (d === null || d === undefined) return false;
+    if (typeof d !== 'object' || Array.isArray(d)) return true;
+    return !(d.success === false || d.ok === false || d.stale || d.error);
+  }
+  function tokCmp(a, b) { a = String(a || ''); b = String(b || ''); return a === b ? 0 : (a > b ? 1 : -1); }   // رموز تبدأ بالوقت بعرض ثابت ⇒ ترتيب نصي = زمني
+
+  /* ---------- IndexedDB ---------- */
+  function db(cb) {
+    if (S.db) return cb(S.db);
+    if (S.dbOff || !window.indexedDB) return cb(null);
+    if (S.dbWait) { S.dbWait.push(cb); return; }
+    S.dbWait = [cb];
+    var done = function (d) { S.db = d; if (!d) S.dbOff = true; var w = S.dbWait; S.dbWait = null; w.forEach(function (f) { try { f(d); } catch (e) {} }); };
+    try {
+      var rq = indexedDB.open('umrah-lf', 1);
+      rq.onupgradeneeded = function () { try { rq.result.createObjectStore('d', { keyPath: 'k' }); } catch (e) {} };
+      rq.onsuccess = function () { done(rq.result); };
+      rq.onerror = rq.onblocked = function () { done(null); };
+    } catch (e) { done(null); }
+  }
+  function idbGet(k, cb) {
+    db(function (d) {
+      if (!d) return cb(null);
+      try { var r = d.transaction('d', 'readonly').objectStore('d').get(k); r.onsuccess = function () { cb(r.result || null); }; r.onerror = function () { cb(null); }; }
+      catch (e) { cb(null); }
+    });
+  }
+  function idbPut(e) {
+    db(function (d) {
+      if (!d) return;
+      try { var tx = d.transaction('d', 'readwrite'); tx.objectStore('d').put(e); tx.onerror = function () { prune(true); }; } catch (x) {}
+    });
+    if (++S.puts % 25 === 0) prune(false);
+  }
+  // حد أعلى للحجم: أقدم النسخ تُحذف (وكل نسخ الإصدارات السابقة/المستخدمين الآخرين على نفس الجهاز بعد أسبوع)
+  function prune(hard) {
+    db(function (d) {
+      if (!d) return;
+      try {
+        var all = [], st = d.transaction('d', 'readwrite').objectStore('d'), pre = 'lf|' + ver() + '|';
+        st.openCursor().onsuccess = function (ev) {
+          var c = ev.target.result;
+          if (c) { var v = c.value || {}; all.push({ k: v.k, t: v.sAt || 0, cur: String(v.k || '').indexOf(pre) === 0 }); c.continue(); return; }
+          var old = now() - 7 * 864e5;
+          var drop = all.filter(function (x) { return !x.cur && (hard || x.t < old); });
+          var cur = all.filter(function (x) { return x.cur; }).sort(function (a, b) { return b.t - a.t; });
+          drop = drop.concat(cur.slice(hard ? 60 : 220));
+          if (drop.length) { var s2 = d.transaction('d', 'readwrite').objectStore('d'); drop.forEach(function (x) { try { s2.delete(x.k); } catch (e) {} }); }
+        };
+      } catch (e) {}
+    });
+  }
+  function getEntry(k, cb) {
+    if (!k) return cb(null);
+    if (S.mem[k]) return cb(S.mem[k]);
+    var ep = S.epoch;   // قراءة بدأت قبل خروج/مسح لا تعيد النسخة لذاكرة الصفحة
+    idbGet(k, function (e) { if (ep !== S.epoch) return cb(null); if (e && !S.mem[k]) S.mem[k] = e; cb(S.mem[k] || null); });
+  }
+  // ep = الحقبة عند بدء الطلب: خروج/مسح أثناءه ⇒ لا يُعاد تخزين رده (لا تبقى بيانات بعد الخروج)
+  function putEntry(e, ep) { if (ep !== undefined && ep !== S.epoch) return; S.mem[e.k] = e; idbPut(e); }
+
+  /* ---------- البصمات ---------- */
+  function learn(dv) {
+    if (!dv || typeof dv !== 'object') return [];
+    var changed = [];
+    Object.keys(dv).forEach(function (g) {
+      var cur = S.dv[g], nv = dv[g];
+      if (!cur) { S.dv[g] = nv; return; }
+      if (tokCmp(nv, cur) > 0) { S.dv[g] = nv; changed.push(g); delete S.dirtyG[g]; }
+    });
+    S.dvAt = now();
+    if (changed.length) onChanged(changed);
+    return changed;
+  }
+  function groupsOf(fn, e) { return (e && e.g) || READ[fn] || ALLG; }
+  // علامة «كُتب محلياً» تنتهي بوصول البصمة الجديدة، أو بعد 60 ثانية (لو صُنّفت دالة حفظ بمجموعة لم تتغيّر فعلاً)
+  function isDirtyG(g) { var t = S.dirtyG[g]; if (!t) return false; if (now() - t > 60000) { delete S.dirtyG[g]; return false; } return true; }
+  // نسخة مؤكَّدة الحداثة: بصمات مجموعاتها = آخر المعروف من نبضة حديثة، ولم تُكتب مجموعاتها محلياً بعدها
+  function fresh(e, fn) {
+    if (!e || !e.dv || now() - S.dvAt > 45000 || now() - (e.vAt || 0) > 15 * 60000) return false;
+    return groupsOf(fn, e).every(function (g) { return !isDirtyG(g) && S.dv[g] && e.dv[g] === S.dv[g]; });
+  }
+  function dirtyBlocked(fn, e) { return groupsOf(fn, e).some(isDirtyG); }
+
+  /* ---------- النداء الخام (بلا هذه الطبقة) ---------- */
+  function raw() { return window._LF_PREV_RUN_ ? window._LF_PREV_RUN_() : google.script.run; }
+  function lfFetch(fn, args, h, ok, fail) {
+    var t0 = now();
+    raw().withSuccessHandler(function (r) { try { if (window.PERF_) PERF_.add('lf:' + fn, now() - t0, true); } catch (e) {} ok(r); })
+      .withFailureHandler(function (e) { try { if (window.PERF_) PERF_.add('lf:' + fn, now() - t0, false); } catch (x) {} fail(e); })
+      .lfFetch(window.authToken, fn, args, h || '');
+  }
+
+  /* ---------- مؤشر الحالة (صغير، أسفل الشاشة) ---------- */
+  var B = { el: null, t: null, n: 0 };
+  function badge(state, msg) {
+    try {
+      if (!B.el) {
+        B.el = document.createElement('div'); B.el.id = 'lfBadge'; B.el.dir = 'rtl';
+        B.el.style.cssText = 'position:fixed;bottom:calc(10px + env(safe-area-inset-bottom,0px));right:12px;z-index:2147483030;border-radius:999px;padding:4px 12px;font-size:11.5px;box-shadow:0 4px 14px rgba(0,0,0,.18);transition:opacity .3s;pointer-events:none;opacity:0;';
+        document.body.appendChild(B.el);
+      }
+      clearTimeout(B.t);
+      if (state === 'checking') { B.n++; B.el.style.background = '#1e3d59'; B.el.style.color = '#fff'; B.el.textContent = msg || '⚡ عرض فوري — جارٍ التحقق من أحدث البيانات…'; B.el.style.opacity = '.92'; return; }
+      if (state === 'done') { B.n = Math.max(0, B.n - 1); if (B.n) return; B.el.style.opacity = '0'; return; }
+      if (state === 'updated') { B.n = Math.max(0, B.n - 1); B.el.style.background = '#047857'; B.el.style.color = '#fff'; B.el.textContent = msg || '🔄 حُدّثت الشاشة بأحدث البيانات'; B.el.style.opacity = '.95'; B.t = setTimeout(function () { B.el.style.opacity = '0'; }, 2200); return; }
+      if (state === 'offline') { B.n = Math.max(0, B.n - 1); B.el.style.background = '#b45309'; B.el.style.color = '#fff'; B.el.textContent = msg || '⚠️ تعذّر التحقق — المعروض آخر نسخة محفوظة'; B.el.style.opacity = '.95'; B.t = setTimeout(function () { B.el.style.opacity = '0'; }, 5000); }
+    } catch (e) {}
+  }
+  // شريط «تغيّرت البيانات وأنت تعدّل» — لا تُمحى تعديلات المستخدم غير المحفوظة أبداً
+  function conflictBar(sub) {
+    try {
+      var bar = document.getElementById('lfConflict');
+      if (!bar) { bar = document.createElement('div'); bar.id = 'lfConflict'; bar.dir = 'rtl'; document.body.appendChild(bar); }
+      bar.style.cssText = 'position:fixed;top:calc(64px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483050;background:#b45309;color:#fff;border-radius:12px;padding:8px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.28);display:flex;gap:10px;align-items:center;max-width:94vw;';
+      bar.innerHTML = '<span>🔄 عدّل مستخدم آخر بيانات هذه الشاشة' + (sub.label ? ' (' + sub.label + ')' : '') + ' — لديك تعديلات غير محفوظة فلم تُستبدل.</span>';
+      var b = document.createElement('button'); b.className = 'btn btn-sm btn-light'; b.textContent = 'عرض الأحدث (تجاهل تعديلاتي)';
+      b.onclick = function () { bar.remove(); applySub(sub, true); };
+      var x = document.createElement('button'); x.className = 'btn btn-sm btn-outline-light'; x.textContent = 'لاحقاً';
+      x.onclick = function () { bar.remove(); };
+      bar.appendChild(b); bar.appendChild(x);
+    } catch (e) {}
+  }
+
+  /* ---------- العرض الفوري + التحقق (للشاشات) ----------
+     LF_.swr(fn, args, opts, onData, onFail):
+       onData(data, meta) ⇐ أولاً النسخة المحفوظة (meta.cached) إن وُجدت، ثم الحديثة فقط لو اختلفت (meta.changed).
+       opts.sub: معرّف اشتراك الشاشة (تحديث حي عند تغيّر مجموعاتها) · opts.visible(): هل الشاشة ظاهرة الآن
+       opts.dirty(): تعديلات غير محفوظة ⇒ لا استبدال (شريط تنبيه) · opts.runner(): مسار شبكة بديل (نداء الإقلاع)
+       opts.label: اسم الشاشة للرسائل · opts.noCache: لا عرض من النسخة (تحقق فقط) */
+  function swr(fn, args, opts, onData, onFail) {
+    opts = opts || {};
+    var ep = S.epoch; opts._ep = ep;   // الحقبة لحظة الطلب: خروج قبل اكتمال القراءة/الرد ⇒ لا عرض ولا تخزين
+    var k = key(fn, args);
+    var sub = null;
+    if (opts.sub) {
+      sub = { id: opts.sub, fn: fn, args: args, k: k, opts: opts, onData: onData, label: opts.label || '', busy: false, pend: false, lastCs: '' };
+      S.subs[opts.sub] = sub;
+    }
+    getEntry(k, function (e) {
+      if (ep !== S.epoch) return;
+      var shown = false;
+      if (e && !opts.noCache && !dirtyBlocked(fn, e)) {
+        shown = true; if (sub) sub.lastCs = e.cs;
+        badge('checking');
+        try { onData(clone(e.d), { cached: true, at: e.sAt }); } catch (x) { console.error('LF swr cached ' + fn, x); }
+      }
+      netCheck(fn, args, k, e, opts, function (res) {   // ok
+        if (shown) badge(res.changed ? 'updated' : 'done');
+        if (sub) sub.lastCs = res.cs || sub.lastCs;
+        if (res.changed) deliverKey(k, res, sub ? sub.id : null);
+        if (res.changed || !shown) {
+          api.morphing = shown;
+          try { onData(res.data, { cached: false, changed: shown }); } catch (x) { console.error('LF swr ' + fn, x); }
+          api.morphing = false;
+        }
+      }, function (err) {
+        if (shown) { badge('offline'); return; }
+        if (onFail) onFail(err); else console.error('LF ' + fn, err);
+      });
+    });
+  }
+  // الشبكة: نداء الإقلاع (بيانات كاملة تُقارن بالمتصفح) أو lfFetch بالبصمة
+  function netCheck(fn, args, k, e, opts, ok, fail) {
+    // جلب جارٍ لنفس المفتاح: البصمة الجديدة التي سيعيدها تُطلق onChanged ⇒ لا جلب ثانٍ لنفس الاشتراك (refreshSub يتحقق من fk)
+    if (k) S.fk[k] = (S.fk[k] || 0) + 1;
+    var ep = (opts && opts._ep !== undefined) ? opts._ep : S.epoch;
+    var fin = function () {
+      if (!k || !S.fk[k] || --S.fk[k]) return;
+      delete S.fk[k];
+      var ag = S.again[k]; if (ag) { delete S.again[k]; setTimeout(function () { refreshKey(ag); }, 0); }   // تغيّر حقيقي وصل أثناء الجلب
+    };
+    var ok0 = ok, fail0 = fail;
+    ok = function (x) { fin(); ok0(x); }; fail = function (x) { fin(); fail0(x); };
+    var store = function (data, h, dv, g) {
+      var cs = csig(data), changed = !e || e.cs !== cs;
+      if (k && cacheable(data)) putEntry({ k: k, fn: fn, d: data, h: h || (e && !changed ? e.h : ''), cs: cs, g: g || READ[fn], dv: dv || (e && !changed ? e.dv : null), sAt: now(), vAt: dv ? now() : (e && !changed ? e.vAt : 0) }, ep);
+      else if (k && !cacheable(data)) changed = true;   // خطأ/«قديم» يمر للمعالج كما هو (يعيد المحاولة بنفسه)
+      ok({ data: data, changed: changed, cs: cs });
+    };
+    if (opts.runner) {
+      var r = opts.runner();
+      r.withSuccessHandler(function (d) { store(d, '', null, null); }).withFailureHandler(fail)[fn].apply(r, args);
+      return;
+    }
+    lfFetch(fn, args, e && e.h, function (r) {
+      if (!r) { fail(new Error('رد فارغ')); return; }
+      S.skipK = k; try { learn(r.dv); } finally { S.skipK = null; }   // بصمة هذا الرد نفسه لا تطلب إعادة جلبه
+      if (r.same && e) {
+        e.dv = r.dv; e.vAt = now(); if (r.g) e.g = r.g; putEntry(e, ep);
+        ok({ data: e.d, changed: false, cs: e.cs });
+        return;
+      }
+      store(r.data, r.h, r.h ? r.dv : null, r.g);
+    }, fail);
+  }
+
+  /* ---------- الاشتراكات والتحديث الحي ----------
+     الجلب لكل مفتاح بيانات (لا لكل اشتراك): طلب واحد ونتيجته توزَّع على كل الاشتراكات التي تعرض نفس البيانات،
+     ولكل اشتراك فحص «تعديلات غير محفوظة» الخاص به. */
+  function subVisible(s) { try { return s.opts.visible ? !!s.opts.visible() : true; } catch (e) { return false; } }
+  function onChanged(groups) {
+    var keys = {};
+    Object.keys(S.subs).forEach(function (id) {
+      var s = S.subs[id];
+      if (!groupsOf(s.fn).some(function (g) { return groups.indexOf(g) >= 0; })) return;
+      if (s.k && s.k === S.skipK) return;   // يُسلَّم من الرد الجاري (deliverKey)
+      if (subVisible(s)) keys[s.k] = s; else s.pend = true;
+    });
+    Object.keys(keys).forEach(function (k) { refreshKey(keys[k]); });
+  }
+  function subsOf(k) { return Object.keys(S.subs).map(function (id) { return S.subs[id]; }).filter(function (s) { return s.k === k; }); }
+  // نتيجة جلب ⇒ كل اشتراك بنفس المفتاح (عدا من سلّمها لنفسه) يأخذها لو اختلفت عمّا يعرضه
+  function deliverKey(k, res, exceptId) {
+    subsOf(k).forEach(function (s) {
+      if (s.id === exceptId || !res || res.cs === s.lastCs) return;
+      s.fresh = res.data;
+      if (subVisible(s)) applySub(s); else s.pend = true;
+    });
+  }
+  function refreshSub(s) { refreshKey(s); }
+  function refreshKey(s) {
+    var k = s.k; if (!k) return;
+    var ep = S.epoch;
+    if (S.fk[k]) { S.again[k] = s; return; }   // جلب جارٍ بدأ قبل التغيير: يُعاد بعد انتهائه (netCheck/fin)
+    getEntry(k, function (e) {
+      if (ep !== S.epoch) return;
+      netCheck(s.fn, s.args, k, e, { _ep: ep }, function (res) { if (res.changed && ep === S.epoch) deliverKey(k, res, null); }, function () {});
+    });
+  }
+  function applySub(s, force) {
+    if (!s.fresh || S.subs[s.id] !== s) return;
+    if (!force && s.opts.dirty) { var dirty = false; try { dirty = !!s.opts.dirty(); } catch (e) {} if (dirty) { conflictBar(s); return; } }
+    var d = s.fresh; s.fresh = null; s.pend = false; s.lastCs = csig(d);
+    api.morphing = true;
+    try { s.onData(d, { cached: false, changed: true, live: true }); } catch (x) { console.error('LF live ' + s.fn, x); }
+    api.morphing = false;
+    badge('updated', '🔄 حُدّثت «' + (s.label || 'الشاشة') + '» تلقائياً بأحدث البيانات');
+  }
+  // فتح شاشة/عودة للتبويب: الاشتراكات المعلّقة الظاهرة تُحدَّث
+  function wake() { Object.keys(S.subs).forEach(function (id) { var s = S.subs[id]; if (!s.pend || !subVisible(s)) return; if (s.fresh) applySub(s); else refreshKey(s); }); }
+  function unsub(id) { delete S.subs[id]; }
+
+  /* ---------- النبضة الذكية ---------- */
+  function anyVisibleSub() { return Object.keys(S.subs).some(function (id) { return subVisible(S.subs[id]); }); }
+  function pollGap() {
+    if (document.hidden) return 0;
+    var active = now() - S.lastAct < 120000;
+    return active && anyVisibleSub() ? 20000 : 60000;
+  }
+  function pollTick(force) {
+    if (!window.authToken || S.pollBusy || !user()) return;
+    if (typeof _tsShouldPulse_ === 'function' && !TABSYNC.leader && TABSYNC.ch && now() - TABSYNC.leaderSeen < 150000 && !force) return;   // القائد ينبض ويبث
+    var gap = pollGap(); if (!gap && !force) return;
+    if (!force && now() - S.lastPoll < gap) return;
+    S.lastPoll = now(); S.pollBusy = true;
+    raw().withSuccessHandler(function (r) {
+      S.pollBusy = false;
+      if (r && r.dv) { try { if (typeof _tsPost_ === 'function') _tsPost_({ t: 'lfdv', dv: r.dv }); } catch (e) {} learn(r.dv); }
+    }).withFailureHandler(function () { S.pollBusy = false; }).lfPoll(window.authToken);
+    // فحص أمان كل 3 دقائق للشاشة الظاهرة (تعديل يدوي بالشيت لا يمر بالبرنامج فلا يغيّر البصمة)
+    if (now() - S.lastSafety > 180000) {
+      S.lastSafety = now();
+      var seen = {}; Object.keys(S.subs).forEach(function (id) { var s = S.subs[id]; if (subVisible(s) && !seen[s.k]) { seen[s.k] = 1; refreshKey(s); } });
+    }
+  }
+  function wire() {
+    if (S.wired) return; S.wired = true;
+    var act = function () { var was = now() - S.lastAct > 120000; S.lastAct = now(); if (was) pollTick(true); };
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach(function (ev) { try { document.addEventListener(ev, act, { passive: true, capture: true }); } catch (e) {} });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) { setTimeout(function () { pollTick(true); wake(); }, 800); } });
+    // كل 5 ثوانٍ: النبضة (حسب فجوتها) + الاشتراكات المعلّقة التي صارت شاشتها ظاهرة (بلا تغليف switchPage — وحدة التبويبات تغلّفها)
+    S.pollT = setInterval(function () { pollTick(false); wake(); }, 5000);
+  }
+
+  /* ---------- طبقة google.script.run (كل النداءات) ---------- */
+  var WG = [
+    [/Booking|Notification|Movement|^bk|Approval/i, ['bookings', 'movements', 'trips']],
+    [/Trip|Pilgrim|Housing|Room|Kashf|Registry|Client(Record|Merge)/i, ['trips', 'pilgrims', 'bookings', 'movements']],
+    [/Visa|^vz/i, ['visa', 'trips']],
+    [/Ministry|^mf|Mf[A-Z]|Supervisor|RoomFee|Quota/i, ['ministry', 'trips']],
+    [/Company|Agent|User|Setting|Dropdown|Folder/i, ['dropdowns', 'visa', 'ministry']],
+    [/^gl|Gl[A-Z]|^ledger|^recon|^acc|Acc[A-Z]|^snap|^aud/i, ['gl', 'hb', 'visa', 'ministry']],
+    [/Payment|^hb|^register|ManualEntry|Party|Account(Profile)?/i, ['hb']]
+  ];
+  function writeGroups(fn) {
+    var out = {};
+    WG.forEach(function (w) { if (w[0].test(fn)) w[1].forEach(function (g) { out[g] = 1; }); });
+    var l = Object.keys(out); return l.length ? l : ALLG.slice();
+  }
+  function isWrite(fn) { return !READ[fn] && !RO_RX.test(fn) && !NODEDUPE[fn]; }
+  function afterWrite(fn) {
+    if (!isWrite(fn)) return;
+    writeGroups(fn).forEach(function (g) { S.dirtyG[g] = now(); });
+    // البصمات الجديدة تصل بنبضة فورية (الخادم غيّرها بالحفظ) ⇒ الشاشات المفتوحة الأخرى تتحدث
+    clearTimeout(S.awT); S.awT = setTimeout(function () { pollTick(true); }, 700);
+  }
+  /* ---------- المهام اللاحقة للحفظ (lfAfter) ----------
+     الحفظ يرد فور اكتمال الكتابة، ويرفق {fn,args} لأعمال تخدم الواجهة فقط (فحص التطابق، أرصدة الوكلاء…) — تُنفَّذ هنا
+     بالخلفية: نتيجة فيها xcheck تُعرض تلقائياً (غلاف الجلسة)، والأرصدة تُدمج بالشاشة المفتوحة. */
+  var AFTER = [
+    function (r) { if (r && r.agentBalances && window.VZ && typeof vzApplyBalances_ === 'function') { vzApplyBalances_(r); try { if (typeof vzRender === 'function') vzRender(); } catch (e) {} } },
+    function (r) { if (r && r.mfBalances && window.MF) { MF.balances = MF.balances || {}; Object.keys(r.mfBalances).forEach(function (k) { MF.balances[k] = r.mfBalances[k]; }); try { if (typeof mfRender === 'function') mfRender(); } catch (e) {} } }
+  ];
+  function runAfter(a) {
+    try {
+      if (!a || !a.fn || !/^[A-Za-z0-9]+$/.test(String(a.fn))) return;
+      var r = google.script.run.withSuccessHandler(function (x) { AFTER.forEach(function (h) { try { h(x); } catch (e) {} }); })
+        .withFailureHandler(function (e) { console.warn('lfAfter ' + a.fn, e); });
+      r[a.fn].apply(r, a.args || []);
+    } catch (e) {}
+  }
+  function deliver(st, val, ok) {
+    setTimeout(function () {
+      try { if (ok) { if (st.ok) st.ok(val, st.uo); } else if (st.fail) st.fail(val, st.uo); else console.error(val); }
+      catch (e) { console.error('LF handler', e); }
+    }, 0);
+  }
+  function call(getPrev, st, fn, args) {
+    var sk = NODEDUPE[fn] ? null : sjson([fn, normArgs(args)]);
+    // ① نداء مطابق ما زال جارياً ⇒ ننتظر نتيجته (لا نرسل ثانية)
+    if (sk && S.infl[sk]) {
+      S.infl[sk].push(st);
+      if (isWrite(fn)) { try { if (typeof showToast === 'function') showToast('⏳ الحفظ السابق ما زال جارياً — لن يُرسل مرتين'); } catch (e) {} }
+      return;
+    }
+    // ② دالة عرض بنسخة مؤكَّدة الحداثة ⇒ فوراً بلا خادم
+    var k = READ[fn] ? key(fn, args) : null;
+    var ep0 = S.epoch;
+    var go = function () {
+      if (sk) S.infl[sk] = [];
+      var r = getPrev();
+      r = r.withSuccessHandler(function (res, uo) {
+        var f = sk ? S.infl[sk] : null; if (sk) delete S.infl[sk];
+        if (k && cacheable(res) && ep0 === S.epoch) { var cs = csig(res), old = S.mem[k]; putEntry({ k: k, fn: fn, d: clone(res), h: old && old.cs === cs ? old.h : '', cs: cs, g: READ[fn], dv: old && old.cs === cs ? old.dv : null, sAt: now(), vAt: old && old.cs === cs ? old.vAt : 0 }); }
+        if (st.ok) st.ok(res, uo);
+        (f || []).forEach(function (x) { deliver(x, clone(res), true); });
+        try { if (!res || res.success !== false) afterWrite(fn); } catch (e) {}
+        if (res && res.lfAfter) setTimeout(function () { runAfter(res.lfAfter); }, 50);
+      }).withFailureHandler(function (err, uo) {
+        var f = sk ? S.infl[sk] : null; if (sk) delete S.infl[sk];
+        if (st.fail) st.fail(err, uo); else console.error('google.script.run.' + fn, err);
+        (f || []).forEach(function (x) { deliver(x, err, false); });
+      });
+      if (st.hasUo) r = r.withUserObject(st.uo);
+      r[fn].apply(r, args);
+    };
+    if (!k || S.bypass) return go();
+    var e0 = S.mem[k];
+    if (e0) { if (fresh(e0, fn)) return deliver(st, clone(e0.d), true); return go(); }
+    getEntry(k, function (e) { if (e && fresh(e, fn)) deliver(st, clone(e.d), true); else go(); });
+  }
+  function install() {
+    try {
+      if (!window.google || !google.script || window._LF_PREV_RUN_) return;
+      var desc = Object.getOwnPropertyDescriptor(google.script, 'run');
+      if (!desc || !desc.get || desc.configurable === false) return;
+      var getPrev = function () { return desc.get.call(google.script); };
+      window._LF_PREV_RUN_ = getPrev;
+      var mk = function (st) {
+        return new Proxy({}, { get: function (t, prop) {
+          if (prop === 'withSuccessHandler') return function (f) { return mk({ ok: f, fail: st.fail, uo: st.uo, hasUo: st.hasUo }); };
+          if (prop === 'withFailureHandler') return function (f) { return mk({ ok: st.ok, fail: f, uo: st.uo, hasUo: st.hasUo }); };
+          if (prop === 'withUserObject') return function (o) { return mk({ ok: st.ok, fail: st.fail, uo: o, hasUo: true }); };
+          if (typeof prop !== 'string' || prop === 'then') return undefined;
+          return function () { call(getPrev, st, prop, Array.prototype.slice.call(arguments)); };
+        } });
+      };
+      Object.defineProperty(google.script, 'run', { configurable: true, get: function () { return mk({}); } });
+    } catch (e) { console.warn('LF install', e); }
+  }
+
+  /* ---------- تحديث الأسطر المتغيّرة فقط (بدل إعادة بناء الجدول) ---------- */
+  function sameAttrs(a, b) {
+    if (a.attributes.length !== b.attributes.length) return false;
+    for (var i = 0; i < a.attributes.length; i++) { var x = a.attributes[i]; if (b.getAttribute(x.name) !== x.value) return false; }
+    return true;
+  }
+  function syncAttrs(a, b) {
+    var i; for (i = a.attributes.length - 1; i >= 0; i--) { var n = a.attributes[i].name; if (!b.hasAttribute(n)) a.removeAttribute(n); }
+    for (i = 0; i < b.attributes.length; i++) { var x = b.attributes[i]; if (a.getAttribute(x.name) !== x.value) a.setAttribute(x.name, x.value); }
+  }
+  var FORM = { INPUT: 1, SELECT: 1, TEXTAREA: 1, OPTION: 1 };
+  function morphKids(op, np) {
+    var o = op.firstChild, n = np.firstChild;
+    while (n) {
+      var nx = n.nextSibling;
+      if (!o) { op.appendChild(n); n = nx; continue; }
+      var on = o.nextSibling;
+      if (o.nodeType === n.nodeType && o.nodeName === n.nodeName) {
+        if (o.nodeType === 3 || o.nodeType === 8) { if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue; }
+        else if (o.nodeType === 1 && !o.isEqualNode(n)) {
+          if (FORM[o.nodeName]) { if (o !== document.activeElement) op.replaceChild(n, o); }   // الحقل الذي يكتب فيه المستخدم لا يُلمس
+          else { if (!sameAttrs(o, n)) syncAttrs(o, n); morphKids(o, n); }
+        }
+      } else op.replaceChild(n, o);
+      o = on; n = nx;
+    }
+    while (o) { var x = o.nextSibling; op.removeChild(o); o = x; }
+  }
+  function morph(el, html) {
+    var t = document.createElement('template'); t.innerHTML = html;
+    var sx = window.scrollX, sy = window.scrollY;
+    morphKids(el, t.content);
+    try { if (window.scrollY !== sy) window.scrollTo(sx, sy); } catch (e) {}
+  }
+  // تستخدمه دوال الرسم: إعادة البناء كالمعتاد، إلا أثناء تحديث حي ⇒ الأسطر المتغيّرة فقط (يبقى التمرير والتركيز)
+  function setHTML(el, html) {
+    if (!el) return;
+    if (api.morphing && el.firstChild) { try { morph(el, html); return; } catch (e) {} }
+    el.innerHTML = html;
+  }
+  function clearAll() {
+    S.epoch++; S.mem = {}; S.subs = {}; S.dv = {}; S.dirtyG = {}; S.dvAt = 0; S.again = {};
+    db(function (d) { if (!d) return; try { d.transaction('d', 'readwrite').objectStore('d').clear(); } catch (e) {} });
+  }
+
+  api.after = AFTER;   // معالجات إضافية لنتائج المهام اللاحقة
+  api.install = install; api.wire = wire; api.swr = swr; api.unsub = unsub; api.wake = wake; api.learn = learn;
+  api.setHTML = setHTML; api.morph = morph; api.clear = clearAll; api.afterWrite = afterWrite; api.poll = pollTick;
+  api.has = function (fn, args) { var k = key(fn, args); return !!(k && S.mem[k]); };
+  api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
+  api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
+  return api;
+})();
+LF_.install();
+LF_.wire();
 
 
 /* 🧳 (V4.342) حقول اسم الرحلة بملفات الوزارة ومجموعات التأشيرات (الأساسية والإضافية والتعديل الجماعي): لا تقبل اسماً غير موجود — عند مغادرة
@@ -8517,6 +9006,7 @@ function _removeTransientOverlays() {
 
 function logoutUser() {
   try { _tsPost_({ t: 'logout' }); } catch (eTs) {}   // 🗂️ (V4.350) كل التبويبات تخرج معاً
+  try { if (window.LF_) LF_.clear(); } catch (eLf) {}   // ⚡ (V4.367) الخروج اليدوي يمسح نسخ البيانات المحفوظة بهذا الجهاز
   try { if (window.appTabsReset_) appTabsReset_(true); } catch (eT) {}   // 📑 (V4.324)
   _removeTransientOverlays();
   try { if (typeof glDlgCloseAll === 'function') glDlgCloseAll(); } catch (e) {}   // (V4.303) لا تبقى نافذة حسابات (أو مكدّسها) فوق شاشة الدخول

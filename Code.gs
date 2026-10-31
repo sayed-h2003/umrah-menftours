@@ -6622,6 +6622,7 @@ function heartbeatOnline(authToken) {
 function appPulse(authToken, p) {
   var session = requireAuth_(authToken); p = p || {};
   var out = { success: true };
+  try { if (typeof _dvAll_ === 'function') out.dv = _dvAll_(); } catch (eDv) {}   // ⚡ (V4.367) بصمات البيانات مع النبضة الموحّدة
   // ⚡ (V4.364) لم تعد النبضة تفرّغ طابور السجل المحصّن (كانت تفتح ملفه داخل نداء المستخدم) — يفرّغه مشغّل كل دقيقة audFlushCron وفتح شاشة السجل
   if (p.online) {
     var map = _onlinePrune_();
@@ -7048,11 +7049,15 @@ var CACHE_GROUPS_ = {
 };
 function _cacheBust_(group) {
   var base = CACHE_GROUPS_[group]; if (!base) return clearAllCache_();
+  // ⚡ (V4.367) الكتابة تُدفع للورقة قبل مسح الكاش، ثم تتغيّر بصمة البيانات (الواجهة اللحظية) — بهذا الترتيب لا يبني قارئ
+  // متزامن كاشاً (أو نسخة متصفح) من بيانات لم تصل للورقة بعد
+  try { SpreadsheetApp.flush(); } catch (eF) {}
   try {
     var keys = [];
     base.forEach(function (key) { keys.push(key, key + '_chunked', key + '_count'); for (var i = 0; i < _CACHE_MAX_CHUNKS_; i++) keys.push(key + '_' + i); });
     CacheService.getScriptCache().removeAll(keys);
   } catch (e) { return clearAllCache_(); }
+  try { if (typeof _dvBumpCacheGroup_ === 'function') _dvBumpCacheGroup_(group); } catch (eDv) {}
   return { success: true, group: group };
 }
 function clearAllCache_() {
@@ -7065,7 +7070,9 @@ function clearAllCache_() {
       keys.push(key, key + '_chunked', key + '_count');
       for (var i = 0; i < _CACHE_MAX_CHUNKS_; i++) keys.push(key + '_' + i);
     });
+    try { SpreadsheetApp.flush(); } catch (eF) {}   // (V4.367) انظر _cacheBust_
     cache.removeAll(keys);
+    try { if (typeof _dvBump_ === 'function') _dvBump_(LF_UMRAH_GROUPS_); } catch (eDv) {}
     return { success: true };
   } catch(e) {
     return { success: false, error: e.toString() };
@@ -23345,6 +23352,7 @@ function _mfClearBootstrapCache_() {
   clearCachedData_(MF_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData_
   clearCachedData_(MF_TRIP_LINKS_CACHE_KEY);  // ⚡ (V4.178) كاش روابط الرحلة⇄الملف يتغيّر مع كل حفظ ملف
   _mfBumpVer_();
+  try { if (typeof _dvBump_ === 'function') _dvBump_(['ministry', 'trips']); } catch (eDv) {}   // ⚡ (V4.367) شارة ملف الوزارة بقائمة الرحلات أيضاً
 }
 
 /* ============================================================
@@ -25111,6 +25119,7 @@ function _vzDataVer_() {
 function _vzClearCache_() {
   clearCachedData_(VZ_BOOTSTRAP_CACHE_KEY);   // 🧹 (V4.177) مسح شامل للصيغة المجزَّأة أيضاً — انظر clearCachedData_
   _vzBumpVer_();
+  try { if (typeof _dvBump_ === 'function') _dvBump_(['visa']); } catch (eDv) {}   // ⚡ (V4.367) بصمة الواجهة اللحظية
 }
 
 function _vzRowToObj_(r) {

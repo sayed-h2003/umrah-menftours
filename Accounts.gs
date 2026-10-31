@@ -265,6 +265,7 @@ function _glBump_() {
   _GL_VER_ = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   try { PropertiesService.getScriptProperties().setProperty('GL_DATA_VER', _GL_VER_); } catch (e) {}
   _GL_ROWS_MEMO_ = {};
+  try { if (typeof _dvBump_ === 'function') _dvBump_(['gl', 'hb']); } catch (eDv) {}   // ⚡ (V4.367) أرقام القيود بكشف الفندق أيضاً
 }
 function _glTouch_(key) {
   if (!GL_CACHE_KEYS_[key]) return;
