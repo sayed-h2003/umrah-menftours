@@ -176,11 +176,9 @@ function snapRowRestore(authToken, sid) {
 
 /* ---------- ② نقاط استعادة النظام ---------- */
 function _snapFolder_() {
-  var p = PropertiesService.getScriptProperties(), id = p.getProperty(SNAP_PROP_FOLDER_);
-  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
-  var f = DriveApp.createFolder('🛡️ نقاط الاستعادة — برنامج العمرة (لا تُشارك)');
-  p.setProperty(SNAP_PROP_FOLDER_, f.getId());
-  return f;
+  // ⚡ (V4.367) كان يُنشأ بجذر My Drive — الآن داخل المجلد الرئيسي (FOLDER_KEYS.SNAPS = نفس الخاصية SNAP_FOLDER_ID):
+  // المجلد القديم يُنقل تحته تلقائياً بنفس معرّفه، فكل نقاط الاستعادة المفهرسة تبقى كما هي
+  return _appFolder_('SNAPS');
 }
 function _snapIdxSheet_() {   // الفهرس داخل ملف السجل المحصّن (مستقل ولا يُشارك)
   var ss = _audSS_(), sh = ss.getSheetByName(SNAP_IDX_SHEET_);
@@ -238,7 +236,7 @@ function _snapPrune_() {
     else keep = ageD <= SNAP_KEEP_RISK_;
     if (keep) return;
     var files = []; try { files = JSON.parse(String(v[5])) || []; } catch (e) {}
-    files.forEach(function (f) { try { DriveApp.getFileById(f.blob || f.id).setTrashed(true); } catch (e) {} });
+    files.forEach(function (f) { _appTrash_(String(f.blob || f.id || ''), { soft: true }); });   // ⚡ (V4.367) عبر الحارس
     sh.getRange(i + 2, 7).setValue('محذوفة'); n++;
   });
   return n;

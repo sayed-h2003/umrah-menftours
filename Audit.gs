@@ -51,6 +51,9 @@ function _audSS_() {
   if (id) ss = SpreadsheetApp.openById(id);   // يرمي لو حُذف/فُقد الوصول ⇒ السجل غير متاح (fail-closed)
   else {
     ss = SpreadsheetApp.create('🛡️ سجل التتبع المحصّن — برنامج العمرة (لا يُشارك ولا يُعدَّل يدوياً)');
+    // ⚡ (V4.367) داخل المجلد الرئيسي (مجلد السجل المحصّن) — كان يبقى بجذر My Drive. أفضل محاولة: تعذّر النقل لا يوقف
+    // إنشاء السجل (البوابة مغلقة عند الفشل)، ويظهر الملف بأداة «فحص ملفات البرنامج خارج المجلد الرئيسي» لنقله لاحقاً
+    try { _appAdopt_(ss, 'AUDIT'); } catch (eMv) { Logger.log('audit: تعذّر نقل ملف السجل للمجلد الرئيسي: ' + eMv.message); }
     var sh = ss.getSheets()[0]; sh.setName('Trail');
     sh.getRange(1, 1, 1000, AUD_HDR_.length).setNumberFormat('@');
     sh.getRange(1, 1, 1, AUD_HDR_.length).setValues([AUD_HDR_]).setFontWeight('bold');

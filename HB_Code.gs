@@ -1626,7 +1626,7 @@ function downloadBackup_() {
   };
   var response = UrlFetchApp.fetch(url, params);
   var blob = response.getBlob().setName(ss.getName() + '.xlsx');
-  var file = DriveApp.createFile(blob);
+  var file = _appFolder_('TEMP').createFile(blob);   // ⚡ (V4.367) داخل المجلد الرئيسي (كان بجذر My Drive)
 
   // إنشاء رابط لتنزيل النسخة الاحتياطية مع JavaScript لإغلاق الرسالة وحذف الملف
   registerTempFile_(file.getId());
@@ -1656,7 +1656,7 @@ function hbDeleteTempFile(fileId) {
     CacheService.getScriptCache().remove('tmpfile_' + fileId);
     var file = DriveApp.getFileById(fileId);
     Logger.log('Found file: ' + file.getName());
-    file.setTrashed(true);
+    _appTrash_(file);   // ⚡ (V4.367) عبر الحارس: داخل المجلد الرئيسي فقط
     Logger.log('File moved to trash: ' + file.getName());
   } catch (e) {
     Logger.log('Error: ' + e.toString());
@@ -1782,7 +1782,7 @@ function saveAsPDF_() {
   // إنشاء اسم الملف مع التاريخ
   var fileName = sheet.getSheetName() + ' ' + formattedDate + '.pdf';
   var blob = response.getBlob().setName(fileName);
-  var file = DriveApp.createFile(blob);
+  var file = _appFolder_('TEMP').createFile(blob);   // ⚡ (V4.367) داخل المجلد الرئيسي (كان بجذر My Drive)
 
   // إنشاء رابط لتنزيل النسخة الاحتياطية مع JavaScript لإغلاق الرسالة وحذف الملف
   registerTempFile_(file.getId());
@@ -1955,8 +1955,9 @@ var SHARE_TEMP_FOLDER_ = 'ملفات مشاركة مؤقتة';
 var SHARE_TEMP_RETENTION_MIN_ = 3; // عمر الملف المؤقت بالدقائق قبل حذفه القسري
 
 function ensureTempShareFolder_() {
-  var it = DriveApp.getFoldersByName(SHARE_TEMP_FOLDER_);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(SHARE_TEMP_FOLDER_);
+  // ⚡ (V4.367) كان يبحث بالاسم في كل الدرايف ويُنشئ المجلد بجذر My Drive (ثم يحذف ما فيه دورياً — حتى لو كان مجلداً
+  // شخصياً بنفس الاسم!) — الآن مجلد مسجَّل (FOLDER_ID_TEMPSHARE) مضمون داخل المجلد الرئيسي للبرنامج
+  return _appFolder_('TEMPSHARE');
 }
 
 // شغّل هذه الدالة يدويًا مرة واحدة من محرر Apps Script (قائمة تشغيل) لمنح صلاحية Drive
@@ -1980,7 +1981,7 @@ function purgeShareTempFolder() {
     var files = folder.getFiles(), n = 0;
     while (files.hasNext()) {
       var f = files.next();
-      if (f.getDateCreated() < cutoff) { f.setTrashed(true); n++; }
+      if (f.getDateCreated() < cutoff && _appTrash_(f, { via: folder, soft: true })) n++;   // ⚡ (V4.367) عبر الحارس
     }
     cleanupSpentPurgeTriggers_();
     return n;
@@ -9761,7 +9762,7 @@ function tgHtmlToImageBlob_(html, name) {
     // احتياطي أخير: مصغَّرة DriveApp (منخفضة الدقة لكنها أفضل من لا شيء)
     if (!img) { try { img = file.getThumbnail(); } catch (eT) {} }
   } finally {
-    try { file.setTrashed(true); } catch (eD) {}
+    _appTrash_(file, { via: folder, soft: true });   // ⚡ (V4.367) عبر الحارس
   }
   if (!img) throw new Error('تعذّر توليد صورة الآن (' + (lastErr || 'المصغَّرة غير جاهزة') + ')');
   var safe = (name || 'صورة').toString().replace(/[\\\/:*?"<>|]/g, '-').trim() || 'صورة';
@@ -11309,11 +11310,13 @@ function tgOcrPdfToText_(blob) {
   // ocrLanguage ضروري لتشغيل القراءة الضوئية على الملفات الصورية (PDF مصوَّر/سكان): بدونه
   // يحوّل Drive ملفات النص فقط (كتأكيد برستيج) ويُرجع فارغًا لأي تأكيد صورة (كقافلة التوحيد).
   // ar يقرأ العربية وأيضًا الأرقام/اللاتينية جيدًا (الحقول الحرجة أرقام لاتينية في كل النماذج).
+  // ⚡ (V4.367) المستند المؤقت يُنشأ داخل مجلد Temp بالمجلد الرئيسي (parents) — كان بجذر My Drive
+  var tmpId = _appFolder_('TEMP').getId();
   var fileId = tgDriveOcrImport_('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=ar',
-    { name: 'OCR_' + Date.now(), mimeType: 'application/vnd.google-apps.document' }, blob, ct, token);
+    { name: 'OCR_' + Date.now(), mimeType: 'application/vnd.google-apps.document', parents: [tmpId] }, blob, ct, token);
   if (!fileId) {
     fileId = tgDriveOcrImport_('https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart&convert=true&ocr=true&ocrLanguage=ar',
-      { title: 'OCR_' + Date.now() }, blob, ct, token);
+      { title: 'OCR_' + Date.now(), parents: [{ id: tmpId }] }, blob, ct, token);
   }
   if (!fileId) throw new Error('تعذّر تحويل الملف لقراءته ضوئيًا (تحقّق أن الملف PDF صالح)');
   var text = '';
@@ -11323,7 +11326,7 @@ function tgOcrPdfToText_(blob) {
     if (exp.getResponseCode() < 300) text = exp.getContentText();
     else Logger.log('OCR export ' + exp.getResponseCode() + ': ' + String(exp.getContentText()).slice(0, 200));
   } finally {
-    try { DriveApp.getFileById(fileId).setTrashed(true); } catch (eDel) {}
+    _appTrash_(fileId, { soft: true });   // ⚡ (V4.367) عبر الحارس (المستند داخل Temp)
   }
   return text;
 }

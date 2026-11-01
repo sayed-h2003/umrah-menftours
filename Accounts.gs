@@ -492,12 +492,8 @@ function glSetupCreate(authToken) {
   if (!_glIsAdmin_(session)) throw new Error('تجهيز ملف الحسابات متاح للمدير فقط');
   if (_glSSId_()) throw new Error('ملف الحسابات مُجهَّز بالفعل');
   var ss = SpreadsheetApp.create('حسابات منف — الدفتر العام');
-  // وضع الملف بجوار شيت البرنامج نفسه بالدرايف (أفضل محاولة)
-  try {
-    var mainFile = DriveApp.getFileById(getSpreadsheet_().getId()), glFile = DriveApp.getFileById(ss.getId());
-    var parents = mainFile.getParents();
-    if (parents.hasNext()) glFile.moveTo(parents.next());
-  } catch (e) {}
+  // ⚡ (V4.367) داخل المجلد الرئيسي للبرنامج (كان بجوار شيت البرنامج أينما كان، أو يبقى بجذر My Drive) — أفضل محاولة
+  try { _appAdopt_(ss, 'ROOT'); } catch (e) { Logger.log('glSetupCreate: تعذّر نقل ملف الحسابات للمجلد الرئيسي: ' + e.message); }
   PropertiesService.getScriptProperties().setProperty('GL_SPREADSHEET_ID', ss.getId());
   _GL_SS_MEMO_ = ss;
   _glInitSheets_(session.username);
@@ -2684,7 +2680,7 @@ function glStmtLog(authToken, code) {
 // 📄 PDF نصي من مستند الكشف المطبوع نفسه (مجلد مؤقت، مشاركة برابط) — للمشاركة/التنزيل من الواجهة
 function glStmtPdf(authToken, htmlDoc, fileName) {
   _glPerm_(authToken, 'view', 'stmt');
-  var folder = getDriveFolder_('TEMP');
+  var folder = _appFolder_('TEMP');   // ⚡ (V4.367) داخل المجلد الرئيسي
   fileName = String(fileName || 'كشف حساب').replace(/[\\/:*?"<>|]/g, '-').trim();
   var pdfBlob = Utilities.newBlob(htmlDoc, 'text/html', fileName + '.html').getAs('application/pdf');
   pdfBlob.setName(fileName + '.pdf');
@@ -4045,7 +4041,7 @@ function glAttachUpload(authToken, entryId, name, mime, b64) {
   if (!b64) throw new Error('الملف فارغ');
   var bytes = Utilities.base64Decode(String(b64).replace(/^data:[^,]*,/, ''));
   if (bytes.length > 15 * 1024 * 1024) throw new Error('حجم الملف أكبر من 15 ميجا');
-  var file = getDriveFolder_('GLATT').createFile(Utilities.newBlob(bytes, _glStr_(mime) || 'application/octet-stream', entryId + ' — ' + (_glStr_(name) || 'مستند')));
+  var file = _appFolder_('GLATT').createFile(Utilities.newBlob(bytes, _glStr_(mime) || 'application/octet-stream', entryId + ' — ' + (_glStr_(name) || 'مستند')));   // ⚡ (V4.367)
   var sh = _glSheet_('attach');
   sh.appendRow([entryId, file.getId(), _glStr_(name) || file.getName(), _glStr_(mime), file.getUrl(), session.username, _glNow_()]);
   logChange_(session.username, 'إرفاق مستند بقيد', 'GL:' + entryId, 'مرفق', '-', _glStr_(name));
@@ -4073,7 +4069,7 @@ function glAttachDelete(authToken, fileId) {
   var sh = _glSheet_('attach'), rows = _glRows_('attach'), hit = -1, ent = '';
   rows.forEach(function (r, i) { if (_glStr_(r[1]) === _glStr_(fileId)) { hit = i; ent = _glStr_(r[0]); } });
   if (hit < 0) throw new Error('المرفق غير موجود');
-  try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) {}
+  _appTrash_(_glStr_(fileId), { soft: true });   // ⚡ (V4.367) عبر الحارس: داخل المجلد الرئيسي فقط (والسطر يُحذف بكل الأحوال كما كان)
   sh.deleteRow(hit + 2);
   logChange_(session.username, 'حذف مرفق قيد', 'GL:' + ent, 'مرفق', _glStr_(rows[hit][2]), '-');
   return { success: true };
@@ -4097,7 +4093,7 @@ function glVchCoLogoUpload(authToken, name, mime, b64) {
   if (!/^image\//.test(_glStr_(mime))) throw new Error('الشعار يجب أن يكون صورة');
   var bytes = Utilities.base64Decode(String(b64 || '').replace(/^data:[^,]*,/, ''));
   if (bytes.length > 1.5 * 1024 * 1024) throw new Error('حجم الشعار أكبر من 1.5 ميجا');
-  var f = getDriveFolder_('GLATT').createFile(Utilities.newBlob(bytes, mime, 'شعار — ' + (_glStr_(name) || 'شركة')));
+  var f = _appFolder_('GLATT').createFile(Utilities.newBlob(bytes, mime, 'شعار — ' + (_glStr_(name) || 'شركة')));   // ⚡ (V4.367)
   logChange_(session.username, 'رفع شعار شركة إصدار', 'GL:settings', 'شعار', '-', _glStr_(name));
   return { success: true, fileId: f.getId() };
 }
@@ -9178,9 +9174,10 @@ function _glBotStmtPdf_(code) {
 }
 // 🖼️ PDF ⇒ صورة عالية الدقة للصفحة الأولى (صورة المعاينة من جوجل درايف بدقة 1600px)
 function _glPdfToPng_(pdf) {
-  var f = null;
+  var f = null, tf = null;
   try {
-    f = getDriveFolder_('TEMP').createFile(pdf);
+    tf = _appFolder_('TEMP');   // ⚡ (V4.367) داخل المجلد الرئيسي
+    f = tf.createFile(pdf);
     var tok = ScriptApp.getOAuthToken(), link = '';
     for (var i = 0; i < 8 && !link; i++) {
       if (i) Utilities.sleep(1500);
@@ -9192,7 +9189,7 @@ function _glPdfToPng_(pdf) {
     if (img.getResponseCode() !== 200) return null;
     return img.getBlob().setName(pdf.getName().replace(/\.pdf$/i, '') + '.png');
   } catch (e) { Logger.log('_glPdfToPng_: ' + e.message); return null; }
-  finally { try { if (f) f.setTrashed(true); } catch (e2) {} }
+  finally { if (f) _appTrash_(f, { via: tf, soft: true }); }   // ⚡ (V4.367) عبر الحارس
 }
 // 🔗 بوت حسابات مستقل: ويب هوك خاص (?glbot=<سر>) — بلا أي محتوى بالرد (تليجرام يرفض تحويل 302)
 function glBotWebhook_(e) {

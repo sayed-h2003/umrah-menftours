@@ -489,11 +489,8 @@ function _aiExec_(fc, ctx) {
 
 /* ———————————————————————————— التخزين ———————————————————————————— */
 function _aiFolder_() {
-  var P = PropertiesService.getScriptProperties(), id = P.getProperty(AI_FOLDER_PROP_);
-  if (id) { try { return DriveApp.getFolderById(id); } catch (e) {} }
-  var root = getDriveFolder_('ROOT'), it = root.getFoldersByName('المحاسب الذكي'), f = it.hasNext() ? it.next() : root.createFolder('المحاسب الذكي');
-  P.setProperty(AI_FOLDER_PROP_, f.getId());
-  return f;
+  // ⚡ (V4.367) عبر _appFolder_ (FOLDER_KEYS.AI = نفس الخاصية AI_ACC_FOLDER): مضمون داخل المجلد الرئيسي
+  return _appFolder_('AI');
 }
 function _aiSheet_() { return _accSheet_(AI_SHEET_, AI_SHEET_HDR_); }
 function _aiIndexRow_(id) {
@@ -665,7 +662,7 @@ function aiChatStep(authToken, id) {
 function aiChatDelete(authToken, id) {
   var s = _aiSession_(authToken), ix = _aiIndexRow_(id); if (!ix.row) return { success: true };
   if (String(ix.vals[1]) !== String(s.username) && !_sessionHasPerm_(s, 'admin')) throw new Error('هذه المحادثة لمستخدم آخر');
-  try { DriveApp.getFileById(String(ix.vals[9])).setTrashed(true); } catch (e) {}
+  _appTrash_(String(ix.vals[9] || ''), { soft: true });   // ⚡ (V4.367) عبر الحارس: داخل المجلد الرئيسي فقط
   ix.sh.deleteRow(ix.row);
   return { success: true };
 }
