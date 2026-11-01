@@ -7305,8 +7305,10 @@ var LF_ = (function () {
   function key(fn, args) { var j = sjson(normArgs(args)); return j === null || !user() ? null : 'lf|' + ver() + '|' + user() + '|' + fn + '|' + j; }
   function clone(d) { try { return d === undefined ? d : JSON.parse(JSON.stringify(d)); } catch (e) { return d; } }
   // بصمة بالمتصفح (FNV-1a) لمقارنة نسختين بلا خادم (مسار نداء الإقلاع)
+  // ⚡ (V4.367) حقل perf بالمستوى الأعلى (زمن البناء بالخادم — بوتستراب التأشيرات/الوزارة) يتغيّر مع كل نداء فلا يدخل البصمة،
+  // وإلا بدت كل نسخة «متغيّرة»: إعادة رسم وشارة «حُدّثت» وشريط تعارض كاذب مع كل تحقق
   function csig(d) {
-    var s; try { s = JSON.stringify(d); } catch (e) { return ''; }
+    var s; try { s = JSON.stringify(d, function (k, v) { return k === 'perf' && this === d ? undefined : v; }); } catch (e) { return ''; }
     if (s == null) return '';
     var h = 0x811c9dc5; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
     return s.length + ':' + h.toString(36);
@@ -7441,18 +7443,22 @@ var LF_ = (function () {
        onData(data, meta) ⇐ أولاً النسخة المحفوظة (meta.cached) إن وُجدت، ثم الحديثة فقط لو اختلفت (meta.changed).
        opts.sub: معرّف اشتراك الشاشة (تحديث حي عند تغيّر مجموعاتها) · opts.visible(): هل الشاشة ظاهرة الآن
        opts.dirty(): تعديلات غير محفوظة ⇒ لا استبدال (شريط تنبيه) · opts.runner(): مسار شبكة بديل (نداء الإقلاع)
-       opts.label: اسم الشاشة للرسائل · opts.noCache: لا عرض من النسخة (تحقق فقط) */
+       opts.label: اسم الشاشة للرسائل · opts.noCache: لا عرض من النسخة (تحقق فقط)
+       ⚡ (V4.367) opts.done(ok, err, changed): مرة واحدة عند انتهاء التحقق من الخادم (نجح/فشل/أُلغي بالخروج) — «نفسها» لا تستدعي
+       onData، فالشاشات التي تمنع تكرار الجلب أثناء طلب جارٍ (قائمة الرحلات) تعرف منها انتهاء الطلب، وchanged=false يعني أن الخادم
+       أكّد النسخة المعروضة نفسها */
   function swr(fn, args, opts, onData, onFail) {
     opts = opts || {};
     var ep = S.epoch; opts._ep = ep;   // الحقبة لحظة الطلب: خروج قبل اكتمال القراءة/الرد ⇒ لا عرض ولا تخزين
     var k = key(fn, args);
-    var sub = null;
+    var sub = null, settled = false;
+    var settle = function (ok, err, changed) { if (settled || !opts.done) return; settled = true; try { opts.done(ok, err, changed); } catch (x) { console.error('LF swr done ' + fn, x); } };
     if (opts.sub) {
       sub = { id: opts.sub, fn: fn, args: args, k: k, opts: opts, onData: onData, label: opts.label || '', busy: false, pend: false, lastCs: '' };
       S.subs[opts.sub] = sub;
     }
     getEntry(k, function (e) {
-      if (ep !== S.epoch) return;
+      if (ep !== S.epoch) { settle(false); return; }
       var shown = false;
       if (e && !opts.noCache && !dirtyBlocked(fn, e)) {
         shown = true; if (sub) sub.lastCs = e.cs;
@@ -7460,17 +7466,23 @@ var LF_ = (function () {
         try { onData(clone(e.d), { cached: true, at: e.sAt }); } catch (x) { console.error('LF swr cached ' + fn, x); }
       }
       netCheck(fn, args, k, e, opts, function (res) {   // ok
-        if (shown) badge(res.changed ? 'updated' : 'done');
-        if (sub) sub.lastCs = res.cs || sub.lastCs;
+        // ⚡ (V4.367) نفس حارس «تعديلات غير محفوظة» للتحديث الحي: بدأ المستخدم التعديل على النسخة الفورية قبل وصول الأحدث ⇒ شريط
+        // التعارض بدل الاستبدال (الرد غير القابل للتخزين — خطأ/«قديم» — يمر للمعالج كما هو ليعيد المحاولة بنفسه)
+        var held = !!(res.changed && shown && sub && S.subs[sub.id] === sub && cacheable(res.data) && subDirty(sub));
+        if (shown) badge(res.changed && !held ? 'updated' : 'done');
+        if (sub && !held) sub.lastCs = res.cs || sub.lastCs;
         if (res.changed) deliverKey(k, res, sub ? sub.id : null);
-        if (res.changed || !shown) {
+        if (held) { sub.fresh = res.data; conflictBar(sub); }
+        else if (res.changed || !shown) {
           api.morphing = shown;
           try { onData(res.data, { cached: false, changed: shown }); } catch (x) { console.error('LF swr ' + fn, x); }
           api.morphing = false;
         }
+        settle(true, null, !!res.changed);
       }, function (err) {
-        if (shown) { badge('offline'); return; }
-        if (onFail) onFail(err); else console.error('LF ' + fn, err);
+        if (shown) badge('offline');
+        else if (onFail) onFail(err); else console.error('LF ' + fn, err);
+        settle(false, err);
       });
     });
   }
@@ -7542,6 +7554,7 @@ var LF_ = (function () {
       netCheck(s.fn, s.args, k, e, { _ep: ep }, function (res) { if (res.changed && ep === S.epoch) deliverKey(k, res, null); }, function () {});
     });
   }
+  function subDirty(s) { if (!s.opts.dirty) return false; try { return !!s.opts.dirty(); } catch (e) { return false; } }   // ⚡ (V4.367)
   function applySub(s, force) {
     if (!s.fresh || S.subs[s.id] !== s) return;
     if (!force && s.opts.dirty) { var dirty = false; try { dirty = !!s.opts.dirty(); } catch (e) {} if (dirty) { conflictBar(s); return; } }
@@ -7647,9 +7660,11 @@ var LF_ = (function () {
       r = r.withSuccessHandler(function (res, uo) {
         var f = sk ? S.infl[sk] : null; if (sk) delete S.infl[sk];
         if (k && cacheable(res) && ep0 === S.epoch) { var cs = csig(res), old = S.mem[k]; putEntry({ k: k, fn: fn, d: clone(res), h: old && old.cs === cs ? old.h : '', cs: cs, g: READ[fn], dv: old && old.cs === cs ? old.dv : null, sAt: now(), vAt: old && old.cs === cs ? old.vAt : 0 }); }
+        // ⚡ (V4.367) علامة «كُتب محلياً» قبل معالج النجاح لا بعده: معالجات الحفظ تعيد تحميل الشاشات فوراً (loadTripsList / vzLoad(true)
+        // / loadBookingsTable…) فلا تُعرض لحظياً نسخة ما قبل الحفظ المحفوظة بالمتصفح (مثل إشعار محذوف يعود للظهور ثوانٍ)
+        try { if (!res || res.success !== false) afterWrite(fn); } catch (e) {}
         if (st.ok) st.ok(res, uo);
         (f || []).forEach(function (x) { deliver(x, clone(res), true); });
-        try { if (!res || res.success !== false) afterWrite(fn); } catch (e) {}
         if (res && res.lfAfter) setTimeout(function () { runAfter(res.lfAfter); }, 50);
       }).withFailureHandler(function (err, uo) {
         var f = sk ? S.infl[sk] : null; if (sk) delete S.infl[sk];
@@ -7732,7 +7747,8 @@ var LF_ = (function () {
   api.after = AFTER;   // معالجات إضافية لنتائج المهام اللاحقة
   api.install = install; api.wire = wire; api.swr = swr; api.unsub = unsub; api.wake = wake; api.learn = learn;
   api.setHTML = setHTML; api.morph = morph; api.clear = clearAll; api.afterWrite = afterWrite; api.poll = pollTick;
-  api.has = function (fn, args) { var k = key(fn, args); return !!(k && S.mem[k]); };
+  // ⚡ (V4.367) هل توجد نسخة ستُعرض فوراً؟ (نسخة حجبتها كتابة محلية حديثة لا تُحتسب) — قرار «⏳ جاري التحميل» بالشاشات
+  api.has = function (fn, args) { var k = key(fn, args), e = k && S.mem[k]; return !!(e && !dirtyBlocked(fn, e)); };
   api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
   api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
   return api;
@@ -8903,6 +8919,17 @@ function _tripsListRun_() {
     }
   };
   return b;
+}
+/* ⚡ (V4.367) أدوات ربط الشاشات بطبقة LF_ (عرض فوري من المتصفح ثم تحقق بالخلفية + تحديث حي) */
+// هل عنصر الشاشة ظاهر الآن؟ (offsetParent = null ⇐ الشاشة أو النافذة مخفية) — شرط التحديث الحي للاشتراك
+function _lfShown_(id) { var el = document.getElementById(id); return !!(el && el.offsetParent !== null); }
+// مسار شبكة الشاشة أثناء الدخول: نداء الإقلاع الموحّد ما زال جارياً أو جزؤه متاح ⇒ نأخذ منه (بلا نداء مكرر للخادم)؛
+// غير ذلك null ⇒ lfFetch بالبصمة. mk = منشئ مسار بديل (قائمة الرحلات: _tripsListRun_ يجمع طلباتها المتزامنة)
+function _lfBootRun_(key, mk) {
+  var P = _BOOT_.parts;
+  var avail = _BOOT_.state === 'pending' || !!(P && Object.prototype.hasOwnProperty.call(P, key) &&
+    Date.now() - _BOOT_.at <= _BOOT_TTL_MS_ && (_BOOT_.uses[key] || 0) < (_BOOT_USES_[key] || 1));
+  return avail ? (mk || function () { return _bootRunner_(key); }) : null;
 }
 function pilgrimVisaNote_(p) {
   var n = String((p && p.notes) || '').trim();
@@ -12047,7 +12074,9 @@ window.__step('4️⃣.4 مقطع الجافاسكربت 4/14 ✅');
 <script>
 function loadGlobalRegistry() {
   var tbody = document.getElementById('registryTableBody');
-  if (tbody) tbody.innerHTML = '<tr><td colspan="15" class="text-muted p-3">⏳ جاري تحميل السجل العام...</td></tr>';
+  var args = [window.authToken];
+  // ⚡ (V4.367) «⏳» فقط لو لا توجد نسخة محفوظة تُعرض فوراً
+  if (tbody && !LF_.has('getGlobalPilgrimsRegistry', args)) tbody.innerHTML = '<tr><td colspan="15" class="text-muted p-3">⏳ جاري تحميل السجل العام...</td></tr>';
   _applyRegColumnVisibility();
   _initRegistryDatePicker();
   _initRegistryKeyNav();
@@ -12060,7 +12089,16 @@ function loadGlobalRegistry() {
       if (td && !td.title) td.title = td.textContent.trim();
     });
   }
-  _ensureRegistryCache(true, renderRegistryTable);
+  // ⚡ (V4.367) بدل _ensureRegistryCache(true, renderRegistryTable): عرض فوري من المتصفح ثم تحقق بالخلفية + تحديث حي.
+  // نفس معالجة _ensureRegistryCache (الكاش + قوائم الاقتراح ثم الرسم)، وبقية مستدعيها (force=false) على حالها
+  LF_.swr('getGlobalPilgrimsRegistry', args, {
+    sub: 'scr:registry', label: 'السجل العام للمعتمرين',
+    visible: function () { return _lfShown_('registryTableBody'); }
+  }, function (res) {
+    window._registryCache = (res && res.pilgrims) || [];
+    _fillRegistryDatalists();
+    renderRegistryTable();
+  }, function (e) { console.warn('registry load failed:', e); renderRegistryTable(); });
 }
 
 /* ----- تخصيص أعمدة السجل العام (نفس نمط تخصيص أعمدة كشف الرحلة) ----- */
@@ -12260,16 +12298,18 @@ function _bkChipHtml_(bookingId) {
 function _vzLoadTripLinks_() {
   if (window._vzTripLinksLoading || window._vzTripLinks) return;
   window._vzTripLinksLoading = true;
-  google.script.run
-    .withSuccessHandler(function (res) {
-      window._vzTripLinksLoading = false;
-      window._vzTripLinks = (res && res.links) || {};
-      if (typeof renderRegistryTable === 'function' && document.getElementById('registryTableBody')) renderRegistryTable();
-      if ((window.tripsCache || []).length && typeof _tripsRerender_ === 'function') _tripsRerender_();
-      if (typeof VZ !== 'undefined' && VZ._pick && typeof vzPickRender === 'function') vzPickRender();
-    })
-    .withFailureHandler(function () { window._vzTripLinksLoading = false; window._vzTripLinks = {}; })
-    .getVisaTripLinks(window.authToken);
+  // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية + تحديث حي (شارات التأشيرات بالرحلات والسجل العام)
+  LF_.swr('getVisaTripLinks', [window.authToken], {
+    sub: 'scr:vzlinks', label: 'روابط مجموعات التأشيرات',
+    visible: function () { return _lfShown_('tripsListArea') || _lfShown_('registryTableBody') || _lfShown_('vzTableWrap'); },
+    done: function () { window._vzTripLinksLoading = false; }
+  }, function (res) {
+    window._vzTripLinksLoading = false;
+    window._vzTripLinks = (res && res.links) || {};
+    if (typeof renderRegistryTable === 'function' && document.getElementById('registryTableBody')) renderRegistryTable();
+    if ((window.tripsCache || []).length && typeof _tripsRerender_ === 'function') _tripsRerender_();
+    if (typeof VZ !== 'undefined' && VZ._pick && typeof vzPickRender === 'function') vzPickRender();
+  }, function () { window._vzTripLinksLoading = false; window._vzTripLinks = {}; });
 }
 // مجموعات التأشيرات التي تخصّ هذا المعتمر في هذه الرحلة (بالجواز إن حُدِّد، وإلا بالعميل، وإلا كل مجموعات الرحلة)
 function _vzGroupsForTrip_(tripName, passport, client) {
@@ -12523,17 +12563,18 @@ function renderRegistryTable() {
   clearTimeout(_regFilterDebTimer_);   // لو استُدعيت مباشرة (تحديث/تبديل) نلغي أي كبح معلّق
   _tblRefresh_('regTable', renderRegistryTable);
   var headRow = document.getElementById('regTableHeadRow');
-  if (headRow) headRow.innerHTML =
+  // ⚡ (V4.367) LF_.setHTML = innerHTML عادةً، وأثناء التحديث الحي يُعدِّل الأسطر المتغيّرة فقط (يبقى التمرير والتحديد)
+  if (headRow) LF_.setHTML(headRow,
     '<th style="width:34px;"><input type="checkbox" class="form-check-input" id="regSelectAll" onchange="_toggleRegSelectAll(this.checked)" title="اختيار الكل"></th>' +
     _tblHead_('regTable', REG_TBL_COLS_, 'mf-thic') +
-    '<th style="width:80px;">إجراءات</th>';
+    '<th style="width:80px;">إجراءات</th>');
   _renderRegistryActiveFilters();
   _renderRegistryExpiryAlert();
   var allRows = _tblApply_('regTable', _registryFilteredRows(), REG_TBL_COLS_, _regColRaw);
   document.getElementById('regCountBadge').textContent = allRows.length;
 
   if (!allRows.length) {
-    tbody.innerHTML = '<tr><td colspan="15" class="text-muted p-3">لا توجد نتائج مطابقة للفلاتر الحالية</td></tr>';
+    LF_.setHTML(tbody, '<tr><td colspan="15" class="text-muted p-3">لا توجد نتائج مطابقة للفلاتر الحالية</td></tr>');
     return;
   }
   // ⚡ عرض كسول: أول دفعة فقط ثم "تحميل المزيد" — رسم آلاف الصفوف دفعة واحدة كان يبطئ الشاشة
@@ -12577,7 +12618,7 @@ function renderRegistryTable() {
       '<button class="btn btn-outline-secondary btn-sm" onclick="_regLoadMore(true)">📜 عرض الكل (' + allRows.length + ')</button>' +
       '</td></tr>';
   }
-  tbody.innerHTML = html;
+  LF_.setHTML(tbody, html);
 }
 function _regLoadMore(all) {
   window._regRenderLimit = all ? Number.MAX_SAFE_INTEGER : (window._regRenderLimit || 100) + 100;
@@ -13778,7 +13819,9 @@ function loadTripsList() {
   if (_tripsListInFlight_) { _tripsListAgain_ = true; return; }
 
   _tripsListInFlight_ = true;
-  if (area && !(window.tripsCache || []).length) {
+  var args = [window.authToken];
+  // ⚡ (V4.367) «⏳» فقط لو لا قائمة معروضة ولا نسخة محفوظة تُعرض فوراً
+  if (area && !(window.tripsCache || []).length && !LF_.has('getTripsList', args)) {
     area.innerHTML = '<div class="alert alert-light border text-center">⏳ جاري تحميل الرحلات...</div>';
   }
 
@@ -13786,14 +13829,18 @@ function loadTripsList() {
     _tripsListInFlight_ = false;
     if (_tripsListAgain_) { _tripsListAgain_ = false; loadTripsList(); }
   };
-  _tripsListRun_()
-    .withSuccessHandler(function (list) { done(); _tripsRenderList_(list); })
-    .withFailureHandler(function (err) {
-      _tripsListInFlight_ = false; _tripsListAgain_ = false;
-      if (_handleSessErr_(err)) return;
-      if (area) area.innerHTML = '<div class="alert alert-danger text-center">❌ ' + (err.message || err) + '</div>';
-    })
-    .getTripsList(window.authToken);
+  // ⚡ (V4.367) عرض فوري من المتصفح (window.tripsCache تُضبط داخل _tripsRenderList_) ثم تحقق بالخلفية + تحديث حي. «الطلب الجاري»
+  // يمتد حتى انتهاء التحقق (opts.done) لا حتى العرض الفوري، فيبقى حارس الطلب الواحد كما هو. أثناء الدخول (أو طلب getTripsList
+  // جارٍ من بطاقة الرحلات العاجلة) ينضم لنفس الطلب عبر _tripsListRun_ بدل نداء ثانٍ للخادم
+  LF_.swr('getTripsList', args, {
+    sub: 'scr:trips', label: 'الرحلات',
+    runner: _lfBootRun_('trips', _tripsListRun_) || (_TL_Q_ ? _tripsListRun_ : null),
+    visible: function () { return _lfShown_('tripsListArea'); },
+    done: function (ok) { if (ok) done(); else { _tripsListInFlight_ = false; _tripsListAgain_ = false; } }
+  }, function (list) { _tripsRenderList_(list); }, function (err) {
+    if (_handleSessErr_(err)) return;
+    if (area) area.innerHTML = '<div class="alert alert-danger text-center">❌ ' + (err.message || err) + '</div>';
+  });
 }
 // 🔽↕️ (V4.99) يُعيد الرسم من window.tripsCache المحمَّل بالفعل بلا أي طلب شبكة — يُستدعى عند كل
 // تغيير بفلتر/ترتيب عمود بشاشة الرحلات (نفس مبدأ _bkRenderSections_ بشاشة سجل الإشعارات)
@@ -13861,20 +13908,22 @@ function _vzTripChip_(t) {
 function _mfLoadTripLinks_() {
   if (window._mfTripLinksLoading) return;
   window._mfTripLinksLoading = true;
-  google.script.run
-    .withSuccessHandler(function (res) {
-      window._mfTripLinksLoading = false;
-      if (!res || !res.success) return;
-      window._mfTripLinks = res.links || {};
-      window._mfTripAlerts = res.alerts || [];
-      // 🔗 (V4.115) الربط الثلاثي: اسم الرحلة → {رقم الإشعار، الرقم المرجعي} + عكسه (إشعار → رحلة)
-      window._mfTripInfo = res.tripInfo || {};
-      window._mfBookingTrip = res.byBooking || {};
-      if ((window.tripsCache || []).length && typeof _tripsRerender_ === 'function') _tripsRerender_();
-      if (typeof MF !== 'undefined' && MF.loaded && typeof mfRender === 'function') mfRender();
-    })
-    .withFailureHandler(function () { window._mfTripLinksLoading = false; })
-    .getMinistryTripLinks(window.authToken);
+  // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية + تحديث حي (شارات الوزارة بالرحلات والإشعارات وشاشة الملفات)
+  LF_.swr('getMinistryTripLinks', [window.authToken], {
+    sub: 'scr:mflinks', label: 'روابط ملفات الوزارة',
+    visible: function () { return _lfShown_('tripsListArea') || _lfShown_('bookingsSectionsArea') || _lfShown_('mfTableWrap'); },
+    done: function () { window._mfTripLinksLoading = false; }
+  }, function (res) {
+    window._mfTripLinksLoading = false;
+    if (!res || !res.success) return;
+    window._mfTripLinks = res.links || {};
+    window._mfTripAlerts = res.alerts || [];
+    // 🔗 (V4.115) الربط الثلاثي: اسم الرحلة → {رقم الإشعار، الرقم المرجعي} + عكسه (إشعار → رحلة)
+    window._mfTripInfo = res.tripInfo || {};
+    window._mfBookingTrip = res.byBooking || {};
+    if ((window.tripsCache || []).length && typeof _tripsRerender_ === 'function') _tripsRerender_();
+    if (typeof MF !== 'undefined' && MF.loaded && typeof mfRender === 'function') mfRender();
+  }, function () { window._mfTripLinksLoading = false; });
 }
 
 /* 🏛️ (V4.111) بانر تنبيه ملفات مراجعة الوزارة أعلى شاشة الرحلات */
@@ -14060,11 +14109,10 @@ function _tripsRenderList_(trips) {
       // بشريط التصفية (تظهر فقط عند وجود رحلات عاجلة وتُصفّي الجدول عليها بضغطة) + كارت
       // «رحلات بلا إشعار» الموجود أصلاً بالشريط العلوي (حد 72 ساعة)
 
+      // ⚡ (V4.367) LF_.setHTML = innerHTML عادةً، وأثناء التحديث الحي يُعدِّل الأسطر المتغيّرة فقط (يبقى التمرير والبحث المكتوب)
       if (!trips.length) {
-        area.innerHTML = filterBannerHtml || '<div class="alert alert-light border text-center">لا توجد رحلات بعد — اضغط "➕ رحلة جديدة" للبدء.</div>';
-        if (window._tripsUrgentFilterActive) {
-          area.innerHTML += '<div class="alert alert-success text-center">✅ لا توجد رحلات عاجلة بدون إشعار حاليًا</div>';
-        }
+        LF_.setHTML(area, (filterBannerHtml || '<div class="alert alert-light border text-center">لا توجد رحلات بعد — اضغط "➕ رحلة جديدة" للبدء.</div>') +
+          (window._tripsUrgentFilterActive ? '<div class="alert alert-success text-center">✅ لا توجد رحلات عاجلة بدون إشعار حاليًا</div>' : ''));
         return;
       }
       // ═══════════ 🧳 V3.84 — العرض المدمج A+B: جدول ذكي (شاشات كبيرة) + بطاقات (موبايل) ═══════════
@@ -14260,8 +14308,8 @@ function _tripsRenderList_(trips) {
                        _makeSection_('📦', 'رحلات مؤرشفة (منتهية)', archivedTrips, '#64748b', 'arc');
       }
 
-      area.innerHTML = filterBannerHtml + _trFilterChipsHtml_() + toolbarHtml + sectionsHtml +
-        '<div class="text-muted small">💡 اضغط على اسم الرحلة لفتح كشف المعتمرين الخاص بها — ومرّر الفأرة على أي رحلة جارية أو مؤرشفة لعرض خط سيرها الكامل 🗺️</div>';
+      LF_.setHTML(area, filterBannerHtml + _trFilterChipsHtml_() + toolbarHtml + sectionsHtml +
+        '<div class="text-muted small">💡 اضغط على اسم الرحلة لفتح كشف المعتمرين الخاص بها — ومرّر الفأرة على أي رحلة جارية أو مؤرشفة لعرض خط سيرها الكامل 🗺️</div>');
 
       // استرجاع حالة البحث/التصفية السابقة بعد إعادة البناء (تحديث القائمة لا يمسح بحث المستخدم)
       var _si = document.getElementById('tripsSearchInput');
@@ -16485,10 +16533,37 @@ function openTripPilgrims(tripName) {
     .withFailureHandler(function() { _pgTick(); })
     .getTripHotelsList(window.authToken, tripName);
   _loadClientSelectNames_(_pgTick);
-  google.script.run
-    .withSuccessHandler(function(pilgrims) { _pgData = pilgrims || []; _pgTick(); })
-    .withFailureHandler(function(err) { _pgErr = err; _pgTick(); })
-    .getTripPilgrims(window.authToken, tripName);
+  // ⚡ (V4.367) صفوف المعتمرين عبر LF_: أول وصول (النسخة المحفوظة فوراً أو رد الخادم) هو جزء المعتمرين من الانتظار المشترك
+  // _pgTick، وما يصل بعده (نسخة أحدث من التحقق أو تحديث حي) يُرسم مباشرة بنفس المسار بلا إنقاص العدّاد مرة ثانية — وقبل اكتمال
+  // الانتظار يحلّ محل البيانات التي سيرسمها. «⏳» أعلاه يبقى دائماً: الرسم ينتظر الفنادق والعملاء فلا تبقى صفوف رحلة سابقة
+  var _pgGot = false;
+  _tpSwr_(tripName, false, function(pilgrims) {
+    if (!_pgGot) { _pgGot = true; _pgData = pilgrims || []; _pgTick(); return; }
+    if (_pgPending > 0) { _pgData = pilgrims || []; return; }
+    _renderTripPilgrimsData_(tripName, t, pilgrims);
+  }, function(err) { if (_pgGot) return; _pgGot = true; _pgErr = err; _pgTick(); });
+}
+// ⚡ (V4.367) كشف المعتمرين قابل للتعديل: لا استبدال بأحدث بيانات (شريط تعارض بدلها) ما دامت هناك تعديلات غير محفوظة،
+// أو المؤشر داخل الجدول، أو نافذة التسكين مفتوحة فوقه (تبني غرفها من صفوف الجدول وتكتب فيها عند التطبيق)
+function _tpDirty_() {
+  if (window._pilgrimsDirty) return true;
+  var tb = document.getElementById('pilgrimsTableBody'), ae = document.activeElement;
+  if (tb && ae && ae !== document.body && tb.contains(ae)) return true;
+  var hm = document.getElementById('housingModal');
+  return !!(hm && hm.classList.contains('show'));
+}
+// اشتراك واحد scr:tp للرحلة المفتوحة (فتح رحلة أخرى يستبدله). _tpSeq_ يُسقط ردود فتحٍ سابق (رحلة أخرى أو نفس الرحلة قبل إعادة الفتح)
+var _tpSeq_ = 0;
+function _tpSwr_(tripName, noCache, onData, onFail) {
+  var seq = ++_tpSeq_;
+  LF_.swr('getTripPilgrims', [window.authToken, tripName], {
+    sub: 'scr:tp', label: 'كشف الرحلة', noCache: !!noCache,
+    visible: function() { return _lfShown_('pilgrimsTableBody'); },
+    dirty: _tpDirty_
+  }, function(pilgrims, m) {
+    if (seq !== _tpSeq_ || window.currentTripName !== tripName) return;
+    onData(pilgrims, m);
+  }, function(err) { if (seq === _tpSeq_) onFail(err); });
 }
 
 // 🏷️ (V4.17) بحث تنبئي بأسماء الرحلات لحقل «اسم المجموعة» بنموذج الإشعار — اختياري، لا يمنع الكتابة الحرة
@@ -16969,14 +17044,18 @@ function _renderTripPilgrimsData_(tripName, t, pilgrims, done) {
 // يجلب صفوف المعتمرين من الخادم (لمن يملك بيانات الفنادق/العملاء بالفعل — إعادة تحميل الكشف
 // بعد الحفظ مثلاً) ثم يمرّرها لنفس منطق الرسم أعلاه
 function _loadTripPilgrimsRows(tripName, t, done) {
-  google.script.run
-    .withSuccessHandler(function(pilgrims) { _renderTripPilgrimsData_(tripName, t, pilgrims, done); })
-    .withFailureHandler(function(err) {
-      if (_handleSessErr_(err)) return;
-      document.getElementById('pilgrimsTableBody').innerHTML = '<tr><td colspan="9" class="text-danger py-3">❌ ' + (err.message || err) + '</td></tr>';
-      if (typeof done === 'function') done(false, err);
-    })
-    .getTripPilgrims(window.authToken, tripName);
+  // ⚡ (V4.367) عبر LF_ (تحقق بالبصمة — رد صغير لو لم تتغيّر + اشتراك scr:tp للتحديث الحي). مستدعيها (التسكين المباشر) يبدأ
+  // جلسة تعديل فور done ⇒ تُطلب نسخة مُتحقَّق منها (noCache) لا نسخة المتصفح، كي لا يُبنى تسكين يُحفظ فوق صفوف أحدث بالخادم.
+  // done مرة واحدة فقط (أول وصول)، وأي وصول لاحق يُرسم بنفس المسار بلا done
+  var first = true;
+  _tpSwr_(tripName, true, function(pilgrims) {
+    if (first) { first = false; _renderTripPilgrimsData_(tripName, t, pilgrims, done); return; }
+    _renderTripPilgrimsData_(tripName, t, pilgrims);
+  }, function(err) {
+    if (_handleSessErr_(err)) return;
+    document.getElementById('pilgrimsTableBody').innerHTML = '<tr><td colspan="9" class="text-danger py-3">❌ ' + (err.message || err) + '</td></tr>';
+    if (typeof done === 'function') done(false, err);
+  });
 }
 
 /* ============================================================
@@ -32610,21 +32689,41 @@ window.__step('4️⃣.11 مقطع الجافاسكربت 11/14 ✅');
 </script>
 <script>
 function loadSetupData() {
-    _bootRunner_('dropdowns').withSuccessHandler(function(res) {
+    // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية (نداء الإقلاع أثناء الدخول، وإلا lfFetch بالبصمة) + تحديث حي.
+    // المعالج يتكرر (النسخة ثم الأحدث/تعديل مستخدم آخر) ⇒ القيمة المختارة بكل قائمة تبقى كما هي بعد إعادة بنائها
+    LF_.swr('loadDropdownsData', [window.authToken], {
+      sub: 'scr:dd', label: 'القوائم المنسدلة', runner: _lfBootRun_('dropdowns'),
+      visible: function() { return _lfShown_('agent') || _lfShown_('searchAgent') || _lfShown_('company'); }
+    }, function(res) {
+      // إعادة البناء كما كانت، ثم إرجاع الاختيار السابق (وإن اختفى من القائمة الجديدة يُضاف كخيار كي لا يُمسح اختيار المستخدم بصمت)
+      var keep = function(sel, fill) {
+        var prev = sel.value;
+        fill();
+        if (!prev) return;
+        var has = Array.prototype.some.call(sel.options, function(o) { return o.value === prev; });
+        if (!has) { var o = document.createElement('option'); o.value = prev; o.textContent = prev; sel.appendChild(o); }
+        sel.value = prev;
+      };
       var agentSel = document.getElementById('agent');
-      agentSel.innerHTML = '<option value="">-- اختر الوكيل السعودي --</option>';
-      res.agents.forEach(a => { agentSel.innerHTML += `<option value="${a}">${a}</option>`; });
+      keep(agentSel, function() {
+        agentSel.innerHTML = '<option value="">-- اختر الوكيل السعودي --</option>';
+        res.agents.forEach(a => { agentSel.innerHTML += `<option value="${a}">${a}</option>`; });
+      });
 
       var sAgent = document.getElementById('searchAgent');
-      sAgent.innerHTML = '<option value="">-- كل الوكلاء --</option>';
-      res.agents.forEach(a => { sAgent.innerHTML += `<option value="${a}">${a}</option>`; });
+      keep(sAgent, function() {
+        sAgent.innerHTML = '<option value="">-- كل الوكلاء --</option>';
+        res.agents.forEach(a => { sAgent.innerHTML += `<option value="${a}">${a}</option>`; });
+      });
 
       var compSel = document.getElementById('company');
-      compSel.innerHTML = '<option value="">-- اختر الشركة المصرية --</option>';
-      res.companies.forEach(c => { compSel.innerHTML += `<option value="${c}">${c}</option>`; });
-    }).withFailureHandler(function(err) {
+      keep(compSel, function() {
+        compSel.innerHTML = '<option value="">-- اختر الشركة المصرية --</option>';
+        res.companies.forEach(c => { compSel.innerHTML += `<option value="${c}">${c}</option>`; });
+      });
+    }, function(err) {
       _showAppLoadError('تحميل القوائم المنسدلة (الوكلاء/الشركات)', err);
-    }).loadDropdownsData(window.authToken);
+    });
   }
   
   function _onTravelDateChanged() {
@@ -33604,21 +33703,29 @@ function selectBookingRow(id, evt) {
     // استدعاء لـ_bkRenderSections_ سيحفظ الحالة الافتراضية (فارغة) فوق ما كان محفوظاً فيمحوه
     _bkRestorePrefsOnce_();
     var area = document.getElementById('bookingsSectionsArea');
-    area.innerHTML = '<div class="text-muted p-3 text-center">⏳ جاري مزامنة السجلات الحالية...</div>';
+    var args = [window.authToken];
+    // ⚡ (V4.367) «⏳» فقط لو لا توجد نسخة محفوظة تُعرض فوراً
+    if (!LF_.has('getAllBookingsAuth', args)) area.innerHTML = '<div class="text-muted p-3 text-center">⏳ جاري مزامنة السجلات الحالية...</div>';
     _ensureTripsCacheForHover_();
 
-    _ensureBookingsSortModeDefault_(function() {
-      _bootRunner_('bookings').withSuccessHandler(function(bookings) {
-        localBookingsCache = bookings;
-        _dynSearchCache = null; // ⚡ (V4.170) بيانات الحجوزات تغيّرت — كاش شاشة البحث الديناميكي بات قديماً
-        _bkRenderSections_();
-      }).withFailureHandler(function(err) {
-        if (_handleSessErr_(err)) return;
-        area.innerHTML = '<div class="alert alert-danger m-2">⛔ تعذّر تحميل سجلات الحجوزات: ' +
-          String((err && err.message) || err).replace(/</g, '&lt;') + '</div>';
-        _showAppLoadError('تحميل جدول الحجوزات', err);
-      }).getAllBookingsAuth(window.authToken);
+    // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية (نداء الإقلاع أثناء الدخول، وإلا lfFetch بالبصمة) + تحديث حي عند تغيير
+    // مستخدم آخر (الأسطر المتغيّرة فقط). نمط الترتيب الافتراضي لم يعد شرطاً للرسم (أول فتح فقط): النسخة تُرسم بالنمط الحالي
+    // ثم يُعاد الرسم عند وصوله. المعالج يتكرر (النسخة ثم الأحدث) فهو يستبدل الحالة كاملة في كل مرة
+    var modeKnown = window._bookingsSortMode !== undefined;
+    LF_.swr('getAllBookingsAuth', args, {
+      sub: 'scr:bookings', label: 'سجل الإشعارات', runner: _lfBootRun_('bookings'),
+      visible: function() { return _lfShown_('bookingsSectionsArea'); }
+    }, function(bookings) {
+      localBookingsCache = bookings;
+      _dynSearchCache = null; // ⚡ (V4.170) بيانات الحجوزات تغيّرت — كاش شاشة البحث الديناميكي بات قديماً
+      _bkRenderSections_();
+    }, function(err) {
+      if (_handleSessErr_(err)) return;
+      area.innerHTML = '<div class="alert alert-danger m-2">⛔ تعذّر تحميل سجلات الحجوزات: ' +
+        String((err && err.message) || err).replace(/</g, '&lt;') + '</div>';
+      _showAppLoadError('تحميل جدول الحجوزات', err);
     });
+    if (!modeKnown) _ensureBookingsSortModeDefault_(function() { if ((localBookingsCache || []).length) _bkRenderSections_(); });
   }
   // 🔽↕️ (V4.96) يُعيد رسم الأقسام الثلاثة من الكاش المحمَّل بالفعل (بلا أي طلب شبكة) — يُستدعى عند
   // كل تغيير بالتصفية/الترتيب لعمود، وأيضاً من loadBookingsTable بعد كل تحميل فعلي من السيرفر
@@ -33630,8 +33737,9 @@ function selectBookingRow(id, evt) {
     _bkSavePrefsQuiet_();
     var area = document.getElementById('bookingsSectionsArea');
     var bookings = localBookingsCache || [];
+    // ⚡ (V4.367) LF_.setHTML = innerHTML عادةً، وأثناء التحديث الحي يُعدِّل الأسطر المتغيّرة فقط (يبقى التمرير والتركيز)
     if (!bookings.length) {
-      area.innerHTML = '<div class="alert alert-light border text-center m-2">📭 لا توجد أي سجلات أو حجوزات معتمدة بالمنظومة حالياً.</div>';
+      LF_.setHTML(area, '<div class="alert alert-light border text-center m-2">📭 لا توجد أي سجلات أو حجوزات معتمدة بالمنظومة حالياً.</div>');
       return;
     }
 
@@ -33660,7 +33768,7 @@ function selectBookingRow(id, evt) {
       });
     }
     if (!filtered.length) {
-      area.innerHTML = chipsHtml + '<div class="alert alert-light border text-center m-2">🔍 لا توجد نتائج مطابقة للتصفية الحالية</div>';
+      LF_.setHTML(area, chipsHtml + '<div class="alert alert-light border text-center m-2">🔍 لا توجد نتائج مطابقة للتصفية الحالية</div>');
       return;
     }
 
@@ -33716,7 +33824,7 @@ function selectBookingRow(id, evt) {
     } else if (arcB.length && !showArchived) {
       html += '<div class="text-muted small px-1">📦 ' + arcB.length + ' إشعار مؤرشف مخفي — فعِّل «عرض المؤرشفة» أعلاه لعرضه</div>';
     }
-    area.innerHTML = chipsHtml + html;
+    LF_.setHTML(area, chipsHtml + html);
   }
   
   function toggleApprovedRow(id, input) {
@@ -38509,7 +38617,8 @@ function renderSmartDashboard(
         ?.includes('رحلة')
     );
 
- area.innerHTML = `
+ // ⚡ (V4.367) LF_.setHTML: أثناء التحديث الحي تُعدَّل الكروت المتغيّرة فقط بلا وميض
+ LF_.setHTML(area, `
 <div class="dashboard-wrap">
   <div class="dash-card today" onclick="filterDashboard('today')">
     <div class="dash-info">
@@ -38583,7 +38692,7 @@ function renderSmartDashboard(
 .alert-card { background: linear-gradient(135deg, #dc2626, #b91c1c); }
 #urgentTripsCard { background: linear-gradient(135deg, #b91c1c, #7f1d1d) !important; }
 \u003C/style>
-`;
+`);
   // بعد إعادة بناء الكروت: اطلِ كارت "رحلات بلا إشعار" بالقيمة الحالية، ثم حدّثها من السيرفر
   _paintUrgentCard();
   if (typeof _refreshUrgentTripsCard === 'function') _refreshUrgentTripsCard();
@@ -38652,25 +38761,24 @@ function _dashToggleTransport_() {
 
 function loadSmartDashboard(){
 
-  _bootRunner_('movements')
-    .withSuccessHandler(
-      function(movements){
+  // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية (نداء الإقلاع أثناء الدخول، وإلا lfFetch بالبصمة) + تحديث حي للكروت
+  LF_.swr('getAllMovementsAuth', [window.authToken], {
+    sub: 'scr:dash', label: 'لوحة التحركات', runner: _lfBootRun_('movements'),
+    visible: function() { return _lfShown_('smartDashboard'); }
+  }, function(movements){
 
-        window.dashboardMovements =
-          movements || [];
+    window.dashboardMovements =
+      movements || [];
 
-        renderSmartDashboard(
-          window.dashboardMovements
-        );
-        // 🔄 حدّث كارت "رحلات بلا إشعار" ببيانات الرحلات (لا تعتمد على شاشة الرحلات فقط)
-        _refreshUrgentTripsCard();
+    renderSmartDashboard(
+      window.dashboardMovements
+    );
+    // 🔄 حدّث كارت "رحلات بلا إشعار" ببيانات الرحلات (لا تعتمد على شاشة الرحلات فقط)
+    _refreshUrgentTripsCard();
 
-      }
-    )
-    .withFailureHandler(function(err) {
-      _showAppLoadError('تحميل لوحة الإحصائيات', err);
-    })
-    .getAllMovementsAuth(window.authToken);
+  }, function(err) {
+    _showAppLoadError('تحميل لوحة الإحصائيات', err);
+  });
 
 }
 
@@ -39842,42 +39950,60 @@ function mfWarmPilgrimSearch() {
     .withFailureHandler(function () { window._mfRegLoading = false; })
     .getGlobalPilgrimsRegistry(window.authToken);
 }
-function mfLoad(force) {
+function mfLoad(force, quiet) {
   var wrap = document.getElementById('mfTableWrap');
-  if (wrap) wrap.innerHTML = '<div class="p-4 text-center text-muted small">⏳ جاري تحميل ملفات المراجعة…</div>';
-  var _t0 = Date.now();
-  google.script.run
-    .withSuccessHandler(function (res) {
-      _perfLog_('ملفات الوزارة', _t0, res);
-      if (!res || !res.success) {
-        if (wrap) wrap.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_((res && res.error) || 'تعذّر التحميل') + '</div>';
-        return;
-      }
-      // 🐛 (V4.177) رد بُني من بيانات تسبق آخر حفظ — لا نستبدل به الصفوف المحدَّثة محلياً، ونعيد
-      // المحاولة بعد لحظة (إلا لو كانت هذه أول تحميلة أصلاً فلا بديل لدينا سوى عرض ما وصل)
-      if (res.stale && MF.loaded) { setTimeout(function () { mfLoad(true); }, 1500); return; }
-      MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
-      MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
-      MF.balances = res.balances || {}; MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
-      MF.execPolicy = res.execPolicy || [];   // 🏛️ (V4.231) سياسة رسوم التنفيذ
-      MF.files.forEach(function (f) { f._c = mfCalc(f); });
-      MF.loaded = true;
-      mfRestoreColPrefs();
-      // 👁️ (V4.111) الوضع الافتراضي عند أول فتح: ما يحتاج متابعة فقط — لم تُراجع بعد أو بلا رقم
-      // ملف أو بلا رقم قيد أو لم تسافر بعد. يظهر شريط الفلاتر المطبَّقة ويمكن مسحه بضغطة.
-      if (!MF._defaultsApplied) {
-        MF._defaultsApplied = true;
-        MF.facets.needsWork = true;
-        var b = document.querySelector('#section-ministry .mf-facet[data-q="needsWork"]');
-        if (b) b.classList.add('on');
-      }
-      mfRender();
-      mfAttachTypeaheads();
-    })
-    .withFailureHandler(function (err) {
-      if (wrap) wrap.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_(err && err.message ? err.message : err) + '</div>';
-    })
-    .getMinistryBootstrap(window.authToken);
+  var args = [window.authToken];
+  // ⚡ (V4.367) «⏳» فقط لو لا توجد نسخة محفوظة تُعرض فوراً (ولا في إعادة المحاولة الهادئة quiet بعد رد «قديم»)
+  if (wrap && !quiet && !LF_.has('getMinistryBootstrap', args)) wrap.innerHTML = '<div class="p-4 text-center text-muted small">⏳ جاري تحميل ملفات المراجعة…</div>';
+  var _t0 = Date.now(), cachedBal = null;
+  // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية + تحديث حي. إعادة المحاولة بعد رد «قديم» (لا يُخزَّن ويصل كما هو) تحقق فقط
+  // (noCache) فلا تُستبدل الصفوف المحدَّثة محلياً بنسخة أقدم. أرصدة الشركات لا تُعرض من النسخة المحفوظة: تبقى آخر أرصدة مؤكَّدة
+  // حتى يرسل الخادم الأحدث أو يؤكد أن النسخة نفسها (done)
+  LF_.swr('getMinistryBootstrap', args, {
+    sub: 'scr:mf', label: 'ملفات الوزارة', noCache: !!(quiet && MF.loaded),
+    visible: function () { return _lfShown_('mfTableWrap'); },
+    dirty: _mfDirty_,
+    done: function (ok, err, changed) {
+      if (ok && !changed && cachedBal) { MF.balances = cachedBal; try { mfRenderAlerts(); } catch (e) {} }
+      cachedBal = null;
+    }
+  }, function (res, m) {
+    if (!m.cached && !m.live) _perfLog_('ملفات الوزارة', _t0, res);
+    if (!m.cached) cachedBal = null;
+    if (!res || !res.success) {
+      if (m.live) return;
+      if (wrap) wrap.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_((res && res.error) || 'تعذّر التحميل') + '</div>';
+      return;
+    }
+    // 🐛 (V4.177) رد بُني من بيانات تسبق آخر حفظ — لا نستبدل به الصفوف المحدَّثة محلياً، ونعيد
+    // المحاولة بعد لحظة (إلا لو كانت هذه أول تحميلة أصلاً فلا بديل لدينا سوى عرض ما وصل)
+    if (res.stale && MF.loaded) { setTimeout(function () { mfLoad(true, true); }, 1500); return; }
+    MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
+    MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
+    if (m.cached) cachedBal = res.balances || {}; else MF.balances = res.balances || {};
+    MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
+    MF.execPolicy = res.execPolicy || [];   // 🏛️ (V4.231) سياسة رسوم التنفيذ
+    MF.files.forEach(function (f) { f._c = mfCalc(f); });
+    MF.loaded = true;
+    mfRestoreColPrefs();
+    // 👁️ (V4.111) الوضع الافتراضي عند أول فتح: ما يحتاج متابعة فقط — لم تُراجع بعد أو بلا رقم
+    // ملف أو بلا رقم قيد أو لم تسافر بعد. يظهر شريط الفلاتر المطبَّقة ويمكن مسحه بضغطة.
+    if (!MF._defaultsApplied) {
+      MF._defaultsApplied = true;
+      MF.facets.needsWork = true;
+      var b = document.querySelector('#section-ministry .mf-facet[data-q="needsWork"]');
+      if (b) b.classList.add('on');
+    }
+    mfRender();
+    mfAttachTypeaheads();
+  }, function (err) {
+    if (wrap) wrap.innerHTML = '<div class="alert alert-danger small m-2">❌ ' + escapeHtml_(err && err.message ? err.message : err) + '</div>';
+  });
+}
+// ⚡ (V4.367) تعديلات غير محفوظة بشاشة الوزارة: نموذج الملف مفتوح (أو مصغَّر — #mfFormBox يبقى بالـDOM)، أو تعديل سريع في
+// مكانه، أو نافذة الربط الجماعي. MF._draft نفسه لا يُفرَّغ عند الإغلاق فلا يصلح وحده مؤشراً
+function _mfDirty_() {
+  return !!(document.getElementById('mfFormBox') || MF.editRowId || document.querySelector('.mf-bulk-edit-backdrop'));
 }
 
 /* ---------- التصفية والفرز ---------- */
@@ -40036,7 +40162,7 @@ function mfRender() {
     h += '<td class="' + cls + '"' + st + '>' + v + '</td>';
   });
   h += '</tr></tfoot></table>';
-  wrap.innerHTML = h;
+  LF_.setHTML(wrap, h);   // ⚡ (V4.367) أثناء التحديث الحي تُعدَّل الأسطر المتغيّرة فقط (يبقى التمرير والتحديد)
   mfRenderApplied(list);
   mfRenderAlerts();
   mfRenderCharts(list);
@@ -41145,6 +41271,7 @@ function mfGoTrip(name) {
 function mfAttachTips() {
   var tip = document.getElementById('mfCellTip'); if (!tip) return;
   document.querySelectorAll('#section-ministry tbody td').forEach(function (td) {
+    if (td._mfTip) return; td._mfTip = 1;   // ⚡ (V4.367) التحديث الحي يُبقي الخلايا غير المتغيّرة نفسها ⇒ لا مستمعات مكررة عليها
     td.addEventListener('mouseenter', function () {
       if (td.scrollWidth <= td.clientWidth + 1) return;
       var full = td.getAttribute('data-full'); if (!full) return;
@@ -44780,28 +44907,42 @@ function vzInit() {
 // يُستخدَم بعد الحفظ الفوري (الذي دمج السجل محلياً بالفعل) لتحديث الأرصدة المحسوبة بالخادم فقط
 function vzLoad(force, silent) {
   var wrap = document.getElementById('vzTableWrap');
-  if (wrap && !silent && (force || !VZ.loaded)) wrap.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
-  var _t0 = Date.now();
-  google.script.run
-    .withSuccessHandler(function (res) {
-      _perfLog_('متابعة الوكلاء', _t0, res);
-      if (!res || !res.success) { if (wrap) wrap.innerHTML = '<div class="alert alert-danger m-2">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
-      // 🐛 (V4.177) رد بُني من بيانات تسبق آخر حفظ (بدأ بناؤه قبل الحفظ وانتهى بعده) — تجاهله
-      // تماماً ولا تستبدل به الصف المحدَّث محلياً، وأعد المحاولة بهدوء بعد لحظة بدل إظهار القيم القديمة
-      if (res.stale) { setTimeout(function () { vzLoad(true, true); }, 1500); return; }
-      VZ.files = res.files || []; VZ.prices = res.prices || []; VZ.transportPrices = res.transportPrices || []; VZ.companies = res.companies || [];
-      VZ.trips = res.trips || []; VZ.clients = res.clients || []; VZ.agents = res.agents || [];
-      VZ.statuses = res.statuses || []; VZ.payStatuses = res.payStatuses || []; VZ.agentBalances = res.agentBalances || {};
-      VZ.cateringByGroup = res.cateringByGroup || {};
-      VZ.housingByGroup = res.housingByGroup || {};
-      VZ.accounts = res.accounts || []; VZ.acctRows = res.acctRows || []; VZ.acctModes = res.acctModes || [];
-      VZ.today = res.today || ''; VZ.can = res.can || {}; VZ.loaded = true;
-      vzRestoreColPrefs();
-      vzApplyFinanceUI();
-      vzRender();
-    })
-    .withFailureHandler(function (e) { if (wrap && !silent) wrap.innerHTML = '<div class="alert alert-danger m-2">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
-    .getVisaBootstrap(window.authToken);
+  var args = [window.authToken];
+  // ⚡ (V4.367) «⏳» فقط لو لا توجد نسخة محفوظة تُعرض فوراً
+  if (wrap && !silent && (force || !VZ.loaded) && !LF_.has('getVisaBootstrap', args)) wrap.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
+  var _t0 = Date.now(), cachedBal = null;
+  // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية + تحديث حي. التحديث الصامت (بعد الحفظ/إعادة المحاولة) والشاشة محمَّلة ⇒
+  // تحقق فقط (noCache) فلا تُستبدل الصفوف المدمجة محلياً بنسخة أقدم. الرد «القديم» (stale) لا يُخزَّن ويصل كما هو ⇒ نفس إعادة المحاولة.
+  // أرصدة الوكلاء لا تُعرض من النسخة المحفوظة: تبقى آخر أرصدة مؤكَّدة حتى يرسل الخادم الأحدث أو يؤكد أن النسخة نفسها (done)
+  LF_.swr('getVisaBootstrap', args, {
+    sub: 'scr:vz', label: 'مجموعات التأشيرات', noCache: !!(silent && VZ.loaded),
+    visible: function () { return _lfShown_('vzTableWrap'); },
+    dirty: _vzDirty_,
+    done: function (ok, err, changed) { if (ok && !changed && cachedBal) VZ.agentBalances = cachedBal; cachedBal = null; }
+  }, function (res, m) {
+    if (!m.cached && !m.live) _perfLog_('متابعة الوكلاء', _t0, res);
+    if (!m.cached) cachedBal = null;
+    if (!res || !res.success) { if (m.live) return; if (wrap) wrap.innerHTML = '<div class="alert alert-danger m-2">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
+    // 🐛 (V4.177) رد بُني من بيانات تسبق آخر حفظ (بدأ بناؤه قبل الحفظ وانتهى بعده) — تجاهله
+    // تماماً ولا تستبدل به الصف المحدَّث محلياً، وأعد المحاولة بهدوء بعد لحظة بدل إظهار القيم القديمة
+    if (res.stale) { setTimeout(function () { vzLoad(true, true); }, 1500); return; }
+    VZ.files = res.files || []; VZ.prices = res.prices || []; VZ.transportPrices = res.transportPrices || []; VZ.companies = res.companies || [];
+    VZ.trips = res.trips || []; VZ.clients = res.clients || []; VZ.agents = res.agents || [];
+    VZ.statuses = res.statuses || []; VZ.payStatuses = res.payStatuses || [];
+    if (m.cached) cachedBal = res.agentBalances || {}; else VZ.agentBalances = res.agentBalances || {};
+    VZ.cateringByGroup = res.cateringByGroup || {};
+    VZ.housingByGroup = res.housingByGroup || {};
+    VZ.accounts = res.accounts || []; VZ.acctRows = res.acctRows || []; VZ.acctModes = res.acctModes || [];
+    VZ.today = res.today || ''; VZ.can = res.can || {}; VZ.loaded = true;
+    vzRestoreColPrefs();
+    vzApplyFinanceUI();
+    vzRender();
+  }, function (e) { if (wrap && !silent) wrap.innerHTML = '<div class="alert alert-danger m-2">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; });
+}
+// ⚡ (V4.367) تعديلات غير محفوظة بشاشة التأشيرات: نموذج المجموعة مفتوح (أو مصغَّر — #vzFormBody يبقى بالـDOM) أو نافذة
+// الربط الجماعي. VZ._draft نفسه لا يُفرَّغ عند الإغلاق فلا يصلح وحده مؤشراً
+function _vzDirty_() {
+  return !!(document.getElementById('vzFormOv') || document.getElementById('vzFormBody') || document.querySelector('.vz-bulk-edit-backdrop'));
 }
 // ⚡ (V4.154) دمج المجموعة المحفوظة في الذاكرة فوراً بدل إعادة تحميل البوتستراب كاملاً — نفس أسلوب
 // mfApplySaved بشاشة ملفات الوزارة. هذا يُصلح أيضاً ظهور البيانات القديمة بالجدول بعد الحفظ: كان
@@ -45604,7 +45745,7 @@ function vzRender() {
   var wrap = document.getElementById('vzTableWrap'); if (!wrap) return;
   var totalsBar = document.getElementById('vzTotalsBar');
   if (!list.length) {
-    wrap.innerHTML = '<div class="text-muted text-center py-4">لا توجد مجموعات مطابقة</div>';
+    LF_.setHTML(wrap, '<div class="text-muted text-center py-4">لا توجد مجموعات مطابقة</div>');
     if (totalsBar) totalsBar.innerHTML = '';
     return;
   }
@@ -45698,10 +45839,11 @@ function vzRender() {
   // أوسع محتوى بداخله (auto layout) — فيبدو الأمر وكأن الحفظ لم يعمل رغم أنه محفوظ فعلاً بالمتصفح.
   // colgroup + fixed layout يُلزمان كل عمود بعرضه المحفوظ بصرامة بصرف النظر عن طول محتواه.
   var colgroup = '<colgroup>' + cols.map(function (c) { var w = colW[c.k] || c.w; return '<col' + (w ? (' style="width:' + w + 'px;"') : '') + '>'; }).join('') + '</colgroup>';
-  wrap.innerHTML = '<table class="vz-tab" style="table-layout:fixed;">' + colgroup + '<thead><tr>' +
+  // ⚡ (V4.367) LF_.setHTML = innerHTML عادةً، وأثناء التحديث الحي تُعدَّل الأسطر المتغيّرة فقط (يبقى التمرير والتحديد)
+  LF_.setHTML(wrap, '<table class="vz-tab" style="table-layout:fixed;">' + colgroup + '<thead><tr>' +
     headCells + '</tr></thead><tbody>' + body +
     totalsRow +
-    '</tbody></table>';
+    '</tbody></table>');
   // 📌 (V4.150) نفس الإجمالي يظهر أيضاً فوق الجدول (لا حاجة للتمرير لأسفل لرؤيته) ويتحدَّث لحظياً
   // مع أي تصفية — الفلترة أصلاً حيّة بلا زر "تطبيق" (مربوطة بحدث input/change منذ البداية)
   if (totalsBar) totalsBar.innerHTML = '<div style="background:linear-gradient(135deg,var(--vzG),var(--vzGD));color:#fff;' +
