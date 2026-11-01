@@ -7109,8 +7109,11 @@ function clearAllCache_() {
 var RES_BUSY_ = 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات';
 // قفل مورد واحد بمهلة ⇒ كائن القفل، أو null عند الانشغال (بلا LiveSync.gs — اختبارات قديمة — يرجع لقفل السكربت كما كان)
 function _resTry_(name, ms) {
-  var l = (typeof _resLock_ === 'function') ? _resLock_(name) : LockService.getScriptLock();
-  try { return l.tryLock(ms === undefined ? 30000 : ms) ? l : null; } catch (e) { return null; }
+  ms = (ms === undefined) ? 30000 : ms;
+  // ⚡ (V4.367) المسار القديم حرفياً: waitLock على قفل السكربت (يرمي عند المهلة ⇒ «مشغول») — لا يفترض وجود tryLock
+  if (typeof _resLock_ !== 'function') { var sl = LockService.getScriptLock(); try { sl.waitLock(ms); return sl; } catch (eS) { return null; } }
+  var l = _resLock_(name);
+  try { return l.tryLock(ms) ? l : null; } catch (e) { return null; }
 }
 // فك قفل مورد بعد دفع الكتابات المعلّقة للورقة (noFlush: لا كتابة بالأوراق داخل القفل، مثل العدّادات بخصائص السكربت)
 function _resRelease_(l, noFlush) {
