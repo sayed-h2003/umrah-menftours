@@ -802,15 +802,14 @@ function _glAccDelCatScan_(code) {
 }
 function _glAccDelCatClear_(code) {   // نفس قفل حذف/دمج صفوف الاتفاقيات (كتابة بموضع الصف) كـ _glCatRecode_
   if (typeof CATERING_SHEET === 'undefined') return 0;
-  var sl = LockService.getScriptLock(), had = false; try { had = sl.hasLock(); } catch (e0) {}
-  if (!had) try { sl.tryLock(15000); } catch (e1) {}
-  try {
+  // 🔒 ⚡ (V4.367) قفل مورد الاتفاقيات 'cc' (Code.gs ← _ccWithLock_) بدل قفل السكربت — نفس السلوك: محاولة 15 ثانية ثم التنفيذ
+  return _ccWithLock_(15000, function () {
     var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS), last = sh.getLastRow(); if (last < 2) return 0;
     var rg = sh.getRange(2, 22, last - 1, 2), v = rg.getValues(), n = 0;
     v.forEach(function (r) { for (var i = 0; i < 2; i++) if (_glStr_(r[i]) === code) { r[i] = ''; n++; } });
     if (n) rg.setNumberFormat('@').setValues(v);
     return n;
-  } finally { if (!had) try { sl.releaseLock(); } catch (e2) {} }
+  }, true);
 }
 // دفعات «حسابات عملاء العمرة» المنسوخة من سندات ستُحذف (وسم ⟦src:gl-رقم القيد⟧ بعمود البيان)
 function _glAccDelPayScan_(delSet) {
@@ -1225,12 +1224,15 @@ function glAccountRestore(authToken, delId, dry) {
     var catOps = ext.filter(function (o) { return o.data && !Array.isArray(o.data) && o.data.id !== undefined; });
     if (catOps.length && typeof CATERING_SHEET !== 'undefined') {
       try {
-        var cSh = _accSheet_(CATERING_SHEET, CATERING_HEADERS), cl = cSh.getLastRow();
-        if (cl >= 2) {
-          var cv = cSh.getRange(2, 21, cl - 1, 3).getValues(), ch = false;
-          catOps.forEach(function (o) { cv.forEach(function (r) { if (_glStr_(r[0]) === _glStr_(o.data.id)) { if (!_glStr_(r[1]) && o.data.vendorAcc === code) { r[1] = code; ch = true; } if (!_glStr_(r[2]) && o.data.targetAcc === code) { r[2] = code; ch = true; } } }); });
-          if (ch) { cSh.getRange(2, 21, cl - 1, 3).setNumberFormat('@').setValues(cv); extN += catOps.length; }
-        }
+        // 🔒 ⚡ (V4.367) كتابة أعمدة الاتفاقيات بموضع الصفوف ⇒ قفل مورد الاتفاقيات 'cc' (كان بلا قفل) — محاولة 15 ثانية ثم التنفيذ
+        _ccWithLock_(15000, function () {
+          var cSh = _accSheet_(CATERING_SHEET, CATERING_HEADERS), cl = cSh.getLastRow();
+          if (cl >= 2) {
+            var cv = cSh.getRange(2, 21, cl - 1, 3).getValues(), ch = false;
+            catOps.forEach(function (o) { cv.forEach(function (r) { if (_glStr_(r[0]) === _glStr_(o.data.id)) { if (!_glStr_(r[1]) && o.data.vendorAcc === code) { r[1] = code; ch = true; } if (!_glStr_(r[2]) && o.data.targetAcc === code) { r[2] = code; ch = true; } } }); });
+            if (ch) { cSh.getRange(2, 21, cl - 1, 3).setNumberFormat('@').setValues(cv); extN += catOps.length; }
+          }
+        }, true);
       } catch (eC) { Logger.log('accrestore catering: ' + eC.message); }
     }
     var extApp = function (sh, W, rows) { if (!rows.length) return; sh.getRange(sh.getLastRow() + 1, 1, rows.length, W).setValues(rows.map(function (r) { var x = r.slice(0, W); while (x.length < W) x.push(''); return x; })); extN += rows.length; };
@@ -3820,15 +3822,15 @@ function _glCatEntries_(roleOf, accMap, set, warn) {
 // 🍽️ (V4.323) نقل/دمج حساب ⇒ تُحدَّث أكواده المحفوظة باتفاقيات الإعاشة (حساب المورد + حساب العميل/الرحلة) بكتابة واحدة
 function _glCatRecode_(map) {
   if (!map || !Object.keys(map).length || typeof CATERING_SHEET === 'undefined') return 0;
-  var sl = LockService.getScriptLock(), had = false; try { had = sl.hasLock(); } catch (e0) {}
-  if (!had) try { sl.tryLock(15000); } catch (e1) {}   // 🔒 (V4.323 مراجعة) نفس قفل حذف/دمج صفوف الاتفاقيات (كتابة بموضع الصف)
-  try {
+  // 🔒 (V4.323 مراجعة) نفس قفل حذف/دمج صفوف الاتفاقيات (كتابة بموضع الصف) — ⚡ (V4.367) قفل المورد 'cc' بدل قفل السكربت
+  // (محاولة 15 ثانية ثم التنفيذ كما كان)
+  return _ccWithLock_(15000, function () {
     var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS), last = sh.getLastRow(); if (last < 2) return 0;
     var rg = sh.getRange(2, 22, last - 1, 2), v = rg.getValues(), n = 0;
     v.forEach(function (r) { for (var i = 0; i < 2; i++) { var c = _glStr_(r[i]); if (c && map[c]) { r[i] = map[c]; n++; } } });
     if (n) rg.setNumberFormat('@').setValues(v);
     return n;
-  } finally { if (!had) try { sl.releaseLock(); } catch (e2) {} }
+  }, true);
 }
 // 🍽️ (V4.323) تسجيل/تحديث/إلغاء قيود اتفاقيات محددة فوراً عند حفظها أو حذفها (بلا انتظار المزامنة وبلا قائمة اعتماد — الحفظ اعتماد)
 // يقرأ شيت الاتفاقيات فقط (ثوانٍ) ويطبّق مفاتيحها وحدها. لو قفل الحسابات مشغول ⇒ علامة «تغيّر» فتلتقطها المزامنة التالية
