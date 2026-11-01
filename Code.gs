@@ -11627,7 +11627,18 @@ function _driveRootAudit_() {
   var items = _driveRootItems_().map(function (it) { return _driveRootInfo_(it, anc, me); });
   var n = { inside: 0, outside: 0, other: 0 };
   items.forEach(function (x) { if (x.status === 'inside') n.inside++; else if (x.status === 'outside') n.outside++; else n.other++; });
-  return { success: true, root: { id: String(root.getId()), name: String(root.getName()), url: String(root.getUrl()) }, items: items, counts: n, me: me };
+  return { success: true, root: { id: String(root.getId()), name: String(root.getName()), url: String(root.getUrl()), shared: _driveRootSharing_(root, me) }, items: items, counts: n, me: me };
+}
+// ⚡ (V4.367) مشاركة المجلد الرئيسي (قراءة فقط): كل ما بداخله يرث مشاركته — ومنه الآن السجل المحصّن ونقاط الاستعادة
+// (نسخ كاملة من البيانات) ⇒ تُعرض للمدير كتحذير. null = تعذّرت القراءة
+function _driveRootSharing_(root, me) {
+  try {
+    var acc = String(root.getSharingAccess() || ''), owner = '', mine = String(me || '').toLowerCase();
+    try { owner = String(root.getOwner().getEmail() || '').toLowerCase(); } catch (eO) {}
+    var others = function (list) { return (list || []).filter(function (u) { var e = ''; try { e = String(u.getEmail() || '').toLowerCase(); } catch (x) {} return e && e !== owner && e !== mine; }).length; };
+    var ed = others(root.getEditors()), vw = others(root.getViewers());
+    return { access: acc, editors: ed, viewers: vw, any: (acc && acc !== 'PRIVATE') || ed > 0 || vw > 0 };
+  } catch (e) { return null; }
 }
 /** فحص (بلا أي تعديل): ملفات البرنامج المعروفة بمعرّفها داخل المجلد الرئيسي أم خارجه — للمدير فقط */
 function driveRootAudit(authToken) {

@@ -10627,6 +10627,11 @@ function renderDriveRootAudit(res, fixRes) {
     if (mv.length) html += '<div class="alert alert-success small py-2 mb-2">✅ نُقل ' + mv.length + ': ' + mv.map(function (x) { return E(x.label) + (x.to ? ' ← ' + E(x.to) : ''); }).join('، ') + '</div>';
     if ((fixRes.failed || []).length) html += '<div class="alert alert-warning small py-2 mb-2">⚠️ تعذّر نقل ' + fixRes.failed.length + ':<br>' + fixRes.failed.map(function (x) { return '• ' + E(x.label) + ': ' + E(x.error); }).join('<br>') + '</div>';
   }
+  // ⚡ (V4.367) المجلد الرئيسي مشارك ⇒ تحذير: ما بداخله (ومنه السجل المحصّن ونقاط الاستعادة) يرث مشاركته
+  var sh = res.root && res.root.shared;
+  if (sh && sh.any) html += '<div class="alert alert-warning small py-2 mb-2">⚠️ المجلد الرئيسي مشارك' +
+    (sh.access && sh.access !== 'PRIVATE' ? ' (الوصول: ' + E(sh.access) + ')' : '') + ((Number(sh.editors) || 0) ? ' · محررون: ' + (Number(sh.editors) || 0) : '') + ((Number(sh.viewers) || 0) ? ' · مشاهدون: ' + (Number(sh.viewers) || 0) : '') +
+    ' — كل ما بداخله يرث هذه المشاركة، ومنه السجل المحصّن ونقاط الاستعادة (نسخ كاملة من البيانات). يُنصح بإبقاء المجلد الرئيسي خاصاً ومشاركة الملفات منفردة.</div>';
   html += '<div class="d-flex flex-wrap gap-2 align-items-center mb-2 small">' +
     '<span>🗂️ المجلد الرئيسي: ' + (res.root && res.root.url ? '<a href="' + E(res.root.url) + '" target="_blank" rel="noopener">' + E(res.root.name) + '</a>' : '-') + '</span>' +
     '<span class="badge bg-success">' + (c.inside || 0) + ' داخل</span>' +
