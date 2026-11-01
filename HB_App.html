@@ -4740,7 +4740,12 @@ var HBLF = (function () {
   }
   // رد lfFetch ⇒ يُخزَّن (البيانات الصالحة فقط: h فارغة = خطأ/قديم لا يُخزَّن) ويُرجع ما يُرسم وبصمة محتواه
   function take(k, e, r, t0, ep) {
-    if (r.same && e) { e.vAt = Math.max(e.vAt || 0, t0); if (r.dv) e.dv = r.dv; putEntry(e, ep); return { d: clone(e.d), cs: e.cs }; }
+    if (r.same && e) {
+      e.vAt = Math.max(e.vAt || 0, t0); if (r.dv) e.dv = r.dv;
+      // ⚡ (V4.367) الخادم يستبعد وقت الإصدار (today) من البصمة ويرسله مع «نفسها» ⇒ يُدمج فتبقى ساعة الطباعة حديثة
+      if (r.vol && e.d && typeof e.d === 'object') Object.keys(r.vol).forEach(function (kk) { e.d[kk] = r.vol[kk]; });
+      putEntry(e, ep); return { d: clone(e.d), cs: e.cs, vol: !!r.vol };
+    }
     var cs = csig(r.data);
     if (k && r.h) putEntry({ k: k, d: clone(r.data), h: r.h, cs: cs, dv: r.dv || null, sAt: now(), vAt: t0 }, ep);
     return { d: r.data, cs: cs };
@@ -4764,7 +4769,7 @@ var HBLF = (function () {
         if (show) {
           if (!shown() || V.k !== k) return;                      // أُفرغت الشاشة أثناء التأكيد
           if (x.cs !== V.cs) { V.cs = x.cs; safe(function () { keepScroll(function () { onData(x.d, { changed: true, pend: false }); }); }); }
-          else { if (!r.same) { cacheData = x.d; lastStatementRes_ = x.d; } window.stmtLoadedAt_ = now(); }   // نفس المحتوى (today أحدث للطباعة)
+          else { if (!r.same || x.vol) { cacheData = x.d; lastStatementRes_ = x.d; } window.stmtLoadedAt_ = now(); }   // نفس المحتوى (today أحدث للطباعة)
         } else {
           if (x.d) { V.k = k; V.args = args; V.cs = x.cs; }       // رد فارغ ⇒ يبقى المعروض كما هو (رسالة loadData)
           safe(function () { var p = function () { onData(x.d, { pend: true }); }; if (same0) keepScroll(p); else p(); });   // نفس الكشف بعد كتابة ⇒ بلا قفز
@@ -4803,7 +4808,7 @@ var HBLF = (function () {
         if (ltok !== loadDataToken || k !== V.k || !shown()) return;   // تحميل أحدث أو شاشة أُفرغت
         V.dv = mergeDv(V.dv, r.dv); S.lastPoll = now();
         if (x.cs === V.cs) {
-          if (!r.same) { cacheData = x.d; lastStatementRes_ = x.d; }
+          if (!r.same || x.vol) { cacheData = x.d; lastStatementRes_ = x.d; }
           window.stmtLoadedAt_ = now();
           setState(verdict(t0)); return;
         }

@@ -88,6 +88,20 @@ function _lfAuth_(token) {
   throw new Error(LF_SESS_ERR_);
 }
 
+// حقول متغيّرة بكل نداء لا تخص البيانات: توقيت البناء (كل الدوال) ووقت إصدار كشف الفندق بالدقيقة — خارج البصمة (وإلا لا
+// يرد الخادم «نفسها» أبداً لهذه الشاشات ويُرسل الحمل كاملاً بكل تحقق)، وتُرسل مع رد «نفسها» (vol) لمن يحتاجها (طباعة الكشف).
+// ⚠️ today بالتأشيرات/الوزارة تاريخ اليوم (يدخل حساب المتأخرات) فلا يُستبعد هناك
+var LF_VOL_ = { perf: 1, serverMs: 1 };
+var LF_VOL_FN_ = { getUnifiedStatement: { today: 1 } };
+function _lfJson_(fn, data, vol) {
+  var vk = {}, k;
+  for (k in LF_VOL_) vk[k] = 1;
+  var extra = LF_VOL_FN_[fn] || {}; for (k in extra) vk[k] = 1;
+  return JSON.stringify(data, function (key, v) {
+    if (this === data && key && vk[key] && data && typeof data === 'object' && !Array.isArray(data)) { vol[key] = v; return undefined; }
+    return v;
+  });
+}
 function _lfHash_(json) {
   return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, json, Utilities.Charset.UTF_8));
 }
@@ -112,9 +126,9 @@ function lfFetch(token, fn, args, h) {
   var data = G[fn].apply(null, Array.isArray(args) ? args : []);
   var ms = Date.now() - t0;
   try { if (typeof _perfRecA_ === 'function' && (ms >= 800 || Math.random() < 0.25)) _perfRecA_('lf:' + fn, ms, 0, false); } catch (eP) {}
-  var ok = _lfCacheable_(data), hh = '';
-  if (ok) { try { hh = _lfHash_(JSON.stringify(data)); } catch (eH) { hh = ''; } }
-  if (hh && h && hh === String(h)) return { same: true, h: hh, dv: dv, g: grp };
+  var ok = _lfCacheable_(data), hh = '', vol = {};
+  if (ok) { try { hh = _lfHash_(_lfJson_(fn, data, vol)); } catch (eH) { hh = ''; } }
+  if (hh && h && hh === String(h)) { var r = { same: true, h: hh, dv: dv, g: grp }; if (Object.keys(vol).length) r.vol = vol; return r; }
   return { data: data, h: hh, dv: dv, g: grp };
 }
 
