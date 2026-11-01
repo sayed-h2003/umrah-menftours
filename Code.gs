@@ -11964,9 +11964,10 @@ function _doSystemBackup_() {
   DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
 
   // 🧹 حذف النسخ الأقدم من فترة الاحتفاظ (مع إبقاء أحدث BACKUP_MIN_KEEP_ نسخ دائماً)
-  var files = [];
+  // ⚡ (V4.367) النسخ اليومية فقط (بادئة اسمها): نسخ «قبل عملية خطرة» صارت بنفس المجلد (كانت بجذر My Drive ولا تُحذف أبداً) فتبقى كما كانت
+  var files = [], dailyPfx = '💾 نسخة احتياطية — ';
   var it = folder.getFiles();
-  while (it.hasNext()) { files.push(it.next()); }
+  while (it.hasNext()) { var bf = it.next(); if (String(bf.getName() || '').indexOf(dailyPfx) === 0) files.push(bf); }
   files.sort(function(a, b) { return b.getDateCreated().getTime() - a.getDateCreated().getTime(); });
   var cutoff = Date.now() - BACKUP_RETENTION_DAYS_ * 86400000;
   var removed = 0;
