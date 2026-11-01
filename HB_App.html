@@ -3032,6 +3032,9 @@ var INITIAL_PAGE = "<?!= initialPage ?>";
 var SSO_CODE = "<?!= ssoCode ?>";
 var HB_EMBED = "<?!= embed ?>" === '1';
 var HB_SEC = "<?!= hbSec ?>";
+// ⚡ (V4.367) إصدار الواجهة لمفتاح نسخ كشف الحساب المحفوظة بالمتصفح (HBLF): «إصدار المشروع/إصدار الحجوزات» يُحقن عند تقديم
+//   الصفحة — APP_VERSION يتغيّر مع كل إصدار مرفوع فلا تُعرض نسخة بصيغة إصدار سابق (HB_APP_VERSION وحده لم يعد يُرفع). typeof ⇒ لا خطأ
+var HB_LF_VER = "<?!= (typeof APP_VERSION !== 'undefined' && APP_VERSION || '') + '/' + (typeof HB_APP_VERSION !== 'undefined' && HB_APP_VERSION || '') ?>";
 
 if (HB_EMBED) {
   try { document.documentElement.classList.add('hb-embed'); } catch (eE) {}
@@ -3088,7 +3091,8 @@ if (HB_EMBED) {
   window.addEventListener('message', function (ev) {
     var d = ev && ev.data; if (!d) return;
     // (V4.290) حفظ من برنامج الحسابات (دفعة/قيد) ⇒ كشف الحساب المفتوح يُحدَّث بهدوء، أو يُعلَّم ليُحدَّث عند الرجوع إليه
-    if (d.hbRefresh) { try { window.lastDataWriteTs_ = Date.now(); if (typeof stmtSoftReload_ === 'function') stmtSoftReload_(true); } catch (eR) {} return; }
+    // ⚡ (V4.367) حفظ هناك = كتابة بهذا الجهاز ⇒ نسخ الكشوف المحفوظة «قديمة» (لا عرض فوري منها قبل تأكيد الخادم)
+    if (d.hbRefresh) { try { window.lastDataWriteTs_ = Date.now(); if (window.HBLF) HBLF.markStale(); if (typeof stmtSoftReload_ === 'function') stmtSoftReload_(true); } catch (eR) {} return; }
     if (!d.hbShow) return;
     try { if (typeof currentUser !== 'undefined' && currentUser) showPage(String(d.hbShow)); else INITIAL_PAGE = String(d.hbShow); } catch (eM) {}
   });
@@ -3147,7 +3151,8 @@ window.PERF_ = (function () {
     respondPortalRequest:1, appendBookingFromForm:1,
     refreshBookingsNow:1, getPartyBalancesAsOf:1, searchBookings:1, registerBookingsBulk:1,
     registerTelegramWebhook:1, telegramTestMessage:1, telegramDiscoverChat:1, testTelegramWebhookUrl:1, getTelegramBotLog:1, enableTelegramPolling:1, pollTelegramNow:1,
-    telegramRunDigestNow:1, telegramDiagnose:1, renamePartyEverywhere:1, hbGlAccLinkSave:1, hbGlAccList:1
+    telegramRunDigestNow:1, telegramDiagnose:1, renamePartyEverywhere:1, hbGlAccLinkSave:1, hbGlAccList:1,
+    lfFetch:1   // ⚡ (V4.367) كشف الحساب عبر الواجهة اللحظية (HBLF) = getUnifiedStatement نفسها مغلّفة بالبصمة
   };
   // دوال تكتب في البيانات: لا يصح أن نقول لها "أعد المحاولة" عند انتهاء المهلة — الخادم قد
   // يكون أتمّها فعلًا، وإعادتها تُنتج دفعة/حجزًا مكرَّرًا
@@ -3159,6 +3164,9 @@ window.PERF_ = (function () {
     saveTelegramBotUser:1, registerBookingsBulk:1, registerPaymentsBatch:1, hbGlAccLinkSave:1,
     registerLinkedPayment:1, registerManualEntry:1, deleteAccount:1
   };
+  var WRITE_RX_ = /^(register|edit|delete|update|save|sync|import|rename|append|respond|refresh|set|link|unlink|merge)/;
+  // ⚡ (V4.367) نفس تصنيف «الكتابة» للطابور متاح لطبقة كشف الحساب (HBLF) — مصدر واحد للتصنيف
+  window.gsrIsWrite_ = function (fn) { return !!(WRITE_FNS[fn] || WRITE_RX_.test(fn)); };
   // دوال تُرجع دائمًا كائنًا/مصفوفة عند النجاح — فإذا عاد null فهو ردّ ضائع يستحق إعادة محاولة
   var RETRY_ON_NULL = {
     getUnifiedStatement:1, searchBookings:1, getArrivalsByDateRange:1,
@@ -3166,7 +3174,8 @@ window.PERF_ = (function () {
     searchPayments:1, getBookingNotes:1, hbGetAppVersion:1, getSourceSettings:1,
     debugPartyName:1, testSourceConnection:1, getBookingsQuickStats:1,
     getSourceColumnLabels:1, useProgramSpreadsheetAsSource:1, getDistinctSalesAgents:1, getSuggestedSalesAgent:1, getDistinctHotels:1,
-    getPartyBalancesAsOf:1, getStatsReportData:1
+    getPartyBalancesAsOf:1, getStatsReportData:1,
+    lfFetch:1   // ⚡ (V4.367) يرجع دائماً {same} أو {data} عند النجاح
   };
   // دوال قراءة "خاملة" (idempotent): تكرار نفس النداء بنفس الوسائط لا يضيف شيئًا. إن ضغط
   // المستخدم زر كشف الحساب مرتين (لأن العرض تأخّر) نُلحق ردّ النقرة الثانية بالنداء الجاري
@@ -3176,7 +3185,8 @@ window.PERF_ = (function () {
     getUnifiedStatement:1, searchBookings:1, getArrivalsByDateRange:1, getPartyBalancesAsOf:1,
     getPartyPayments:1, searchPayments:1, getUnifiedPartyList:1, getBookingsQuickStats:1,
     getBookingNotes:1, getBookingDetails:1, getPortalRequests:1, getPortalBellItems:1,
-    getPortalPendingCount:1, getDistinctSalesAgents:1, getDistinctHotels:1, getSuggestedSalesAgent:1, getStatsReportData:1
+    getPortalPendingCount:1, getDistinctSalesAgents:1, getDistinctHotels:1, getSuggestedSalesAgent:1, getStatsReportData:1,
+    lfFetch:1   // ⚡ (V4.367) تحقق النبضة وتحميل الكشف لنفس الطرف والفترة والبصمة ⇒ نداء واحد
   };
   // ⚡ (V4.364) قوالب الطباعة ثابتة طوال الإصدار — تُجلب مرة واحدة بالجلسة ثم من الذاكرة (القياس: 7 نداءات × 4.2 ث)
   var MEMO_FNS = { getPrintTemplate:1, getConfirmationTemplate:1, getArrivalsReportTemplate:1, getBalancesReportTemplate:1 };
@@ -3212,15 +3222,18 @@ window.PERF_ = (function () {
         }
         // ختم زمني لآخر كتابة ناجحة (دفعة/حجز/قيد/تعديل...) — تقرؤه الشاشات المصغَّرة عند
         // استعادتها لتعرف أن بياناتها المعروضة صارت قديمة فتُحدِّثها بدل عرض أرصدة ما قبل التعديل
-        if (WRITE_FNS[job.fn] || /^(register|edit|delete|update|save|sync|import|rename|append|respond|refresh|set|link|unlink|merge)/.test(job.fn)) {
+        if (WRITE_FNS[job.fn] || WRITE_RX_.test(job.fn)) {
           window.lastDataWriteTs_ = Date.now();
         }
+        // ⚡ (V4.367) كتابة ⇒ نسخ الكشوف المحفوظة «قديمة» قبل أن يصل الرد لمعالجه (الذي يعيد تحميل الكشف عادةً)
+        try { if (window.HBLF) window.HBLF.done(job.fn); } catch (eLf) {}
         try { if (job.onS) job.onS(val); } catch (e) {}
         if (job._extra) job._extra.forEach(function (x) { try { if (x.onS) x.onS(val); } catch (e) {} });
       } else {
         if (!job._retried && RETRY_ON_NULL[job.fn]) {
           job._retried = true; queue.unshift(job); pump(); return; // فشل عابر = أعد المحاولة مرة
         }
+        try { if (window.HBLF) window.HBLF.done(job.fn); } catch (eLf) {}   // ⚡ (V4.367) كتابة انتهت مهلتها قد تكون تمت فعلاً ⇒ قديمة أيضاً
         try { if (job.onF) job.onF(val || { message: 'فشل الاتصال بالخادم' }); } catch (e) {}
         if (job._extra) job._extra.forEach(function (x) { try { if (x.onF) x.onF(val || { message: 'فشل الاتصال بالخادم' }); } catch (e) {} });
       }
@@ -3923,6 +3936,7 @@ function showNoAccessScreen_() {
 
 function doLogout() {
   stopIdleWatch_();
+  try { if (window.HBLF) HBLF.clear(); } catch (eLf) {}   // ⚡ (V4.367) الخروج يمسح نسخ الكشوف المحفوظة بهذا الجهاز
   var tok = currentSessionToken;
   clearStoredToken_();
   if (tok) { try { google.script.run.logout(tok); } catch (e) {} }
@@ -4510,6 +4524,370 @@ function stmtFinalBalanceLabel_(balanceStr, roles) {
   return s.replace(/\s*(مدين|دائن)\s*$/, ' ' + word);
 }
 
+/* ============================================================================
+   ⚡ (V4.367) كشف الحساب «محلي أولاً» — HBLF (نسخة مصغّرة من طبقة LF_ ببرنامج العمرة)
+   ----------------------------------------------------------------------------
+   كل نداء للخادم يكلّف ≈ 4 ثوانٍ ثابتة (القياس)، فالكشف لا ينتظر الخادم ليظهر:
+   • آخر نسخة من كل كشف (الطرف + الفترة) محفوظة بالمتصفح (IndexedDB «hb-lf»، والذاكرة إن تعذّر) وتُرسم فوراً بنفس مسار
+     الرسم (stmtRender_) لكنها «غير مؤكَّدة»: شريط «⏳ يتم التحقق من أحدث الأرصدة…» فوق البطاقات، وكل إجراء يعتمد على
+     الرصيد (تسجيل/تعديل/حذف دفعة، ربط دفعة بقيد، بند يدوي، طباعة/PDF/صورة/مشاركة) ممنوع برسالة حتى يؤكّدها الخادم.
+   • التأكيد: lfFetch بالبصمة عبر نفس الطابور التسلسلي ⇒ «نفسها» (رد صغير) أو البيانات الجديدة فيُعاد الرسم (يحترم
+     loadDataToken ويحفظ التمرير). الفشل ⇒ «⚠️ تعذّر التحقق…» + زر إعادة المحاولة والإجراءات تبقى ممنوعة.
+   • today (وقت إصدار الكشف بالدقيقة) خارج مقارنة المحتوى: تغيّره وحده لا يعيد الرسم (يُحدَّث للطباعة فقط).
+   • نبضة ذكية والكشف ظاهر: كل 30 ث والطابور فارغ والتبويب ظاهر وبلا تفاعل 8 ث ⇒ lfPoll؛ تقدّمت بصمة hb أو gl (الرموز
+     تبدأ بالوقت: الأكبر أحدث، ولا رجوع للخلف) ⇒ تأكيد بالبصمة؛ التغيير يُرسم فوراً ما لم تكن نافذة/تعديل مفتوحاً، وإلا
+     شريط «تغيّرت بيانات الكشف — اضغط للتحديث» (والإجراءات ممنوعة حتى يُضغط).
+   • أي كتابة (من هنا أو حفظ من البرنامج الرئيسي) ⇒ كل النسخ المحفوظة «قديمة»: لا تُعرض قبل تأكيد الخادم، والكشف المعروض
+     يعود «غير مؤكَّد» حتى يُعاد تحميله (أو يؤكّده المراقب إن لم يتبع الكتابةَ تحميل). الخروج يمسح النسخ.
+   • المفتاح = إصدار الواجهة + المستخدم + الدالة + [الطرف، من، إلى] (رمز الجلسة مستبعد). لا حساب أرصدة هنا إطلاقاً:
+     المعروض نسخة طبق الأصل من رد الخادم، والكتابات والاعتمادات لا تمر من هذه الطبقة.
+   ============================================================================ */
+var HBLF = (function () {
+  var FN = 'getUnifiedStatement', STORE = 'd', STALE_KEY = 'hblf_stale', WIPE_KEY = 'hblf_wipe';
+  var POLL_MS = 30000, QUIET_MS = 8000;
+  var S = { mem: {}, db: null, dbWait: null, dbOff: false, epoch: 0, staleAt: 0, puts: 0, lastAct: Date.now(), lastPoll: 0, pollBusy: false, timer: null };
+  // الكشف المعروض: k/args مفتاحه ومعاملاته · st: ok | checking | failed | outdated · cs بصمة محتواه · dv بصمات بياناته
+  // fresh: نسخة أحدث مؤجَّلة (نافذة مفتوحة) · busy: طلبات جارية له · since: وقت آخر تغيّر للحالة
+  var V = { k: null, args: null, st: 'ok', cs: '', dv: null, fresh: null, busy: 0, since: 0 };
+
+  /* ---------- أدوات ---------- */
+  function now() { return Date.now(); }
+  function ver() { var v = String(typeof HB_LF_VER !== 'undefined' ? HB_LF_VER : ''); return /^[\w.\/-]+$/.test(v) ? v : 'dev'; }   // قالب لم يُقيَّم (اختبار) ⇒ dev
+  function user() { return (typeof currentUser !== 'undefined' && currentUser && currentUser.username) ? String(currentUser.username) : ''; }
+  function token() { return (typeof currentSessionToken !== 'undefined' && currentSessionToken) || ''; }
+  function key(args) { if (!user()) return null; try { return 'hblf|' + ver() + '|' + user() + '|' + FN + '|' + JSON.stringify(args); } catch (e) { return null; } }
+  function clone(d) { try { return d == null ? d : JSON.parse(JSON.stringify(d)); } catch (e) { return d; } }
+  function safe(fn) { try { fn(); } catch (e) { try { console.error('HBLF', e); } catch (x) {} } }
+  // بصمة المحتوى بالمتصفح (FNV-1a) بلا today
+  function csig(d) {
+    var s, o = {};
+    try {
+      if (d && typeof d === 'object' && !Array.isArray(d)) { Object.keys(d).forEach(function (x) { if (x !== 'today') o[x] = d[x]; }); s = JSON.stringify(o); }
+      else s = JSON.stringify(d);
+    } catch (e) { return ''; }
+    if (s == null) return '';
+    var h = 0x811c9dc5; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
+    return s.length + ':' + h.toString(36);
+  }
+  function tokCmp(a, b) { a = String(a || ''); b = String(b || ''); return a === b ? 0 : (a > b ? 1 : -1); }   // رموز تبدأ بالوقت ⇒ الترتيب النصي زمني
+  function mergeDv(a, b) {   // بلا رجوع للخلف: لكل مجموعة الرمز الأحدث
+    var o = {};
+    [a, b].forEach(function (x) { Object.keys(x || {}).forEach(function (g) { if (!o[g] || tokCmp(x[g], o[g]) > 0) o[g] = x[g]; }); });
+    return o;
+  }
+  // آخر كتابة بهذا الجهاز (كل التبويبات والإطارات) — نسخة لم تُؤكَّد بعدها «قديمة»
+  function staleAt() { var t = 0; try { t = parseInt(localStorage.getItem(STALE_KEY), 10) || 0; } catch (e) {} return Math.max(S.staleAt, t); }
+  function isStale(e) { return !e || !e.vAt || e.vAt < staleAt(); }
+  function verdict(t0) { return t0 >= staleAt() ? 'ok' : 'checking'; }   // كتابة بعد إرسال الطلب ⇒ يبقى «غير مؤكَّد»
+
+  /* ---------- التخزين: IndexedDB «hb-lf» + الذاكرة ---------- */
+  function db(cb) {
+    if (S.db) return cb(S.db);
+    if (S.dbOff || !window.indexedDB) return cb(null);
+    if (S.dbWait) { S.dbWait.push(cb); return; }
+    S.dbWait = [cb];
+    var done = function (d) {
+      if (!S.dbWait) { if (d) { try { d.close(); } catch (e) {} } return; }   // مرة واحدة (نجاح بعد انتهاء المهلة)
+      S.db = d; if (!d) S.dbOff = true;
+      var w = S.dbWait; S.dbWait = null;
+      w.forEach(function (f) { try { f(d); } catch (e) {} });
+    };
+    setTimeout(function () { done(null); }, 3000);   // متصفح يعلّق فتح القاعدة ⇒ الذاكرة فقط
+    try {
+      var rq = indexedDB.open('hb-lf', 1);
+      rq.onupgradeneeded = function () { try { rq.result.createObjectStore(STORE, { keyPath: 'k' }).createIndex('sAt', 'sAt'); } catch (e) {} };
+      rq.onsuccess = function () {
+        var d = rq.result, wipe = false;
+        try { wipe = localStorage.getItem(WIPE_KEY) === '1'; } catch (e) {}
+        // مسح مؤجَّل: خروج سابق غادر الصفحة قبل اكتمال المسح ⇒ يكتمل قبل أي قراءة
+        if (wipe && S.dbWait) { try { var tx = d.transaction(STORE, 'readwrite'); tx.objectStore(STORE).clear(); tx.oncomplete = function () { try { localStorage.removeItem(WIPE_KEY); } catch (e) {} }; } catch (e) {} }
+        done(d);
+      };
+      rq.onerror = rq.onblocked = function () { done(null); };
+    } catch (e) { done(null); }
+  }
+  function idbGet(k, cb) {
+    db(function (d) {
+      if (!d) return cb(null);
+      try { var r = d.transaction(STORE, 'readonly').objectStore(STORE).get(k); r.onsuccess = function () { cb(r.result || null); }; r.onerror = function () { cb(null); }; }
+      catch (e) { cb(null); }
+    });
+  }
+  function idbPut(e) {
+    db(function (d) {
+      if (!d) return;
+      try { var tx = d.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put(e); tx.onabort = function () { prune(true); }; } catch (x) {}
+    });
+    if (++S.puts % 10 === 0) prune(false);
+  }
+  // حد أعلى للحجم: أحدث 40 كشفاً للمستخدم والإصدار الحاليين (15 عند امتلاء المساحة) ونسخ غيرهما بعد أسبوع — بالفهرس بلا قراءة البيانات
+  function prune(hard) {
+    db(function (d) {
+      if (!d) return;
+      try {
+        var all = [], pre = 'hblf|' + ver() + '|' + user() + '|', st = d.transaction(STORE, 'readwrite').objectStore(STORE);
+        st.index('sAt').openKeyCursor().onsuccess = function (ev) {
+          var c = ev.target.result;
+          if (c) { all.push({ k: c.primaryKey, t: c.key || 0, cur: String(c.primaryKey).indexOf(pre) === 0 }); c.continue(); return; }
+          var old = now() - 7 * 864e5;
+          var drop = all.filter(function (x) { return !x.cur && (hard || x.t < old); });
+          drop = drop.concat(all.filter(function (x) { return x.cur; }).sort(function (a, b) { return b.t - a.t; }).slice(hard ? 15 : 40));
+          drop.forEach(function (x) { try { st.delete(x.k); } catch (e) {} });
+        };
+      } catch (e) {}
+    });
+  }
+  function memPut(e) {
+    S.mem[e.k] = e;
+    var ks = Object.keys(S.mem); if (ks.length <= 12) return;
+    ks.sort(function (a, b) { return (S.mem[a].sAt || 0) - (S.mem[b].sAt || 0); });
+    delete S.mem[ks[0]];
+  }
+  function getEntry(k, cb) {
+    if (!k) return cb(null);
+    if (S.mem[k]) return cb(S.mem[k]);
+    var ep = S.epoch;   // قراءة بدأت قبل خروج/مسح لا تعيد النسخة
+    idbGet(k, function (e) { if (ep !== S.epoch) return cb(null); if (e && !S.mem[k]) memPut(e); cb(S.mem[k] || e || null); });
+  }
+  // ep = الحقبة لحظة الطلب: خروج أثناءه ⇒ لا يُعاد تخزين رده
+  function putEntry(e, ep) { if (!e || !e.k || (ep !== undefined && ep !== S.epoch)) return; memPut(e); idbPut(e); }
+  function dropEntry(k) {
+    if (!k) return;
+    delete S.mem[k];
+    db(function (d) { if (!d) return; try { d.transaction(STORE, 'readwrite').objectStore(STORE).delete(k); } catch (e) {} });
+  }
+
+  /* ---------- الحالة + الشريط فوق بطاقات الأرصدة ---------- */
+  function cardsRow() { var x = document.getElementById('sum-debit'); return x && x.closest ? x.closest('.row') : null; }
+  function shown() { var da = document.getElementById('display-area'); return !!(V.k && typeof cacheData !== 'undefined' && cacheData && da && da.style.display !== 'none'); }
+  function blocked() { return V.st !== 'ok' && shown(); }
+  function setState(st) { V.st = st; V.since = now(); if (st !== 'outdated') V.fresh = null; paintBar(); }
+  // الشريط يطفو فوق بطاقات الأرصدة نفسها (لا يأخذ مكاناً بالصفحة) ⇒ ظهوره واختفاؤه عند كل تأكيد بلا قفز بالجدول؛ والبطاقات تُعتَّم
+  function paintBar() {
+    var row = cardsRow(), el = document.getElementById('hbLfBar');
+    var dim = function (v) { if (row) Array.prototype.forEach.call(row.querySelectorAll('.summary-card'), function (x) { x.style.opacity = v; }); };
+    if (V.st === 'ok' || !row) { if (el) el.remove(); dim(''); if (row) row.style.position = ''; return; }
+    if (!el) { el = document.createElement('div'); el.id = 'hbLfBar'; el.dir = 'rtl'; }
+    if (el.parentNode !== row) row.appendChild(el);
+    row.style.position = 'relative';
+    var c = V.st === 'checking' ? ['#eff6ff', '#1e40af', '#bfdbfe'] : (V.st === 'failed' ? ['#fff7ed', '#9a3412', '#fdba74'] : ['#fefce8', '#854d0e', '#facc15']);
+    el.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;width:auto;max-width:94%;margin:0;' +
+      'display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:7px 14px;border-radius:12px;font-size:.85rem;font-weight:700;' +
+      'box-shadow:0 6px 18px rgba(15,23,42,.18);background:' + c[0] + ';color:' + c[1] + ';border:1px solid ' + c[2] + ';cursor:' + (V.st === 'outdated' ? 'pointer' : 'default') + ';';
+    el.innerHTML = V.st === 'checking' ? '<span>⏳ يتم التحقق من أحدث الأرصدة…</span>'
+      : (V.st === 'failed' ? '<span>⚠️ تعذّر التحقق — الأرصدة المعروضة قد لا تكون الأحدث</span><button type="button" class="btn btn-sm btn-outline-secondary py-0" onclick="HBLF.retry()">↻ إعادة المحاولة</button>'
+      : '<span>🔄 تغيّرت بيانات الكشف — اضغط للتحديث</span>');
+    el.onclick = V.st === 'outdated' ? apply : null;
+    el.title = V.st === 'outdated' ? 'عدّل مستخدم آخر بيانات هذا الكشف — اضغط لعرض الأحدث' : '';
+    dim('.45');
+  }
+  // نافذة/حوار مفتوح أو تعديل جارٍ داخل الكشف ⇒ لا إعادة رسم تلقائية من النبضة (شريط «اضغط للتحديث» بدلها)
+  function busyUi() {
+    try {
+      if (document.querySelector('.modal.show, body > [id$="Ov"], #colPopover.open, #tableBody input, #tableBody select, #tableBody textarea')) return true;
+      var cf = document.getElementById('colFilterPop');
+      return !!(cf && !cf.hidden);
+    } catch (e) { return true; }
+  }
+  function hide() {   // نسخة لحساب لم يعد مسموحاً ⇒ لا تبقى معروضة
+    try { document.getElementById('display-area').style.display = 'none'; } catch (e) {}
+    cacheData = null; V.k = null; V.args = null; V.cs = ''; V.dv = null; setState('ok');
+  }
+  // إعادة رسم نفس الكشف: يبقى موضع التمرير (الصفحة + التمرير الأفقي للجدول) والصف المحدَّد
+  function keepScroll(fn) {
+    var w = document.querySelector('#page-statement .table-scroll'), tb = document.getElementById('tableBody');
+    var sx = window.scrollX, sy = window.scrollY, wl = w ? w.scrollLeft : 0, sel = -1;
+    try { if (tb) sel = Array.prototype.indexOf.call(tb.rows, tb.querySelector('tr.row-selected')); } catch (e) {}
+    try { fn(); } finally {
+      try {
+        if (w) w.scrollLeft = wl;
+        if (window.scrollX !== sx || window.scrollY !== sy) window.scrollTo(sx, sy);
+        if (sel >= 0 && tb && tb.rows[sel]) tb.rows[sel].classList.add('row-selected');
+      } catch (e) {}
+    }
+  }
+
+  /* ---------- منع الإجراءات المعتمدة على الرصيد قبل التأكيد ----------
+     على window بمرحلة الالتقاط: يسبق مستمع document (أزرار الدفعات داخل برنامج العمرة) وonclick الأزرار نفسها */
+  var BAL_RX = /^\s*(openPaymentModal|openBatchModal|openLinkedPaymentModal|editPaymentRow|deletePaymentRow|hbPayFix_|showManualEntryRow|saveManualEntry|printStatement|shareStatementPdf_|shareStatementImage_)\(/;
+  function guard(ev) {
+    if (!blocked()) return;
+    var t = ev.target && ev.target.closest ? ev.target.closest('[onclick]') : null;
+    if (!t || !t.closest('#page-statement') || !BAL_RX.test(t.getAttribute('onclick') || '')) return;
+    ev.preventDefault(); ev.stopPropagation(); if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+    try {
+      showToast(V.st === 'failed' ? '⚠️ تعذّر التحقق من أحدث الأرصدة — اضغط «إعادة المحاولة» أولاً'
+        : (V.st === 'outdated' ? '🔄 تغيّرت بيانات الكشف — اضغط شريط «اضغط للتحديث» أولاً' : '⏳ لحظة — يتم التحقق من أحدث الأرصدة قبل هذا الإجراء'));
+    } catch (e) {}
+  }
+
+  /* ---------- الشبكة: lfFetch عبر نفس الطابور التسلسلي ---------- */
+  var SESS_RX = /جلسة غير صالحة أو منتهية/;   // رسالة LiveSync (_lfAuth_) — رسالة الحجوزات نفسها يلتقطها الاعتراض العام
+  function sessErr(err) {
+    if (!SESS_RX.test((err && err.message) || '') || typeof handleSessionExpired_ !== 'function') return false;
+    handleSessionExpired_(); return true;
+  }
+  function net(args, h, ok, fail) {
+    var t0 = now(), ep = S.epoch;   // t0 = وقت الإرسال: كتابة بعده تُبقي الرد «غير مؤكَّد»
+    google.script.run.withSuccessHandler(function (r) {
+      if (ep !== S.epoch) return;
+      if (!r || typeof r !== 'object' || (!r.same && !('data' in r))) { fail({ message: 'رد فارغ من الخادم' }); return; }
+      ok(r, t0);
+    }).withFailureHandler(function (err) {
+      if (ep !== S.epoch || sessErr(err)) return;
+      fail(err || { message: 'فشل الاتصال بالخادم' });
+    }).lfFetch(token(), FN, args.concat([token()]), h || '');
+  }
+  // رد lfFetch ⇒ يُخزَّن (البيانات الصالحة فقط: h فارغة = خطأ/قديم لا يُخزَّن) ويُرجع ما يُرسم وبصمة محتواه
+  function take(k, e, r, t0, ep) {
+    if (r.same && e) { e.vAt = Math.max(e.vAt || 0, t0); if (r.dv) e.dv = r.dv; putEntry(e, ep); return { d: clone(e.d), cs: e.cs }; }
+    var cs = csig(r.data);
+    if (k && r.h) putEntry({ k: k, d: clone(r.data), h: r.h, cs: cs, dv: r.dv || null, sAt: now(), vAt: t0 }, ep);
+    return { d: r.data, cs: cs };
+  }
+
+  /* ---------- تحميل الكشف (من loadData) ----------
+     onData(res, meta): meta.cached = النسخة المحفوظة · meta.changed = إعادة رسم بعد التأكيد · meta.pend === false ⇒ لا يُطلب
+     صندوق «بانتظار الاعتماد» ثانية · onFail(err) = فشل بلا نسخة معروضة (نفس رسالة الخطأ السابقة) */
+  function load(args, ltok, onData, onFail) {
+    var k = key(args), ep = S.epoch, same0 = !!k && k === V.k;
+    V.busy++;
+    var fin = function () { V.busy = Math.max(0, V.busy - 1); };
+    getEntry(k, function (e) {
+      if (ep !== S.epoch || ltok !== loadDataToken) { fin(); return; }   // خروج أو طلب أحدث قبل البدء
+      var show = !!(e && !isStale(e));
+      net(args, e && e.h, function (r, t0) {
+        fin();
+        var x = take(k, e, r, t0, ep);
+        if (ltok !== loadDataToken) return;                      // تجاوزه طلب أحدث: يُخزَّن فقط
+        V.dv = mergeDv(V.k === k ? V.dv : null, r.dv); S.lastPoll = now();
+        if (show) {
+          if (!shown() || V.k !== k) return;                      // أُفرغت الشاشة أثناء التأكيد
+          if (x.cs !== V.cs) { V.cs = x.cs; safe(function () { keepScroll(function () { onData(x.d, { changed: true, pend: false }); }); }); }
+          else { if (!r.same) { cacheData = x.d; lastStatementRes_ = x.d; } window.stmtLoadedAt_ = now(); }   // نفس المحتوى (today أحدث للطباعة)
+        } else {
+          if (x.d) { V.k = k; V.args = args; V.cs = x.cs; }       // رد فارغ ⇒ يبقى المعروض كما هو (رسالة loadData)
+          safe(function () { var p = function () { onData(x.d, { pend: true }); }; if (same0) keepScroll(p); else p(); });   // نفس الكشف بعد كتابة ⇒ بلا قفز
+          if (!x.d) return;
+        }
+        setState(verdict(t0));
+      }, function (err) {
+        fin();
+        if (ltok !== loadDataToken) return;
+        var denied = /لا تملك صلاحية/.test((err && err.message) || '');
+        if (denied) dropEntry(k);                                 // لم يعد مسموحاً ⇒ لا تبقى نسخته
+        if (show && !denied) { setState('failed'); return; }      // المعروض نسخة غير مؤكَّدة ⇒ شريط الفشل والإجراءات ممنوعة
+        if (show) hide();
+        onFail(err || {});
+      });
+      if (show) {   // بعد إرسال التأكيد للطابور ⇒ صندوق «بانتظار الاعتماد» الذي يطلبه الرسم يأتي بعده
+        V.k = k; V.args = args; V.cs = e.cs; V.dv = e.dv || null;
+        safe(function () { onData(clone(e.d), { cached: true, at: e.vAt, pend: true }); });
+        setState('checking');
+      }
+    });
+  }
+
+  /* ---------- تأكيد الكشف المعروض: poll (النبضة) · check (غير مؤكَّد بلا طلب جارٍ) · retry (زر إعادة المحاولة) ---------- */
+  function revalidate(kind) {
+    if (!V.k || !V.args || V.busy || !shown()) return;
+    var k = V.k, args = V.args, ltok = loadDataToken, ep = S.epoch;
+    V.busy++;
+    if (kind !== 'poll') setState('checking');
+    var fin = function () { V.busy = Math.max(0, V.busy - 1); };
+    getEntry(k, function (e) {
+      if (ep !== S.epoch) { fin(); return; }
+      net(args, e && e.h, function (r, t0) {
+        fin();
+        var x = take(k, e, r, t0, ep);
+        if (ltok !== loadDataToken || k !== V.k || !shown()) return;   // تحميل أحدث أو شاشة أُفرغت
+        V.dv = mergeDv(V.dv, r.dv); S.lastPoll = now();
+        if (x.cs === V.cs) {
+          if (!r.same) { cacheData = x.d; lastStatementRes_ = x.d; }
+          window.stmtLoadedAt_ = now();
+          setState(verdict(t0)); return;
+        }
+        if (kind === 'poll' && busyUi()) { V.fresh = { d: x.d, cs: x.cs, t0: t0 }; setState('outdated'); return; }
+        repaint(x.d, x.cs);
+        setState(verdict(t0));
+        if (kind === 'poll') { try { showToast('🔄 حُدّث كشف الحساب تلقائياً بأحدث البيانات'); } catch (eT) {} }
+      }, function (err) {
+        fin();
+        if (ltok !== loadDataToken || k !== V.k) return;
+        if (/لا تملك صلاحية/.test((err && err.message) || '')) { dropEntry(k); hide(); try { showToast('تعذّر تحميل كشف الحساب — السبب الحقيقي: ' + err.message); } catch (eT) {} return; }
+        if (kind !== 'poll') setState('failed');   // النبضة: يبقى الكشف والبصمة القديمة ⇒ تُعاد بالنبضة التالية
+      });
+    });
+  }
+  // نسخة أحدث من نفس الكشف ⇒ نفس مسار الرسم بلا قفز (ومعه صندوق «بانتظار الاعتماد»: الاعتماد ينقل الدفعة منه للكشف)
+  function repaint(d, cs) {
+    V.cs = cs;
+    if (typeof stmtRender_ === 'function') safe(function () { keepScroll(function () { stmtRender_(d, { changed: true, live: true }); }); });
+  }
+  function apply() {   // ضغط شريط «اضغط للتحديث»
+    var f = V.fresh;
+    if (!f || !shown()) { revalidate('retry'); return; }
+    repaint(f.d, f.cs);
+    setState(verdict(f.t0));
+  }
+
+  /* ---------- الكتابة ⇒ «قديمة» (من الطابور بعد كل نداء، ومن رسالة الحفظ بالبرنامج الرئيسي) ---------- */
+  // كتابات لا تلتقطها بادئات الطابور · وكتابات لا تمسّ بيانات الكشف (تفضيلات الواجهة، مسح كاش المصدر عند فتح البرنامج، تليجرام، البوابة…)
+  var XW = /^(hbPayEntryAct|hbDupResolve|hbSyncFromGl|hbGlAccLinkSave|glLinkSaveConfig|runCustodySyncNow|useProgramSpreadsheetAsSource)$/;
+  var NOT_DATA = /^(saveUserUiPrefs|refreshBookingsNow|setSessionDurationMinutes|deleteSharedFile)$|Telegram|ClientPortal|Gemini/;
+  function markStale() {
+    var t = now(); S.staleAt = t;
+    try { localStorage.setItem(STALE_KEY, String(t)); } catch (e) {}
+    if (shown()) setState('checking');   // المعروض من قبل الكتابة ⇒ غير مؤكَّد حتى يُعاد تحميله أو يؤكّده المراقب
+  }
+  function done(fn) {
+    fn = String(fn || '');
+    var w = (typeof window.gsrIsWrite_ === 'function' && window.gsrIsWrite_(fn)) || XW.test(fn);
+    if (w && !NOT_DATA.test(fn)) markStale();
+  }
+
+  /* ---------- النبضة الذكية + المراقب (كل 5 ث محلياً، والخادم عند الحاجة فقط) ---------- */
+  function idle() { return typeof window.gsrIsIdle_ !== 'function' || window.gsrIsIdle_(); }
+  function tick() {
+    if (!token() || !user() || !shown() || document.hidden || !(window.innerHeight > 0)) return;
+    var pg = document.getElementById('page-statement'); if (!pg || !pg.classList.contains('active')) return;
+    if (V.busy || S.pollBusy || !idle()) return;
+    // «يتم التحقق» بلا طلب جارٍ (كتابة لم يتبعها تحميل، أو حفظ بالبرنامج الرئيسي) ⇒ تأكيد الآن
+    if (V.st === 'checking') { if (now() - V.since > 2500) revalidate('check'); return; }
+    if (V.st !== 'ok' || now() - S.lastAct < QUIET_MS || now() - S.lastPoll < POLL_MS) return;
+    S.lastPoll = now(); S.pollBusy = true;
+    var ep = S.epoch;
+    google.script.run.withSuccessHandler(function (r) {
+      S.pollBusy = false;
+      if (ep !== S.epoch || !r || !r.dv) return;
+      var adv = ['hb', 'gl'].some(function (g) { return r.dv[g] && (!V.dv || !V.dv[g] || tokCmp(r.dv[g], V.dv[g]) > 0); });
+      if (adv) revalidate('poll');
+    }).withFailureHandler(function (err) { S.pollBusy = false; sessErr(err); }).lfPoll(token());
+  }
+
+  /* ---------- الخروج ---------- */
+  function clear() {
+    S.epoch++; S.mem = {}; S.pollBusy = false;
+    V.k = null; V.args = null; V.cs = ''; V.dv = null; V.busy = 0; setState('ok');
+    try { localStorage.setItem(WIPE_KEY, '1'); } catch (e) {}   // لو غادرت الصفحة قبل اكتمال المسح ⇒ يكتمل عند الفتح التالي
+    db(function (d) {
+      if (!d) return;
+      try { var tx = d.transaction(STORE, 'readwrite'); tx.objectStore(STORE).clear(); tx.oncomplete = function () { try { localStorage.removeItem(WIPE_KEY); } catch (e) {} }; } catch (e) {}
+    });
+  }
+
+  function act() { S.lastAct = now(); }
+  ['pointerdown', 'keydown', 'wheel', 'touchstart', 'input'].forEach(function (n) { try { window.addEventListener(n, act, { capture: true, passive: true }); } catch (e) {} });
+  try { document.addEventListener('scroll', act, { capture: true, passive: true }); } catch (e) {}
+  window.addEventListener('click', guard, true);
+  S.timer = setInterval(tick, 5000);
+
+  return {
+    load: load, retry: function () { revalidate('retry'); }, done: done, markStale: markStale, clear: clear, blocked: blocked,
+    _s: S, _v: V, _key: key, _csig: csig, _tick: tick, _busyUi: busyUi
+  };
+})();
+
 function loadData() {
   var c = document.getElementById('customer').value;
   var s = readDateField_('start');
@@ -4526,63 +4904,71 @@ function loadData() {
   lastLoadKey = key; lastLoadAt = now;
 
   var myToken = ++loadDataToken;
-  google.script.run.withSuccessHandler(function(res) {
+  // ⚡ (V4.367) محلي أولاً (HBLF أعلاه): نسخة محفوظة لنفس الطرف والفترة ⇒ تُرسم فوراً «غير مؤكَّدة» ثم يؤكّدها الخادم
+  //   بالبصمة عبر نفس الطابور؛ بلا نسخة (أو بعد كتابة) ⇒ الجلب من الخادم كالسابق (lfFetch يغلّف getUnifiedStatement نفسها)
+  HBLF.load([c, s, e], myToken, function (res, meta) {
     if (myToken !== loadDataToken) return; // نتيجة نداء سابق تجاوزه نداء أحدث — تجاهلها
     if (!res) { showToast('تم استلام رد فارغ من الخادم (على الأرجح بسبب عدة طلبات متزامنة) — أعد المحاولة'); return; }
-    cacheData = res; window.stmtLoadedAt_ = Date.now();
-    document.getElementById('display-area').style.display = 'block';
-    document.getElementById('v-cust').innerText = res.party;
-    document.getElementById('v-start').innerText = res.start || "---";
-    document.getElementById('v-end').innerText = res.end || "---";
-    document.getElementById('v-roles').innerHTML = (res.roles || []).map(function(r){ return '<span class="role-tag ' + r + '">' + (r === 'client' ? 'عميل' : 'مورد') + '</span>'; }).join('');
-    document.getElementById('v-code-line').style.display = res.accountCode ? '' : 'none';
-    document.getElementById('v-code').textContent = res.accountCode || '';
-
-    hbLedgerPendLoad_(res.party);   // 🏛️ (V4.357) دفعات هذا الطرف بانتظار الاعتماد
-    var warnBox = document.getElementById('warningsBox');
-    if (res.warnings && res.warnings.length > 0) {
-      warnBox.style.display = 'block';
-      warnBox.innerHTML = '⚠ يوجد <b>' + res.warnings.length + '</b> حجز ضمن هذه الفترة بدون سعر (' +
-        res.warnings.map(function(w){ return (w.hotelRef || '—') + ' بتاريخ ' + w.date; }).join('، ') +
-        ') — مستبعد من حساب الرصيد أدناه لحين استكمال تسعيره في شاشة "كل الحجوزات".';
-    } else { warnBox.style.display = 'none'; }
-
-    if (!res.totals) {
-      document.getElementById('sum-debit').innerText = "0";
-      document.getElementById('sum-credit').innerText = "0";
-      document.getElementById('sum-final').innerText = "لا توجد بيانات";
-      document.getElementById('sum-today').innerText = res.todayBalance || '—';
-      document.getElementById('tableBody').innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">لا توجد حركات لهذا الطرف</td></tr>';
-      return;
-    }
-    document.getElementById('sum-debit').innerText = res.totals.debit;
-    document.getElementById('sum-credit').innerText = res.totals.credit;
-    var finalElem = document.getElementById('sum-final');
-    finalElem.innerText = stmtFinalBalanceLabel_(res.totals.balance, res.roles);
-    finalElem.className = res.totals.balance.indexOf("دائن") !== -1 ? "card-value text-credit" : "card-value text-debit";
-    document.getElementById('sum-today').innerText = res.todayBalance || '—';
-
-    // تسمية عمود "الطرف الآخر" ديناميكيًا حسب دور الطرف الرئيسي:
-    // - كشف عميل → الطرف الآخر هو المورد
-    // - كشف مورد → الطرف الآخر هو العميل
-    // - عميل ومورد معًا → نُبقيها "الطرف الآخر"
-    // النص داخل <span> مستقل: كتابته على الـth مباشرةً كانت تمسح أيقونة فلترة العمود
-    // المُضافة إليه، فيختفي فلتر "الطرف الآخر" وحده دون بقية الأعمدة
-    var head = document.getElementById('colCounterpartyHead');
-    var r = res.roles || [];
-    if (r.length === 1 && r[0] === 'client') head.textContent = 'المورد';
-    else if (r.length === 1 && r[0] === 'supplier') head.textContent = 'العميل';
-    else head.textContent = 'الطرف الآخر';
-    // تسمية الفلتر تتبع نفس العنوان الظاهر (المورد/العميل/الطرف الآخر)
-    STMT_COL_LABELS_.counterparty = head.textContent;
-
-    renderTable(res);
-    applyColVisibility();
-  }).withFailureHandler(function (err) {
+    stmtRender_(res, meta);
+  }, function (err) {
     if (myToken !== loadDataToken) return;
     // بدون هذا المعالج كان أي خطأ من الخادم يظهر في الـ console فقط بدون أي رسالة للمستخدم
     showToast('تعذّر تحميل كشف الحساب — السبب الحقيقي: ' + err.message);
-  }).getUnifiedStatement(c, s, e, currentSessionToken);
+  });
+}
+
+// ⚡ (V4.367) رسم الكشف — كان معالج نجاح loadData؛ صار مساراً واحداً للنسخة المحفوظة (العرض الفوري) وللحديثة من الخادم.
+//   meta.pend === false ⇒ لا يُطلب صندوق «بانتظار الاعتماد» مرة ثانية (طُلب مع نفس التحميل) · meta.at = وقت آخر تأكيد للنسخة
+function stmtRender_(res, meta) {
+  cacheData = res; window.stmtLoadedAt_ = (meta && meta.at) || Date.now();
+  document.getElementById('display-area').style.display = 'block';
+  document.getElementById('v-cust').innerText = res.party;
+  document.getElementById('v-start').innerText = res.start || "---";
+  document.getElementById('v-end').innerText = res.end || "---";
+  document.getElementById('v-roles').innerHTML = (res.roles || []).map(function(r){ return '<span class="role-tag ' + r + '">' + (r === 'client' ? 'عميل' : 'مورد') + '</span>'; }).join('');
+  document.getElementById('v-code-line').style.display = res.accountCode ? '' : 'none';
+  document.getElementById('v-code').textContent = res.accountCode || '';
+
+  if (!meta || meta.pend !== false) hbLedgerPendLoad_(res.party);   // 🏛️ (V4.357) دفعات هذا الطرف بانتظار الاعتماد
+  var warnBox = document.getElementById('warningsBox');
+  if (res.warnings && res.warnings.length > 0) {
+    warnBox.style.display = 'block';
+    warnBox.innerHTML = '⚠ يوجد <b>' + res.warnings.length + '</b> حجز ضمن هذه الفترة بدون سعر (' +
+      res.warnings.map(function(w){ return (w.hotelRef || '—') + ' بتاريخ ' + w.date; }).join('، ') +
+      ') — مستبعد من حساب الرصيد أدناه لحين استكمال تسعيره في شاشة "كل الحجوزات".';
+  } else { warnBox.style.display = 'none'; }
+
+  if (!res.totals) {
+    document.getElementById('sum-debit').innerText = "0";
+    document.getElementById('sum-credit').innerText = "0";
+    document.getElementById('sum-final').innerText = "لا توجد بيانات";
+    document.getElementById('sum-today').innerText = res.todayBalance || '—';
+    document.getElementById('tableBody').innerHTML = '<tr><td colspan="10" class="text-center text-muted py-3">لا توجد حركات لهذا الطرف</td></tr>';
+    return;
+  }
+  document.getElementById('sum-debit').innerText = res.totals.debit;
+  document.getElementById('sum-credit').innerText = res.totals.credit;
+  var finalElem = document.getElementById('sum-final');
+  finalElem.innerText = stmtFinalBalanceLabel_(res.totals.balance, res.roles);
+  finalElem.className = res.totals.balance.indexOf("دائن") !== -1 ? "card-value text-credit" : "card-value text-debit";
+  document.getElementById('sum-today').innerText = res.todayBalance || '—';
+
+  // تسمية عمود "الطرف الآخر" ديناميكيًا حسب دور الطرف الرئيسي:
+  // - كشف عميل → الطرف الآخر هو المورد
+  // - كشف مورد → الطرف الآخر هو العميل
+  // - عميل ومورد معًا → نُبقيها "الطرف الآخر"
+  // النص داخل <span> مستقل: كتابته على الـth مباشرةً كانت تمسح أيقونة فلترة العمود
+  // المُضافة إليه، فيختفي فلتر "الطرف الآخر" وحده دون بقية الأعمدة
+  var head = document.getElementById('colCounterpartyHead');
+  var r = res.roles || [];
+  if (r.length === 1 && r[0] === 'client') head.textContent = 'المورد';
+  else if (r.length === 1 && r[0] === 'supplier') head.textContent = 'العميل';
+  else head.textContent = 'الطرف الآخر';
+  // تسمية الفلتر تتبع نفس العنوان الظاهر (المورد/العميل/الطرف الآخر)
+  STMT_COL_LABELS_.counterparty = head.textContent;
+
+  renderTable(res);
+  applyColVisibility();
 }
 
 
