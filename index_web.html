@@ -10641,7 +10641,7 @@ function renderDriveRootAudit(res, fixRes) {
     var st = DRIVE_ROOT_ST_[x.status] || ['•', x.status, '#334155'], out = x.status === 'outside';
     html += '<tr' + (out ? ' class="table-warning"' : '') + '>' +
       '<td class="text-center">' + (out ? '<input type="checkbox" class="form-check-input drv-root-sel" value="' + E(x.id) + '">' : '') + '</td>' +
-      '<td style="color:' + st[2] + ';font-size:12px;">' + st[0] + ' ' + st[1] + '</td>' +
+      '<td style="color:' + st[2] + ';font-size:12px;">' + st[0] + ' ' + E(st[1]) + '</td>' +
       '<td><div class="fw-bold" style="font-size:13px;">' + (x.kind === 'folder' ? '📁 ' : '📄 ') + E(x.label) + '</div>' +
         '<div class="text-muted" style="font-size:10px;" dir="ltr">' + E(x.src || '') + '</div></td>' +
       '<td style="font-size:12px;">' + (x.url ? '<a href="' + E(x.url) + '" target="_blank" rel="noopener">' + E(x.name || x.id) + '</a>' : E(x.name || x.id)) +
