@@ -23613,6 +23613,9 @@ function saveMinistryFile(authToken, data) {
     var all = _mfReadAll_();
     var old = isNew ? null : all.filter(function(x) { return x.id === _mfStr_(data.id); })[0];
     if (!isNew && !old) return { success: false, error: 'الملف غير موجود' };
+    // 🔒 ⚡ (V4.367) التعديل الجماعي (saveMinistryFilesBulk): الحقول المعدَّلة تُدمج فوق الملف المقروء الآن تحت قفل 'mf' لا فوق لقطة
+    // قُرئت أول الدفعة — تعديل متزامن لحقل آخر بنفس الملف لا يُستبدل بقيمة قديمة. _patch دالة ⇒ من نداء داخلي فقط (لا تصل بـJSON)
+    if (old && typeof data._patch === 'function') data = data._patch(old);
     // 🚫 (V4.329) رقم الملف لا يتكرر: يُفحص عند الإضافة، أو عند تغيير الرقم فقط (ملف قديم مكرَّر يبقى قابلاً للتعديل دون تغيير رقمه)
     var _fnK = _dupKey_(data.fileNo);
     if (_fnK && (isNew || _dupKey_(old.fileNo) !== _fnK)) {
@@ -23885,11 +23888,16 @@ function saveMinistryFilesBulk(authToken, items) {
       if (!old) throw new Error('الملف غير موجود');
       if (it.selected !== undefined && !Array.isArray(it.selected)) throw new Error('قائمة المعتمرين غير صالحة');
       if (it.breakdown !== undefined && !Array.isArray(it.breakdown)) throw new Error('بنود العميل غير صالحة');
-      var data = Object.assign({}, old);
-      editable.forEach(function (k) { if (it[k] !== undefined) data[k] = it[k]; });
-      if (it.selected) data.selected = it.selected.map(function (k) { return _mfStr_(k); }).filter(Boolean);
-      data._manualType = !!old.manualType;   // 🏛️ (V4.233) يبقى التحكم اليدوي لنوع المراجعة كما يفعل نموذج التعديل المنفرد
-      var r = saveMinistryFile(authToken, data);   // 🔒 (V4.367) كل ملف يُكتب بقفل المورد 'mf' داخل saveMinistryFile
+      var patch = function (cur) {
+        var d = Object.assign({}, cur);
+        editable.forEach(function (k) { if (it[k] !== undefined) d[k] = it[k]; });
+        if (it.selected) d.selected = it.selected.map(function (k) { return _mfStr_(k); }).filter(Boolean);
+        d._manualType = !!cur.manualType;   // 🏛️ (V4.233) يبقى التحكم اليدوي لنوع المراجعة كما يفعل نموذج التعديل المنفرد
+        return d;
+      };
+      // 🔒 ⚡ (V4.367) كل ملف يُكتب بقفل المورد 'mf' داخل saveMinistryFile، ونفس الدمج يُعاد هناك فوق الملف المقروء تحت القفل (_patch)
+      var data = patch(old); data._patch = patch;
+      var r = saveMinistryFile(authToken, data);
       if (!r || !r.success) throw new Error((r && r.error) || 'فشل الحفظ');
       okN++; results.push({ id: id, success: true, file: r.file, balances: r.balances, others: r.others, syncTrips: r.syncTrips });
     } catch (e) { results.push({ id: id, success: false, error: e.message }); }
@@ -25961,6 +25969,9 @@ function saveVisaFile(authToken, data) {
     // يقرأ عمود المعرِّف وحده ثم صف المجموعة المعدَّلة فقط، والإضافة تقرأ عمود المسلسل وحده للرقم التالي
     var old = isNew ? null : _vzReadOne_(sh, _mfStr_(data.id));
     if (!isNew && !old) return { success: false, error: 'القيد غير موجود' };
+    // 🔒 ⚡ (V4.367) التعديل الجماعي (saveVisaFilesBulk): الحقول المعدَّلة تُدمج فوق الصف المقروء الآن تحت قفل 'vz' لا فوق نسخة قُرئت
+    // قبله — تعديل متزامن لحقل آخر بنفس المجموعة لا يُستبدل بقيمة قديمة. _patch دالة ⇒ من نداء داخلي فقط (لا تصل بـJSON من المتصفح)
+    if (old && typeof data._patch === 'function') data = data._patch(old);
     // 🚫 (V4.329) رقم المجموعة لا يتكرر: عند الإضافة أو تغيير الرقم فقط — قراءة عمودي المعرّف والرقم وحدهما (بلا قراءة الشيت كاملاً)
     var _rfK = _dupKey_(data.ref);
     if (_rfK && (isNew || _dupKey_(old.ref) !== _rfK)) {
@@ -26098,9 +26109,14 @@ function saveVisaFilesBulk(authToken, items) {
       if (!old) throw new Error('المجموعة غير موجودة');
       if (it.selected !== undefined && !Array.isArray(it.selected)) throw new Error('قائمة المعتمرين غير صالحة');
       if (it.breakdown !== undefined && !Array.isArray(it.breakdown)) throw new Error('بنود العملاء غير صالحة');
-      var data = Object.assign({}, old);
-      editable.forEach(function (k) { if (it[k] !== undefined) data[k] = it[k]; });
-      if (it.selected) data.selected = it.selected.map(function (k) { return _mfStr_(k); }).filter(Boolean);
+      var patch = function (cur) {
+        var d = Object.assign({}, cur);
+        editable.forEach(function (k) { if (it[k] !== undefined) d[k] = it[k]; });
+        if (it.selected) d.selected = it.selected.map(function (k) { return _mfStr_(k); }).filter(Boolean);
+        return d;
+      };
+      // 🔒 ⚡ (V4.367) نفس الدمج يُعاد داخل saveVisaFile فوق صف المجموعة المقروء تحت قفل 'vz' (_patch): القراءة والدمج والكتابة ذرّية
+      var data = patch(old); data._patch = patch;
       var r = saveVisaFile(authToken, data);
       if (!r || !r.success) throw new Error((r && r.error) || 'فشل الحفظ');
       try { ((r.lfAfter && r.lfAfter.args && r.lfAfter.args[1] && r.lfAfter.args[1].agents) || []).forEach(function (a) { _bgAg[a] = 1; }); } catch (eAg) {}

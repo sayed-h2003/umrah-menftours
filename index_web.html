@@ -7279,7 +7279,9 @@ var LF_ = (function () {
   };
   var ALLG = ['bookings', 'movements', 'trips', 'pilgrims', 'visa', 'ministry', 'dropdowns', 'hb', 'gl'];
   var NODEDUPE = { perfPing: 1, perfReport: 1, lfPoll: 1, lfFetch: 1, glJobStatus: 1, appPulse: 1, heartbeatOnline: 1, presencePing: 1, logoutUserSession: 1, loginUser: 1, resumeSession: 1 };
-  var RO_RX = /^(get|list|load|search|fetch|peek|preview|check|lf|perf|find|count|read|calc|export|print|generatePrint|glList|glGet|glBootstrap|glStatement|glTreasury|glBank|glPending|glAcc(Deleted)?List|glClient|glParty|glWarm|glLinkConfig|glHb(State|PartyCode)|glVchLogo|glIncome|glBalance|ledgerCount|ledgerScrGet|audList|audStatus|snapPoints|getOnline)/;
+  // ⚡ (V4.367) المهام اللاحقة للحفظ (lfAfter: vzAfterSaveBg / mfAfterSaveBg) قراءة فقط — لا تُعلِّم مجموعاتها «كُتبت محلياً»
+  // (كانت تحجب العرض الفوري للتأشيرات/الوزارة/الرحلات 60 ثانية بعد كل حفظ: بصماتها لا تتغيّر فلا تُرفع العلامة إلا بالمهلة)
+  var RO_RX = /^(get|list|load|search|fetch|peek|preview|check|lf|perf|find|count|read|calc|export|print|generatePrint|glList|glGet|glBootstrap|glStatement|glTreasury|glBank|glPending|glAcc(Deleted)?List|glClient|glParty|glWarm|glLinkConfig|glHb(State|PartyCode)|glVchLogo|glIncome|glBalance|ledgerCount|ledgerScrGet|audList|audStatus|snapPoints|getOnline|[a-z]+AfterSaveBg$)/;
   var S = {
     mem: {}, db: null, dbWait: null, dbOff: false,
     dv: {}, dvAt: 0, dirtyG: {}, infl: {}, subs: {}, puts: 0, fk: {}, again: {}, epoch: 0, skipK: null,
