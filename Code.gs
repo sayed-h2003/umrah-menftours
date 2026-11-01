@@ -644,7 +644,7 @@ function _analyzeTicketCore_(base64Data, fileName, tempOldFileId) {
 
 var folder;
 try {
-  folder = getDriveFolder_('TEMP');  // مجلد مؤقت موحّد للتذاكر والملفات المؤقتة
+  folder = _appFolder_('TEMP');  // مجلد مؤقت موحّد للتذاكر والملفات المؤقتة — ⚡ (V4.367) مضمون داخل المجلد الرئيسي
 } catch(err) {
   return {
     success: false,
@@ -988,7 +988,7 @@ function uploadAndParseTicketManual(authToken, base64Data, fileName, tempOldFile
 
     // ===== رفع الملف مؤقتاً (نفس منطق uploadAndAnalyzeTicket بالظبط) =====
     var folder;
-    try { folder = getDriveFolder_('TEMP'); }
+    try { folder = _appFolder_('TEMP'); }   // ⚡ (V4.367) داخل المجلد الرئيسي
     catch(err) { return { success: false, error: "فشل الوصول إلى Google Drive." }; }
 
     var contentType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";"));
@@ -1021,7 +1021,7 @@ function uploadAndParseTicketManual(authToken, base64Data, fileName, tempOldFile
         var ocrAttempts = 0;
         while (ocrAttempts < 2) {
           try {
-            ocrFile = Drive.Files.insert(
+            ocrFile = _appDriveInsert_(   // ⚡ (V4.367) مستند OCR المؤقت داخل Temp (كان بجذر My Drive)
               { title: 'OCR_TEMP_' + Date.now() },
               ocrBlob,
               { convert: true, ocr: true, ocrLanguage: 'en' }
@@ -1054,8 +1054,8 @@ function uploadAndParseTicketManual(authToken, base64Data, fileName, tempOldFile
       Logger.log('OCR failed: ' + ocrErr.message);
       // حذف الـ Doc المؤقت لو لم يُحذف بعد
       if (ocrDocId) _driveDeleteForever_(ocrDocId);
-      // حذف الملف المؤقت من TEMP عند الفشل الكلي
-      if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {} }
+      // حذف الملف المؤقت من TEMP عند الفشل الكلي — ⚡ (V4.367) عبر الحارس (الملف من مجلد Temp نفسه)
+      if (fileId) _appTrash_(file, { via: folder, soft: true });
 
       var errMsg = ocrErr.message || '';
       var userMsg = errMsg.indexOf('rate limit') !== -1
@@ -1070,7 +1070,7 @@ function uploadAndParseTicketManual(authToken, base64Data, fileName, tempOldFile
 
     if (!extractedText || extractedText.trim().length < 10) {
       // النص فارغ — نمسح الملف المؤقت ونطلب من المستخدم الإدخال اليدوي
-      if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {} }
+      if (fileId) _appTrash_(file, { via: folder, soft: true });   // ⚡ (V4.367)
       return {
         success: false,
         error: "⚠️ لم يُعثر على نص قابل للقراءة في التذكرة.\nربما الصورة غير واضحة أو التذكرة ممسوحة ضوئياً بجودة منخفضة.\nجرّب زر 'رفع + AI' أو أدخل البيانات يدوياً."
@@ -1082,7 +1082,7 @@ function uploadAndParseTicketManual(authToken, base64Data, fileName, tempOldFile
 
     if (!parsedData) {
       // فشل التحليل — نمسح الملف المؤقت
-      if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {} }
+      if (fileId) _appTrash_(file, { via: folder, soft: true });   // ⚡ (V4.367)
       return {
         success: false,
         error: "⚠️ تم استخراج النص لكن لم يتم التعرف على أرقام رحلات داخله.\nجرّب زر 'رفع + AI' أو أدخل البيانات يدوياً."
@@ -1549,12 +1549,14 @@ function finalizeTicketFile_(
 
     var file =
       DriveApp.getFileById(tempFileId);
+    // ⚡ (V4.367) ملف من خارج المجلد الرئيسي لا يُعاد تسميته ولا يُنقل
+    if (!_inAppTree_(file)) throw new Error('🔒 ملف التذكرة المؤقت خارج المجلد الرئيسي للبرنامج');
 
     // ===============================
     // مجلد التذاكر النهائي
     // ===============================
 
-    var finalFolder = getDriveFolder_('TICKETS');  // مجلد التذاكر النهائية الدائمة
+    var finalFolder = _appFolder_('TICKETS');  // مجلد التذاكر النهائية الدائمة — ⚡ (V4.367) داخل المجلد الرئيسي
 
     // ===============================
     // الامتداد
@@ -1589,47 +1591,17 @@ function finalizeTicketFile_(
     // نقل للفولدر النهائي
     // ===============================
 
-    finalFolder.addFile(file);
-
-    // ===============================
-    // حذف من temp
-    // ===============================
-
-    try {
-
-      var tempFolders =
-        DriveApp.getFoldersByName(
-          "TempTickets"
-        );
-
-      if (tempFolders.hasNext()) {
-
-        tempFolders
-          .next()
-          .removeFile(file);
-      }
-
-    } catch(e) {
-
-      Logger.log(e);
-    }
+    // ⚡ (V4.367) نقل حقيقي (moveTo) من Temp إلى Tickets داخل شجرة البرنامج — بدل addFile + removeFile من مجلد
+    // يُبحث عنه بالاسم في كل الدرايف ("TempTickets"). ملف خارج المجلد الرئيسي يُرفض (لا يُنقل)
+    _appMove_(file, finalFolder);
 
     // ===============================
     // حذف التذكرة القديمة بعد النجاح
     // ===============================
 
-    try {
-
-      if (oldFileId) {
-
-        DriveApp
-          .getFileById(oldFileId)
-          .setTrashed(true);
-      }
-
-    } catch(e) {
-
-      Logger.log(e);
+    if (oldFileId) {
+      // ⚡ (V4.367) عبر الحارس: داخل المجلد الرئيسي فقط
+      if (!_appTrash_(String(oldFileId), { soft: true })) Logger.log('finalizeTicketFile_: التذكرة القديمة لم تُحذف (خارج المجلد الرئيسي أو غير موجودة): ' + oldFileId);
     }
 
     return {
@@ -2161,9 +2133,8 @@ if (
 
 ) {
 
-  DriveApp
-    .getFileById(fileId)
-    .setTrashed(true);
+  // ⚡ (V4.367) عبر الحارس: لا شيتات/مستندات، وداخل المجلد الرئيسي فقط — ملف خارجه لا يُحذف لكن التذكرة تُفصل عن الإشعار
+  try { _driveSafeTrash_(fileId); } catch (eTr) { Logger.log('deleteTicketFromBooking: لم يُحذف الملف ' + fileId + ': ' + eTr.message); }
 }
     var sheet =
       SpreadsheetApp
@@ -4136,7 +4107,7 @@ var fileName =
 
   // ===== فولدر الحفظ =====
 
-  var folder = getDriveFolder_('NOTICES');
+  var folder = _appFolder_('NOTICES');   // ⚡ (V4.367) داخل المجلد الرئيسي
 
 // ===== حذف أي نسخة قديمة لنفس الإشعار =====
 
@@ -4160,7 +4131,7 @@ while (files.hasNext()) {
 
   ) {
 
-    file.setTrashed(true);
+    _appTrash_(file, { via: folder, soft: true });   // ⚡ (V4.367) عبر الحارس
 
   }
 
@@ -4171,6 +4142,9 @@ while (files.hasNext()) {
   var doc =
 
     DocumentApp.create(fileName);
+
+  // ⚡ (V4.367) DocumentApp.create يضعه بجذر My Drive ⇒ يُنقل فوراً لمجلد Temp داخل المجلد الرئيسي
+  var docFile = _appAdopt_(doc, 'TEMP');
 
   var body =
 
@@ -4527,11 +4501,7 @@ if (data.ticketUrl) {
 
   // ===== حذف المستند المؤقت =====
 
-  DriveApp
-
-    .getFileById(doc.getId())
-
-    .setTrashed(true);
+  _appTrash_(docFile, { soft: true });   // ⚡ (V4.367) عبر الحارس (المستند داخل Temp)
 
   // ===== إرجاع الرابط =====
 
@@ -5294,18 +5264,9 @@ function exportToProfessionalExcelV4(authToken, data) {
     const sheet =
       ss.getActiveSheet();
 
-    const file =
-      DriveApp.getFileById(
-        ss.getId()
-      );
-
-    const folder = getDriveFolder_('EXPORTS');
-
-    folder.addFile(file);
-
-    DriveApp
-      .getRootFolder()
-      .removeFile(file);
+    // ⚡ (V4.367) SpreadsheetApp.create يضعه بجذر My Drive ⇒ نقل حقيقي (moveTo) لمجلد Exports داخل المجلد الرئيسي
+    // (بدل addFile/removeFile المهجورتين اللتين قد تتركان الملف بجذر My Drive)
+    const file = _appAdopt_(ss, 'EXPORTS');
 
     // ==============================
     // اتجاه RTL
@@ -5531,7 +5492,7 @@ function exportMovementExcel(authToken, rows, selectedCols, reportTitle) {
 
   try {
 
-    const folder = getDriveFolder_('EXPORTS');
+    const folder = _appFolder_('EXPORTS');   // ⚡ (V4.367) داخل المجلد الرئيسي
 
     const now =
       Utilities.formatDate(
@@ -5554,6 +5515,10 @@ function exportMovementExcel(authToken, rows, selectedCols, reportTitle) {
 
     const ss =
       SpreadsheetApp.create(fileName);
+
+    // ⚡ (V4.367) فور الإنشاء: نقل حقيقي (moveTo) لمجلد Exports داخل المجلد الرئيسي (بدل addFile/removeFile بآخر الدالة —
+    // أي خطأ أثناء التنسيق كان يترك الملف بجذر My Drive)
+    const file = _appAdopt_(ss, folder);
 
     const sheet =
       ss.getSheets()[0];
@@ -5773,20 +5738,7 @@ selectedCols.forEach(
 
     sheet.setFrozenRows(2);
 
-    // =====================
-    // نقل الملف للفولدر
-    // =====================
-
-    const file =
-      DriveApp.getFileById(
-        ss.getId()
-      );
-
-    folder.addFile(file);
-
-    DriveApp
-      .getRootFolder()
-      .removeFile(file);
+    // ⚡ (V4.367) الملف نُقل لمجلد Exports فور إنشائه (انظر أعلى الدالة)
 
     // =====================
     // تحويل XLSX
@@ -5839,8 +5791,8 @@ selectedCols.forEach(
       +
       xlsxFile.getId();
 
-    // حذف المؤقت
-    file.setTrashed(true);
+    // حذف المؤقت — ⚡ (V4.367) عبر الحارس
+    _appTrash_(file, { via: folder });
 
     return {
       success:true,
@@ -5867,9 +5819,9 @@ function deleteTempFile(authToken, fileId){
 
   try{
 
-    DriveApp
-      .getFileById(fileId)
-      .setTrashed(true);
+    // ⚡ (V4.367) كانت تنقل أي ملف بالدرايف للسلة بمعرّف من الواجهة — الآن عبر الحارس: لا شيتات/مستندات،
+    // وداخل المجلد الرئيسي للبرنامج فقط
+    _driveSafeTrash_(fileId);
 
   } catch(err){
 
@@ -7119,7 +7071,16 @@ function updateFolderSetting_(key, newName, newFolderId) {
         props.deleteProperty(FOLDER_KEYS[k]);
       });
     }
-    return { success: true, name: f.getName(), url: f.getUrl() };
+    _appTreeReset_();
+    // ⚡ (V4.367) المجلد الفرعي يجب أن يكون داخل المجلد الرئيسي: يُنقل تحته فوراً بنفس معرّفه، وإن تعذّر يُستخدم
+    // مجلد داخل المجلد الرئيسي بدلاً منه (نفس منطق _appFolder_ — والنتيجة تظهر للمدير بدل أن تحدث بصمت لاحقاً)
+    var note = '';
+    if (key !== 'ROOT') {
+      var g = _appFolder_(key);
+      if (_APP_FOLDER_NOTE_[key] === 'moved') note = 'نُقل المجلد داخل المجلد الرئيسي (المعرّف والروابط كما هي)';
+      else if (_APP_FOLDER_NOTE_[key] === 'replaced') { note = '⚠️ المجلد خارج المجلد الرئيسي وتعذّر نقله — استُخدم «' + g.getName() + '» داخل المجلد الرئيسي بدلاً منه'; f = g; }
+    }
+    return { success: true, name: f.getName(), url: f.getUrl(), message: note };
   }
 
   if (newName) {
@@ -7131,6 +7092,7 @@ function updateFolderSetting_(key, newName, newFolderId) {
         props.deleteProperty(FOLDER_KEYS[k]);
       });
     }
+    _appTreeReset_();   // ⚡ (V4.367)
     return { success: true, message: 'سيتم إنشاء المجلد بالاسم الجديد عند أول استخدام' };
   }
 
@@ -10428,7 +10390,7 @@ function _tgbnProcessHostDoc_(chatId, userId, state, fileRef) {
     var ct = (fileRef.mime && fileRef.mime !== 'application/octet-stream') ? fileRef.mime :
       (lower.indexOf('.pdf') > -1 ? 'application/pdf' : lower.indexOf('.png') > -1 ? 'image/png' : 'image/jpeg');
     blob.setContentType(ct);
-    var folder = getDriveFolder_('TICKETS');
+    var folder = _appFolder_('TICKETS');   // ⚡ (V4.367) داخل المجلد الرئيسي
     var f = folder.createFile(blob);
     f.setName('مستند المستضيف - ' + Utilities.formatDate(new Date(), _tz_(), 'dd-MM-yyyy HHmmss') + (ct === 'application/pdf' ? '.pdf' : '.jpg'));
     f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
@@ -10648,7 +10610,7 @@ function changeMyPassword(authToken, oldPassword, newPassword) {
    نظام مشاركة PDF مؤقت (منفصل تماماً عن نظام الطباعة والحفظ الحالي)
 ================================ */
 function _ensureTempShareFolder_() {
-  return getDriveFolder_('TEMP');
+  return _appFolder_('TEMP');   // ⚡ (V4.367) مضمون داخل المجلد الرئيسي
 }
 
 // ينشئ ملف PDF مؤقت من محتوى HTML جاهز (ويُرفق صورة التذكرة كصفحة إضافية إن توفر معرّفها)، يحفظه، ويعيد الرابط + الـ Base64 معاً
@@ -10903,7 +10865,7 @@ function generateBookingPdfForShare(authToken, bookingId) {
     var oldFiles = folder.getFiles();
     while (oldFiles.hasNext()) {
       var f = oldFiles.next();
-      if (f.getDateCreated() < oneHourAgo) _driveDeleteForever_(f.getId());
+      if (f.getDateCreated() < oneHourAgo) _appTrash_(f, { via: folder, forever: true, soft: true });   // ⚡ (V4.367) عبر الحارس
     }
   } catch (e) { /* تجاهل */ }
 
@@ -11056,7 +11018,7 @@ function uploadCompanyLogo(authToken, base64Data, fileName) {
   requireSettingsBasicPermission_(authToken);
 
   try {
-    var folder = getDriveFolder_('LOGOS');
+    var folder = _appFolder_('LOGOS');   // ⚡ (V4.367) داخل المجلد الرئيسي
 
     var contentType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";"));
     var rawBase64 = base64Data.substring(base64Data.indexOf(",") + 1);
@@ -11078,7 +11040,7 @@ function uploadBookingAttachment(authToken, base64Data, fileName) {
   requireAuth_(authToken);
 
   try {
-    var folder = getDriveFolder_('NOTICES');
+    var folder = _appFolder_('NOTICES');   // ⚡ (V4.367) داخل المجلد الرئيسي
 
     var contentType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";"));
     var rawBase64 = base64Data.substring(base64Data.indexOf(",") + 1);
@@ -11098,7 +11060,7 @@ function uploadBookingAttachment(authToken, base64Data, fileName) {
 function uploadCateringAttachment(authToken, base64Data, fileName) {
   requireAuth_(authToken);
   try {
-    var folder = getDriveFolder_('CATERING');
+    var folder = _appFolder_('CATERING');   // ⚡ (V4.367) داخل المجلد الرئيسي
     var contentType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";"));
     var rawBase64 = base64Data.substring(base64Data.indexOf(",") + 1);
     var blob = Utilities.newBlob(Utilities.base64Decode(rawBase64), contentType, fileName);
@@ -11567,6 +11529,125 @@ function updateFolderSettingFromUI(authToken, key, newName, newFolderId) {
   return result;
 }
 
+/* ============================================================
+   ⚡ (V4.367) أداة الترحيل: ملفات البرنامج المعروفة بمعرّفها — داخل المجلد الرئيسي أم خارجه — ونقل المختار داخله.
+   النقل moveTo فقط (المعرّف والروابط وصلاحيات الملف نفسه لا تتغير). لا يُنقل إلا ما بالقائمة (لا معرّفات حرة من الواجهة).
+   ============================================================ */
+var DRIVE_ROOT_LABELS_ = {
+  NOTICES: 'مجلد إشعارات الوصول', TICKETS: 'مجلد تذاكر الطيران', LOGOS: 'مجلد شعارات الشركات', EXPORTS: 'مجلد ملفات Excel',
+  TEMP: 'مجلد الملفات المؤقتة', BACKUPS: 'مجلد النسخ الاحتياطية', CATERING: 'مجلد مرفقات الإعاشة', GLATT: 'مجلد مرفقات القيود والسندات',
+  SNAPS: 'مجلد نقاط الاستعادة', TEMPSHARE: 'مجلد المشاركة المؤقت (برنامج الحجوزات)', AUDIT: 'مجلد السجل المحصّن', AI: 'مجلد المحاسب الذكي'
+};
+function _driveRootItems_() {
+  var P = PropertiesService.getScriptProperties(), out = [], seen = {};
+  var add = function (id, kind, label, target, src) {
+    id = String(id || '').trim();
+    if (!id || seen[id]) return;
+    seen[id] = 1;
+    out.push({ id: id, kind: kind, label: label, target: target || 'ROOT', src: src || '' });
+  };
+  Object.keys(FOLDER_KEYS).forEach(function (k) {
+    if (k !== 'ROOT') add(P.getProperty(FOLDER_KEYS[k]), 'folder', DRIVE_ROOT_LABELS_[k] || k, 'ROOT', FOLDER_KEYS[k]);
+  });
+  try { add(getSpreadsheet_().getId(), 'file', 'ملف البرنامج الرئيسي (شيت العمرة)', 'ROOT', 'main'); } catch (e) {}
+  add(P.getProperty('GL_SPREADSHEET_ID'), 'file', 'ملف الحسابات العامة', 'ROOT', 'GL_SPREADSHEET_ID');
+  add(P.getProperty('GL_LINK_SS_ID'), 'file', 'ملف الحسابات المربوط ببرنامج الحجوزات', 'ROOT', 'GL_LINK_SS_ID');
+  try { if (typeof hbProgramId_ === 'function') add(hbProgramId_(), 'file', 'ملف برنامج الحجوزات', 'ROOT', 'HB_PROGRAM_SS_ID'); } catch (e) {}
+  add(P.getProperty('AUDIT_SS_ID'), 'file', 'ملف السجل المحصّن', 'AUDIT', 'AUDIT_SS_ID');
+  // مجلد المشاركة المؤقت القديم لبرنامج الحجوزات (كان يُنشأ بجذر My Drive باسمه بلا معرّف مخزَّن): بالاسم، ملك حساب البرنامج فقط
+  try {
+    var me = String(Session.getEffectiveUser().getEmail() || '').toLowerCase(), it = DriveApp.getFoldersByName(FOLDER_DEFAULTS.TEMPSHARE);
+    while (it.hasNext()) {
+      var f = it.next(), own = null;
+      try { own = f.getOwner(); } catch (eO) {}
+      if (own && me && String(own.getEmail() || '').toLowerCase() === me) add(f.getId(), 'folder', 'مجلد المشاركة المؤقت القديم (برنامج الحجوزات)', 'ROOT', 'legacy');
+    }
+  } catch (eL) {}
+  return out;
+}
+// أسلاف المجلد الرئيسي (لا يُنقل أي منها داخله — حلقة)
+function _driveRootAncestors_(root) {
+  var anc = {}, ps = _appParentsOf_(root) || [], d = 0;
+  while (ps.length && d < APP_TREE_DEPTH_) { try { anc[String(ps[0].getId())] = 1; } catch (e) {} ps = _appParentsOf_(ps[0]) || []; d++; }
+  return anc;
+}
+function _driveRootOpen_(it) { return it.kind === 'folder' ? DriveApp.getFolderById(it.id) : DriveApp.getFileById(it.id); }
+function _driveRootInfo_(it, anc, me) {
+  var o = { id: it.id, kind: it.kind, label: it.label, src: it.src, target: it.target, status: 'missing', name: '', url: '', parent: '', owner: '', note: '' };
+  var obj = null;
+  try { obj = _driveRootOpen_(it); } catch (e) { o.note = 'تعذّر فتحه (محذوف أو بلا صلاحية): ' + e.message; return o; }
+  try { o.name = String(obj.getName() || ''); o.url = String(obj.getUrl() || ''); } catch (e1) {}
+  var ps = _appParentsOf_(obj) || [];
+  try { o.parent = ps.map(function (p) { return String(p.getName() || ''); }).join('، '); } catch (e2) {}
+  var own = null; try { own = obj.getOwner(); } catch (e3) {}
+  try { o.owner = own ? String(own.getEmail() || '') : ''; } catch (e4) {}
+  var trashed = false; try { trashed = !!(obj.isTrashed && obj.isTrashed()); } catch (e5) {}
+  if (_inAppTree_(obj, null, true)) o.status = trashed ? 'trashed' : 'inside';
+  else if (anc[it.id]) { o.status = 'ancestor'; o.note = 'هذا المجلد يحتوي المجلد الرئيسي نفسه — لا يمكن نقله داخله'; }
+  else {
+    o.status = trashed ? 'trashed' : 'outside';
+    if (!own) o.note = 'داخل Drive مشترك (Shared drive) — يُنقل يدوياً من Drive';
+    else if (me && o.owner && o.owner.toLowerCase() !== me.toLowerCase()) o.note = 'المالك ' + o.owner + ' — النقل يتطلب حساب المالك';
+  }
+  if (trashed) o.note = (o.note ? o.note + ' · ' : '') + 'في سلة المهملات';
+  return o;
+}
+function _driveRootAudit_() {
+  _appTreeReset_();
+  var root = _appRoot_(), me = '';
+  try { me = String(Session.getEffectiveUser().getEmail() || ''); } catch (e) {}
+  var anc = _driveRootAncestors_(root);
+  var items = _driveRootItems_().map(function (it) { return _driveRootInfo_(it, anc, me); });
+  var n = { inside: 0, outside: 0, other: 0 };
+  items.forEach(function (x) { if (x.status === 'inside') n.inside++; else if (x.status === 'outside') n.outside++; else n.other++; });
+  return { success: true, root: { id: String(root.getId()), name: String(root.getName()), url: String(root.getUrl()) }, items: items, counts: n, me: me };
+}
+/** فحص (بلا أي تعديل): ملفات البرنامج المعروفة بمعرّفها داخل المجلد الرئيسي أم خارجه — للمدير فقط */
+function driveRootAudit(authToken) {
+  requireAdminPermission_(authToken);
+  return _driveRootAudit_();
+}
+function _driveFixWhy_(e, obj) {
+  var m = String((e && e.message) || e), own = null, me = '';
+  try { own = obj && obj.getOwner ? obj.getOwner() : null; } catch (x) {}
+  try { me = String(Session.getEffectiveUser().getEmail() || ''); } catch (x2) {}
+  if (obj && !own) return 'داخل Drive مشترك (Shared drive) أو بلا مالك ظاهر — انقله يدوياً من Drive (' + m + ')';
+  try { if (own && me && String(own.getEmail() || '').toLowerCase() !== me.toLowerCase()) return 'لست مالك الملف (المالك: ' + own.getEmail() + ') — يلزم نقله من حساب المالك'; } catch (x3) {}
+  return m;
+}
+/** نقل العناصر المختارة (من قائمة الفحص فقط) داخل المجلد الرئيسي بـ moveTo — للمدير فقط */
+function driveRootFix(authToken, ids) {
+  var session = requireAdminPermission_(authToken);
+  var want = [];
+  (Array.isArray(ids) ? ids : [ids]).forEach(function (x) { x = String(x || '').trim(); if (x && want.indexOf(x) < 0) want.push(x); });
+  if (!want.length) throw new Error('اختر عنصراً واحداً على الأقل');
+  _appTreeReset_();
+  var root = _appRoot_(), anc = _driveRootAncestors_(root), known = {}, moved = [], failed = [];
+  _driveRootItems_().forEach(function (it) { known[it.id] = it; });
+  want.forEach(function (id) {
+    var it = known[id], obj = null;
+    if (!it) { failed.push({ id: id, label: id, error: 'ليس من ملفات البرنامج المعروفة — لا يُنقل' }); return; }
+    try {
+      obj = _driveRootOpen_(it);
+      if (_inAppTree_(obj, null, true)) { moved.push({ id: id, label: it.label, already: true }); return; }
+      if (anc[id]) throw new Error('هذا المجلد يحتوي المجلد الرئيسي نفسه — لا يمكن نقله داخله');
+      var dest = (it.target && it.target !== 'ROOT') ? _appFolder_(it.target) : root;
+      obj.moveTo(dest);
+      if (it.kind === 'folder') _appTreeMark_(id, true); else _APP_TREE_MEMO_[id] = true;
+      moved.push({ id: id, label: it.label, to: String(dest.getName()) });
+    } catch (e) {
+      failed.push({ id: id, label: it.label, error: _driveFixWhy_(e, obj) });
+    }
+  });
+  try {
+    logChange_(session.username, 'نقل ملفات البرنامج داخل المجلد الرئيسي', 'Drive', 'المجلد الرئيسي', '-',
+      moved.filter(function (x) { return !x.already; }).map(function (x) { return x.label; }).join('، ') + (failed.length ? (' — تعذّر: ' + failed.map(function (x) { return x.label; }).join('، ')) : ''));
+  } catch (eL) {}
+  var res = _driveRootAudit_();
+  res.moved = moved; res.failed = failed;
+  return res;
+}
+
 // فحص سريع (بدون أي تعديل) لمعرفة هل الأعمدة الإضافية (سعر الباص/قيمة التشغيلة/اسم الرحلة) مضافة بالفعل
 // يُستخدم لتحديث شكل/نص الزر في شاشة الإعدادات ليعكس الحالة الفعلية
 function checkBusPriceColumnsExist(authToken) {
@@ -11716,23 +11797,27 @@ function cleanupTempFiles_(maxAgeHours) {
   var isTriggerEvent = maxAgeHours && typeof maxAgeHours === 'object';
   var hours = Number(maxAgeHours) >= 0 ? Number(maxAgeHours) : (isTriggerEvent ? 6 : 0);
   var cutoff = hours > 0 ? (new Date().getTime() - hours * 3600000) : Number.POSITIVE_INFINITY;
-  var trashed = 0, kept = 0, scanned = [], perFolder = [];
+  var trashed = 0, kept = 0, scanned = [], perFolder = [], outsideFolders = 0;
   // ينظّف مجلد TEMP وEXPORTS من كل الملفات (الجذور المخزَّنة + أي مجلد بنفس الاسم بحثاً عن ملفات
   // مُبعثرة). كان التنفيذ يعتمد فقط على معرّف المجلد المخزَّن — لو تغيّر المعرف (حُذف يدوياً وأُنشئ
   // مجلد جديد بنفس الاسم مثلاً)، الدالة تنشئ مجلداً فارغاً جديداً وتفحصه وتُبلّغ عن "0 ملفات"،
   // بينما الملفات الحقيقية تعيش في المجلد القديم "الحقيقي" بلا تنظيف. الآن نبحث بالاسم أيضاً
   // كسقف أمان يضمن الوصول لكل الملفات ذات الصلة
+  // ⚡ (V4.367) …لكن داخل شجرة المجلد الرئيسي فقط: مجلد «Temp»/«Exports» شخصي للمستخدم بأي مكان آخر بالدرايف كان
+  // يُفرَّغ بالكامل نهائياً! الآن يُتجاهل ويُعدّ، والحذف نفسه يمر بالحارس _appTrash_
   ['TEMP', 'EXPORTS'].forEach(function(key) {
     var foldersToScan = [];
-    // 1) المجلد المسجَّل رسمياً بمعرّفه المخزَّن
-    try { foldersToScan.push(getDriveFolder_(key)); } catch (e) { Logger.log('cleanupTempFiles_: getDriveFolder_(' + key + ') failed: ' + e); }
-    // 2) كل مجلد آخر بنفس الاسم في Drive المستخدم (شبكة أمان — حالات تكرار الاسم بعد حذف يدوي)
+    // 1) المجلد المسجَّل رسمياً بمعرّفه المخزَّن (مضمون داخل المجلد الرئيسي)
+    try { foldersToScan.push(_appFolder_(key)); } catch (e) { Logger.log('cleanupTempFiles_: _appFolder_(' + key + ') failed: ' + e); }
+    // 2) كل مجلد آخر بنفس الاسم داخل شجرة البرنامج (شبكة أمان — حالات تكرار الاسم بعد حذف يدوي)
     try {
       var expectedName = PropertiesService.getScriptProperties().getProperty('FOLDER_NAME_' + key) || FOLDER_DEFAULTS[key];
       var byName = DriveApp.getFoldersByName(expectedName);
       while (byName.hasNext()) {
         var f2 = byName.next();
-        if (!foldersToScan.some(function(x) { return x.getId() === f2.getId(); })) foldersToScan.push(f2);
+        if (foldersToScan.some(function(x) { return x.getId() === f2.getId(); })) continue;
+        if (!_inAppTree_(f2)) { outsideFolders++; continue; }
+        foldersToScan.push(f2);
       }
     } catch (nErr) { Logger.log('cleanupTempFiles_: search-by-name failed for ' + key + ': ' + nErr); }
     if (!foldersToScan.length) return;
@@ -11744,7 +11829,7 @@ function cleanupTempFiles_(maxAgeHours) {
         var f = files.next();
         folderSeen++;
         try {
-          if (f.getLastUpdated().getTime() < cutoff || hours === 0) { _driveDeleteForever_(f.getId()); folderTrashed++; }
+          if (f.getLastUpdated().getTime() < cutoff || hours === 0) { if (_appTrash_(f, { via: folder, forever: true, soft: true })) folderTrashed++; else folderKept++; }
           else folderKept++;
         } catch (fe) { Logger.log('cleanupTempFiles_: file trash failed: ' + fe); }
       }
@@ -11755,7 +11840,8 @@ function cleanupTempFiles_(maxAgeHours) {
   });
   if (!scanned.length) return 'تعذّر الوصول لمجلدي Temp/Exports — تحقق من صلاحيات Drive';
   var ageMsg = hours === 0 ? 'كل الملفات (بلا شرط عمر)' : ('أقدم من ' + hours + ' ساعة');
-  return 'تم حذف ' + trashed + ' ملف مؤقت نهائياً (' + ageMsg + ')، وأُبقي على ' + kept + '. التفاصيل: ' + perFolder.join(' | ');
+  return 'تم حذف ' + trashed + ' ملف مؤقت نهائياً (' + ageMsg + ')، وأُبقي على ' + kept + '. التفاصيل: ' + perFolder.join(' | ') +
+    (outsideFolders ? (' — تُرك ' + outsideFolders + ' مجلد بنفس الاسم خارج المجلد الرئيسي دون مساس') : '');
 }
 
 /**
@@ -11834,7 +11920,7 @@ var BACKUP_MIN_KEEP_ = 5;
 
 function _doSystemBackup_() {
   var ss = getSpreadsheet_();
-  var folder = getDriveFolder_('BACKUPS');
+  var folder = _appFolder_('BACKUPS');   // ⚡ (V4.367) داخل المجلد الرئيسي
   var stamp = Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'yyyy-MM-dd HH:mm');
   var name = '💾 نسخة احتياطية — ' + ss.getName() + ' — ' + stamp;
   DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
@@ -11847,7 +11933,7 @@ function _doSystemBackup_() {
   var cutoff = Date.now() - BACKUP_RETENTION_DAYS_ * 86400000;
   var removed = 0;
   for (var i = BACKUP_MIN_KEEP_; i < files.length; i++) {
-    if (files[i].getDateCreated().getTime() < cutoff) { files[i].setTrashed(true); removed++; }
+    if (files[i].getDateCreated().getTime() < cutoff && _appTrash_(files[i], { via: folder, soft: true })) removed++;   // ⚡ (V4.367) عبر الحارس
   }
   PropertiesService.getScriptProperties().setProperty('LAST_BACKUP_AT', stamp);
   return { name: name, removed: removed, total: Math.min(files.length + 1, files.length + 1) - removed };
@@ -11896,7 +11982,7 @@ function getBackupStatus(authToken) {
   var label = active ? ('يومياً — ' + ('0' + (hour || 3)).slice(-2) + ':00') : 'غير مُفعَّل';
   var count = 0, folderUrl = '';
   try {
-    var folder = getDriveFolder_('BACKUPS');
+    var folder = _appFolder_('BACKUPS');   // ⚡ (V4.367)
     folderUrl = folder.getUrl();
     var it = folder.getFiles();
     while (it.hasNext()) { it.next(); count++; }
@@ -11919,7 +12005,7 @@ function _backupSpreadsheet_(reason) {
     var ss = getSpreadsheet_();
     var stamp = Utilities.formatDate(new Date(), _tz_() || 'Asia/Riyadh', 'yyyy-MM-dd_HH-mm');
     var copyName = ss.getName() + ' — نسخة احتياطية (' + (reason || 'قبل عملية خطرة') + ') ' + stamp;
-    var file = DriveApp.getFileById(ss.getId()).makeCopy(copyName);
+    var file = DriveApp.getFileById(ss.getId()).makeCopy(copyName, _appFolder_('BACKUPS'));   // ⚡ (V4.367) كانت النسخة تُنشأ بلا مجلد (خارج المجلد الرئيسي)
     Logger.log('نسخة احتياطية: ' + file.getUrl());
     return file.getUrl();
   } catch (e) {
@@ -11947,9 +12033,9 @@ function DANGER_resetAllDataForNewClient(confirmText) {
   // تفريغ مجلد TEMP بالكامل
   var tempTrashed = 0;
   try {
-    var folder = getDriveFolder_('TEMP');
+    var folder = _appFolder_('TEMP');   // ⚡ (V4.367) داخل المجلد الرئيسي + الحذف عبر الحارس
     var files = folder.getFiles();
-    while (files.hasNext()) { files.next().setTrashed(true); tempTrashed++; }
+    while (files.hasNext()) { if (_appTrash_(files.next(), { via: folder, soft: true })) tempTrashed++; }
   } catch (e) {}
   clearAllCache_();
   var msg = 'تم تصفير: ' + (cleared.length ? cleared.join("، ") : "لا صفوف") + ' — وحُذف ' + tempTrashed + ' ملف مؤقت.' +
@@ -12321,10 +12407,9 @@ function exportTransportAccountsExcel(authToken, payload) {
     var sheet = ss.getSheets()[0];
     sheet.setName('حسابات النقل');
 
-    var file = DriveApp.getFileById(ss.getId());
-    var folder = getDriveFolder_('EXPORTS');
-    folder.addFile(file);
-    DriveApp.getRootFolder().removeFile(file);
+    // ⚡ (V4.367) نقل حقيقي (moveTo) لمجلد Exports داخل المجلد الرئيسي — بدل addFile/removeFile
+    var folder = _appFolder_('EXPORTS');
+    var file = _appAdopt_(ss, folder);
 
     sheet.setRightToLeft(true);
 
@@ -12381,7 +12466,7 @@ function exportTransportAccountsExcel(authToken, payload) {
     SpreadsheetApp.flush();
 
     var url = 'https://docs.google.com/spreadsheets/d/' + ss.getId() + '/export?format=xlsx';
-    file.setTrashed(true);
+    _appTrash_(file, { via: folder });   // ⚡ (V4.367) عبر الحارس
     return url;
 
   } catch (err) {
@@ -17939,7 +18024,7 @@ function getTripAccountsSummary(authToken, tripName) {
 // 📤 تحويل كشف الحساب (المبني في الواجهة بنفس تصميم الطباعة) إلى PDF على Drive للمشاركة/التنزيل
 function accStatementPdf(authToken, htmlDoc, fileName) {
   _accPerm_(authToken, 'view');
-  var folder = getDriveFolder_('TEMP');
+  var folder = _appFolder_('TEMP');   // ⚡ (V4.367) داخل المجلد الرئيسي
   fileName = String(fileName || 'كشف حساب').replace(/[\\/:*?"<>|]/g, '-').trim();
   var htmlBlob = Utilities.newBlob(htmlDoc, 'text/html', fileName + '.html');
   var pdfBlob = htmlBlob.getAs('application/pdf');
@@ -20307,6 +20392,7 @@ function generatePilgrimsTemplate(authToken, tripName) {
   tripName = String(tripName || "").trim();
 
   var ss = SpreadsheetApp.create("قالب_كشف_المعتمرين");
+  var file = _appAdopt_(ss, 'EXPORTS');   // ⚡ (V4.367) فور الإنشاء: moveTo لمجلد Exports داخل المجلد الرئيسي (بدل addFile/removeFile)
   var sheet = ss.getSheets()[0];
   sheet.setName("كشف المعتمرين");
   sheet.setRightToLeft(true);
@@ -20344,10 +20430,6 @@ function generatePilgrimsTemplate(authToken, tripName) {
 
   for (var c = 1; c <= templateHeaders.length; c++) sheet.setColumnWidth(c, 140);
 
-  var file = DriveApp.getFileById(ss.getId());
-  var folder = getDriveFolder_('EXPORTS');
-  folder.addFile(file);
-  DriveApp.getRootFolder().removeFile(file);
   SpreadsheetApp.flush();
 
   // 🐛 (V4.310) لم تكن تُشارَك إطلاقاً (ولا حتى تُحذَف) ⇒ رابط يطلب صلاحية وصول على الموبايل
@@ -20358,6 +20440,7 @@ function generatePilgrimsTemplate(authToken, tripName) {
 function generatePilgrimsTemplateSafa(authToken) {
   requireAuth_(authToken);
   var ss = SpreadsheetApp.create("قالب_صفا_للمعتمرين");
+  var file = _appAdopt_(ss, 'EXPORTS');   // ⚡ (V4.367) فور الإنشاء: moveTo داخل المجلد الرئيسي (بدل addFile/removeFile)
   var sheet = ss.getSheets()[0];
   sheet.setName("كشف صفا");
   sheet.setRightToLeft(true);
@@ -20372,9 +20455,6 @@ function generatePilgrimsTemplateSafa(authToken) {
     .setBackground("#075985").setFontColor("white").setFontWeight("bold").setHorizontalAlignment("center");
   sheet.setFrozenRows(1);
   for (var c = 1; c <= headers.length; c++) sheet.setColumnWidth(c, 120);
-  var file = DriveApp.getFileById(ss.getId());
-  var folder = getDriveFolder_('EXPORTS');
-  folder.addFile(file); DriveApp.getRootFolder().removeFile(file);
   SpreadsheetApp.flush();
   // 🐛 (V4.310) نفس إصلاح generatePilgrimsTemplate — لم تكن تُشارَك إطلاقاً
   return _glShareExportedSheet_(ss, file, 'قالب_صفا_للمعتمرين');
@@ -20387,7 +20467,7 @@ function _glShareExportedSheet_(ss, file, fileName) {
   var b64 = '';
   try { b64 = Utilities.base64Encode(UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() } }).getBlob().getBytes()); }
   catch (eB) { Logger.log('_glShareExportedSheet_ b64: ' + eB); }
-  try { file.setTrashed(true); } catch (eT) {}
+  _appTrash_(file, { soft: true });   // ⚡ (V4.367) عبر الحارس (الملف داخل Exports)
   return { success: true, url: url, fileId: ss.getId(), b64: b64, fileName: fileName };
 }
 
@@ -20405,7 +20485,7 @@ function parsePilgrimsExcel(authToken, base64Data, fileName, tripName) {
 
     // التحويل لـ Google Sheet مؤقت عشان نقدر نقرأه بـ SpreadsheetApp
     var resource = { title: 'temp_pilgrims_import_' + Date.now(), mimeType: MimeType.GOOGLE_SHEETS };
-    tempFile = Drive.Files.insert(resource, blob, { convert: true });
+    tempFile = _appDriveInsert_(resource, blob, { convert: true });   // ⚡ (V4.367) الشيت المؤقت داخل Temp (كان بجذر My Drive)
     tempSs = SpreadsheetApp.openById(tempFile.id);
     var sheet = tempSs.getSheets()[0];
 
@@ -21469,7 +21549,7 @@ function extractPassportDataManual(authToken, base64Image, mimeType) {
     for (var attempt = 0; attempt < OCR_WAITS.length; attempt++) {
       if (OCR_WAITS[attempt]) Utilities.sleep(OCR_WAITS[attempt]);
       try {
-        ocrFile = Drive.Files.insert(
+        ocrFile = _appDriveInsert_(   // ⚡ (V4.367) مستند OCR المؤقت داخل Temp (كان بجذر My Drive)
           { title: 'PASSPORT_OCR_TEMP_' + Date.now() },
           blob,
           { convert: true, ocr: true, ocrLanguage: 'ar' }
@@ -22352,7 +22432,7 @@ function generateHousingPdf(authToken, htmlContent, tripName) {
     var htmlBlob = Utilities.newBlob(htmlContent, MimeType.HTML, fileName + '.html');
     var pdfBlob = htmlBlob.getAs(MimeType.PDF).setName(fileName + '.pdf');
 
-    var folder = getDriveFolder_('EXPORTS');
+    var folder = _appFolder_('EXPORTS');   // ⚡ (V4.367) داخل المجلد الرئيسي
     var file = folder.createFile(pdfBlob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
@@ -24554,7 +24634,7 @@ function extractRoomFeeReceiptSmart(authToken, base64Data, mimeType, aiFallback)
   var localErr = '';
   try {
     var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType || 'image/jpeg', 'receipt');
-    var file = Drive.Files.insert({ title: 'mf_ocr_' + new Date().getTime() }, blob,
+    var file = _appDriveInsert_({ title: 'mf_ocr_' + new Date().getTime() }, blob,   // ⚡ (V4.367) داخل Temp
       { ocr: true, ocrLanguage: 'ar', convert: true });
     var doc = DocumentApp.openById(file.id);
     var txt = doc.getBody().getText();
@@ -27701,7 +27781,7 @@ function _flightAiExtract_(base64, mimeType) {
 }
 function flightCmpPdf(authToken, htmlDoc, fileName) {
   requireAuth_(authToken);
-  var folder = getDriveFolder_('TEMP');
+  var folder = _appFolder_('TEMP');   // ⚡ (V4.367) داخل المجلد الرئيسي
   fileName = String(fileName || 'مطابقة برنت الطيران').replace(/[\\/:*?"<>|]/g, '-').trim();
   var pdfBlob = Utilities.newBlob(htmlDoc, 'text/html', fileName + '.html').getAs('application/pdf');
   pdfBlob.setName(fileName + '.pdf');
@@ -27753,7 +27833,7 @@ function _driveOcrText_(base64, mimeType, lang) {
     var f = null, lastErr = null, W = [0, 4000, 8000];
     for (var a = 0; a < W.length && !f; a++) {
       if (W[a]) Utilities.sleep(W[a]);
-      try { f = Drive.Files.insert({ title: 'FLT_OCR_TEMP_' + Date.now() }, blob, { convert: true, ocr: true, ocrLanguage: lang || 'en' }); }
+      try { f = _appDriveInsert_({ title: 'FLT_OCR_TEMP_' + Date.now() }, blob, { convert: true, ocr: true, ocrLanguage: lang || 'en' }); }   // ⚡ (V4.367) داخل Temp
       catch (e) { lastErr = e; if (!/rate limit|quota|limit exceeded|backend/i.test(String(e))) throw e; }
     }
     if (!f) throw lastErr;
