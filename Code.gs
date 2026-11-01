@@ -2237,8 +2237,10 @@ if (
 // وسيلتقط الإشعار التالي هذا الرقم تلقائياً (بدون أي إعداد إضافي)
 function _nextBookingId_() {
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  // 🔒 ⚡ (V4.367) قفل مورد رقم الإشعار وحده بدل قفل السكربت العام (نفس النطاق: حساب الرقم التالي فقط).
+  // تعذّره ⇒ استثناء «الشيت مشغول…» قبل أي كتابة — saveBookingToServer يرده كخطأ فتعيده الواجهة تلقائياً
+  var lock = _resTry_('bkid', 30000);
+  if (!lock) throw new Error(RES_BUSY_);
   try {
     var sheet = getSpreadsheet_().getSheetByName("Bookings");
     var data = sheet.getDataRange().getValues();
@@ -2253,7 +2255,7 @@ function _nextBookingId_() {
     try { PropertiesService.getScriptProperties().deleteProperty('NEXT_BOOKING_ID'); } catch(_e) {}
     return maxId + 1;
   } finally {
-    lock.releaseLock();
+    _resRelease_(lock, true);   // قراءة فقط داخل القفل
   }
 }
 
@@ -9192,8 +9194,9 @@ function _tgccSaveOne_(contract, username) {
   if (!no) return { success: false, error: 'رقم الاتفاقية فارغ' };
   // 🔒 (V4.73) نفس قفل saveCateringContracts — يمنع تكرار الصفوف لو تزامن حفظ البوت مع حفظ الويب
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); } catch (eLock) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  // 🔒 ⚡ (V4.367) قفل مورد الاتفاقيات 'cc' — نفس قفل كل كاتب لشيت الاتفاقيات (الويب/البوت/الحذف/الدمج/تعيين المعرّفات) بدل قفل السكربت العام
+  var lock = _resTry_('cc', 30000);
+  if (!lock) return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' };
   try {
   var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
   var now = new Date();
@@ -9231,7 +9234,7 @@ function _tgccSaveOne_(contract, username) {
   logChange_(username || 'TelegramBot', 'إنشاء اتفاقية إعاشة', no, 'اتفاقية جديدة', '-',
     (contract.provider || '-') + ' — ' + (contract.area || '-') + (contract.totalAmount ? ' — ' + contract.totalAmount : ''));
   return { success: true, created: true };
-  } finally { lock.releaseLock(); }
+  } finally { _resRelease_(lock); }   // ⚡ (V4.367) يدفع الكتابة للورقة قبل فك قفل المورد
 }
 
 function _tgbnDefaults_() {
@@ -14523,15 +14526,15 @@ function _accId_(prefix) {
 // 🔢 (V4.24) رقم تسلسلي تلقائي لكل دفعة جديدة — عدّاد مستمر بخصائص السكربت، لا يتكرر ولا يُعاد ترقيمه
 function _accNextPaySerial_() {
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  var lock = _resTry_('accpay', 30000);   // 🔒 ⚡ (V4.367) قفل مورد العدّاد وحده (لا قفل السكربت العام)
+  if (!lock) throw new Error(RES_BUSY_);
   try {
     var props = PropertiesService.getScriptProperties();
     var next = (parseInt(props.getProperty('ACC_PAY_SERIAL_CTR'), 10) || 0) + 1;
     props.setProperty('ACC_PAY_SERIAL_CTR', String(next));
     return next;
   } finally {
-    lock.releaseLock();
+    _resRelease_(lock, true);   // العدّاد بخصائص السكربت — لا كتابة بالأوراق
   }
 }
 
@@ -14540,15 +14543,15 @@ function _accNextPaySerial_() {
 function _accNextPaySerials_(n) {
   n = Math.max(1, n | 0);
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  var lock = _resTry_('accpay', 30000);   // 🔒 ⚡ (V4.367) نفس قفل مورد العدّاد
+  if (!lock) throw new Error(RES_BUSY_);
   try {
     var props = PropertiesService.getScriptProperties();
     var first = (parseInt(props.getProperty('ACC_PAY_SERIAL_CTR'), 10) || 0) + 1;
     props.setProperty('ACC_PAY_SERIAL_CTR', String(first + n - 1));
     return first;
   } finally {
-    lock.releaseLock();
+    _resRelease_(lock, true);
   }
 }
 
@@ -16421,9 +16424,11 @@ function getCateringContracts(authToken) {
   // 🛡️ (V4.323 مراجعة) وتصحيح أي معرّف مكرر (يبقى لأول صف ويأخذ ما بعده معرّفاً جديداً). القراءة والكتابة داخل قفل السكربت —
   // وكل كاتب يحذف/يدمج صفوفاً (أو يكتب بموضع الصف) يأخذ نفس القفل الآن، فلا تنزاح المعرّفات لاتفاقيات أخرى
   var _idFix = function (rows) { var seen = {}; return rows.some(function (r) { var id = String(r[CC_I_.id] || '').trim(); if (!String(r[0] || '').trim()) return false; if (!id || seen[id]) return true; seen[id] = 1; return false; }); };
+  // ⚡ (V4.367) لماذا تأخذ القراءة قفلاً؟ لأنها تكتب أحياناً: تعيين المعرّفات الناقصة/المكررة يكتب عمود المعرّف بموضع الصفوف،
+  // فيجب ألا يتزامن مع حذف/دمج صفوف ⇒ قفل مورد الاتفاقيات 'cc' (لا قفل السكربت). الحالة العادية (لا إصلاح) بلا أي قفل
   if (_idFix(vals)) {
-    var lk = LockService.getScriptLock();
-    if (lk.tryLock(5000)) {
+    var lk = _resTry_('cc', 5000);
+    if (lk) {
       try {
         vals = sh.getRange(2, 1, sh.getLastRow() - 1, CATERING_HEADERS.length).getValues();
         var seenId = {}, chg = false;
@@ -16435,7 +16440,7 @@ function getCateringContracts(authToken) {
         });
         if (chg) sh.getRange(2, CC_I_.id + 1, col.length, 1).setNumberFormat('@').setValues(col);
         col.forEach(function (c, i) { vals[i][CC_I_.id] = c[0]; });
-      } catch (eId) {} finally { lk.releaseLock(); }
+      } catch (eId) {} finally { _resRelease_(lk); }
     }
   }
   var glE = {}, accN = {};
@@ -16492,8 +16497,9 @@ function saveCateringContracts(authToken, list) {
   // 🔒 (V4.73) قفل صريح يمنع تكرار الصفوف عند نداءين متزامنين (نقرتين سريعتين، أو حفظ من الويب
   // والبوت في نفس اللحظة) — بدونه قد يقرأ كلا النداءين "غير موجود" معاً فيُضيفان صفّين مكرَّرين
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); } catch (eLock) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  // 🔒 ⚡ (V4.367) قفل مورد الاتفاقيات 'cc' — نفس قفل كل كاتب لشيت الاتفاقيات (الويب/البوت/الحذف/الدمج/تعيين المعرّفات) بدل قفل السكربت العام
+  var lock = _resTry_('cc', 30000);
+  if (!lock) return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' };
   try {
   var sh = _accSheet_(CATERING_SHEET, CATERING_HEADERS);
   var now = new Date();
@@ -16600,7 +16606,9 @@ function saveCateringContracts(authToken, list) {
   if (appended.length) {
     sh.getRange(sh.getLastRow() + 1, 1, appended.length, CATERING_HEADERS.length).setValues(appended);
   }
-  SpreadsheetApp.flush();
+  // ⚡ (V4.367) دفع الكتابة ثم فك قفل 'cc' فوراً: السجل وربط المجموعات (قفل 'vz') بعده — فلا يُطلب قفل مورد آخر والقفل
+  // ممسوك (ترتيب ثابت يمنع الانسداد مع الحفظ الشامل). الربط يقرأ الصفوف من الذاكرة (byNo) لا من الورقة
+  _resRelease_(lock);
   // 🕘 (V4.86) سجل تعديلات بتفاصيل كل حقل تغيّر فعلياً (بدل سطر ملخّص واحد فقط) — يدعم زر
   // «سجل تعديلات الاتفاقية» بجوار كل اتفاقية بشاشة الاتفاقيات
   if (logEntries.length) logChangesBatch_(session.username, logEntries);
@@ -16624,19 +16632,20 @@ function saveCateringContracts(authToken, list) {
       } catch (eG) {}
     });
   });
-  lock.releaseLock();
-  // 🍽️ (V4.323) القيد التلقائي للاتفاقيات المحفوظة يُسجَّل/يُحدَّث/يُلغى الآن (الحفظ = اعتماد) — بعد فك قفل السكربت
+  // 🍽️ (V4.323) القيد التلقائي للاتفاقيات المحفوظة يُسجَّل/يُحدَّث/يُلغى الآن (الحفظ = اعتماد) — بعد فك قفل الاتفاقيات
   var gl = null; try { if (postIds.length && typeof _glCatPostNow_ === 'function') gl = _glCatPostNow_(session.username, postIds); } catch (eGl) { gl = { error: eGl.message }; }
   return { success: true, created: created, updated: updatedFilled, skipped: skipped, linkedGroups: linkedGroups, gl: gl };
-  } finally { try { lock.releaseLock(); } catch (eR) {} }
+  } finally { _resRelease_(lock); }   // لا أثر لو فُك أعلاه (الفك الثاني لا يفعل شيئاً)
 }
 
-// 🔒 (V4.323 مراجعة) قفل السكربت لكل من يحذف/يدمج صفوف الاتفاقيات أو يكتب بموضع الصف (تعيين المعرّفات، مزامنة المجموعات)
+// 🔒 (V4.323 مراجعة) قفل واحد لكل من يحذف/يدمج صفوف الاتفاقيات أو يكتب بموضع الصف (تعيين المعرّفات، مزامنة المجموعات)
 // — نفس قفل saveCateringContracts وحفظ البوت؛ يُعاد استخدامه لو كان النداء داخله أصلاً
-function _ccWithLock_(ms, fn) {
-  var sl = LockService.getScriptLock(), had = false; try { had = sl.hasLock(); } catch (e0) {}
-  if (!had && !sl.tryLock(ms)) throw new Error('شيت الاتفاقيات مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات');
-  try { return fn(); } finally { if (!had) try { sl.releaseLock(); } catch (e1) {} }
+// 🔒 ⚡ (V4.367) صار قفل المورد 'cc' (يعيد الدخول بالاسم) بدل قفل السكربت. soft: لو تعذّر ⇒ ينفّذ fn بلا قفل (سلوك كتّاب
+// الحسابات العامة القديم: تحديث أكواد الحسابات بالاتفاقيات لا يُترك ناقصاً بسبب انشغال)
+function _ccWithLock_(ms, fn, soft) {
+  var l = _resTry_('cc', ms);
+  if (!l && !soft) throw new Error('شيت الاتفاقيات مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات');
+  try { return fn(); } finally { _resRelease_(l); }
 }
 // 🗑️ حذف اتفاقية واحدة برقمها
 function deleteCateringContract(authToken, contractNo, rowId) {
@@ -27402,9 +27411,9 @@ function saveUiPref(authToken, screenKey, prefsObj) {
   var json = '';
   try { json = JSON.stringify(prefsObj || {}); } catch (e) { return { success: false, error: 'تعذّر ترميز التفضيلات' }; }
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch (e) { return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' }; }
+  // 🔒 ⚡ (V4.367) قفل مورد التفضيلات وحده — كان قفل السكربت العام يوقف حفظ الشاشات كلها لأجل تغيير عرض عمود
+  var lock = _resTry_('uipref', 30000);
+  if (!lock) return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' };
   try {
     var sh = _accSheet_(UI_PREFS_SHEET, UI_PREFS_HEADERS);
     var last = sh.getLastRow();
@@ -27423,7 +27432,7 @@ function saveUiPref(authToken, screenKey, prefsObj) {
     }
     SpreadsheetApp.flush();
     return { success: true };
-  } finally { lock.releaseLock(); }
+  } finally { _resRelease_(lock, true); }   // دُفعت الكتابة أعلاه
 }
 
 /* ============================================================
