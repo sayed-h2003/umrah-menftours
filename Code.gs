@@ -7079,6 +7079,43 @@ function clearAllCache_() {
   }
 }
 
+/* ============================================================
+   🔒 ⚡ (V4.367) أقفال المورد بدل قفل السكربت العام — حفظ مجموعة تأشيرات لا يوقف حفظ ملف وزارة ولا تفضيلات الواجهة
+   ------------------------------------------------------------
+   • كل كاتب لورقة مُحوَّلة يأخذ قفل موردها (LiveSync.gs: _resLock_ ← _glNamedLock_، يعيد الدخول بنفس التنفيذ):
+       'vz' VisaFiles · 'vzprice' تسعير الوكلاء (تأشيرات + نقل) · 'mf' MinistryFiles + عدّاد مسلسلها · 'mfquota' ترحيل حصص الأفراد ·
+       'mfrec' إيصالات رسوم الغرفة · 'uipref' تفضيلات الواجهة · 'bkid' رقم الإشعار التالي · 'accpay' عدّاد مسلسل الدفعات ·
+       'cc' اتفاقيات الإعاشة — وهي نفسها قائمة LF_RES_ALL_ (LiveSync.gs).
+   • تعذّر القفل ⇒ رسالة «الشيت مشغول…» قبل أي كتابة، فتعيد الواجهة النداء تلقائياً (_BUSY_RES_RX_ للرد / _BUSY_RX_ للاستثناء).
+   • الفك عبر _resRelease_: يدفع الكتابات المعلّقة للورقة أولاً — القفل المسمّى (بالكاش) لا يدفعها كما يفعل فكّ قفل السكربت، وبدون
+     الدفع قد يقرأ منفّذ يأخذ القفل بعده صفوفاً قديمة ثم يكتب فوقها بموضع الصف.
+   • العمليات الشاملة التي تبقى على قفل السكربت (الاستعادة الزمنية، التراجع بالرحلة، المطابقة، تبعية الحسابات، إعادة التسمية
+     المتتالية) تأخذ بعده كل الموارد معاً (_resAllTry_ ← _resLockAll_: ترتيب أبجدي ثابت، كلها أو لا شيء) — قفل السكربت وحده لم يعد
+     يمنع أصحاب أقفال الموارد.
+   • منع الانسداد: الترتيب دائماً قفل السكربت ثم الموارد بترتيبها الأبجدي؛ ولا يُطلب قفل مورد آخر ولا قفل السكربت أثناء الإمساك بقفل
+     مورد (الآثار الجانبية — المزامنات والسجل والكاش — بعد الفك).
+   ============================================================ */
+var RES_BUSY_ = 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات';
+// قفل مورد واحد بمهلة ⇒ كائن القفل، أو null عند الانشغال (بلا LiveSync.gs — اختبارات قديمة — يرجع لقفل السكربت كما كان)
+function _resTry_(name, ms) {
+  var l = (typeof _resLock_ === 'function') ? _resLock_(name) : LockService.getScriptLock();
+  try { return l.tryLock(ms === undefined ? 30000 : ms) ? l : null; } catch (e) { return null; }
+}
+// فك قفل مورد بعد دفع الكتابات المعلّقة للورقة (noFlush: لا كتابة بالأوراق داخل القفل، مثل العدّادات بخصائص السكربت)
+function _resRelease_(l, noFlush) {
+  if (!l) return;
+  if (!noFlush) { try { SpreadsheetApp.flush(); } catch (eF) {} }
+  try { l.releaseLock(); } catch (e) {}
+}
+// كل الموارد معاً للعمليات الشاملة (بعد أخذ قفل السكربت) ⇒ كائن القفل، أو null لو أحدها مشغول (وتُحرَّر المأخوذة تلقائياً)
+function _resAllTry_(ms) {
+  if (typeof _resLockAll_ !== 'function') return { releaseLock: function () {} };
+  var l = _resLockAll_();
+  try { return l.tryLock(ms === undefined ? 30000 : ms) ? l : null; } catch (e) { try { l.releaseLock(); } catch (e2) {} return null; }
+}
+// ⏱️ (V4.367) قياس خطوة بعد الكتابة: _perfStep_ (Perf.gs) يسجّل الخطوة ≥ 300ms باسم «الدالة›الخطوة» فتظهر بتقرير التشخيص
+function _perfStepIf_(name, fn) { return (typeof _perfStep_ === 'function') ? _perfStep_(name, fn) : fn(); }
+
 // نقطة دخول جديدة للمتصفح فقط - تتحقق من الجلسة ثم تستدعي الدالة الأصلية كما هي بدون أي تعديل عليها
 function clearAllCacheAuth(authToken) {
   requireAuth_(authToken);
@@ -25808,8 +25845,8 @@ function saveVisaFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _vzPerm_(authToken, isNew ? 'add' : 'edit');
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
+  var lock = _resTry_('vz', 30000);   // 🔒 ⚡ (V4.367) قفل مورد VisaFiles وحده — لا يوقف حفظ الوزارة/الحجوزات
+  if (!lock) return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' };
   var _vzLockReleased = false;
   try {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
@@ -25855,38 +25892,42 @@ function saveVisaFile(authToken, data) {
     if (_hMd) { f.madinahIn = _hMd.in; f.madinahOut = _hMd.out; f.madinahHousingAgr = _hMd.hAgr; f.madinahCateringAgr = _hMd.cAgr; }
     var row = _vzObjToRow_(f);
     if (isNew) sh.appendRow(row); else sh.getRange(old._row, 1, 1, VZ_FILES_HEADERS.length).setValues([row]);
-    // ⚡ (V4.178) أُفرِج عن القفل فور اكتمال الكتابة (releaseLock يفرغ ضمنياً، فلا حاجة لـflush) — كل
-    // ما يلي (مزامنة السكن، السجل، إبطال الكاش) لا يحتاج تسلسلاً فلا يظل القفل محجوزاً خلاله
-    lock.releaseLock(); _vzLockReleased = true;
-    _vzClearCache_();
+    // ⚡ (V4.178) أُفرِج عن القفل فور اكتمال الكتابة — كل ما يلي (مزامنة السكن، السجل، إبطال الكاش) لا يحتاج تسلسلاً
+    // فلا يظل القفل محجوزاً خلاله. ⚡ (V4.367) _resRelease_ يدفع الكتابة للورقة قبل الفك (القفل المسمّى لا يدفعها بنفسه)
+    _resRelease_(lock); _vzLockReleased = true;
+    _perfStepIf_('saveVisaFile›cache', function () { _vzClearCache_(); });
     // 🔗 (V4.134) ربط ثنائي الاتجاه: أرقام اتفاقيات السكن المكتوبة بالمجموعة تُسجَّل تخصيصاً
     // في شاشة اتفاقيات السكن تلقائياً (والعكس مُنفَّذ في saveHousingAllocation)
-    try { _vzSyncGroupHousingAllocs_(f, session.username); } catch (eSync) {}
+    _perfStepIf_('saveVisaFile›housing', function () { try { _vzSyncGroupHousingAllocs_(f, session.username); } catch (eSync) {} });
     // 📜 (V4.142) سجل تعديلات حقيقي لكل مجموعة على حدة (recordId = 'VZ:'+id وليس اسم الوكيل —
     // كان يخلط سجلات كل مجموعات الوكيل معاً فلا يمكن تتبع مجموعة بعينها) بفرق حقل بحقل كملفات الوزارة
     var recId = 'VZ:' + f.id;
-    if (isNew) {
-      logChange_(session.username, 'إضافة مجموعة تأشيرات', recId, '-', '-',
-        (f.ref ? 'مجموعة ' + f.ref : 'مسلسل ' + f.seq) + ' — ' + (f.agent || '') + ' — ' + f.visaCount + '×' + f.price);
-    } else {
-      var entries = [];
-      Object.keys(VZ_FIELD_LABELS_).forEach(function (k) {
-        var a = old[k], b = f[k];
-        if (k === 'breakdown' || k === 'selected' || k === 'housing') { a = JSON.stringify(a || []); b = JSON.stringify(b || []); }
-        if (String(a == null ? '' : a) === String(b == null ? '' : b)) return;
-        entries.push({ action: 'تعديل مجموعة تأشيرات', recordId: recId, field: VZ_FIELD_LABELS_[k],
-          oldVal: String(a == null || a === '' ? '-' : a).slice(0, 4000),
-          newVal: String(b == null || b === '' ? '-' : b).slice(0, 4000) });
-      });
-      if (entries.length) logChangesBatch_(session.username, entries);
-    }
+    _perfStepIf_('saveVisaFile›log', function () {
+      if (isNew) {
+        logChange_(session.username, 'إضافة مجموعة تأشيرات', recId, '-', '-',
+          (f.ref ? 'مجموعة ' + f.ref : 'مسلسل ' + f.seq) + ' — ' + (f.agent || '') + ' — ' + f.visaCount + '×' + f.price);
+      } else {
+        var entries = [];
+        Object.keys(VZ_FIELD_LABELS_).forEach(function (k) {
+          var a = old[k], b = f[k];
+          if (k === 'breakdown' || k === 'selected' || k === 'housing') { a = JSON.stringify(a || []); b = JSON.stringify(b || []); }
+          if (String(a == null ? '' : a) === String(b == null ? '' : b)) return;
+          entries.push({ action: 'تعديل مجموعة تأشيرات', recordId: recId, field: VZ_FIELD_LABELS_[k],
+            oldVal: String(a == null || a === '' ? '-' : a).slice(0, 4000),
+            newVal: String(b == null || b === '' ? '-' : b).slice(0, 4000) });
+        });
+        if (entries.length) logChangesBatch_(session.username, entries);
+      }
+    });
     f.dueSAR = f.visaCount * f.price;
     // 🔔 (V4.212) تنبيه الجرس: إنشاء/تعديل مجموعة تأشيرات
-    try {
-      _notifPush_('vz_saved', (isNew ? '🛂 مجموعة تأشيرات جديدة: ' : '✏️ تعديل مجموعة تأشيرات: ') + (f.ref ? 'رقم ' + f.ref : '#' + f.seq) +
-        ' — ' + (f.agent || '') + ' — ' + f.visaCount + ' تأشيرة — ' + f.status + (f.tripName ? ' — ' + f.tripName : '') + ' — بواسطة ' + session.username,
-        '', f.tripName, 'visas.view', session.username);
-    } catch (eN) {}
+    _perfStepIf_('saveVisaFile›notif', function () {
+      try {
+        _notifPush_('vz_saved', (isNew ? '🛂 مجموعة تأشيرات جديدة: ' : '✏️ تعديل مجموعة تأشيرات: ') + (f.ref ? 'رقم ' + f.ref : '#' + f.seq) +
+          ' — ' + (f.agent || '') + ' — ' + f.visaCount + ' تأشيرة — ' + f.status + (f.tripName ? ' — ' + f.tripName : '') + ' — بواسطة ' + session.username,
+          '', f.tripName, 'visas.view', session.username);
+      } catch (eN) {}
+    });
     var _vzSync = null;
     // 🔄 (V4.203) مزامنة بند «تأشيرات» التلقائي لحسابات العملاء بالرحلات المتأثرة — فقط لو تغيّر ما يؤثر عليه
     try {
@@ -25897,11 +25938,34 @@ function saveVisaFile(authToken, data) {
         _vzSync = Object.keys(_vts);   // ⚡ (V4.212) تُنفَّذ بعد رد الحفظ عبر syncTripAccountsBg
       }
     } catch (eSync) {}
-    // ⚡ (V4.234) أرصدة الوكلاء المتأثرين فقط (الجديد + القديم إن تغيّر) — يطبّقها العميل محلياً بلا getVisaBootstrap
-    var _vzBal;
-    try { if (_vzHasFinance_(session)) _vzBal = _vzBalancesForAgents_([f.agent].concat(old ? [old.agent] : [])); } catch (eB) {}
-    return { success: true, file: f, syncTrips: _vzSync || [], agentBalances: _vzBal, xcheck: _xcSafe_(_vzTripsOf_(f)) };
-  } finally { if (!_vzLockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
+    // ⚡ (V4.367) الحفظ يرد فور اكتمال الكتابة: أرصدة الوكلاء المتأثرين (الجديد + القديم — V4.234) وفحص تطابق الشركة/الوكيل
+    // (V4.337) يخدمان الواجهة فقط، فصارا مهمة لاحقة بالخلفية (lfAfter ⇒ vzAfterSaveBg) تُدمج نتيجتها تلقائياً بالشاشة.
+    // agentBalances = {} (لا undefined) لصاحب الصلاحية المالية: الأرصدة قادمة من المهمة اللاحقة — فلا تعيد الواجهة بناء
+    // getVisaBootstrap كاملاً بعد كل حفظ (vzApplySavedFile_ تفعل ذلك فقط عند غياب الأرصدة)
+    var _vzFin = false; try { _vzFin = !!_vzHasFinance_(session); } catch (eF) {}
+    var _bgAg = _vzFin ? [f.agent].concat(old ? [old.agent] : []).map(_mfStr_).filter(function (a, i, arr) { return a && arr.indexOf(a) === i; }) : [];
+    var _bgTr = _XC_SKIP_ ? [] : _vzTripsOf_(f);   // (V4.337) الحفظ الجماعي يفحص مرة واحدة بنهاية الدفعة
+    var _res = { success: true, file: f, syncTrips: _vzSync || [] };
+    if (_vzFin) _res.agentBalances = {};
+    if (_bgAg.length || _bgTr.length) _res.lfAfter = { fn: 'vzAfterSaveBg', args: [authToken, { agents: _bgAg, trips: _bgTr }] };
+    return _res;
+  } finally { if (!_vzLockReleased) _resRelease_(lock); }
+}
+/* ⚡ (V4.367) المهمة اللاحقة لحفظ مجموعة تأشيرات (lfAfter): أعمال تخدم الواجهة فقط ولا تكتب شيئاً — فحص تطابق الشركة/الوكيل بين
+   الرحلة والتأشيرات وملفات الوزارة (xcheck — يعرضه غلاف الجلسة تلقائياً) وأرصدة الوكلاء المتأثرين (agentBalances — تُدمج بالشاشة
+   المفتوحة). كانت تُحسب داخل الحفظ نفسه فتُطيل انتظار المستخدم. الأرصدة تُبنى من الأوراق مباشرة دائماً (لا كاش)، وللصلاحية المالية فقط.
+   payload: {agents:[…], trips:[…]} (أو مصفوفة وكلاء). */
+function vzAfterSaveBg(authToken, payload) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'visas.add') && !_sessionHasPerm_(session, 'visas.edit')) throw new Error('لا تملك صلاحية إضافة/تعديل متابعة التأشيرات والوكلاء');
+  var p = Array.isArray(payload) ? { agents: payload } : (payload || {});
+  var list = function (a, n) { var out = []; (Array.isArray(a) ? a : []).forEach(function (x) { x = _mfStr_(x); if (x && out.indexOf(x) < 0 && out.length < n) out.push(x); }); return out; };
+  var trips = list(p.trips, 30), agents = list(p.agents, 60), out = { success: true, xcheck: [] };
+  if (trips.length) out.xcheck = _perfStepIf_('vzAfterSaveBg›xcheck', function () { return _xcSafe_(trips) || []; });
+  if (agents.length && _vzHasFinance_(session)) {
+    try { out.agentBalances = _perfStepIf_('vzAfterSaveBg›balances', function () { return _vzBalancesForAgents_(agents); }); } catch (eB) {}
+  }
+  return out;
 }
 /* ✏️ (V4.312) تعديل جماعي لعدة مجموعات تأشيرات دفعة واحدة: يستدعي saveVisaFile الحقيقية لكل مجموعة — فيحصل
    على نفس كل التحقق والمزامنات الجانبية بالضبط (مزامنة السكن، أرصدة الوكلاء، بند التأشيرات بحسابات العملاء،
@@ -25916,6 +25980,10 @@ function saveVisaFilesBulk(authToken, items) {
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS), results = [], okN = 0, _xcPrev = _XC_SKIP_; _XC_SKIP_ = true;   // 🔗 (V4.337)
   var editable = ['status', 'payStatus', 'date', 'company', 'agent', 'entryNo', 'notes',
     'tripName', 'extraTrips', 'selected', 'breakdown', 'visaCount', 'price'];
+  // 🔒 ⚡ (V4.367) كل مجموعة تُكتب عبر saveVisaFile بقفل المورد 'vz' (يقرأ صفها من جديد تحت القفل ويكتب بموضعه). لا قفل حول
+  // الدفعة كلها عمداً: كان سيبقى ممسوكاً أثناء مزامنة السكن/الإعاشة (قفل 'cc') بعد كل كتابة ⇒ ترتيب vz←cc عكس الترتيب الثابت
+  // (انسداد محتمل مع الحفظ الشامل)، ويوقف حفظ المستخدمين الآخرين طوال الدفعة. وكلاء أرصدة كل الحفظات ⇒ مهمة لاحقة واحدة
+  var _bgAg = {};
   (items || []).forEach(function (it) {
     var id = _mfStr_(it && it.id); if (!id) return;
     try {
@@ -25928,12 +25996,16 @@ function saveVisaFilesBulk(authToken, items) {
       if (it.selected) data.selected = it.selected.map(function (k) { return _mfStr_(k); }).filter(Boolean);
       var r = saveVisaFile(authToken, data);
       if (!r || !r.success) throw new Error((r && r.error) || 'فشل الحفظ');
+      try { ((r.lfAfter && r.lfAfter.args && r.lfAfter.args[1] && r.lfAfter.args[1].agents) || []).forEach(function (a) { _bgAg[a] = 1; }); } catch (eAg) {}
       okN++; results.push({ id: id, success: true, file: r.file, syncTrips: r.syncTrips, agentBalances: r.agentBalances });
     } catch (e) { results.push({ id: id, success: false, error: e.message }); }
   });
   _XC_SKIP_ = _xcPrev;
-  var _xts = []; results.forEach(function (r) { if (r.success && r.file) _xts = _xts.concat(_vzTripsOf_(r.file)); });
-  return { success: true, done: okN, total: (items || []).length, results: results, xcheck: _xcSafe_(_xts) };
+  // ⚡ (V4.367) فحص التطابق (مرة واحدة للدفعة — V4.337) وأرصدة الوكلاء ⇒ مهمة لاحقة بالخلفية بدل إطالة رد الحفظ
+  var _xts = []; if (!_xcPrev) results.forEach(function (r) { if (r.success && r.file) _vzTripsOf_(r.file).forEach(function (t) { if (_xts.indexOf(t) < 0) _xts.push(t); }); });
+  var out = { success: true, done: okN, total: (items || []).length, results: results }, _ags = Object.keys(_bgAg);
+  if (_ags.length || _xts.length) out.lfAfter = { fn: 'vzAfterSaveBg', args: [authToken, { agents: _ags, trips: _xts }] };
+  return out;
 }
 
 /* 📥 (V4.134) استيراد المجموعات القديمة دفعةً واحدة بعد معاينتها وتعديلها بالشاشة.

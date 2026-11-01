@@ -153,5 +153,5 @@ function _resLocks_(names) {
   };
 }
 // كل الموارد المعروفة — للعمليات الشاملة النادرة (الاستعادة الزمنية، إعادة التسمية المتتالية)
-var LF_RES_ALL_ = ['bkid', 'cc', 'mf', 'mfseq', 'uipref', 'vz', 'vzprice'];
+var LF_RES_ALL_ = ['accpay', 'bkid', 'cc', 'mf', 'mfquota', 'mfrec', 'uipref', 'vz', 'vzprice'];
 function _resLockAll_() { return _resLocks_(LF_RES_ALL_); }
