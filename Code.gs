@@ -22897,14 +22897,16 @@ function _mfTripsOf_(f) {
 }
 function _mfNextSeq_() {
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  // 🔒 ⚡ (V4.367) قفل مورد الوزارة 'mf' (يعيد الدخول من saveMinistryFile/الاستيراد وهما يمسكانه أصلاً). كان قفل السكربت هنا
+  // يُفك داخل حفظ يمسك قفل السكربت نفسه (لا عدّ للتداخل — انظر had بـ_ccWithLock_) فيُكمل الحفظ كتابته بلا قفل
+  var lock = _resTry_('mf', 30000);
+  if (!lock) throw new Error(RES_BUSY_);
   try {
     var props = PropertiesService.getScriptProperties();
     var next = (parseInt(props.getProperty('MF_SEQ_CTR'), 10) || 0) + 1;
     props.setProperty('MF_SEQ_CTR', String(next));
     return next;
-  } finally { lock.releaseLock(); }
+  } finally { _resRelease_(lock, true); }
 }
 function _mfReadAll_() {
   var sh = _accSheet_(MF_SHEET, MF_HEADERS);
@@ -22989,9 +22991,8 @@ function getRoomFeeLedger(authToken, company) {
 function saveRoomFeeReceipt(authToken, rec) {
   var session = _mfPerm_(authToken, 'add');
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  var lock = _resTry_('mfrec', 30000);   // 🔒 ⚡ (V4.367) قفل مورد إيصالات رسوم الغرفة (فحص التكرار + الإضافة ذرّيان)
+  if (!lock) return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' };
   try {
     var sh = _accSheet_(MF_REC_SHEET, MF_REC_HEADERS);
     var no = _mfStr_(rec && rec.receiptNo);
@@ -23018,17 +23019,22 @@ function saveRoomFeeReceipt(authToken, rec) {
     }
     SpreadsheetApp.flush();
     return { success: true };
-  } finally { lock.releaseLock(); }
+  } finally { _resRelease_(lock, true); }   // دُفعت الكتابة أعلاه
 }
 
 function deleteRoomFeeReceipt(authToken, receiptNo) {
   var session = _mfPerm_(authToken, 'delete');
   var sh = _accSheet_(MF_REC_SHEET, MF_REC_HEADERS);
-  var list = _mfReadReceipts_();
-  var hit = list.filter(function(x) { return x.receiptNo === _mfStr_(receiptNo); })[0];
-  if (!hit) return { success: false, error: 'الإيصال غير موجود' };
-  sh.deleteRow(hit._row);
-  SpreadsheetApp.flush();
+  // 🔒 ⚡ (V4.367) حذف صف بموضعه ⇒ نفس قفل مورد الإيصالات (كان بلا قفل؛ يُستدعى أيضاً من حذف صف كشف الحساب glRowDelete)
+  var lock = _resTry_('mfrec', 30000);
+  if (!lock) return { success: false, error: RES_BUSY_ };
+  var hit;
+  try {
+    var list = _mfReadReceipts_();
+    hit = list.filter(function(x) { return x.receiptNo === _mfStr_(receiptNo); })[0];
+    if (!hit) return { success: false, error: 'الإيصال غير موجود' };
+    sh.deleteRow(hit._row);
+  } finally { _resRelease_(lock); }
   logChange_(session.username, 'حذف إيصال رسوم غرفة', hit.receiptNo, hit.company, hit.amount, '-');
   _mfClearBootstrapCache_();
   return { success: true };
@@ -23551,9 +23557,8 @@ function saveMinistryFile(authToken, data) {
   var isNew = !_mfStr_(data && data.id);
   var session = _mfPerm_(authToken, isNew ? 'add' : 'edit');
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  var lock = _resTry_('mf', 30000);   // 🔒 ⚡ (V4.367) قفل مورد MinistryFiles وحده — لا يوقف حفظ التأشيرات/الحجوزات
+  if (!lock) return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' };
   var _lockReleased = false;
   try {
     var sh = _accSheet_(MF_SHEET, MF_HEADERS);
@@ -23688,43 +23693,46 @@ function saveMinistryFile(authToken, data) {
       sh.getRange(o._row, 1, 1, MF_HEADERS.length).setValues([_mfObjToRow_(o)]);
       if (othersChanged.indexOf(o) < 0) othersChanged.push(o);
     });
-    // ⚡ (V4.178) أُفرِج عن القفل فور اكتمال الكتابة — releaseLock يفرغ التغييرات للشيت ضمنياً (فلا
-    // حاجة لـSpreadsheetApp.flush الذي كان يفرض دورة تزامن زائدة داخل القفل). كل ما يلي (تسجيل
-    // السجل، إبطال الكاش، حساب الأرصدة والقواعد) قراءة/حساب لا يحتاج تسلسلاً — فلا يظل القفل محجوزاً
-    // خلاله، وهو ما كان يجعل الحفظات المتتابعة تنتظر بعضها حتى 48 ثانية بسجلات التنفيذ.
-    lock.releaseLock(); _lockReleased = true;
-    _mfClearBootstrapCache_();
+    // ⚡ (V4.178) أُفرِج عن القفل فور اكتمال الكتابة. كل ما يلي (تسجيل السجل، إبطال الكاش، حساب القواعد) قراءة/حساب
+    // لا يحتاج تسلسلاً — فلا يظل القفل محجوزاً خلاله، وهو ما كان يجعل الحفظات المتتابعة تنتظر بعضها حتى 48 ثانية.
+    // ⚡ (V4.367) _resRelease_ يدفع التغييرات للشيت قبل الفك (القفل المسمّى لا يدفعها بنفسه كما يفعل قفل السكربت)
+    _resRelease_(lock); _lockReleased = true;
+    _perfStepIf_('saveMinistryFile›cache', function () { _mfClearBootstrapCache_(); });
 
     // سجل التعديلات: فرق حقل بحقل
     var recId = 'MF:' + f.id;
-    var entries = [];
-    if (isNew) {
-      entries.push({ action: 'إنشاء ملف مراجعة وزارة', recordId: recId, field: '-', oldVal: '-',
-        newVal: (f.fileNo ? 'ملف رقم ' + f.fileNo : 'بدون رقم ملف') + ' — ' + (f.clientLabel || '') + ' — ' + f.company });
-    } else {
-      Object.keys(MF_FIELD_LABELS_).forEach(function(k) {
-        var a = old[k], b = f[k];
-        if (k === 'breakdown' || k === 'sups' || k === 'selected') { a = JSON.stringify(a || []); b = JSON.stringify(b || []); }
-        if (k === 'approved') { a = a ? 'معتمد' : 'غير معتمد'; b = b ? 'معتمد' : 'غير معتمد'; }
-        if (String(a == null ? '' : a) === String(b == null ? '' : b)) return;
-        entries.push({ action: 'تعديل ملف مراجعة وزارة', recordId: recId, field: MF_FIELD_LABELS_[k],
-          oldVal: String(a == null || a === '' ? '-' : a).slice(0, 4000),
-          newVal: String(b == null || b === '' ? '-' : b).slice(0, 4000) });
-      });
-      // سحب رسوم الغرفة يتم عند تسجيل تاريخ المراجعة
-      if (!_mfStr_(old.reviewDate) && _mfStr_(f.reviewDate)) {
-        entries.push({ action: 'سحب رسوم غرفة', recordId: recId, field: 'رصيد ' + f.company,
-          oldVal: '-', newVal: _mfCompute_(f).totalRoomFee + ' ج عند تسجيل تاريخ المراجعة ' + f.reviewDate });
+    _perfStepIf_('saveMinistryFile›log', function () {
+      var entries = [];
+      if (isNew) {
+        entries.push({ action: 'إنشاء ملف مراجعة وزارة', recordId: recId, field: '-', oldVal: '-',
+          newVal: (f.fileNo ? 'ملف رقم ' + f.fileNo : 'بدون رقم ملف') + ' — ' + (f.clientLabel || '') + ' — ' + f.company });
+      } else {
+        Object.keys(MF_FIELD_LABELS_).forEach(function(k) {
+          var a = old[k], b = f[k];
+          if (k === 'breakdown' || k === 'sups' || k === 'selected') { a = JSON.stringify(a || []); b = JSON.stringify(b || []); }
+          if (k === 'approved') { a = a ? 'معتمد' : 'غير معتمد'; b = b ? 'معتمد' : 'غير معتمد'; }
+          if (String(a == null ? '' : a) === String(b == null ? '' : b)) return;
+          entries.push({ action: 'تعديل ملف مراجعة وزارة', recordId: recId, field: MF_FIELD_LABELS_[k],
+            oldVal: String(a == null || a === '' ? '-' : a).slice(0, 4000),
+            newVal: String(b == null || b === '' ? '-' : b).slice(0, 4000) });
+        });
+        // سحب رسوم الغرفة يتم عند تسجيل تاريخ المراجعة
+        if (!_mfStr_(old.reviewDate) && _mfStr_(f.reviewDate)) {
+          entries.push({ action: 'سحب رسوم غرفة', recordId: recId, field: 'رصيد ' + f.company,
+            oldVal: '-', newVal: _mfCompute_(f).totalRoomFee + ' ج عند تسجيل تاريخ المراجعة ' + f.reviewDate });
+        }
       }
-    }
-    if (entries.length) logChangesBatch_(session.username, entries);
+      if (entries.length) logChangesBatch_(session.username, entries);
+    });
     // 🔔 (V4.212) تنبيه الجرس: ملف جديد / تمت مراجعة الملف (تسجيل تاريخ المراجعة)
-    try {
-      var _mfLbl = (f.fileNo ? 'ملف ' + f.fileNo : 'ملف بدون رقم') + ' — ' + (f.clientLabel || f.tripName || '') + ' — ' + f.company;
-      if (isNew) _notifPush_('mf_new', '🏛️ تسجيل ملف مراجعة وزارة: ' + _mfLbl + (f.goDate ? ' (سفر ' + f.goDate + ')' : '') + ' — بواسطة ' + session.username, '', f.tripName, 'ministry.view', session.username);
-      if (_mfStr_(f.reviewDate) && (isNew || !_mfStr_(old.reviewDate)))
-        _notifPush_('mf_reviewed', '✅ تمت مراجعة ' + _mfLbl + ' بتاريخ ' + f.reviewDate + ' — بواسطة ' + session.username, '', f.tripName, 'ministry.view', session.username);
-    } catch (eN) {}
+    _perfStepIf_('saveMinistryFile›notif', function () {
+      try {
+        var _mfLbl = (f.fileNo ? 'ملف ' + f.fileNo : 'ملف بدون رقم') + ' — ' + (f.clientLabel || f.tripName || '') + ' — ' + f.company;
+        if (isNew) _notifPush_('mf_new', '🏛️ تسجيل ملف مراجعة وزارة: ' + _mfLbl + (f.goDate ? ' (سفر ' + f.goDate + ')' : '') + ' — بواسطة ' + session.username, '', f.tripName, 'ministry.view', session.username);
+        if (_mfStr_(f.reviewDate) && (isNew || !_mfStr_(old.reviewDate)))
+          _notifPush_('mf_reviewed', '✅ تمت مراجعة ' + _mfLbl + ' بتاريخ ' + f.reviewDate + ' — بواسطة ' + session.username, '', f.tripName, 'ministry.view', session.username);
+      } catch (eN) {}
+    });
 
     // ⚡ (V4.126) كان هنا قراءة كاملة ثانية للشيت (_mfReadAll_) بعد الكتابة مباشرةً — أي أن كل حفظ
     // (وكل ضغطة «اعتماد») كان يقرأ شيت الملفات مرتين كاملتين، وهو السبب الأساسي لبطء الحفظ
@@ -23736,10 +23744,15 @@ function saveMinistryFile(authToken, data) {
     if (_ix >= 0) allAfter[_ix] = f; else allAfter.push(f);
 
     _MF_ALL_MEMO_ = allAfter;
-    var balances = _mfBalances_(allAfter, _mfReadReceipts_());
+    // ⚡ (V4.367) أرصدة رسوم الغرفة لكل الشركات تخدم العرض فقط ⇒ مهمة لاحقة بالخلفية (lfAfter ⇒ mfAfterSaveBg ⇒ mfBalances).
+    // تُحسب هنا فقط حين تحتاجها تنبيهات الملف نفسها (قاعدة NOBAL بـ_mfRules_: ملف له رقم ولم تُسجَّل مراجعته) — فالتنبيهات
+    // المُرسلة مع الحفظ مطابقة تماماً لما قبل (بلا رصيد تُتخطّى تلك القاعدة وحدها، ولا تنطبق أصلاً على غير هذه الملفات)
+    var _needBal = [f].concat(othersChanged).some(function (x) { return !!_mfStr_(x.fileNo) && !_mfStr_(x.reviewDate); });
+    var balances = _needBal ? _perfStepIf_('saveMinistryFile›balances', function () { return _mfBalances_(allAfter, _mfReadReceipts_()); }) : null;
     f.calc = _mfCompute_(f);
     f.flags = _mfRules_(f, allAfter, balances);
-    var ret = { success: true, file: f, balances: balances };
+    var ret = { success: true, file: f };
+    if (balances) ret.balances = balances;
     if (othersChanged.length) {
       ret.others = othersChanged.map(function (o) {
         var c = {}; Object.keys(o).forEach(function (k) { if (k !== '_row' && k !== 'calc' && k !== 'flags') c[k] = o[k]; });
@@ -23770,7 +23783,7 @@ function saveMinistryFile(authToken, data) {
     } catch (eSync) {}
     // 🎯 حصة الأفراد الشهرية: تنبيه غير مانع فقط — الحفظ ينجح دائماً — عند تجاوز 36 فرد/شهر لكل
     // شركة أو 9 أفراد للملف الواحد، مع اقتراح شركات بديلة بأكبر مساحة متبقية لنفس الشهر
-    if (f.fileType === 'فردي' && _notifEnabled_('mf_quota_exceeded')) {
+    if (f.fileType === 'فردي' && _notifEnabled_('mf_quota_exceeded')) _perfStepIf_('saveMinistryFile›quota', function () {
       var qMonthKey = _mfMonthKey_(f.goDate);
       var qUsed = allAfter.filter(function(x) { return x.fileType === 'فردي' && x.company === f.company && _mfMonthKey_(x.goDate) === qMonthKey; })
         .reduce(function(a, x) { return a + _mfNum_(x.pilgrims); }, 0);
@@ -23784,10 +23797,27 @@ function saveMinistryFile(authToken, data) {
         }).filter(function(s) { return s.headroom > 0; }).sort(function(a, b) { return b.headroom - a.headroom; }).slice(0, 3);
         ret.quotaWarning = { overMonthly: qOverMonthly, overPerFile: qOverPerFile, used: qUsed, limit: 36, perFileLimit: 9, suggestions: qSugg };
       }
-    }
-    var _xc = _xcSafe_(_mfTripsOf_(f), { mf: allAfter }); if (_xc) ret.xcheck = _xc;   // 🔗 (V4.337) مطابقة الشركة/الوكيل بين الرحلة والتأشيرات والملفات
+    });
+    // 🔗 (V4.337) مطابقة الشركة/الوكيل بين الرحلة والتأشيرات والملفات + أرصدة الشركات ⇒ ⚡ (V4.367) مهمة لاحقة بالخلفية
+    // (xcheck يعرضه غلاف الجلسة تلقائياً، وmfBalances تُدمج بالشاشة) — الحفظ يرد فور اكتمال الكتابة
+    var _bgTr = _XC_SKIP_ ? [] : _mfTripsOf_(f);   // الحفظ الجماعي يفحص مرة واحدة بنهاية الدفعة
+    if (_bgTr.length || !balances) ret.lfAfter = { fn: 'mfAfterSaveBg', args: [authToken, { trips: _bgTr, bal: !balances }] };
     return ret;
-  } finally { if (!_lockReleased) { try { lock.releaseLock(); } catch (eRl) {} } }
+  } finally { if (!_lockReleased) _resRelease_(lock); }
+}
+/* ⚡ (V4.367) المهمة اللاحقة لحفظ ملف وزارة (lfAfter): أعمال للعرض فقط لا تكتب شيئاً — فحص تطابق الشركة/الوكيل (xcheck) وأرصدة
+   رسوم الغرفة لكل الشركات (mfBalances — مطلقة، تُبنى من الأوراق مباشرة لا من كاش). payload: {trips:[…], bal: true/false} */
+function mfAfterSaveBg(authToken, payload) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'ministry.add') && !_sessionHasPerm_(session, 'ministry.edit')) throw new Error('لا تملك صلاحية إضافة/تعديل مراجعة ملفات الوزارة');
+  var p = payload || {}, trips = [];
+  (Array.isArray(p.trips) ? p.trips : []).forEach(function (t) { t = _mfStr_(t); if (t && trips.indexOf(t) < 0 && trips.length < 30) trips.push(t); });
+  var out = { success: true, xcheck: [] }, all = null;
+  if (p.bal !== false) {
+    try { out.mfBalances = _perfStepIf_('mfAfterSaveBg›balances', function () { all = _mfReadAll_(); return _mfBalances_(all, _mfReadReceipts_()); }); } catch (eB) {}
+  }
+  if (trips.length) out.xcheck = _perfStepIf_('mfAfterSaveBg›xcheck', function () { return _xcSafe_(trips, all ? { mf: all } : undefined) || []; });
+  return out;
 }
 /* ✏️ (V4.312) تعديل جماعي لعدة ملفات مراجعة وزارة دفعة واحدة — نفس أسلوب saveVisaFilesBulk: تستدعي
    saveMinistryFile الحقيقية لكل ملف، بعد دمج الحقول المعدَّلة فقط فوق قيمته الكاملة الحالية (لا فقدان
@@ -23811,14 +23841,17 @@ function saveMinistryFilesBulk(authToken, items) {
       editable.forEach(function (k) { if (it[k] !== undefined) data[k] = it[k]; });
       if (it.selected) data.selected = it.selected.map(function (k) { return _mfStr_(k); }).filter(Boolean);
       data._manualType = !!old.manualType;   // 🏛️ (V4.233) يبقى التحكم اليدوي لنوع المراجعة كما يفعل نموذج التعديل المنفرد
-      var r = saveMinistryFile(authToken, data);
+      var r = saveMinistryFile(authToken, data);   // 🔒 (V4.367) كل ملف يُكتب بقفل المورد 'mf' داخل saveMinistryFile
       if (!r || !r.success) throw new Error((r && r.error) || 'فشل الحفظ');
       okN++; results.push({ id: id, success: true, file: r.file, balances: r.balances, others: r.others, syncTrips: r.syncTrips });
     } catch (e) { results.push({ id: id, success: false, error: e.message }); }
   });
   _XC_SKIP_ = _xcPrev;
-  var _xts = []; results.forEach(function (r) { if (r.success && r.file) _xts = _xts.concat(_mfTripsOf_(r.file)); });
-  return { success: true, done: okN, total: (items || []).length, results: results, xcheck: _xcSafe_(_xts) };
+  // ⚡ (V4.367) فحص التطابق (مرة واحدة للدفعة) + الأرصدة النهائية بعد كل الحفظات ⇒ مهمة لاحقة واحدة بالخلفية
+  var _xts = []; if (!_xcPrev) results.forEach(function (r) { if (r.success && r.file) _mfTripsOf_(r.file).forEach(function (t) { if (_xts.indexOf(t) < 0) _xts.push(t); }); });
+  var out = { success: true, done: okN, total: (items || []).length, results: results };
+  if (okN || _xts.length) out.lfAfter = { fn: 'mfAfterSaveBg', args: [authToken, { trips: _xts, bal: okN > 0 }] };
+  return out;
 }
 // 🔍 (V4.171/V4.173) فحص الملفات المرشَّحة لتكون «فردي»: عدد معتمريها من 1 إلى 9، ومشرفوها إما
 // بدون مشرف حقيقي (فارغ) أو المشرف هو الوكيل نفسه فقط (مقارنة بعد تطبيع الاسم — تتجاهل اختلاف
@@ -23865,9 +23898,9 @@ function bulkSetMfFileType(authToken, ids, fileType) {
   fileType = (_mfStr_(fileType) === 'فردي') ? 'فردي' : 'مجموعات';
   if (!ids.length) return { success: false, error: 'لم يُحدَّد أي ملف' };
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  var lock = _resTry_('mf', 30000);   // 🔒 ⚡ (V4.367) قفل مورد MinistryFiles
+  if (!lock) return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' };
+  var _rel = false;
   try {
     var sh = _accSheet_(MF_SHEET, MF_HEADERS);
     var all = _mfReadAll_();
@@ -23886,13 +23919,13 @@ function bulkSetMfFileType(authToken, ids, fileType) {
       f.fileType = fileType;
       updatedFiles.push(f);
     });
-    SpreadsheetApp.flush();
+    _resRelease_(lock); _rel = true;   // ⚡ (V4.367) دفع الكتابة ثم الفك — السجل والكاش والحساب بعده
     if (entries.length) logChangesBatch_(session.username, entries);
     _mfClearBootstrapCache_();
     var balances = _mfBalances_(all, _mfReadReceipts_());
     updatedFiles.forEach(function(f) { f.calc = _mfCompute_(f); f.flags = _mfRules_(f, all, balances); });
     return { success: true, files: updatedFiles, balances: balances };
-  } finally { lock.releaseLock(); }
+  } finally { if (!_rel) _resRelease_(lock); }
 }
 // قائمة أسماء الشركات المصرية الفريدة — نفس مصدر MF.companies بالواجهة (شيت Agents_Settings)
 function _mfCompanyList_() {
@@ -23961,9 +23994,9 @@ function saveMfQuotaTransfer(authToken, data) {
   if (fromMonth === toMonth) return { success: false, error: 'لا يمكن ترحيل حصة لنفس الشهر' };
   if (!amount || amount <= 0) return { success: false, error: 'أدخل عدداً صحيحاً أكبر من صفر' };
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch (e) { return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' }; }
+  var lock = _resTry_('mfquota', 30000);   // 🔒 ⚡ (V4.367) قفل مورد ترحيلات الحصص (فحص المجموع + الإضافة ذرّيان)
+  if (!lock) return { success: false, error: 'الشيت مشغول بعملية أخرى — أعد المحاولة بعد لحظات' };
+  var _rel = false;
   try {
     var all = _mfReadQuotaTransfers_();
     var outFromSum = all.filter(function(t) { return t.company === company && t.fromMonth === fromMonth; })
@@ -23980,19 +24013,24 @@ function saveMfQuotaTransfer(authToken, data) {
     rng.setNumberFormat('@');
     rng.setValues([[id, company, fromMonth, toMonth, String(amount), _mfStr_(data.notes), session.username, _mfStamp_()]]);
     sh.getRange(newRow, 5).setNumberFormat('0').setValue(amount);
-    SpreadsheetApp.flush();
+    _resRelease_(lock); _rel = true;   // ⚡ (V4.367) دفع الكتابة ثم الفك
     logChange_(session.username, 'ترحيل حصة أفراد شهرية', company, 'الترحيل', '-', fromMonth + ' → ' + toMonth + ' (' + amount + ' فرد)');
     return { success: true, id: id };
-  } finally { lock.releaseLock(); }
+  } finally { if (!_rel) _resRelease_(lock); }
 }
 function deleteMfQuotaTransfer(authToken, id) {
   var session = _mfPerm_(authToken, 'edit');
   id = _mfStr_(id);
   var sh = _accSheet_(MF_QUOTA_TRANSFER_SHEET, MF_QUOTA_TRANSFER_HEADERS);
-  var hit = _mfReadQuotaTransfers_().filter(function(t) { return t.id === id; })[0];
-  if (!hit) return { success: false, error: 'سجل الترحيل غير موجود' };
-  sh.deleteRow(hit._row);
-  SpreadsheetApp.flush();
+  // 🔒 ⚡ (V4.367) حذف صف بموضعه ⇒ نفس قفل المورد (كان بلا قفل)
+  var lock = _resTry_('mfquota', 30000);
+  if (!lock) return { success: false, error: RES_BUSY_ };
+  var hit;
+  try {
+    hit = _mfReadQuotaTransfers_().filter(function(t) { return t.id === id; })[0];
+    if (!hit) return { success: false, error: 'سجل الترحيل غير موجود' };
+    sh.deleteRow(hit._row);
+  } finally { _resRelease_(lock); }
   logChange_(session.username, 'حذف ترحيل حصة أفراد شهرية', hit.company, 'الترحيل',
     hit.fromMonth + ' → ' + hit.toMonth + ' (' + hit.amount + ' فرد)', '-');
   return { success: true };
@@ -24060,6 +24098,11 @@ function setMinistryFileApproved(authToken, id, approved) {
   id = _mfStr_(id);
   approved = !!approved;
   var sh = _accSheet_(MF_SHEET, MF_HEADERS);
+  // 🔒 ⚡ (V4.367) كان بلا قفل رغم الكتابة بموضع صف محسوب (حذف/إضافة متزامنة ⇒ يُعتمد ملف آخر) ⇒ قفل مورد الوزارة
+  var lock = _resTry_('mf', 30000);
+  if (!lock) return { success: false, error: RES_BUSY_ };
+  var rowVals, wasApproved;
+  try {
   var last = sh.getLastRow();
   if (last < 2) return { success: false, error: 'الملف غير موجود' };
 
@@ -24076,8 +24119,8 @@ function setMinistryFileApproved(authToken, id, approved) {
   var iUpdAt = MF_HEADERS.indexOf('عُدّل في');
   if (iApproved === -1) return { success: false, error: 'عمود الاعتماد غير موجود' };
 
-  var rowVals = sh.getRange(row, 1, 1, MF_HEADERS.length).getValues()[0];
-  var wasApproved = (_mfStr_(rowVals[iApproved]) === 'نعم');   // نفس تمثيل _mfRowToObj_ بالضبط
+  rowVals = sh.getRange(row, 1, 1, MF_HEADERS.length).getValues()[0];
+  wasApproved = (_mfStr_(rowVals[iApproved]) === 'نعم');   // نفس تمثيل _mfRowToObj_ بالضبط
   var ref = iRef === -1 ? '' : _mfStr_(rowVals[iRef]);
   if (approved && !ref && !wasApproved && !_sessionHasPerm_(session, 'ministry.approve')) {
     return { success: false, error: 'لا تملك صلاحية اعتماد ملفات مراجعة الوزارة' };
@@ -24087,6 +24130,7 @@ function setMinistryFileApproved(authToken, id, approved) {
   sh.getRange(row, iApproved + 1).setValue(approved ? 'نعم' : 'لا');
   if (iUpdBy !== -1) sh.getRange(row, iUpdBy + 1).setValue(session.username);
   if (iUpdAt !== -1) sh.getRange(row, iUpdAt + 1).setValue(_mfStamp_());
+  } finally { _resRelease_(lock); }
   _mfClearBootstrapCache_();
   logChange_(session.username, approved ? 'اعتماد ملف مراجعة' : 'إلغاء اعتماد ملف مراجعة',
     'MF:' + id, 'معتمد' + (_mfStr_(rowVals[MF_HEADERS.indexOf('رقم الملف')]) ? (' — ملف ' + _mfStr_(rowVals[MF_HEADERS.indexOf('رقم الملف')])) : ''),
@@ -24097,10 +24141,15 @@ function setMinistryFileApproved(authToken, id, approved) {
 function deleteMinistryFile(authToken, id) {
   var session = _mfPerm_(authToken, 'delete');
   var sh = _accSheet_(MF_SHEET, MF_HEADERS);
-  var hit = _mfReadAll_().filter(function(x) { return x.id === _mfStr_(id); })[0];
-  if (!hit) return { success: false, error: 'الملف غير موجود' };
-  sh.deleteRow(hit._row);
-  SpreadsheetApp.flush();
+  // 🔒 ⚡ (V4.367) حذف صف بموضعه المحسوب ⇒ تحت قفل مورد الوزارة (كان بلا قفل)
+  var lock = _resTry_('mf', 30000);
+  if (!lock) return { success: false, error: RES_BUSY_ };
+  var hit;
+  try {
+    hit = _mfReadAll_().filter(function(x) { return x.id === _mfStr_(id); })[0];
+    if (!hit) return { success: false, error: 'الملف غير موجود' };
+    sh.deleteRow(hit._row);
+  } finally { _resRelease_(lock); }   // يدفع الحذف للورقة (بدل flush المنفصل)
   _mfClearBootstrapCache_();
   logChange_(session.username, 'حذف ملف مراجعة وزارة', 'MF:' + hit.id, '-',
     (hit.fileNo ? 'ملف رقم ' + hit.fileNo : 'بدون رقم') + ' — ' + hit.clientLabel, '-');
@@ -24113,10 +24162,16 @@ function deleteMinistryFilesBatch(authToken, ids) {
   ids = (Array.isArray(ids) ? ids : []).map(_mfStr_).filter(Boolean);
   if (!ids.length) return { success: false, error: 'لم تُحدَّد أي ملفات' };
   var sh = _accSheet_(MF_SHEET, MF_HEADERS);
-  var all = _mfReadAll_();
-  var hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+  // 🔒 ⚡ (V4.367) القراءة والحذف بموضع الصف تحت قفل مورد الوزارة (كانا بلا قفل) — السجل بعد الفك
+  var lock = _resTry_('mf', 30000);
+  if (!lock) return { success: false, error: RES_BUSY_ };
+  var hits;
+  try {
+    var all = _mfReadAll_();
+    hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+    hits.forEach(function (hit) { sh.deleteRow(hit._row); });
+  } finally { _resRelease_(lock); }
   hits.forEach(function (hit) {
-    sh.deleteRow(hit._row);
     logChange_(session.username, 'حذف ملف مراجعة وزارة (جماعي)', 'MF:' + hit.id, '-',
       (hit.fileNo ? 'ملف رقم ' + hit.fileNo : 'بدون رقم') + ' — ' + hit.clientLabel, '-');
   });
@@ -24521,9 +24576,9 @@ function importMinistryFilesBatch(authToken, rows) {
   rows = Array.isArray(rows) ? rows : [];
   if (!rows.length) return { success: false, error: 'لا توجد صفوف صالحة للاستيراد' };
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); }
-  catch (e) { return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' }; }
+  var lock = _resTry_('mf', 30000);   // 🔒 ⚡ (V4.367) قفل مورد MinistryFiles (يعيد الدخول في _mfNextSeq_ لكل صف)
+  if (!lock) return { success: false, error: 'الشيت مشغول بعملية حفظ أخرى — أعد المحاولة بعد لحظات' };
+  var _rel = false;
   try {
     var sh = _accSheet_(MF_SHEET, MF_HEADERS);
     var out = [];
@@ -24579,12 +24634,12 @@ function importMinistryFilesBatch(authToken, rows) {
       out.push(_mfObjToRow_(f));
     });
     if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, MF_HEADERS.length).setValues(out);
-    SpreadsheetApp.flush();
+    _resRelease_(lock); _rel = true;   // ⚡ (V4.367) دفع الكتابة ثم الفك — السجل والكاش بعده
     logChange_(session.username, 'استيراد ملفات مراجعة من إكسيل', '-', 'عدد الصفوف', '-',
       String(out.length) + (skipped ? (' (تُخطّي ' + skipped + ' مكرَّر)') : ''));
     _mfClearBootstrapCache_();
     return { success: true, imported: out.length, skipped: skipped, skippedNos: skippedNos };
-  } finally { lock.releaseLock(); }
+  } finally { if (!_rel) _resRelease_(lock); }
 }
 
 /* ==================================================================================
@@ -26015,8 +26070,9 @@ function importVisaFilesBatch(authToken, rows) {
   rows = Array.isArray(rows) ? rows : [];
   if (!rows.length) return { success: false, error: 'لا توجد صفوف للاستيراد' };
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  var lock = _resTry_('vz', 30000);   // 🔒 ⚡ (V4.367) قفل مورد VisaFiles (نفس قفل كل كاتب لها)
+  if (!lock) return { success: false, error: 'الشيت مشغول — أعد المحاولة' };
+  var _rel = false;
   try {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
     var all = _vzReadAll_();
@@ -26056,23 +26112,29 @@ function importVisaFilesBatch(authToken, rows) {
       imported++;
     });
     if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, VZ_FILES_HEADERS.length).setValues(out);
-    SpreadsheetApp.flush();
+    _resRelease_(lock); _rel = true;   // ⚡ (V4.367) دفع الكتابة ثم الفك فوراً — السجل والكاش بعده (لا يحتاجان تسلسلاً)
     logChange_(session.username, 'استيراد مجموعات تأشيرات', '-', 'استيراد دفعة',
       '-', 'استُورد ' + imported + ' — تُخطِّي ' + skipped.length + (noRef ? (' — بلا رقم مجموعة ' + noRef) : ''));
     _vzClearCache_();
     return { success: true, imported: imported, skipped: skipped.length, skippedRefs: skipped, noRef: noRef };
-  } finally { lock.releaseLock(); }
+  } finally { if (!_rel) _resRelease_(lock); }
 }
 
 // 📝 (V4.149) تعديل رقم القيد وحده لمجموعة — كتابة خلية واحدة سريعة بلا إعادة التحقق من كامل
 // النموذج (يُستخدَم من عمود "القيد" القابل للتحرير المباشر بجدول المجموعات وكشف الحساب)
 function setVisaFileEntryNo(authToken, id, entryNo) {
   var session = _vzPerm_(authToken, 'edit');
-  var hit = _vzReadAll_().filter(function (x) { return x.id === _mfStr_(id); })[0];
-  if (!hit) return { success: false, error: 'القيد غير موجود' };
-  var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
-  var old = hit.entryNo;
-  sh.getRange(hit._row, 28).setValue(_mfStr_(entryNo)); // العمود 28 = رقم القيد
+  // 🔒 ⚡ (V4.367) كان بلا أي قفل رغم الكتابة بموضع صف محسوب — حذف/إضافة متزامنة تُزيح الصفوف فيُكتب الرقم بمجموعة أخرى
+  var lock = _resTry_('vz', 30000);
+  if (!lock) return { success: false, error: RES_BUSY_ };
+  var hit, old;
+  try {
+    hit = _vzReadAll_().filter(function (x) { return x.id === _mfStr_(id); })[0];
+    if (!hit) return { success: false, error: 'القيد غير موجود' };
+    var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
+    old = hit.entryNo;
+    sh.getRange(hit._row, 28).setValue(_mfStr_(entryNo)); // العمود 28 = رقم القيد
+  } finally { _resRelease_(lock); }
   logChange_(session.username, 'تعديل رقم القيد', 'VZ:' + hit.id, 'رقم القيد', old || '-', entryNo || '-');
   _vzClearCache_();
   return { success: true };
@@ -26080,9 +26142,15 @@ function setVisaFileEntryNo(authToken, id, entryNo) {
 function deleteVisaFile(authToken, id) {
   var session = _vzPerm_(authToken, 'delete');
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
-  var hit = _vzReadAll_().filter(function (x) { return x.id === _mfStr_(id); })[0];
-  if (!hit) return { success: false, error: 'القيد غير موجود' };
-  sh.deleteRow(hit._row);
+  // 🔒 ⚡ (V4.367) حذف صف بموضعه المحسوب ⇒ تحت قفل المورد (كان بلا قفل: إضافة/حذف متزامن يحذف مجموعة أخرى)
+  var lock = _resTry_('vz', 30000);
+  if (!lock) return { success: false, error: RES_BUSY_ };
+  var hit;
+  try {
+    hit = _vzReadAll_().filter(function (x) { return x.id === _mfStr_(id); })[0];
+    if (!hit) return { success: false, error: 'القيد غير موجود' };
+    sh.deleteRow(hit._row);
+  } finally { _resRelease_(lock); }
   logChange_(session.username, 'حذف قيد تأشيرات', 'VZ:' + hit.id, 'قيد ' + (hit.ref || hit.seq) + ' — ' + (hit.agent || '-'), '-', '-');
   _vzClearCache_();
   var _vzBal; try { if (_vzHasFinance_(session)) _vzBal = _vzBalancesForAgents_([hit.agent]); } catch (eB) {}   // ⚡ (V4.234)
@@ -26095,12 +26163,19 @@ function deleteVisaFilesBatch(authToken, ids) {
   ids = (Array.isArray(ids) ? ids : []).map(_mfStr_).filter(Boolean);
   if (!ids.length) return { success: false, error: 'لم تُحدَّد أي مجموعة' };
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
-  var all = _vzReadAll_();
-  var hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
-  var _vzAg = {};
+  // 🔒 ⚡ (V4.367) القراءة والحذف بموضع الصف تحت قفل المورد (كانا بلا قفل) — السجل بعد الفك
+  var lock = _resTry_('vz', 30000);
+  if (!lock) return { success: false, error: RES_BUSY_ };
+  var hits, _vzAg = {};
+  try {
+    var all = _vzReadAll_();
+    hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
+    hits.forEach(function (hit) {
+      sh.deleteRow(hit._row);
+      if (hit.agent) _vzAg[hit.agent] = 1;
+    });
+  } finally { _resRelease_(lock); }
   hits.forEach(function (hit) {
-    sh.deleteRow(hit._row);
-    if (hit.agent) _vzAg[hit.agent] = 1;
     logChange_(session.username, 'حذف قيد تأشيرات (جماعي)', 'VZ:' + hit.id, 'قيد ' + (hit.ref || hit.seq) + ' — ' + (hit.agent || '-'), '-', '-');
   });
   _vzClearCache_();
@@ -26118,8 +26193,9 @@ function saveVisaAgentPrices(authToken, agent, periods) {
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  var lock = _resTry_('vzprice', 30000);   // 🔒 ⚡ (V4.367) قفل مورد تسعير الوكلاء
+  if (!lock) return { success: false, error: 'الشيت مشغول — أعد المحاولة' };
+  var _rel = false;
   try {
     var sh = _accSheet_(VZ_PRICES_SHEET, VZ_PRICES_HEADERS);
     // احذف كل فترات هذا الوكيل ثم أعد كتابتها (تحديث ذرّي بسيط)
@@ -26135,11 +26211,11 @@ function saveVisaAgentPrices(authToken, agent, periods) {
     var lastRow = sh.getLastRow();
     if (lastRow > 1) sh.getRange(2, 1, lastRow - 1, VZ_PRICES_HEADERS.length).clearContent();
     if (out.length) sh.getRange(2, 1, out.length, VZ_PRICES_HEADERS.length).setValues(out);
-    SpreadsheetApp.flush();
+    _resRelease_(lock); _rel = true;   // ⚡ (V4.367) دفع الكتابة ثم الفك — السجل والكاش بعده
     logChange_(session.username, 'تسعير وكيل تأشيرات', agent, 'عدد الفترات', '-', String(mine.length));
     _vzClearCache_();
     return { success: true, count: mine.length };
-  } finally { lock.releaseLock(); }
+  } finally { if (!_rel) _resRelease_(lock); }
 }
 
 /* -------- 🚌 (V4.152) تسعير دورات النقل للوكيل (فترات) — يُطبَّق افتراضياً على الدورات بلا سعر يدوي -------- */
@@ -26152,8 +26228,9 @@ function saveVisaAgentTransportPrices(authToken, agent, periods) {
   agent = _mfStr_(agent);
   if (!agent) return { success: false, error: 'اسم الوكيل مطلوب' };
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  var lock = _resTry_('vzprice', 30000);   // 🔒 ⚡ (V4.367) قفل مورد تسعير الوكلاء (التأشيرات والنقل معاً)
+  if (!lock) return { success: false, error: 'الشيت مشغول — أعد المحاولة' };
+  var _rel = false;
   try {
     var sh = _accSheet_(VZ_TRANS_PRICES_SHEET, VZ_TRANS_PRICES_HEADERS);
     var all = _vzReadTransportPrices_();
@@ -26168,11 +26245,11 @@ function saveVisaAgentTransportPrices(authToken, agent, periods) {
     var lastRow = sh.getLastRow();
     if (lastRow > 1) sh.getRange(2, 1, lastRow - 1, VZ_TRANS_PRICES_HEADERS.length).clearContent();
     if (out.length) sh.getRange(2, 1, out.length, VZ_TRANS_PRICES_HEADERS.length).setValues(out);
-    SpreadsheetApp.flush();
+    _resRelease_(lock); _rel = true;   // ⚡ (V4.367) دفع الكتابة ثم الفك — السجل والكاش بعده
     logChange_(session.username, 'تسعير وكيل دورات نقل', agent, 'عدد الفترات', '-', String(mine.length));
     _vzClearCache_();
     return { success: true, count: mine.length };
-  } finally { lock.releaseLock(); }
+  } finally { if (!_rel) _resRelease_(lock); }
 }
 /* 💲 (V4.154) تطبيق سعر الفترة فعلياً على دورات النقل المسجَّلة ضمنها والتي لا سعر باص يدوي لها —
    يكتب السعر وقيمة التشغيلة بشيت الإشعارات دفعةً واحدة. أي دورة لها سعر مسجَّل مسبقاً لا تُمسّ
@@ -26235,13 +26312,13 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
   var fromMs = from ? _mfMs_(_mfDate_(from)) : -Infinity;
   var toMs = to ? _mfMs_(_mfDate_(to)) : Infinity;
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
-  try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  var lock = _resTry_('vz', 30000);   // 🔒 ⚡ (V4.367) قفل مورد VisaFiles (كتابة عمود السعر بموضع كل صف)
+  if (!lock) return { success: false, error: 'الشيت مشغول — أعد المحاولة' };
+  var touched = 0, logs = [];
   try {
     var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
     var all = _vzReadAll_();
     var map = _vzAcctMap_();
-    var touched = 0;
     all.forEach(function (f) {
       if (!_vzFileInAcct_(f, agent, map)) return;
       var ms = _mfMs_(_mfDate_(f.date));
@@ -26249,13 +26326,14 @@ function applyAgentPriceToGroups(authToken, agent, price, from, to) {
       if (_mfNum_(f.price) === price) return;
       var oldP = f.price;
       sh.getRange(f._row, 12).setValue(price); // العمود 12 = السعر
-      logChange_(session.username, 'تطبيق سعر جماعي', 'VZ:' + f.id, 'السعر', String(oldP), String(price));
+      logs.push(['VZ:' + f.id, String(oldP)]);
       touched++;
     });
-    SpreadsheetApp.flush();
-    _vzClearCache_();
-    return { success: true, count: touched };
-  } finally { lock.releaseLock(); }
+  } finally { _resRelease_(lock); }
+  // ⚡ (V4.367) نفس سطور السجل لكل مجموعة — بعد فك القفل (لا يحتاج تسلسلاً)
+  logs.forEach(function (x) { logChange_(session.username, 'تطبيق سعر جماعي', x[0], 'السعر', x[1], String(price)); });
+  _vzClearCache_();
+  return { success: true, count: touched };
 }
 
 // 📜 (V4.144) سجل تعديلات سطر واحد بكشف حساب الوكيل — بند/دفعة/مجموعة/دورة نقل، كلٌّ بمفتاحه الخاص
@@ -27177,10 +27255,15 @@ function saveHousingAllocation(authToken, data) {
    إن لم يوجد سكن لتلك المدينة، ولا يمسّ رقماً سبق للمستخدم كتابته يدوياً. */
 function _vzSyncAllocToGroup_(agr, groupRef, count, from, to, username) {
   groupRef = _mfStr_(groupRef); if (!groupRef) return;
+  // 🔒 ⚡ (V4.367) كانت بلا قفل وتكتب صف المجموعة بموضعه المحسوب ⇒ قفل مورد VisaFiles (يعيد الدخول لو كان ممسوكاً).
+  // تعذّره ⇒ استثناء يلتقطه المستدعي (حفظ التخصيص/الاتفاقية لا يفشل بسبب هذا الربط الجانبي — نفس سلوك أي خطأ هنا)
+  var lock = _resTry_('vz', 30000);
+  if (!lock) throw new Error(RES_BUSY_);
+  var touched = false;
+  try {
   var sh = _accSheet_(VZ_FILES_SHEET, VZ_FILES_HEADERS);
   var all = _vzReadAll_();
   var kind = (agr.kind || 'سكن') === 'إعاشة' ? 'cAgr' : 'hAgr';
-  var touched = false;
   all.forEach(function (f) {
     if (_mfStr_(f.ref) !== groupRef) return;
     var hz = _vzHousingNormalize_(f);
@@ -27209,7 +27292,8 @@ function _vzSyncAllocToGroup_(agr, groupRef, count, from, to, username) {
     sh.getRange(f._row, 1, 1, VZ_FILES_HEADERS.length).setValues([_vzObjToRow_(f)]);
     touched = true;
   });
-  if (touched) { SpreadsheetApp.flush(); _vzClearCache_(); }
+  } finally { _resRelease_(lock, !touched); }   // الفك يدفع الكتابة للورقة أولاً (بدل flush المنفصل)
+  if (touched) _vzClearCache_();
 }
 
 /* 💳 (V4.134) ترحيل قيمة اتفاقية سكن/إعاشة موردها هو الوكيل السعودي إلى الجانب الدائن
