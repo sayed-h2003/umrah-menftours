@@ -11311,11 +11311,12 @@ function tgOcrPdfToText_(blob) {
   // يحوّل Drive ملفات النص فقط (كتأكيد برستيج) ويُرجع فارغًا لأي تأكيد صورة (كقافلة التوحيد).
   // ar يقرأ العربية وأيضًا الأرقام/اللاتينية جيدًا (الحقول الحرجة أرقام لاتينية في كل النماذج).
   // ⚡ (V4.367) المستند المؤقت يُنشأ داخل مجلد Temp بالمجلد الرئيسي (parents) — كان بجذر My Drive
+  // (supportsAllDrives: لو كان المجلد الرئيسي داخل Drive مشترك؛ بدونه يُرفض parents)
   var tmpId = _appFolder_('TEMP').getId();
-  var fileId = tgDriveOcrImport_('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=ar',
+  var fileId = tgDriveOcrImport_('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=ar&supportsAllDrives=true',
     { name: 'OCR_' + Date.now(), mimeType: 'application/vnd.google-apps.document', parents: [tmpId] }, blob, ct, token);
   if (!fileId) {
-    fileId = tgDriveOcrImport_('https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart&convert=true&ocr=true&ocrLanguage=ar',
+    fileId = tgDriveOcrImport_('https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart&convert=true&ocr=true&ocrLanguage=ar&supportsAllDrives=true',
       { title: 'OCR_' + Date.now(), parents: [{ id: tmpId }] }, blob, ct, token);
   }
   if (!fileId) throw new Error('تعذّر تحويل الملف لقراءته ضوئيًا (تحقّق أن الملف PDF صالح)');
