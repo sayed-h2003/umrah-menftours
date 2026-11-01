@@ -2481,51 +2481,60 @@ if (
     }
   }
 
+  // ⏱️ ⚡ (V4.367) خطوات ما بعد الكتابة مقيسة (_perfStepIf_ ⇒ «_saveBookingToServer_impl_›…» بتقرير التشخيص لو ≥ 300ms)
   // ===== سجل التعديلات: تسجيل الإنشاء أو تسجيل كل حقل تغيّر فعلياً عند التعديل =====
-  if (wasExistingBooking) {
-    logBookingRowDiff_(session.username, finalId, oldRowSnapshot, rowValues);
-  } else {
-    logChange_(session.username, "إنشاء إشعار جديد", finalId, "-", "-", "تم إنشاء إشعار وصول رقم " + finalId);
-  }
+  _perfStepIf_('_saveBookingToServer_impl_›log', function () {
+    if (wasExistingBooking) {
+      logBookingRowDiff_(session.username, finalId, oldRowSnapshot, rowValues);
+    } else {
+      logChange_(session.username, "إنشاء إشعار جديد", finalId, "-", "-", "تم إنشاء إشعار وصول رقم " + finalId);
+    }
+  });
 
   sheet.getRange(targetRow, 1, 1, rowValues.length).setHorizontalAlignment("center");
 
   // =====================================
   // تحديث شيت التحركات الموحد (Movements)
   // =====================================
-  var movementsSheet = ss.getSheetByName("Movements");
-  if (movementsSheet) {
-    deleteBookingMovements_(finalId);
-    var allMovements = buildAllMovements_(bookingData);
+  _perfStepIf_('_saveBookingToServer_impl_›movements', function () {
+    var movementsSheet = ss.getSheetByName("Movements");
+    if (movementsSheet) {
+      deleteBookingMovements_(finalId);
+      var allMovements = buildAllMovements_(bookingData);
 
-    if (allMovements.length > 0) {
-      var rows = [];
-      allMovements.forEach(function(m) {
-        rows.push([
-          bookingData.status || "قيد المراجعة",                     // العمود 1: الحالة
-          finalId,                                                // العمود 2: رقم الإشعار
-          m.date || "",                                           // العمود 3: التاريخ
-          m.time || "00:00",                                      // العمود 4: الوقت
-          m.type || "",                                           // العمود 5: نوع التحرك 
-          bookingData.agent || "",                                // العمود 6: الوكيل
-          bookingData.company || "",                              // العمود 7: الشركة المصرية
-          bookingData.client || "",                               // العمود 8: العميل
-          bookingData.count || "0",                               // العمود 9: العدد
-          bookingData.supervisor || "",                           // العمود 10: المشرف
-          m.buses || bookingData.busCount || ""                   // العمود 11: عدد الباصات 
-        ]);
-      });
+      if (allMovements.length > 0) {
+        var rows = [];
+        allMovements.forEach(function(m) {
+          rows.push([
+            bookingData.status || "قيد المراجعة",                     // العمود 1: الحالة
+            finalId,                                                // العمود 2: رقم الإشعار
+            m.date || "",                                           // العمود 3: التاريخ
+            m.time || "00:00",                                      // العمود 4: الوقت
+            m.type || "",                                           // العمود 5: نوع التحرك
+            bookingData.agent || "",                                // العمود 6: الوكيل
+            bookingData.company || "",                              // العمود 7: الشركة المصرية
+            bookingData.client || "",                               // العمود 8: العميل
+            bookingData.count || "0",                               // العمود 9: العدد
+            bookingData.supervisor || "",                           // العمود 10: المشرف
+            m.buses || bookingData.busCount || ""                   // العمود 11: عدد الباصات
+          ]);
+        });
 
-      movementsSheet.getRange(movementsSheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+        movementsSheet.getRange(movementsSheet.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+      }
     }
-  }
+  });
 
   // 🔄 مزامنة الإشعار → الرحلة المرتبطة (لا توقف الحفظ لو فشلت)
-  try { _propagateBookingChangesToTrip_(finalId, bookingData); } catch (e) { Logger.log('propagate booking→trip failed: ' + e); }
+  _perfStepIf_('_saveBookingToServer_impl_›trip', function () {
+    try { _propagateBookingChangesToTrip_(finalId, bookingData); } catch (e) { Logger.log('propagate booking→trip failed: ' + e); }
+  });
 
   // 🐛 (V4.48) مسح الـ Cache هنا فقط — بعد كتابة الصف فعليًا بالشيت — انظر التعليق أعلى الدالة
-  SpreadsheetApp.flush();
-  _cacheBust_('booking');
+  _perfStepIf_('_saveBookingToServer_impl_›cache', function () {
+    SpreadsheetApp.flush();
+    _cacheBust_('booking');
+  });
 
   Logger.log('⏱️ saveBookingToServer(#' + finalId + '): ' + (new Date().getTime() - _perfStart) + 'ms');
   return { success: true, id: finalId };
@@ -12543,6 +12552,9 @@ function tripRestorePoint(authToken, tripName, snapId) {
   tripName = String(tripName || '').trim();
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  // 🔒 ⚡ (V4.367) عملية شاملة (الرحلة + كشفها + مزامنة حساباتها): بعد قفل السكربت كل أقفال الموارد معاً (كلها أو لا شيء)
+  var rl = _resAllTry_(20000);
+  if (!rl) { try { lock.releaseLock(); } catch (eRl) {} return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
     var R = _tripSnapRows_(tripName), hit = R.rows.filter(function (x) { return x.id === snapId; })[0];
     if (!hit) return { success: false, error: 'اللقطة غير موجودة (قد تكون حُذفت لقدمها)' };
@@ -12551,7 +12563,7 @@ function tripRestorePoint(authToken, tripName, snapId) {
     logChange_(session.username, 'رجوع بالرحلة إلى نقطة سابقة', tripName, 'استرجاع', hit.ts + ' — ' + hit.action, '(' + n + ' معتمر)');
     _tripAfterRestore_(tripName, session.username, 'رجوع إلى نقطة: ' + hit.ts);
     return { success: true, pilgrims: n };
-  } finally { try { lock.releaseLock(); } catch (eR) {} }
+  } finally { _resRelease_(rl); try { lock.releaseLock(); } catch (eR) {} }
 }
 function tripUndoChange(authToken, tripName, snapId) {
   var session = requireAuth_(authToken);
@@ -12559,6 +12571,9 @@ function tripUndoChange(authToken, tripName, snapId) {
   tripName = String(tripName || '').trim();
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
   var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  // 🔒 ⚡ (V4.367) عملية شاملة: بعد قفل السكربت كل أقفال الموارد معاً (كلها أو لا شيء)
+  var rl = _resAllTry_(20000);
+  if (!rl) { try { lock.releaseLock(); } catch (eRl) {} return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   try {
     var R = _tripSnapRows_(tripName), ix = -1; R.rows.forEach(function (x, i) { if (x.id === snapId) ix = i; });
     if (ix < 0) return { success: false, error: 'اللقطة غير موجودة' };
@@ -12592,7 +12607,7 @@ function tripUndoChange(authToken, tripName, snapId) {
     logChange_(session.username, 'تراجع عن تعديل بالرحلة', tripName, 'تراجع', R.rows[ix].ts + ' — ' + R.rows[ix].action, changed + ' تغيير' + (conflicts.length ? ' (+' + conflicts.length + ' تعارض)' : ''));
     _tripAfterRestore_(tripName, session.username, 'تراجع عن: ' + R.rows[ix].action + ' (' + R.rows[ix].ts + ')');
     return { success: true, changed: changed, conflicts: conflicts, pilgrims: n };
-  } finally { try { lock.releaseLock(); } catch (eR) {} }
+  } finally { _resRelease_(rl); try { lock.releaseLock(); } catch (eR) {} }
 }
 function getTripChangeLog(authToken, tripName) {
   var session = requireAuth_(authToken);
@@ -18583,32 +18598,40 @@ function _renameInJsonCol_(sheetName, headerName, oldVal, newVal, field) {
   }
 }
 // كل مواضع اسم العميل خارج دليل العملاء نفسه وكشف المعتمرين (هما يُعالجان بمكانهما)
+// 🔒 ⚡ (V4.367) إعادة كتابة أعمدة كاملة بعدة أوراق (منها MinistryFiles) ⇒ كل أقفال الموارد معاً طوال الانتشار — وإلا قد يكتب
+// عمود الوزارة كاملاً فوق صف أضافه/حذفه حفظ متزامن بقفل 'mf'. يُنتظر حتى 30 ثانية؛ لو تعذّر يُكمل كما كان (التسمية الأساسية
+// كُتبت أصلاً، وترك الانتشار ناقصاً يفصل السجلات المرتبطة عن الاسم الجديد)
 function _cascadeClientRename_(oldName, newName) {
-  var n = 0;
-  n += _renameInSheetCol_(ACC_ITEMS_SHEET, 'العميل', oldName, newName);          // بنود الحساب
-  n += _renameInSheetCol_(ACC_PAY_SHEET, 'العميل', oldName, newName);            // الدفعات
-  n += _renameInSheetCol_(ACC_META_SHEET, 'العميل', oldName, newName);           // نمط الحساب واللقطات
-  n += _renameInSheetCol_(ACC_CLIENT_PRICES_SHEET, 'العميل', oldName, newName);  // تسعير العميل
-  n += _renameInSheetCol_(ACC_MERGE_SHEET, 'العميل', oldName, newName);          // مجموعات دمج الرحلات
-  n += _renameInSheetCol_('Bookings', 'العميل', oldName, newName);               // إشعارات الوصول
-  n += _renameInSheetCol_(MF_SHEET, 'العميل', oldName, newName);                 // ملفات الوزارة (لو الاسم مفرد)
-  n += _renameInJsonCol_(MF_SHEET, 'بنود العميل (JSON)', oldName, newName, 'name');
+  var n = 0, rl = _resAllTry_(30000);
+  try {
+    n += _renameInSheetCol_(ACC_ITEMS_SHEET, 'العميل', oldName, newName);          // بنود الحساب
+    n += _renameInSheetCol_(ACC_PAY_SHEET, 'العميل', oldName, newName);            // الدفعات
+    n += _renameInSheetCol_(ACC_META_SHEET, 'العميل', oldName, newName);           // نمط الحساب واللقطات
+    n += _renameInSheetCol_(ACC_CLIENT_PRICES_SHEET, 'العميل', oldName, newName);  // تسعير العميل
+    n += _renameInSheetCol_(ACC_MERGE_SHEET, 'العميل', oldName, newName);          // مجموعات دمج الرحلات
+    n += _renameInSheetCol_('Bookings', 'العميل', oldName, newName);               // إشعارات الوصول
+    n += _renameInSheetCol_(MF_SHEET, 'العميل', oldName, newName);                 // ملفات الوزارة (لو الاسم مفرد)
+    n += _renameInJsonCol_(MF_SHEET, 'بنود العميل (JSON)', oldName, newName, 'name');
+  } finally { _resRelease_(rl); }
   try { clearAllCache_(); } catch (e) {}
   try { _mfClearBootstrapCache_(); } catch (e) {}
   return n;
 }
 // كل مواضع اسم الرحلة خارج شيت الرحلات نفسه (كشف المعتمرين والإشعارات لهما دالتاهما أعلاه)
+// 🔒 ⚡ (V4.367) نفس أقفال الموارد كـ_cascadeClientRename_ (عمود «الرحلة المرتبطة» بالوزارة يُعاد كتابته كاملاً)
 function _cascadeTripRename_(oldName, newName) {
-  var n = 0;
-  n += _renameInSheetCol_(ACC_ITEMS_SHEET, 'اسم الرحلة', oldName, newName);
-  n += _renameInSheetCol_(ACC_PAY_SHEET, 'اسم الرحلة', oldName, newName);
-  n += _renameInSheetCol_(ACC_META_SHEET, 'اسم الرحلة', oldName, newName);
-  n += _renameInSheetCol_(ACC_TRIP_PRICES_SHEET, 'اسم الرحلة', oldName, newName);
-  n += _renameInSheetCol_(MF_SHEET, 'الرحلة المرتبطة', oldName, newName);
-  // ملاحظات التسكين: مفتاحها مبنيّ من أسماء الرحلات — نُصلح عمود الرحلات للحالة المفردة
-  n += _renameInSheetCol_(HOUSING_NOTES_SHEET_, 'الرحلات', oldName, newName);
-  // مجموعات الدمج تحفظ الرحلات كمصفوفة نصوص JSON
-  n += _renameInJsonCol_(ACC_MERGE_SHEET, 'الرحلات (JSON)', oldName, newName, null);
+  var n = 0, rl = _resAllTry_(30000);
+  try {
+    n += _renameInSheetCol_(ACC_ITEMS_SHEET, 'اسم الرحلة', oldName, newName);
+    n += _renameInSheetCol_(ACC_PAY_SHEET, 'اسم الرحلة', oldName, newName);
+    n += _renameInSheetCol_(ACC_META_SHEET, 'اسم الرحلة', oldName, newName);
+    n += _renameInSheetCol_(ACC_TRIP_PRICES_SHEET, 'اسم الرحلة', oldName, newName);
+    n += _renameInSheetCol_(MF_SHEET, 'الرحلة المرتبطة', oldName, newName);
+    // ملاحظات التسكين: مفتاحها مبنيّ من أسماء الرحلات — نُصلح عمود الرحلات للحالة المفردة
+    n += _renameInSheetCol_(HOUSING_NOTES_SHEET_, 'الرحلات', oldName, newName);
+    // مجموعات الدمج تحفظ الرحلات كمصفوفة نصوص JSON
+    n += _renameInJsonCol_(ACC_MERGE_SHEET, 'الرحلات (JSON)', oldName, newName, null);
+  } finally { _resRelease_(rl); }
   try { clearAllCache_(); } catch (e) {}
   try { _mfClearBootstrapCache_(); } catch (e) {}
   return n;
@@ -19709,6 +19732,9 @@ function _accAfterPilgrimsMoved_(clients, fromTrip, toTrip, username, authToken)
     var cl = String(PR(r, 'client') || '').trim(); if (cl && String(PR(r, 'name') || '').trim()) remain[cl] = (remain[cl] || 0) + 1;
   });
   var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (eL) { return out; }
+  // 🔒 ⚡ (V4.367) عملية شاملة بقفل السكربت ⇒ ومعه كل أقفال الموارد (كلها أو لا شيء). لا تكتب أوراقاً ذات قفل مورد، فتعذّرها
+  // لا يُسقط تبعية الحسابات (كانت تُتخطّى صامتة لو تأخر القفل): تُكمل بقفل السكربت وحده كما كانت
+  var rl = _resAllTry_(10000);
   try {
     var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS), pSh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
     var iv = iSh.getLastRow() >= 2 ? iSh.getRange(2, 1, iSh.getLastRow() - 1, ACC_ITEMS_HEADERS.length).getValues() : [];
@@ -19734,7 +19760,7 @@ function _accAfterPilgrimsMoved_(clients, fromTrip, toTrip, username, authToken)
     });
     delRows.sort(function (a, b) { return b - a; }).forEach(function (row) { iSh.deleteRow(row); });
     out.note = notes.join('\n');
-  } finally { try { lock.releaseLock(); } catch (eR) {} }
+  } finally { _resRelease_(rl); try { lock.releaseLock(); } catch (eR) {} }
   if (out.full.length || out.partial.length) {
     try { _syncTripAccounts_(authToken, fromTrip, username); } catch (e1) {}
     try { _syncTripAccounts_(authToken, toTrip, username); } catch (e2) {}
@@ -19970,32 +19996,42 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
     sheet.getRange(2, 1, keptRows.length, width).setValues(keptRows);
   }
 
+  // ⏱️ ⚡ (V4.367) كل خطوة بعد الكتابة مقيسة (_perfStepIf_ ⇒ «saveTripPilgrims›…» بتقرير التشخيص لو ≥ 300ms)
   // 📝 سجل تدقيق تفصيلي: أضيف/عُدّل/حُذف معتمر مع القيم القديمة/الجديدة (تُقرأ الصفوف القديمة بالاسم)
-  try { _logKashfDiff_(session.username, tripName, oldThisTrip, pilgrims, C); }
-  catch (e) { Logger.log('kashf diff log failed: ' + e); }
+  _perfStepIf_('saveTripPilgrims›log', function () {
+    try { _logKashfDiff_(session.username, tripName, oldThisTrip, pilgrims, C); }
+    catch (e) { Logger.log('kashf diff log failed: ' + e); }
+  });
 
   // 🧑‍✈️ (V4.15) مزامنة مشرفي الرحلة من الكشف: صف عميله «المشرف...» = مشرف فعلي بملف الرحلة
   // (إضافة مشرف ثانٍ بتعديل خانة العميل، وحذف مشرف بحذف صفه) — داخل try فلا يفشل الحفظ بسببها
-  try { _syncTripSupervisorsFromKashf_(tripName, pilgrims, session.username); }
-  catch (eSup) { Logger.log('supervisors sync failed: ' + eSup); }
+  _perfStepIf_('saveTripPilgrims›sups', function () {
+    try { _syncTripSupervisorsFromKashf_(tripName, pilgrims, session.username); }
+    catch (eSup) { Logger.log('supervisors sync failed: ' + eSup); }
+  });
 
   // 🔔 (V4.32) تنبيهات: عميل جديد على الرحلة، أو تغيّر تسكين/عدد/فندق لعميل له حساب مسجَّل مسبقًا
-  try { _pushKashfChangeNotifications_(tripName, oldThisTrip, pilgrims, C, session.username); }
-  catch (eNotif) { Logger.log('kashf change notifications failed: ' + eNotif); }
+  _perfStepIf_('saveTripPilgrims›notif', function () {
+    try { _pushKashfChangeNotifications_(tripName, oldThisTrip, pilgrims, C, session.username); }
+    catch (eNotif) { Logger.log('kashf change notifications failed: ' + eNotif); }
+  });
 
   // ⚡ (V4.322) كان clearAllCache_() يمسح كل كاش البرنامج فيُجبر كل مستخدم آخر على قراءة باردة ثقيلة (التأشيرات/الرحلات/الوزارة…)
   // عند أول فتح شاشة بعد أي حفظ كشف. الكشف يؤثر فقط على قائمة الرحلات (المقاعد/الجاهزية) والسجل العام وفهرس أعداد العملاء.
-  ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'].forEach(function (k) { try { clearCachedData_(k); } catch (eC) {} });
+  _perfStepIf_('saveTripPilgrims›cache', function () {
+    ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'].forEach(function (k) { try { clearCachedData_(k); } catch (eC) {} });
+  });
 
   // 💵 (V4.12) مزامنة حسابات العملاء تلقائياً لو للرحلة تسعير مفعَّل («تطبيق» ضُغط من قبل):
   // معتمرون جدد/تغيّر مستوى أو تسكين ← تتحدث البنود التلقائية فوراً، والمعدّلة يدوياً لا تُمس.
   // داخل try حتى لا يفشل حفظ الكشف نفسه أبداً بسبب المحاسبة
-  var accSync = null;
-  try { accSync = _syncTripAccounts_(authToken, tripName, session.username); }
-  catch (eSync) { Logger.log('acc sync failed: ' + eSync); }
+  var accSync = _perfStepIf_('saveTripPilgrims›accSync', function () {
+    try { return _syncTripAccounts_(authToken, tripName, session.username); }
+    catch (eSync) { Logger.log('acc sync failed: ' + eSync); return null; }
+  });
 
-  var conflicts = _checkTripConflicts_(tripName, pilgrims);
-  _tripSnapTake_(tripName, session.username, 'حفظ الكشف');   // ↩️ (V4.343)
+  var conflicts = _perfStepIf_('saveTripPilgrims›conflicts', function () { return _checkTripConflicts_(tripName, pilgrims); });
+  _perfStepIf_('saveTripPilgrims›snap', function () { _tripSnapTake_(tripName, session.username, 'حفظ الكشف'); });   // ↩️ (V4.343)
   return { success: true, count: pilgrims.length , conflicts: conflicts, accSync: accSync };
 }
 
@@ -25604,6 +25640,10 @@ function xcApply(authToken, items, trips) {
         if (!_sessionHasPerm_(session, 'trips.edit')) throw new Error('لا تملك صلاحية تعديل الرحلات');
         if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
         var lock = LockService.getScriptLock(); lock.waitLock(30000);
+        // 🔒 ⚡ (V4.367) بعد قفل السكربت كل أقفال الموارد معاً (عملية مطابقة شاملة) — تعذّرها ⇒ خطأ «مشغول» لهذا العنصر قبل أي كتابة.
+        // التصحيحات على المجموعات/الملفات أدناه تمر بـsaveVisaFile/saveMinistryFile بقفلَي 'vz'/'mf' (بعد فك هذين)
+        var rlx = _resAllTry_(20000);
+        if (!rlx) { try { lock.releaseLock(); } catch (eRl) {} throw new Error(RES_BUSY_); }
         try {
           var sh = _getTripsSheet_(), C = _robustColMap_(sh, TRIPS_HEADERS_), nameCol = C[TRIPS_COL_.name], coCol = C[TRIPS_COL_.company], agCol = C[TRIPS_COL_.agent];
           var last = sh.getLastRow(), names = last >= 2 ? sh.getRange(2, nameCol + 1, last - 1, 1).getValues() : [], row = 0;
@@ -25613,7 +25653,7 @@ function xcApply(authToken, items, trips) {
           if (company) sh.getRange(row, coCol + 1).setValue(company);
           sh.getRange(row, agCol + 1).setValue(agent);
           logChange_(session.username, 'تصحيح شركة/وكيل الرحلة (مطابقة)', id, 'الشركة/الوكيل', oldCo + ' / ' + oldAg, (company || oldCo) + ' / ' + agent);
-        } finally { lock.releaseLock(); }
+        } finally { _resRelease_(rlx); lock.releaseLock(); }
         try { clearAllCache_(); } catch (eC) {}
         res.push({ id: id, success: true });
       } catch (e) { res.push({ id: id, success: false, error: e.message }); }

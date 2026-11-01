@@ -161,6 +161,9 @@ function snapRowRestore(authToken, sid) {
   var name = String(hit[4]), key = String(hit[5]), row = _snapUnpack_(hit.slice(6));
   if (!row || !row.length) throw new Error('بيانات النسخة تالفة');
   var at = -1, lock = LockService.getScriptLock(); lock.waitLock(30000);
+  // 🔒 ⚡ (V4.367) قفل السكربت وحده لم يعد يمنع كتّاب الأوراق بأقفال المورد ⇒ كل الموارد معاً بعده (كلها أو لا شيء، قبل أي كتابة)
+  var rl = _resAllTry_(30000);
+  if (!rl) { try { lock.releaseLock(); } catch (eRl) {} throw new Error(RES_BUSY_); }
   try {
     var t = getSpreadsheet_().getSheetByName(name); if (!t) throw new Error('الورقة ' + name + ' غير موجودة');
     var n = t.getLastRow(), ids = n >= 2 ? t.getRange(2, 1, n - 1, 1).getValues() : [];
@@ -169,7 +172,7 @@ function snapRowRestore(authToken, sid) {
     if (cur) _snapRowTake_(name, key, cur, 'قبل الاستعادة', session.username);
     if (at > 0) t.getRange(at, 1, 1, row.length).setValues([row]); else t.getRange(n + 1, 1, 1, row.length).setValues([row]);
     logChange_(session.username, 'استعادة نسخة سابقة لصف', name + ':' + key, 'النسخة', String(hit[1]) + ' (' + String(hit[3]) + ')', at > 0 ? 'استُبدل الصف الحالي' : 'أُعيد الصف المحذوف');
-  } finally { lock.releaseLock(); }
+  } finally { _resRelease_(rl); lock.releaseLock(); }
   try { if (typeof _vzClearCache_ === 'function') _vzClearCache_(); } catch (e) {}
   return { success: true, recreated: at < 0 };
 }
@@ -561,6 +564,10 @@ function snapApply(authToken, pid, screenKey, picks, tokens) {
     var names = Object.keys(bySheet);
     names.forEach(function (n) { if (!S.sheets.some(function (x) { return x.name === n; })) throw new Error('الورقة ' + n + ' ليست من هذه الشاشة'); });
     var lock2 = LockService.getScriptLock(); lock2.waitLock(60000);
+    // 🔒 ⚡ (V4.367) أوراق الشاشة قد تكون لموارد بأقفالها (الوزارة/التأشيرات/الإعاشة/التسعير…) وقفل السكربت وحده لم يعد يمنع
+    // كتّابها ⇒ كل الموارد معاً بعده (ترتيب ثابت، كلها أو لا شيء) قبل أي كتابة — تعذّرها ⇒ «الشيت مشغول» فيُعاد تلقائياً
+    var rl2 = _resAllTry_(30000);
+    if (!rl2) { try { lock2.releaseLock(); } catch (eRl) {} throw new Error(RES_BUSY_); }
     try {
       names.forEach(function (n) { var L = _snapReadLive_(n); if (!L || _snapHashVals_(L.vals) !== tokens[n]) throw new Error('تغيّرت بيانات «' + n + '» منذ المعاينة — أعد «معاينة الفروقات» ثم الاستعادة'); });
       _snapLight_('قبل استعادة', S.label + ' من ' + P.at, session.username, names);
@@ -592,7 +599,7 @@ function snapApply(authToken, pid, screenKey, picks, tokens) {
         dels.sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
         try { PropertiesService.getScriptProperties().deleteProperty('SNAPH_' + n); } catch (e) {}
       });
-    } finally { lock2.releaseLock(); }
+    } finally { _resRelease_(rl2); lock2.releaseLock(); }   // الكتابات تُدفع للأوراق قبل فك الموارد
   }
   if (audits.length) _audLog_(audits);
   logChange_(session.username, 'استعادة انتقائية من نقطة', 'SNAP:' + pid, S.label, P.at, done + ' تغيير' + (problems.length ? ' — تعذّر ' + problems.length : ''));
