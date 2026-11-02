@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.368  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.369  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7428,7 +7428,7 @@ var LF_ = (function () {
   }
   // ⚡ (V4.367) + نسخة خُزّنت/تُحقّق منها قبل آخر حفظ محلي لمجموعتها ⇒ لا تُعرض فوراً (كانت تظهر نسخة ما قبل الحفظ عند إعادة الفتح)
   function dirtyBlocked(fn, e) {
-    var t = (e && (e.vAt || e.sAt)) || 0;
+    var t = e ? Math.max(e.vAt || 0, e.sAt || 0) : 0;
     return groupsOf(fn, e).some(function (g) { return isDirtyG(g) || (S.wroteG[g] && S.wroteG[g] > t); });
   }
 
@@ -7592,14 +7592,36 @@ var LF_ = (function () {
     subsOf(k).forEach(function (x) { if (!x.fresh) x.pend = false; });
     if (S.fk[k] && now() - (S.fkT[k] || 0) > 120000) { delete S.fk[k]; delete S.again[k]; }   // رد ضاع (لا نجاح ولا فشل) ⇒ لا تعطيل دائم
     if (S.fk[k]) { S.again[k] = s; return; }   // جلب جارٍ بدأ قبل التغيير: يُعاد بعد انتهائه (netCheck/fin)
+    // ⚡ (V4.367) اشتراك أُلغي تحديثه المعلّق (force): النسخة المحفوظة تحوي الأحدث أصلاً فرد «نفسها» كان يضيّعه ⇒ جلب كامل بلا مقارنة
+    var forced = subsOf(k).some(function (x) { return x.force; });
     getEntry(k, function (e) {
       if (ep !== S.epoch) return;
-      netCheck(s.fn, s.args, k, e, { _ep: ep }, function (res) { if (res.changed && ep === S.epoch) deliverKey(k, res, null); }, function () {});
+      netCheck(s.fn, s.args, k, forced ? null : e, { _ep: ep }, function (res) {
+        if (ep !== S.epoch) return;
+        if (res.changed || forced) deliverKey(k, res, null);
+        subsOf(k).forEach(function (x) { x.force = false; });
+      }, function () {});
+    });
+  }
+  // ⚡ (V4.367) تحقق مباشر لاشتراك بنتيجة (للشاشات التي تحتاج تأكيد الخادم قبل الحفظ): cb(ok, held)
+  function verifySub(id, cb) {
+    var s = S.subs[id]; if (!s || !s.k) { cb(false); return; }
+    var ep = S.epoch;
+    getEntry(s.k, function (e) {
+      if (ep !== S.epoch) { cb(false); return; }
+      netCheck(s.fn, s.args, s.k, e, { _ep: ep }, function (res) {
+        if (ep !== S.epoch || S.subs[id] !== s) { cb(false); return; }
+        if (res.cs === s.lastCs) { cb(true, false); return; }   // المعروض = الخادم
+        s.fresh = res.data; s.pend = true; s.snooze = 0;
+        applySub(s);   // غير معدَّل ⇒ يُطبَّق فوراً · معدَّل ⇒ شريط التعارض
+        cb(true, !!s.fresh);
+      }, function () { cb(false); });
     });
   }
   function subDirty(s) { if (!s.opts.dirty) return false; try { return !!s.opts.dirty(); } catch (e) { return false; } }   // ⚡ (V4.367)
   function applySub(s, force) {
-    if (!s.fresh || S.subs[s.id] !== s) return;
+    if (S.subs[s.id] !== s) return;
+    if (!s.fresh) { if (force) { s.force = true; s.lastCs = ''; refreshKey(s); } return; }   // ⚡ (V4.367) «عرض الأحدث» بلا تحديث محفوظ ⇒ جلب كامل
     // ⚡ (V4.367) تعديل جارٍ ⇒ الشريط (مرة، لا إعادة بناء كل 5 ث، ولا شيء خلال مهلة «لاحقاً») ويبقى التحديث معلّقاً حتى ينتهي التعديل
     if (!force && subDirty(s)) { s.pend = true; if (!(s.snooze > now())) conflictBar(s); return; }
     try { var cb = document.getElementById('lfConflict'); if (cb && cb._sub === s) cb.remove(); } catch (e) {}
@@ -7673,7 +7695,7 @@ var LF_ = (function () {
     // wroteG: متى كُتبت المجموعة محلياً (لا يُمسح بوصول البصمة الجديدة) ⇒ نسخة محفوظة قبل حفظك لا تُعرض فورياً بعده أبداً
     wg.forEach(function (g) { S.dirtyG[g] = now(); S.wroteG[g] = now(); });
     // تحديث معلّق التُقط قبل هذا الحفظ لا يُطبَّق بعده (بيانات بلا حفظك) ⇒ يُلغى ويُجلب الأحدث عند العرض
-    Object.keys(S.subs).forEach(function (id) { var s = S.subs[id]; if (s.fresh && groupsOf(s.fn).some(function (g) { return wg.indexOf(g) >= 0; })) { s.fresh = null; s.pend = true; } });
+    Object.keys(S.subs).forEach(function (id) { var s = S.subs[id]; if (s.fresh && groupsOf(s.fn).some(function (g) { return wg.indexOf(g) >= 0; })) { s.fresh = null; s.pend = true; s.force = true; s.lastCs = ''; } });
     // البصمات الجديدة تصل بنبضة فورية (الخادم غيّرها بالحفظ) ⇒ الشاشات المفتوحة الأخرى تتحدث
     clearTimeout(S.awT); S.awT = setTimeout(function () { pollTick(true); }, 700);
   }
@@ -7701,11 +7723,12 @@ var LF_ = (function () {
   function call(getPrev, st, fn, args) {
     var sk = NODEDUPE[fn] ? null : sjson([fn, normArgs(args)]);
     // ⚡ (V4.367) طلب جارٍ بلا رد منذ دقيقتين (رد ضاع) لا يعطّل النداءات المطابقة للأبد
-    if (sk && S.infl[sk] && now() - (S.inflT[sk] || 0) > 120000) delete S.infl[sk];
+    // (الكتابات لا تنتهي مهلتها: حفظ طويل ما زال يعمل لا يُرسل مرة ثانية)
+    if (sk && S.infl[sk] && !isWrite(fn) && now() - (S.inflT[sk] || 0) > 120000) delete S.infl[sk];
     // ⚡ (V4.367) حفظ مطابق لطلب جارٍ لكن بعد حفظ مختلف لنفس الدالة (تبديل A ثم B ثم A) ⇒ يُرسل (وإلا بقي الخادم على B والشاشة على A)
-    var wr = isWrite(fn);
-    if (sk && S.infl[sk] && wr && S.lastW[fn] !== sk) sk = null;
-    if (wr && sk) S.lastW[fn] = sk;
+    var wr = isWrite(fn), prevW = S.lastW[fn];
+    if (wr && sk) S.lastW[fn] = sk;   // يُسجَّل قبل القرار (تبديل A→B→A→B: الأخير يُرسل أيضاً)
+    if (sk && S.infl[sk] && wr && prevW !== sk) sk = null;
     // ① نداء مطابق ما زال جارياً ⇒ ننتظر نتيجته (لا نرسل ثانية)
     if (sk && S.infl[sk]) {
       S.infl[sk].push(st);
@@ -7717,10 +7740,10 @@ var LF_ = (function () {
     var k = (READ[fn] && !BALFN[fn]) ? key(fn, args) : null;
     var ep0 = S.epoch;
     var go = function () {
-      if (sk) { S.infl[sk] = []; S.inflT[sk] = now(); }
+      var mine = null; if (sk) { mine = S.infl[sk] = []; S.inflT[sk] = now(); }
       var r = getPrev();
       r = r.withSuccessHandler(function (res, uo) {
-        var f = sk ? S.infl[sk] : null; if (sk) delete S.infl[sk];
+        var f = mine; if (sk && S.infl[sk] === mine) delete S.infl[sk];
         if (k && cacheable(res) && ep0 === S.epoch) { var cs = csig(res), old = S.mem[k]; putEntry({ k: k, fn: fn, d: clone(res), h: old && old.cs === cs ? old.h : '', cs: cs, g: READ[fn], dv: old && old.cs === cs ? old.dv : null, sAt: now(), vAt: old && old.cs === cs ? old.vAt : 0 }); }
         // ⚡ (V4.367) علامة «كُتب محلياً» قبل معالج النجاح لا بعده: معالجات الحفظ تعيد تحميل الشاشات فوراً (loadTripsList / vzLoad(true)
         // / loadBookingsTable…) فلا تُعرض لحظياً نسخة ما قبل الحفظ المحفوظة بالمتصفح (مثل إشعار محذوف يعود للظهور ثوانٍ)
@@ -7731,7 +7754,7 @@ var LF_ = (function () {
         try { if (st.ok) st.ok(res, uo); } catch (eH) { console.error('google.script.run.' + fn + ' handler', eH); }
         (f || []).forEach(function (x, i) { deliver(x, copies[i], true); });
       }).withFailureHandler(function (err, uo) {
-        var f = sk ? S.infl[sk] : null; if (sk) delete S.infl[sk];
+        var f = mine; if (sk && S.infl[sk] === mine) delete S.infl[sk];
         try { if (st.fail) st.fail(err, uo); else console.error('google.script.run.' + fn, err); } catch (eH) { console.error('google.script.run.' + fn + ' handler', eH); }
         (f || []).forEach(function (x) { deliver(x, err, false); });
       });
@@ -7820,6 +7843,8 @@ var LF_ = (function () {
   // ⚡ (V4.367) هل توجد نسخة ستُعرض فوراً؟ (نسخة حجبتها كتابة محلية حديثة لا تُحتسب) — قرار «⏳ جاري التحميل» بالشاشات
   api.has = function (fn, args) { var k = key(fn, args), e = k && S.mem[k]; return !!(e && !dirtyBlocked(fn, e)); };
   api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
+  api.verify = verifySub;
+  api.showBar = function (id) { var s = S.subs[id]; if (!s) return; s.snooze = 0; if (s.fresh) conflictBar(s); };
   api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
   return api;
 })();
@@ -9009,7 +9034,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.368";
+var CLIENT_APP_VERSION = "4.369";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -16727,7 +16752,7 @@ function _tpSwr_(tripName, noCache, onData, onFail) {
   var seq = ++_tpSeq_;
   // ⚡ (V4.367) حالة تحقق الكشف المعروض: حفظ الكشف يستبدل قائمة الرحلة كلها، فلا حفظ من نسخة محفوظة بالمتصفح قبل أن يؤكد
   // الخادم أنها الأحدث (وإلا مُحي معتمر أضافه مستخدم آخر بعدها). checking ⇒ انتظار · held ⇒ أحدث منها معلّقة بشريط التعارض
-  var V = window._tpVer_ = { trip: tripName, state: 'checking', fresh: false };
+  var V = window._tpVer_ = { trip: tripName, state: 'checking', fresh: false, chkAt: Date.now() };
   LF_.swr('getTripPilgrims', [window.authToken, tripName], {
     sub: 'scr:tp', label: 'كشف الرحلة', noCache: !!noCache,
     visible: function() { return _lfShown_('pilgrimsTableBody'); },
@@ -16751,7 +16776,15 @@ function _tpSaveBlocked_() {
     : V.state === 'failed'
       ? '⚠️ تعذّر التحقق من أحدث نسخة من الكشف — جارٍ إعادة المحاولة، احفظ بعد لحظات'
       : '⏳ جارٍ التحقق من أحدث نسخة من الكشف — احفظ بعد لحظات';
-  if (V.state === 'failed') { V.state = 'checking'; try { LF_.refresh('scr:tp'); } catch (e) {} }
+  // ⚡ (V4.367) تحقق لم يُحسم خلال 20 ث ⇒ يُعامل كفشل ويُعاد. وإعادة التحقق تعيد نتيجتها لحالة الكشف مباشرة
+  if (V.state === 'checking' && V.chkAt && Date.now() - V.chkAt > 20000) V.state = 'failed';
+  if (V.state === 'failed') {
+    V.state = 'checking'; V.chkAt = Date.now();
+    try {
+      LF_.verify('scr:tp', function (ok, held) { if (window._tpVer_ !== V) return; V.state = !ok ? 'failed' : (held ? 'held' : 'ok'); if (V.state !== 'checking') V.chkAt = 0; });
+    } catch (e) { V.state = 'failed'; }
+  }
+  if (V.state === 'held') { try { LF_.showBar('scr:tp'); } catch (e) {} }   // الشريط قد يكون مخفياً بـ«لاحقاً»
   try { showToast(msg); } catch (e) { alert(msg); }
   return true;
 }

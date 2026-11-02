@@ -3288,7 +3288,7 @@ window.PERF_ = (function () {
               }
             }
           }
-          try { if (typeof window.gsrIsWrite_ === 'function' && window.gsrIsWrite_(prop)) _hbWseq_++; } catch (eW) {}
+          try { if ((typeof window.gsrIsWrite_ === 'function' && window.gsrIsWrite_(prop)) || /^(hbPayEntryAct|hbDupResolve|hbSyncFromGl|hbGlAccLinkSave|glLinkSaveConfig|runCustodySyncNow|useProgramSpreadsheetAsSource)$/.test(prop)) _hbWseq_++; } catch (eW) {}   // + كتابات HBLF (XW)
           queue.push({ fn: prop, args: args, onS: onS, onF: onF, _retried: false, _ws: _hbWseq_ });
           pump();
         };
