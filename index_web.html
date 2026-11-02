@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.366  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.367  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7236,7 +7236,8 @@ function _runExec_(getReal, st, fn, args, attempt, busyN) {
       if (busyN < 8) { if (!busyN) _busyToast_('⏳ النظام مشغول لحظات — جارٍ التنفيذ تلقائياً…'); setTimeout(function () { _runExec_(getReal, st, fn, args, attempt, busyN + 1); }, 1500 * (busyN + 1)); return; }
     }
     if (attempt < 3 && _SESS_RX_.test(String((err && err.message) || err || ''))) {
-      var retry = function () { var nt = window.authToken; _runExec_(getReal, st, fn, args.map(function (a) { return _sessStaleArg_(a, nt) ? nt : a; }), attempt + 1); };
+      // ⚡ (V4.367) lfFetch يحمل معاملات الدالة الحقيقية كمصفوفة داخلية — رمزها القديم يُستبدل أيضاً (مستوى واحد)
+      var retry = function () { var nt = window.authToken; _runExec_(getReal, st, fn, args.map(function (a) { if (fn === 'lfFetch' && Array.isArray(a)) return a.map(function (b) { return _sessStaleArg_(b, nt) ? nt : b; }); return _sessStaleArg_(a, nt) ? nt : a; }), attempt + 1); };
       var cur = window.authToken;
       if (cur && args.some(function (a) { return _sessStaleArg_(a, cur); })) { retry(); return; }   // تغيّر الرمز بعد خروج النداء
       if (!attempt) {
@@ -7297,6 +7298,7 @@ var LF_ = (function () {
     getVisaTripLinks: ['visa', 'trips'], getMinistryBootstrap: ['ministry', 'trips', 'dropdowns', 'gl'],
     getMinistryTripLinks: ['ministry', 'trips', 'bookings'], loadDropdownsData: ['dropdowns'], getUnifiedStatement: ['hb', 'gl']
   };
+  var BALFN = { getVisaBootstrap: 1, getMinistryBootstrap: 1, getUnifiedStatement: 1 };
   var ALLG = ['bookings', 'movements', 'trips', 'pilgrims', 'visa', 'ministry', 'dropdowns', 'hb', 'gl'];
   var NODEDUPE = { perfPing: 1, perfReport: 1, lfPoll: 1, lfFetch: 1, glJobStatus: 1, appPulse: 1, heartbeatOnline: 1, presencePing: 1, logoutUserSession: 1, loginUser: 1, resumeSession: 1 };
   // ⚡ (V4.367) المهام اللاحقة للحفظ (lfAfter: vzAfterSaveBg / mfAfterSaveBg) قراءة فقط — لا تُعلِّم مجموعاتها «كُتبت محلياً»
@@ -7304,7 +7306,7 @@ var LF_ = (function () {
   var RO_RX = /^(get|list|load|search|fetch|peek|preview|check|lf|perf|find|count|read|calc|export|print|generatePrint|glList|glGet|glBootstrap|glStatement|glTreasury|glBank|glPending|glAcc(Deleted)?List|glClient|glParty|glWarm|glLinkConfig|glHb(State|PartyCode)|glVchLogo|glIncome|glBalance|ledgerCount|ledgerScrGet|audList|audStatus|snapPoints|getOnline|[a-z]+AfterSaveBg$)/;
   var S = {
     mem: {}, db: null, dbWait: null, dbOff: false,
-    dv: {}, dvAt: 0, dirtyG: {}, infl: {}, subs: {}, puts: 0, fk: {}, again: {}, epoch: 0, skipK: null,
+    dv: {}, dvAt: 0, dirtyG: {}, wroteG: {}, inflT: {}, fkT: {}, lastW: {}, infl: {}, subs: {}, puts: 0, fk: {}, again: {}, epoch: 0, skipK: null,
     lastAct: Date.now(), pollT: null, pollBusy: false, lastPoll: 0, lastSafety: 0, wired: false
   };
   var api = { morphing: false, READ: READ };
@@ -7315,6 +7317,9 @@ var LF_ = (function () {
   function user() { var u = window.currentUser || {}; return String(u.username || ''); }
   function isTok(a) { return typeof a === 'string' && !!a && (a === window.authToken || (typeof _TOK_RX_ !== 'undefined' && _TOK_RX_.test(a))); }
   function normArgs(args) { return (args || []).map(function (a) { return isTok(a) ? '§T' : a; }); }
+  // ⚡ (V4.367) الاشتراك يحفظ معاملاته لحظة فتح الشاشة ⇒ رمز الجلسة الحالي لحظة كل جلب (بعد تجديد الجلسة بصمت كان الرمز القديم
+  // داخل المعاملات يُرفض فيتوقف التحديث الحي للشاشة بلا رسالة، وكل محاولة تفتح جلسة جديدة)
+  function curArgs(args) { return (args || []).map(function (a) { return (isTok(a) && window.authToken) ? window.authToken : a; }); }
   // JSON مستقر للمعاملات — يرفض (null) أي معامل غير قابل للتسلسل (نموذج/ملف/عنصر DOM) فلا يُدمَج ولا يُخزَّن
   function sjson(x) {
     try {
@@ -7348,11 +7353,14 @@ var LF_ = (function () {
     if (S.dbOff || !window.indexedDB) return cb(null);
     if (S.dbWait) { S.dbWait.push(cb); return; }
     S.dbWait = [cb];
-    var done = function (d) { S.db = d; if (!d) S.dbOff = true; var w = S.dbWait; S.dbWait = null; w.forEach(function (f) { try { f(d); } catch (e) {} }); };
+    var fired = false;
+    var done = function (d) { if (fired) return; fired = true; S.db = d; if (!d) S.dbOff = true; var w = S.dbWait; S.dbWait = null; w.forEach(function (f) { try { f(d); } catch (e) {} }); };
+    // ⚡ (V4.367) متصفح لا يجيب طلب الفتح أبداً (وضع خاص/قاعدة معطوبة) ⇒ بعد 3 ث بلا تخزين محلي (الخادم كالمعتاد) بدل «⏳» دائم
+    setTimeout(function () { done(null); }, 3000);
     try {
       var rq = indexedDB.open('umrah-lf', 1);
       rq.onupgradeneeded = function () { try { rq.result.createObjectStore('d', { keyPath: 'k' }); } catch (e) {} };
-      rq.onsuccess = function () { done(rq.result); };
+      rq.onsuccess = function () { if (fired) { try { rq.result.close(); } catch (e) {} return; } done(rq.result); };
       rq.onerror = rq.onblocked = function () { done(null); };
     } catch (e) { done(null); }
   }
@@ -7418,7 +7426,11 @@ var LF_ = (function () {
     if (!e || !e.dv || now() - S.dvAt > 45000 || now() - (e.vAt || 0) > 15 * 60000) return false;
     return groupsOf(fn, e).every(function (g) { return !isDirtyG(g) && S.dv[g] && e.dv[g] === S.dv[g]; });
   }
-  function dirtyBlocked(fn, e) { return groupsOf(fn, e).some(isDirtyG); }
+  // ⚡ (V4.367) + نسخة خُزّنت/تُحقّق منها قبل آخر حفظ محلي لمجموعتها ⇒ لا تُعرض فوراً (كانت تظهر نسخة ما قبل الحفظ عند إعادة الفتح)
+  function dirtyBlocked(fn, e) {
+    var t = (e && (e.vAt || e.sAt)) || 0;
+    return groupsOf(fn, e).some(function (g) { return isDirtyG(g) || (S.wroteG[g] && S.wroteG[g] > t); });
+  }
 
   /* ---------- النداء الخام (بلا هذه الطبقة) ---------- */
   function raw() { return window._LF_PREV_RUN_ ? window._LF_PREV_RUN_() : google.script.run; }
@@ -7449,13 +7461,16 @@ var LF_ = (function () {
   function conflictBar(sub) {
     try {
       var bar = document.getElementById('lfConflict');
+      if (bar && bar._sub === sub) return;   // ⚡ (V4.367) معروض بالفعل لنفس الشاشة
       if (!bar) { bar = document.createElement('div'); bar.id = 'lfConflict'; bar.dir = 'rtl'; document.body.appendChild(bar); }
+      bar._sub = sub;
       bar.style.cssText = 'position:fixed;top:calc(64px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483050;background:#b45309;color:#fff;border-radius:12px;padding:8px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.28);display:flex;gap:10px;align-items:center;max-width:94vw;';
       bar.innerHTML = '<span>🔄 عدّل مستخدم آخر بيانات هذه الشاشة' + (sub.label ? ' (' + sub.label + ')' : '') + ' — لديك تعديلات غير محفوظة فلم تُستبدل.</span>';
       var b = document.createElement('button'); b.className = 'btn btn-sm btn-light'; b.textContent = 'عرض الأحدث (تجاهل تعديلاتي)';
       b.onclick = function () { bar.remove(); applySub(sub, true); };
       var x = document.createElement('button'); x.className = 'btn btn-sm btn-outline-light'; x.textContent = 'لاحقاً';
-      x.onclick = function () { bar.remove(); };
+      // «لاحقاً»: لا شريط دقيقتين، والتحديث يبقى معلّقاً ويُطبَّق وحده عند انتهاء التعديل (حفظ/إغلاق النموذج)
+      x.onclick = function () { sub.snooze = now() + 120000; sub.pend = true; bar.remove(); };
       bar.appendChild(b); bar.appendChild(x);
     } catch (e) {}
   }
@@ -7488,13 +7503,14 @@ var LF_ = (function () {
         try { onData(clone(e.d), { cached: true, at: e.sAt }); } catch (x) { console.error('LF swr cached ' + fn, x); }
       }
       netCheck(fn, args, k, e, opts, function (res) {   // ok
+        if (ep !== S.epoch) { settle(false); return; }   // ⚡ (V4.367) خروج أثناء الطلب ⇒ لا يُعرض رده للمستخدم التالي
         // ⚡ (V4.367) نفس حارس «تعديلات غير محفوظة» للتحديث الحي: بدأ المستخدم التعديل على النسخة الفورية قبل وصول الأحدث ⇒ شريط
         // التعارض بدل الاستبدال (الرد غير القابل للتخزين — خطأ/«قديم» — يمر للمعالج كما هو ليعيد المحاولة بنفسه)
         var held = !!(res.changed && shown && sub && S.subs[sub.id] === sub && cacheable(res.data) && subDirty(sub));
         if (shown) badge(res.changed && !held ? 'updated' : 'done');
         if (sub && !held) sub.lastCs = res.cs || sub.lastCs;
         if (res.changed) deliverKey(k, res, sub ? sub.id : null);
-        if (held) { sub.fresh = res.data; conflictBar(sub); }
+        if (held) { sub.fresh = res.data; sub.pend = true; conflictBar(sub); }   // pend ⇒ يُطبَّق تلقائياً بعد انتهاء التعديل (wake)
         else if (res.changed || !shown) {
           api.morphing = shown;
           try { onData(res.data, { cached: false, changed: shown }); } catch (x) { console.error('LF swr ' + fn, x); }
@@ -7502,6 +7518,7 @@ var LF_ = (function () {
         }
         settle(true, null, !!res.changed);
       }, function (err) {
+        if (ep !== S.epoch) { settle(false, err); return; }
         if (shown) badge('offline');
         else if (onFail) onFail(err); else console.error('LF ' + fn, err);
         settle(false, err);
@@ -7511,7 +7528,7 @@ var LF_ = (function () {
   // الشبكة: نداء الإقلاع (بيانات كاملة تُقارن بالمتصفح) أو lfFetch بالبصمة
   function netCheck(fn, args, k, e, opts, ok, fail) {
     // جلب جارٍ لنفس المفتاح: البصمة الجديدة التي سيعيدها تُطلق onChanged ⇒ لا جلب ثانٍ لنفس الاشتراك (refreshSub يتحقق من fk)
-    if (k) S.fk[k] = (S.fk[k] || 0) + 1;
+    if (k) { S.fk[k] = (S.fk[k] || 0) + 1; S.fkT[k] = now(); }
     var ep = (opts && opts._ep !== undefined) ? opts._ep : S.epoch;
     var fin = function () {
       if (!k || !S.fk[k] || --S.fk[k]) return;
@@ -7522,21 +7539,22 @@ var LF_ = (function () {
     ok = function (x) { fin(); ok0(x); }; fail = function (x) { fin(); fail0(x); };
     var store = function (data, h, dv, g) {
       var cs = csig(data), changed = !e || e.cs !== cs;
-      if (k && cacheable(data)) putEntry({ k: k, fn: fn, d: data, h: h || (e && !changed ? e.h : ''), cs: cs, g: g || READ[fn], dv: dv || (e && !changed ? e.dv : null), sAt: now(), vAt: dv ? now() : (e && !changed ? e.vAt : 0) }, ep);
+      // ⚡ (V4.367) نسخة مستقلة للتخزين: الشاشة تعدّل كائن بياناتها محلياً (تعديل متفائل) فلا تُحفظ تعديلاتها كأنها نسخة الخادم
+      if (k && cacheable(data)) putEntry({ k: k, fn: fn, d: clone(data), h: h || (e && !changed ? e.h : ''), cs: cs, g: g || READ[fn], dv: dv || (e && !changed ? e.dv : null), sAt: now(), vAt: dv ? now() : (e && !changed ? e.vAt : 0) }, ep);
       else if (k && !cacheable(data)) changed = true;   // خطأ/«قديم» يمر للمعالج كما هو (يعيد المحاولة بنفسه)
       ok({ data: data, changed: changed, cs: cs });
     };
     if (opts.runner) {
       var r = opts.runner();
-      r.withSuccessHandler(function (d) { store(d, '', null, null); }).withFailureHandler(fail)[fn].apply(r, args);
+      r.withSuccessHandler(function (d) { store(d, '', null, null); }).withFailureHandler(fail)[fn].apply(r, curArgs(args));
       return;
     }
-    lfFetch(fn, args, e && e.h, function (r) {
+    lfFetch(fn, curArgs(args), e && e.h, function (r) {
       if (!r) { fail(new Error('رد فارغ')); return; }
       S.skipK = k; try { learn(r.dv); } finally { S.skipK = null; }   // بصمة هذا الرد نفسه لا تطلب إعادة جلبه
       if (r.same && e) {
         e.dv = r.dv; e.vAt = now(); if (r.g) e.g = r.g; putEntry(e, ep);
-        ok({ data: e.d, changed: false, cs: e.cs });
+        ok({ data: clone(e.d), changed: false, cs: e.cs });
         return;
       }
       store(r.data, r.h, r.h ? r.dv : null, r.g);
@@ -7570,6 +7588,9 @@ var LF_ = (function () {
   function refreshKey(s) {
     var k = s.k; if (!k) return;
     var ep = S.epoch;
+    // ⚡ (V4.367) هذا الجلب يحسم «المعلّق» لكل اشتراكات المفتاح (كان رد «نفسها» يترك pend فيُعاد الجلب كل 5 ث ما دامت الشاشة ظاهرة)
+    subsOf(k).forEach(function (x) { if (!x.fresh) x.pend = false; });
+    if (S.fk[k] && now() - (S.fkT[k] || 0) > 120000) { delete S.fk[k]; delete S.again[k]; }   // رد ضاع (لا نجاح ولا فشل) ⇒ لا تعطيل دائم
     if (S.fk[k]) { S.again[k] = s; return; }   // جلب جارٍ بدأ قبل التغيير: يُعاد بعد انتهائه (netCheck/fin)
     getEntry(k, function (e) {
       if (ep !== S.epoch) return;
@@ -7579,7 +7600,9 @@ var LF_ = (function () {
   function subDirty(s) { if (!s.opts.dirty) return false; try { return !!s.opts.dirty(); } catch (e) { return false; } }   // ⚡ (V4.367)
   function applySub(s, force) {
     if (!s.fresh || S.subs[s.id] !== s) return;
-    if (!force && s.opts.dirty) { var dirty = false; try { dirty = !!s.opts.dirty(); } catch (e) {} if (dirty) { conflictBar(s); return; } }
+    // ⚡ (V4.367) تعديل جارٍ ⇒ الشريط (مرة، لا إعادة بناء كل 5 ث، ولا شيء خلال مهلة «لاحقاً») ويبقى التحديث معلّقاً حتى ينتهي التعديل
+    if (!force && subDirty(s)) { s.pend = true; if (!(s.snooze > now())) conflictBar(s); return; }
+    try { var cb = document.getElementById('lfConflict'); if (cb && cb._sub === s) cb.remove(); } catch (e) {}
     var d = s.fresh; s.fresh = null; s.pend = false; s.lastCs = csig(d);
     api.morphing = true;
     try { s.onData(d, { cached: false, changed: true, live: true }); } catch (x) { console.error('LF live ' + s.fn, x); }
@@ -7599,7 +7622,8 @@ var LF_ = (function () {
   }
   function pollTick(force) {
     if (!window.authToken || S.pollBusy || !user()) return;
-    if (typeof _tsShouldPulse_ === 'function' && !TABSYNC.leader && TABSYNC.ch && now() - TABSYNC.leaderSeen < 150000 && !force) return;   // القائد ينبض ويبث
+    // القائد ينبض ويبث — ⚡ (V4.367) التابع يسكت فقط ما دامت تصله بصمات حديثة (قائد مخفي لا ينبض ⇒ التبويب الظاهر ينبض بنفسه)
+    if (typeof _tsShouldPulse_ === 'function' && !TABSYNC.leader && TABSYNC.ch && now() - TABSYNC.leaderSeen < 150000 && now() - S.dvAt < 45000 && !force) return;
     var gap = pollGap(); if (!gap && !force) return;
     if (!force && now() - S.lastPoll < gap) return;
     S.lastPoll = now(); S.pollBusy = true;
@@ -7632,7 +7656,12 @@ var LF_ = (function () {
     [/^gl|Gl[A-Z]|^ledger|^recon|^acc|Acc[A-Z]|^snap|^aud/i, ['gl', 'hb', 'visa', 'ministry']],
     [/Payment|^hb|^register|ManualEntry|Party|Account(Profile)?/i, ['hb']]
   ];
+  // ⚡ (V4.367) نداءات لا تكتب بيانات أي شاشة (تفضيلات الواجهة، المحاسب الذكي، الاستخراج/OCR، اختبارات وإعدادات تليجرام والتنبيهات،
+  // فحص Drive، رفع ملفات مؤقتة) ⇒ لا تُعلِّم شيئاً «كُتب محلياً» (كان فرز عمود أو فتح محادثة يعطّل العرض الفوري لكل الشاشات 60 ث)
+  var NOGRP = /^(ai[A-Z]|analyze|appBatch$|changeMyPassword$|deleteTempFile$|deleteTicketFile$|disableTempCleanup|driveRoot|extract|flight|hotelsHandoff$|runAllTests|save(AlertCenter|RequiredFieldsConfig|SessionDurationConfig|UiPref|Tg)|setTempCleanup|setTg|test|upload(AndAnalyzeTicket|AndParseTicketManual|CateringAttachment)$)/;
+  WG.push([/Transport/, ['movements', 'bookings']], [/Catering|ClientPricing|UnlinkedFees/, ['gl']]);
   function writeGroups(fn) {
+    if (NOGRP.test(fn)) return [];
     var out = {};
     WG.forEach(function (w) { if (w[0].test(fn)) w[1].forEach(function (g) { out[g] = 1; }); });
     var l = Object.keys(out); return l.length ? l : ALLG.slice();
@@ -7640,7 +7669,11 @@ var LF_ = (function () {
   function isWrite(fn) { return !READ[fn] && !RO_RX.test(fn) && !NODEDUPE[fn]; }
   function afterWrite(fn) {
     if (!isWrite(fn)) return;
-    writeGroups(fn).forEach(function (g) { S.dirtyG[g] = now(); });
+    var wg = writeGroups(fn); if (!wg.length) return;
+    // wroteG: متى كُتبت المجموعة محلياً (لا يُمسح بوصول البصمة الجديدة) ⇒ نسخة محفوظة قبل حفظك لا تُعرض فورياً بعده أبداً
+    wg.forEach(function (g) { S.dirtyG[g] = now(); S.wroteG[g] = now(); });
+    // تحديث معلّق التُقط قبل هذا الحفظ لا يُطبَّق بعده (بيانات بلا حفظك) ⇒ يُلغى ويُجلب الأحدث عند العرض
+    Object.keys(S.subs).forEach(function (id) { var s = S.subs[id]; if (s.fresh && groupsOf(s.fn).some(function (g) { return wg.indexOf(g) >= 0; })) { s.fresh = null; s.pend = true; } });
     // البصمات الجديدة تصل بنبضة فورية (الخادم غيّرها بالحفظ) ⇒ الشاشات المفتوحة الأخرى تتحدث
     clearTimeout(S.awT); S.awT = setTimeout(function () { pollTick(true); }, 700);
   }
@@ -7667,6 +7700,12 @@ var LF_ = (function () {
   }
   function call(getPrev, st, fn, args) {
     var sk = NODEDUPE[fn] ? null : sjson([fn, normArgs(args)]);
+    // ⚡ (V4.367) طلب جارٍ بلا رد منذ دقيقتين (رد ضاع) لا يعطّل النداءات المطابقة للأبد
+    if (sk && S.infl[sk] && now() - (S.inflT[sk] || 0) > 120000) delete S.infl[sk];
+    // ⚡ (V4.367) حفظ مطابق لطلب جارٍ لكن بعد حفظ مختلف لنفس الدالة (تبديل A ثم B ثم A) ⇒ يُرسل (وإلا بقي الخادم على B والشاشة على A)
+    var wr = isWrite(fn);
+    if (sk && S.infl[sk] && wr && S.lastW[fn] !== sk) sk = null;
+    if (wr && sk) S.lastW[fn] = sk;
     // ① نداء مطابق ما زال جارياً ⇒ ننتظر نتيجته (لا نرسل ثانية)
     if (sk && S.infl[sk]) {
       S.infl[sk].push(st);
@@ -7674,10 +7713,11 @@ var LF_ = (function () {
       return;
     }
     // ② دالة عرض بنسخة مؤكَّدة الحداثة ⇒ فوراً بلا خادم
-    var k = READ[fn] ? key(fn, args) : null;
+    // ⚡ (V4.367) دوال فيها أرصدة (بوتستراب التأشيرات/الوزارة، كشف الفندق) لا تُخدم أبداً من المتصفح بنداء عادي
+    var k = (READ[fn] && !BALFN[fn]) ? key(fn, args) : null;
     var ep0 = S.epoch;
     var go = function () {
-      if (sk) S.infl[sk] = [];
+      if (sk) { S.infl[sk] = []; S.inflT[sk] = now(); }
       var r = getPrev();
       r = r.withSuccessHandler(function (res, uo) {
         var f = sk ? S.infl[sk] : null; if (sk) delete S.infl[sk];
@@ -7685,12 +7725,14 @@ var LF_ = (function () {
         // ⚡ (V4.367) علامة «كُتب محلياً» قبل معالج النجاح لا بعده: معالجات الحفظ تعيد تحميل الشاشات فوراً (loadTripsList / vzLoad(true)
         // / loadBookingsTable…) فلا تُعرض لحظياً نسخة ما قبل الحفظ المحفوظة بالمتصفح (مثل إشعار محذوف يعود للظهور ثوانٍ)
         try { if (!res || res.success !== false) afterWrite(fn); } catch (e) {}
-        if (st.ok) st.ok(res, uo);
-        (f || []).forEach(function (x) { deliver(x, clone(res), true); });
+        // ⚡ (V4.367) نسخ المنتظرين ومهمة المتابعة قبل معالج الأول، وخطؤه لا يحرمهم منها
+        var copies = (f || []).map(function () { return clone(res); });
         if (res && res.lfAfter) setTimeout(function () { runAfter(res.lfAfter); }, 50);
+        try { if (st.ok) st.ok(res, uo); } catch (eH) { console.error('google.script.run.' + fn + ' handler', eH); }
+        (f || []).forEach(function (x, i) { deliver(x, copies[i], true); });
       }).withFailureHandler(function (err, uo) {
         var f = sk ? S.infl[sk] : null; if (sk) delete S.infl[sk];
-        if (st.fail) st.fail(err, uo); else console.error('google.script.run.' + fn, err);
+        try { if (st.fail) st.fail(err, uo); else console.error('google.script.run.' + fn, err); } catch (eH) { console.error('google.script.run.' + fn + ' handler', eH); }
         (f || []).forEach(function (x) { deliver(x, err, false); });
       });
       if (st.hasUo) r = r.withUserObject(st.uo);
@@ -7727,9 +7769,13 @@ var LF_ = (function () {
     for (var i = 0; i < a.attributes.length; i++) { var x = a.attributes[i]; if (b.getAttribute(x.name) !== x.value) return false; }
     return true;
   }
+  // ⚡ (V4.367) أصناف تضيفها الواجهة للتحديد (ليست من الرسم) تبقى على السطر بعد التحديث الحي
+  var KEEPCLS = ['row-selected', 'reg-selected', 'selected', 'active-row', 'kb-focus'];
   function syncAttrs(a, b) {
+    var keep = KEEPCLS.filter(function (c) { return a.classList && a.classList.contains(c); });
     var i; for (i = a.attributes.length - 1; i >= 0; i--) { var n = a.attributes[i].name; if (!b.hasAttribute(n)) a.removeAttribute(n); }
     for (i = 0; i < b.attributes.length; i++) { var x = b.attributes[i]; if (a.getAttribute(x.name) !== x.value) a.setAttribute(x.name, x.value); }
+    keep.forEach(function (c) { try { a.classList.add(c); } catch (e) {} });
   }
   var FORM = { INPUT: 1, SELECT: 1, TEXTAREA: 1, OPTION: 1 };
   function morphKids(op, np) {
@@ -7762,8 +7808,10 @@ var LF_ = (function () {
     el.innerHTML = html;
   }
   function clearAll() {
-    S.epoch++; S.mem = {}; S.subs = {}; S.dv = {}; S.dirtyG = {}; S.dvAt = 0; S.again = {};
+    S.epoch++; S.mem = {}; S.subs = {}; S.dv = {}; S.dirtyG = {}; S.wroteG = {}; S.dvAt = 0; S.again = {}; S.infl = {}; S.inflT = {}; S.fk = {}; S.fkT = {}; S.lastW = {};
     db(function (d) { if (!d) return; try { d.transaction('d', 'readwrite').objectStore('d').clear(); } catch (e) {} });
+    // ⚡ (V4.367) كشوف برنامج الحجوزات المضمّنة (HBLF) على نفس الجهاز تُمسح بالخروج أيضاً
+    try { if (window.indexedDB) indexedDB.deleteDatabase('hb-lf'); } catch (e) {}
   }
 
   api.after = AFTER;   // معالجات إضافية لنتائج المهام اللاحقة
@@ -8961,7 +9009,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.366";
+var CLIENT_APP_VERSION = "4.367";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -11563,8 +11611,10 @@ function settingsShell_() {
     });
     sec.insertBefore(shell, sec.firstChild);
     // شريط التغييرات غير المحفوظة
-    box.addEventListener('input', function (e) { if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'search') settingsDirty_(true); });
-    box.addEventListener('change', function (e) { if (e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'search') settingsDirty_(true); });
+    // ⚡ (V4.367) عناصر أدوات لا تُحفظ مع الإعدادات (تحديد ملفات بطاقة فحص Drive) لا تُظهر شريط «تغييرات غير محفوظة»
+    var _stTrack = function (e) { var t = e.target; return t && /INPUT|SELECT|TEXTAREA/.test(t.tagName) && t.type !== 'search' && !(t.closest && t.closest('#driveRootBox, [data-nodirty]')); };
+    box.addEventListener('input', function (e) { if (_stTrack(e)) settingsDirty_(true); });
+    box.addEventListener('change', function (e) { if (_stTrack(e)) settingsDirty_(true); });
     box.addEventListener('click', function (e) { var b = e.target && e.target.closest ? e.target.closest('button') : null; if (b && /حفظ|💾|تطبيق|تفعيل/.test(b.textContent || '')) setTimeout(function () { settingsDirty_(false); }, 400); });
   }
   settingsNav_();
@@ -16663,6 +16713,9 @@ function openTripPilgrims(tripName) {
 // أو المؤشر داخل الجدول، أو نافذة التسكين مفتوحة فوقه (تبني غرفها من صفوف الجدول وتكتب فيها عند التطبيق)
 function _tpDirty_() {
   if (window._pilgrimsDirty) return true;
+  // ⚡ (V4.367) فلاتر الأعمدة النشطة أو تحديد جماعي = عمل جارٍ (إعادة رسم الكشف تمحوهما) ⇒ يُعلَّق التحديث حتى تُمسح
+  if (window._kashfCf && Object.keys(window._kashfCf).length) return true;
+  if (document.querySelector('#pilgrimsTableBody .p-bulk:checked')) return true;
   var tb = document.getElementById('pilgrimsTableBody'), ae = document.activeElement;
   if (tb && ae && ae !== document.body && tb.contains(ae)) return true;
   var hm = document.getElementById('housingModal');
@@ -16672,14 +16725,35 @@ function _tpDirty_() {
 var _tpSeq_ = 0;
 function _tpSwr_(tripName, noCache, onData, onFail) {
   var seq = ++_tpSeq_;
+  // ⚡ (V4.367) حالة تحقق الكشف المعروض: حفظ الكشف يستبدل قائمة الرحلة كلها، فلا حفظ من نسخة محفوظة بالمتصفح قبل أن يؤكد
+  // الخادم أنها الأحدث (وإلا مُحي معتمر أضافه مستخدم آخر بعدها). checking ⇒ انتظار · held ⇒ أحدث منها معلّقة بشريط التعارض
+  var V = window._tpVer_ = { trip: tripName, state: 'checking', fresh: false };
   LF_.swr('getTripPilgrims', [window.authToken, tripName], {
     sub: 'scr:tp', label: 'كشف الرحلة', noCache: !!noCache,
     visible: function() { return _lfShown_('pilgrimsTableBody'); },
-    dirty: _tpDirty_
+    dirty: _tpDirty_,
+    done: function(ok, err, changed) {
+      if (window._tpVer_ !== V) return;
+      V.state = !ok ? 'failed' : (changed && !V.fresh ? 'held' : 'ok');
+    }
   }, function(pilgrims, m) {
     if (seq !== _tpSeq_ || window.currentTripName !== tripName) return;
+    if (!m || !m.cached) { V.fresh = true; if (window._tpVer_ === V) V.state = 'ok'; }   // بيانات الخادم نفسها (أول رد/الأحدث/تحديث حي)
     onData(pilgrims, m);
   }, function(err) { if (seq === _tpSeq_) onFail(err); });
+}
+// ⚡ (V4.367) هل يُمنع حفظ الكشف الآن؟ (يعرض السبب) — لا يمنع إلا كشفاً معروضاً من نسخة لم يؤكدها الخادم بعد
+function _tpSaveBlocked_() {
+  var V = window._tpVer_;
+  if (!V || V.trip !== window.currentTripName || V.state === 'ok') return false;
+  var msg = V.state === 'held'
+    ? '⚠️ عدّل مستخدم آخر هذا الكشف بعد فتحك له — اضغط «عرض الأحدث» بالشريط أعلى الشاشة ثم أعد تعديلك وحفظه (الحفظ الآن كان سيمحو تعديله)'
+    : V.state === 'failed'
+      ? '⚠️ تعذّر التحقق من أحدث نسخة من الكشف — جارٍ إعادة المحاولة، احفظ بعد لحظات'
+      : '⏳ جارٍ التحقق من أحدث نسخة من الكشف — احفظ بعد لحظات';
+  if (V.state === 'failed') { V.state = 'checking'; try { LF_.refresh('scr:tp'); } catch (e) {} }
+  try { showToast(msg); } catch (e) { alert(msg); }
+  return true;
 }
 
 // 🏷️ (V4.17) بحث تنبئي بأسماء الرحلات لحقل «اسم المجموعة» بنموذج الإشعار — اختياري، لا يمنع الكتابة الحرة
@@ -18888,6 +18962,7 @@ window.__step('8️⃣.3 savePilgrimsFromTable ✅');
 <script>
 function savePilgrimsFromTable(btn) {
   if (!window.currentTripName) { alert('افتح رحلة أولاً'); return; }
+  if (_tpSaveBlocked_()) return;   // ⚡ (V4.367) لا حفظ من نسخة لم يؤكدها الخادم بعد
 
   // ⛔ منع الازدواج داخل الكشف: نفس الجواز أو نفس الاسم في صفّين — يوقف الحفظ برسالة واضحة
   var kdups = _findKashfDuplicates();
@@ -19171,6 +19246,7 @@ window.__step('8️⃣.7 _saveThen ✅');
 <script>
 function _saveThen(after) {
   if (!window.currentTripName) { after(); return; }
+  if (_tpSaveBlocked_()) return;   // ⚡ (V4.367) لا حفظ من نسخة لم يؤكدها الخادم بعد
   // 🧾 (V4.165) نفس فحص "اسم العميل إلزامي" المُطبَّق بزر الحفظ العادي — كان هذا المسار (الحفظ
   // عند الخروج من كشف الرحلة) يتخطاه فيصل الطلب للسيرفر ليُرفَض هناك بلا فرصة تصحيح سريعة هنا أولاً
   var noClient = _findKashfNoClient();
@@ -32430,7 +32506,7 @@ function openGlobalSearch() {
         if (res && res.success) {
           MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
           MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
-          MF.balances = res.balances || {}; MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
+          MF.balances = res.balances || {}; MF._balOk = true; MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
           MF.execPolicy = res.execPolicy || [];   // 🏛️ (V4.231) سياسة رسوم التنفيذ
           MF.files.forEach(function(f) { f._c = mfCalc(f); });
           MF.loaded = true;
@@ -38881,7 +38957,7 @@ function loadSmartDashboard(){
   LF_.swr('getAllMovementsAuth', [window.authToken], {
     sub: 'scr:dash', label: 'لوحة التحركات', runner: _lfBootRun_('movements'),
     visible: function() { return _lfShown_('smartDashboard'); }
-  }, function(movements){
+  }, function(movements, m){
 
     window.dashboardMovements =
       movements || [];
@@ -38890,7 +38966,8 @@ function loadSmartDashboard(){
       window.dashboardMovements
     );
     // 🔄 حدّث كارت "رحلات بلا إشعار" ببيانات الرحلات (لا تعتمد على شاشة الرحلات فقط)
-    _refreshUrgentTripsCard();
+    // ⚡ (V4.367) مرة عند الفتح فقط — لا مع كل تحديث حي/نسخة أحدث (كان كل حفظ إشعار يطلق جلب قائمة الرحلات كاملة لكل مستخدم)
+    if (!m || (!m.live && !m.changed)) _refreshUrgentTripsCard();
 
   }, function(err) {
     _showAppLoadError('تحميل لوحة الإحصائيات', err);
@@ -40045,7 +40122,7 @@ function mfDetachFloats() {
 function mfInit() {
   mfDetachFloats();
   if (!MF.loaded) mfLoad(false);
-  else { mfRender(); }
+  else { mfRender(); if (!LF_._s.subs['scr:mf']) mfLoad(false, true); }   // ⚡ (V4.367) محمَّلة بلا اشتراك حي (تحميل البحث الشامل/خروج ودخول) ⇒ تحقق + اشتراك
   mfAttachDateInputs();
   mfAttachTypeaheads();
   mfWarmPilgrimSearch();
@@ -40070,17 +40147,18 @@ function mfLoad(force, quiet) {
   var wrap = document.getElementById('mfTableWrap');
   var args = [window.authToken];
   // ⚡ (V4.367) «⏳» فقط لو لا توجد نسخة محفوظة تُعرض فوراً (ولا في إعادة المحاولة الهادئة quiet بعد رد «قديم»)
-  if (wrap && !quiet && !LF_.has('getMinistryBootstrap', args)) wrap.innerHTML = '<div class="p-4 text-center text-muted small">⏳ جاري تحميل ملفات المراجعة…</div>';
+  if (wrap && !quiet && (!MF._balOk || !LF_.has('getMinistryBootstrap', args))) wrap.innerHTML = '<div class="p-4 text-center text-muted small">⏳ جاري تحميل ملفات المراجعة…</div>';
   var _t0 = Date.now(), cachedBal = null;
   // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية + تحديث حي. إعادة المحاولة بعد رد «قديم» (لا يُخزَّن ويصل كما هو) تحقق فقط
   // (noCache) فلا تُستبدل الصفوف المحدَّثة محلياً بنسخة أقدم. أرصدة الشركات لا تُعرض من النسخة المحفوظة: تبقى آخر أرصدة مؤكَّدة
   // حتى يرسل الخادم الأحدث أو يؤكد أن النسخة نفسها (done)
   LF_.swr('getMinistryBootstrap', args, {
-    sub: 'scr:mf', label: 'ملفات الوزارة', noCache: !!(quiet && MF.loaded),
+    // ⚡ (V4.367) بلا أرصدة أكّدها الخادم بعد في هذه الصفحة ⇒ لا عرض من المتصفح (وإلا ظهرت أرصدة الشركات صفراً/«لا يكفي» كاذبة)
+    sub: 'scr:mf', label: 'ملفات الوزارة', noCache: !!(quiet && MF.loaded) || !MF._balOk,
     visible: function () { return _lfShown_('mfTableWrap'); },
     dirty: _mfDirty_,
     done: function (ok, err, changed) {
-      if (ok && !changed && cachedBal) { MF.balances = cachedBal; try { mfRenderAlerts(); } catch (e) {} }
+      if (ok && !changed && cachedBal) { MF.balances = cachedBal; MF._balOk = true; try { mfRenderAlerts(); } catch (e) {} }
       cachedBal = null;
     }
   }, function (res, m) {
@@ -40096,7 +40174,7 @@ function mfLoad(force, quiet) {
     if (res.stale && MF.loaded) { setTimeout(function () { mfLoad(true, true); }, 1500); return; }
     MF.files = res.files || []; MF.receipts = res.receipts || []; MF.sups = res.supervisors || [];
     MF.companies = res.companies || []; MF.trips = res.trips || []; MF.clients = res.clients || [];
-    if (m.cached) cachedBal = res.balances || {}; else MF.balances = res.balances || {};
+    if (m.cached) cachedBal = res.balances || {}; else { MF.balances = res.balances || {}; MF._balOk = true; }
     MF.cfg = res.cfg || {}; MF.can = res.can || {}; MF.today = res.today || '';
     MF.execPolicy = res.execPolicy || [];   // 🏛️ (V4.231) سياسة رسوم التنفيذ
     MF.files.forEach(function (f) { f._c = mfCalc(f); });
@@ -45014,7 +45092,7 @@ function vzInit() {
   // قسم مخفي (display:none) فلا تظهر قائمة الرحلات/العملاء إطلاقاً عند "ربط برحلة" — وتبدو
   // للمستخدم وكأنها خلف النموذج. النقل هنا أيضاً يجعلها تعمل من أي شاشة.
   if (typeof mfDetachFloats === 'function') mfDetachFloats();
-  if (!VZ.loaded) vzLoad(false); else vzRender();
+  if (!VZ.loaded) vzLoad(false); else { vzRender(); if (!LF_._s.subs['scr:vz']) vzLoad(true, true); }   // ⚡ (V4.367) بلا اشتراك حي ⇒ تحقق + اشتراك
   // 🔒 (V4.167) زر استيراد المجموعات من إكسيل — للأدمن فقط (نفس قاعدة استيراد ملفات المراجعة)
   var ib = document.getElementById('vzImportBtn');
   if (ib) ib.style.display = hasPermission('admin') ? '' : 'none';
@@ -45025,16 +45103,17 @@ function vzLoad(force, silent) {
   var wrap = document.getElementById('vzTableWrap');
   var args = [window.authToken];
   // ⚡ (V4.367) «⏳» فقط لو لا توجد نسخة محفوظة تُعرض فوراً
-  if (wrap && !silent && (force || !VZ.loaded) && !LF_.has('getVisaBootstrap', args)) wrap.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
+  if (wrap && !silent && (force || !VZ.loaded) && (!VZ._balOk || !LF_.has('getVisaBootstrap', args))) wrap.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
   var _t0 = Date.now(), cachedBal = null;
   // ⚡ (V4.367) عرض فوري من المتصفح ثم تحقق بالخلفية + تحديث حي. التحديث الصامت (بعد الحفظ/إعادة المحاولة) والشاشة محمَّلة ⇒
   // تحقق فقط (noCache) فلا تُستبدل الصفوف المدمجة محلياً بنسخة أقدم. الرد «القديم» (stale) لا يُخزَّن ويصل كما هو ⇒ نفس إعادة المحاولة.
   // أرصدة الوكلاء لا تُعرض من النسخة المحفوظة: تبقى آخر أرصدة مؤكَّدة حتى يرسل الخادم الأحدث أو يؤكد أن النسخة نفسها (done)
   LF_.swr('getVisaBootstrap', args, {
-    sub: 'scr:vz', label: 'مجموعات التأشيرات', noCache: !!(silent && VZ.loaded),
+    // ⚡ (V4.367) بلا أرصدة وكلاء أكّدها الخادم بعد ⇒ لا عرض من المتصفح (وإلا «لا أرصدة مستحقة» كاذبة)
+    sub: 'scr:vz', label: 'مجموعات التأشيرات', noCache: !!(silent && VZ.loaded) || !VZ._balOk,
     visible: function () { return _lfShown_('vzTableWrap'); },
     dirty: _vzDirty_,
-    done: function (ok, err, changed) { if (ok && !changed && cachedBal) VZ.agentBalances = cachedBal; cachedBal = null; }
+    done: function (ok, err, changed) { if (ok && !changed && cachedBal) { VZ.agentBalances = cachedBal; VZ._balOk = true; } cachedBal = null; }
   }, function (res, m) {
     if (!m.cached && !m.live) _perfLog_('متابعة الوكلاء', _t0, res);
     if (!m.cached) cachedBal = null;
@@ -45045,7 +45124,7 @@ function vzLoad(force, silent) {
     VZ.files = res.files || []; VZ.prices = res.prices || []; VZ.transportPrices = res.transportPrices || []; VZ.companies = res.companies || [];
     VZ.trips = res.trips || []; VZ.clients = res.clients || []; VZ.agents = res.agents || [];
     VZ.statuses = res.statuses || []; VZ.payStatuses = res.payStatuses || [];
-    if (m.cached) cachedBal = res.agentBalances || {}; else VZ.agentBalances = res.agentBalances || {};
+    if (m.cached) cachedBal = res.agentBalances || {}; else { VZ.agentBalances = res.agentBalances || {}; VZ._balOk = true; }
     VZ.cateringByGroup = res.cateringByGroup || {};
     VZ.housingByGroup = res.housingByGroup || {};
     VZ.accounts = res.accounts || []; VZ.acctRows = res.acctRows || []; VZ.acctModes = res.acctModes || [];

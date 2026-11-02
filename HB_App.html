@@ -3181,6 +3181,7 @@ window.PERF_ = (function () {
   // المستخدم زر كشف الحساب مرتين (لأن العرض تأخّر) نُلحق ردّ النقرة الثانية بالنداء الجاري
   // بدل تشغيله من جديد — فلا ازدواج ولا تأخير إضافي. (دوال الكتابة WRITE_FNS لا تُدمَج أبدًا:
   // كل كتابة نيّة مستقلة.)
+  var _hbWseq_ = 0;   // ⚡ (V4.367) عدّاد الكتابات الداخلة للطابور
   var COALESCE_FNS = {
     getUnifiedStatement:1, searchBookings:1, getArrivalsByDateRange:1, getPartyBalancesAsOf:1,
     getPartyPayments:1, searchPayments:1, getUnifiedPartyList:1, getBookingsQuickStats:1,
@@ -3277,16 +3278,18 @@ window.PERF_ = (function () {
             var sig = jobSig_(prop, args);
             if (sig) {
               // نفس النداء جارٍ الآن؟ ألحِق الرد به بلا تشغيل ثانٍ
-              if (inflight && !inflight._done && jobSig_(inflight.fn, inflight.args) === sig) {
+              // ⚡ (V4.367) لا إلحاق بنداء بدأ/انتظر قبل كتابة دخلت الطابور بعده (رد «ما قبل الحفظ» كان يُعلَّم مؤكَّداً)
+              if (inflight && !inflight._done && inflight._ws === _hbWseq_ && jobSig_(inflight.fn, inflight.args) === sig) {
                 attachPiggyback_(inflight, onS, onF); return;
               }
               // نفس النداء منتظر في الطابور؟ ألحِق الرد به
               for (var i = 0; i < queue.length; i++) {
-                if (jobSig_(queue[i].fn, queue[i].args) === sig) { attachPiggyback_(queue[i], onS, onF); return; }
+                if (queue[i]._ws === _hbWseq_ && jobSig_(queue[i].fn, queue[i].args) === sig) { attachPiggyback_(queue[i], onS, onF); return; }
               }
             }
           }
-          queue.push({ fn: prop, args: args, onS: onS, onF: onF, _retried: false });
+          try { if (typeof window.gsrIsWrite_ === 'function' && window.gsrIsWrite_(prop)) _hbWseq_++; } catch (eW) {}
+          queue.push({ fn: prop, args: args, onS: onS, onF: onF, _retried: false, _ws: _hbWseq_ });
           pump();
         };
       }
