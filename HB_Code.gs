@@ -5306,6 +5306,7 @@ function saveAccountProfile(token, payload) {
     var row = [name, type, (payload.notes || '').toString(), (payload.phone || '').toString(), (payload.salesAgent || '').toString().trim(), role, code];
     if (rowIdx === -1) sh.appendRow(row);
     else sh.getRange(rowIdx, 1, 1, 7).setValues([row]);
+    try { if (typeof _dvBump_ === 'function') _dvBump_(['hb']); } catch (eDv) {}   // ⚡ (V4.367) بيانات الحساب تظهر بكشف الفندق
     hbLogChange_(user, 'بيانات حساب', name, 'تعديل بيانات حساب' + (renameResult ? (' (بعد إعادة تسمية من "' + oldName + '")') : '') + ' — النوع: ' + type + (role ? ' — الدور: ' + role : '') + (code ? (' — الكود: ' + code) : ''), '', '');
     return {
       ok: true, renamed: !!renameResult,
@@ -5408,6 +5409,7 @@ function deleteAccount(name, token) {
       PropertiesService.getScriptProperties().setProperty(EXTRA_PARTIES_KEY_, JSON.stringify(filtered));
     }
     hbLogChange_(user, 'حذف حساب', name, 'حذف حساب "' + name + '" (بلا حركات)', name, '');
+    try { if (typeof _dvBump_ === 'function') _dvBump_(['hb']); } catch (eDv) {}   // ⚡ (V4.367) حذف حساب يظهر بكشف الفندق
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };

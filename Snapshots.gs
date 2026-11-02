@@ -239,8 +239,15 @@ function _snapPrune_() {
     else keep = ageD <= SNAP_KEEP_RISK_;
     if (keep) return;
     var files = []; try { files = JSON.parse(String(v[5])) || []; } catch (e) {}
-    files.forEach(function (f) { _appTrash_(String(f.blob || f.id || ''), { soft: true }); });   // ⚡ (V4.367) عبر الحارس
-    sh.getRange(i + 2, 7).setValue('محذوفة'); n++;
+    // ⚡ (V4.367) عبر الحارس — «محذوفة» فقط لو حُذفت كل ملفاتها (أو لم تعد موجودة)، وإلا «تعذّر الحذف» فلا تُعدّ ولا تُعاد كل يوم
+    var allOk = true;
+    files.forEach(function (f) {
+      var id = String(f.blob || f.id || ''); if (!id) return;
+      if (_appTrash_(id, { soft: true })) return;
+      try { if (_appDriveItem_(id)) allOk = false; } catch (eI) { allOk = false; }
+    });
+    if (allOk) { sh.getRange(i + 2, 7).setValue('محذوفة'); n++; }
+    else sh.getRange(i + 2, 7).setValue('تعذّر الحذف');
   });
   return n;
 }

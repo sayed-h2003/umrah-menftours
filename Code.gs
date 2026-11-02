@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.367";
+var APP_VERSION = "4.368";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6688,6 +6688,14 @@ function _driveSafeTrash_(fileId, folderId) {
     var ok = false, it = f.getParents();
     while (it.hasNext()) { if (it.next().getId() === folderId) { ok = true; break; } }
     if (!ok) throw new Error('🔒 الملف ليس من ملفات المشاركة المؤقتة');
+  } else {
+    // 🔒 ⚡ (V4.367) معرّف من الواجهة بلا مجلد محدد: فقط ملف مباشر في مجلدات الملفات العابرة (المؤقت/التذاكر/الإشعارات/التصدير) —
+    // لا نقاط استعادة ولا مرفقات قيود ولا سجل محصّن ولا أي ملف آخر داخل المجلد الرئيسي
+    var allow = {};
+    ['TEMP', 'TICKETS', 'NOTICES', 'EXPORTS'].forEach(function (k) { try { allow[String(_appFolder_(k).getId())] = 1; } catch (eK) {} });
+    var okP = false, itP = f.getParents();
+    while (itP.hasNext()) { if (allow[String(itP.next().getId())]) { okP = true; break; } }
+    if (!okP) throw new Error('🔒 لا يُسمح بحذف هذا الملف من هنا');
   }
   // ⚡ (V4.367) وفي كل الأحوال داخل شجرة المجلد الرئيسي فقط (مع مجلد: يكفي أن يكون المجلد نفسه داخلها)
   _appTrash_(f, { via: folderId || null });
@@ -7102,12 +7110,8 @@ function updateFolderSetting_(key, newName, newFolderId) {
     var f = DriveApp.getFolderById(newFolderId);
     props.setProperty(FOLDER_KEYS[key], newFolderId);
     if (newName) props.setProperty('FOLDER_NAME_' + key, newName);
-    // إذا غيّرنا ROOT، نمسح معرّفات الفروع حتى تعاد ربطها تلقائياً داخل الجذر الجديد
-    if (key === 'ROOT') {
-      ['NOTICES','TICKETS','LOGOS','EXPORTS','TEMP'].forEach(function(k) {
-        props.deleteProperty(FOLDER_KEYS[k]);
-      });
-    }
+    // ⚡ (V4.367) تغيير ROOT لا يمسح معرّفات الفروع بعد الآن: _appFolder_ ينقلها تحت الجذر الجديد بنفس معرّفاتها عند أول استخدام
+    // (كان مسحها يترك التذاكر/الإشعارات/المؤقت القديمة خارج الشجرة فيرفض الحارس حذفها وتبقى روابطها بلا مجلد)
     _appTreeReset_();
     // ⚡ (V4.367) المجلد الفرعي يجب أن يكون داخل المجلد الرئيسي: يُنقل تحته فوراً بنفس معرّفه، وإن تعذّر يُستخدم
     // مجلد داخل المجلد الرئيسي بدلاً منه (نفس منطق _appFolder_ — والنتيجة تظهر للمدير بدل أن تحدث بصمت لاحقاً)
@@ -7125,11 +7129,7 @@ function updateFolderSetting_(key, newName, newFolderId) {
     props.setProperty('FOLDER_NAME_' + key, newName);
     // مسح الـ ID القديم حتى يُعاد البحث/الإنشاء بالاسم الجديد
     props.deleteProperty(FOLDER_KEYS[key]);
-    if (key === 'ROOT') {
-      ['NOTICES','TICKETS','LOGOS','EXPORTS','TEMP'].forEach(function(k) {
-        props.deleteProperty(FOLDER_KEYS[k]);
-      });
-    }
+    // ⚡ (V4.367) معرّفات الفروع تبقى (تُنقل تحت الجذر الجديد بنفس معرّفاتها عند أول استخدام)
     _appTreeReset_();   // ⚡ (V4.367)
     return { success: true, message: 'سيتم إنشاء المجلد بالاسم الجديد عند أول استخدام' };
   }
@@ -9452,11 +9452,13 @@ function _tgccSaveOne_(contract, username) {
       var diffs = _ccLogDiffEntries_(no, origRow, oldRow);
       if (diffs.length) logChangesBatch_(username || 'TelegramBot', diffs);
     }
+    try { _vzClearCache_(); } catch (eVz) {}   // ⚡ (V4.367) الإعاشة تظهر ببوتستراب التأشيرات (cateringByGroup) + بصمة التأشيرات
     return { success: true, updated: filled > 0 };
   }
   sh.appendRow(newVals);
   logChange_(username || 'TelegramBot', 'إنشاء اتفاقية إعاشة', no, 'اتفاقية جديدة', '-',
     (contract.provider || '-') + ' — ' + (contract.area || '-') + (contract.totalAmount ? ' — ' + contract.totalAmount : ''));
+  try { _vzClearCache_(); } catch (eVz) {}   // ⚡ (V4.367) الإعاشة تظهر ببوتستراب التأشيرات (cateringByGroup) + بصمة التأشيرات
   return { success: true, created: true };
   } finally { _resRelease_(lock); }   // ⚡ (V4.367) يدفع الكتابة للورقة قبل فك قفل المورد
 }
@@ -11910,6 +11912,8 @@ function cleanupTempFiles_(maxAgeHours) {
         foldersToScan.push(f2);
       }
     } catch (nErr) { Logger.log('cleanupTempFiles_: search-by-name failed for ' + key + ': ' + nErr); }
+    // ⚡ (V4.367) تحقق مباشر بلا الذاكرة (مرة لكل مجلد بكل تشغيل): مجلد نُقل خارج المجلد الرئيسي خلال ساعة نتيجة «داخل» المحفوظة لا يُفرَّغ
+    foldersToScan = foldersToScan.filter(function (fd) { var ok = false; try { ok = _inAppTree_(fd, null, true); } catch (eT) {} if (!ok) outsideFolders++; return ok; });
     if (!foldersToScan.length) return;
     scanned.push(key);
     var folderTrashed = 0, folderKept = 0, folderSeen = 0;
@@ -12659,6 +12663,7 @@ function saveTransportRowEdit(authToken, data) {
   SpreadsheetApp.flush();
   logChange_(session.username, 'تعديل صف كشف النقل السعودي', 'إشعار ' + id, 'مورد/بيان/سعر',
     priceChanged || '-', (data.supplier || '') + ' — ' + (data.desc || ''));
+  try { _vzClearCache_(); } catch (eVz) {}   // ⚡ (V4.367) كشوف الوكلاء (بوتستراب التأشيرات) + بصمة التأشيرات
   return { success: true };
 }
 // 📝 (V4.164) تعديل رقم قيد دورة نقل وحده — كتابة سريعة بلا التأثير على المورد/البيان/السعر،
@@ -12673,6 +12678,7 @@ function deleteTransportRowEdit(authToken, id) {
   var ovr = _taOverrides_();
   if (!ovr[id]) return { success: true };
   _accSheet_(TA_OVR_SHEET, TA_OVR_HEADERS).deleteRow(ovr[id]._row);
+  try { _vzClearCache_(); } catch (eVz) {}   // ⚡ (V4.367)
   return { success: true };
 }
 
@@ -17035,6 +17041,7 @@ function deleteCateringContract(authToken, contractNo, rowId) {
   if (miss) return { success: false, error: 'الاتفاقية غير موجودة' };
   logChange_(session.username, 'حذف اتفاقية إعاشة', delNo, CATERING_SHEET, '-', 'حُذفت الاتفاقية رقم ' + delNo);
   var gl = null; try { if (delId && typeof _glCatPostNow_ === 'function') gl = _glCatPostNow_(session.username, [delId]); } catch (eGl) { gl = { error: eGl.message }; }   // يُلغى قيدها التلقائي فوراً
+  try { _vzClearCache_(); } catch (eVz) {}   // ⚡ (V4.367) الإعاشة تظهر ببوتستراب التأشيرات (cateringByGroup) + بصمة التأشيرات
   return { success: true, gl: gl };
 }
 
@@ -17257,6 +17264,7 @@ function mergeCateringDuplicates(authToken, contractNo) {
     logChange_(session.username, 'دمج اتفاقيات إعاشة مكرَّرة', contractNo, CATERING_SHEET, '-',
       'دُمجت ' + matches.length + ' نسخة لرقم الاتفاقية ' + contractNo + ' في صف واحد');
     var keepId = String(merged[CC_I_.id] || '').trim(); postIds = goneIds.concat(keepId ? [keepId] : []);
+    try { _vzClearCache_(); } catch (eVz) {}   // ⚡ (V4.367) الإعاشة تظهر ببوتستراب التأشيرات (cateringByGroup) + بصمة التأشيرات
     return { success: true, mergedCount: matches.length };
   });
   try { if (postIds.length && typeof _glCatPostNow_ === 'function') _glCatPostNow_(session.username, postIds); } catch (eGl) {}
@@ -18952,6 +18960,10 @@ function _renameInJsonCol_(sheetName, headerName, oldVal, newVal, field) {
 // عمود الوزارة كاملاً فوق صف أضافه/حذفه حفظ متزامن بقفل 'mf'. يُنتظر حتى 30 ثانية؛ لو تعذّر يُكمل كما كان (التسمية الأساسية
 // كُتبت أصلاً، وترك الانتشار ناقصاً يفصل السجلات المرتبطة عن الاسم الجديد)
 function _cascadeClientRename_(oldName, newName) {
+  // 🔒 ⚡ (V4.367) نفس ترتيب الأقفال الموثَّق: قفل السكربت (إن لم يكن للمستدعي) ثم كل الموارد — وإلا تنتظر عملية شاملة أخرى حتى المهلة
+  var sl = LockService.getScriptLock(), hadSl = false;
+  try { hadSl = sl.hasLock(); } catch (eH) {}
+  if (!hadSl) { try { sl.waitLock(30000); } catch (eW) {} }
   var n = 0, rl = _resAllTry_(30000);
   try {
     n += _renameInSheetCol_(ACC_ITEMS_SHEET, 'العميل', oldName, newName);          // بنود الحساب
@@ -18962,7 +18974,7 @@ function _cascadeClientRename_(oldName, newName) {
     n += _renameInSheetCol_('Bookings', 'العميل', oldName, newName);               // إشعارات الوصول
     n += _renameInSheetCol_(MF_SHEET, 'العميل', oldName, newName);                 // ملفات الوزارة (لو الاسم مفرد)
     n += _renameInJsonCol_(MF_SHEET, 'بنود العميل (JSON)', oldName, newName, 'name');
-  } finally { _resRelease_(rl); }
+  } finally { _resRelease_(rl); if (!hadSl) { try { sl.releaseLock(); } catch (eR) {} } }
   try { clearAllCache_(); } catch (e) {}
   try { _mfClearBootstrapCache_(); } catch (e) {}
   return n;
@@ -18970,6 +18982,10 @@ function _cascadeClientRename_(oldName, newName) {
 // كل مواضع اسم الرحلة خارج شيت الرحلات نفسه (كشف المعتمرين والإشعارات لهما دالتاهما أعلاه)
 // 🔒 ⚡ (V4.367) نفس أقفال الموارد كـ_cascadeClientRename_ (عمود «الرحلة المرتبطة» بالوزارة يُعاد كتابته كاملاً)
 function _cascadeTripRename_(oldName, newName) {
+  // 🔒 ⚡ (V4.367) نفس ترتيب الأقفال الموثَّق: قفل السكربت (إن لم يكن للمستدعي) ثم كل الموارد — وإلا تنتظر عملية شاملة أخرى حتى المهلة
+  var sl = LockService.getScriptLock(), hadSl = false;
+  try { hadSl = sl.hasLock(); } catch (eH) {}
+  if (!hadSl) { try { sl.waitLock(30000); } catch (eW) {} }
   var n = 0, rl = _resAllTry_(30000);
   try {
     n += _renameInSheetCol_(ACC_ITEMS_SHEET, 'اسم الرحلة', oldName, newName);
@@ -18981,7 +18997,7 @@ function _cascadeTripRename_(oldName, newName) {
     n += _renameInSheetCol_(HOUSING_NOTES_SHEET_, 'الرحلات', oldName, newName);
     // مجموعات الدمج تحفظ الرحلات كمصفوفة نصوص JSON
     n += _renameInJsonCol_(ACC_MERGE_SHEET, 'الرحلات (JSON)', oldName, newName, null);
-  } finally { _resRelease_(rl); }
+  } finally { _resRelease_(rl); if (!hadSl) { try { sl.releaseLock(); } catch (eR) {} } }
   try { clearAllCache_(); } catch (e) {}
   try { _mfClearBootstrapCache_(); } catch (e) {}
   return n;
@@ -20370,6 +20386,9 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
   // عند أول فتح شاشة بعد أي حفظ كشف. الكشف يؤثر فقط على قائمة الرحلات (المقاعد/الجاهزية) والسجل العام وفهرس أعداد العملاء.
   _perfStepIf_('saveTripPilgrims›cache', function () {
     ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'].forEach(function (k) { try { clearCachedData_(k); } catch (eC) {} });
+    // ⚡ (V4.367) أكثر كتابة للمعتمرين تكراراً: بصمتا المعتمرين والرحلات (المشرفون بورقة الرحلات) ⇒ كشف الرحلة والسجل وقائمة الرحلات
+    // المفتوحة عند الآخرين تتحدث، ولا يُعتبر ما بمتصفحهم «مؤكَّد الحداثة»
+    try { if (typeof _dvBump_ === 'function') _dvBump_(['pilgrims', 'trips']); } catch (eDv) {}
   });
 
   // 💵 (V4.12) مزامنة حسابات العملاء تلقائياً لو للرحلة تسعير مفعَّل («تطبيق» ضُغط من قبل):

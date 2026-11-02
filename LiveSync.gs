@@ -50,13 +50,25 @@ function _lfG_() { return (typeof globalThis !== 'undefined') ? globalThis : thi
 function _dvTok_() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
 // تغيير رموز مجموعات (بعد كتابة). الكتابات المعلّقة تُدفع أولاً — انظر رأس الملف
+// ⚡ (V4.367) الرمز يُولَّد بعد الدفع، ويُضمن أكبر من المخزَّن (نفس الملّي ثانية/فرق ساعات الخوادم) — المتصفح لا يقبل إلا الأكبر
+function _dvNext_(cur) {
+  var t = _dvTok_();
+  if (cur && t <= String(cur)) {
+    var ms = parseInt(String(cur).slice(0, 8), 36);
+    t = (isFinite(ms) ? (ms + 1).toString(36) : Date.now().toString(36)) + Math.random().toString(36).slice(2, 7);
+  }
+  return t;
+}
 function _dvBump_(groups) {
   try {
-    var o = {}, t = _dvTok_(), n = 0;
-    (groups || []).forEach(function (g) { if (g && LF_GROUPS_.indexOf(g) >= 0) { o['dv_' + g] = t; n++; } });
-    if (!n) return;
+    var ks = [], seen = {};
+    (groups || []).forEach(function (g) { if (g && LF_GROUPS_.indexOf(g) >= 0 && !seen[g]) { seen[g] = 1; ks.push('dv_' + g); } });
+    if (!ks.length) return;
     try { SpreadsheetApp.flush(); } catch (eF) {}
-    CacheService.getScriptCache().putAll(o, LF_DV_TTL_);
+    var c = CacheService.getScriptCache(), cur = {}, o = {};
+    try { cur = c.getAll(ks) || {}; } catch (eG) {}
+    ks.forEach(function (k) { o[k] = _dvNext_(cur[k]); });
+    c.putAll(o, LF_DV_TTL_);
   } catch (e) {}
 }
 // من نقاط إبطال الكاش القديمة (_cacheBust_) — مجموعة غير معروفة ⇒ كل مجموعات العمرة (أمان)
@@ -64,14 +76,16 @@ function _dvBumpCacheGroup_(group) { _dvBump_(LF_CG_MAP_[group] || LF_UMRAH_GROU
 
 // كل الرموز الحالية (قراءة واحدة). المفقود يُولَّد ويُحفظ
 function _dvAll_() {
-  var c = CacheService.getScriptCache(), got = {}, out = {}, miss = {}, nm = 0;
-  try { got = c.getAll(LF_GROUPS_.map(function (g) { return 'dv_' + g; })) || {}; } catch (e) {}
+  var c = CacheService.getScriptCache(), got = {}, out = {}, miss = {}, nm = 0, okRead = true;
+  try { got = c.getAll(LF_GROUPS_.map(function (g) { return 'dv_' + g; })) || {}; } catch (e) { okRead = false; }
   LF_GROUPS_.forEach(function (g) {
     var v = got['dv_' + g];
     if (v) out[g] = v;
-    else { out[g] = miss['dv_' + g] = 'e' + _dvTok_(); nm++; }
+    // ⚡ (V4.367) رمز مفقود ⇒ رمز زمني عادي (أحدث من كل سابق ⇒ تحقق إضافي واحد بالمتصفح، لا تجاهل) — كان 'e…' أصغر دائماً فيُتجاهل
+    else { out[g] = miss['dv_' + g] = _dvTok_(); nm++; }
   });
-  if (nm) { try { c.putAll(miss, LF_DV_TTL_); } catch (e) {} }
+  // فشل القراءة نفسها (خطأ مؤقت) ⇒ لا كتابة فوق رموز صحيحة موجودة
+  if (nm && okRead) { try { c.putAll(miss, LF_DV_TTL_); } catch (e) {} }
   return out;
 }
 
@@ -119,7 +133,8 @@ function _lfCacheable_(data) {
  */
 function lfFetch(token, fn, args, h) {
   _lfAuth_(token);
-  var grp = LF_READ_[fn], G = _lfG_();
+  // ⚡ (V4.367) أسماء القائمة نفسها فقط (لا constructor/toString الموروثة)
+  var grp = (typeof fn === 'string' && Object.prototype.hasOwnProperty.call(LF_READ_, fn)) ? LF_READ_[fn] : null, G = _lfG_();
   if (!grp || typeof G[fn] !== 'function') throw new Error('lfFetch: دالة غير مسموحة — ' + fn);
   var dv = _dvAll_();   // قبل البناء (انظر رأس الملف)
   var t0 = Date.now();
