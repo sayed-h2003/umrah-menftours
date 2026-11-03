@@ -7555,7 +7555,7 @@ var LF_ = (function () {
       fetch(c.url + '/rest/v1/' + path, { headers: { apikey: c.anon, Authorization: 'Bearer ' + c.token, Accept: 'application/json' }, signal: ctl ? ctl.signal : undefined })
         .then(function (r) {
           clearTimeout(to);
-          if (r.status === 401 || r.status === 403) { console.warn('LF supa: رمز مرفوض — يُعطَّل لهذه الجلسة'); SP.st = 3; return null; }
+          if (r.status === 401 || r.status === 403) { SP.last = r.status + ' ' + (r.headers.get('sb-error-code') || ''); console.warn('LF supa: مرفوض ' + SP.last + ' — يُعطَّل لهذه الجلسة'); SP.st = 3; SP.cfg = null; try { sessionStorage.removeItem(spStoreKey()); } catch (e3) {} return null; }
           return r.ok ? r.json() : null;
         }).then(function (j) { cb(j); }, function () { clearTimeout(to); cb(null); });
     } catch (e) { clearTimeout(to); cb(null); }
