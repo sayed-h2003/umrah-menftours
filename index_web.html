@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.369  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.372  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7525,6 +7525,68 @@ var LF_ = (function () {
       });
     });
   }
+  /* ---------- ⚡ (V4.372) قراءة سريعة من Supabase لشاشتين (قائمة الرحلات + كشف الرحلة) ----------
+     الخادم (SupaSync.gs) يرفع نتائج الدالتين لجدول read_cache كل دقيقة عند تغيّر البصمات. المتصفح يقرؤه مباشرة برمز قصير العمر
+     (supaIssueToken) ولا يعتمد عليه إلا إن كانت بصمات الصف ≥ آخر بصمات يعرفها من الخادم؛ غير ذلك أو أي خطأ ⇒ المسار الحالي.
+     مفتاح الإيقاف: localStorage.lf_supa_off = '1' · أو SUPA_ENABLED بالخادم. الأرصدة والقيود لا تمر من هنا إطلاقاً. */
+  var SUPA_FN = { getTripsList: 1, getTripPilgrims: 1 };
+  var SP = { st: 0, cfg: null, fails: 0, off: false, next: 0 };   // st: 0 لم يبدأ · 1 جارٍ · 2 جاهز · 3 معطَّل
+  function spStoreKey() { return 'lf_supa|' + user(); }
+  function spReady() { return SP.st === 2 && !SP.off && SP.cfg && SP.cfg.exp - now() > 120000; }
+  function spInit() {
+    if (SP.st !== 0 || !window.authToken || !user() || now() < SP.next) return;
+    try { if (localStorage.getItem('lf_supa_off') === '1') { SP.st = 3; return; } } catch (e0) {}
+    try { var c = JSON.parse(sessionStorage.getItem(spStoreKey()) || 'null'); if (c && c.token && c.exp - now() > 600000) { SP.cfg = c; SP.st = 2; return; } } catch (e1) {}
+    SP.st = 1; var ep = S.epoch;
+    raw().withSuccessHandler(function (r) {
+      if (ep !== S.epoch) { SP.st = 0; return; }
+      if (!r || !r.enabled || !r.token) { SP.st = 3; return; }
+      SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt }; SP.st = 2;
+      try { sessionStorage.setItem(spStoreKey(), JSON.stringify(SP.cfg)); } catch (e2) {}
+    }).withFailureHandler(function () { SP.st = 0; SP.next = now() + 60000; }).supaIssueToken(window.authToken);
+  }
+  function spReset() {
+    SP.st = 0; SP.cfg = null; SP.fails = 0; SP.off = false; SP.next = 0;
+    try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('lf_supa|') === 0) sessionStorage.removeItem(k); }); } catch (e) {}
+  }
+  function spGet(path, cb) {
+    var c = SP.cfg, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} }, 8000);
+    try {
+      fetch(c.url + '/rest/v1/' + path, { headers: { apikey: c.anon, Authorization: 'Bearer ' + c.token, Accept: 'application/json' }, signal: ctl ? ctl.signal : undefined })
+        .then(function (r) {
+          clearTimeout(to);
+          if (r.status === 401 || r.status === 403) { console.warn('LF supa: رمز مرفوض — يُعطَّل لهذه الجلسة'); SP.st = 3; return null; }
+          return r.ok ? r.json() : null;
+        }).then(function (j) { cb(j); }, function () { clearTimeout(to); cb(null); });
+    } catch (e) { clearTimeout(to); cb(null); }
+  }
+  function spKeyOf(fn, args) { return fn === 'getTripsList' ? '' : String(args[1] === undefined || args[1] === null ? '' : args[1]); }
+  function spFresh(fn, row) {
+    return !!(row && row.dv && groupsOf(fn).every(function (g) { return S.dv[g] && row.dv[g] && tokCmp(row.dv[g], S.dv[g]) >= 0; }));
+  }
+  // onRes: نفس معالج رد lfFetch · fallback: المسار القديم (الخادم)
+  function spRead(fn, args, e, onRes, fallback) {
+    var ep = S.epoch, base = 'read_cache?fn=eq.' + fn + '&args_key=eq.' + encodeURIComponent(spKeyOf(fn, args)) + '&select=';
+    var fb = function (stale) { if (!stale) { SP.fails++; if (SP.fails >= 4) SP.off = true; } fallback(); };
+    var use = function (row) {
+      if (!spFresh(fn, row)) { fb(true); return; }   // الصف أقدم من آخر بصمات الخادم ⇒ المسار القديم (مزامنة الدقيقة لم تلحق بعد)
+      SP.fails = 0;
+      if (e && e.h && row.h === e.h) onRes({ same: true, h: row.h, dv: row.dv, g: READ[fn] });
+      else onRes({ data: row.data, h: row.h, dv: row.dv, g: READ[fn] });
+    };
+    spGet(base + ((e && e.h) ? 'h,dv' : 'h,dv,data'), function (rows) {
+      if (ep !== S.epoch) { onRes(null); return; }
+      if (!rows || !rows.length) { fb(false); return; }
+      var row = rows[0];
+      if (row.data !== undefined || (e && e.h && row.h === e.h)) { use(row); return; }
+      spGet(base + 'h,dv,data', function (full) {   // البصمة مختلفة ⇒ البيانات كاملة
+        if (ep !== S.epoch) { onRes(null); return; }
+        if (!full || !full.length || full[0].data === undefined) { fb(false); return; }
+        use(full[0]);
+      });
+    });
+  }
+
   // الشبكة: نداء الإقلاع (بيانات كاملة تُقارن بالمتصفح) أو lfFetch بالبصمة
   function netCheck(fn, args, k, e, opts, ok, fail) {
     // جلب جارٍ لنفس المفتاح: البصمة الجديدة التي سيعيدها تُطلق onChanged ⇒ لا جلب ثانٍ لنفس الاشتراك (refreshSub يتحقق من fk)
@@ -7549,7 +7611,7 @@ var LF_ = (function () {
       r.withSuccessHandler(function (d) { store(d, '', null, null); }).withFailureHandler(fail)[fn].apply(r, curArgs(args));
       return;
     }
-    lfFetch(fn, curArgs(args), e && e.h, function (r) {
+    var onRes = function (r) {
       if (!r) { fail(new Error('رد فارغ')); return; }
       S.skipK = k; try { learn(r.dv); } finally { S.skipK = null; }   // بصمة هذا الرد نفسه لا تطلب إعادة جلبه
       if (r.same && e) {
@@ -7558,7 +7620,10 @@ var LF_ = (function () {
         return;
       }
       store(r.data, r.h, r.h ? r.dv : null, r.g);
-    }, fail);
+    };
+    var viaApps = function () { lfFetch(fn, curArgs(args), e && e.h, onRes, fail); };
+    if (SUPA_FN[fn]) { spInit(); if (spReady()) { spRead(fn, args, e, onRes, viaApps); return; } }
+    viaApps();
   }
 
   /* ---------- الاشتراكات والتحديث الحي ----------
@@ -7831,6 +7896,7 @@ var LF_ = (function () {
     el.innerHTML = html;
   }
   function clearAll() {
+    spReset();   // ⚡ (V4.372)
     S.epoch++; S.mem = {}; S.subs = {}; S.dv = {}; S.dirtyG = {}; S.wroteG = {}; S.dvAt = 0; S.again = {}; S.infl = {}; S.inflT = {}; S.fk = {}; S.fkT = {}; S.lastW = {};
     db(function (d) { if (!d) return; try { d.transaction('d', 'readwrite').objectStore('d').clear(); } catch (e) {} });
     // ⚡ (V4.367) كشوف برنامج الحجوزات المضمّنة (HBLF) على نفس الجهاز تُمسح بالخروج أيضاً
@@ -7845,7 +7911,7 @@ var LF_ = (function () {
   api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
   api.verify = verifySub;
   api.showBar = function (id) { var s = S.subs[id]; if (!s) return; s.snooze = 0; if (s.fresh) conflictBar(s); };
-  api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
+  api._sp = SP; api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
   return api;
 })();
 LF_.install();
@@ -9034,7 +9100,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.369";
+var CLIENT_APP_VERSION = "4.372";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

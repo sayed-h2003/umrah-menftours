@@ -39,7 +39,7 @@ create table if not exists read_cache_perms (
   perm text not null               -- '*' = أي مستخدم مسجَّل
 );
 insert into read_cache_perms (fn, perm) values
-  ('getTripsList','trips.view'), ('getTripPilgrims','kashf.view'), ('getAllMovementsAuth','*'),
+  ('getTripsList','*'), ('getTripPilgrims','*'), ('getAllMovementsAuth','*'),   -- كما بالخادم الحالي: requireAuth_ فقط
   ('getGlobalPilgrimsRegistry','registry.view'), ('getAllBookingsAuth','bookings.view'),
   ('getVisaBootstrap','visas.view'), ('getVisaTripLinks','visas.view'),
   ('getMinistryBootstrap','ministry.view'), ('getMinistryTripLinks','ministry.view'),

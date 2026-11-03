@@ -373,6 +373,7 @@ function _mgSave_(st) { PropertiesService.getScriptProperties().setProperty('MG_
 function _mgNewCtx_() { MG_CTX_ = { warn: {}, skip: {}, now: new Date().toISOString() }; MG_CACHE_ = {}; }
 
 function mgPing() {
+  requireScriptOwner_();   // 🔒 (V4.372) لا تُستدعى من المتصفح: صاحب السكربت من المحرر فقط
   var r = _mgReq_('get', 'clients?select=name&limit=1');
   var msg = r.code === 200 ? '✅ الاتصال سليم (Supabase يرد)' : '❌ فشل الاتصال: ' + r.code + ' ' + String(r.text).slice(0, 200);
   Logger.log(msg); return msg;
@@ -380,6 +381,7 @@ function mgPing() {
 
 /* فحص بلا كتابة */
 function mgDryRun() {
+  requireScriptOwner_();
   _mgNewCtx_();
   var refs = _mgRefs_(), lines = [], tot = 0;
   MG_SPECS_.forEach(function (sp) {
@@ -395,7 +397,8 @@ function mgDryRun() {
 }
 
 /* النقل الفعلي — يستأنف تلقائياً */
-function mgRun() {
+function mgRun() { requireScriptOwner_(); return mgRun_(); }
+function mgRun_() {   // خاصة: يستدعيها مشغّل الاستئناف التلقائي أيضاً
   var t0 = Date.now(), st = _mgState_();
   _mgNewCtx_();
   _mgClearTriggers_();
@@ -427,16 +430,17 @@ function mgRun() {
   }
   _mgSave_(st);
   if (!done) {
-    ScriptApp.newTrigger('mgRun').timeBased().after(60 * 1000).create();
+    ScriptApp.newTrigger('mgRun_').timeBased().after(60 * 1000).create();
     Logger.log('⏳ لم ينتهِ بعد — سيستأنف تلقائياً بعد دقيقة (الجدول ' + (st.i + 1) + ' من ' + MG_SPECS_.length + ')');
     return 'partial';
   }
   Logger.log('✅ انتهى النقل — شغّل mgVerify() للمطابقة');
-  var rep = mgReport(); return rep;
+  var rep = _mgReportText_(); return rep;
 }
-function _mgClearTriggers_() { ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'mgRun') { try { ScriptApp.deleteTrigger(t); } catch (e) {} } }); }
+function _mgClearTriggers_() { ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'mgRun_' || t.getHandlerFunction() === 'mgRun') { try { ScriptApp.deleteTrigger(t); } catch (e) {} } }); }
 
-function mgReport() {
+function mgReport() { requireScriptOwner_(); return _mgReportText_(); }
+function _mgReportText_() {
   var st = _mgState_(), L = ['تقرير النقل — الجدول ' + Math.min(st.i + 1, MG_SPECS_.length) + ' من ' + MG_SPECS_.length];
   Object.keys(st.tables).forEach(function (t) {
     var x = st.tables[t];
@@ -449,6 +453,7 @@ function mgReport() {
 
 /* مسح جداول الوجهة بترتيب عكسي (لإعادة نقل نظيفة) — لا يُشغَّل بالخطأ: يتطلب mgReset('نعم') */
 function mgReset(confirm) {
+  requireScriptOwner_();
   if (confirm !== 'نعم') { Logger.log('لتأكيد المسح: mgReset("نعم")'); return 'لم يُنفَّذ'; }
   var tabs = MG_SPECS_.filter(function (s) { return s.t; }).map(function (s) { return s.t; }).reverse(), msgs = [];
   tabs.forEach(function (t) {
@@ -462,6 +467,7 @@ function mgReset(confirm) {
 
 /* ---------- المطابقة: الأعداد + الأرصدة (GL كاملاً) + مجاميع الحسابات ---------- */
 function mgVerify() {
+  requireScriptOwner_();
   _mgNewCtx_();
   var refs = _mgRefs_(), exp = {}, sums = {}, glKeys = {};
   var by = function (t) { return MG_SPECS_.filter(function (x) { return x.t === t; })[0]; };

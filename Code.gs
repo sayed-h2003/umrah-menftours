@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.369";
+var APP_VERSION = "4.372";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -14101,6 +14101,10 @@ function _tripFormatTime_(val) {
 // يرجع كل الرحلات (الأحدث أولاً) مع عدد المعتمرين المحسوب لكل رحلة من كشف المعتمرين
 function getTripsList(authToken) {
   requireAuth_(authToken);
+  return _getTripsListCore_();
+}
+// ⚡ (V4.372) النواة بلا فحص جلسة — تستخدمها مزامنة Supabase (SupaSync.gs) بنفس المنطق تماماً
+function _getTripsListCore_() {
 
   // ⚡ كاش: قائمة الرحلات تقرأ 3 شيتات (Trips/Pilgrims/Bookings) — تُمسح تلقائياً مع أي حفظ/حذف
   var _cachedTrips = getCachedData_('trips_list_cache');
