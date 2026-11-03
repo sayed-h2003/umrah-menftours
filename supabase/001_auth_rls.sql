@@ -70,6 +70,10 @@ create policy rc_read on read_cache for select to authenticated using (
 );
 
 grant select on data_versions, read_cache to authenticated;
+-- سياسة rc_read تستعلم read_cache_perms ⇒ يلزم منح قراءة + سياسة (لا بيانات حساسة فيه)
+grant select on read_cache_perms to authenticated;
+drop policy if exists rcp_read on read_cache_perms;
+create policy rcp_read on read_cache_perms for select to authenticated using (app_user() is not null);
 -- app_users و login_attempts و read_cache_perms: بلا أي منح ⇒ لا يراها المتصفح أبداً (كلمات المرور محمية)
 
 -- 7) رفع صيغة كلمة المرور (PBKDF2) يخزَّن بنفس العمود
