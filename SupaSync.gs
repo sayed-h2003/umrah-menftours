@@ -11,7 +11,7 @@
 var SUPA_FNS_ = ['getTripsList', 'getTripPilgrims'];
 var SUPA_BUDGET_MS_ = 240000;
 
-function _supaP_(k) { return String(PropertiesService.getScriptProperties().getProperty(k) || ''); }
+function _supaP_(k) { return String(PropertiesService.getScriptProperties().getProperty(k) || '').replace(/^[\s"']+|[\s"']+$/g, ''); }
 function _supaOn_() { return _supaP_('SUPA_ENABLED') === '1' && !!_supaP_('SUPA_URL') && !!_supaP_('SUPA_SERVICE_KEY'); }
 
 function _supaReq_(method, path, body, prefer) {
