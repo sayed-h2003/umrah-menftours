@@ -60,6 +60,26 @@ function supaSyncInstall() {
 function supaSyncUninstall() { requireScriptOwner_(); _supaUninstall_(); }
 function _supaUninstall_() { ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'supaSyncTick_' || t.getHandlerFunction() === 'supaSyncTick') { try { ScriptApp.deleteTrigger(t); } catch (e) {} } }); }
 
+/* فحص فوري من المحرر (صاحب السكربت): يعرض حالة الإعداد، يشغّل مزامنة الآن، ويعدّ ما بـ Supabase — بلا أسرار */
+function supaSyncNow() {
+  requireScriptOwner_();
+  var L = ['SUPA_URL: ' + (_supaP_('SUPA_URL') ? 'موجود' : '❌ ناقص'), 'SUPA_SERVICE_KEY: ' + (_supaP_('SUPA_SERVICE_KEY') ? 'موجود' : '❌ ناقص'),
+    'SUPA_ANON_KEY: ' + (_supaP_('SUPA_ANON_KEY') ? 'موجود' : '❌ ناقص'), 'SUPA_JWT_SECRET: ' + (_supaP_('SUPA_JWT_SECRET') ? 'موجود' : '❌ ناقص'), 'SUPA_ENABLED: ' + (_supaP_('SUPA_ENABLED') || '❌ غير مضبوط') + (_supaP_('SUPA_ENABLED') === '1' ? '' : ' (يجب 1)')];
+  if (typeof _getTripsListCore_ !== 'function') L.push('❌ Code.gs قديم: الدالة _getTripsListCore_ غير موجودة — استبدل Code.gs');
+  var trig = ScriptApp.getProjectTriggers().filter(function (t) { return /^supaSyncTick_?$/.test(t.getHandlerFunction()); }).length;
+  L.push('مشغّل المزامنة: ' + (trig ? 'موجود' : '❌ غير موجود — شغّل supaSyncInstall()'));
+  if (_supaOn_() && typeof _getTripsListCore_ === 'function') {
+    var t0 = Date.now(), r = supaSyncTick_();
+    L.push('نتيجة المزامنة الآن: ' + r + ' (' + (Date.now() - t0) + ' مل ث)');
+    var q = _supaReq_('get', 'read_cache?select=fn,args_key&limit=5000');
+    if (q.code === 200) { var rows = JSON.parse(q.text), c = {}; rows.forEach(function (x) { c[x.fn] = (c[x.fn] || 0) + 1; }); L.push('read_cache بـ Supabase: ' + (rows.length ? JSON.stringify(c) : '❌ فارغ')); }
+    else L.push('❌ تعذّر قراءة read_cache: ' + q.code + ' ' + String(q.text).slice(0, 160) + ' (هل شغّلت SQL المرحلة 3-أ؟)');
+    var d = _supaReq_('get', 'data_versions?select=group_name');
+    if (d.code === 200) L.push('data_versions: ' + JSON.parse(d.text).length + ' مجموعة');
+  }
+  var out = L.join('\n'); Logger.log(out); return out;
+}
+
 function _supaSynced_() { try { return JSON.parse(_supaP_('SUPA_SYNCED') || '{}') || {}; } catch (e) { return {}; } }
 
 function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا تُستدعى من المتصفح
