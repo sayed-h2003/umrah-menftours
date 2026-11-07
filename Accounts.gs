@@ -213,7 +213,10 @@ function _glSS_() {
 // ⚡ (V4.252) أي وصول للشيت عبر _glSheet_ يُعتبر «كتابة محتملة» ⇒ يُعلَّم التنفيذ متسخاً ويتغيّر رقم إصدار البيانات فيُبطَل الكاش.
 // القراءة البحتة تمر عبر _glSheetR_ (لا تُبطل شيئاً)
 function _glSheet_(key) { _glTouch_(key); return _glSheetR_(key); }
+// 🗄️ (V4.373) طبقة التخزين: عند GL_STORE=supabase تُرجع قيود/سطور GL «واجهة شيت» فوق Supabase (GlStore.gs) — وإلا الشيت كما هو
+function _glStX_(key) { return (key === 'entries' || key === 'lines') && typeof _glStOn_ === 'function' && _glStOn_(); }
 function _glSheetR_(key) {
+  if (_glStX_(key)) return _glStSheet_(key);
   var def = GL_SHEETS_[key], ss = _glSS_();
   var sh = ss.getSheetByName(def.name);
   if (!sh) {
@@ -240,6 +243,7 @@ function _glSheetR_(key) {
 // قراءة بعرض الأعمدة المعرّفة حتى لو الشيت أُنشئ بنسخة أقدم أقل أعمدة
 function _glRowsW_(key) { return GL_CACHE_KEYS_[key] ? _glRowsC_(key, true) : _glRowsWRaw_(key); }
 function _glRowsWRaw_(key) {
+  if (_glStX_(key)) return _glStRows_(key);
   var sh = _glSheetR_(key), last = sh.getLastRow(), W = GL_SHEETS_[key].headers.length;
   if (last < 2) return [];
   var have = Math.max(1, Math.min(W, sh.getLastColumn()));
@@ -247,6 +251,7 @@ function _glRowsWRaw_(key) {
 }
 function _glRows_(key) { return GL_CACHE_KEYS_[key] ? _glRowsC_(key, false) : _glRowsRaw_(key); }
 function _glRowsRaw_(key) {
+  if (_glStX_(key)) return _glStRows_(key);
   var sh = _glSheetR_(key), last = sh.getLastRow();
   if (last < 2) return [];
   return sh.getRange(2, 1, last - 1, GL_SHEETS_[key].headers.length).getValues();
@@ -271,6 +276,7 @@ function _glTouch_(key) {
   if (!GL_CACHE_KEYS_[key]) return;
   _GL_ROWS_MEMO_ = {};
   if (_GL_DIRTY_) return;
+  if (typeof _glStPre_ === 'function' && _glStX_(key)) _glStPre_();   // 🗄️ نسخة البيانات قبل أول كتابة (لتبذير صورة التخزين من الكاش)
   _GL_DIRTY_ = true; _glBump_();
   try { CacheService.getScriptCache().put('gl_wip', String(Date.now()), 600); } catch (e) {}
 }
@@ -302,12 +308,12 @@ function _glNamedLock_(name) {
     var t0 = Date.now(), end = t0 + Math.max(0, ms || 0), wait = 150;
     try {
       for (;;) {
-        if (attempt()) { _GL_NL_DEPTH_[name] = 1; held = true; try { if (typeof _perfLockWait_ === 'function') _perfLockWait_(name, Date.now() - t0); } catch (eP) {} return true; }
+        if (attempt()) { _GL_NL_DEPTH_[name] = 1; held = true; if (name === 'gl' && typeof _glStOnAcquire_ === 'function') _glStOnAcquire_(); try { if (typeof _perfLockWait_ === 'function') _perfLockWait_(name, Date.now() - t0); } catch (eP) {} return true; }
         if (Date.now() + wait > end) return false;
         Utilities.sleep(wait); wait = Math.min(1000, Math.round(wait * 1.5));
       }
     } catch (eC) {   // الكاش/القفل غير متاح ⇒ قفل السكربت التقليدي
-      fb = LockService.getScriptLock(); held = fb.tryLock(Math.max(1, ms || 0)); return held;
+      fb = LockService.getScriptLock(); held = fb.tryLock(Math.max(1, ms || 0)); if (held && name === 'gl' && typeof _glStOnAcquire_ === 'function') _glStOnAcquire_(); return held;
     }
   };
   return {
@@ -326,9 +332,13 @@ function _glNamedLock_(name) {
 }
 function _glLock_() { if (typeof _audGate_ === 'function') _audGate_(); _GL_LOCKN_++; return _glNamedLock_('gl'); }   // 🛡️ (V4.345) لا حفظ مالي بلا سجل تتبع
 function _glUnlock_(lock) {
+  var stErr = null;
+  if (typeof _glStFlush_ === 'function' && _glStX_('entries')) { try { _glStFlush_(); } catch (eSt) { stErr = eSt; } }   // 🗄️ رفع تعديلات القيود/السطور دفعة ذرّية قبل فك القفل
   if (_GL_DIRTY_) { _glBump_(); try { CacheService.getScriptCache().remove('gl_wip'); } catch (e) {} }
   _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1);
+  if (_GL_LOCKN_ === 0 && typeof _glStWarm_ === 'function' && _glStX_('entries')) { if (stErr) _glStDrop_(); else _glStWarm_(); }
   try { lock.releaseLock(); } catch (e) {}
+  if (stErr) throw stErr;
 }
 function _glCK_(k) { return 'glc_' + _glSSId_().slice(-10) + '_' + k; }
 // تخزين مضغوط على أجزاء (حد القيمة الواحدة 100KB) — التواريخ تُحفظ كـ {$d:ms} وتعود كائنات Date كما بالشيت
@@ -1465,6 +1475,7 @@ function glSyncParties(authToken) {
    الآن: قفل مستقل «seq» + قراءة العدّاد مباشرة من الشيت + لا يقل أبداً عن أكبر رقم قيد موجود فعلاً */
 function _glNextEntrySeq_(n) {
   n = Math.max(1, parseInt(n, 10) || 1);
+  if (_glStX_('entries')) return _glStNextSeq_(n);   // 🗄️ SEQUENCE بقاعدة البيانات — لا يُعاد رقم أبداً
   var lk = _glNamedLock_('seq'); lk.waitLock(60000);
   try {
     var sh = _glSheetR_('settings'), last = sh.getLastRow(), row = 0, cur = 0;
@@ -1590,6 +1601,7 @@ function _glWriteEntry_(v, meta, user) {
 // يُرجع null لو البحث غير متاح (فيُستخدم المسح الكامل القديم)
 function _glFindRows_(key, id) {
   id = _glStr_(id); if (!id) return [];
+  if (_glStX_(key)) return null;   // 🗄️ لا TextFinder بالتخزين ⇒ المسح الكامل من الصورة/الكاش
   var sh = _glSheetR_(key), last = sh.getLastRow(); if (last < 2) return [];
   var col = sh.getRange(2, 1, last - 1, 1);
   if (typeof col.createTextFinder !== 'function') return null;
