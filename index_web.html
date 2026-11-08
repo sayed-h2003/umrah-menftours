@@ -5079,6 +5079,13 @@ input[type="date"]:not(:focus):not(:valid) {
   #mfColFilterPop .cf-it input{ width:auto; margin:0; }
   #mfColFilterPop .cf-it .n{ color:#94a3b8; font-size:10px; margin-inline-start:auto; }
   #mfColFilterPop .cf-hint{ font-size:9.5px; color:#94a3b8; margin-top:4px; }
+  #mfColFilterPop .cf-x{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:5px; font-size:11px; }
+  #mfColFilterPop .cf-x label{ display:flex; align-items:center; gap:5px; cursor:pointer; color:#b91c1c; font-weight:700; margin:0; }
+  #mfColFilterPop .cf-x input{ width:auto; margin:0; }
+  #mfColFilterPop .cf-q{ cursor:help; width:16px; height:16px; line-height:15px; text-align:center; border-radius:50%; background:#e2e8f0; color:#475569; font-size:10px; font-weight:800; }
+  #mfColFilterPop .cf-syn{ flex-basis:100%; white-space:pre-line; font-size:10.5px; line-height:1.6; background:#f8fafc; border:1px solid #e2e8f0; border-radius:7px; padding:6px 8px; color:#334155; direction:rtl; }
+  #mfColFilterPop .cf-bad{ flex-basis:100%; font-size:10px; color:#b45309; }
+  button.mf-thic.ex::after, button.vz-thic.ex::after { content:'⛔'; font-size:8px; margin-inline-start:1px; }
 
   /* ===== (V4.111) أقسام الشاشة القابلة للطي + وميض التنبيهات ===== */
   #section-ministry .mf-sec{ border:1px solid var(--mfBorder); border-radius:12px; background:var(--mfSurf);
@@ -6550,7 +6557,7 @@ function _tblHead_(id, cols, thClass, reorderCols, reorderSaveFn, colWMap, colWS
     if (c.nof) return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + '>' + escapeHtml_(c.label) + '</th>';
     var si = st.sort.key === c.k ? (st.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + (st2 ? ' style="' + st2 + '"' : '') + drag(c.k) + ' title="اسحب لإعادة ترتيب الأعمدة"><div class="' + thinCls + '"><span>' + escapeHtml_(c.label) + '</span>' +
-      '<button class="' + thClass + (_cfOn_(st.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();_tblColFilter_(\'' + id + '\',event,\'' + c.k + '\')">▾</button>' +
+      '<button class="' + thClass + _cfCls_(st.colFilters[c.k]) + '" title="تصفية هذا العمود" onclick="event.stopPropagation();_tblColFilter_(\'' + id + '\',event,\'' + c.k + '\')">▾</button>' +
       '<button class="' + thClass + (st.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();_tblSortBy_(\'' + id + '\',\'' + c.k + '\')">' + si + '</button></div>' + rszHandle(c.k) + '</th>';
   }).join('');
 }
@@ -6655,13 +6662,93 @@ function _tblDrop_(e, id, k) {
 function _tblDragEnd_() { document.querySelectorAll('.tbl-dragover,.tbl-dragging').forEach(function (x) { x.classList.remove('tbl-dragover', 'tbl-dragging'); }); }
 /* ☑️ (V4.224) تصفية رأس العمود: كتابة = تصفية حركية لحظية (يحتوي على) · أو اختيار متعدد من قائمة قيم العمود
    (مثل اتفاقيات الإعاشة) — قيمة الفلتر نص (يحتوي) أو مصفوفة (قيم محددة بالضبط). مشتركة بين كل الشاشات */
-function _cfOn_(v) { return Array.isArray(v) ? v.length > 0 : !!v; }
+// 🚫 (V4.378) قيمة الفلتر: نص (تعبير/يحتوي) أو مصفوفة (قيم محددة) أو {x:1, v:<نص|مصفوفة>} = «استبعاد» (يُخفي المطابق ويُظهر الباقي)
+function _cfOn_(v) { return v && typeof v === 'object' && !Array.isArray(v) ? (!!v.x && _cfOn_(v.v)) : Array.isArray(v) ? v.length > 0 : !!v; }
 function _cfNorm_(v) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim(); }
-function _cfHit_(val, raw) {
-  if (Array.isArray(val)) return val.indexOf(_cfNorm_(raw)) >= 0;
-  return _cfNorm_(raw).toLowerCase().indexOf(String(val).toLowerCase()) >= 0;
+function _cfCls_(v) { return _cfOn_(v) ? (v && v.x ? ' on ex' : ' on') : ''; }
+/* 🧮 (V4.378) معادلات التصفية — مفسِّر واحد مشترك لكل شاشات التصفية من رأس العمود (ملفات الوزارة · التأشيرات · الجداول العامة · الحسابات…):
+   نص عادي = «يحتوي» (كما كان) · <>x لا يحتوي/لا يساوي · =x يساوي · = وحدها فارغ · <  >  <=  >= (أرقام أو تواريخ dd/mm/yyyy) · a..b مدى ·
+   وصل بـ  &&  أو  و/and  (و)  ||  أو  او/أو/or (أو) · فارغ / غير فارغ. الأرقام تُطبَّع (٠-٩ ۰-۹ وفواصل الآلاف ، ٬ ,). صيغة غير مفهومة ⇒ يحتوي + تلميح. */
+function _cfDig_(s) { return String(s == null ? '' : s).replace(/[٠-٩]/g, function (c) { return c.charCodeAt(0) - 1632; }).replace(/[۰-۹]/g, function (c) { return c.charCodeAt(0) - 1776; }); }
+function _cfNum_(s) {
+  var t = _cfDig_(s).replace(/[\s ,٬،]/g, '').replace(/٫/g, '.').replace(/%$/, '');
+  return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(t) ? parseFloat(t) : NaN;
 }
-function _cfLbl_(v) { return Array.isArray(v) ? (v.length === 1 ? (v[0] || '(فارغ)') : v.length + ' قيم محددة') : v; }
+function _cfDate_(s) {
+  var t = _cfDig_(s).trim(), m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})(?!\d)/.exec(t), d, mo, y;
+  if (m) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+  else { m = /^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})(?!\d)/.exec(t); if (!m) return NaN; y = +m[1]; mo = +m[2]; d = +m[3]; }
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return NaN;
+  return Date.UTC(y, mo - 1, d);
+}
+var _CF_OPRX_ = /^(<>|!=|≠|<=|>=|=<|=>|≤|≥|==|=|<|>)\s*([\s\S]*)$/, _CF_RNGRX_ = /^(.+?)\s*(?:\.\.|~)\s*(.+)$/;
+function _cfIsExprTerm_(t) {
+  if (_CF_OPRX_.test(t) || /^(فارغ|غير\s+فارغ|!فارغ|empty|nonempty)$/i.test(t)) return true;
+  var m = _CF_RNGRX_.exec(t); return !!(m && ((!isNaN(_cfNum_(m[1])) && !isNaN(_cfNum_(m[2]))) || (!isNaN(_cfDate_(m[1])) && !isNaN(_cfDate_(m[2])))));
+}
+function _cfTerm_(t) {   // مسند الحد الواحد أو null (صيغة غير صالحة)
+  var low = t.toLowerCase(), m;
+  if (/^(فارغ|empty)$/i.test(low)) return function (r) { return _cfNorm_(r) === ''; };
+  if (/^(غير\s+فارغ|!فارغ|nonempty)$/i.test(low)) return function (r) { return _cfNorm_(r) !== ''; };
+  if ((m = _CF_OPRX_.exec(t))) {
+    var op = { '!=': '<>', '≠': '<>', '=<': '<=', '=>': '>=', '≤': '<=', '≥': '>=', '==': '=' }[m[1]] || m[1], arg = _cfNorm_(m[2]), al = arg.toLowerCase();
+    var an = _cfNum_(arg), ad = isNaN(an) ? _cfDate_(arg) : NaN;
+    if (op === '=') {
+      if (!arg) return function (r) { return _cfNorm_(r) === ''; };
+      return function (r) { var c = _cfNorm_(r); if (!isNaN(an)) { var n = _cfNum_(c); if (!isNaN(n)) return Math.abs(n - an) < 1e-9; } if (!isNaN(ad)) return _cfDate_(c) === ad; return c.toLowerCase() === al; };
+    }
+    if (op === '<>') {
+      if (!arg) return function (r) { return _cfNorm_(r) !== ''; };
+      return function (r) { var c = _cfNorm_(r); if (!isNaN(an)) { var n = _cfNum_(c); if (!isNaN(n)) return Math.abs(n - an) >= 1e-9; } if (!isNaN(ad)) return _cfDate_(c) !== ad; return c.toLowerCase().indexOf(al) < 0; };
+    }
+    if (!isNaN(an)) return function (r) { var n = _cfNum_(r); if (isNaN(n)) return false; return op === '<' ? n < an : op === '>' ? n > an : op === '<=' ? n <= an : n >= an; };
+    if (!isNaN(ad)) return function (r) { var d = _cfDate_(r); if (isNaN(d)) return false; return op === '<' ? d < ad : op === '>' ? d > ad : op === '<=' ? d <= ad : d >= ad; };
+    return null;
+  }
+  if ((m = _CF_RNGRX_.exec(t))) {
+    var a = _cfNum_(m[1]), b = _cfNum_(m[2]);
+    if (!isNaN(a) && !isNaN(b)) { var lo = Math.min(a, b), hi = Math.max(a, b); return function (r) { var n = _cfNum_(r); return !isNaN(n) && n >= lo && n <= hi; }; }
+    a = _cfDate_(m[1]); b = _cfDate_(m[2]);
+    if (!isNaN(a) && !isNaN(b)) { var l2 = Math.min(a, b), h2 = Math.max(a, b); return function (r) { var d = _cfDate_(r); return !isNaN(d) && d >= l2 && d <= h2; }; }
+    return null;
+  }
+  if (/\.\.|~/.test(t)) return null;   // مدى ناقص ⇒ صيغة غير مفهومة
+  return function (r) { return _cfNorm_(r).toLowerCase().indexOf(low) >= 0; };
+}
+var _CF_PC_ = {}, _CF_PCN_ = 0;
+function _cfParse_(text) {   // → { pred, bad, expr }  (مخزَّن مؤقتاً بالنص فلا إعادة تحليل لكل صف)
+  text = _cfNorm_(text);
+  var hit = _CF_PC_[text]; if (hit) return hit;
+  var plainLow = text.toLowerCase(), plain = function (r) { return _cfNorm_(r).toLowerCase().indexOf(plainLow) >= 0; };
+  var res = { pred: plain, bad: false, expr: false };
+  var looks = /^(<>|!=|≠|<=|>=|=<|=>|≤|≥|==|=|<|>)/.test(text) || /&&|\|\||\.\.|~/.test(text) || /^(فارغ|غير\s+فارغ|!فارغ)$/.test(text) || /\s(و|او|أو|and|or)\s+(<|>|=|!|≠|≤|≥|فارغ|غير)/i.test(text);
+  if (looks) {
+    var tokenize = function (rx) {
+      var parts = [], seps = [], last = 0, m; rx.lastIndex = 0;
+      while ((m = rx.exec(text))) { parts.push(text.slice(last, m.index)); seps.push(m[1] ? (m[1] === '||' ? 'or' : 'and') : (/^(او|أو|or)$/i.test(m[2]) ? 'or' : 'and')); last = m.index + m[0].length; }
+      parts.push(text.slice(last)); return { parts: parts.map(_cfNorm_), seps: seps };
+    };
+    var tk = tokenize(/\s*(\|\||&&)\s*|\s+(و|او|أو|and|or)\s+/gi);
+    if (!tk.parts.every(_cfIsExprTerm_) && tk.seps.length) tk = tokenize(/\s*(\|\||&&)\s*/g);   // «و/او» كلمات عادية ما لم تفصل حدّين كلاهما معادلة
+    var preds = tk.parts.map(function (p) { return p ? _cfTerm_(p) : null; });
+    if (preds.every(function (f) { return !!f; })) {
+      var groups = [[preds[0]]];
+      tk.seps.forEach(function (sp, i) { if (sp === 'or') groups.push([preds[i + 1]]); else groups[groups.length - 1].push(preds[i + 1]); });
+      res = { bad: false, expr: true, pred: groups.length === 1 && groups[0].length === 1 ? groups[0][0] : function (r) {
+        for (var g = 0; g < groups.length; g++) { var ok = true; for (var j = 0; j < groups[g].length; j++) if (!groups[g][j](r)) { ok = false; break; } if (ok) return true; }
+        return false; } };
+    } else res = { pred: plain, bad: true, expr: true };
+  }
+  if (_CF_PCN_++ > 300) { _CF_PC_ = {}; _CF_PCN_ = 0; }
+  _CF_PC_[text] = res; return res;
+}
+var _CF_SYNTAX_ = 'صيغ التصفية:\n• كلمة = يحتوي (كما هو)\n• <> إعادة = لا يحتوي / لا يساوي\n• =نص = يساوي تماماً · = وحدها = فارغ\n• >50  <100  >=50  <=100 (أرقام أو تواريخ dd/mm/yyyy)\n• 50..100 = بين رقمين/تاريخين\n• >50 و <100  أو  >50 && <100  (والـ)\n• <10 او >90  أو  <10 || >90  (أو)\n• فارغ · غير فارغ\nالأرقام العربية وفواصل الآلاف مقبولة. «استبعاد» يعكس النتيجة كلها.';
+function _cfHit_(val, raw) {
+  if (val && typeof val === 'object' && !Array.isArray(val)) return val.x ? !_cfHit_(val.v, raw) : _cfHit_(val.v, raw);
+  if (Array.isArray(val)) return val.indexOf(_cfNorm_(raw)) >= 0;
+  return _cfParse_(val).pred(raw);
+}
+function _cfLbl_(v) { if (v && typeof v === 'object' && !Array.isArray(v)) return (v.x ? '🚫 استبعاد: ' : '') + _cfLbl_(v.v); return Array.isArray(v) ? (v.length === 1 ? (v[0] || '(فارغ)') : v.length + ' قيم محددة') : v; }
 var _CF_ = null;
 // label: اسم العمود · cur: الفلتر الحالي · raws: قيم العمود لكل الصفوف · apply(v): يحفظ الفلتر ('' = إلغاء) ويعيد الرسم
 function _cfOpen_(ev, label, cur, raws, apply) {
@@ -6672,14 +6759,26 @@ function _cfOpen_(ev, label, cur, raws, apply) {
     if (a !== '' && b !== '' && !isNaN(na) && !isNaN(nb)) return na - nb;
     return a.localeCompare(b, 'ar');
   });
-  _CF_ = { vals: vals, cnt: cnt, apply: apply, sel: Array.isArray(cur) ? cur.slice() : null };
+  var isX = !!(cur && typeof cur === 'object' && !Array.isArray(cur) && cur.x), inner = isX ? cur.v : cur;
+  _CF_ = { vals: vals, cnt: cnt, apply: apply, sel: Array.isArray(inner) ? inner.slice() : null, x: isX };
   document.getElementById('mfColFilterLbl').textContent = 'تصفية: ' + label;
   var inp = document.getElementById('mfColFilterInput');
-  inp.value = typeof cur === 'string' ? cur : '';
-  inp.placeholder = 'اكتب للتصفية الحركية أو للبحث بالقائمة…';
+  inp.value = typeof inner === 'string' ? inner : '';
+  inp.placeholder = 'اكتب للتصفية الحركية أو معادلة: <>كلمة · >50 · 10..99';
+  // 🚫 (V4.378) صف «استبعاد» + «؟» صيغ المعادلات (يُنشأ مرة واحدة تحت خانة الإدخال)
+  var xr = document.getElementById('mfColFilterX');
+  if (!xr) {
+    xr = document.createElement('div'); xr.id = 'mfColFilterX'; xr.className = 'cf-x';
+    xr.innerHTML = '<label><input type="checkbox" id="mfColFilterXCb"> 🚫 استبعاد (إخفاء المطابق وإظهار الباقي)</label><span class="cf-q" id="mfColFilterQ" title="">؟</span><div class="cf-syn" id="mfColFilterSyn" style="display:none;"></div><div class="cf-bad" id="mfColFilterBad" style="display:none;"></div>';
+    inp.parentNode.insertBefore(xr, document.getElementById('mfColFilterBox'));
+    document.getElementById('mfColFilterXCb').onchange = function () { _CF_.x = this.checked; _cfApply_(_CF_.sel ? _CF_.sel.slice() : _cfNorm_(document.getElementById('mfColFilterInput').value)); _cfDraw_(); };
+    document.getElementById('mfColFilterQ').onclick = function () { var b = document.getElementById('mfColFilterSyn'); b.style.display = b.style.display === 'none' ? 'block' : 'none'; };
+    var sy = document.getElementById('mfColFilterSyn'); sy.textContent = _CF_SYNTAX_; document.getElementById('mfColFilterQ').title = _CF_SYNTAX_;
+  }
+  document.getElementById('mfColFilterXCb').checked = isX; document.getElementById('mfColFilterSyn').style.display = 'none';
   inp.oninput = function () {
     var q = _cfNorm_(inp.value);
-    if (!_CF_.sel) _CF_.apply(q);   // بلا اختيار من القائمة: الكتابة تصفّي الجدول لحظياً
+    if (!_CF_.sel) _cfApply_(q);   // بلا اختيار من القائمة: الكتابة تصفّي الجدول لحظياً
     _cfDraw_();
   };
   inp.onkeydown = function (e) { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); pop.classList.remove('show'); } };
@@ -6692,8 +6791,12 @@ function _cfOpen_(ev, label, cur, raws, apply) {
   pop.style.left = Math.max(8, Math.min(window.innerWidth - pw - 8, r.left - 90)) + 'px';
   setTimeout(function () { inp.focus(); }, 30);
 }
+// يُطبّق قيمة الفلتر مغلَّفة بوضع الاستبعاد الحالي (القيمة الفارغة = إلغاء الفلتر دائماً)
+function _cfApply_(v) { _CF_.apply(_cfOn_(v) && _CF_.x ? { x: 1, v: v } : v); }
 function _cfDraw_() {
   var box = document.getElementById('mfColFilterBox'); if (!box || !_CF_) return;
+  var bad = document.getElementById('mfColFilterBad');   // تلميح خفيف: صيغة معادلة غير مفهومة ⇒ يُبحث كنص عادي
+  if (bad) { var qi = _cfNorm_(document.getElementById('mfColFilterInput').value), pi = qi && !_CF_.sel ? _cfParse_(qi) : null; bad.style.display = pi && pi.bad ? 'block' : 'none'; if (pi && pi.bad) bad.textContent = '⚠️ صيغة غير مفهومة — يُبحث كنص عادي (اضغط ؟ لعرض الصيغ)'; }
   var q = typeof _normalizeArabic_ === 'function' ? _normalizeArabic_(_cfNorm_(document.getElementById('mfColFilterInput').value)) : _cfNorm_(document.getElementById('mfColFilterInput').value).toLowerCase();
   var norm = function (v) { return typeof _normalizeArabic_ === 'function' ? _normalizeArabic_(v) : v.toLowerCase(); };
   var shown = _CF_.vals.filter(function (v) { return !q || norm(v).indexOf(q) >= 0; });
@@ -6713,18 +6816,19 @@ function _cfTick_(cb) {
   var i = sel.indexOf(v);
   if (cb.checked && i < 0) sel.push(v); if (!cb.checked && i >= 0) sel.splice(i, 1);
   _CF_.sel = sel.length ? sel : null;
-  _CF_.apply(_CF_.sel ? _CF_.sel.slice() : _cfNorm_(document.getElementById('mfColFilterInput').value));
+  _cfApply_(_CF_.sel ? _CF_.sel.slice() : _cfNorm_(document.getElementById('mfColFilterInput').value));
   _cfDraw_();
 }
 function _cfPickShown_(on) {
   var sel = _CF_.sel || [];
   _CF_.shown.slice(0, 400).forEach(function (v) { var i = sel.indexOf(v); if (on && i < 0) sel.push(v); if (!on && i >= 0) sel.splice(i, 1); });
   _CF_.sel = sel.length ? sel : null;
-  _CF_.apply(_CF_.sel ? _CF_.sel.slice() : '');
+  _cfApply_(_CF_.sel ? _CF_.sel.slice() : '');
   _cfDraw_();
 }
 function _cfClear_() {
-  _CF_.sel = null; document.getElementById('mfColFilterInput').value = '';
+  _CF_.sel = null; _CF_.x = false; document.getElementById('mfColFilterInput').value = '';
+  var xc = document.getElementById('mfColFilterXCb'); if (xc) xc.checked = false;
   _CF_.apply(''); _cfDraw_();
 }
 var _tblPopId = null, _tblPopKey = null;
@@ -40514,7 +40618,9 @@ function mfPilgrimMatches(f, q) {
     return r.client === f.tripName && ((r.name || '').toLowerCase().indexOf(q) >= 0 || (r.passport || '').toLowerCase().indexOf(q) >= 0);
   });
 }
-function mfMatch(f) {
+function mfMatch(f) { return mfMatchEx_(f, '', ''); }
+// 🔗 (V4.378) تصفية متسلسلة (مثل إكسل): sf = حقل علوي (id) و sc = عمود يُستثنى فلترهما فقط — لبناء قائمة خياراتهما من الصفوف التي طابقت باقي الفلاتر
+function mfMatchEx_(f, sf, sc) {
   var q = mfFV('mfSearch').toLowerCase();
   if (q) {
     var hay = [f.fileNo, f.company, f.agent, f.clientLabel, mfClientTripTxt_(f), f.tripName, f.ref, f.eInvoice,
@@ -40525,11 +40631,12 @@ function mfMatch(f) {
     ['mfF_clientLabel', 'clientLabel'], ['mfF_tripName', 'tripName'],
     ['mfF_madinahHotel', 'madinahHotel'], ['mfF_makkahHotel', 'makkahHotel']];
   for (var i = 0; i < pairs.length; i++) {
+    if (pairs[i][0] === sf) continue;
     var v = mfFV(pairs[i][0]);
     var fv = pairs[i][1] === 'clientLabel' ? (mfStr(f.clientLabel) + ' ' + mfClientTripTxt_(f)) : String(f[pairs[i][1]] || '');   // (V4.220) العميل يشمل الرحلة والعملاء
     if (v && fv.toLowerCase().indexOf(v.toLowerCase()) < 0) return false;
   }
-  var sv = mfFV('mfF_supName');
+  var sv = sf === 'mfF_supName' ? '' : mfFV('mfF_supName');
   if (sv && mfRaw('supNames', f).toLowerCase().indexOf(sv.toLowerCase()) < 0) return false;
   var gf = mfDate(mfFV('mfF_goFrom'));
   if (gf && !isNaN(mfMs(gf)) && !(mfMs(f.goDate) >= mfMs(gf))) return false;
@@ -40538,7 +40645,7 @@ function mfMatch(f) {
   var rt = mfDate(mfFV('mfF_retTo'));
   if (rt && !isNaN(mfMs(rt)) && !(mfMs(f.retDate) <= mfMs(rt))) return false;
   for (var k in MF.colFilters) {
-    var val = MF.colFilters[k]; if (!_cfOn_(val)) continue;
+    var val = MF.colFilters[k]; if (!_cfOn_(val) || k === sc) continue;
     if (!_cfHit_(val, mfRaw(k, f))) return false;
   }
   var st = mfStatus(f);
@@ -40613,7 +40720,7 @@ function mfRender() {
     if (MF.hidden[c.k]) cls += ' mf-hide';
     var si = MF.sort.key === c.k ? (MF.sort.dir > 0 ? '▲' : '▼') : '⇅';
     var ics = c.nof ? '' :
-      '<button class="mf-thic' + (_cfOn_(MF.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">▾</button>' +
+      '<button class="mf-thic' + _cfCls_(MF.colFilters[c.k]) + '" title="تصفية هذا العمود" onclick="event.stopPropagation();mfColFilter(event,\'' + c.k + '\')">▾</button>' +
       '<button class="mf-thic' + (MF.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();mfSort(\'' + c.k + '\')">' + si + '</button>';
     h += '<th class="' + cls + '" style="' + st + '" draggable="true" data-key="' + c.k + '"' +
       ' title="' + mfEsc(c.g) + ' · ' + mfEsc(c.l) + '"' +
@@ -41787,7 +41894,8 @@ var _mfPopKey = null;
 function mfColFilter(ev, k) {
   _mfPopKey = k;
   var col = MF_COLS.filter(function (c) { return c.k === k; })[0];
-  _cfOpen_(ev, col ? col.l : k, MF.colFilters[k], MF.files.map(function (f) { return mfRaw(k, f); }), function (v) {
+  // 🔗 (V4.378) خيارات العمود = قيم الصفوف التي طابقت كل الفلاتر الأخرى (العلوية + بقية الأعمدة) دون فلتر هذا العمود نفسه
+  _cfOpen_(ev, col ? col.l : k, MF.colFilters[k], MF.files.filter(function (f) { return mfMatchEx_(f, '', k); }).map(function (f) { return mfRaw(k, f); }), function (v) {
     if (_cfOn_(v)) MF.colFilters[k] = v; else delete MF.colFilters[k];
     mfRender();
   });
@@ -41896,7 +42004,22 @@ function mfAttachDateInputs() {
 }
 
 /* ---------- البحث التنبئي ---------- */
+// 🔗 (V4.378) قائمة الاقتراح تتضيّق بباقي الفلاتر: لو ثمة فلتر آخر نشط تُعرض قيم الصفوف المطابقة له فقط (لا كل الشركات/العملاء/الرحلات)
+function mfTaScoped_(id) {
+  var ex = { mfF_fileNo: 'fileNo', mfF_company: 'company', mfF_agent: 'agent', mfF_clientLabel: 'clientLabel', mfF_tripName: 'tripName', mfF_madinahHotel: 'madinahHotel', mfF_makkahHotel: 'makkahHotel' };
+  if (!ex[id] && id !== 'mfF_supName') return null;
+  var rows = MF.files.filter(function (f) { return mfMatchEx_(f, id, ''); });
+  if (rows.length >= MF.files.length) return null;   // لا تضييق ⇒ القائمة الكاملة كما كانت
+  if (id === 'mfF_supName') {
+    var all = rows.map(function (f) { return mfRaw('supNames', f); }).join('\n');
+    return (MF.sups || []).map(function (s) { return s.name; }).filter(function (n) { return n && all.indexOf(n) >= 0; });
+  }
+  var seen = {}, out = [];
+  rows.forEach(function (f) { var v = mfStr(f[ex[id]]); if (v && v !== '—' && !seen[v]) { seen[v] = 1; out.push(v); } });
+  return out;
+}
 function mfTaList(id) {
+  var scp = mfTaScoped_(id); if (scp) return scp;
   if (id === 'mfF_company') return (MF.companies || []).map(function (c) { return c.company; });
   if (id === 'mfF_agent') return mfUniq(function (f) { return f.agent; }).concat((MF.companies || []).map(function (c) { return c.agent; }));
   if (id === 'mfF_supName') return (MF.sups || []).map(function (s) { return s.name; });
@@ -45540,7 +45663,8 @@ function vzFileInAcct(f, acctKey) {
   return vzAcctKeyOf(agent, f.company) === acctKey;
 }
 function vzClientsOf(f) { return (f.breakdown || []).map(function (b) { return b.name; }).join(' ') + ' ' + (f.tripName || ''); }
-function vzMatch(f) {
+function vzMatch(f) { return vzMatchEx_(f, false); }
+function vzMatchEx_(f, skipComp) {   // 🔗 (V4.378) skipComp: بلا فلتر الشركات (لبناء قائمة خياراتها المتسلسلة)
   var q = vzFV('vzF_search').toLowerCase();
   if (q) {
     var hay = [f.ref, f.agent, f.company, f.tripName, f.status, f.payStatus, f.notes, vzClientsOf(f),
@@ -45555,7 +45679,7 @@ function vzMatch(f) {
     var v = vzFV(pairs[i][0]); if (v && String(f[pairs[i][1]] || '').toLowerCase().indexOf(v.toLowerCase()) < 0) return false;
   }
   // 🏢 (V4.164) فلتر الشركة المصرية باختيار متعدد — أي شركة من المحدَّدة تُطابق (بلا فلتر لو المصفوفة فارغة)
-  if (VZ._compSel && VZ._compSel.length && VZ._compSel.indexOf(f.company) < 0) return false;
+  if (!skipComp && VZ._compSel && VZ._compSel.length && VZ._compSel.indexOf(f.company) < 0) return false;
   var cl = vzFV('vzF_client'); if (cl && vzClientsOf(f).toLowerCase().indexOf(cl.toLowerCase()) < 0) return false;
   var agr = vzFV('vzF_agr');
   if (agr) { var ah = [f.makkahHousingAgr, f.madinahHousingAgr, f.makkahCateringAgr, f.madinahCateringAgr].join(' '); if (ah.indexOf(agr) < 0) return false; }
@@ -45960,13 +46084,17 @@ function vzColRaw(k, f) {
     default: return '';
   }
 }
-function vzVisible() {
-  var list = VZ.files.filter(vzMatch);
-  // 🔎 (V4.136) تصفية ديناميكية لحظية من رأس الأعمدة — نص فرعي بلا حساسية لحالة الأحرف
+// 🔗 (V4.378) صفوف مطابقة لكل الفلاتر عدا فلتر العمود skipCol وفلتر الشركات إن skipComp — أساس الخيارات المتسلسلة
+function vzScoped_(skipCol, skipComp) {
+  var list = VZ.files.filter(function (f) { return vzMatchEx_(f, skipComp); });
   for (var k in VZ.colFilters) {
-    var val = VZ.colFilters[k]; if (!_cfOn_(val)) continue;
+    var val = VZ.colFilters[k]; if (!_cfOn_(val) || k === skipCol) continue;
     list = list.filter(function (f) { return _cfHit_(val, vzColRaw(k, f)); });
   }
+  return list;
+}
+function vzVisible() {
+  var list = vzScoped_('', false);   // 🔎 (V4.136) تصفية ديناميكية لحظية من رأس الأعمدة (نص/معادلة/استبعاد/قيم محددة)
   // ↕️ (V4.136) الترتيب: رقمي للأعمدة الرقمية/التاريخية، وأبجدي عربي لغيرها
   var sk = VZ.sort.key, dir = VZ.sort.dir;
   var def = VZ_COL_DEFS_.filter(function (c) { return c.k === sk; })[0];
@@ -46104,7 +46232,7 @@ var _vzPopKey = null;
 function vzColFilter(ev, k) {
   _vzPopKey = k;
   var col = VZ_COL_DEFS_.filter(function (c) { return c.k === k; })[0];
-  _cfOpen_(ev, col ? col.label : k, VZ.colFilters[k], VZ.files.filter(vzMatch).map(function (f) { return vzColRaw(k, f); }), function (v) {
+  _cfOpen_(ev, col ? col.label : k, VZ.colFilters[k], vzScoped_(k, false).map(function (f) { return vzColRaw(k, f); }), function (v) {
     if (_cfOn_(v)) VZ.colFilters[k] = v; else delete VZ.colFilters[k];
     vzRender();
   });
@@ -46168,7 +46296,7 @@ function vzCompFilterOpen(btn) {
   var rect = btn.getBoundingClientRect();
   pop.style.top = (rect.bottom + 4) + 'px';
   pop.style.right = (window.innerWidth - rect.right) + 'px';
-  var comps = (VZ.companies || []).map(function (c) { return c.company; }).filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+  var comps = vzCompList_();
   pop.innerHTML = '<div class="d-flex justify-content-between align-items-center mb-1">' +
     '<b style="font-size:12px;color:#0f4c4c;">🏢 الشركات المصرية</b>' +
     '<span style="cursor:pointer;font-weight:900;" onclick="document.getElementById(\'vzCompFilterPop\').remove()">✕</span></div>' +
@@ -46193,8 +46321,15 @@ function vzCompToggle_(c, on) {
   if (!on && i >= 0) VZ._compSel.splice(i, 1);
   vzCompBtnSync_(); vzRender();
 }
+// 🔗 (V4.378) الشركات المعروضة = شركات المجموعات المطابقة لباقي الفلاتر (مع إبقاء المحدَّد حالياً) — كل الشركات إن لا فلتر آخر
+function vzCompList_() {
+  var all = (VZ.companies || []).map(function (c) { return c.company; }).filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+  var rows = vzScoped_('', true); if (rows.length >= VZ.files.length) return all;
+  var have = {}; rows.forEach(function (f) { have[f.company] = 1; });
+  return all.filter(function (c) { return have[c] || (VZ._compSel || []).indexOf(c) >= 0; });
+}
 function vzCompSelAll_(on) {
-  var comps = (VZ.companies || []).map(function (c) { return c.company; }).filter(function (v, i, a) { return v && a.indexOf(v) === i; });
+  var comps = vzCompList_();
   VZ._compSel = on ? comps.slice() : [];
   var pop = document.getElementById('vzCompFilterPop');
   if (pop) pop.querySelectorAll('.vzCompChk').forEach(function (x) { x.checked = on; });
@@ -46324,7 +46459,7 @@ function vzRender() {
     if (c.nof) return '<th' + wStyle + '>' + vzEsc(c.label) + '</th>';
     var si = VZ.sort.key === c.k ? (VZ.sort.dir > 0 ? '▲' : '▼') : '⇅';
     return '<th' + wStyle + '><div class="vz-thin"><span>' + vzEsc(c.label) + '</span>' +
-      '<button class="vz-thic' + (_cfOn_(VZ.colFilters[c.k]) ? ' on' : '') + '" title="تصفية هذا العمود" onclick="event.stopPropagation();vzColFilter(event,\'' + c.k + '\')">▾</button>' +
+      '<button class="vz-thic' + _cfCls_(VZ.colFilters[c.k]) + '" title="تصفية هذا العمود" onclick="event.stopPropagation();vzColFilter(event,\'' + c.k + '\')">▾</button>' +
       '<button class="vz-thic' + (VZ.sort.key === c.k ? ' on' : '') + '" title="ترتيب تصاعدي/تنازلي" onclick="event.stopPropagation();vzSortBy(\'' + c.k + '\')">' + si + '</button>' +
       '</div>' + rsz.replace(/\{\{K\}\}/g, c.k) + '</th>';
   }).join('');
