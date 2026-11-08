@@ -15,7 +15,11 @@
    perfReport. الغلاف لا يغيّر أي سلوك: نفس المعالجات ونفس الوسائط، ويقيس فقط. */
 window.PERF_ = (function () {
   var D = {}, on = true, timer = null;
+  // 🔎 (V4.373) سجل نداءات Apps Script: Console ثم copy(JSON.stringify(__GSR)) — لطباعة كل نداء لحظة انتهائه: localStorage.lf_trace='1' ثم إعادة التحميل
+  var TR = false; try { TR = localStorage.getItem('lf_trace') === '1'; } catch (e0) {}
+  window.__GSR = [];
   function add(fn, ms, ok) {
+    try { if (fn) { window.__GSR.push([fn, ms, ok, Date.now()]); if (window.__GSR.length > 300) window.__GSR.shift(); if (TR) console.info('📞 apps-script', fn, ms + 'ms', ok ? '' : 'FAILED'); } } catch (e1) {}
     if (!on || !fn || fn === 'perfReport') return;
     var a = D[fn] || (D[fn] = [fn, 0, 0, 0, 0, 0]);
     a[1]++; a[2] += ms; if (ms > a[3]) a[3] = ms; if (ms > 3000) a[4]++; if (!ok) a[5]++;
