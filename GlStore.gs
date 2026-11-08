@@ -324,14 +324,21 @@ function glStoreCompare() {
   Object.keys(B.sums).forEach(function (id) { if (!A.sums[id]) { bad++; if (L.length < 30) L.push('❌ ' + id + ' : موجود بـDB فقط'); } });
   var codes = {}; Object.keys(A.bal).forEach(function (k) { codes[k] = 1; }); Object.keys(B.bal).forEach(function (k) { codes[k] = 1; });
   var badBal = 0; Object.keys(codes).forEach(function (k) { if (Math.abs((A.bal[k] || 0) - (B.bal[k] || 0)) > 0.01) { badBal++; if (L.length < 30) L.push('❌ رصيد ' + k + ' : شيت=' + _glStRnd_(A.bal[k]) + ' · DB=' + _glStRnd_(B.bal[k])); } });
+  // معرّفات قيود مكررة بالشيت (علّة قديمة — شاشة «قيود مكررة المعرّف»): قاعدة DB مفتاحها الأساسي معرّف القيد فيبقى آخر رأس؛ تُعرض ولا تُحسب فرقاً
+  var dupG = {}; se.forEach(function (r) { var id = _glStr_(r[0]); (dupG[id] = dupG[id] || []).push(r); });
+  var dupIds = Object.keys(dupG).filter(function (id) { return dupG[id].length > 1; });
+  se = _glStDedupe_('entries', se);
   var rowDiff = 0, W = _glStW_('entries'), WL = _glStW_('lines');
   var mapE = {}; de.forEach(function (r) { mapE[_glStRowKey_('entries', r)] = _glStJs_(r, W); });
   se.forEach(function (r) { if (mapE[_glStRowKey_('entries', r)] !== _glStJs_(r, W)) rowDiff++; });
   var mapL = {}; dl.forEach(function (r) { mapL[_glStRowKey_('lines', r)] = _glStJs_(r, WL); });
   sl.forEach(function (r) { if (mapL[_glStRowKey_('lines', r)] !== _glStJs_(r, WL)) rowDiff++; });
   if (rowDiff) L.push('❌ صفوف مختلفة المحتوى (رؤوس+سطور): ' + rowDiff);
+  var dupNote = dupIds.length ? '\nℹ️ ' + dupIds.length + ' قيد مكرر المعرّف بالشيت (يبقى آخر رأس بالقاعدة، والسطور والأرصدة غير متأثرة): ' + dupIds.slice(0, 12).map(function (id) {
+    return id + ' [' + dupG[id].map(function (r) { return _glStr_(r[2]) + ' ' + _glStr_(r[3]) + ' ' + _glStr_(r[5]) + ' ' + _glNum_(r[8]); }).join(' | ') + ']'; }).join(' ؛ ') : '';
   var out = (L.length || bad || badBal) ? '⚠️ فروق (قيود ' + bad + ' · أرصدة ' + badBal + ')\n' + L.join('\n')
     : '✅ تطابق كامل: ' + A.nE + ' قيد · ' + A.nL + ' سطر · ' + Object.keys(codes).length + ' رصيد (حساب|عملة)';
+  out += dupNote;
   Logger.log(out); return out;
 }
 /* نقل البيانات من الشيتات إلى Supabase بكل خلايا الشيت حرفياً (raw) وبترتيب الشيت — يمسح gl_lines/gl_entries ثم يعيد تحميلهما */
