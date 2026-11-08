@@ -66,10 +66,11 @@ function supaIssueToken(authToken) {
   perms = _supaExpandPerms_(perms);   // ⚡ (V4.374) نفس تدرّج _sessionHasPerm_ (تعديل ⇒ إضافة+عرض…) كي تطابق فحوص Postgres فحوص الخادم
   var now = Math.floor(Date.now() / 1000), exp = now + 8 * 3600;
   var b64 = function (o) { return Utilities.base64EncodeWebSafe(typeof o === 'string' ? o : JSON.stringify(o)).replace(/=+$/, ''); };
-  var head = b64({ alg: 'HS256', typ: 'JWT' }), body = b64({ role: 'authenticated', aud: 'authenticated', sub: String(s.username), app_user: String(s.username), perms: perms, iat: now, exp: exp });
+  var head = b64({ alg: 'HS256', typ: 'JWT' }), body = b64({ role: 'authenticated', aud: 'authenticated', sub: String(s.username), app_user: String(s.username), name: String(s.fullName || s.username), perms: perms, iat: now, exp: exp });   // name: اسم العرض للمتصلين الآن (app_pulse)
   var sig = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(head + '.' + body, _supaP_('SUPA_JWT_SECRET'))).replace(/=+$/, '');
   return { success: true, enabled: true, url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), token: head + '.' + body + '.' + sig, expiresAt: exp * 1000,
-    glStore: _supaP_('GL_STORE') === 'supabase' };   // ⚡ (V4.374) شاشات الحسابات تقرأ من Postgres فقط حين تكون قيود GL فيه (المصدر الوحيد)
+    glStore: _supaP_('GL_STORE') === 'supabase',
+    store: _supaStoreInfo_() };   // 🗄️ (V4.377) المجموعات الحيّة بـ Postgres + هل data_versions مرجع النبضة ⇒ الواجهة تقرأ الرحلات/المعتمرين/الحركات… بـ RPC   // ⚡ (V4.374) شاشات الحسابات تقرأ من Postgres فقط حين تكون قيود GL فيه (المصدر الوحيد)
 }
 
 /* ---------- المزامنة ---------- */
@@ -161,10 +162,12 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
     });
     var keys = Object.keys(okGroups);
     if (keys.length) {
-      _supaUpsert_('data_versions', keys.map(function (g) { return { group_name: g, token: okGroups[g], updated_at: new Date().toISOString() }; }), 'group_name');
+      var dvr = {}; keys.forEach(function (g) { dvr[g] = okGroups[g]; });
+      _supaReq_('post', 'rpc/dv_set', { p: dvr, p_force: false });   // (V4.377) رفع فقط (لا يُرجع رمزاً للخلف ولا يولّد تغييراً وهمياً)
       keys.forEach(function (g) { done[g] = okGroups[g]; });
       PropertiesService.getScriptProperties().setProperty('SUPA_SYNCED', JSON.stringify(done));
     }
+    try { _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (V4.377)
     var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
     return 'ok work=' + work + ' glaux=' + gx + ' ms=' + (Date.now() - t0);
   } finally { try { lk.releaseLock(); } catch (e) {} }
@@ -209,4 +212,43 @@ function _supaPushTripPilgrims_(dv, groups, t0) {
   // بصمات المجموعات لكل صفوف الكشف دفعة واحدة (بعد رفع المتغيّر منها)
   if (ok) { var pr = _supaReq_('patch', 'read_cache?fn=eq.getTripPilgrims', { dv: dvUsed, updated_at: nowIso }, 'return=minimal'); ok = pr.code >= 200 && pr.code < 300; }
   return ok;
+}
+
+/* ============================================================================
+   🗄️ (V4.377) data_versions في Postgres = مرجع النبضة الوحيد حين تعمل طبقة التخزين (STORE_TABLES غير فارغة)
+   ----------------------------------------------------------------------------
+   • _dvBump_ (LiveSync.gs) يبدّل رموز الكاش كما كان ثم يستدعي _dvPgPush_ فيرفع نفس الرموز إلى Postgres (rpc/dv_set بمعاملة مستقلة بعد رفع
+     الكتابات المعلّقة store_put، فالبيانات تسبق الرمز دائماً). dv_set يضمن رمزاً أكبر من الحالي مهما اختلفت الساعات.
+   • فشل الرفع ⇒ علامة dv_pg_dirty بالكاش ⇒ مشغّل الدقيقة يطابق (soft) ويمسحها. أول تشغيل: يرفع كل الرموز مرة (DV_PG_SEEDED=1).
+   • المتصفح ينبض من Postgres (app_poll) فقط إذا أعلن الخادم store.dv=true (STORE_TABLES + DV_PG_SEEDED) وإلا يبقى lfPoll.
+   • إيقاف: Script property DV_PG=off (يرجع lfPoll). لا يمس سلوك Apps Script نفسه: الكاش يبقى المرجع للمسار القديم.
+   ============================================================================ */
+function _dvPgOn_() { return _supaOn_() && !!_supaP_('STORE_TABLES') && _supaP_('DV_PG') !== 'off'; }
+function _dvPgPush_(o) {
+  if (!_dvPgOn_() || !o) return;
+  var r = _supaReq_('post', 'rpc/dv_set', { p: o });
+  if (r.code < 200 || r.code >= 300) { Logger.log('dv_set ' + r.code + ' ' + String(r.text).slice(0, 160)); try { CacheService.getScriptCache().put('dv_pg_dirty', '1', 21600); } catch (e) {} }
+}
+function _dvPgReconcile_() {
+  if (!_dvPgOn_()) return 'off';
+  var P = PropertiesService.getScriptProperties(), c = CacheService.getScriptCache(), dirty = false;
+  try { dirty = !!c.get('dv_pg_dirty'); } catch (e) {}
+  if (!dirty && P.getProperty('DV_PG_SEEDED') === '1') return 'same';
+  var r = _supaReq_('post', 'rpc/dv_set', { p: _dvAll_(), p_force: false });
+  if (r.code < 200 || r.code >= 300) return 'fail ' + r.code;
+  try { c.remove('dv_pg_dirty'); } catch (e2) {}
+  P.setProperty('DV_PG_SEEDED', '1');
+  return 'ok';
+}
+function supaDvSeedNow() { requireScriptOwner_(); var r = _dvPgReconcile_(); Logger.log('data_versions: ' + r); return r; }
+// المجموعات الحيّة بالمخزن: مجموعة حيّة = كل جداولها بـ STORE_TABLES (ST_GROUPS_ بـ Store.gs)
+function _supaStoreInfo_() {
+  var out = { groups: [], dv: false };
+  try {
+    if (typeof _stCfg_ !== 'function' || typeof ST_GROUPS_ === 'undefined') return out;
+    var cfg = _stCfg_(); if (!cfg.on) return out;
+    Object.keys(ST_GROUPS_).forEach(function (g) { if (ST_GROUPS_[g].every(function (t) { return cfg.set[t]; })) out.groups.push(g); });
+    out.dv = _dvPgOn_() && _supaP_('DV_PG_SEEDED') === '1';
+  } catch (e) {}
+  return out;
 }

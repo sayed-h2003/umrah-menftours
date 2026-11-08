@@ -70,6 +70,7 @@ function _dvBump_(groups) {
     try { cur = c.getAll(ks) || {}; } catch (eG) {}
     ks.forEach(function (k) { o[k] = _dvNext_(cur[k]); });
     c.putAll(o, LF_DV_TTL_);
+    try { if (typeof _dvPgPush_ === 'function') _dvPgPush_(o); } catch (ePg) {}   // 🗄️ (V4.377) Postgres data_versions يتبع الكاش فوراً (SupaSync.gs) — المتصفح ينبض منه
   } catch (e) {}
 }
 // من نقاط إبطال الكاش القديمة (_cacheBust_) — مجموعة غير معروفة ⇒ كل مجموعات العمرة (أمان)
