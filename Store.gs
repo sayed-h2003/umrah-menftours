@@ -689,7 +689,8 @@ function storeKvBackfill() {
   var ok = storeKvPush_(KV_KEYS_);
   var r = _supaReq_('post', 'rpc/kv_set', { p: { __seeded: '1' } });
   if (ok && r.code < 300) PropertiesService.getScriptProperties().setProperty('SUPA_KV_OK', '1');   // يعلنها supaIssueToken كمجموعة «kv» فيبدأ المتصفح بقراءة الوزارة/التأشيرات من Supabase
-  return (ok && r.code < 300) ? 'تم نسخ ' + KV_KEYS_.join(' · ') + ' إلى app_kv' : 'فشل النسخ (' + r.code + ') — تأكد من تشغيل 010_screens_reads.sql';
+  var msg = (ok && r.code < 300) ? 'تم نسخ ' + KV_KEYS_.join(' · ') + ' إلى app_kv' : 'فشل النسخ (' + r.code + ' ' + String(r.text).slice(0, 200) + ') — تأكد من تشغيل 010_screens_reads.sql';
+  Logger.log(msg); return msg;
 }
 function storeBotMark_(id) {
   if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY')) return false;
@@ -705,10 +706,22 @@ function storeBotsBackfill() {
   var all = Object.keys(ids);
   for (var i = 0; i < all.length; i += 500) {
     var r = _supaReq_('post', 'rpc/bot_mark', { p_ids: all.slice(i, i + 500) });
-    if (r.code < 200 || r.code >= 300) return 'فشل (' + r.code + ') — تأكد من تشغيل 013_bookings_via_bot.sql';
+    if (r.code < 200 || r.code >= 300) { var fm = 'فشل (' + r.code + ' ' + String(r.text).slice(0, 200) + ') — تأكد من تشغيل 013_bookings_via_bot.sql'; Logger.log(fm); return fm; }
     n += Math.min(500, all.length - i);
   }
   var r2 = _supaReq_('post', 'rpc/kv_set', { p: { __bots_seeded: '1' } });
   if (r2.code < 300) PropertiesService.getScriptProperties().setProperty('SUPA_BOT_OK', '1');   // مجموعة «bots»
-  return (r2.code < 300 ? 'تم وسم ' : 'وُسمت ') + n + ' إشعار بوت وفُعِّلت قراءة الإشعارات من Supabase';
+  var bm = (r2.code < 300 ? 'تم وسم ' : 'وُسمت ') + n + ' إشعار بوت وفُعِّلت قراءة الإشعارات من Supabase' + (r2.code < 300 ? '' : ' — لكن kv_set فشل ' + r2.code + ' ' + String(r2.text).slice(0, 160));
+  Logger.log(bm); return bm;
+}
+// تشخيص: يطبع حالة كل علم ومجموعة تعلنها الواجهة (شغّله من المحرر وأرسل السجل)
+function supaDiagNow() {
+  requireScriptOwner_();
+  var P = PropertiesService.getScriptProperties(), L = [];
+  ['SUPA_CFG_OK', 'SUPA_GLK_OK', 'SUPA_AUD_OK', 'SUPA_KV_OK', 'SUPA_BOT_OK', 'DV_PG_SEEDED'].forEach(function (k) { L.push(k + '=' + (P.getProperty(k) || '—')); });
+  try { L.push('groups: ' + JSON.stringify(_supaStoreInfo_())); } catch (e) { L.push('groups err ' + e); }
+  var t = _supaReq_('post', 'rpc/kv_set', { p: { __ping: '1' } }); L.push('kv_set → ' + t.code + ' ' + String(t.text).slice(0, 160));
+  var b = _supaReq_('post', 'rpc/bot_mark', { p_ids: [] }); L.push('bot_mark → ' + b.code + ' ' + String(b.text).slice(0, 160));
+  var a = _supaReq_('get', 'audit_log?select=*&limit=1'); L.push('audit_log → ' + a.code + ' ' + String(a.text).slice(0, 200));
+  var out = L.join('\n'); Logger.log(out); return out;
 }
