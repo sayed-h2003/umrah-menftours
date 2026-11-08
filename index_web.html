@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.373  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.374  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9136,7 +9136,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.373";
+var CLIENT_APP_VERSION = "4.374";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -49601,7 +49601,7 @@ function openHotelsApp_() {
   }).hotelsHandoff(window.authToken);
 }
 // ⚡ (V4.252) نداءات القراءة فقط — أي نداء غيرها (حفظ/ترحيل/حذف/مزامنة…) يمسح كاش الكشوف بالواجهة ويُسخّن كاش الخادم
-var GL_RO_RX_ = /^gl(BankPending|PartyBalances|Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbSeasonPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk|AccountDeletePreview|BotLinkList|BotLinkPend|CpSrcLostScan|DupScan|FindDupEntryIds|FindOrphanEntries|OpeningInfo|ReconLast|AccDeletedList)$/;
+var GL_RO_RX_ = /^gl(BankPending|PartyBalances|Statement|Statements|StatementHb|Ledger|Treasury|TrialBalance|ListEntries|ListBatches|Bootstrap|VchLogo|Stmt(Log|Pdf)|GetEntry|EntryHistory|RowHistory|Profitability|IncomeStatement|BalanceSheet|CashFlow|Aging|PendingList|FxRateAt|FxDaily|VoucherPrint|HbState|HbCharters|HbMirrorList|HbKeepList|HbPartyCode|HbTripHousing|HbReconcile|HbSeasonPreview|AutoPreview|AutoReconcile|ImportPreview|ErpPreview|CustSheetGet|CsPendAccounts|CsPendOne|CpList|CashDupScan|CsDupScan|Warm|GetEntriesBulk|AccountDeletePreview|BotLinkList|BotLinkPend|CpSrcLostScan|DupScan|FindDupEntryIds|FindOrphanEntries|OpeningInfo|ReconLast|AccDeletedList)$/;
 function glDataChanged_() {
   GL._chg = (GL._chg || 0) + 1;   // 📑 (V4.324) تبويب حسابات مُوقَف يُحدَّث عند العودة له لو تغيّرت البيانات
   GL._stCache = {};
@@ -54514,10 +54514,130 @@ document.addEventListener('change', function (e) {
   if (t.classList.contains('glSplAcc')) { var rw = t.closest('.glSplRow'), cs = rw && rw.querySelector('.glSplCur'), dc = glAccDefCur_(glAccVal(t)); if (cs && dc) { cs.value = dc; glCsSplitCur_(cs); } }   // 💱 (V4.356)
 });
 document.addEventListener('input', function (e) { var t = e.target; if (t && t.classList && t.classList.contains('glCsDesc')) { var tr = t.closest('tr[data-row]'), cs = tr && tr.querySelector('.glCcCur'); if (cs && cs.value !== (tr.dataset.cur || 'EGP')) glCcFill_(tr); } });
+/* ⚡ (V4.374b) «استكمال واعتماد» سريعة: تُعرض آخر نتيجة محفوظة فوراً (ذاكرة الخادم عبر glCsPendAccounts + نسخة localStorage) ثم يُحدَّث
+   كل شيت على حدة بالتوازي (حتى 3 نداءات glCsPendOne معاً) مع تحديث الصفوف والعدّادات والبانر تدريجياً.
+   قاعدة أمان: صفوف الشيت غير «المحدَّثة» (محفوظة/قيد التحديث/فشل تحديثها) تُعرض معطّلة ولا تُعتمد أبداً — الاعتماد فقط من صفوف
+   جاءت من معاينة هذه الجلسة، وglCsApproveAll على الخادم يقرأ الشيتات طازجةً قبل القفل على أي حال. */
+var GL_CS_LS_ = 'gl_cs_pend_v374b', GL_CS_CONC_ = 3;
+function glCsLsLoad_() { try { var o = JSON.parse(localStorage.getItem(GL_CS_LS_) || 'null'); return o && o.s ? o : null; } catch (e) { return null; } }
+function glCsLsSave_() {
+  try {
+    var o = {}, S = GL._csS || {}; Object.keys(S).forEach(function (k) { var x = S[k]; if (x.group !== undefined && (x.st === 'fresh' || x.st === 'cached') && x.t) o[k] = { t: x.t, group: x.group }; });
+    var P = GL._csP || {}, js = JSON.stringify({ s: o, meta: { canApprove: !!P.canApprove, autoSusp: !!P.autoSusp, suspAccs: P.suspAccs || [] } });
+    if (js.length < 1500000) localStorage.setItem(GL_CS_LS_, js);
+  } catch (e) {}
+}
+function glCsLsDrop_() { try { localStorage.removeItem(GL_CS_LS_); } catch (e) {} }
+function glCsFreshOk_(code) { var S = GL._csS; if (!S) return true; var x = S[code]; return !!x && x.st === 'fresh'; }
+function glCsAgo_(t) {
+  if (!t) return '—';
+  var d = Math.max(0, Math.round((Date.now() + (GL._csSkew || 0) - t) / 1000));
+  return d < 10 ? 'الآن' : d < 60 ? 'منذ ' + d + ' ثانية' : d < 3600 ? 'منذ ' + Math.round(d / 60) + ' دقيقة' : d < 86400 ? 'منذ ' + Math.round(d / 3600) + ' ساعة' : 'منذ ' + Math.round(d / 86400) + ' يوم';
+}
+function glCsBuildR_() {
+  var S = GL._csS || {}, P = GL._csP = GL._csP || {}, ord = GL._csOrder || Object.keys(S), groups = [], errs = [], tot = 0;
+  ord.forEach(function (c) {
+    var x = S[c]; if (!x) return;
+    if (x.group) { groups.push(x.group); tot += (x.group.rows || []).length + (x.group.susp || []).length; }
+    if (x.st === 'error') errs.push((x.name || c) + ': ' + (x.err || 'فشل التحديث'));
+  });
+  P.groups = groups; P.errors = errs; P.csPend = tot;
+  return P;
+}
+function glCsScrollEl_(el) { for (var e = el && el.parentNode; e && e.nodeType === 1; e = e.parentNode) { var oy = getComputedStyle(e).overflowY; if ((oy === 'auto' || oy === 'scroll') && e.scrollHeight > e.clientHeight) return e; } return null; }
+function glCsMarkStale_() {
+  var S = GL._csS; if (!S) return;
+  document.querySelectorAll('#glCsPBox tr[data-code], #glCsPBox tr[data-scode]').forEach(function (tr) {
+    var c = tr.dataset.code || tr.dataset.scode, x = S[c]; if (!x || x.st === 'fresh') return;
+    tr.style.opacity = '.6'; tr.title = 'نتيجة محفوظة قديمة — بانتظار التحديث (لا يُعتمد منها)';
+    tr.querySelectorAll('input,select,button,textarea').forEach(function (e) { e.disabled = true; });
+  });
+}
+function glCsStat_() {
+  var el = document.getElementById('glCsPStat'); if (!el) return;
+  var S = GL._csS || {}, ord = GL._csOrder || Object.keys(S), busy = 0, ts = [], chips = [];
+  ord.forEach(function (c) {
+    var x = S[c]; if (!x) return;
+    if (x.st === 'loading') busy++;
+    if (x.st === 'fresh' && !x.group) return;   // شيت بلا صفوف: لا شارة
+    if (x.t && x.st !== 'error') ts.push(x.t);
+    var lbl = glEsc(x.name || c), st = x.st === 'loading' ? '<span class="spinner-border spinner-border-sm" style="width:.75rem;height:.75rem;"></span> ' : x.st === 'error' ? '❌ ' : x.st === 'fresh' ? '✔ ' : '💾 ';
+    chips.push('<span class="gl-pill" style="' + (x.st === 'error' ? 'background:#fee2e2;' : x.st === 'cached' ? 'background:#f1f5f9;' : '') + '" title="' + glEsc(x.st === 'error' ? x.err || '' : x.st === 'cached' ? 'محفوظ — ' + glCsAgo_(x.t) : x.st === 'fresh' ? glCsAgo_(x.t) : 'جارٍ التحديث') + '">' + st + lbl +
+      (x.st === 'error' ? ' <a href="#" onclick="glCsRetry_(\'' + glJs(c) + '\');return false;">إعادة</a>' : '') + '</span>');
+  });
+  var old = ts.length ? Math.min.apply(null, ts) : 0;
+  el.innerHTML = '<div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:12px;">' +
+    '<span class="gl-pill" style="background:#ecfeff;">🕒 آخر تحديث ' + (old ? glCsAgo_(old) : '—') + '</span>' +
+    (busy ? '<span class="gl-pill" style="background:#fef3c7;">⏳ جارٍ تحديث ' + busy + ' شيت…</span>' : '') + chips.join('') +
+    '<button class="btn btn-outline-primary btn-sm ms-auto" ' + (busy ? 'disabled ' : '') + 'onclick="glCsLoad_(true)" title="يعيد قراءة كل الشيتات المربوطة متجاوزاً الذاكرة">🔄 تحديث الكل</button></div>';
+  clearTimeout(GL._csAT); if (document.getElementById('glCsPStat')) GL._csAT = setTimeout(glCsStat_, 20000);
+}
+// رسم الحالة الحالية (يتأجل ما دام المستخدم يكتب بحقل داخل الشاشة كي لا تضيع كتابته) مع حفظ اختياراته ومكان التمرير
+function glCsApply_() {
+  var box = document.getElementById('glCsPBox'); if (!box) return;
+  var ae = document.activeElement;
+  if (ae && box.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) { clearTimeout(GL._csDT); GL._csDT = setTimeout(glCsApply_, 1500); glCsStat_(); return; }
+  var R = glCsBuildR_(), S = GL._csS || {}, loading = Object.keys(S).some(function (k) { return S[k].st === 'loading'; });
+  GL.csPend = R.csPend; try { glCsBanner_(); } catch (e0) {}
+  if (!R.groups.length && loading) { box.innerHTML = '<div class="text-muted small py-4 text-center">⏳ جارٍ جلب الصفوف من الشيتات…</div>'; glCsStat_(); return; }
+  var sc = glCsScrollEl_(box), top = sc ? sc.scrollTop : 0, snap = box.querySelector('tr[data-row]') ? glRevSnap_(GL_REV_.all, '') : null;
+  glCsPendDraw_();
+  if (snap) glRevRestore_(GL_REV_.all, snap);
+  glCsMarkStale_(); if (sc) sc.scrollTop = top; glCsStat_();
+}
+function glCsRetry_(code) { glCsLoad_(false, null, code); }
+// التحميل: قائمة الشيتات + آخر نتيجة مخزّنة، ثم معاينة كل شيت بالتوازي. only = شيت واحد (إعادة محاولة)
+function glCsLoad_(force, done, only) {
+  var gen = GL._csGen = (GL._csGen || 0) + 1, S = GL._csS = GL._csS || {};
+  var fail = function (e) { if (gen !== GL._csGen) return; var b = document.getElementById('glCsPBox'); if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc((e && e.message) || e) + '</div>'; if (done) done(true); };
+  glRun('glCsPendAccounts', [!!force], function (res) {
+    if (gen !== GL._csGen) return;
+    var P = GL._csP = GL._csP || {}; P.success = true; P.autoSusp = res.autoSusp; P.canApprove = res.canApprove; P.suspAccs = res.suspAccs; GL._csSkew = (res.now || Date.now()) - Date.now();
+    GL._csOrder = (res.accounts || []).map(function (a) { return a.code; });
+    var keep = {}, queue = [];
+    (res.accounts || []).forEach(function (a) {
+      keep[a.code] = 1; if (only && only !== a.code) return;
+      var s = S[a.code] || (S[a.code] = { code: a.code, group: null, t: 0, st: 'cached' });
+      s.name = a.name;
+      if (a.hasGroup) { s.group = a.group; s.t = (a.cache && a.cache.t) || s.t; s.st = (a.cache && a.cache.young && !force) ? 'fresh' : 'cached'; }
+      else if (!a.scan) { s.group = null; s.st = 'fresh'; }   // لا صفوف ناقصة حسب آخر مزامنة ⇒ لا حاجة لفتحه (كما في glCsPendAll القديمة)
+      else s.st = 'cached';   // لا نتيجة صالحة بالخادم: تبقى نسخة المتصفح (إن وُجدت) معطّلة حتى التحديث
+      if (!a.scan && !force && !s.group) s.st = 'fresh';   // لا صفوف ولا حاجة لفحصه
+      if ((a.scan || force) && s.st !== 'fresh' && (!only || only === a.code)) { s.st = 'loading'; queue.push(a); }
+    });
+    Object.keys(S).forEach(function (k) { if (!keep[k]) delete S[k]; });
+    glCsApply_();
+    var qi = 0, active = 0, finished = false, anyErr = false;
+    var next = function () {
+      if (gen !== GL._csGen || finished) return;
+      if (!document.getElementById('glCsPBox')) { finished = true; return; }
+      while (active < GL_CS_CONC_ && qi < queue.length) {
+        (function (a) {
+          active++;
+          var got = function (r) {
+            active--; if (gen !== GL._csGen) return;
+            var s = S[a.code]; if (!s) { next(); return; }
+            if (r && r.success) { s.group = r.group || null; s.t = r.t || Date.now(); s.st = 'fresh'; s.err = ''; } else { s.st = 'error'; s.err = (r && r.error) || 'فشل التحديث'; anyErr = true; }
+            glCsApply_(); next();
+          };
+          glRun('glCsPendOne', [a.code, !!force], got, function (e) { got({ success: false, error: (e && e.message) || String(e) }); });
+        })(queue[qi++]);
+      }
+      if (!active && qi >= queue.length) { finished = true; glCsLsSave_(); glCsApply_(); if (done) done(anyErr); }
+    };
+    next();
+  }, fail);
+}
 function glCsPendDlg(force) {
-  glDlg('👜 صفوف الشيتات الناقصة — استكمال واعتماد', '<div id="glCsPBox" class="text-muted small py-4 text-center">⏳ جارٍ جلب الصفوف من الشيتات…</div>', 1180);
-  glRun('glCsPendAll', [!!force], function (res) { GL._csP = res; GL.csPend = res.csPend || 0; glCsBanner_(); glCsPendDraw_(); },
-    function (e) { var b = document.getElementById('glCsPBox'); if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + glEsc((e && e.message) || e) + '</div>'; });
+  glDlg('👜 صفوف الشيتات الناقصة — استكمال واعتماد', '<div id="glCsPStat" class="mb-2"></div><div id="glCsPBox" class="text-muted small py-4 text-center">⏳ جارٍ جلب الصفوف من الشيتات…</div>', 1180);
+  GL._csS = {}; GL._csOrder = null; GL._csP = {};
+  var ls = glCsLsLoad_();   // آخر نتيجة بهذا المتصفح تُعرض فوراً (معطّلة حتى يصل التحديث)
+  if (ls) {
+    Object.keys(ls.s).forEach(function (c) { var o = ls.s[c]; GL._csS[c] = { code: c, name: (o.group && o.group.name) || c, group: o.group || null, t: o.t || 0, st: 'cached' }; });
+    var m = ls.meta || {}; GL._csP = { success: true, canApprove: !!m.canApprove, autoSusp: !!m.autoSusp, suspAccs: m.suspAccs || [] };
+    if (Object.keys(GL._csS).length) glCsApply_();
+  }
+  glCsLoad_(!!force);
 }
 function glCsPendDraw_() {
   var R = GL._csP, box = document.getElementById('glCsPBox'); if (!R || !box) return;
@@ -54556,7 +54676,7 @@ var GL_REV_ = {
   all: { boxId: 'glCsPBox', chk: '.glCsPk',
     key: function (tr) { return tr.dataset.code + '|' + tr.dataset.row; },
     refresh: function (done) {
-      glRun('glCsPendAll', [false], function (res) { GL._csP = res; GL.csPend = res.csPend || 0; glCsBanner_(); glCsPendDraw_(); done(false); }, function () { done(true); });
+      glCsLoad_(false, function (failed) { done(failed); });   // (V4.374b) تحديث متوازٍ بدل glCsPendAll المتسلسلة
     } },
   sheet: { boxId: 'glCsRes', chk: '.glCsChk',
     key: function (tr) { return String(tr.dataset.row); },
@@ -54719,6 +54839,7 @@ function glCsBkSug_(x, g, R) {
     }).join('<hr class="my-1">') + '</div>';
 }
 function glCsBkLink_(btn, code, row, acc, name) {
+  if (!glCsFreshOk_(code)) { _showPopup('هذا الشيت بانتظار التحديث — انتظر اكتماله ثم أعد المحاولة', 'warning'); return; }   // (V4.374b)
   askConfirm_('نقل هذا المبلغ المعلق (نفس القيد) إلى حساب «' + name + '»؟ يخرج من «متعلقات» ويظهر بكشف الحساب مقابل الحجز.', function () {
     btn.disabled = true; btn.innerHTML = '⏳ جاري الربط…';
     var it = { row: row, repoint: 1, account: acc }, tr = document.querySelector('#glCsPBox tr[data-scode="' + code + '"][data-srow="' + row + '"]');
@@ -54728,11 +54849,12 @@ function glCsBkLink_(btn, code, row, acc, name) {
       if (pr.length) _showPopup(pr.map(function (p) { return 'صف ' + p.row + ': ' + p.msg; }).join('\n'), 'warning');
       else showToast('✅ رُبط المبلغ بحساب ' + name);
       try { glApplyDelta_(res); } catch (e) {}
-      glCsPendDlg(false);
+      glCsLsDrop_(); glCsPendDlg(false);
     }, function (e) { btn.disabled = false; btn.innerHTML = '🔗 ربط بهذا الحجز'; _showPopup((e && e.message) || e, 'error'); });
   }, { title: 'ربط بالحجز', icon: '🏨', okLabel: 'ربط' });
 }
 function glCsRepoint_(btn, code) {
+  if (!glCsFreshOk_(code)) { _showPopup('هذا الشيت بانتظار التحديث — انتظر اكتماله ثم أعد المحاولة (لا يُنقل من نتيجة قديمة)', 'warning'); return; }   // (V4.374b)
   var items = [], miss = 0, bad = [];
   document.querySelectorAll('#glCsPBox tr[data-scode="' + code + '"]').forEach(function (tr) {
     if (!tr.querySelector('.glCsSpk').checked) return;
@@ -54750,7 +54872,7 @@ function glCsRepoint_(btn, code) {
     showToast('✅ نُقل ' + Math.max(0, items.length - pr.length) + ' مبلغ معلق لحسابه الحقيقي');
     if (pr.length) _showPopup(pr.map(function (p) { return 'صف ' + p.row + ': ' + p.msg; }).join('\n'), 'warning');
     try { glApplyDelta_(res); } catch (e) {}
-    glCsPendDlg(false);
+    glCsLsDrop_(); glCsPendDlg(false);
   }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); });
 }
 function glCsPickSugg_() {
@@ -54767,8 +54889,10 @@ function glCsTripList_() {
 function glCsTripOf_(tr) { var i = tr.querySelector('.glCsTrip'); return i ? i.value.trim() : ''; }
 function glCsApproveAll_(btn) {
   var by = {}, n = 0, miss = 0, bad = [];
+  var stale = {};
   document.querySelectorAll('#glCsPBox tr[data-row]').forEach(function (tr) {
     if (!tr.querySelector('.glCsPk').checked) return;
+    if (!glCsFreshOk_(tr.dataset.code)) { stale[tr.dataset.code] = 1; return; }   // (V4.374b) لا اعتماد من نتيجة محفوظة/غير محدَّثة
     var ds = tr.querySelector('.glCsDupSel');   // (V4.278) صف مطابق لقيد قائم
     if (ds && ds.value === 'link') { (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push({ row: +tr.dataset.row, link: ds.dataset.link }); n++; return; }
     var ss = tr.querySelector('.glCsSus');   // ⏳ (V4.324) مبلغ معلق ⇒ على حساب المعلقات المختار
@@ -54789,6 +54913,7 @@ function glCsApproveAll_(btn) {
     var tp0 = glCsTripOf_(tr); if (tp0) it.trip = tp0;   // (V4.343)
     (by[tr.dataset.code] = by[tr.dataset.code] || { code: tr.dataset.code, items: [] }).items.push(it); n++;
   });
+  if (Object.keys(stale).length) { _showPopup('صفوف بعض الشيتات المحددة ما زالت بانتظار التحديث أو فشل تحديثها، ولا يُعتمد من نتيجة قديمة. انتظر اكتمال التحديث أو اضغط «🔄 تحديث الكل» ثم أعد الاعتماد.', 'warning'); return; }   // (V4.374b)
   if (bad.length) { _showPopup(bad.join('\n'), 'warning'); return; }
   if (!n) { _showPopup('اختر حساب الطرف لصف واحد على الأقل', 'warning'); return; }
   var go = function () {
@@ -54797,7 +54922,7 @@ function glCsApproveAll_(btn) {
       GL.csPend = res.csPend || 0; if (typeof res.pendingCount === 'number') GL.pendingCount = res.pendingCount; glNavBadge_(); glCsBanner_();
       showToast('✅ سُجّل ' + res.created + ' قيد' + (res.left ? ' — بقي ' + res.left + ' صف' : '') + ((res.problems || []).length ? ' · ⚠️ ' + res.problems.length + ' مشكلة' : ''));
       if ((res.problems || []).length || (res.warns || []).length) _showPopup((res.problems || []).concat(res.warns || []).map(function (p) { return 'صف ' + p.row + ': ' + p.msg; }).join('\n'), 'warning');
-      glDlgClose(); glAfterChange();
+      glCsLsDrop_(); glDlgClose(); glAfterChange();
       if (res.left) glCsPendDlg();
     }, function (e) { btn.disabled = false; btn.innerHTML = orig; _showPopup((e && e.message) || e, 'error'); });
   };

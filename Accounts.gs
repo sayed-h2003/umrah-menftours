@@ -1067,6 +1067,7 @@ function glAccountDelete(authToken, code, confirmText, sig) {
     if (csCfg !== undefined) {
       _glDelSetting_(csKey);
       try { var PP = PropertiesService.getScriptProperties(); PP.deleteProperty('GLBOT_CS_' + code);
+        try { PP.deleteProperty('GL_CS_PV_' + code); CacheService.getScriptCache().remove('gl_cs_pv_' + code); } catch (ePv) {}
         ['GL_CS_SIG', 'GL_CS_LAST_AUTO'].forEach(function (pk) { try { var o = JSON.parse(PP.getProperty(pk) || '{}') || {}; if (o[code] !== undefined) { delete o[code]; PP.setProperty(pk, JSON.stringify(o)); } } catch (e1) {} });
       } catch (eS) {}
       _GL_SET_MEMO_ = null; try { _glCsEnsureTrigger_(); } catch (eT) { Logger.log('accdel custsheet trigger: ' + eT.message); }
@@ -5608,12 +5609,12 @@ function glCustSheetSync(authToken, code, preview) {
 // اعتماد صفوف الطرف غير المعروف: items = [{row, account}] — ويُتذكَّر اسم الطرف ⇒ حسابه للمرات القادمة
 // 👜 (V4.268) مجموع صفوف الشيتات (عهدة/خزينة/بنك) الناقصة بانتظار تحديد الطرف — من آخر مزامنة لكل شيت (بلا فتح أي شيت)
 function _glCsPendTotal_() {
-  var n = 0; try { var set = _glSettings_(); Object.keys(set).forEach(function (k) { if (k.indexOf('custsheet:') !== 0) return; try { var c = JSON.parse(set[k] || '{}'); if (c && c.id && c.last) n += (+c.last.pending || 0) + (+c.last.susp || 0); } catch (e) {} }); } catch (e2) {}   // ⏳ (V4.324) + المبالغ المعلقة
+  var n = 0; try { var set = _glSettings_(), all = _glCsPvAll_(); Object.keys(set).forEach(function (k) { if (k.indexOf('custsheet:') !== 0) return; try { var c = JSON.parse(set[k] || '{}'); if (c && c.id && (c.last || all['GL_CS_PV_' + k.slice(10)])) { var q = _glCsPendCounts_(k.slice(10), c, all); n += q.p + q.s; } } catch (e) {} }); } catch (e2) {}   // (V4.374b) من آخر معاينة صالحة لو أحدث   // ⏳ (V4.324) + المبالغ المعلقة
   return n;
 }
 function _glCsPendBrief_() {
   var out = [], accM = {}; try { accM = _glAccounts_().map; } catch (e0) {}
-  try { var set = _glSettings_(); Object.keys(set).forEach(function (k) { if (k.indexOf('custsheet:') !== 0) return; try { var c = JSON.parse(set[k] || '{}'), code = k.slice(10); if (c && c.id && c.last && +c.last.pending > 0) out.push({ code: code, name: (accM[code] || {}).name || code, n: +c.last.pending }); } catch (e) {} }); } catch (e2) {}
+  try { var set = _glSettings_(), all = _glCsPvAll_(); Object.keys(set).forEach(function (k) { if (k.indexOf('custsheet:') !== 0) return; try { var c = JSON.parse(set[k] || '{}'), code = k.slice(10); if (c && c.id && (c.last || all['GL_CS_PV_' + code])) { var q = _glCsPendCounts_(code, c, all); if (q.p > 0) out.push({ code: code, name: (accM[code] || {}).name || code, n: q.p }); } } catch (e) {} }); } catch (e2) {}
   return out;
 }
 /* ⏳ (V4.324) «مبالغ معلقة»: صف شيت خزينة/بنك/عهدة بلا طرف معروف بعد (بانتظار التنفيذ/التسوية) يُقيَّد على حساب معلقات
@@ -5641,7 +5642,88 @@ function _glCsSuspAcc_(code, user) {
   if (!m[r.cs_susp]) { r = _glAutoRoles_(user || '', false); _GL_ACC_MEMO_ = null; }
   return r.cs_susp;
 }
-// يجمع الصفوف الناقصة من كل الشيتات المربوطة (معاينة بلا تسجيل) — لشاشة «استكمال واعتماد» بالحسابات العامة
+/* ⚡ (V4.374b) تسريع «استكمال واعتماد»: نتيجة المعاينة لكل شيت تُخزَّن مع بصمتها (id الشيت + «آخر تعديل» لملف الشيت من Drive +
+   وقت آخر مزامنة فعلية cfg.last.at + العمر ≤ 10 دقائق) — الشيت الذي لم يتغيّر لا يُفتح ولا يُقرأ (فحص Drive واحد فقط).
+   الملخّص (عدّادات + بصمة) في خاصية GL_CS_PV_<code>، والصفوف الكاملة في كاش السكربت (حدّ 100KB للمفتاح، 6 ساعات).
+   لا يُعتمد عليها أبداً في الاعتماد: glCsApproveAll يقرأ الشيتات طازجةً بنفسه. */
+var GL_CS_PV_TTL_ = 600000, GL_CS_PV_YOUNG_ = 60000, GL_CS_PV_MAXB_ = 90000;
+function _glCsPvMeta_(code) { try { var v = PropertiesService.getScriptProperties().getProperty('GL_CS_PV_' + code); return v ? (JSON.parse(v) || null) : null; } catch (e) { return null; } }
+function _glCsPvDrop_(code) { try { PropertiesService.getScriptProperties().deleteProperty('GL_CS_PV_' + code); } catch (e) {} try { CacheService.getScriptCache().remove('gl_cs_pv_' + code); } catch (e2) {} }
+function _glCsPvAt_(cfg) { return _glStr_((cfg && cfg.last && cfg.last.at) || ''); }
+// ملخّص صالح لإعداد الشيت الحالي (نفس الشيت ونفس آخر مزامنة)؟ وإلا فهو قديم لا يُعرض
+function _glCsPvOk_(m, cfg) { return !!(m && cfg && m.id === cfg.id && m.at === _glCsPvAt_(cfg)); }
+function _glCsPvGroup_(code, r, accM) {
+  if (!r || !((r.pending && r.pending.length) || (r.susp && r.susp.length))) return null;
+  return { code: code, name: (accM[code] || {}).name || code, currency: (r.account || {}).currency || '', url: (r.sheet || {}).url || '', rows: r.pending || [], susp: r.susp || [] };
+}
+function _glCsPvPut_(code, group, cfg, lu) {
+  var m = { t: Date.now(), lu: lu || 0, id: cfg.id, at: _glCsPvAt_(cfg), p: group ? group.rows.length : 0, s: group ? (group.susp || []).length : 0, g: 0, big: 0 };
+  try {
+    if (group) {
+      var js = JSON.stringify(group);
+      if (js.length <= GL_CS_PV_MAXB_) { CacheService.getScriptCache().put('gl_cs_pv_' + code, js, 21600); m.g = 1; } else m.big = 1;
+    } else { try { CacheService.getScriptCache().remove('gl_cs_pv_' + code); } catch (e0) {} }
+    PropertiesService.getScriptProperties().setProperty('GL_CS_PV_' + code, JSON.stringify(m));
+  } catch (e) {}
+  return m;
+}
+function _glCsPvGet_(code, m) {   // صفوف المجموعة المخزّنة (null لو لا صفوف) أو undefined لو غير متاحة بالكاش
+  if (!m) return undefined;
+  if (!m.g) return m.big ? undefined : null;
+  try { var c = CacheService.getScriptCache().get('gl_cs_pv_' + code); return c ? JSON.parse(c) : undefined; } catch (e) { return undefined; }
+}
+function _glCsLastUpd_(cfg) { try { return DriveApp.getFileById(cfg.id).getLastUpdated().getTime() || 0; } catch (e) { return 0; } }
+// معاينة شيت واحد: من الكاش لو بصمته لم تتغيّر (بلا فتح الشيت)، وإلا معاينة كاملة ثم تخزين. force ⇒ تجاوز الكاش
+function _glCsPendOne_(code, user, force) {
+  var cfg = _glCsCfg_(code); if (!cfg || !cfg.id) throw new Error('لم يُربط شيت لهذه العهدة بعد');
+  var lu = _glCsLastUpd_(cfg);   // قبل القراءة: لو تغيّر الشيت أثناءها يظهر فرق البصمة بالمرة القادمة
+  if (!force && lu) {
+    var m = _glCsPvMeta_(code);
+    if (_glCsPvOk_(m, cfg) && m.lu === lu && Date.now() - (m.t || 0) < GL_CS_PV_TTL_) {
+      var gc = _glCsPvGet_(code, m);
+      if (gc !== undefined) return { group: gc, t: m.t, hit: true };
+    }
+  }
+  var r = _glCsSync_(code, user, { preview: true });
+  var cfg2 = _glCsCfg_(code), group = _glCsPvGroup_(code, r, _glAccounts_().map), m2 = _glCsPvPut_(code, group, cfg2, lu);
+  return { group: group, t: m2.t, hit: false };
+}
+// أثر جانبي للمزامنة المجدولة: تخزين ما قرأته للتوّ (بلا فتح إضافي للشيت)
+function _glCsPvFromSync_(code, r, lu) {
+  try { var cfg = _glCsCfg_(code); if (cfg && cfg.id && r) _glCsPvPut_(code, _glCsPvGroup_(code, r, _glAccounts_().map), cfg, lu); } catch (e) {}
+}
+function _glCsPendCounts_(code, cfg, all) {   // عدّادات الشيت: من ملخّص المعاينة لو صالح (أحدث) وإلا من آخر مزامنة
+  var m = null; try { var v = all ? all['GL_CS_PV_' + code] : null; m = v ? JSON.parse(v) : null; } catch (e) { m = null; }
+  if (_glCsPvOk_(m, cfg)) return { p: +m.p || 0, s: +m.s || 0 };
+  return { p: +((cfg.last || {}).pending) || 0, s: +((cfg.last || {}).susp) || 0 };
+}
+function _glCsPvAll_() { try { return PropertiesService.getScriptProperties().getProperties() || {}; } catch (e) { return {}; } }
+// قائمة الشيتات المربوطة + آخر نتيجة مخزّنة لكل شيت (بلا فتح أي شيت) — تُعرض فوراً بينما يُحدَّث كل شيت على حدة
+function glCsPendAccounts(authToken, force) {
+  var session = _glPerm_(authToken, 'view', 'sheets'), accM = _glAccounts_().map, all = _glCsPvAll_(), out = [], tot = 0, now = Date.now();
+  _glCsCodes_().forEach(function (code) {
+    var cfg = _glCsCfg_(code); if (!cfg || !cfg.id) return;
+    var cnt = _glCsPendCounts_(code, cfg, all), m = null; try { m = all['GL_CS_PV_' + code] ? JSON.parse(all['GL_CS_PV_' + code]) : null; } catch (e) {}
+    var ok = _glCsPvOk_(m, cfg), grp = ok ? _glCsPvGet_(code, m) : undefined;
+    if (grp) { grp.name = (accM[code] || {}).name || code; try { _glCsSuspBkSugg_([grp]); } catch (eB) {} }
+    tot += cnt.p + cnt.s;
+    out.push({ code: code, name: (accM[code] || {}).name || code, url: 'https://docs.google.com/spreadsheets/d/' + cfg.id, pending: cnt.p, susp: cnt.s,
+      scan: !!force || cnt.p > 0 || cnt.s > 0,   // نفس شرط glCsPendAll القديم: بلا force لا يُفحص إلا ما فيه صفوف
+      cache: ok ? { t: m.t, age: now - (m.t || 0), young: now - (m.t || 0) < GL_CS_PV_YOUNG_ } : null,
+      group: grp === undefined ? null : grp, hasGroup: grp !== undefined });
+  });
+  return { success: true, accounts: out, now: now, autoSusp: _glStr_(_glSettings_().cs_auto_susp) === 'نعم', canApprove: _sessionHasPerm_(session, 'admin') || _sessionHasPerm_(session, 'gl.edit'), csPend: tot, suspAccs: _glCsSuspAccs_() };
+}
+// معاينة شيت واحد (للاستدعاء المتوازي من الشاشة): { group|null, t, hit } أو { success:false, error }
+function glCsPendOne(authToken, code, force) {
+  var session = _glPerm_(authToken, 'view', 'sheets'), accM = _glAccounts_().map; code = _glStr_(code);
+  try {
+    var r = _glCsPendOne_(code, session.username, !!force);
+    if (r.group) { try { _glCsSuspBkSugg_([r.group]); } catch (eBk) { Logger.log('susp bk sugg: ' + eBk.message); } }
+    return { success: true, code: code, name: (accM[code] || {}).name || code, group: r.group, t: r.t, hit: !!r.hit, csPend: _glCsPendTotal_() };
+  } catch (e) { return { success: false, code: code, name: (accM[code] || {}).name || code, error: e.message }; }
+}
+// يجمع الصفوف الناقصة من كل الشيتات المربوطة (معاينة بلا تسجيل) — يبقى للتوافق: دائماً طازج (يتجاوز الكاش) ويحدّثه
 function glCsPendAll(authToken, force) {
   var session = _glPerm_(authToken, 'view', 'sheets');
   var groups = [], errs = [], t0 = Date.now(), accM = _glAccounts_().map;
@@ -5650,8 +5732,8 @@ function glCsPendAll(authToken, force) {
     if (!force && !(cfg.last && (+cfg.last.pending > 0 || +cfg.last.susp > 0))) return;
     if (Date.now() - t0 > 150000) { errs.push((accM[code] || {}).name || code); return; }
     try {
-      var r = _glCsSync_(code, session.username, { preview: true });
-      if ((r.pending && r.pending.length) || (r.susp && r.susp.length)) groups.push({ code: code, name: (accM[code] || {}).name || code, currency: (r.account || {}).currency || '', url: (r.sheet || {}).url || '', rows: r.pending || [], susp: r.susp || [] });
+      var r = _glCsPendOne_(code, session.username, true);
+      if (r.group) groups.push(r.group);
     } catch (e) { errs.push(((accM[code] || {}).name || code) + ': ' + e.message); }
   });
   try { _glCsSuspBkSugg_(groups); } catch (eBk) { Logger.log('susp bk sugg: ' + eBk.message); }   // 🏨 (V4.355)
@@ -5745,9 +5827,10 @@ function glCsApproveAll(authToken, groups) {
         var r = _glCsSync_(_glStr_(g.code), session.username, { approve: pick, descOv: ov, tripOv: tov, link: lnk, force: frc, ccy: cc, susp: sus, repoint: rep, split: spl, pre: preMap[_glStr_(g.code)] });
         created += (r.merged || []).length;
         created += (r.created || []).length; left += (r.pending || []).length;
+        _glCsPvDrop_(_glStr_(g.code));   // (V4.374b) المعاينة المخزّنة لم تعد صالحة بعد الاعتماد
         (r.problems || []).forEach(function (x) { problems.push({ code: g.code, row: x.row, msg: x.msg }); });
         (r.warns || []).forEach(function (x) { warns.push({ code: g.code, row: x.row, msg: x.msg }); });
-      } catch (e) { problems.push({ code: g.code, row: 0, msg: e.message }); }
+      } catch (e) { problems.push({ code: g.code, row: 0, msg: e.message }); _glCsPvDrop_(_glStr_(g.code)); }
     });
     return { success: true, created: created, left: left, problems: problems, warns: warns, csPend: _glCsPendTotal_(), mirQ: _GL_MIRQ_N_, pendingCount: (function () { try { return _glPendingCount_(); } catch (e) { return 0; } })() };
   } finally { _glUnlock_(lock); }
@@ -6397,6 +6480,7 @@ function _glCsAutoAll_() {
     last[code] = now;
     try {
       var r = _glCsSync_(code, 'مزامنة مجدولة', pre ? { pre: pre } : {}); res.push(code + ': ' + r.created.length + '/' + r.pending.length);
+      _glCsPvFromSync_(code, r, luNow);   // ⚡ (V4.374b) نفس القراءة تغذّي كاش «استكمال واعتماد» (بلا فتح إضافي)
       if (pre) { sigs[code] = { s: sig, t: now, lu: luNow }; try { P.setProperty('GL_CS_SIG', JSON.stringify(sigs)); } catch (eW) {} }
       var nPend = r.pending.length, lastN = +(P.getProperty('GLBOT_CS_' + code) || 0);   // 📲 (V4.254) تنبيه عند ظهور صفوف ناقصة جديدة فقط
       if (nPend !== lastN) { P.setProperty('GLBOT_CS_' + code, String(nPend)); if (nPend > lastN) _glBotQ_('custody_err', { name: (_glAccounts_().map[code] || {}).name || code, n: nPend, code: code,
