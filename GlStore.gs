@@ -393,3 +393,6 @@ function glStoreRollback() {
     var m = '↩️ أُعيدت الشيتات من DB: قيود ' + ents.length + ' · سطور ' + lns.length + ' و GL_STORE أُلغي'; Logger.log(m); return m;
   } finally { _glUnlock_(lock); }
 }
+
+// تشغيل التفعيل من زر «تشغيل» بالمحرر (لا يقبل متغيرات): ينفّذ glStoreCutover(true)
+function glStoreCutoverApply() { requireScriptOwner_(); return glStoreCutover(true); }
