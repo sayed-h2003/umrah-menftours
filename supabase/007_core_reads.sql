@@ -1,4 +1,4 @@
--- 007_core_reads.sql — (V4.377 / المرحلة 4) قراءات الرحلات والمعتمرين والحركات والعملاء من Postgres مباشرة (المتصفح ← RPC ← jsonb)
+-- 007_core_reads.sql — (المرحلة 4) قراءات الرحلات والمعتمرين والحركات والعملاء من Postgres مباشرة (المتصفح ← RPC ← jsonb)
 -- كل دالة rx_*_raw تُرجع نفس JSON الذي تُرجعه دالة Apps Script المقابلة حرفياً (الأسماء/الأنواع/القيم/التواريخ dd/MM/yyyy بتوقيت القاهرة):
 --   getTripsList → rx_trips_list_raw · getTripPilgrims → rx_trip_pilgrims_raw · getGlobalPilgrimsRegistry → rx_registry_raw
 --   getAllMovementsAuth → rx_movements_raw · loadDropdownsData → rx_dropdowns_raw · getClientsDirectory → rx_clients_dir_raw
@@ -171,9 +171,11 @@ begin
   cur2 as (
     select c.*, coalesce(pc.cnt, 0) pcnt, coalesce(pc.inf, 0) inf, coalesce(pc.sup, 0) sup, coalesce(pc.hous, false) hous,
            (coalesce(pc.cnt, 0) - coalesce(pc.sup, 0) - coalesce(pc.inf, 0)) + _rx_sup_seats(c.sups) seats,
+           bid.v bid_v, bdep.v bdep_v, bcnt.v bcnt_v, (priced.tn is not null) is_priced, (bflag.tn is not null) has_bk, (btick.tn is not null) has_tick,
            case when jsonb_typeof(c.ret) = 'object' and c.ret ? '$d' then (c.ret ->> '$d')::float8 < t0ms
                 else coalesce(_rx_dmy(_rx_fdate(c.ret)) < p_today, false) end arch
-      from cur c left join pc on pc.tn = c.name where c.name <> ''),
+      from cur c left join pc on pc.tn = c.name left join bid on bid.tn = c.name left join bdep on bdep.tn = c.name left join bcnt on bcnt.tn = c.name
+           left join priced on priced.tn = c.name left join bflag on bflag.tn = c.name left join btick on btick.tn = c.name where c.name <> ''),
   cur3 as (
     select c.*, case when c.bs in ('""'::jsonb, 'null'::jsonb) then '""'::jsonb else coalesce(to_jsonb(_rx_numc(c.bs)), 'null'::jsonb) end bs0 from cur2 c),
   cur4 as (
@@ -189,8 +191,8 @@ begin
       'makkahHotel', _rx_s(_rx_c(c.raw, _rx_ix(tm, 'سكن مكة'))), 'makkahCheckIn', _rx_fdate(_rx_c(c.raw, _rx_ix(tm, 'تاريخ دخول مكة'))),
       'makkahCheckOut', _rx_fdate(_rx_c(c.raw, _rx_ix(tm, 'تاريخ الخروج من مكة'))),
       'makkahNights', case when _rx_c(c.raw, _rx_ix(tm, 'ليالي مكة')) in ('""'::jsonb, 'null'::jsonb) then '""'::jsonb else coalesce(to_jsonb(_rx_numc(_rx_c(c.raw, _rx_ix(tm, 'ليالي مكة')))), 'null'::jsonb) end,
-      'linkedBookingId', case when c.linked <> '' then c.linked else coalesce((select v from bid where bid.tn = c.name), '') end,
-      'pricingApplied', exists (select 1 from priced p where p.tn = c.name),
+      'linkedBookingId', case when c.linked <> '' then c.linked else coalesce(c.bid_v, '') end,
+      'pricingApplied', c.is_priced,
       'pilgrimCount', c.pcnt, 'infantCount', c.inf, 'supervisors', c.sups, 'supervisorsDisplay', _rx_sups_disp(c.sups),
       'supervisorPhones', _rx_s(_rx_c(c.raw, _rx_ix(tm, 'أرقام جوالات المشرف'))), 'seatsOccupied', c.seats,
       'bookedSeats', c.bsf, 'direction', _rx_s(_rx_c(c.raw, _rx_ix(tm, 'اتجاه الإقامة')))
@@ -201,16 +203,16 @@ begin
       'supervisorRole', coalesce(nullif(_rx_s(_rx_c(c.raw, _rx_ix(tm, 'دور المشرف'))), ''), 'مرافق'),
       'tripRef', _rx_s(_rx_c(c.raw, _rx_ix(tm, 'الرقم المرجعي'))),
       'ruleCount', greatest(0, c.pcnt - c.inf - c.sup),
-      'bookingReturnDate', coalesce((select v from bdep where bdep.tn = c.name), ''),
-      'bookingCount', coalesce((select to_jsonb(v) from bcnt where bcnt.tn = c.name), '0'::jsonb),
+      'bookingReturnDate', coalesce(c.bdep_v, ''),
+      'bookingCount', coalesce(to_jsonb(c.bcnt_v), '0'::jsonb),
       'archived', c.arch,
       'arrivalPort', _rx_s(_rx_c(c.raw, _rx_ix(tm, 'منفذ الوصول'))), 'departurePort', _rx_s(_rx_c(c.raw, _rx_ix(tm, 'منفذ المغادرة'))),
       'arrivalTime', _rx_ftime(_rx_c(c.raw, _rx_ix(tm, 'ساعة الوصول'))), 'departureTime', _rx_ftime(_rx_c(c.raw, _rx_ix(tm, 'ساعة المغادرة'))),
       'arrivalFlight', _rx_s(_rx_c(c.raw, _rx_ix(tm, 'رقم رحلة الوصول'))), 'departureFlight', _rx_s(_rx_c(c.raw, _rx_ix(tm, 'رقم رحلة المغادرة'))),
       'readiness', jsonb_build_object(
         'manifest', c.pcnt > 0, 'housing', c.hous,
-        'booking', exists (select 1 from bflag f where f.tn = c.name) or _rx_trim(c.linked) <> '',
-        'ticket', exists (select 1 from btick k where k.tn = c.name) or _rx_trim(_rx_s(_rx_c(c.raw, _rx_ix(tm, 'رابط تذكرة الرحلة')))) <> ''
+        'booking', c.has_bk or _rx_trim(c.linked) <> '',
+        'ticket', c.has_tick or _rx_trim(_rx_s(_rx_c(c.raw, _rx_ix(tm, 'رابط تذكرة الرحلة')))) <> ''
                   or exists (select 1 from unnest(regexp_split_to_array(c.linked, '[,،\s]+')) x where x <> '' and exists (select 1 from btid i where i.v = _rx_trim(x))))
     ) order by c.rn desc), '[]'::jsonb) into res from cur4 c;
   return res;
@@ -269,9 +271,10 @@ $$ declare pm jsonb := _rx_map('pilgrims', _rx_h_pil()); tm jsonb := _rx_map('tr
             (array_agg(_rx_fdate(ed) order by rn) filter (where _rx_dnz(ed)))[count(*) filter (where _rx_dnz(ed))] ed,
             (array_agg(pid order by rn) filter (where _rx_trim(pid) <> ''))[count(*) filter (where _rx_trim(pid) <> '')] pid
           from pk group by k),
+  tja as (select k, jsonb_agg(o order by rn) arr from tj group by k),
   lst as (select jsonb_build_object('name', g.name, 'passport', g.passport, 'type', coalesce(g.ty, ''), 'client', coalesce(g.cl, ''), 'notes', coalesce(g.nt, ''),
               'latinName', coalesce(g.ln, ''), 'birthDate', coalesce(g.bd, ''), 'issueDate', coalesce(g.idt, ''), 'expiryDate', coalesce(g.ed, ''), 'pid', coalesce(g.pid, ''),
-              'trips', coalesce((select jsonb_agg(t.o order by t.rn) from tj t where t.k = g.k), '[]'::jsonb)) o, g.first_rn from grp g)
+              'trips', coalesce(a.arr, '[]'::jsonb)) o, g.first_rn from grp g left join tja a on a.k = g.k)
   select jsonb_build_object('pilgrims', coalesce(jsonb_agg(o order by first_rn), '[]'::jsonb), 'total', count(*)) into res from lst;
   return res;
 end $$;
@@ -296,7 +299,7 @@ $$ declare bh jsonb := _rx_hdr('bookings'); bm jsonb := _rx_map('bookings', _rx_
   with bk as (select distinct on (v) v, tc, bc from (
                 select rn, _rx_s_raw(raw -> b_id) v, _rx_trim(_rx_ts(_rx_c(raw, b_tc))) tc, _rx_trim(_rx_ts(_rx_c(raw, b_bc))) bc
                   from _rx_rows('bookings') where _rx_truthy(raw -> b_id)) x order by v, rn),
-  mv as (select rn, raw from _rx_rows('movements') where _rx_truthy(raw -> 1))
+  mv as (select rn, raw, _rx_s_raw(raw -> 1) bid from _rx_rows('movements') where _rx_truthy(raw -> 1))
   select coalesce(jsonb_agg(jsonb_build_object(
       'status', _rx_ts(_rx_c(raw, 0)), 'bookingId', _rx_s_raw(raw -> 1),
       'movementDate', case when not _rx_truthy(_rx_c(raw, 2)) then '' when jsonb_typeof(raw -> 2) = 'object' then _rx_fdate(raw -> 2) else _rx_trim(_rx_s_raw(raw -> 2)) end,
@@ -304,8 +307,8 @@ $$ declare bh jsonb := _rx_hdr('bookings'); bm jsonb := _rx_map('bookings', _rx_
       'agent', _rx_ts(_rx_c(raw, 5)), 'company', _rx_ts(_rx_c(raw, 6)), 'client', _rx_ts(_rx_c(raw, 7)),
       'count', case when _rx_truthy(_rx_c(raw, 8)) then _rx_s_raw(raw -> 8) else '0' end,
       'supervisor', _rx_ts(_rx_c(raw, 9)), 'buses', _rx_ts(_rx_c(raw, 10)),
-      'hasTransport', coalesce((select not (b.tc = '' or b.tc like '%بمعرفة العميل%' or b.bc like '%بمعرفة العميل%') from bk b where b.v = _rx_s_raw(raw -> 1)), true)
-    ) order by rn), '[]'::jsonb) into res from mv;
+      'hasTransport', coalesce(not (b.tc = '' or b.tc like '%بمعرفة العميل%' or b.bc like '%بمعرفة العميل%'), true)
+    ) order by rn), '[]'::jsonb) into res from mv left join bk b on b.v = mv.bid;
   return res;
 end $$;
 

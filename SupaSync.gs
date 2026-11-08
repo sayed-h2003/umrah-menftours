@@ -70,7 +70,7 @@ function supaIssueToken(authToken) {
   var sig = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(head + '.' + body, _supaP_('SUPA_JWT_SECRET'))).replace(/=+$/, '');
   return { success: true, enabled: true, url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), token: head + '.' + body + '.' + sig, expiresAt: exp * 1000,
     glStore: _supaP_('GL_STORE') === 'supabase',
-    store: _supaStoreInfo_() };   // 🗄️ (V4.377) المجموعات الحيّة بـ Postgres + هل data_versions مرجع النبضة ⇒ الواجهة تقرأ الرحلات/المعتمرين/الحركات… بـ RPC   // ⚡ (V4.374) شاشات الحسابات تقرأ من Postgres فقط حين تكون قيود GL فيه (المصدر الوحيد)
+    store: _supaStoreInfo_() };   // 🗄️ (المرحلة 4) المجموعات الحيّة بـ Postgres + هل data_versions مرجع النبضة ⇒ الواجهة تقرأ الرحلات/المعتمرين/الحركات… بـ RPC   // ⚡ (V4.374) شاشات الحسابات تقرأ من Postgres فقط حين تكون قيود GL فيه (المصدر الوحيد)
 }
 
 /* ---------- المزامنة ---------- */
@@ -163,11 +163,11 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
     var keys = Object.keys(okGroups);
     if (keys.length) {
       var dvr = {}; keys.forEach(function (g) { dvr[g] = okGroups[g]; });
-      _supaReq_('post', 'rpc/dv_set', { p: dvr, p_force: false });   // (V4.377) رفع فقط (لا يُرجع رمزاً للخلف ولا يولّد تغييراً وهمياً)
+      _supaReq_('post', 'rpc/dv_set', { p: dvr, p_force: false });   // (المرحلة 4) رفع فقط (لا يُرجع رمزاً للخلف ولا يولّد تغييراً وهمياً)
       keys.forEach(function (g) { done[g] = okGroups[g]; });
       PropertiesService.getScriptProperties().setProperty('SUPA_SYNCED', JSON.stringify(done));
     }
-    try { _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (V4.377)
+    try { _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (المرحلة 4)
     var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
     return 'ok work=' + work + ' glaux=' + gx + ' ms=' + (Date.now() - t0);
   } finally { try { lk.releaseLock(); } catch (e) {} }
@@ -215,7 +215,7 @@ function _supaPushTripPilgrims_(dv, groups, t0) {
 }
 
 /* ============================================================================
-   🗄️ (V4.377) data_versions في Postgres = مرجع النبضة الوحيد حين تعمل طبقة التخزين (STORE_TABLES غير فارغة)
+   🗄️ (المرحلة 4) data_versions في Postgres = مرجع النبضة الوحيد حين تعمل طبقة التخزين (STORE_TABLES غير فارغة)
    ----------------------------------------------------------------------------
    • _dvBump_ (LiveSync.gs) يبدّل رموز الكاش كما كان ثم يستدعي _dvPgPush_ فيرفع نفس الرموز إلى Postgres (rpc/dv_set بمعاملة مستقلة بعد رفع
      الكتابات المعلّقة store_put، فالبيانات تسبق الرمز دائماً). dv_set يضمن رمزاً أكبر من الحالي مهما اختلفت الساعات.

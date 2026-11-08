@@ -1,4 +1,4 @@
--- 008_app_poll.sql — (V4.377 / المرحلة 4) النبضة والمتصلون الآن من Postgres + بصمات data_versions المرجع الوحيد للتحقق اللحظي
+-- 008_app_poll.sql — (المرحلة 4) النبضة والمتصلون الآن من Postgres + بصمات data_versions المرجع الوحيد للتحقق اللحظي
 -- • app_poll()            ≡ lfPoll: {ok, dv:{مجموعة: رمز}, t}     — بدل نداء Apps Script كل 20 ث (4.5 ث/نداء)
 -- • app_pulse(p)          ≡ الجزء الخفيف من appPulse: تحديث «آخر ظهور» + عدد المتصلين + بصمات + إصدار التنبيهات (store_meta.ver لجدول notifications)
 -- • app_heartbeat()       ≡ heartbeatOnline: {success, count}
