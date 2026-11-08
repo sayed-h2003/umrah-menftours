@@ -2508,9 +2508,13 @@ if (
     SpreadsheetApp.flush();
     _cacheBust_('booking');
   });
+  var _trInfo = null;   // 🚌 (V4.377) الدورة تظهر مُسعَّرة بكشف الوكيل فوراً (كاش التأشيرات + بصمة الواجهة) مع تحذير لو بلا سعر
+  _perfStepIf_('_saveBookingToServer_impl_›transport', function () { _trInfo = _vzTransportAfterSave_(finalId, bookingData); });
 
   Logger.log('⏱️ saveBookingToServer(#' + finalId + '): ' + (new Date().getTime() - _perfStart) + 'ms');
-  return { success: true, id: finalId };
+  var _res = { success: true, id: finalId };
+  if (_trInfo) { _res.transport = _trInfo; if (_trInfo.warning) _res.transportWarning = _trInfo.warning; }
+  return _res;
 }
 
 
@@ -19214,7 +19218,61 @@ function addClientRecord(authToken, name, mobile, notes, force) {
   }
   sheet.appendRow([name, String(mobile || '').trim(), String(notes || '').trim()]);
   clearCachedData_('mf_ref_lists_cache');   // ⚡ (V4.193) قائمة العملاء المرجعية لشاشتي الوزارة والوكلاء
+  try { if (typeof _dvBump_ === 'function') _dvBump_(['dropdowns']); } catch (eDvC) {}   // (V4.377)
   return { success: true, client: { name: name, mobile: String(mobile || '').trim(), notes: String(notes || '').trim() } };
+}
+
+/* 🧷 (V4.377) السبب الجذري لعميل «لا يظهر بالدليل ولا بحسابات العملاء»: تسجيل العميل بالدليل (Clients) كان يحدث فقط من نافذة
+   «سجّله كعميل جديد» عند مغادرة خانة العميل يدوياً؛ أما كل مسارات الإدخال الأخرى (استيراد إكسل + «تطبيق على الكل»، لصق، مزامنة
+   عميل المحرم/الأطفال، اسم قادم من رحلة أخرى، تعطّل تحميل قائمة العملاء بالمتصفح فيُعدّ كل اسم «غير معروف» ثم يُمسح…) فكانت تحفظ
+   الاسم نصاً حراً بكشف المعتمرين وحده، والسيرفر (saveTripPilgrims) لا يتحقق ولا يُسجّل — فيبقى العميل خارج Clients وخارج قائمة شاشة
+   حسابات العملاء (تُبنى من الدليل وتُخبَّأ 3 دقائق بالمتصفح). الإصلاح عند المصدر: كل حفظ كشف يسجّل أسماء عملائه غير المسجَّلة
+   بالدليل تلقائياً (مرة واحدة، دفعة واحدة، بقفل، idempotent)، ويُبلغ بالفشل صراحةً بدل التخطّي الصامت. */
+function _clientDirKey_(s) {
+  return String(s || '')
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF\u0640]/g, '')   // محارف الاتجاه/العرض الصفري/التطويل غير المرئية
+    .replace(/[\u0660-\u0669]/g, function (d) { return String(d.charCodeAt(0) - 0x0660); })   // أرقام عربية-هندية → لاتينية
+    .replace(/[\u06F0-\u06F9]/g, function (d) { return String(d.charCodeAt(0) - 0x06F0); })
+    .replace(/[\u00A0]/g, ' ');
+}
+function _clientDirNorm_(s) { return _normalizeArabicName_(_clientDirKey_(s)).toLowerCase(); }
+function _clientDirIsReserved_(name) { return name === 'مشرف' || String(name).indexOf('المشرف') === 0; }
+// يُسجّل بدليل العملاء كل اسم غير مسجَّل (مقارنة بعد التطبيع) — يرجع {added:[], existing:{name:canonical}, failed:[{name,error}], error}
+function _clientDirEnsure_(names, username) {
+  var out = { added: [], existing: {}, failed: [], error: '' };
+  var uniq = {}, todo = [];
+  (names || []).forEach(function (n) {
+    n = String(n || '').trim();
+    if (!n || _clientDirIsReserved_(n)) return;
+    var k = _clientDirNorm_(n); if (!k || uniq[k]) return;
+    uniq[k] = n; todo.push(n);
+  });
+  if (!todo.length) return out;
+  var lock = _resTry_('accpay', 20000);   // مورد حسابات العملاء الموجود (لا مورد قفل جديد — LF_RES_ALL_ ثابت)
+  if (!lock) { out.error = 'دليل العملاء مشغول — لم يُسجَّل ' + todo.length + ' عميل جديد تلقائياً؛ أعد حفظ الكشف'; todo.forEach(function (n) { out.failed.push({ name: n, error: 'busy' }); }); return out; }
+  try {
+    var sheet = _ensureClientsDirSheet_();
+    var last = sheet.getLastRow(), have = {};
+    if (last >= 2) sheet.getRange(2, 1, last - 1, 1).getValues().forEach(function (r) {
+      var nm = String(r[0] || '').trim(); if (nm) have[_clientDirNorm_(nm)] = nm;
+    });
+    var rows = [];
+    todo.forEach(function (n) {
+      var k = _clientDirNorm_(n);
+      if (have[k]) { if (have[k] !== n) out.existing[n] = have[k]; return; }
+      rows.push([n, '', 'سُجّل تلقائياً من كشف معتمرين']); have[k] = n; out.added.push(n);
+    });
+    if (rows.length) sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, CLIENTS_HEADERS_.length).setValues(rows);
+  } catch (e) {
+    out.error = 'تعذّر تسجيل العملاء الجدد بدليل العملاء: ' + (e.message || e);
+    out.added.forEach(function (n) { out.failed.push({ name: n, error: String(e.message || e) }); }); out.added = [];
+  } finally { _resRelease_(lock); }
+  if (out.added.length) {
+    clearCachedData_('mf_ref_lists_cache');
+    try { if (typeof _dvBump_ === 'function') _dvBump_(['dropdowns', 'pilgrims']); } catch (eDv) {}   // قوائم العملاء عند باقي المستخدمين/التبويبات
+    try { logChange_(username || '', 'تسجيل عملاء جدد تلقائياً', out.added.slice(0, 5).join('، '), 'عدد', '-', String(out.added.length)); } catch (eL) {}
+  }
+  return out;
 }
 
 // 🗑️ (V4.35) حذف عميل — يُرفض لو له معتمرون على رحلات فعلية، ويُسمح لو معتمروه (إن وُجدوا) كلهم
@@ -20401,7 +20459,14 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
 
   var conflicts = _perfStepIf_('saveTripPilgrims›conflicts', function () { return _checkTripConflicts_(tripName, pilgrims); });
   _perfStepIf_('saveTripPilgrims›snap', function () { _tripSnapTake_(tripName, session.username, 'حفظ الكشف'); });   // ↩️ (V4.343)
-  return { success: true, count: pilgrims.length , conflicts: conflicts, accSync: accSync };
+  // 🧷 (V4.377) تسجيل العملاء الجدد بدليل العملاء (ومنه قائمة حسابات العملاء) — بعد نجاح حفظ الكشف نفسه؛ الفشل لا يُسقط الحفظ لكنه يُعاد صراحةً
+  var cdir = _perfStepIf_('saveTripPilgrims›clients', function () {
+    try { return _clientDirEnsure_(pilgrims.map(function (p) { return p.client; }), session.username); }
+    catch (eCd) { Logger.log('client dir ensure failed: ' + eCd); return { added: [], existing: {}, failed: [], error: 'تعذّر تسجيل العملاء الجدد بدليل العملاء: ' + (eCd.message || eCd) }; }
+  });
+  var _ret = { success: true, count: pilgrims.length , conflicts: conflicts, accSync: accSync };
+  if (cdir) { _ret.clientsAdded = cdir.added; if (cdir.error) _ret.clientsWarning = cdir.error; if (Object.keys(cdir.existing).length) _ret.clientsAliases = cdir.existing; }
+  return _ret;
 }
 
 // 🧑‍✈️ (V4.15) مزامنة قائمة مشرفي الرحلة (بملف الرحلة) مع صفوف «المشرف» بالكشف المحفوظ:
@@ -26801,6 +26866,48 @@ function getAgentTransportRuns(authToken, acctKey) {
   var out = _vzTransportRunsFor_(acctKey, _vzAcctMap_());
   return { success: true, rows: out.rows, diag: out.diag };
 }
+/* 🔄 (V4.377) زر «تحديث دورات النقل» بكشف الوكيل: يُعيد قراءة دورات النقل من الإشعارات ويُطبّق عليها تسعير
+   الوكيل (فترات أسعار النقل) في نفس الإجراء، ويُبطل كاش التأشيرات/بصمة الواجهة كي يظهر الأثر بالكشف والأرصدة فوراً.
+   لا يُنشئ أي صف جديد (الدورات مشتقة من شيت الإشعارات ⇒ لا تكرار مهما كثر الضغط) ويرجع ملخص التسعير. */
+function refreshAgentTransportRuns(authToken, acctKey) {
+  _vzFinancePerm_(authToken);   // 🔒 مالي
+  acctKey = _mfStr_(acctKey);
+  if (!acctKey) return { success: false, error: 'حساب الوكيل مطلوب' };
+  try { _vzClearCache_(); } catch (eC) {}
+  var out = _vzTransportRunsFor_(acctKey, _vzAcctMap_());
+  var sum = _vzTransportSummary_(out.rows, _vzReadTransportPrices_(), acctKey.split(' - ')[0]);
+  return { success: true, rows: out.rows, diag: out.diag, summary: sum };
+}
+function _vzTransportSummary_(rows, prices, agent) {
+  var s = { total: rows.length, manual: 0, defaulted: 0, unpriced: 0, hasPriceTable: false, warning: '' };
+  agent = _mfStr_(agent);
+  (prices || []).forEach(function (p) { if (_mfStr_(p.agent) === agent) s.hasPriceTable = true; });
+  rows.forEach(function (t) { if (t.unpriced) s.unpriced++; else if (t.priceIsDefault) s.defaulted++; else s.manual++; });
+  if (s.unpriced) s.warning = s.hasPriceTable
+    ? ('⚠️ ' + s.unpriced + ' دورة نقل تاريخها خارج فترات تسعير النقل المسجَّلة للوكيل «' + agent + '» — بلا سعر')
+    : ('⚠️ لا جدول أسعار نقل للوكيل «' + agent + '» — ' + s.unpriced + ' دورة نقل بلا سعر (سجّل أسعار النقل من متابعة الوكلاء)');
+  return s;
+}
+/* 🚌 (V4.377) بعد حفظ إشعار فيه نقل داخلي: الدورة تُشتق من صف الإشعار نفسه (فلا تكرار/لا صف منفصل) وتُسعَّر بفترة
+   تسعير الوكيل بتاريخ الوصول؛ هنا نُبطل كاش كشوف الوكلاء ونُرجع بيان الدورة والتحذير لو بلا سعر ليراه المستخدم
+   (لا يفشل الحفظ بسبب هذه الخطوة أبداً). */
+function _vzTransportAfterSave_(finalId, bookingData) {
+  try {
+    var tc = _mfStr_(bookingData && bookingData.transportCompany);
+    if (!tc || tc === 'النقل بمعرفة العميل') return null;
+    var supplier = tc === 'الوكيل' ? _mfStr_(bookingData.agent) : tc;
+    var cnt = parseFloat(bookingData.busCount || bookingData.buses); if (isNaN(cnt)) cnt = 0;
+    var manual = parseFloat(bookingData.busPrice); if (isNaN(manual)) manual = 0;
+    var price = manual, src = manual ? 'manual' : 'none';
+    if (!price && supplier) { price = _vzTransportPriceAt_(supplier, bookingData.arrivalDate, _vzReadTransportPrices_()); if (price) src = 'default'; }
+    _vzClearCache_();
+    var info = { id: String(finalId), agent: supplier, busCount: cnt, busPrice: price, value: cnt * price, priceSource: src, warning: '' };
+    if (!price && cnt > 0) info.warning = supplier
+      ? ('⚠️ دورة النقل بالإشعار #' + finalId + ' أُدرجت بكشف حساب «' + supplier + '» بلا سعر — لا فترة تسعير نقل ساريّة بتاريخ الوصول؛ سجّل أسعار النقل للوكيل')
+      : ('⚠️ دورة النقل بالإشعار #' + finalId + ' بلا مورد/وكيل محدد — لن تظهر بكشف أي وكيل');
+    return info;
+  } catch (e) { Logger.log('transportAfterSave failed: ' + e); return { id: String(finalId), warning: '⚠️ تعذّر تحديث دورة النقل تلقائياً: ' + (e.message || e) }; }
+}
 // ⚡ (V4.154) نواة جلب دورات النقل لحساب بعينه — استُخرجت من getAgentTransportRuns كي يستدعيها
 // getAgentAccount أيضاً فيُجلب الكشف ودوراته بنداء واحد (كانا نداءين متتاليين عند كل فتح حساب).
 // preRows/prePrices (V4.164): تُمرَّران عند استدعاء هذه الدالة لعدة حسابات متتالية (بوتستراب كل
@@ -26817,9 +26924,12 @@ function _vzTransportRunsFor_(acctKey, map, preRows, prePrices) {
     var busCount = _mfNum_(r.busCount), busPrice = _mfNum_(r.busPrice);
     var priceIsDefault = !!r.priceIsDefault;
     if (!busPrice) { busPrice = _vzTransportPriceAt_(agentPart, r.arrivalDate, tPrices); priceIsDefault = !!busPrice; }
+    // ⚠️ (V4.377) دورة بلا أي سعر (لا يدوي ولا فترة تسعير ساريّة) ⇒ علامة صريحة تظهر بالكشف بدل أن تمرّ صامتة بقيمة صفر
+    var unpriced = !busPrice && busCount > 0;
     return {
+      unpriced: unpriced,
       id: r.id, date: r.arrivalDate, groupRef: 'نقل ' + r.id, entryNo: r.entryNo || '',
-      desc: 'دورة نقل ' + (r.tripName || r.client || '—') + ' (' + busCount + ' × ' + busPrice + ')' + (priceIsDefault ? ' — سعر افتراضي' : ''),
+      desc: 'دورة نقل ' + (r.tripName || r.client || '—') + ' (' + busCount + ' × ' + busPrice + ')' + (priceIsDefault ? ' — سعر افتراضي' : '') + (unpriced ? ' — ⚠️ بلا سعر (سجّل فترة تسعير النقل للوكيل)' : ''),
       busCount: busCount, busPrice: busPrice, priceIsDefault: priceIsDefault, value: busCount * busPrice,
       client: r.client, tripName: r.tripName, company: r.company,
       // 🚌 (V4.154) الحقول الخام اللازمة لتعديل الدورة من داخل كشف الحساب مباشرة بلا فتح شاشة النقل

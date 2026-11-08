@@ -19233,6 +19233,7 @@ function _proceedWithOrphanCheckThenSave(btn, pilgrims) {
     .withSuccessHandler(function(res) {
       _kbReset();
       window._pilgrimsDirty = false;
+      _kashfClientsAfterSave_(res);   // 🧷 (V4.377)
       loadTripsList(); // تحديث عدد المعتمرين في قائمة الرحلات
       // 💾 (V4.342) الحفظ لا يُغلق الكشف — يبقى مفتوحاً حتى يغلقه المستخدم بنفسه. رسالة خفيفة تؤكد الحفظ، وتنبيه كامل فقط عند وجود تعارض
       var hasConf = res.conflicts && res.conflicts.length;
@@ -19429,10 +19430,31 @@ function _saveThen(after) {
 window.__step('8️⃣.8 _saveThenCore ✅');
 </script>
 <script>
+// 🧷 (V4.377) بعد حفظ الكشف: السيرفر يسجّل عملاءه الجدد بدليل العملاء تلقائياً — نُبطل كاش قوائم العملاء بالمتصفح (شاشة الحسابات تخزّنه 3 دقائق)
+// ونُظهر الإضافة، ونُبلغ صراحةً لو تعذّر التسجيل (لا تخطٍّ صامت)
+function _kashfClientsAfterSave_(res) {
+  try {
+    var added = (res && res.clientsAdded) || [];
+    if (added.length) {
+      window._accDirAt = 0; window._clientsDirCache = null;
+      window._clientSelectNames = window._clientSelectNames || [];
+      added.forEach(function (n) { if (window._clientSelectNames.indexOf(n) === -1) window._clientSelectNames.push(n); });
+      window._clientSelectNames.sort();
+      if (typeof _accClientsList !== 'undefined') added.forEach(function (n) { if (_accClientsList.indexOf(n) === -1) _accClientsList.push(n); });
+      if (typeof _refreshAllClientSelects_ === 'function') _refreshAllClientSelects_();
+      if (typeof showToast === 'function') showToast('👤 سُجّل ' + added.length + ' عميل جديد بدليل العملاء: ' + added.slice(0, 3).join('، ') + (added.length > 3 ? ' …' : ''));
+    }
+    if (res && res.clientsWarning) {
+      window._accDirAt = 0;
+      if (typeof _showPopup === 'function') _showPopup('⚠️ ' + res.clientsWarning, 'error'); else alert('⚠️ ' + res.clientsWarning);
+    }
+  } catch (eK) {}
+}
 function _saveThenCore(after, pilgrims) {
   google.script.run
     .withSuccessHandler(function(res) {
       window._pilgrimsDirty = false;
+      _kashfClientsAfterSave_(res);
       alert('✅ تم حفظ بيانات المعتمرين بنجاح (' + res.count + ' معتمر)');
       loadTripsList();
       after();
@@ -26818,6 +26840,8 @@ function _addClientDoSave_(name, mobile, notes, force, close, errEl) {
       if (window._clientSelectNames && window._clientSelectNames.indexOf(name) === -1) {
         window._clientSelectNames.push(name); window._clientSelectNames.sort();
       }
+      window._accDirAt = 0; window._clientsDirCache = null;   // 🧷 (V4.377) شاشة الحسابات/الدليل يعيدان الجلب فوراً (كاش 3 دقائق كان يُخفي العميل الجديد)
+      try { if (typeof _accClientsList !== 'undefined' && _accClientsList.indexOf(name) === -1) _accClientsList.push(name); } catch (eAc) {}
       if (typeof showToast === 'function') showToast('✅ أُضيف العميل: ' + name);
       close(res.client);
     })
@@ -35659,6 +35683,7 @@ function _proceedSaveBooking_(bookingObj) {
   }
 
   // نجاح
+  if (res.transportWarning) { try { _showPopup(res.transportWarning, 'error'); } catch (eTw) {} }   // ⚠️ (V4.377) دورة نقل بلا سعر — تحذير ظاهر لا صامت
   showElegantConfirm({
     icon: '🎯', title: 'تم الحفظ بنجاح',
     message: 'تم حفظ واعتماد ملف الرحلة رقم #' + res.id + ' بنجاح كامل!',
@@ -48172,10 +48197,13 @@ function vzAccRowHistory(kind, id) {
 // 🚌 (V4.144) يجلب دورات النقل السعودي الخاصة بهذا الحساب تحديداً (الوكيل/المورد + الشركة
 // المصرية مطابقان لمفتاح الحساب) من شاشة حسابات النقل، ويُدرجها ضمن دفتر الحساب الموحَّد.
 function vzAccRefreshTransport(quiet) {
+  // 🔄 (V4.377) الزر اليدوي = تحديث + تطبيق تسعير الوكيل على الدورات بنفس الإجراء (refreshAgentTransportRuns) ثم إعادة جلب الكشف
+  // لتتطابق الأرصدة؛ الاستدعاء الصامت (بعد تعديل دورة) يبقى على الجلب الخفيف
   google.script.run
     .withSuccessHandler(function (res) {
       if (!res || !res.success) { if (!quiet) _showPopup((res && res.error) || 'تعذّر الجلب', 'error'); return; }
       VZ._accTransport = res.rows || [];
+      if (!quiet && res.summary && res.summary.warning) _showPopup(res.summary.warning, 'error');
       // 🔎 (V4.147) التشخيص عند 0 نتيجة يظهر فقط عند الضغط اليدوي على الزر (ليس عند الفتح التلقائي
       // الصامت) — فمعظم الحسابات لا تشمل دورات نقل أصلاً وهذا طبيعي وليس عطلاً يستحق نافذة تنبيه
       if (!quiet && !VZ._accTransport.length && (res.diag || []).length) {
@@ -48185,12 +48213,13 @@ function vzAccRefreshTransport(quiet) {
           '</div></div>';
         showElegantConfirm({ icon: '🔎', title: 'لا دورات نقل مطابقة', messageHtml: h, buttons: [{ label: 'حسناً', class: 'btn-primary', onClick: function () {} }] });
       } else if (!quiet) {
-        _showPopup('جُلبت ' + VZ._accTransport.length + ' دورة نقل', 'success');
+        _showPopup('جُلبت ' + VZ._accTransport.length + ' دورة نقل' + (res.summary ? ' — مُسعَّرة: ' + ((res.summary.manual || 0) + (res.summary.defaulted || 0)) + (res.summary.unpriced ? ' | بلا سعر: ' + res.summary.unpriced : '') : ''), 'success');
       }
       vzAccRender();
+      if (!quiet && res.summary) vzAccFetch();   // يُعيد حساب الأرصدة بالأسعار المطبَّقة
     })
     .withFailureHandler(function (e) { if (!quiet) _showPopup(e && e.message ? e.message : e, 'error'); })
-    .getAgentTransportRuns(window.authToken, VZ._accKey);
+    [quiet ? 'getAgentTransportRuns' : 'refreshAgentTransportRuns'](window.authToken, VZ._accKey);
 }
 /* ============================================================
    🧾 (V4.134 — المرحلة 3) كشف حساب الوكيل الاحترافي القابل للطباعة والمشاركة
