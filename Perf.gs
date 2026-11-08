@@ -49,6 +49,7 @@ function _perfWrap_(name, fn) {
     catch (e) { failed = true; throw e; }
     finally {
       _PERF_DEPTH_--;
+      if (_PERF_DEPTH_ === 0 && typeof _stEndRequest_ === 'function') { try { _stEndRequest_(); } catch (eSt) { if (!failed) throw eSt; } }   // 🗄️ (V4.376) STORE_TABLES: رفع ما تبقّى بنهاية الطلب (فشل الرفع = فشل الحفظ يظهر للمستخدم)
       var ms = Date.now() - t0;
       if (ms >= PERF_SLOW_MS_) _perfRec_(name, ms, failed);
       if (ms >= PERF_SLOW_MS_ || Math.random() < PERF_SAMPLE_) _perfRecA_(name, ms, _PERF_LW_, failed);

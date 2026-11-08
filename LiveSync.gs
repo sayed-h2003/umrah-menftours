@@ -64,6 +64,7 @@ function _dvBump_(groups) {
     var ks = [], seen = {};
     (groups || []).forEach(function (g) { if (g && LF_GROUPS_.indexOf(g) >= 0 && !seen[g]) { seen[g] = 1; ks.push('dv_' + g); } });
     if (!ks.length) return;
+    try { if (typeof _stFlush_ === 'function') _stFlush_(false); } catch (eSt) {}   // 🗄️ (V4.376) STORE_TABLES: ارفع الكتابات قبل تغيير الرمز (الخطأ يُرمى بنهاية الطلب)
     try { SpreadsheetApp.flush(); } catch (eF) {}
     var c = CacheService.getScriptCache(), cur = {}, o = {};
     try { cur = c.getAll(ks) || {}; } catch (eG) {}

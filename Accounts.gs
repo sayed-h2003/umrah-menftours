@@ -203,13 +203,15 @@ function _glLev_(a, b) {
 /* ---------------------------- ملف الحسابات ---------------------------- */
 var _GL_SS_MEMO_ = null;
 function _glSSId_() { return _glStr_(PropertiesService.getScriptProperties().getProperty('GL_SPREADSHEET_ID')); }
-function _glSS_() {
+function _glSSRaw_() {
   if (_GL_SS_MEMO_) return _GL_SS_MEMO_;
   var id = _glSSId_();
   if (!id) throw new Error('لم يُجهَّز ملف الحسابات بعد — من «⚙️ إعدادات الحسابات» اضغط «إنشاء ملف الحسابات»');
   _GL_SS_MEMO_ = SpreadsheetApp.openById(id);
   return _GL_SS_MEMO_;
 }
+// 🗄️ (V4.376) STORE_TABLES: غلاف المصنّف لجداول ملف الحسابات الجانبية — بلا تفعيل يرجع المصنّف نفسه حرفياً (انظر Store.gs)
+function _glSS_() { var ss = _glSSRaw_(); return (typeof _stWrapSS_ === 'function') ? _stWrapSS_(ss, 'gl') : ss; }
 // ⚡ (V4.252) أي وصول للشيت عبر _glSheet_ يُعتبر «كتابة محتملة» ⇒ يُعلَّم التنفيذ متسخاً ويتغيّر رقم إصدار البيانات فيُبطَل الكاش.
 // القراءة البحتة تمر عبر _glSheetR_ (لا تُبطل شيئاً)
 function _glSheet_(key) { _glTouch_(key); return _glSheetR_(key); }
@@ -308,12 +310,12 @@ function _glNamedLock_(name) {
     var t0 = Date.now(), end = t0 + Math.max(0, ms || 0), wait = 150;
     try {
       for (;;) {
-        if (attempt()) { _GL_NL_DEPTH_[name] = 1; held = true; if (name === 'gl' && typeof _glStOnAcquire_ === 'function') _glStOnAcquire_(); try { if (typeof _perfLockWait_ === 'function') _perfLockWait_(name, Date.now() - t0); } catch (eP) {} return true; }
+        if (attempt()) { _GL_NL_DEPTH_[name] = 1; held = true; if (name === 'gl' && typeof _glStOnAcquire_ === 'function') _glStOnAcquire_(); if (typeof _stOnAcquire_ === 'function') _stOnAcquire_(); try { if (typeof _perfLockWait_ === 'function') _perfLockWait_(name, Date.now() - t0); } catch (eP) {} return true; }
         if (Date.now() + wait > end) return false;
         Utilities.sleep(wait); wait = Math.min(1000, Math.round(wait * 1.5));
       }
     } catch (eC) {   // الكاش/القفل غير متاح ⇒ قفل السكربت التقليدي
-      fb = LockService.getScriptLock(); held = fb.tryLock(Math.max(1, ms || 0)); if (held && name === 'gl' && typeof _glStOnAcquire_ === 'function') _glStOnAcquire_(); return held;
+      fb = LockService.getScriptLock(); held = fb.tryLock(Math.max(1, ms || 0)); if (held && name === 'gl' && typeof _glStOnAcquire_ === 'function') _glStOnAcquire_(); if (held && typeof _stOnAcquire_ === 'function') _stOnAcquire_(); return held;
     }
   };
   return {
@@ -325,8 +327,10 @@ function _glNamedLock_(name) {
       if (fb) { try { fb.releaseLock(); } catch (e) {} fb = null; return; }
       if (--_GL_NL_DEPTH_[name] > 0) return;
       _GL_NL_DEPTH_[name] = 0;
+      var stE = (typeof _stFlushOnRelease_ === 'function') ? _stFlushOnRelease_() : null;   // 🗄️ (V4.376) رفع كتابات الجداول المخزَّنة قبل فك القفل
       // الفك بلا قفل السكربت: لا يكتب الرمز إلا مالكه، فحذفه آمن — ولا يبقى القفل عالقاً لو كان البرنامج مشغولاً بحفظ
       try { var c = CacheService.getScriptCache(), cur = c.get(key); if (cur && cur.split('|')[0] === _GL_NL_OWN_) c.remove(key); } catch (e3) {}
+      if (stE) throw stE;
     }
   };
 }
@@ -334,6 +338,7 @@ function _glLock_() { if (typeof _audGate_ === 'function') _audGate_(); _GL_LOCK
 function _glUnlock_(lock) {
   var stErr = null;
   if (typeof _glStFlush_ === 'function' && _glStX_('entries')) { try { _glStFlush_(); } catch (eSt) { stErr = eSt; } }   // 🗄️ رفع تعديلات القيود/السطور دفعة ذرّية قبل فك القفل
+  if (!stErr && typeof _stFlush_ === 'function') { try { _stFlush_(true); } catch (eSt2) { stErr = eSt2; } }   // 🗄️ (V4.376) جداول STORE_TABLES الجانبية قبل رفع إصدار البيانات
   if (_GL_DIRTY_) { _glBump_(); try { CacheService.getScriptCache().remove('gl_wip'); } catch (e) {} }
   _GL_LOCKN_ = Math.max(0, _GL_LOCKN_ - 1);
   if (_GL_LOCKN_ === 0 && typeof _glStWarm_ === 'function' && _glStX_('entries')) { if (stErr) _glStDrop_(); else _glStWarm_(); }

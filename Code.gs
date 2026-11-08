@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.374";
+var APP_VERSION = "4.375";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -266,14 +266,18 @@ function getSpreadsheet_() {
       throw new Error("تعذّر الوصول لجدول البيانات (getActiveSpreadsheet أرجعت فارغة) - تأكد أن السكريبت مرتبط بالشيت الصحيح");
     }
   }
-  return _SS_INSTANCE;
+  // 🗄️ (V4.376) STORE_TABLES: غلاف المصنّف يرجع واجهة شيت فوق Supabase للجداول المفعّلة فقط — بلا تفعيل يرجع المصنّف نفسه حرفياً
+  return (typeof _stWrapSS_ === 'function') ? _stWrapSS_(_SS_INSTANCE, 'main') : _SS_INSTANCE;
 }
+
+// 🗄️ (V4.376) غلاف قفل السكربت لجداول STORE_TABLES: بلا تفعيل يرجع القفل نفسه؛ ومعها يرفع كتابات الجداول المخزَّنة قبل الفك ويعيد تحميل صورها عند الأخذ
+function _stLk_(l) { return (typeof _stWrapLock_ === 'function') ? _stWrapLock_(l) : l; }
 
 
 
 function setupSmartSystem_() {
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
 
   // =====================================================
   // إنشاء الأوراق الأساسية
@@ -590,7 +594,7 @@ function setupSmartSystem_() {
 
 // إنشاء شيت التحركات الموحّد بالرؤوس الصحيحة إن لم يكن موجوداً (idempotent — لا يمسّ شيتاً قائماً)
 function ensureMovementsSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Movements");
   if (sheet) return sheet;
   sheet = ss.insertSheet("Movements");
@@ -2085,9 +2089,7 @@ if (
 ) {
 
   var sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName("Bookings");
+    getSpreadsheet_().getSheetByName("Bookings");
 
   var data =
     sheet.getDataRange().getValues();
@@ -2139,9 +2141,7 @@ if (
   try { _driveSafeTrash_(fileId); } catch (eTr) { Logger.log('deleteTicketFromBooking: لم يُحذف الملف ' + fileId + ': ' + eTr.message); }
 }
     var sheet =
-      SpreadsheetApp
-        .getActiveSpreadsheet()
-        .getSheetByName("Bookings");
+      getSpreadsheet_().getSheetByName("Bookings");
 
     var data =
       sheet.getDataRange().getValues();
@@ -3522,9 +3522,7 @@ function buildAllMovements_(bookingData) {
 function deleteBookingMovements_(bookingId) {
 
   var sheet =
-    SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName("Movements");
+    getSpreadsheet_().getSheetByName("Movements");
 
   var data = sheet.getDataRange().getValues();
 
@@ -5850,9 +5848,7 @@ function getCompanyLogoBase64_(companyName) {
     if (!companyName) return "";
 
     var sheet =
-      SpreadsheetApp
-      .getActiveSpreadsheet()
-      .getSheetByName("Agents_Settings");
+      getSpreadsheet_().getSheetByName("Agents_Settings");
 
     if (!sheet) return "";
 
@@ -5916,7 +5912,7 @@ function getCompanyLogoBase64_(companyName) {
 // ==========================================
 
 function setupUsersSystem_(adminPassword) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = getSpreadsheet_();
   var sheetName = "Users";
   var sheet = ss.getSheetByName(sheetName);
 
@@ -7323,7 +7319,7 @@ var RES_BUSY_ = 'الشيت مشغول بعملية حفظ أخرى — أعد �
 function _resTry_(name, ms) {
   ms = (ms === undefined) ? 30000 : ms;
   // ⚡ (V4.367) المسار القديم حرفياً: waitLock على قفل السكربت (يرمي عند المهلة ⇒ «مشغول») — لا يفترض وجود tryLock
-  if (typeof _resLock_ !== 'function') { var sl = LockService.getScriptLock(); try { sl.waitLock(ms); return sl; } catch (eS) { return null; } }
+  if (typeof _resLock_ !== 'function') { var sl = _stLk_(LockService.getScriptLock()); try { sl.waitLock(ms); return sl; } catch (eS) { return null; } }
   var l = _resLock_(name);
   try { return l.tryLock(ms) ? l : null; } catch (e) { return null; }
 }
@@ -12907,7 +12903,7 @@ function tripRestorePoint(authToken, tripName, snapId) {
   if (!_tripUndoCan_(session)) throw new Error('الرجوع لنقطة سابقة للأدمن أو من مُنح صلاحية «التراجع بسجل الرحلات»');
   tripName = String(tripName || '').trim();
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  var lock = _stLk_(LockService.getScriptLock()); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   // 🔒 ⚡ (V4.367) عملية شاملة (الرحلة + كشفها + مزامنة حساباتها): بعد قفل السكربت كل أقفال الموارد معاً (كلها أو لا شيء)
   var rl = _resAllTry_(20000);
   if (!rl) { try { lock.releaseLock(); } catch (eRl) {} return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
@@ -12926,7 +12922,7 @@ function tripUndoChange(authToken, tripName, snapId) {
   if (!_tripUndoCan_(session)) throw new Error('التراجع عن تعديل للأدمن أو من مُنح صلاحية «التراجع بسجل الرحلات»');
   tripName = String(tripName || '').trim();
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
+  var lock = _stLk_(LockService.getScriptLock()); try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
   // 🔒 ⚡ (V4.367) عملية شاملة: بعد قفل السكربت كل أقفال الموارد معاً (كلها أو لا شيء)
   var rl = _resAllTry_(20000);
   if (!rl) { try { lock.releaseLock(); } catch (eRl) {} return { success: false, error: 'الشيت مشغول — أعد المحاولة' }; }
@@ -14528,7 +14524,7 @@ function saveClientMergeGroupV2(authToken, client, group, opts) {
     .filter(function (t, i, a) { return t && t !== 'عام' && a.indexOf(t) === i; });
   if (!client || trips.length < 2) return { success: false, error: 'مجموعة الدمج تحتاج رحلتين على الأقل' };
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  var lock = _stLk_(LockService.getScriptLock()); lock.waitLock(20000);
   try {
     var sh = _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS), groups = _accMergeGroupsRead_(client), id = String(group.id || '').trim();
     var cur = id ? groups.filter(function (g) { return g.id === id; })[0] : null;
@@ -14552,7 +14548,7 @@ function deleteClientMergeGroup(authToken, client, groupId) {
   var session = _accPerm_(authToken, 'edit');
   client = String(client || '').trim();
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  var lock = _stLk_(LockService.getScriptLock()); lock.waitLock(20000);
   try {
     var g = _accMergeGroupsRead_(client).filter(function (x) { return x.id === String(groupId || ''); })[0];
     if (g) { _accSheet_(ACC_MERGE_SHEET, ACC_MERGE_HEADERS).deleteRow(g.rowNum); logChange_(session.username, 'فك مجموعة دمج رحلات بكشف حساب: ' + g.name, client, '-', '-', g.trips.join('، ')); }
@@ -14692,7 +14688,7 @@ function saveAlertCenter(authToken, map) {
   var session = requireAdminPermission_(authToken);
   map = map || {};
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  var lock = _stLk_(LockService.getScriptLock()); lock.waitLock(20000);
   try {
     var plain = {}, hb = {}, gl = {}, changed = [];
     Object.keys(map).forEach(function (k) {
@@ -18965,7 +18961,7 @@ function _renameInJsonCol_(sheetName, headerName, oldVal, newVal, field) {
 // كُتبت أصلاً، وترك الانتشار ناقصاً يفصل السجلات المرتبطة عن الاسم الجديد)
 function _cascadeClientRename_(oldName, newName) {
   // 🔒 ⚡ (V4.367) نفس ترتيب الأقفال الموثَّق: قفل السكربت (إن لم يكن للمستدعي) ثم كل الموارد — وإلا تنتظر عملية شاملة أخرى حتى المهلة
-  var sl = LockService.getScriptLock(), hadSl = false;
+  var sl = _stLk_(LockService.getScriptLock()), hadSl = false;
   try { hadSl = sl.hasLock(); } catch (eH) {}
   if (!hadSl) { try { sl.waitLock(30000); } catch (eW) {} }
   var n = 0, rl = _resAllTry_(30000);
@@ -18987,7 +18983,7 @@ function _cascadeClientRename_(oldName, newName) {
 // 🔒 ⚡ (V4.367) نفس أقفال الموارد كـ_cascadeClientRename_ (عمود «الرحلة المرتبطة» بالوزارة يُعاد كتابته كاملاً)
 function _cascadeTripRename_(oldName, newName) {
   // 🔒 ⚡ (V4.367) نفس ترتيب الأقفال الموثَّق: قفل السكربت (إن لم يكن للمستدعي) ثم كل الموارد — وإلا تنتظر عملية شاملة أخرى حتى المهلة
-  var sl = LockService.getScriptLock(), hadSl = false;
+  var sl = _stLk_(LockService.getScriptLock()), hadSl = false;
   try { hadSl = sl.hasLock(); } catch (eH) {}
   if (!hadSl) { try { sl.waitLock(30000); } catch (eW) {} }
   var n = 0, rl = _resAllTry_(30000);
@@ -20101,7 +20097,7 @@ function _accAfterPilgrimsMoved_(clients, fromTrip, toTrip, username, authToken)
     if (String(PR(r, 'tripName') || '').trim() !== fromTrip) return;
     var cl = String(PR(r, 'client') || '').trim(); if (cl && String(PR(r, 'name') || '').trim()) remain[cl] = (remain[cl] || 0) + 1;
   });
-  var lock = LockService.getScriptLock(); try { lock.waitLock(30000); } catch (eL) { return out; }
+  var lock = _stLk_(LockService.getScriptLock()); try { lock.waitLock(30000); } catch (eL) { return out; }
   // 🔒 ⚡ (V4.367) عملية شاملة بقفل السكربت ⇒ ومعه كل أقفال الموارد (كلها أو لا شيء). لا تكتب أوراقاً ذات قفل مورد، فتعذّرها
   // لا يُسقط تبعية الحسابات (كانت تُتخطّى صامتة لو تأخر القفل): تُكمل بقفل السكربت وحده كما كانت
   var rl = _resAllTry_(10000);
@@ -26015,7 +26011,7 @@ function xcApply(authToken, items, trips) {
       try {
         if (!_sessionHasPerm_(session, 'trips.edit')) throw new Error('لا تملك صلاحية تعديل الرحلات');
         if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-        var lock = LockService.getScriptLock(); lock.waitLock(30000);
+        var lock = _stLk_(LockService.getScriptLock()); lock.waitLock(30000);
         // 🔒 ⚡ (V4.367) بعد قفل السكربت كل أقفال الموارد معاً (عملية مطابقة شاملة) — تعذّرها ⇒ خطأ «مشغول» لهذا العنصر قبل أي كتابة.
         // التصحيحات على المجموعات/الملفات أدناه تمر بـsaveVisaFile/saveMinistryFile بقفلَي 'vz'/'mf' (بعد فك هذين)
         var rlx = _resAllTry_(20000);
@@ -27937,7 +27933,7 @@ function accFixOrphanLines(authToken, client, trip, action, target) {
   if ((action === 'moveClient' || action === 'moveTrip') && !target) return { success: false, error: 'حدّد الوجهة' };
   if (action === 'moveClient' && target === client) return { success: false, error: 'اختر عميلاً آخر' };
   if (typeof _audGate_ === 'function') _audGate_();   // 🛡️ (V4.345)
-  var lock = LockService.getScriptLock();
+  var lock = _stLk_(LockService.getScriptLock());
   try { lock.waitLock(30000); } catch (e) { return { success: false, error: 'الشيت مشغول — أعد المحاولة بعد لحظات' }; }
   try {
     var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS), pSh = _accSheet_(ACC_PAY_SHEET, ACC_PAY_HEADERS);
