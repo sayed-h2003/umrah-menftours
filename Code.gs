@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.379";
+var APP_VERSION = "4.380";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -26607,6 +26607,9 @@ function vzAfterSaveBg(authToken, payload) {
   var p = Array.isArray(payload) ? { agents: payload } : (payload || {});
   var list = function (a, n) { var out = []; (Array.isArray(a) ? a : []).forEach(function (x) { x = _mfStr_(x); if (x && out.indexOf(x) < 0 && out.length < n) out.push(x); }); return out; };
   var trips = list(p.trips, 30), agents = list(p.agents, 60), out = { success: true, xcheck: [] };
+  if (p.syncHousing) {   // (V4.380) مزامنة اتفاقيات/تخصيصات السكن بعد الحفظ من Postgres (كانت داخل saveVisaFile)
+    try { var _hf = _vzReadOne_(null, _mfStr_(p.syncHousing)); if (_hf) _perfStepIf_('vzAfterSaveBg›housing', function () { _vzSyncGroupHousingAllocs_(_hf, session.username); }); } catch (eH) { Logger.log('vzAfterSaveBg housing: ' + eH.message); }
+  }
   if (trips.length) out.xcheck = _perfStepIf_('vzAfterSaveBg›xcheck', function () { return _xcSafe_(trips) || []; });
   if (agents.length && _vzHasFinance_(session)) {
     try { out.agentBalances = _perfStepIf_('vzAfterSaveBg›balances', function () { return _vzBalancesForAgents_(agents); }); } catch (eB) {}

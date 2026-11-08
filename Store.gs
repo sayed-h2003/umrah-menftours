@@ -732,22 +732,25 @@ function supaDiagNow() {
 function supaWriteOn(which) {
   requireScriptOwner_();
   which = which || 'mf';
-  if (which !== 'mf') throw new Error('غير مدعوم بعد: ' + which);
-  if (!_stActive_() || !_stCfg_().set.mf_files) throw new Error('فعّل مجموعة ministry أولاً (storeCutoverMinistryApply) — الكتابة بـPostgres تحتاج أن يكون المخزن هو مصدر ملفات الوزارة');
-  var r = _supaReq_('post', 'rpc/rw_call', { p_fn: 'saveMinistryFile', p_args: [] });
+  var W = { mf: { prop: 'SUPA_W_MF', tbl: 'mf_files', fn: 'saveMinistryFile', label: 'ملفات الوزارة', grp: 'ministry' }, vz: { prop: 'SUPA_W_VZ', tbl: 'vz_files', fn: 'saveVisaFile', label: 'مجموعات التأشيرات', grp: 'visa' } }[which];
+  if (!W) throw new Error('غير مدعوم بعد: ' + which + ' (المتاح: mf · vz)');
+  if (!_stActive_() || !_stCfg_().set[W.tbl]) throw new Error('فعّل مجموعة ' + W.grp + ' أولاً — الكتابة بـPostgres تحتاج أن يكون المخزن هو مصدر ' + W.label);
+  var r = _supaReq_('post', 'rpc/rw_call', { p_fn: W.fn, p_args: [] });
   var txt = String(r.text || '');
-  if (r.code === 404 || /PGRST202|Could not find/.test(txt)) throw new Error('شغّل 016_ministry_write.sql في Supabase أولاً');
-  PropertiesService.getScriptProperties().setProperty('SUPA_W_MF', '1');
-  var m = 'تم تفعيل حفظ ملفات الوزارة من Supabase (SUPA_W_MF=1) — سجّل خروجاً ودخولاً ليظهر. للإيقاف: supaWriteOff()';
+  if (r.code === 404 || /PGRST202|Could not find/.test(txt)) throw new Error('شغّل ملف SQL الخاص بالكتابة في Supabase أولاً (016 للوزارة · 017 للتأشيرات)');
+  if (/غير مدعومة/.test(txt)) throw new Error('الدالة ' + W.fn + ' غير موجودة في Supabase — شغّل 017_visa_write.sql');
+  PropertiesService.getScriptProperties().setProperty(W.prop, '1');
+  var m = 'تم تفعيل حفظ ' + W.label + ' من Supabase (' + W.prop + '=1) — سجّل خروجاً ودخولاً ليظهر. للإيقاف: supaWriteOff(\'' + which + '\')';
   Logger.log(m); return m;
 }
-function supaWriteOff() {
+function supaWriteOff(which) {
   requireScriptOwner_();
-  PropertiesService.getScriptProperties().deleteProperty('SUPA_W_MF');
-  var m = 'أُوقف حفظ ملفات الوزارة من Supabase — الحفظ يرجع لـApps Script'; Logger.log(m); return m;
+  var P = PropertiesService.getScriptProperties();
+  if (!which) { P.deleteProperty('SUPA_W_MF'); P.deleteProperty('SUPA_W_VZ'); } else P.deleteProperty(which === 'vz' ? 'SUPA_W_VZ' : 'SUPA_W_MF');
+  var m = 'أُوقف الحفظ من Supabase (' + (which || 'الكل') + ') — الحفظ يرجع لـApps Script'; Logger.log(m); return m;
 }
 function _outboxDrain_(maxMs) {
-  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY') || _supaP_('SUPA_W_MF') !== '1') return 0;
+  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY') || (_supaP_('SUPA_W_MF') !== '1' && _supaP_('SUPA_W_VZ') !== '1')) return 0;
   var t0 = Date.now(), n = 0;
   while (Date.now() - t0 < (maxMs || 20000)) {
     var r = _supaReq_('get', 'app_outbox?done_at=is.null&order=id.asc&limit=100&select=id,kind,payload');
