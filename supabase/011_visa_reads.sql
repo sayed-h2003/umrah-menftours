@@ -116,7 +116,8 @@ $$ select coalesce(case jsonb_typeof(c) when 'number' then (c #>> '{}')::float8 
 
 -- صفوف النقل: (rn, supplier, company, arr(تاريخ الوصول نصاً), cnt(_mfNum_(busCount)), price0(سعر الباص أو الافتراضي بفترة التسعير للوكيل))
 create or replace function _vz_transport_rows(tprices jsonb) returns table (rn int, supplier text, company text, arr text, cnt float8, price0 float8) language plpgsql stable set search_path = public as
-$$ declare bh jsonb := _rx_hdr('bookings'); i_tc int := _vz_lidx(bh, 'شركة النقل الداخلي'); i_ag int := _vz_lidx(bh, 'الوكيل السعودي'); i_bp int := _vz_lidx(bh, 'سعر الباص');
+$$ #variable_conflict use_column
+declare bh jsonb := _rx_hdr('bookings'); i_tc int := _vz_lidx(bh, 'شركة النقل الداخلي'); i_ag int := _vz_lidx(bh, 'الوكيل السعودي'); i_bp int := _vz_lidx(bh, 'سعر الباص');
   i_arr int := _vz_lidx(bh, 'تاريخ الوصول'); i_id int := _vz_lidx(bh, 'رقم الإشعار'); i_co int := _vz_lidx(bh, 'الشركة المصرية'); i_bc int := _vz_lidx(bh, 'عدد الباصات'); ovr jsonb; begin
   select coalesce(jsonb_object_agg(id, sup), '{}'::jsonb) into ovr from (
     select distinct on (id) id, sup from (select rn, _rx_trim(_rx_s(_rx_c(raw, 0))) id, _rx_trim(_rx_s(_rx_c(raw, 1))) sup from _rx_rows('transport_overrides')) z where id <> '' order by id, rn desc) y;
