@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.383  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.384  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9385,7 +9385,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.383";
+var CLIENT_APP_VERSION = "4.384";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -10387,8 +10387,9 @@ function showEntryForm() {
 
 // يزامن نجمة (*) وخاصية required في النموذج مع إعدادات الحقول الإلزامية المحفوظة في شاشة الإعدادات
 function applyRequiredFieldsToForm() {
-  google.script.run
-    .withSuccessHandler(function(res) {
+  // (V4.384) تطبيق فوري من نسخة محفوظة (مدة 30 دقيقة) + تحديث بالخلفية — كان كل فتح للنموذج ينتظر 3.5–4.6 ثانية
+  var _rfKey = '_reqFieldsCfg_';
+  var _applyRf = function(res) {
       if (!res || !res.catalog) return;
       var requiredSet = {};
       (res.required || []).forEach(function(id) { requiredSet[id] = true; });
@@ -10411,6 +10412,15 @@ function applyRequiredFieldsToForm() {
           }
         }
       });
+  };
+  var _cached = null;
+  try { _cached = JSON.parse(localStorage.getItem(_rfKey) || 'null'); } catch (e) {}
+  if (_cached && _cached.res) _applyRf(_cached.res);
+  if (_cached && _cached.res && (Date.now() - (_cached.at || 0)) < 30 * 60 * 1000) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.catalog) { try { localStorage.setItem(_rfKey, JSON.stringify({ at: Date.now(), res: res })); } catch (e) {} }
+      _applyRf(res);
     })
     .withFailureHandler(function(err) {
       console.warn('تعذر مزامنة الحقول الإلزامية:', err);
@@ -11829,6 +11839,7 @@ function saveRequiredFieldsSelection(btn) {
     .withSuccessHandler(function(res) {
       btn.disabled = false; btn.innerHTML = orig;
       if (res && res.success) {
+        try { localStorage.removeItem('_reqFieldsCfg_'); } catch (e) {}
         showSvcResult('requiredFields', '✅ تم حفظ الحقول الإلزامية بنجاح (' + res.required.length + ' حقل)', true);
         var badge = document.getElementById('svcBadge-requiredFields');
         if (badge) { badge.textContent = res.required.length + ' حقل إلزامي'; badge.className = 'badge rounded-pill bg-primary small'; }
@@ -33853,10 +33864,17 @@ function _toggleSingleCityBlocks_(dir) {
 
   var id = "move_" + Date.now() + Math.floor(Math.random() * 100);
 
-  var dateVal = data.date || "";
-  var timeVal = data.time || "";
+  // (V4.384) تنظيف قيم قديمة غير صالحة: "[]" كتاريخ، ونص مثل «النقل بمعرفة العميل» داخل حقل رقمي
+  function _cleanStr_(v) { v = (v === null || v === undefined) ? "" : String(v).trim(); return (v === "[]" || v === "{}" || v === "null" || v === "undefined") ? "" : v; }
+  var dateVal = _cleanStr_(data.date);
+  data.toDate = _cleanStr_(data.toDate);
+  var timeVal = _cleanStr_(data.time);
   var typeVal = data.type || "مزارات المدينة";
-  var busesVal = data.buses || "";
+  var busesVal = _cleanStr_(data.buses);
+  if (busesVal !== "" && isNaN(Number(busesVal))) busesVal = "";
+  var _bcEl = document.getElementById('busCount');
+  var _bcVal = _bcEl ? _cleanStr_(_bcEl.value) : "";
+  if (_bcVal !== "" && isNaN(Number(_bcVal))) _bcVal = "";
   var html = `
 
     <div class="movement-row row g-2 align-items-center" id="${id}">
@@ -33945,11 +33963,7 @@ function _toggleSingleCityBlocks_(dir) {
 <div class="col-md-2">
   <input type="number"
          class="form-control move-buses-field"
-         value="${
-           busesVal ||
-           document.getElementById('busCount').value ||
-           ''
-         }">
+         value="${busesVal || _bcVal || ''}">
 </div>
 
       <div class="col-md-2 text-center">
@@ -38151,63 +38165,51 @@ function formatTimeOnly(value){
 
 function printBookingPattern(id) {
 
-  // ملاحظة: تم توحيد مسار الطباعة (موبايل وكمبيوتر) على نفس صفحة print_view.html
-  // حتى يكون شكل ملف الطباعة مطابقاً دائماً لتصميم النظام (نفس الألوان والتخطيط)
-  // بدلاً من الاعتماد على generateMergedPdf القديمة (DocumentApp) التي كانت تنتج ملفاً بلا أي تنسيق.
+  // (V4.384) فتح نافذة الطباعة فوراً (قبل أي نداء خادم) كي لا يحجبها المتصفح، وجلب الرمز + رابط التطبيق بالتوازي
+  // (كانا متتاليين ≈ 5.7s + 4.4s). رابط التطبيق ثابت فيُخزَّن محلياً فلا يُطلب إلا مرة واحدة.
+  var win = null;
+  try {
+    win = window.open('', '_blank');
+    if (win && win.document) {
+      win.document.write('<html dir="rtl"><head><meta charset="utf-8"><title>جاري تجهيز الإشعار…</title></head>' +
+        '<body style="font-family:Tahoma,Arial,sans-serif;text-align:center;padding:60px;color:#444">' +
+        '<div style="font-size:42px">⏳</div><div style="font-size:18px;margin-top:12px">جاري تجهيز الإشعار للطباعة…</div></body></html>');
+    }
+  } catch (e) { win = null; }
 
-  // ==========================
-  // الكمبيوتر والموبايل معاً - رمز وصول مشفر بدل رقم الإشعار المباشر
-  // ==========================
+  var baseUrl = '';
+  try { baseUrl = localStorage.getItem('_webAppUrl_') || ''; } catch (e) {}
+  var tokenRes = null, urlDone = !!baseUrl, tokenDone = false, failed = false;
+
+  function fail(msg, err) {
+    if (failed) return; failed = true;
+    console.error(err);
+    try { if (win && !win.closed) win.close(); } catch (e) {}
+    alert(msg);
+  }
+  function go() {
+    if (failed || !urlDone || !tokenDone) return;
+    if (!tokenRes || !tokenRes.token) { fail('تعذر إنشاء رابط طباعة آمن'); return; }
+    var printUrl = baseUrl + '?page=print&t=' + encodeURIComponent(tokenRes.token);
+    if (win && !win.closed) { win.location.href = printUrl; }
+    else { window.open(printUrl, '_blank'); }
+  }
+
   google.script.run
-
-    .withSuccessHandler(function (tokenRes) {
-
-      if (!tokenRes || !tokenRes.token) {
-        alert('تعذر إنشاء رابط طباعة آمن');
-        return;
-      }
-
-      google.script.run
-        .withSuccessHandler(function (baseUrl) {
-
-          var printUrl =
-
-            baseUrl +
-            '?page=print&t=' +
-            encodeURIComponent(tokenRes.token);
-
-          window.open(
-            printUrl,
-            '_blank'
-          );
-
-        })
-
-        .withFailureHandler(function (err) {
-
-          console.error(err);
-
-          alert(
-            'تعذر فتح صفحة الطباعة'
-          );
-
-        })
-
-        .getWebAppUrl(window.authToken);
-
-    })
-
-    .withFailureHandler(function (err) {
-
-      console.error(err);
-
-      alert(
-        'تعذر إنشاء رابط طباعة آمن'
-      );
-
-    })
-
+    .withSuccessHandler(function (r) { tokenRes = r; tokenDone = true; go(); })
+    .withFailureHandler(function (err) { fail('تعذر إنشاء رابط طباعة آمن', err); })
     .generatePrintAccessToken(window.authToken, id);
+
+  if (!baseUrl) {
+    google.script.run
+      .withSuccessHandler(function (u) {
+        baseUrl = u || '';
+        if (baseUrl) { try { localStorage.setItem('_webAppUrl_', baseUrl); } catch (e) {} }
+        urlDone = true; go();
+      })
+      .withFailureHandler(function (err) { fail('تعذر فتح صفحة الطباعة', err); })
+      .getWebAppUrl(window.authToken);
+  }
 }
 
 

@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.383";
+var APP_VERSION = "4.384";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2265,20 +2265,28 @@ function _saveBookingToServer_impl_(authToken, bookingData) {
 
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Bookings");
-  var data = sheet.getDataRange().getValues();
   var C = _robustColMap_(sheet, BOOKINGS_HEADERS_); // خريطة أعمدة بالاسم (تقاوم إعادة الترتيب)
   var B = _cellReader_(C, BOOKINGS_COL_);            // قارئ صف بالاسم المنطقي
 
   var targetRow = -1;
   var finalId = bookingData.id;
-
+  // ⚡ (V4.384) لا نقرأ الشيت كله (عمود المرفقات/JSON يضخّم القراءة لثوانٍ): نقرأ عمود الرقم وحده ثم صف الإشعار المستهدف فقط
+  var data = [];   // data[r-1] = صف الشيت r (يُملأ للصف المستهدف فقط — باقي استخدامات data تخص الصف المستهدف حصراً)
   if (finalId) {
-    for (var i = 1; i < data.length; i++) {
-      var _rid = B(data[i], 'id');
-      if (_rid && _rid.toString() === finalId.toString()) {
-        targetRow = i + 1;
-        break;
+    var _lastRow = sheet.getLastRow();
+    if (_lastRow >= 2) {
+      var _idCol = (C[BOOKINGS_COL_.id] !== undefined ? C[BOOKINGS_COL_.id] : 0) + 1;
+      var _ids = sheet.getRange(2, _idCol, _lastRow - 1, 1).getValues();
+      for (var i = 0; i < _ids.length; i++) {
+        var _rid = _ids[i][0];
+        if (_rid && _rid.toString() === finalId.toString()) {
+          targetRow = i + 2;
+          break;
+        }
       }
+    }
+    if (targetRow !== -1) {
+      data[targetRow - 1] = sheet.getRange(targetRow, 1, 1, Math.max(sheet.getLastColumn(), BOOKINGS_HEADERS_.length)).getValues()[0];
     }
   } else {
     // 🔢 (V4.47) رقم إشعار مضمون التفرّد عبر عدّاد ذري بقفل — كان "أقصى رقم موجود + 1" يُحسَب من
