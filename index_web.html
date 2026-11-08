@@ -6922,8 +6922,24 @@ function _pulseTick_(force) {
     var part = { success: true, dv: r.dv, online: r.online };
     _tsPost_({ t: 'pulse', r: part, since: since }); _pulseApply_(part, since);
     var pgv = String(r.notifVer || ''), nchg = canNotif && (_PULSE_.pgNotif === undefined || pgv !== _PULSE_.pgNotif);
-    if (nchg || vis) viaApps({ online: false, notif: nchg, notifVer: '', gl: vis, glSince: since }, pgv);
-    else _PULSE_.busy = false;
+    // ⚡ (V4.378) حالة القيود (pending/csPend) من Postgres (app_gl_kick، لقطة المشغّل كل دقيقة) — Apps Script (4-7 ث) فقط عند الحاجة:
+    //   تغيّرت بصمات مجموعات تصدر عنها قيود (علامة gl_dirty/glDue تعيش بكاش الخادم) · أو مرّت 5 دقائق (شبكة أمان) · أو ظهر قيد تلقائي جديد بعد آخر «since» (recent) · أو تعذّرت القراءة
+    var autoKey = function (x) { var m = String(x || '').match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/); return m ? m[3] + m[2] + m[1] + m[4] + m[5] + m[6] : ''; };
+    var sig = ''; try { sig = JSON.stringify(['bookings', 'movements', 'trips', 'pilgrims', 'visa', 'ministry', 'hb', 'gl'].map(function (g) { return (r.dv || {})[g] || ''; })); } catch (eS) {}
+    var finish = function (glApps) {
+      if (glApps) { _PULSE_.glAt = Date.now(); _PULSE_.glSig = sig; }
+      if (nchg || glApps) viaApps({ online: false, notif: nchg, notifVer: '', gl: glApps, glSince: since }, pgv);
+      else _PULSE_.busy = false;
+    };
+    if (!vis) { finish(false); return; }
+    if (_PULSE_.glSig === undefined) { _PULSE_.glSig = sig; _PULSE_.glAt = Date.now(); }   // أول نبضة: لا نداء (الحالة تُقرأ من Postgres)
+    var due = sig !== _PULSE_.glSig || Date.now() - (_PULSE_.glAt || 0) > 300000;
+    if (!(window.LF_ && LF_.stRpc && LF_.stRpc('app_gl_kick', { p_since: since }, function (g) {
+      if (!g || !g.gl) { finish(true); return; }   // تعذّر ⇒ المسار القديم كاملاً
+      if (since && g.autoAt && autoKey(g.autoAt) > autoKey(since)) { finish(true); return; }   // قيد تلقائي جديد ⇒ Apps Script يجلب «recent» ثم يُحدِّث since
+      var gp = { success: true, gl: g.gl }; _tsPost_({ t: 'pulse', r: gp, since: since }); _pulseApply_(gp, since);
+      finish(due);
+    }, 'glKick', ['glkick']))) finish(true);
   }, 'appPulse', ['@dv', 'misc']))) viaApps({ online: true, notif: canNotif, notifVer: _PULSE_.notifVer, gl: vis, glSince: since });
 }
 function _pulseApply_(r, since) {
@@ -7173,6 +7189,7 @@ function _devKeySet_(k) {
 var _SESS_RX_ = /جلسة غير صالحة أو منتهية/;
 var _RESUME_ = { busy: false, q: [], dead: {} };
 function _sessAdopt_(res) {
+  var _sp = res.supa; try { delete res.supa; } catch (eS) {}   // ⚡ (V4.378) رمز Supabase لا يُحفظ مع بيانات المستخدم بـ localStorage
   if (window.authToken && window.authToken !== res.token) _RESUME_.dead[window.authToken] = 1;
   window.authToken = res.token;
   try { localStorage.setItem('authToken', res.token); } catch (e) {}
@@ -7180,6 +7197,7 @@ function _sessAdopt_(res) {
   var u = window.currentUser || res;
   u.token = res.token; u.permissions = res.permissions; u.fullName = res.fullName || u.fullName; u.deviceKey = res.deviceKey; u.userRow = res.userRow; if (res.username) u.username = res.username;
   window.currentUser = u;
+  try { if (_sp && window.LF_ && LF_.spAdopt) LF_.spAdopt(_sp); } catch (eS2) {}   // ⚡ (V4.378)
   try { localStorage.setItem('smartManagerUser', JSON.stringify(u)); } catch (e) {}
   try { _tsPost_({ t: 'token', token: res.token, user: u.username || '' }); } catch (e) {}   // 🗂️ (V4.350)
   if (res.deviceKey) _devKeySet_(res.deviceKey);
@@ -7549,23 +7567,51 @@ var LF_ = (function () {
   var SP = { st: 0, cfg: null, fails: 0, off: false, next: 0 };   // st: 0 لم يبدأ · 1 جارٍ · 2 جاهز · 3 معطَّل
   function spStoreKey() { return 'lf_supa|' + user(); }
   function spReady() { return SP.st === 2 && !SP.off && SP.cfg && SP.cfg.exp - now() > 120000; }
+  /* ⚡ (V4.378) رمز Supabase يصل مع loginUser/resumeSession (res.supa) ⇒ spAdopt قبل أول قراءة (لا نداء supaIssueToken منفصل ≈6 ث).
+     التجديد: supaIssueToken (Apps Script) قبل انتهاء الرمز بساعة والرمز الحالي يبقى صالحاً أثناءه. التخزين: sessionStorage كما كان + نسخة localStorage
+     (رمز قصير العمر فقط، يُمسح بالخروج) كي لا تنتظر أول قراءة بعد إعادة فتح المتصفح نداء الرمز. */
+  function spSet(r) {
+    SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, gl: !!r.glStore, st: { groups: (r.store && r.store.groups) || [], dv: !!(r.store && r.store.dv) } }; SP.st = 2;   // st (المرحلة 4): المجموعات الحيّة بالمخزن + هل data_versions بـ Postgres مرجع النبضة
+    // gl: قيود الحسابات في Postgres (GL_STORE=supabase) ⇒ يُسمح بقراءة شاشاتها منه
+    try { sessionStorage.setItem(spStoreKey(), JSON.stringify(SP.cfg)); } catch (e2) {}
+    try { localStorage.setItem('lf_supa_ls|' + user(), JSON.stringify(SP.cfg)); } catch (e2b) {}
+    try { if (!document.getElementById('spPre')) { var lk = document.createElement('link'); lk.id = 'spPre'; lk.rel = 'preconnect'; lk.href = String(r.url || '').replace(/\/+$/, ''); lk.crossOrigin = 'anonymous'; document.head.appendChild(lk); } } catch (e3) {}   // (V4.376) اتصال مسبق: يخفي زمن TLS الأول
+  }
+  // رد الدخول/الاستئناف الحامل للرمز ⇒ جاهز فوراً (يرجع false إن لم يكن Supabase مفعّلاً/الرمز ناقصاً فيبقى المسار القديم)
+  function spAdopt(r) {
+    try {
+      if (!r || !r.enabled || !r.token || !r.url || !r.anon || !user()) return false;
+      try { if (localStorage.getItem('lf_supa_off') === '1') return false; } catch (e0) {}
+      spSet(r); SP.fails = 0; SP.stFails = 0; SP.glFails = 0; SP.off = false; SP.stOff = false; SP.glOff = false; SP.refreshing = false; SP.rnext = 0; return true;
+    } catch (e) { return false; }
+  }
+  function spRefreshMaybe() {
+    if (SP.refreshing || !SP.cfg || SP.cfg.exp - now() > 3600000 || now() < (SP.rnext || 0) || !window.authToken) return;
+    SP.refreshing = true; var ep = S.epoch;
+    raw().withSuccessHandler(function (r) {
+      SP.refreshing = false; if (ep !== S.epoch) return;
+      if (r && r.enabled && r.token) spSet(r); else SP.rnext = now() + 60000;
+    }).withFailureHandler(function () { SP.refreshing = false; SP.rnext = now() + 60000; }).supaIssueToken(window.authToken);
+  }
   function spInit() {
-    if (SP.st !== 0 || !window.authToken || !user() || now() < SP.next) return;
+    if (!window.authToken || !user()) return;
+    if (SP.st === 2) { spRefreshMaybe(); return; }
+    if (SP.st !== 0 || now() < SP.next) return;
     try { if (localStorage.getItem('lf_supa_off') === '1') { SP.st = 3; return; } } catch (e0) {}
-    try { var c = JSON.parse(sessionStorage.getItem(spStoreKey()) || 'null'); if (c && c.token && c.exp - now() > 600000 && c.gl !== undefined && c.st !== undefined) { SP.cfg = c; SP.st = 2; return; } } catch (e1) {}   // c.gl: رمز V4.374+ (يحمل glStore)
+    var cc = function (c) { return !!(c && c.token && c.exp - now() > 600000 && c.gl !== undefined && c.st !== undefined); };   // c.gl: رمز V4.374+ (يحمل glStore)
+    try { var c = JSON.parse(sessionStorage.getItem(spStoreKey()) || 'null'); if (cc(c)) { SP.cfg = c; SP.st = 2; return; } } catch (e1) {}
+    try { var c2 = JSON.parse(localStorage.getItem('lf_supa_ls|' + user()) || 'null'); if (cc(c2)) { SP.cfg = c2; SP.st = 2; return; } } catch (e1b) {}
     SP.st = 1; var ep = S.epoch;
     raw().withSuccessHandler(function (r) {
       if (ep !== S.epoch) { SP.st = 0; return; }
       if (!r || !r.enabled || !r.token) { SP.st = 3; return; }
-      SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, gl: !!r.glStore, st: { groups: (r.store && r.store.groups) || [], dv: !!(r.store && r.store.dv) } }; SP.st = 2;   // st (المرحلة 4): المجموعات الحيّة بالمخزن + هل data_versions بـ Postgres مرجع النبضة
-      // gl: قيود الحسابات في Postgres (GL_STORE=supabase) ⇒ يُسمح بقراءة شاشاتها منه
-      try { sessionStorage.setItem(spStoreKey(), JSON.stringify(SP.cfg)); } catch (e2) {}
-      try { if (!document.getElementById('spPre')) { var lk = document.createElement('link'); lk.id = 'spPre'; lk.rel = 'preconnect'; lk.href = String(r.url || '').replace(/\/+$/, ''); lk.crossOrigin = 'anonymous'; document.head.appendChild(lk); } } catch (e3) {}   // (V4.376) اتصال مسبق: يخفي زمن TLS الأول
+      spSet(r);
     }).withFailureHandler(function () { SP.st = 0; SP.next = now() + 60000; }).supaIssueToken(window.authToken);
   }
   function spReset() {
-    SP.st = 0; SP.cfg = null; SP.fails = 0; SP.off = false; SP.next = 0; SP.glOff = false; SP.glFails = 0; SP.stOff = false; SP.stFails = 0;
+    SP.st = 0; SP.cfg = null; SP.fails = 0; SP.off = false; SP.next = 0; SP.glOff = false; SP.glFails = 0; SP.stOff = false; SP.stFails = 0; SP.refreshing = false; SP.rnext = 0;
     try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('lf_supa|') === 0) sessionStorage.removeItem(k); }); } catch (e) {}
+    try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('lf_supa_ls|') === 0) localStorage.removeItem(k); }); } catch (e) {}
   }
   function spGet(path, cb) {
     var c = SP.cfg, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} }, 8000);
@@ -7621,16 +7667,26 @@ var LF_ = (function () {
   /* ⚡ (المرحلة 4) المرحلة 4 — قراءات الرحلات/المعتمرين/الحركات/العملاء/القوائم + النبضة والمتصلون من Postgres (007_core_reads.sql + 008_app_poll.sql).
      fn ⇒ المجموعات الحيّة المطلوبة (يعلنها الخادم بـ supaIssueToken().store.groups). الرد {success, d: نفس ما ترجعه دالة Apps Script حرفياً, dv: بصمات لحظة القراءة}.
      أي خطأ/رفض/انقطاع/مجموعة غير حيّة ⇒ النداء الأصلي لـ Apps Script كما كان. المفتاح: localStorage.lf_supa_off='1'. الكتابات لا تمر من هنا إطلاقاً. */
+  function RB(fn, need) { return { need: need, rpc: 'rx_boot', body: function (a) { return { p_fn: fn, p_args: a }; } }; }
   var STRPC = {
     getTripsList: { need: ['core', 'bookings', 'acc'] }, getTripPilgrims: { need: ['core'] }, getTripDraft: { need: ['core'] }, getTripHotelsList: { need: ['core'] },
     getGlobalPilgrimsRegistry: { need: ['core'] }, getKnownClientNames: { need: ['core'] }, getClientsDirectory: { need: ['core'] }, loadDropdownsData: { need: ['core'] },
     getAllMovementsAuth: { need: ['bookings'] }, getTripPricing: { need: ['acc'] }, getMyUiPrefs: { need: ['misc'] },
+    /* ⚡ (V4.378) التهيئة من Postgres (009_boot_config.sql): الإعدادات (app_config) · قراءات صغيرة · سجل التعديلات · حفظ التفضيلات · نداء الإقلاع الموحّد.
+       'cfg'/'audit'/'glkick' مجموعات «إعلانية» يضيفها الخادم لـ store.groups حين تُرفع بياناتها (SupaSync.gs). السجل: بعد كتابة محلية حديثة (90 ث) ⇒ Apps Script كي ترى فعلتك فوراً. */
+    getNotifSettings: RB('getNotifSettings', ['cfg']), getSessionDurationConfig: RB('getSessionDurationConfig', ['cfg']), getBookingsSortDefault: RB('getBookingsSortDefault', ['cfg']),
+    getTripNamesList: RB('getTripNamesList', ['core']), listTripPricings: RB('listTripPricings', ['acc']), getHousingNote: RB('getHousingNote', ['misc']),
+    checkTripConflictsPreview: RB('checkTripConflictsPreview', ['core']),
+    getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { skip: function () { return now() - (S.lastWAt || 0) < 90000; } }),
+    saveUiPref: { need: ['misc'], rpc: 'app_save_ui_pref', body: function (a) { return { p_screen: a[1], p_prefs: a[2] === undefined ? null : a[2] }; }, out: function () { return { success: true }; } },
+    getAppBootstrap: { need: ['cfg', 'core', 'bookings', 'acc', 'misc', '@dv'], rpc: 'app_boot', body: function () { return {}; }, out: function (r) { return { success: true, parts: r.parts || {}, serverMs: r.serverMs }; } },
     heartbeatOnline: { need: ['@dv'], rpc: 'app_heartbeat', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count }; } },
     getOnlineUsersNow: { need: ['@dv'], rpc: 'app_online_users', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count, users: r.users }; } }
   };
   // يبدأ قراءة RPC؛ يرجع false إن لم تكن جاهزة (⇒ المسار القديم فوراً). cb({d, dv}) عند النجاح · cb(null, why) ⇒ المسار القديم ('epoch' ⇒ الجلسة تغيّرت فلا شيء)
   function stRoute(fn, args, cb) {
     var d = STRPC[fn]; if (!d) return false;
+    if (d.skip && d.skip()) return false;   // (V4.378) مثلاً سجل التعديلات بعد كتابة محلية حديثة
     var ep = S.epoch, a = (args || []).slice(); a[0] = null;   // لا يُرسل رمز الجلسة؛ الهوية من JWT
     return glRpc(d.rpc || 'rx_call', d.body ? d.body(a) : { p_fn: fn, p_args: a }, function (res) {
       if (ep !== S.epoch) { cb(null, 'epoch'); return; }
@@ -7862,6 +7918,7 @@ var LF_ = (function () {
   function isWrite(fn) { return !READ[fn] && !RO_RX.test(fn) && !NODEDUPE[fn]; }
   function afterWrite(fn) {
     if (!isWrite(fn)) return;
+    if (fn !== 'saveUiPref') S.lastWAt = now();   // (V4.378) آخر كتابة محلية (سجل التعديلات يعود لـ Apps Script 90 ث بعدها)
     var wg = writeGroups(fn); if (!wg.length) return;
     // wroteG: متى كُتبت المجموعة محلياً (لا يُمسح بوصول البصمة الجديدة) ⇒ نسخة محفوظة قبل حفظك لا تُعرض فورياً بعده أبداً
     wg.forEach(function (g) { S.dirtyG[g] = now(); S.wroteG[g] = now(); });
@@ -8017,7 +8074,7 @@ var LF_ = (function () {
   api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
   api.verify = verifySub;
   api.showBar = function (id) { var s = S.subs[id]; if (!s) return; s.snooze = 0; if (s.fresh) conflictBar(s); };
-  api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit; api.stRpc = glRpc; api.stRoute = stRoute;
+  api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit; api.spAdopt = spAdopt; api.stRpc = glRpc; api.stRoute = stRoute;
   api._sp = SP; api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
   return api;
 })();
@@ -8565,8 +8622,10 @@ function handleLogin(e) {
         'success: ' + (res && res.success) + ' | توكن: ' + (res && res.token ? 'موجود ✅' : 'مفقود ❌'));
       if (res && res.success) {
         // --- التعديل الجوهري: حفظ بيانات المستخدم في الذاكرة ---
+var _supaCfg_ = res.supa; try { delete res.supa; } catch (eS) {}   // ⚡ (V4.378) رمز Supabase القادم مع الدخول: يُعتمد فوراً ولا يُحفظ بـ localStorage
 window.currentUser = res;
 window.authToken = res.token || null;
+try { if (_supaCfg_ && window.LF_ && LF_.spAdopt) LF_.spAdopt(_supaCfg_); } catch (eS2) {}   // قبل نداء الإقلاع وأول قراءة ⇒ تذهب لـ Supabase من اللحظة الأولى
 // 📱 (V4.319) مفتاح الجهاز للاستئناف الصامت بعد انتهاء الجلسة (يُحفظ هنا وفي صفحة الغلاف)
 if (res.deviceKey) _devKeySet_(res.deviceKey); else if (!res.resumed) _devKeySet_('');   // جهاز مشترك (بلا «تذكّر») ⇒ لا مفتاح قديم يبقى
 try { _loginNote_(''); } catch(e) {}
@@ -9861,6 +9920,16 @@ var currentTicketTemporary = false;
 function _checkAppVersionMismatch() {
   console.log('🏷️ CLIENT_APP_VERSION: ' + CLIENT_APP_VERSION);
   _bootRunner_('version').withSuccessHandler(function(info) {
+    // ⚡ (V4.378) الإصدار قادم من Postgres (app_config) قد يسبق/يتأخر عن Deploy حديث بدقيقة ⇒ عند الاختلاف فقط نسأل Apps Script مباشرة (الحقيقة الفعلية) قبل أي تحذير
+    if (info && info.pg && info.version && info.version !== CLIENT_APP_VERSION) {
+      google.script.run.withSuccessHandler(function (i2) { if (i2 && i2.version && i2.version !== CLIENT_APP_VERSION) _chkVer_(i2); }).withFailureHandler(function () {}).getAppVersion();
+      return;
+    }
+    _chkVer_(info);
+  }).withFailureHandler(function(err) {
+    console.warn('⚠️ تعذّر التحقق من إصدار الخادم:', err);
+  }).getAppVersion();
+  function _chkVer_(info) {
     console.log('🏷️ APP_VERSION (خادم): ' + (info && info.version) + ' | وقت الخادم: ' + (info && info.serverTime));
     var badge = document.getElementById('appVersionBadge');
     if (info && info.version && info.version !== CLIENT_APP_VERSION) {
@@ -9870,9 +9939,7 @@ function _checkAppVersionMismatch() {
         badge.title = 'تعارض إصدار! الواجهة V' + CLIENT_APP_VERSION + ' / الخادم المنشور V' + info.version + ' — اعمل Deploy جديد';
       }
     }
-  }).withFailureHandler(function(err) {
-    console.warn('⚠️ تعذّر التحقق من إصدار الخادم:', err);
-  }).getAppVersion();
+  }
 }
 
 window.onload = function() {

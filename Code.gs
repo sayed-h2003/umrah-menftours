@@ -6012,7 +6012,8 @@ function loginUser(username, password, remember) {
         deviceKey: deviceKey,
         username: String(username),
         mustChangePwd: mustChangePwd,
-        userRow: i + 1   // رقم الصف في الشيت (يُستخدم لمسح علامة mustChangePwd بعد التغيير)
+        userRow: i + 1,   // رقم الصف في الشيت (يُستخدم لمسح علامة mustChangePwd بعد التغيير)
+        supa: (typeof _supaBootCfg_ === 'function') ? _supaBootCfg_(username, data[i][2], userPermissions) : undefined   // ⚡ (V4.378) رمز Supabase مع الدخول (يوفّر نداء supaIssueToken ≈6 ث قبل أول قراءة)
       };
     }
   }
@@ -6515,7 +6516,8 @@ function resumeSession(deviceKey) {
     return {
       success: true, resumed: true, username: String(data[i][0]),
       fullName: String(data[i][2] || ''), permissions: data[i][4], token: token, deviceKey: deviceKey,
-      mustChangePwd: data[i][5] === true || String(data[i][5]).toLowerCase() === 'true', userRow: i + 1
+      mustChangePwd: data[i][5] === true || String(data[i][5]).toLowerCase() === 'true', userRow: i + 1,
+      supa: (typeof _supaBootCfg_ === 'function') ? _supaBootCfg_(String(data[i][0]), data[i][2], data[i][4]) : undefined   // ⚡ (V4.378)
     };
   }
   try { p.deleteProperty(pk); } catch (e) {}
@@ -11461,6 +11463,9 @@ function saveRequiredFieldsConfig(authToken, fieldIds) {
 // 🔀 (V4.48) الوضع الافتراضي لترتيب سجل الإشعارات — 'arrival' (تاريخ الوصول) أو 'id' (رقم الإشعار)
 function getBookingsSortDefault(authToken) {
   requireAuth_(authToken);
+  return _sortModeObj_();
+}
+function _sortModeObj_() {   // ⚡ (V4.378) نفس الناتج يُرفع لـ app_config (SupaSync.gs) فيقرأه المتصفح من Postgres
   var mode = PropertiesService.getScriptProperties().getProperty('BOOKINGS_SORT_DEFAULT');
   return { mode: (mode === 'id') ? 'id' : 'arrival' };
 }
@@ -11468,6 +11473,7 @@ function saveBookingsSortDefault(authToken, mode) {
   var session = requireSettingsBasicPermission_(authToken);
   mode = (mode === 'id') ? 'id' : 'arrival';
   PropertiesService.getScriptProperties().setProperty('BOOKINGS_SORT_DEFAULT', mode);
+  try { _supaCfgKick_(); } catch (eSc) {}   // ⚡ (V4.378) مرآة app_config
   logChange_(session.username, "تعديل إعدادات النظام", "-", "الترتيب الافتراضي لسجل الإشعارات",
     "-", mode === 'id' ? 'رقم الإشعار' : 'تاريخ الوصول');
   return { success: true, mode: mode };
@@ -11476,6 +11482,9 @@ function saveBookingsSortDefault(authToken, mode) {
 // يُرجع مدة الجلسة المُعدَّة (بالدقائق) — متاحة لأي مستخدم مسجّل دخول (لتشغيل مؤقّت الجلسة في الواجهة)
 function getSessionDurationConfig(authToken) {
   requireAuth_(authToken);
+  return _sessionDurationObj_();
+}
+function _sessionDurationObj_() {   // ⚡ (V4.378) يُرفع لـ app_config
   var minutes = parseInt(PropertiesService.getScriptProperties().getProperty('SESSION_DURATION_MINUTES') || '20');
   if (isNaN(minutes) || minutes < 3) minutes = 20;
   return { minutes: minutes };
@@ -11489,6 +11498,7 @@ function saveSessionDurationConfig(authToken, minutes) {
     return { success: false, error: "مدة الجلسة يجب ألا تقل عن 3 دقائق" };
   }
   PropertiesService.getScriptProperties().setProperty('SESSION_DURATION_MINUTES', String(mins));
+  try { _supaCfgKick_(); } catch (eSc) {}   // ⚡ (V4.378) مرآة app_config
   logChange_(session.username, "تعديل إعدادات النظام", "-", "مدة الجلسة", "-", mins + " دقيقة");
   return { success: true, minutes: mins };
 }
@@ -14642,6 +14652,9 @@ function _alertOn_(key) { return _notifCfg_()[key] !== false; }
 function _notifEnabled_(key) { return _alertOn_(key); }
 function getNotifSettings(authToken) {
   requireAuth_(authToken);
+  return _notifSettingsObj_();
+}
+function _notifSettingsObj_() {   // ⚡ (V4.378) يُرفع لـ app_config
   var cfg = _notifCfg_();
   return {
     success: true, screens: ALERT_SCREENS_,
@@ -14658,6 +14671,7 @@ function saveNotifSettings(authToken, settings) {
   });
   PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(clean));
   _NOTIF_MEMO_ = null;
+  try { _supaCfgKick_(); } catch (eSc) {}   // ⚡ (V4.378) مرآة app_config
   try { clearCachedData_(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}   // 🔔 (V4.324) تنبيهات الجرس المعطَّلة تختفي من القائمة فوراً
   var offList = Object.keys(clean);
   logChange_(session.username, 'تعديل إعدادات التنبيهات', 'الإعدادات', 'التنبيهات المعطَّلة', '-',
@@ -14704,6 +14718,7 @@ function saveAlertCenter(authToken, map) {
     NOTIF_TYPES_.forEach(function (t) { var v = plain.hasOwnProperty(t.key) ? plain[t.key] : cur[t.key] !== false; if (!v) next[t.key] = false; if (v !== (cur[t.key] !== false)) changed.push(t.key + (v ? ' ✔' : ' ✘')); });
     PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(next));
     _NOTIF_MEMO_ = null;
+    try { _supaCfgKick_(); } catch (eSc) {}   // ⚡ (V4.378) مرآة app_config
     try { clearCachedData_(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}
     if (Object.keys(hb).length && typeof tgSetEventFlags_ === 'function') { var nh = tgSetEventFlags_(hb); if (nh) changed.push('بوت الحجوزات: ' + nh); }
     if (Object.keys(gl).length && typeof _glBotSetEventFlags_ === 'function') { var ng = _glBotSetEventFlags_(gl); if (ng) changed.push('بوت الحسابات: ' + ng); }

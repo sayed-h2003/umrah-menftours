@@ -2984,3 +2984,49 @@
 **ما لم ينتقل بعد (ولماذا):**
 - `getAllBookingsAuth`: يوسم `viaBot` من شيت `AuditLog` (غير مخزَّن بـ Postgres) — النقل الحرفي مستحيل قبل نقل سجل التعديلات. `getAppBootstrap`: يجمع أجزاء من خصائص السكربت (`BOOKINGS_SORT_DEFAULT`/`SESSION_DURATION_MINUTES`/`NOTIF_TOGGLES`) والإصدار والكاش. `getSessionDurationConfig`/`getNotifSettings`/`getBookingsSortDefault`/`getAppVersion`: إعدادات في Script properties.
 - `getMinistryTripLinks`/`getVisaTripLinks`: منطق كبير (`_mfReadAll_` بـ60 حقلاً + مفتاح `mf_urgent` من الخصائص) — يلزم نقل قراءة ملفات الوزارة/التأشيرات كاملة أولاً. `getAuditLog`: السجل المحصّن في ملف مستقل. `glAutoKick`/`_glKickStatus_`: عمل كتابة وجدولة (ليس قراءة).
+
+
+## V4.378: التهيئة والدخول من Supabase (الملفات: `Code.gs` · `SupaSync.gs` · `index_web.html` · `supabase/009_boot_config.sql` الجديد — لا تغيير في `Store.gs`/`LiveSync.gs`)
+**المشكلة المقيسة (سجل `__GSR` لجلسة واحدة):** بعد V4.377 ما زال الإقلاع يمرّ بنداءات Apps Script بطيئة: `supaIssueToken` 6.3 ث **قبل** أول قراءة (فكانت `getGlobalPilgrimsRegistry` 8.4 ث و`getTripsList` 8.1 ث تذهب لـ Apps Script لأن الرمز يصل بعد الإقلاع)، `getAppBootstrap` 6.4 ث، `getNotifSettings` 4.6 ث، `getSessionDurationConfig` 4.7 ث، `getAuditLog` 6–8.5 ث (4 مرات بالجلسة)، `getTripNamesList` 6 ث، `listTripPricings` 6 ث، `getHousingNote` 6.5 ث، `checkTripConflictsPreview` 4.8 ث، `saveUiPref` 7.2 ث، و`appPulse` (جزء القيود) 4–7 ث كل 30–90 ث.
+
+**ما تغيّر:**
+| البند | قبل | بعد |
+|---|---|---|
+| رمز Supabase | نداء `supaIssueToken` منفصل (≈6 ث) بعد الإقلاع | يأتي **داخل رد `loginUser`/`resumeSession`** (حقل `supa`) ويُعتمد قبل أول قراءة (`LF_.spAdopt`)؛ التجديد بـ `supaIssueToken` فقط حين يتبقى أقل من ساعة (الرمز 8 ساعات)؛ نسخة قصيرة العمر بـ `localStorage` (`lf_supa_ls|<مستخدم>`) فيبقى جاهزاً بعد إعادة فتح المتصفح |
+| `getAppBootstrap` | Apps Script 6.4 ث | `app_boot()` بنداء واحد (sortMode · sessionCfg · notif · uiPrefs · dropdowns · online · version · movements · trips)؛ الأجزاء غير المتاحة (bookings) تُطلب بنداءاتها الأصلية |
+| `getNotifSettings` · `getSessionDurationConfig` · `getBookingsSortDefault` | Apps Script | `rx_boot` من جدول `app_config` (مرآة الإعدادات) |
+| `getTripNamesList` · `listTripPricings` (يتطلب `pricing.view`) · `getHousingNote` · `checkTripConflictsPreview` (قراءة فقط) | Apps Script 4.8–6.5 ث | `rx_boot` من المخزن (core/acc/misc) — التعارضات 60 معتمراً × 10 آلاف صف ≈ 0.35 ث |
+| `getAuditLog` (يتطلب `audit.view`) | Apps Script 6–8.5 ث | `rx_boot` من `audit_log` (آخر 6000 صف + سجل الحجوزات) |
+| `saveUiPref` | Apps Script 7.2 ث | `app_save_ui_pref` (معاملة ذرّية على `store_rows` بنفس قفل `store_put` + مرآة `user_ui_prefs`) |
+| `appPulse` جزء القيود | Apps Script كل 90 ث | `app_gl_kick` من Postgres؛ Apps Script فقط عند تغيّر بصمات مصادر القيود أو كل 5 دقائق أمان أو ظهور قيد تلقائي جديد |
+
+**لا أسرار تصل المتصفح:** رد الدخول يحمل فقط `url` و`anon` (مفتاح عام بطبيعته) و`token` (JWT قصير العمر 8 ساعات بصلاحيات المستخدم) و`expiresAt` و`store` و`glStore`. لا `SUPA_SERVICE_KEY` ولا `SUPA_JWT_SECRET` (اختبار آلي يفحص رد `loginUser` و`resumeSession` و`supaIssueToken` والرمز نفسه).
+
+**الخطوات (بالترتيب):**
+1. Supabase ← SQL Editor: شغّل `supabase/009_boot_config.sql` **بعد** `006` و`007` و`008` (آمن لإعادة التشغيل، لا يلمس بيانات قائمة، ولا يعدّل `rx_call` الخاص بـ 007).
+2. الصق `Code.gs` و`SupaSync.gs` و`index_web.html` وانشر نسخة جديدة (Deploy ← New version). بدون الخطوة 3 لا يتغيّر شيء عدا أن الدخول يحمل الرمز.
+3. من محرر Apps Script شغّل **مرة واحدة** `supaBootSyncNow()`: يرفع `app_config` (الإصدار + إعدادات التنبيهات + مدة الجلسة + ترتيب الإشعارات) وحالة القيود `gl_kick` ويبدأ رفع سجل التعديلات (3000 صف/دقيقة، يكتمل خلال 2–3 دقائق لسجل كبير؛ المشغّل `supaSyncInstall()` — يجب أن يكون مثبّتاً — يكمل كل دقيقة تلقائياً). لا شيء يُرسَل للواجهة قبل اكتمال الرفع: الخادم يعلن المجموعات الإعلانية `cfg` و`glkick` و`audit` في `store.groups` فقط بعد نجاح رفع كل منها.
+4. (للحفظ والقراءات من المخزن) تأكد أن `STORE_TABLES` تحوي المجموعات: `core` و`bookings` و`acc` و`misc` (راجع «طبقة التخزين العامة» و«المرحلة 4»). `getAppBootstrap` من Postgres يشترط اكتمالها كلها + `cfg` + `store.dv`؛ وإلا يبقى النداء القديم كاملاً.
+5. سجّل الخروج ثم الدخول من جديد (Ctrl+Shift+R).
+
+**كيف تتحقق (Console):**
+- بعد الدخول مباشرة: لا يظهر `supaIssueToken` في `copy(JSON.stringify(__GSR))` (يظهر مرة فقط كل ≈7 ساعات للتجديد) والنداءات الوحيدة لـ Apps Script عند الإقلاع هي `loginUser` (أو `resumeSession`) + ما لم ينتقل (انظر الحدود).
+- أسطر `⚡ supabase getAppBootstrap NNms` · `getNotifSettings` · `getSessionDurationConfig` · `getTripNamesList` · `getAuditLog` · `saveUiPref` · `glKick` · `getTripsList` · `getGlobalPilgrimsRegistry` بعد ثوانٍ من الدخول (أول قراءتين لم تعودا `↩︎ apps-script`).
+- `LF_._sp.cfg.st.groups` تحوي `cfg` و`glkick` و`audit` (+ `core`/`bookings`/`acc`/`misc`)، و`LF_._sp.cfg.exp - Date.now()` ≈ 8 ساعات بعد الدخول.
+- من المحرر: `supaBootSyncNow()` يطبع `cfg=same,glk=same,aud=same`. حالة المرآة: `select key, updated_at from app_config;` و`select max(rn), count(*) from audit_log where src='main';`.
+- تغيير مدة الجلسة/التنبيهات من الإعدادات يظهر فوراً بعد الحفظ (الحافظ يرفع `app_config` بنفس الطلب)، وتغيير خاصية من المحرر خلال دقيقة.
+
+**التراجع الفوري (بالترتيب من الأخف):**
+(أ) متصفح واحد: `localStorage.lf_supa_off='1'` ثم إعادة التحميل. (ب) كل المستخدمين، الإعلانات الجديدة فقط: Script property `SUPA_BOOT=off` ⇒ يتوقف رفع `app_config`/`gl_kick`/`audit_log` ولا تُعلَن `cfg`/`glkick`/`audit` فتعود كل دوال هذه المرحلة (الإقلاع/الإعدادات/السجل/التفضيلات/القيود) لـ Apps Script؛ الدخول يبقى يحمل الرمز. (ج) إيقاف الرمز مع الدخول: امسح `SUPA_ENABLED` (يرجع `supa:{enabled:false}` وتعمل الواجهة كلها على Apps Script). (د) إعادة `Code.gs`/`SupaSync.gs`/`index_web.html` السابقة (V4.377): الدخول بلا `supa` فيعود `supaIssueToken` المنفصل تلقائياً. SQL لا يحتاج حذفاً (جداول/دوال خاملة)؛ للحذف: `drop function rx_boot(text,jsonb), app_boot(), app_gl_kick(text), app_save_ui_pref(text,jsonb);`.
+
+**فروق مقصودة وحدود (اقرأها):**
+- **ما بقي من Apps Script عند الإقلاع:** `loginUser`/`resumeSession` (قراءة شيت المستخدمين ≈6 ث — لم ينتقل: التحقق من كلمة المرور/إصدار جلسة الخادم)، `getAllBookingsAuth` (جزء `bookings` غير متاح — يعتمد على `AuditLog` لوسم `viaBot`؛ صار ممكناً نقله لاحقاً فوق `audit_log`)، `getAppVersion` فقط عند اختلاف الإصدار (للتأكد قبل أي تحذير)، و`appPulse` بالتنبيهات فقط عند تغيّر إصدارها. `hotelsHandoff` (3.8 ث) **لا يُنقل**: يولّد رمز دخول موحّداً (SSO) بكاش السكربت يستهلكه `hbSsoLogin` — ليس قراءة، ويُستدعى بالنقر فقط لا بالإقلاع.
+- **زمن المرآة:** الإعدادات فورية بالحافظ (وإلا ≤ دقيقة)؛ سجل التعديلات ≤ دقيقة — ولذلك بعد أي حفظ من المستخدم نفسه (90 ث) يذهب `getAuditLog` لـ Apps Script ليرى فعلته فوراً؛ حالة القيود ≤ دقيقة.
+- **سجل التعديلات:** المصدر الحقيقي ما زال شيت `AuditLog` (+ سجل الحجوزات)، والمرآة `audit_log` للقراءة فقط (الشاشة/التسمية تُحسب بدوال الخادم `_auditScreen_`). نافذة الاستعلام كالخادم: 500 صف بلا فلاتر و6000 مع الفلاتر؛ سجل الحجوزات بآخر 6000 تغيير (ترقيم تسلسلي).
+- **`getAppVersion`:** المصدر بـ Postgres قد يتأخر دقيقة بعد Deploy؛ لذا عند الاختلاف تسأل الواجهة Apps Script قبل التحذير.
+- **`saveUiPref`:** يكتب `store_rows` مباشرة (نفس قفل `store_put` وزيادة `store_meta.ver`) ثم المرآة المنمّطة بأفضل جهد؛ لا يمر بـ `_audGate_` (تفضيلات غير مُدقَّقة). المفاتيح داخل JSON قد تُعاد ترتيبها (jsonb) — نفس المعنى. إن لم يكن `user_ui_prefs` مخزَّناً (55000) يُحفظ عبر Apps Script. نسخة Apps Script قد ترى التفضيل الجديد بعد ≤ دقيقتين (كاش رمز إصدار المخزن).
+- **`checkTripConflictsPreview`:** تواريخ الرحلات تُقارَن كأيام (القاهرة) — خلية تاريخ بوقت غير منتصف الليل تُعامَل كيومها.
+- **أول قراءة بلا رمز مخزَّن** (جهاز جديد/تنظيف بيانات المتصفح ثم استئناف بمفتاح الجهاز): يأتي الرمز مع `resumeSession` نفسه فلا تأخير؛ فقط تحديث صفحة بجلسة قديمة بلا مفتاح جهاز **وبلا** نسخة `localStorage` ما زالت تنتظر `supaIssueToken` الأول.
+- **المحاسبة والأرصدة:** لا تمر من هنا إطلاقاً (كما قبل).
+
+**الاختبارات (`scratchpad/v377b/run_all.sh` — قاعدة Postgres محلية جديدة 000..009):** 221 فحصاً بلا فشل — منها الجديد 126: تكافؤ الدوال الحقيقية ⇄ SQL (12 عائلة، 1695 مقارنة بـ 40 سيناريو عشوائي + سجل 6300 صف: `getTripNamesList` · `listTripPricings` · `getHousingNote` · `checkTripConflictsPreview` (424 تعارضاً) · `getAuditLog` (17 فلتراً ودمج سجل الحجوزات) · الإعدادات الثلاثة · `app_boot`) · الصلاحيات والسلوك على دور `authenticated` (33: 42501/55000/0A000، `saveUiPref` ≡ الحقيقية على 12 سيناريو) · الخادم (50: الرمز مع الدخول بلا أسرار، الحافظون، المشغّل، `gl_kick`، مرآة السجل التدريجية/القص/الفشل/النافذة) · المتصفح الحقيقي (31: الاعتماد عند الدخول بلا `supaIssueToken`، التجديد، localStorage، التوجيه والرجوع، نداء الإقلاع الحقيقي). و`scratchpad/runall.sh` = 122 بلا فشل.

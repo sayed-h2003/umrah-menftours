@@ -59,8 +59,13 @@ function _supaExpandPerms_(list) {
 }
 
 /* رمز قراءة قصير العمر للمتصفح (HS256) — يعمل لكل أنواع الجلسات (حتى «تذكّر الجهاز» بلا كلمة مرور) */
-function supaIssueToken(authToken) {
-  var s = requireAuth_(authToken);
+function supaIssueToken(authToken) { return _supaTokenFor_(requireAuth_(authToken)); }
+/* ⚡ (V4.378) الرمز نفسه يُرجَع مع loginUser/resumeSession (حقل supa) فتقرأ الواجهة من Supabase منذ أول لحظة بلا نداء supaIssueToken منفصل (≈6 ث)؛
+   supaIssueToken يبقى للتجديد قبل انتهاء الرمز بساعة. لا يخرج للمتصفح إلا: SUPA_URL (عام) · SUPA_ANON_KEY (عام بطبيعته) · JWT قصير العمر (8 ساعات) — لا SERVICE_KEY ولا JWT_SECRET أبداً. */
+function _supaBootCfg_(username, fullName, permissions) {
+  try { return _supaTokenFor_({ username: username, fullName: fullName, permissions: permissions }); } catch (e) { return { success: true, enabled: false }; }
+}
+function _supaTokenFor_(s) {
   if (!_supaOn_() || !_supaP_('SUPA_JWT_SECRET') || !_supaP_('SUPA_ANON_KEY')) return { success: true, enabled: false };
   var perms = []; try { var pv = s.permissions; perms = Array.isArray(pv) ? pv : String(pv || '').split(/[,،;|]/).map(function (x) { return x.trim(); }).filter(Boolean); } catch (e) {}
   perms = _supaExpandPerms_(perms);   // ⚡ (V4.374) نفس تدرّج _sessionHasPerm_ (تعديل ⇒ إضافة+عرض…) كي تطابق فحوص Postgres فحوص الخادم
@@ -169,7 +174,8 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
     }
     try { _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (المرحلة 4)
     var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
-    return 'ok work=' + work + ' glaux=' + gx + ' ms=' + (Date.now() - t0);
+    var b378 = _supaBootSync_();   // ⚡ (V4.378) app_config + حالة القيود + سجل التعديلات
+    return 'ok work=' + work + ' glaux=' + gx + ' boot=' + b378 + ' ms=' + (Date.now() - t0);
   } finally { try { lk.releaseLock(); } catch (e) {} }
 }
 
@@ -243,6 +249,12 @@ function _dvPgReconcile_() {
 function supaDvSeedNow() { requireScriptOwner_(); var r = _dvPgReconcile_(); Logger.log('data_versions: ' + r); return r; }
 // المجموعات الحيّة بالمخزن: مجموعة حيّة = كل جداولها بـ STORE_TABLES (ST_GROUPS_ بـ Store.gs)
 function _supaStoreInfo_() {
+  var out = _supaStoreInfo0_();
+  // ⚡ (V4.378) مجموعات «زائفة» تعلن جاهزية ما يُقرأ من app_config/audit_log: cfg (الإعدادات) · glkick (عدّادات القيود) · audit (سجل التعديلات)
+  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); } catch (e) {}
+  return out;
+}
+function _supaStoreInfo0_() {
   var out = { groups: [], dv: false };
   try {
     if (typeof _stCfg_ !== 'function' || typeof ST_GROUPS_ === 'undefined') return out;
@@ -252,3 +264,121 @@ function _supaStoreInfo_() {
   } catch (e) {}
   return out;
 }
+
+
+/* ============================================================================
+   ⚡ (V4.378) التهيئة والدخول من Supabase — مرآة الإعدادات + حالة القيود + سجل التعديلات (009_boot_config.sql)
+   ----------------------------------------------------------------------------
+   • app_config: إعدادات Script properties التي تقرؤها الواجهة عند الإقلاع (notif_settings · session_cfg · sort_mode · app_version). تُرفع فور حفظ المدير
+     للإعداد (saveNotifSettings/saveAlertCenter/saveSessionDurationConfig/saveBookingsSortDefault ⇒ _supaCfgKick_) وكل دقيقة بالمشغّل (بصمة ⇒ لا شبكة إن لم يتغيّر شيء).
+   • gl_kick: {pending, csPend, autoAt, at} من نفس دوال appPulse (_glPendingCount_/_glCsPendTotal_) تُرفع بالمشغّل ⇒ نبضة المتصفح تقرأها من Postgres.
+   • audit_log: ذيل شيت AuditLog (آخر 6000 صف، صفوف جديدة فقط بعلامة آخر صف) + تغييرات برنامج الحجوزات؛ الشاشة/التسمية تُحسب بدوال الخادم نفسها.
+   • إيقاف كلّي: SUPA_BOOT=off (خاصية) ⇒ لا رفع ولا إعلان للواجهة ⇒ ترجع لنداءات Apps Script كما كانت.
+   ============================================================================ */
+function _supaBootOn_() { return _supaOn_() && _supaP_('SUPA_BOOT') !== 'off'; }
+function _supaCfgBuild_() {
+  return { app_version: { version: String(APP_VERSION) }, notif_settings: _notifSettingsObj_(), session_cfg: _sessionDurationObj_(), sort_mode: _sortModeObj_() };
+}
+function _supaCfgPush_(force) {
+  if (!_supaBootOn_()) return 'off';
+  var P = PropertiesService.getScriptProperties(), data = _supaCfgBuild_(), prev = {}, rows = [], H = {}, nowIso = new Date().toISOString();
+  try { prev = JSON.parse(P.getProperty('SUPA_CFG_H') || '{}') || {}; } catch (e) { prev = {}; }
+  Object.keys(data).forEach(function (k) { var h = _lfHash_(JSON.stringify(data[k])); H[k] = h; if (force || prev[k] !== h) rows.push({ key: k, value: data[k], updated_at: nowIso }); });
+  if (!rows.length) return 'same';
+  if (!_supaUpsert_('app_config', rows, 'key')) return 'fail';
+  var merged = {}; Object.keys(prev).forEach(function (k) { merged[k] = prev[k]; }); Object.keys(H).forEach(function (k) { merged[k] = H[k]; });
+  P.setProperty('SUPA_CFG_H', JSON.stringify(merged)); P.setProperty('SUPA_CFG_OK', '1');
+  return 'ok:' + rows.length;
+}
+// يُستدعى من أي حافظ إعداد (بعد كتابة الخاصية): أي خطأ لا يكسر الحفظ
+function _supaCfgKick_() { try { if (_supaBootOn_()) _supaCfgPush_(false); } catch (e) { Logger.log('supaCfg: ' + e); } }
+function supaCfgSyncNow() { requireScriptOwner_(); var r = _supaCfgPush_(true); Logger.log('app_config: ' + r); return r; }
+
+// حالة القيود للنبضة (الجزء المعدود من appPulse): تُرفع فقط إن تغيّرت القيم
+function supaGlKickSync_() {
+  if (!_supaBootOn_()) return 'off';
+  if (typeof _glSSId_ !== 'function' || !_glSSId_() || typeof _glTripMode_ !== 'function' || !_glTripMode_()) return 'skip';
+  var P = PropertiesService.getScriptProperties(), autoAt = '';
+  try { autoAt = CacheService.getScriptCache().get('gl_autolog_at') || ''; } catch (e0) {}
+  var v = { pending: _glPendingCount_(), csPend: _glCsPendTotal_(), autoAt: String(autoAt) };
+  var h = _lfHash_(JSON.stringify(v));
+  if (P.getProperty('SUPA_GLK_H') === h && P.getProperty('SUPA_GLK_OK') === '1') return 'same';
+  v.at = _glNow_();
+  if (!_supaUpsert_('app_config', [{ key: 'gl_kick', value: v, updated_at: new Date().toISOString() }], 'key')) return 'fail';
+  P.setProperty('SUPA_GLK_H', h); P.setProperty('SUPA_GLK_OK', '1');
+  return 'ok';
+}
+
+// ---- سجل التعديلات: نفس بناء حقول getAuditLog (Code.gs) لكل صف ----
+var SUPA_AUD_WIN_ = 6000, SUPA_AUD_CHUNK_ = 500, SUPA_AUD_TICK_ = 3000;
+function _supaAuditClean_(val) {   // = cleanDateVal بـ getAuditLog
+  if (!val) return '-';
+  var s = String(val), m = s.match(/^(Sun|Mon|Tue|Wed|Thu|Fri|Sat)\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{4})\s+(\d{2}:\d{2}):\d{2}\s+GMT[+-]\d{4}.*/i);
+  if (m) {
+    var months = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
+    var day = m[3].padStart(2, '0'), mon = months[m[2]] || '??', yr = m[4], time = m[5];
+    return time === '00:00' ? day + '/' + mon + '/' + yr : day + '/' + mon + '/' + yr + ' ' + time;
+  }
+  return s;
+}
+function _supaAuditRow_(row, rn) {
+  if (!row[0] && !row[1] && !row[2]) return null;
+  var ts = row[0], tsStr = '-', tsDate = (ts instanceof Date) ? ts : null;
+  if (ts) { try { tsStr = (ts instanceof Date) ? Utilities.formatDate(ts, _tz_() || 'Asia/Riyadh', 'dd/MM/yyyy HH:mm:ss') : String(ts); } catch (e) { tsStr = String(ts); } }
+  var username = row[1] ? String(row[1]) : '-', action = row[2] ? String(row[2]) : '-', recordId = row[3] ? String(row[3]) : '-', field = row[4] ? String(row[4]) : '-';
+  var screen = _auditScreen_(action, field, recordId);
+  return { src: 'main', rn: rn, ts_str: tsStr, ts_ms: tsDate ? tsDate.getTime() : null, t_ms: tsDate ? tsDate.getTime() : _auditTsNum_(tsStr), username: username, action: action, record_id: recordId, field: field,
+    old_value: _supaAuditClean_(row[5]), new_value: _supaAuditClean_(row[6]), screen: screen, screen_label: AUDIT_SCREEN_LABELS_[screen] || 'أخرى' };
+}
+function supaAuditSync_() {
+  if (!_supaBootOn_()) return 'off';
+  var P = PropertiesService.getScriptProperties(), res = [];
+  var sh = ensureAuditLogSheet_(), lastRow = sh.getLastRow(), mk = parseInt(P.getProperty('SUPA_AUD_ROW') || '0', 10) || 0, win = SUPA_AUD_WIN_;
+  if (mk > lastRow) { var d = _supaReq_('delete', 'audit_log?src=eq.main'); if (d.code < 200 || d.code >= 300) return 'fail'; mk = 0; }   // الشيت قُصّ ⇒ إعادة بناء
+  var from = mk ? mk + 1 : Math.max(2, lastRow - win + 1), to = Math.min(lastRow, from + SUPA_AUD_TICK_ - 1), moved = (mk === 0);
+  for (var s = from; s <= to; s += SUPA_AUD_CHUNK_) {
+    var e = Math.min(to, s + SUPA_AUD_CHUNK_ - 1), vals = sh.getRange(s, 1, e - s + 1, 7).getValues(), rows = [];
+    vals.forEach(function (r, i) { var o = _supaAuditRow_(r, s + i); if (o) rows.push(o); });
+    if (!_supaUpsert_('audit_log', rows, 'src,rn')) return 'fail';
+    mk = e; moved = true; P.setProperty('SUPA_AUD_ROW', String(mk));
+  }
+  if (lastRow < 2) { mk = Math.max(lastRow, 0); moved = true; P.setProperty('SUPA_AUD_ROW', String(mk)); }
+  var hbSeq = 0;
+  // برنامج الحجوزات: صفوف جديدة فقط (rn تسلسلي) — اختياري (إن وُجد ملفه)
+  try {
+    var hs = (typeof getSS_ === 'function' && typeof CHANGELOG_SHEET_NAME !== 'undefined') ? getSS_().getSheetByName(CHANGELOG_SHEET_NAME) : null;
+    if (hs) {
+      var hl = hs.getLastRow(), hm = P.getProperty('SUPA_AUD_HB_ROW'); hm = (hm === null || hm === undefined || hm === '') ? -1 : parseInt(hm, 10); hbSeq = parseInt(P.getProperty('SUPA_AUD_HB_SEQ') || '0', 10) || 0;
+      if (hm < 0 || hl < hm) { _supaReq_('delete', 'audit_log?src=eq.hb'); hm = Math.max(1, hl - win); hbSeq = 0; }
+      if (hl > hm) {
+        var list = _auditHotelsRows_(hl - hm), rows2 = list.map(function (x) { return { src: 'hb', rn: ++hbSeq, ts_str: x.timestamp, ts_ms: x.tsDate ? x.tsDate.getTime() : null, t_ms: x.tsDate ? x.tsDate.getTime() : _auditTsNum_(x.timestamp),
+          username: x.username, action: x.action, record_id: x.recordId, field: x.field, old_value: x.oldValue, new_value: x.newValue, screen: x.screen, screen_label: x.screenLabel }; });
+        for (var q = 0; q < rows2.length; q += SUPA_AUD_CHUNK_) if (!_supaUpsert_('audit_log', rows2.slice(q, q + SUPA_AUD_CHUNK_), 'src,rn')) return 'fail';
+        _supaReq_('delete', 'audit_log?src=eq.hb&rn=lte.' + (hbSeq - win));
+      }
+      P.setProperty('SUPA_AUD_HB_ROW', String(hl)); P.setProperty('SUPA_AUD_HB_SEQ', String(hbSeq));
+    }
+  } catch (eHb) { Logger.log('supaAudit hb: ' + eHb); }
+  if (moved || P.getProperty('SUPA_AUD_OK') !== '1') {
+    if (!_supaUpsert_('app_config', [{ key: 'audit_meta', value: { lastRow: mk }, updated_at: new Date().toISOString() }], 'key')) return 'fail';
+    if (mk > win) _supaReq_('delete', 'audit_log?src=eq.main&rn=lt.' + (mk - win + 1));
+    P.setProperty('SUPA_AUD_OK', '1'); return 'ok to=' + mk;
+  }
+  return 'same';
+}
+function supaAuditResetNow() {   // من المحرر (المالك): يمسح النسخة ويعيد بناءها من الشيت
+  requireScriptOwner_();
+  _supaReq_('delete', 'audit_log?rn=gte.0');
+  var P = PropertiesService.getScriptProperties(); ['SUPA_AUD_ROW', 'SUPA_AUD_HB_ROW', 'SUPA_AUD_HB_SEQ', 'SUPA_AUD_OK'].forEach(function (k) { P.deleteProperty(k); });
+  var r = supaAuditSync_(); Logger.log('audit_log: ' + r); return r;
+}
+
+function _supaBootSync_() {
+  var r = [];
+  try { r.push('cfg=' + _supaCfgPush_(false)); } catch (e1) { r.push('cfg=err'); Logger.log('supaCfg: ' + e1); }
+  try { r.push('glk=' + supaGlKickSync_()); } catch (e2) { r.push('glk=err'); Logger.log('supaGlKick: ' + e2); }
+  try { r.push('aud=' + supaAuditSync_()); } catch (e3) { r.push('aud=err'); Logger.log('supaAudit: ' + e3); }
+  return r.join(',');
+}
+// فحص فوري من المحرر لكل ما سبق
+function supaBootSyncNow() { requireScriptOwner_(); var r = _supaBootSync_(); Logger.log(r); return r; }
