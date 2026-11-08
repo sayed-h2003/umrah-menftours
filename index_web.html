@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.372  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.373  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7536,17 +7536,17 @@ var LF_ = (function () {
   function spInit() {
     if (SP.st !== 0 || !window.authToken || !user() || now() < SP.next) return;
     try { if (localStorage.getItem('lf_supa_off') === '1') { SP.st = 3; return; } } catch (e0) {}
-    try { var c = JSON.parse(sessionStorage.getItem(spStoreKey()) || 'null'); if (c && c.token && c.exp - now() > 600000) { SP.cfg = c; SP.st = 2; return; } } catch (e1) {}
+    try { var c = JSON.parse(sessionStorage.getItem(spStoreKey()) || 'null'); if (c && c.token && c.exp - now() > 600000 && c.gl !== undefined) { SP.cfg = c; SP.st = 2; return; } } catch (e1) {}   // c.gl: رمز V4.374+ (يحمل glStore)
     SP.st = 1; var ep = S.epoch;
     raw().withSuccessHandler(function (r) {
       if (ep !== S.epoch) { SP.st = 0; return; }
       if (!r || !r.enabled || !r.token) { SP.st = 3; return; }
-      SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt }; SP.st = 2;
+      SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, gl: !!r.glStore }; SP.st = 2;   // gl: قيود الحسابات في Postgres (GL_STORE=supabase) ⇒ يُسمح بقراءة شاشاتها منه
       try { sessionStorage.setItem(spStoreKey(), JSON.stringify(SP.cfg)); } catch (e2) {}
     }).withFailureHandler(function () { SP.st = 0; SP.next = now() + 60000; }).supaIssueToken(window.authToken);
   }
   function spReset() {
-    SP.st = 0; SP.cfg = null; SP.fails = 0; SP.off = false; SP.next = 0;
+    SP.st = 0; SP.cfg = null; SP.fails = 0; SP.off = false; SP.next = 0; SP.glOff = false; SP.glFails = 0;
     try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('lf_supa|') === 0) sessionStorage.removeItem(k); }); } catch (e) {}
   }
   function spGet(path, cb) {
@@ -7559,6 +7559,37 @@ var LF_ = (function () {
           return r.ok ? r.json() : null;
         }).then(function (j) { cb(j); }, function () { clearTimeout(to); cb(null); });
     } catch (e) { clearTimeout(to); cb(null); }
+  }
+  /* ⚡ (V4.374) شاشات الحسابات (كشف الحساب · القيود · الأرصدة · الخزينة · الميزان · الاعتماد) تقرأ من Postgres عبر RPC (glx_* بملف supabase/005_gl_screens.sql)
+     بدل Apps Script (4-13 ث) ⇒ 0.1-0.4 ث. يعمل فقط حين يقول الخادم glStore:true (قيود GL مصدرها Postgres). أي خطأ/رفض/انقطاع/استجابة غير ناجحة ⇒ cb(null) فيُنفَّذ المسار القديم.
+     مفتاح الإيقاف: localStorage.lf_supa_off='1' (نفس مفتاح V4.372). الاستجابة تُرجَع بنفس شكل الدالة الأصلية حرفياً. */
+  function glRpcReady() { spInit(); return spReady() && SP.cfg.gl === true && !SP.glOff; }
+  function glRpc(rpc, body, cb, fn) {
+    if (!glRpcReady() || typeof fetch !== 'function') return false;
+    var c = SP.cfg, t0 = now(), done = false, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var fin = function (res, why) {
+      if (done) return; done = true; clearTimeout(to);
+      if (res) { SP.glFails = 0; try { console.info('⚡ supabase', fn || rpc, (now() - t0) + 'ms'); } catch (e0) {} }
+      else { try { console.info('↩︎ apps-script', fn || rpc, why || ''); } catch (e1) {} }
+      try { cb(res); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
+    };
+    var soft = function () { fin(null, 'soft'); };
+    var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); SP.glFails = (SP.glFails || 0) + 1; if (SP.glFails >= 4) SP.glOff = true; }, 6000);
+    try {
+      fetch(c.url + '/rest/v1/rpc/' + rpc, { method: 'POST', headers: { apikey: c.anon, Authorization: 'Bearer ' + c.token, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body || {}), signal: ctl ? ctl.signal : undefined })
+        .then(function (r) {
+          if (r.ok) return r.json().then(function (j) { if (j && j.success === true) fin(j); else soft(); });
+          if (r.status === 401) { spReset(); soft(); return; }   // الرمز منتهٍ/غير صالح ⇒ يُعاد إصداره ويُستعمل المسار القديم الآن
+          return r.json().then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) {
+            // أخطاء عمل متوقعة (صلاحية 42501 · gl_aux لم يُرفع بعد 55000 · عمل غير مدعوم 0A000 · رسالة العمل P0001) ⇒ المسار القديم يعطي الرسالة الأصلية بلا تعطيل
+            if (/^(42501|55000|0A000|P0001)$/.test(String(j.code || ''))) { soft(); return; }
+            SP.glFails = (SP.glFails || 0) + 1;
+            if (r.status === 404 || r.status === 403 || SP.glFails >= 4) { SP.glOff = true; console.warn('LF supa gl: معطَّل لهذه الجلسة', r.status, j.code || '', rpc); }
+            fin(null, 'http ' + r.status);
+          });
+        }, function () { SP.glFails = (SP.glFails || 0) + 1; if (SP.glFails >= 4) SP.glOff = true; fin(null, 'net'); });
+    } catch (e) { fin(null, 'ex'); }
+    return true;
   }
   function spKeyOf(fn, args) { return fn === 'getTripsList' ? '' : String(args[1] === undefined || args[1] === null ? '' : args[1]); }
   function spFresh(fn, row) {
@@ -7911,6 +7942,7 @@ var LF_ = (function () {
   api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
   api.verify = verifySub;
   api.showBar = function (id) { var s = S.subs[id]; if (!s) return; s.snooze = 0; if (s.fresh) conflictBar(s); };
+  api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit;
   api._sp = SP; api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
   return api;
 })();
@@ -9100,7 +9132,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.372";
+var CLIENT_APP_VERSION = "4.373";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -49571,12 +49603,37 @@ function glDataChanged_() {
   GL._stCache = {};
   // ⚡ (V4.364) أُلغي نداء glWarm بعد كل حفظ: القياس أظهر 11 نداءً × 6 ث تتزاحم مع إعادة التحميل التي تليه مباشرة (وهي نفسها تبني الكاش)
 }
+/* ⚡ (V4.374) قراءات الحسابات من Postgres (RPC) بدل Apps Script — ترجع بنفس شكل دالة Apps Script، وأي خطأ/غياب ⇒ المسار القديم.
+   aux:1 ⇒ تعتمد على gl_aux (حسابات/مرفقات/اعتماد/استحقاق… يرفعها الخادم كل دقيقة) فلا تُستعمل لمدة GL_AUX_GATE_ بعد أي كتابة من هذا المتصفح (قراءة-بعد-الكتابة).
+   القيود والسطور نفسها حيّة دائماً (تُكتب بـ Postgres قبل رجوع الحفظ). when: شرط إضافي على المعاملات (كشف الحساب السريع فقط). */
+var GL_AUX_GATE_ = 75000;
+var GL_SUPA_ = {
+  glListEntries: { rpc: 'glx_list_entries', aux: 0, body: function (a) { return { f: a[0] || {} }; } },
+  glTrialBalance: { rpc: 'glx_trial_balance', aux: 0, body: function (a) { return { p_from: a[0] || '', p_to: a[1] || '' }; } },
+  glLedger: { rpc: 'glx_ledger', aux: 1, body: function (a) { return { p_code: a[0], p_from: a[1] || '', p_to: a[2] || '' }; } },
+  glStatement: { rpc: 'glx_statement', aux: 1, when: function (a) { return !!(a[3] && a[3].fast); }, body: function (a) { return { p_code: a[0], p_from: a[1] || '', p_to: a[2] || '', p_opts: { fast: true } }; } },
+  glTreasury: { rpc: 'glx_treasury', aux: 1, body: function (a) { return { p_code: a[0], p_from: a[1] || '', p_to: a[2] || '' }; } },
+  glPartyBalances: { rpc: 'glx_party_balances', aux: 1, body: function (a) { return { p_groups: a[0] || [] }; } },
+  glBankPending: { rpc: 'glx_bank_pending', aux: 1, body: function () { return {}; } },
+  glGetEntriesBulk: { rpc: 'glx_get_entries_bulk', aux: 1, body: function (a) { return { ids: a[0] || [] }; } },
+  glPendingList: { rpc: 'glx_pending_list', aux: 1, body: function () { return {}; } }
+};
 function glRun(fn, args, ok, fail) {
-  if (!GL_RO_RX_.test(fn)) { var ok0 = ok; ok = function (res) { glDataChanged_(); if (res && res.mirQ) glMirFlushSoon_(); if (ok0) ok0(res); }; }
-  var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
-    if (fail) fail(e); else _showPopup((e && e.message) || String(e), 'error');
-  });
-  r[fn].apply(r, [window.authToken].concat(args || []));
+  var ro = GL_RO_RX_.test(fn);
+  if (!ro) { GL._wAt = Date.now(); var ok0 = ok; ok = function (res) { GL._wAt = Date.now(); glDataChanged_(); if (res && res.mirQ) glMirFlushSoon_(); if (ok0) ok0(res); }; }
+  var viaApps = function () {
+    var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
+      if (fail) fail(e); else _showPopup((e && e.message) || String(e), 'error');
+    });
+    r[fn].apply(r, [window.authToken].concat(args || []));
+  };
+  var sx = ro && GL_SUPA_[fn], a = args || [];
+  try {
+    if (sx && typeof LF_ !== 'undefined' && LF_.glRpc && (!sx.when || sx.when(a)) && !(sx.aux && Date.now() - (GL._wAt || 0) < GL_AUX_GATE_)) {
+      if (LF_.glRpc(sx.rpc, sx.body(a), function (res) { if (res) ok(res); else viaApps(); }, fn)) return;
+    }
+  } catch (eSx) { console.error('GL supa router', eSx); }
+  viaApps();
 }
 // ⚡ (V4.307) النسخ لكشف برنامج الحجوزات يُنفَّذ بنداء خلفي بعد ظهور نتيجة الحفظ/الاعتماد (خارج قفل الحسابات) — لا ينتظره المستخدم
 var _glMirT_ = null;
@@ -49645,6 +49702,7 @@ function glApplyBoot_(res) {
 }
 function glInit(keepTab) {
   var box = document.getElementById('glBody'); if (!box) return;
+  try { if (typeof LF_ !== 'undefined' && LF_.spWarm) LF_.spWarm(); } catch (eW) {}   // ⚡ (V4.374) رمز Supabase يُجهَّز بالتوازي مع تحميل الحسابات
   var cached = glBootLoad_(), shown = false;
   if (cached) {   // عرض فوري من المتصفح (الصلاحيات للعرض فقط — الخادم يتحقق من كل عملية) ثم تُصحَّح من رد الخادم
     glApplyBoot_(cached); shown = true; GL._stCache = {}; GL.can = cached.can || {}; GL.isAdmin = !!cached.isAdmin;

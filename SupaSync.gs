@@ -38,16 +38,38 @@ function _supaUpsert_(table, rows, conflict) {
 /* بصمة بيانات بنفس صيغة lfFetch (LiveSync.gs) ⇒ المتصفح يقارنها بنسخته المحفوظة مباشرة */
 function _supaHash_(fn, data) { var vol = {}; return _lfHash_(_lfJson_(fn, data, vol)); }
 
+/* ⚡ (V4.374) توسيع الصلاحيات كما يفعل _sessionHasPerm_ (Code.gs): المستوى الأعلى يشمل ما دونه (حذف ⊃ تعديل ⊃ إضافة ⊃ عرض) + الخريطة القديمة + «delete» العام */
+function _supaExpandPerms_(list) {
+  var set = {}, out = [];
+  (list || []).forEach(function (p0) {
+    var t = String(p0 || '').toLowerCase().trim(); if (!t) return;
+    set[t] = true;
+    try { if (typeof _PERM_LEGACY_MAP_ !== 'undefined' && _PERM_LEGACY_MAP_[t]) { t = _PERM_LEGACY_MAP_[t]; set[t] = true; } } catch (e) {}
+    var dot = t.indexOf('.');
+    if (dot > 0) {
+      var scr = t.slice(0, dot), cap = t.slice(dot + 1);
+      set[scr + '.view'] = true;
+      if (cap === 'edit' || cap === 'delete') set[scr + '.add'] = true;
+      if (cap === 'delete') set[scr + '.edit'] = true;
+    }
+  });
+  try { if (set['delete'] && typeof _PERM_SCREENS_ !== 'undefined') _PERM_SCREENS_.forEach(function (s) { set[s + '.delete'] = true; set[s + '.edit'] = true; set[s + '.add'] = true; set[s + '.view'] = true; }); } catch (e2) {}
+  Object.keys(set).forEach(function (k) { out.push(k); });
+  return out;
+}
+
 /* رمز قراءة قصير العمر للمتصفح (HS256) — يعمل لكل أنواع الجلسات (حتى «تذكّر الجهاز» بلا كلمة مرور) */
 function supaIssueToken(authToken) {
   var s = requireAuth_(authToken);
   if (!_supaOn_() || !_supaP_('SUPA_JWT_SECRET') || !_supaP_('SUPA_ANON_KEY')) return { success: true, enabled: false };
   var perms = []; try { var pv = s.permissions; perms = Array.isArray(pv) ? pv : String(pv || '').split(/[,،;|]/).map(function (x) { return x.trim(); }).filter(Boolean); } catch (e) {}
+  perms = _supaExpandPerms_(perms);   // ⚡ (V4.374) نفس تدرّج _sessionHasPerm_ (تعديل ⇒ إضافة+عرض…) كي تطابق فحوص Postgres فحوص الخادم
   var now = Math.floor(Date.now() / 1000), exp = now + 8 * 3600;
   var b64 = function (o) { return Utilities.base64EncodeWebSafe(typeof o === 'string' ? o : JSON.stringify(o)).replace(/=+$/, ''); };
   var head = b64({ alg: 'HS256', typ: 'JWT' }), body = b64({ role: 'authenticated', aud: 'authenticated', sub: String(s.username), app_user: String(s.username), perms: perms, iat: now, exp: exp });
   var sig = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(head + '.' + body, _supaP_('SUPA_JWT_SECRET'))).replace(/=+$/, '');
-  return { success: true, enabled: true, url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), token: head + '.' + body + '.' + sig, expiresAt: exp * 1000 };
+  return { success: true, enabled: true, url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), token: head + '.' + body + '.' + sig, expiresAt: exp * 1000,
+    glStore: _supaP_('GL_STORE') === 'supabase' };   // ⚡ (V4.374) شاشات الحسابات تقرأ من Postgres فقط حين تكون قيود GL فيه (المصدر الوحيد)
 }
 
 /* ---------- المزامنة ---------- */
@@ -80,6 +102,40 @@ function supaSyncNow() {
   var out = L.join('\n'); Logger.log(out); return out;
 }
 
+/* ============================================================================
+   ⚡ (V4.374) gl_aux — البيانات المساعدة لدوال glx_* (005_gl_screens.sql): كل ما يلزم شاشات الحسابات وليس بجدولَي القيود/السطور:
+   الحسابات · عدد/قائمة المرفقات · التغييرات المعلّقة · تواريخ استحقاق البنوك · خريطة أسماء الحجوزات · تواريخ الرحلات · قائمة الاعتماد.
+   تُبنى بنفس دوال الخادم الحالية (فالشكل مطابق) وتُرفع عند تغيّر GL_DATA_VER (المشغّل كل دقيقة)، ويحمل كل صف الإصدار الذي بُني منه.
+   ============================================================================ */
+function _supaGlAuxBuild_() {
+  var A = {}; _glAccounts_().list.forEach(function (a) { var c = {}; for (var k in a) c[k] = a[k]; A[a.code] = c; });
+  var att = {}; try { att = _glAttachMap_(); } catch (e0) {}
+  var pend = {}, pr = {}; try { pr = _glPendingRows_(); } catch (e1) {}
+  Object.keys(pr).forEach(function (k) { var r = pr[k].row; if (_glStr_(r[9]) !== 'مرفوض') pend[_glStr_(r[1])] = _glStr_(r[2]) || 'تعديل'; });
+  var due = {}; try { due = _glDueMap_(); } catch (e2) {}
+  var hbn = {}; try { _glRows_('hbmap').forEach(function (r) { var c = _glStr_(r[2]); if (c) (hbn[c] = hbn[c] || []).push({ name: _glStr_(r[0]), type: _glStr_(r[1]) }); }); } catch (e3) {}
+  var trips = {}; try { trips = JSON.parse(JSON.stringify(_glTripsInfo_())); } catch (e4) {}
+  // قائمة الاعتماد: نفس حقول glPendingList (الصلاحية canApprove تُحسب من JWT بـPostgres)
+  var rows = [];
+  try { _glRowsW_('pending').forEach(function (r) { if (_glStr_(r[0])) rows.push({ key: _glStr_(r[0]), id: _glStr_(r[1]), kind: _glStr_(r[2]), oldDesc: _glStr_(r[3]), oldBase: _glNum_(r[4]),
+    newDesc: _glStr_(r[5]), newBase: _glNum_(r[6]), at: _glStr_(r[8]), status: _glStr_(r[9]) || 'بانتظار', by: _glStr_(r[10]), note: _glStr_(r[11]), oldAmt: _glStr_(r[12]), newAmt: _glStr_(r[13]), diff: _glStr_(r[14]) }); }); } catch (e5) {}
+  var cust = [], P = PropertiesService.getScriptProperties();
+  try { _glCsCodes_().forEach(function (code) { var n = +(P.getProperty('GLBOT_CS_' + code) || 0); if (n) cust.push({ code: code, name: (A[code] || {}).name || code, n: n }); }); } catch (e6) {}
+  return { accounts: A, att: att, pend: pend, due: due, hbnames: hbn, trips: trips, pendlist: { rows: rows, cust: cust } };
+}
+// يرفع gl_aux لـSupabase إن تغيّر GL_DATA_VER منذ آخر رفع (يُستدعى من مشغّل الدقيقة؛ ومن المحرر: supaGlAuxSyncNow)
+function supaGlAuxSync_(force) {
+  if (!_supaOn_() || _supaP_('GL_STORE') !== 'supabase') return 'skip';
+  var P = PropertiesService.getScriptProperties(), ver = _glVerFresh_();   // الإصدار يُقرأ قبل البناء: لو تغيّر أثناءه يُعاد الرفع بالدقيقة التالية
+  if (!force && P.getProperty('SUPA_GLAUX_VER') === ver) return 'same';
+  var data = _supaGlAuxBuild_(), now = new Date().toISOString();
+  var ok = _supaUpsert_('gl_aux', Object.keys(data).map(function (k) { return { key: k, data: data[k], ver: ver, updated_at: now }; }), 'key');
+  if (!ok) return 'fail';
+  P.setProperty('SUPA_GLAUX_VER', ver);
+  return 'ok';
+}
+function supaGlAuxSyncNow() { requireScriptOwner_(); var r = supaGlAuxSync_(true); Logger.log('gl_aux: ' + r + ' (GL_STORE=' + _supaP_('GL_STORE') + ')'); return r; }
+
 function _supaSynced_() { try { return JSON.parse(_supaP_('SUPA_SYNCED') || '{}') || {}; } catch (e) { return {}; } }
 
 function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا تُستدعى من المتصفح
@@ -109,7 +165,8 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
       keys.forEach(function (g) { done[g] = okGroups[g]; });
       PropertiesService.getScriptProperties().setProperty('SUPA_SYNCED', JSON.stringify(done));
     }
-    return 'ok work=' + work + ' ms=' + (Date.now() - t0);
+    var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
+    return 'ok work=' + work + ' glaux=' + gx + ' ms=' + (Date.now() - t0);
   } finally { try { lk.releaseLock(); } catch (e) {} }
 }
 
