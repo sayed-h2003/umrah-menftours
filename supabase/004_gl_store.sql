@@ -29,6 +29,32 @@ $$ declare cols text; sets text; n int; begin
   return n;
 end $$;
 
+-- ===== 2ب) حذف قيود مع التعامل مع الجداول التي تشير إليها بمفتاح أجنبي (مثل gl_attachments) — ديناميكي بلا افتراض أسماء =====
+-- only_unreferenced=true  ⇒ يحذف القيود غير المشار إليها فقط (يُستعمل في wipe/إعادة النقل: المُشار إليه يبقى ويُحدَّث بالـupsert)
+-- only_unreferenced=false ⇒ يحذف صفوف الجداول التابعة أولاً (مرفقات قيد محذوف) ثم القيود (حذف صريح من التطبيق)
+create or replace function _gls_del_entries(ids text[], only_unreferenced boolean) returns int
+language plpgsql as
+$$ declare r record; q text; n int := 0; begin
+  for r in select c.conrelid::regclass::text as child, a.attname as col
+             from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+            where c.contype = 'f' and c.confrelid = 'gl_entries'::regclass and c.conrelid <> 'gl_lines'::regclass loop
+    if not only_unreferenced then
+      execute format('delete from %s where %I = any ($1)', r.child, r.col) using coalesce(ids, (select array_agg(entry_id) from gl_entries));
+    end if;
+  end loop;
+  q := 'delete from gl_entries e where ' || case when ids is null then 'true' else 'e.entry_id = any ($1)' end;
+  if only_unreferenced then
+    for r in select c.conrelid::regclass::text as child, a.attname as col
+               from pg_constraint c join pg_attribute a on a.attrelid = c.conrelid and a.attnum = c.conkey[1]
+              where c.contype = 'f' and c.confrelid = 'gl_entries'::regclass and c.conrelid <> 'gl_lines'::regclass loop
+      q := q || format(' and not exists (select 1 from %s x where x.%I = e.entry_id)', r.child, r.col);
+    end loop;
+  end if;
+  if ids is null then execute q; else execute q using ids; end if;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
 -- ===== 3) الكتابة الذرّية: حذف سطور/قيود ثم upsert قيود ثم سطور — كلها بمعاملة واحدة =====
 -- p = { entries:[{<أعمدة gl_entries>, raw:[...]}], lines:[...], accs:[{code,name,acc_type}] (ظلال حسابات للمفاتيح الأجنبية),
 --       del_lines:[[entry_id,line_no]], del_lines_of:[entry_id], del_entries:[entry_id], wipe:bool, reset_ord:bool }
@@ -38,7 +64,7 @@ $$ declare e jsonb; e2 jsonb; l jsonb; l2 jsonb; b0 bigint; ro boolean := coales
   perform pg_advisory_xact_lock(hashtextextended('gl:store:put', 0));
   if coalesce((p ->> 'wipe')::boolean, false) then
     delete from gl_lines where true;
-    delete from gl_entries where true;
+    perform _gls_del_entries(null, true);   -- القيود المشار إليها (مرفقات…) تبقى وتُحدَّث بالـupsert أدناه
   end if;
   if jsonb_array_length(coalesce(p -> 'accs', '[]'::jsonb)) > 0 then
     insert into gl_accounts (code, name, acc_type)
@@ -48,7 +74,7 @@ $$ declare e jsonb; e2 jsonb; l jsonb; l2 jsonb; b0 bigint; ro boolean := coales
   delete from gl_lines gl using jsonb_array_elements(coalesce(p -> 'del_lines', '[]'::jsonb)) d
    where gl.entry_id = d ->> 0 and gl.line_no = (d ->> 1)::int;
   delete from gl_lines where entry_id in (select jsonb_array_elements_text(coalesce(p -> 'del_lines_of', '[]'::jsonb)));
-  delete from gl_entries where entry_id in (select jsonb_array_elements_text(coalesce(p -> 'del_entries', '[]'::jsonb)));
+  perform _gls_del_entries(array(select jsonb_array_elements_text(coalesce(p -> 'del_entries', '[]'::jsonb))), false);
   -- ord: الجديد/المنقول (_mv) يأخذ رقماً جديداً بترتيب المصفوفة (تحت القفل ⇒ متتابع)؛ القائم يحتفظ بترتيبه إلا مع reset_ord
   -- دفعة غير موجودة بـ gl_batches ⇒ batch_no فارغ بالعمود المنمّط (القيمة الأصلية تبقى بـ raw) كما بالهجرة
   select coalesce(jsonb_array_length(p -> 'entries'), 0) + coalesce(jsonb_array_length(p -> 'lines'), 0) into ne;
@@ -72,8 +98,7 @@ language plpgsql security invoker set search_path = public, pg_temp as
 $$ declare n int; begin
   perform pg_advisory_xact_lock(hashtextextended('gl:store:put', 0));
   delete from gl_lines where entry_id = any (ids);
-  delete from gl_entries where entry_id = any (ids);
-  get diagnostics n = row_count;
+  n := _gls_del_entries(ids, false);
   return n;
 end $$;
 
@@ -110,6 +135,7 @@ end $$;
 
 -- ===== 5) الصلاحيات: service_role فقط =====
 revoke all on function _gls_upsert(text, text, jsonb, boolean) from public, anon, authenticated;
+revoke all on function _gls_del_entries(text[], boolean) from public, anon, authenticated;
 revoke all on function gl_store_put(jsonb) from public, anon, authenticated;
 revoke all on function gl_store_delete(text[]) from public, anon, authenticated;
 revoke all on function gl_store_next_seq(int) from public, anon, authenticated;
