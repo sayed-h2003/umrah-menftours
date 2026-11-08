@@ -6890,7 +6890,7 @@ function _onlineStart_() {
 /* ⚡ (V4.236) نبضة موحّدة: نداء واحد كل دقيقة (كل دقيقتين والتبويب مخفي) بدل 3 نداءات دورية منفصلة
    (المتصلون + التنبيهات + المزامنة اللحظية) — كل نداء للسيرفر يكلّف 2-5 ثوانٍ تشغيل مهما كان صغيراً.
    التنبيهات لا تُعاد إلا لو تغيّرت، والتبويب المخفي يرسل «آخر ظهور» فقط. */
-var _PULSE_ = { busy: false, last: Date.now(), notifVer: '', timer: null };
+var _PULSE_ = { busy: false, last: Date.now(), notifVer: '', timer: null, pgNotif: undefined };
 function _pulseStart_() {
   try { _tsInit_(); } catch (eTs) {}   // 🗂️ (V4.350)
   if (_PULSE_.timer) return;
@@ -6907,12 +6907,24 @@ function _pulseTick_(force) {
   var vis = _tsAnyVisible_(), bell = document.getElementById('notifBellWrap');
   var canNotif = vis && !!bell && !bell.classList.contains('d-none');
   var since = ''; try { since = localStorage.getItem('glKickSince') || ''; } catch (e) {}
-  google.script.run.withSuccessHandler(function (r) {
-    _PULSE_.busy = false; if (!r || !r.success) return;
-    _tsPost_({ t: 'pulse', r: r, since: since });
-    _pulseApply_(r, since);
-  }).withFailureHandler(function () { _PULSE_.busy = false; })
-    .appPulse(window.authToken, { online: true, notif: canNotif, notifVer: _PULSE_.notifVer, gl: vis, glSince: since });
+  var viaApps = function (o, pgv) {
+    google.script.run.withSuccessHandler(function (r) {
+      _PULSE_.busy = false; if (!r || !r.success) return;
+      if (pgv !== undefined && o.notif && r.notifications) _PULSE_.pgNotif = pgv;   // (V4.377) إصدار جدول التنبيهات بـ Postgres وقت جلب القائمة
+      _tsPost_({ t: 'pulse', r: r, since: since });
+      _pulseApply_(r, since);
+    }).withFailureHandler(function () { _PULSE_.busy = false; })
+      .appPulse(window.authToken, o);
+  };
+  // ⚡ (V4.377) المتصلون + البصمات + إصدار التنبيهات من Postgres (app_pulse)؛ Apps Script فقط لحالة القيود (إن كان التبويب ظاهراً) أو عند تغيّر التنبيهات
+  if (!(window.LF_ && LF_.stRpc && LF_.stRpc('app_pulse', { p: { online: true } }, function (r) {
+    if (!r) { viaApps({ online: true, notif: canNotif, notifVer: _PULSE_.notifVer, gl: vis, glSince: since }); return; }
+    var part = { success: true, dv: r.dv, online: r.online };
+    _tsPost_({ t: 'pulse', r: part, since: since }); _pulseApply_(part, since);
+    var pgv = String(r.notifVer || ''), nchg = canNotif && (_PULSE_.pgNotif === undefined || pgv !== _PULSE_.pgNotif);
+    if (nchg || vis) viaApps({ online: false, notif: nchg, notifVer: '', gl: vis, glSince: since }, pgv);
+    else _PULSE_.busy = false;
+  }, 'appPulse', ['@dv', 'misc']))) viaApps({ online: true, notif: canNotif, notifVer: _PULSE_.notifVer, gl: vis, glSince: since });
 }
 function _pulseApply_(r, since) {
     if (r.dv && window.LF_) { try { LF_.learn(r.dv); } catch (eLf) {} }   // ⚡ (V4.367) بصمات البيانات مع النبضة الموحّدة
@@ -7540,18 +7552,19 @@ var LF_ = (function () {
   function spInit() {
     if (SP.st !== 0 || !window.authToken || !user() || now() < SP.next) return;
     try { if (localStorage.getItem('lf_supa_off') === '1') { SP.st = 3; return; } } catch (e0) {}
-    try { var c = JSON.parse(sessionStorage.getItem(spStoreKey()) || 'null'); if (c && c.token && c.exp - now() > 600000 && c.gl !== undefined) { SP.cfg = c; SP.st = 2; return; } } catch (e1) {}   // c.gl: رمز V4.374+ (يحمل glStore)
+    try { var c = JSON.parse(sessionStorage.getItem(spStoreKey()) || 'null'); if (c && c.token && c.exp - now() > 600000 && c.gl !== undefined && c.st !== undefined) { SP.cfg = c; SP.st = 2; return; } } catch (e1) {}   // c.gl: رمز V4.374+ (يحمل glStore)
     SP.st = 1; var ep = S.epoch;
     raw().withSuccessHandler(function (r) {
       if (ep !== S.epoch) { SP.st = 0; return; }
       if (!r || !r.enabled || !r.token) { SP.st = 3; return; }
-      SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, gl: !!r.glStore }; SP.st = 2;   // gl: قيود الحسابات في Postgres (GL_STORE=supabase) ⇒ يُسمح بقراءة شاشاتها منه
+      SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, gl: !!r.glStore, st: { groups: (r.store && r.store.groups) || [], dv: !!(r.store && r.store.dv) } }; SP.st = 2;   // st (V4.377): المجموعات الحيّة بالمخزن + هل data_versions بـ Postgres مرجع النبضة
+      // gl: قيود الحسابات في Postgres (GL_STORE=supabase) ⇒ يُسمح بقراءة شاشاتها منه
       try { sessionStorage.setItem(spStoreKey(), JSON.stringify(SP.cfg)); } catch (e2) {}
       try { if (!document.getElementById('spPre')) { var lk = document.createElement('link'); lk.id = 'spPre'; lk.rel = 'preconnect'; lk.href = String(r.url || '').replace(/\/+$/, ''); lk.crossOrigin = 'anonymous'; document.head.appendChild(lk); } } catch (e3) {}   // (V4.376) اتصال مسبق: يخفي زمن TLS الأول
     }).withFailureHandler(function () { SP.st = 0; SP.next = now() + 60000; }).supaIssueToken(window.authToken);
   }
   function spReset() {
-    SP.st = 0; SP.cfg = null; SP.fails = 0; SP.off = false; SP.next = 0; SP.glOff = false; SP.glFails = 0;
+    SP.st = 0; SP.cfg = null; SP.fails = 0; SP.off = false; SP.next = 0; SP.glOff = false; SP.glFails = 0; SP.stOff = false; SP.stFails = 0;
     try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf('lf_supa|') === 0) sessionStorage.removeItem(k); }); } catch (e) {}
   }
   function spGet(path, cb) {
@@ -7568,18 +7581,22 @@ var LF_ = (function () {
   /* ⚡ (V4.374) شاشات الحسابات (كشف الحساب · القيود · الأرصدة · الخزينة · الميزان · الاعتماد) تقرأ من Postgres عبر RPC (glx_* بملف supabase/005_gl_screens.sql)
      بدل Apps Script (4-13 ث) ⇒ 0.1-0.4 ث. يعمل فقط حين يقول الخادم glStore:true (قيود GL مصدرها Postgres). أي خطأ/رفض/انقطاع/استجابة غير ناجحة ⇒ cb(null) فيُنفَّذ المسار القديم.
      مفتاح الإيقاف: localStorage.lf_supa_off='1' (نفس مفتاح V4.372). الاستجابة تُرجَع بنفس شكل الدالة الأصلية حرفياً. */
-  function glRpcReady() { spInit(); return spReady() && SP.cfg.gl === true && !SP.glOff; }
-  function glRpc(rpc, body, cb, fn) {
-    if (!glRpcReady() || typeof fetch !== 'function') return false;
+  /* ⚡ (V4.377) need: مصفوفة مجموعات المخزن المطلوبة حيّة بـ Postgres (core/bookings/acc/misc…) أو '@dv' (data_versions مرجع النبضة) — بدونها يُشترط glStore كما كان.
+     عدّادات الفشل/التعطيل منفصلة (stOff/stFails) فلا يعطّل فشل قراءات الرحلات شاشات الحسابات ولا العكس. */
+  function stHas(need) { var s = SP.cfg && SP.cfg.st; return !!s && need.every(function (g) { return g === '@dv' ? s.dv === true : s.groups.indexOf(g) >= 0; }); }
+  function glRpcReady(need) { spInit(); if (!spReady()) return false; return need ? (!SP.stOff && stHas(need)) : (SP.cfg.gl === true && !SP.glOff); }
+  function glRpc(rpc, body, cb, fn, need) {
+    if (!glRpcReady(need) || typeof fetch !== 'function') return false;
+    var KF = need ? 'stFails' : 'glFails', KO = need ? 'stOff' : 'glOff';
     var c = SP.cfg, t0 = now(), done = false, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var fin = function (res, why) {
       if (done) return; done = true; clearTimeout(to);
-      if (res) { SP.glFails = 0; try { console.info('⚡ supabase', fn || rpc, (now() - t0) + 'ms'); } catch (e0) {} }
+      if (res) { SP[KF] = 0; try { console.info('⚡ supabase', fn || rpc, (now() - t0) + 'ms'); } catch (e0) {} }
       else { try { console.info('↩︎ apps-script', fn || rpc, why || ''); } catch (e1) {} }
       try { cb(res); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
     };
     var soft = function () { fin(null, 'soft'); };
-    var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); SP.glFails = (SP.glFails || 0) + 1; if (SP.glFails >= 4) SP.glOff = true; }, 6000);
+    var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; }, 6000);
     try {
       // (V4.376) اتصال أول بطيء بـSupabase (شوهد ≈6 ث للاتصال الأولي) ⇒ طلب ثانٍ مطابق بعد 1.5 ث والأسبق يفوز (قراءات فقط ⇒ آمن) — يحجب الانتظار حتى مهلة 6 ث
       var hedged = false, go = function () {
@@ -7592,14 +7609,54 @@ var LF_ = (function () {
           return r.json().then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) {
             // أخطاء عمل متوقعة (صلاحية 42501 · gl_aux لم يُرفع بعد 55000 · عمل غير مدعوم 0A000 · رسالة العمل P0001) ⇒ المسار القديم يعطي الرسالة الأصلية بلا تعطيل
             if (/^(42501|55000|0A000|P0001)$/.test(String(j.code || ''))) { soft(); return; }
-            SP.glFails = (SP.glFails || 0) + 1;
-            if (r.status === 404 || r.status === 403 || SP.glFails >= 4) { SP.glOff = true; console.warn('LF supa gl: معطَّل لهذه الجلسة', r.status, j.code || '', rpc); }
+            SP[KF] = (SP[KF] || 0) + 1;
+            if (r.status === 404 || r.status === 403 || SP[KF] >= 4) { SP[KO] = true; console.warn('LF supa gl: معطَّل لهذه الجلسة', r.status, j.code || '', rpc); }
             fin(null, 'http ' + r.status);
           });
       };
-      go().then(handle, function () { if (!hedged) { SP.glFails = (SP.glFails || 0) + 1; if (SP.glFails >= 4) SP.glOff = true; fin(null, 'net'); } });
+      go().then(handle, function () { if (!hedged) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; fin(null, 'net'); } });
     } catch (e) { fin(null, 'ex'); }
     return true;
+  }
+  /* ⚡ (V4.377) المرحلة 4 — قراءات الرحلات/المعتمرين/الحركات/العملاء/القوائم + النبضة والمتصلون من Postgres (007_core_reads.sql + 008_app_poll.sql).
+     fn ⇒ المجموعات الحيّة المطلوبة (يعلنها الخادم بـ supaIssueToken().store.groups). الرد {success, d: نفس ما ترجعه دالة Apps Script حرفياً, dv: بصمات لحظة القراءة}.
+     أي خطأ/رفض/انقطاع/مجموعة غير حيّة ⇒ النداء الأصلي لـ Apps Script كما كان. المفتاح: localStorage.lf_supa_off='1'. الكتابات لا تمر من هنا إطلاقاً. */
+  var STRPC = {
+    getTripsList: { need: ['core', 'bookings', 'acc'] }, getTripPilgrims: { need: ['core'] }, getTripDraft: { need: ['core'] }, getTripHotelsList: { need: ['core'] },
+    getGlobalPilgrimsRegistry: { need: ['core'] }, getKnownClientNames: { need: ['core'] }, getClientsDirectory: { need: ['core'] }, loadDropdownsData: { need: ['core'] },
+    getAllMovementsAuth: { need: ['bookings'] }, getTripPricing: { need: ['acc'] }, getMyUiPrefs: { need: ['misc'] },
+    heartbeatOnline: { need: ['@dv'], rpc: 'app_heartbeat', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count }; } },
+    getOnlineUsersNow: { need: ['@dv'], rpc: 'app_online_users', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count, users: r.users }; } }
+  };
+  // يبدأ قراءة RPC؛ يرجع false إن لم تكن جاهزة (⇒ المسار القديم فوراً). cb({d, dv}) عند النجاح · cb(null, why) ⇒ المسار القديم ('epoch' ⇒ الجلسة تغيّرت فلا شيء)
+  function stRoute(fn, args, cb) {
+    var d = STRPC[fn]; if (!d) return false;
+    var ep = S.epoch, a = (args || []).slice(); a[0] = null;   // لا يُرسل رمز الجلسة؛ الهوية من JWT
+    return glRpc(d.rpc || 'rx_call', d.body ? d.body(a) : { p_fn: fn, p_args: a }, function (res) {
+      if (ep !== S.epoch) { cb(null, 'epoch'); return; }
+      if (!res) { cb(null, 'fail'); return; }
+      cb({ d: d.out ? d.out(res) : res.d, dv: res.dv || null });
+    }, fn, d.need);
+  }
+  // بديل r = google.script.run (المغلَّف) لدالة مدعومة: نفس واجهة withSuccessHandler/withFailureHandler/withUserObject
+  function stRunner(getPrev, fn) {
+    var s = null, f = null, uo, hasUo = false;
+    var p = new Proxy({}, { get: function (t0, prop) {
+      if (prop === 'withSuccessHandler') return function (x) { s = x; return p; };
+      if (prop === 'withFailureHandler') return function (x) { f = x; return p; };
+      if (prop === 'withUserObject') return function (x) { uo = x; hasUo = true; return p; };
+      if (typeof prop !== 'string' || prop === 'then') return undefined;
+      return function () {
+        var a = Array.prototype.slice.call(arguments);
+        var viaApps = function () { var n = getPrev(); if (s) n = n.withSuccessHandler(s); if (f) n = n.withFailureHandler(f); if (hasUo) n = n.withUserObject(uo); n[prop].apply(n, a); };
+        if (!stRoute(prop, a, function (x, why) {
+          if (!x) { if (why !== 'epoch') viaApps(); return; }
+          try { learn(x.dv); } catch (eL) {}   // بصمات لحظة القراءة ⇒ الشاشات الأخرى تتحدّث إن تغيّر شيء
+          if (s) s(x.d, uo);
+        })) viaApps();
+      };
+    } });
+    return p;
   }
   function spKeyOf(fn, args) { return fn === 'getTripsList' ? '' : String(args[1] === undefined || args[1] === null ? '' : args[1]); }
   function spFresh(fn, row) {
@@ -7663,6 +7720,10 @@ var LF_ = (function () {
       store(r.data, r.h, r.h ? r.dv : null, r.g);
     };
     var viaApps = function () { lfFetch(fn, curArgs(args), e && e.h, onRes, fail); };
+    if (STRPC[fn] && stRoute(fn, curArgs(args), function (x, why) {   // ⚡ (V4.377) Postgres RPC أولاً (يحمل البصمات؛ h='sb' ⇒ لا تطابق مع بصمة الخادم فيعود النداء القديم بكل البيانات)
+      if (!x) { if (why === 'epoch') onRes(null); else viaApps(); return; }
+      onRes({ data: x.d, h: 'sb', dv: x.dv, g: READ[fn] });
+    })) return;
     if (SUPA_FN[fn]) { spInit(); if (spReady()) { spRead(fn, args, e, onRes, viaApps); return; } }
     viaApps();
   }
@@ -7755,10 +7816,14 @@ var LF_ = (function () {
     var gap = pollGap(); if (!gap && !force) return;
     if (!force && now() - S.lastPoll < gap) return;
     S.lastPoll = now(); S.pollBusy = true;
-    raw().withSuccessHandler(function (r) {
+    var gotDv = function (r) {
       S.pollBusy = false;
       if (r && r.dv) { try { if (typeof _tsPost_ === 'function') _tsPost_({ t: 'lfdv', dv: r.dv }); } catch (e) {} learn(r.dv); }
-    }).withFailureHandler(function () { S.pollBusy = false; }).lfPoll(window.authToken);
+    };
+    var pollApps = function () { raw().withSuccessHandler(gotDv).withFailureHandler(function () { S.pollBusy = false; }).lfPoll(window.authToken); };
+    // ⚡ (V4.377) النبضة من Postgres (app_poll ≡ lfPoll) حين يعلن الخادم store.dv؛ غير ذلك/أي خطأ ⇒ lfPoll كما كان
+    var pollEp = S.epoch;
+    if (!glRpc('app_poll', {}, function (r) { if (pollEp !== S.epoch) { S.pollBusy = false; return; } if (r) gotDv(r); else pollApps(); }, 'lfPoll', ['@dv'])) pollApps();
     // فحص أمان كل 3 دقائق للشاشة الظاهرة (تعديل يدوي بالشيت لا يمر بالبرنامج فلا يغيّر البصمة)
     if (now() - S.lastSafety > 180000) {
       S.lastSafety = now();
@@ -7847,7 +7912,7 @@ var LF_ = (function () {
     var ep0 = S.epoch;
     var go = function () {
       var mine = null; if (sk) { mine = S.infl[sk] = []; S.inflT[sk] = now(); }
-      var r = getPrev();
+      var r = STRPC[fn] ? stRunner(getPrev, fn) : getPrev();   // ⚡ (V4.377) قراءة من Postgres إن كانت مجموعتها حيّة، وإلا Apps Script
       r = r.withSuccessHandler(function (res, uo) {
         var f = mine; if (sk && S.infl[sk] === mine) delete S.infl[sk];
         if (k && cacheable(res) && ep0 === S.epoch) { var cs = csig(res), old = S.mem[k]; putEntry({ k: k, fn: fn, d: clone(res), h: old && old.cs === cs ? old.h : '', cs: cs, g: READ[fn], dv: old && old.cs === cs ? old.dv : null, sAt: now(), vAt: old && old.cs === cs ? old.vAt : 0 }); }
@@ -7952,7 +8017,7 @@ var LF_ = (function () {
   api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
   api.verify = verifySub;
   api.showBar = function (id) { var s = S.subs[id]; if (!s) return; s.snooze = 0; if (s.fresh) conflictBar(s); };
-  api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit;
+  api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit; api.stRpc = glRpc; api.stRoute = stRoute;
   api._sp = SP; api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
   return api;
 })();
