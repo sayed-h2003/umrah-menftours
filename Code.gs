@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.382";
+var APP_VERSION = "4.383";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -15319,6 +15319,15 @@ function getClientAccount(authToken, client) {
   var ledgerPend = null; try { if (typeof ledgerPendingFor === 'function' && _ledgerOn_()) ledgerPend = _perfStepIf_('getClientAccount›ledgerPend', function () { return ledgerPendingFor(authToken, 'cp', client).rows; }); } catch (eLp) {}
   return { success: true, client: client, trips: stats.rows, noTripCount: stats.noTripCount,
            items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips, mergeGroups: mergeGroups, tripRefs: tripRefs, gl: glLinks, ledgerPend: ledgerPend };
+}
+
+// 🏨 (V4.383) مزامنة حجوزات الفنادق المقيَّدة على حساب العميل — كانت داخل getClientAccount؛ تعمل الآن بالخلفية بعد القراءة السريعة من Postgres
+function clientAccountBg(authToken, client) {
+  var sess = _accPerm_(authToken, 'view');
+  client = String(client || '').trim();
+  if (!client) return { success: true };
+  try { if (typeof _accHbMirror_ === 'function') _accHbMirror_(client, sess.username); } catch (e) { console.warn('hb mirror bg: ' + (e && e.message)); }
+  return { success: true };
 }
 
 // 🕘 (V4.90) سجل تعديلات كامل لحساب عميل واحد — كل عمليات AuditLog التي مرجعها اسم هذا العميل
