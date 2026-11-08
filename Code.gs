@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.381";
+var APP_VERSION = "4.382";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -15230,9 +15230,9 @@ function getClientAccount(authToken, client) {
   client = String(client || '').trim();
   if (!client) throw new Error('اسم العميل مطلوب');
   // 🏨 (V4.326) حجوزات الفنادق المقيَّدة على حساب العميل بالحسابات العامة ⇒ بنود بحسابه (مزامنة خفيفة لهذا العميل فقط)
-  try { if (typeof _accHbMirror_ === 'function') _accHbMirror_(client, _accSess.username); } catch (eHbM) { console.warn('hb mirror: ' + (eHbM && eHbM.message)); }
+  try { if (typeof _accHbMirror_ === 'function') _perfStepIf_('getClientAccount›hbMirror', function () { _accHbMirror_(client, _accSess.username); }); } catch (eHbM) { console.warn('hb mirror: ' + (eHbM && eHbM.message)); }
 
-  var stats = getClientTripStats(authToken, client); // رحلات العميل وأعداده الحالية
+  var stats = _perfStepIf_('getClientAccount›tripStats', function () { return getClientTripStats(authToken, client); }); // رحلات العميل وأعداده الحالية
 
   var items = [];
   var iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
@@ -15299,13 +15299,13 @@ function getClientAccount(authToken, client) {
   // ⚡ (V4.41) حالة الدمج المحفوظة تُدمَج بنفس استجابة تحميل الحساب — بلا أي طلب شبكة إضافي لاحقًا،
   // فتظهر شارة الدمج فورًا لحظة فتح شاشة الكشف الشامل بدل انتظار طلب منفصل (بطلب صريح)
   var mergeTrips = null, mergeGroups = [];
-  try { mergeGroups = _accMergeGroupsRead_(client).map(function (g) { return { id: g.id, name: g.name, trips: g.trips, by: g.by, at: g.at }; }); mergeTrips = mergeGroups.length ? mergeGroups[0].trips : null; } catch (eMg) { mergeTrips = null; mergeGroups = []; }
+  try { mergeGroups = _perfStepIf_('getClientAccount›merge', function () { return _accMergeGroupsRead_(client); }).map(function (g) { return { id: g.id, name: g.name, trips: g.trips, by: g.by, at: g.at }; }); mergeTrips = mergeGroups.length ? mergeGroups[0].trips : null; } catch (eMg) { mergeTrips = null; mergeGroups = []; }
   // 🏷️ (V4.320) كود كل رحلة يظهر بجانب اسمها (يميّز الرحلات المتشابهة) — يشمل رحلات بنود/دفعات قديمة ليست بالكشوف
   var tripRefs = {}; try { var _rf = _accClientStatsIdx_().r || {}; stats.rows.forEach(function (r) { if (_rf[r.trip]) tripRefs[r.trip] = _rf[r.trip]; });
     items.concat(payments).forEach(function (x) { var tn = x && x.trip; if (tn && tn !== 'عام' && _rf[tn]) tripRefs[tn] = _rf[tn]; }); } catch (eRf) {}
 
   // 📘 (V4.222) رقم قيد إيرادات كل رحلة بالحسابات العامة (وهل له تغيير بانتظار الاعتماد)
-  var glLinks = null; try { if (typeof _glClientLinks_ === 'function') glLinks = _glClientLinks_(client); } catch (eGl) { glLinks = null; }
+  var glLinks = null; try { if (typeof _glClientLinks_ === 'function') glLinks = _perfStepIf_('getClientAccount›glLinks', function () { return _glClientLinks_(client); }); } catch (eGl) { glLinks = null; }
   // 🧾 (V4.341) رقم السند + الطرف المقابل لكل دفعة (للشاشة فقط)
   try {
     if (glLinks && typeof _glRefsFor_ === 'function' && payments.length) {
@@ -15316,7 +15316,7 @@ function getClientAccount(authToken, client) {
     }
   } catch (eRf) {}
   // ⚡ (V4.351) الدفعات بانتظار الاعتماد ضمن نفس الاستجابة (بدل نداء ثانٍ)
-  var ledgerPend = null; try { if (typeof ledgerPendingFor === 'function' && _ledgerOn_()) ledgerPend = ledgerPendingFor(authToken, 'cp', client).rows; } catch (eLp) {}
+  var ledgerPend = null; try { if (typeof ledgerPendingFor === 'function' && _ledgerOn_()) ledgerPend = _perfStepIf_('getClientAccount›ledgerPend', function () { return ledgerPendingFor(authToken, 'cp', client).rows; }); } catch (eLp) {}
   return { success: true, client: client, trips: stats.rows, noTripCount: stats.noTripCount,
            items: items, payments: payments, meta: meta, alerts: alerts, mergeTrips: mergeTrips, mergeGroups: mergeGroups, tripRefs: tripRefs, gl: glLinks, ledgerPend: ledgerPend };
 }
