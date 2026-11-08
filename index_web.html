@@ -8050,9 +8050,10 @@ var LF_ = (function () {
   function runAfter(a) {
     try {
       if (!a || !a.fn || !/^[A-Za-z0-9]+$/.test(String(a.fn))) return;
+      var aa = (a.args || []).slice(); if (aa.length && (aa[0] === null || aa[0] === undefined)) aa[0] = window.authToken;   // (V4.379) الحفظ من Postgres لا يحمل رمز الجلسة ⇒ يُلصق هنا
       var r = google.script.run.withSuccessHandler(function (x) { AFTER.forEach(function (h) { try { h(x); } catch (e) {} }); })
         .withFailureHandler(function (e) { console.warn('lfAfter ' + a.fn, e); });
-      r[a.fn].apply(r, a.args || []);
+      r[a.fn].apply(r, aa);
     } catch (e) {}
   }
   function deliver(st, val, ok) {
@@ -9379,7 +9380,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.379";
+var CLIENT_APP_VERSION = "4.379.1";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
