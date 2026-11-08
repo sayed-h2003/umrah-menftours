@@ -572,15 +572,22 @@ function glBootstrap(authToken, knownVer) {
 // 🏦 (V4.343) المعلّق لكل بنك (لبطاقات شاشة الأرصدة): حركات مرحّلة تاريخ استحقاقها (أو تاريخها) بعد اليوم = إيداعات/تحويلات لم تُتَح بعد
 function glBankPending(authToken) {
   _glPerm_(authToken, 'view');
-  var accs = _glAccounts_().map, due = _glDueMap_(), todayK = _glDKey_(_glToday_()), out = {};
+  var accs = _glAccounts_().map, due = _glDueMap_(), todayK = _glDKey_(_glToday_()), out = {}, cf = {};
   _glRows_('lines').forEach(function (r) {
     if (_glStr_(r[3]) !== GL_ST_POSTED_) return;
-    var code = _glStr_(r[4]), a = accs[code]; if (!a || a.kind !== 'bank') return;
+    var code = _glStr_(r[4]), a = accs[code]; if (!a) return;
+    if (a.kind === 'custody') {   // 👜 (V4.378) العهد: ما بعد اليوم بتاريخ السطر (لا الاستحقاق) — شاشة الأرصدة تعرض «الرصيد اليوم» = الكامل − هذا
+      var ck = _glDKey_(_glDate_(r[2])); if (!ck || ck <= todayK) return;
+      var cc = _glCur_(r[7]), q = (cf[code] = cf[code] || { EGP: 0, SAR: 0, USD: 0, base: 0 });
+      q[cc] = _glR2_(q[cc] + _glNum_(r[5]) - _glNum_(r[6])); q.base = _glR2_(q.base + _glNum_(r[9]) - _glNum_(r[10]));
+      return;
+    }
+    if (a.kind !== 'bank') return;
     var dk = _glDKey_(due[_glStr_(r[0])] || '') || _glDKey_(_glDate_(r[2])); if (!dk || dk <= todayK) return;
     var cur = _glCur_(r[7]), o = (out[code] = out[code] || { EGP: 0, SAR: 0, USD: 0 });
     o[cur] = _glR2_(o[cur] + _glNum_(r[5]) - _glNum_(r[6]));
   });
-  return { success: true, pending: out };
+  return { success: true, pending: out, custFut: cf, asOf: _glToday_() };
 }
 // أرصدة الحسابات الورقية المرحّلة حتى تاريخ (أو كلها): {code: {EGP, SAR, USD, base}} (الموجب = مدين)
 function _glBalances_(toDate) {

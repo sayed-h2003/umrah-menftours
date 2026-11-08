@@ -668,3 +668,47 @@ function storeRollbackBookings() { return storeRollback('bookings'); }
 function storeRollbackVisa() { return storeRollback('visa'); }
 function storeRollbackMisc() { return storeRollback('misc'); }
 function storeRollbackGlAux() { return storeRollback('glaux'); }
+
+
+/* ---------------- (V4.378) نسخ إعدادات الخادم + وسم إشعارات البوت إلى Supabase لقراءات الشاشات (010/013) ----------------
+   خصائص السكربت ACC_PRICING · MF_EXEC_POLICY · NOTIF_TOGGLES تُنسخ حرفياً إلى app_kv عند كل حفظ لها (storeKvPush_) — دون ذلك تفشل قراءات الوزارة
+   بـ55000 فتعود الواجهة لـ Apps Script تلقائياً. شغّل storeKvBackfill() مرة واحدة من المحرر بعد تشغيل 010 (يضع أيضاً علامة __seeded).
+   bookings_via_bot: storeBotMark_ لحظة إنشاء بوت تليجرام لإشعار، و storeBotsBackfill() مرة واحدة تملؤها بأثر رجعي من شيت AuditLog ثم تضع __bots_seeded. */
+var KV_KEYS_ = ['ACC_PRICING', 'MF_EXEC_POLICY', 'NOTIF_TOGGLES'];
+function storeKvPush_(keys) {
+  try {
+    if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY')) return false;
+    var p = {}, sp = PropertiesService.getScriptProperties();
+    (keys || KV_KEYS_).forEach(function (k) { var v = sp.getProperty(k); p[k] = (v === null || v === undefined) ? '' : String(v); });
+    var r = _supaReq_('post', 'rpc/kv_set', { p: p });
+    return r.code >= 200 && r.code < 300;
+  } catch (e) { Logger.log('storeKvPush_ failed: ' + e); return false; }
+}
+function storeKvBackfill() {
+  requireScriptOwner_();
+  var ok = storeKvPush_(KV_KEYS_);
+  var r = _supaReq_('post', 'rpc/kv_set', { p: { __seeded: '1' } });
+  if (ok && r.code < 300) PropertiesService.getScriptProperties().setProperty('SUPA_KV_OK', '1');   // يعلنها supaIssueToken كمجموعة «kv» فيبدأ المتصفح بقراءة الوزارة/التأشيرات من Supabase
+  return (ok && r.code < 300) ? 'تم نسخ ' + KV_KEYS_.join(' · ') + ' إلى app_kv' : 'فشل النسخ (' + r.code + ') — تأكد من تشغيل 010_screens_reads.sql';
+}
+function storeBotMark_(id) {
+  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY')) return false;
+  var r = _supaReq_('post', 'rpc/bot_mark', { p_ids: [String(id)] });
+  return r.code >= 200 && r.code < 300;
+}
+function storeBotsBackfill() {
+  requireScriptOwner_();
+  var sh = getSpreadsheet_().getSheetByName('AuditLog'), ids = {}, n = 0;
+  if (sh && sh.getLastRow() >= 2) sh.getRange(2, 2, sh.getLastRow() - 1, 3).getValues().forEach(function (ar) {
+    if (String(ar[0]) === 'TelegramBot' && String(ar[1]).indexOf('إنشاء إشعار') > -1) ids[String(ar[2])] = true;
+  });
+  var all = Object.keys(ids);
+  for (var i = 0; i < all.length; i += 500) {
+    var r = _supaReq_('post', 'rpc/bot_mark', { p_ids: all.slice(i, i + 500) });
+    if (r.code < 200 || r.code >= 300) return 'فشل (' + r.code + ') — تأكد من تشغيل 013_bookings_via_bot.sql';
+    n += Math.min(500, all.length - i);
+  }
+  var r2 = _supaReq_('post', 'rpc/kv_set', { p: { __bots_seeded: '1' } });
+  if (r2.code < 300) PropertiesService.getScriptProperties().setProperty('SUPA_BOT_OK', '1');   // مجموعة «bots»
+  return (r2.code < 300 ? 'تم وسم ' : 'وُسمت ') + n + ' إشعار بوت وفُعِّلت قراءة الإشعارات من Supabase';
+}

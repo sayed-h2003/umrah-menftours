@@ -7629,7 +7629,7 @@ var LF_ = (function () {
      مفتاح الإيقاف: localStorage.lf_supa_off='1' (نفس مفتاح V4.372). الاستجابة تُرجَع بنفس شكل الدالة الأصلية حرفياً. */
   /* ⚡ (المرحلة 4) need: مصفوفة مجموعات المخزن المطلوبة حيّة بـ Postgres (core/bookings/acc/misc…) أو '@dv' (data_versions مرجع النبضة) — بدونها يُشترط glStore كما كان.
      عدّادات الفشل/التعطيل منفصلة (stOff/stFails) فلا يعطّل فشل قراءات الرحلات شاشات الحسابات ولا العكس. */
-  function stHas(need) { var s = SP.cfg && SP.cfg.st; return !!s && need.every(function (g) { return g === '@dv' ? s.dv === true : s.groups.indexOf(g) >= 0; }); }
+  function stHas(need) { var s = SP.cfg && SP.cfg.st; return !!s && need.every(function (g) { return g === '@dv' ? s.dv === true : (g === '@gl' ? SP.cfg.gl === true : s.groups.indexOf(g) >= 0); }); }
   function glRpcReady(need) { spInit(); if (!spReady()) return false; return need ? (!SP.stOff && stHas(need)) : (SP.cfg.gl === true && !SP.glOff); }
   function glRpc(rpc, body, cb, fn, need) {
     if (!glRpcReady(need) || typeof fetch !== 'function') return false;
@@ -7672,6 +7672,11 @@ var LF_ = (function () {
     getTripsList: { need: ['core', 'bookings', 'acc'] }, getTripPilgrims: { need: ['core'] }, getTripDraft: { need: ['core'] }, getTripHotelsList: { need: ['core'] },
     getGlobalPilgrimsRegistry: { need: ['core'] }, getKnownClientNames: { need: ['core'] }, getClientsDirectory: { need: ['core'] }, loadDropdownsData: { need: ['core'] },
     getAllMovementsAuth: { need: ['bookings'] }, getTripPricing: { need: ['acc'] }, getMyUiPrefs: { need: ['misc'] },
+    /* ⚡ (V4.378) الوزارة · التأشيرات · حسابات العملاء · الإشعارات من Postgres عبر rx_call2 (010..013). 'kv' = إعدادات الخادم منسوخة (storeKvBackfill) · 'bots' = وسم إشعارات البوت معبّأ (storeBotsBackfill) · '@gl' = قيود الحسابات بـPostgres. */
+    getMinistryBootstrap: { need: ['ministry', 'core', 'kv'], rpc: 'rx_call2' }, getMinistryTripLinks: { need: ['ministry', 'core', 'kv'], rpc: 'rx_call2' },
+    getVisaBootstrap: { need: ['visa', 'core', 'bookings', 'misc'], rpc: 'rx_call2' }, getVisaTripLinks: { need: ['visa', 'core'], rpc: 'rx_call2' },
+    getClientsBalances: { need: ['acc'], rpc: 'rx_call2' }, getTripClientsBalances: { need: ['acc'], rpc: 'rx_call2' }, getAllClientsSummary: { need: ['acc', 'core'], rpc: 'rx_call2' },
+    getGeneralPayments: { need: ['acc', '@gl'], rpc: 'rx_call2' }, getAllBookingsAuth: { need: ['bookings', 'bots'], rpc: 'rx_call2' },
     /* ⚡ (V4.378) التهيئة من Postgres (009_boot_config.sql): الإعدادات (app_config) · قراءات صغيرة · سجل التعديلات · حفظ التفضيلات · نداء الإقلاع الموحّد.
        'cfg'/'audit'/'glkick' مجموعات «إعلانية» يضيفها الخادم لـ store.groups حين تُرفع بياناتها (SupaSync.gs). السجل: بعد كتابة محلية حديثة (90 ث) ⇒ Apps Script كي ترى فعلتك فوراً. */
     getNotifSettings: RB('getNotifSettings', ['cfg']), getSessionDurationConfig: RB('getSessionDurationConfig', ['cfg']), getBookingsSortDefault: RB('getBookingsSortDefault', ['cfg']),
@@ -31740,8 +31745,9 @@ function _accGen_(trip) {
         '<thead style="background:#0f4c4c;color:#fff;"><tr><th><input type="checkbox" id="accGenChkAll" checked title="تحديد/إلغاء الكل" onchange="_accGenAll_(this.checked)"></th><th class="text-start">البيان</th>' + (showN ? '<th style="width:110px;">الفندق</th>' : '') + '<th>عملة</th><th style="width:85px;">العدد</th>' + (showN ? '<th style="width:85px;">الليالي</th>' : '') + '<th style="width:105px;">السعر</th>' + (showN ? '<th style="width:150px;">ملاحظات (تاريخ الدخول/الخروج)</th>' : '') + '</tr></thead><tbody>' +
         res.items.map(function(it, i) {
           return '<tr' + (it.currency === 'SAR' ? ' style="background:#faf5ff;"' : '') + '>' +
-            '<td class="text-center"><input type="checkbox" class="accgen-chk" data-i="' + i + '" checked onchange="_accGenCnt_()"></td>' +
-            '<td><input type="text" class="form-control form-control-sm accgen-desc" data-i="' + i + '" value="' + escapeHtml_(it.desc) + '"></td>' +
+            '<td class="text-center"><input type="checkbox" class="accgen-chk" data-i="' + i + '"' + (it.sel === false ? '' : ' checked') + ' onchange="_accGenCnt_()"></td>' +
+            '<td><input type="text" class="form-control form-control-sm accgen-desc" data-i="' + i + '" value="' + escapeHtml_(it.desc) + '">' +
+              (it.removed ? '<div class="small" style="color:#b45309;font-size:10.5px;">🪦 حذفته سابقاً — لا يعود إلا بتحديدك</div>' : it.exists ? '<div class="small text-muted" style="font-size:10.5px;">موجود بالحساب</div>' : (it.sel === false ? '<div class="small text-muted" style="font-size:10.5px;">بلا سعر — حدّده لإدراجه</div>' : '')) + '</td>' +
             (showN ? '<td><input type="text" class="form-control form-control-sm accgen-company" data-i="' + i + '" value="' + escapeHtml_(it.company || '') + '"></td>' : '') +
             '<td>' + _accCur_(it.currency) + '</td>' +
             '<td><input type="text" inputmode="decimal" lang="en" style="direction:ltr;" class="form-control form-control-sm accgen-count" data-i="' + i + '" value="' + (it.count || '') + '" oninput="_numInputLatin_(this)"></td>' +
@@ -50113,7 +50119,8 @@ function glBalSecHtml_(sec, ed) {
   }
   var accs = glBalAccs_(sec), tot = { EGP: 0, SAR: 0, USD: 0 };
   var cards = accs.map(function (a) {
-    var b = GL.balances[a.code] || {};
+    var b = GL.balances[a.code] || {}, cust = a.kind === 'custody' ? glCustToday_(a.code) : null;
+    if (cust) b = cust.b;   // 👜 (V4.378) العهد: «الرصيد اليوم» (حركات بتاريخ ≤ اليوم) لا النهائي
     ['EGP', 'SAR', 'USD'].forEach(function (c) { tot[c] += b[c] || 0; });
     var cur = ['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(b[c] || 0) > 0.004; });
     return '<div class="gl-bcard" data-code="' + glEsc(a.code) + '" ' + (ed ? '' : 'onclick="glBalOpen_(\'' + glJs(a.code) + '\')" title="' + (/^(safe|bank|custody)$/.test(a.kind) ? 'فتح شاشة ' + ({ safe: 'الخزينة', bank: 'البنوك', custody: 'العهد' })[a.kind] : 'فتح دفتر الأستاذ') + '"') + '>' +
@@ -50121,7 +50128,8 @@ function glBalSecHtml_(sec, ed) {
       (ed ? '<button class="btn btn-sm btn-outline-danger py-0 px-1" style="position:absolute;top:4px;left:4px;font-size:10px;" title="إخفاء من القسم" onclick="glBalCardDel_(this)">✕</button>' : '') +
       (cur.length ? cur.map(function (c) { return '<div class="gl-bline"><span>' + GL_CUR_LBL_[c] + '</span><b class="gl-latin" style="color:' + ((b[c] || 0) < 0 ? '#b91c1c' : '#0f172a') + '">' + glFmt(b[c]) + '</b></div>'; }).join('')
         : '<div class="gl-bline text-muted"><span>لا حركة</span><b>0</b></div>') +
-      (a.kind === 'bank' ? '<div class="gl-bpend" data-code="' + glEsc(a.code) + '">' + glBalBankPendHtml_(a.code) + '</div>' : '') + '</div>';
+      (a.kind === 'bank' ? '<div class="gl-bpend" data-code="' + glEsc(a.code) + '">' + glBalBankPendHtml_(a.code) + '</div>' : '') +
+      (a.kind === 'custody' ? glCustTodayHtml_(cust) : '') + '</div>';
   }).join('') || '<div class="text-muted small p-2">لا توجد حسابات في هذا القسم' + (ed ? ' — عدّل القسم (✏️) لإضافة حسابات.' : '.') + '</div>';
   return '<div class="gl-sec" data-sid="' + glEsc(sec.id) + '">' + head(['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(tot[c]) > 0.004; }).map(function (c) { return '<span class="gl-pill">' + GL_CUR_LBL_[c] + ' <b class="gl-latin">' + glFmt(tot[c]) + '</b></span>'; }).join('')) +
     '<div class="gl-bgrid" data-sid="' + glEsc(sec.id) + '">' + cards + '</div></div>';
@@ -50146,12 +50154,48 @@ function glBalBankPendHtml_(code) {
   });
   return out;
 }
+// 👜 (V4.378) أرصدة العهد بشاشة الأرصدة = «الرصيد اليوم» (سطور مرحّلة بتاريخ ≤ اليوم بتوقيت القاهرة) لا النهائي الذي يشمل المستقبلي:
+//   الخادم (glBankPending ← Apps Script أو glx_bank_pending ← Postgres) يرجع custFut = مجموع حركات كل عهدة بعد اليوم، والمعروض = GL.balances − custFut.
+//   صلاحية custFut مربوطة ببصمة أرصدة العهد وقت الجلب (glCustSig_): أي حفظ/دلتا يغيّر رصيد عهدة ⇒ البصمة تتغير ⇒ يُعاد الجلب (لا رقم قديم).
+function glCustSig_() { return GL.accounts.filter(function (a) { return a.kind === 'custody' && !a.isGroup; }).map(function (a) { var b = GL.balances[a.code] || {}; return a.code + ':' + (b.EGP || 0) + ',' + (b.SAR || 0) + ',' + (b.USD || 0) + ',' + (b.base || 0); }).join('|'); }
+function glCustToday_(code) {
+  var P = GL._bankPend, F = P && P.cust && P.sig === glCustSig_() ? P.cust : null, b = GL.balances[code] || {};
+  if (!F) return { ok: false, b: b, fu: null };
+  var fu = F[code] || {}, o = {}; ['EGP', 'SAR', 'USD', 'base'].forEach(function (c) { o[c] = Math.round(((b[c] || 0) - (fu[c] || 0)) * 100) / 100; });
+  return { ok: true, b: o, fu: fu, asOf: P.asOf || '' };
+}
+function glCustTodayHtml_(cu) {
+  if (!cu || !cu.ok) return '<div class="gl-bline text-muted" style="font-size:11px;"><span>⏳ جارٍ حساب الرصيد اليوم…</span></div>';
+  var parts = ['EGP', 'SAR', 'USD'].filter(function (c) { return Math.abs(cu.fu[c] || 0) > 0.004; }).map(function (c) { return '<b class="gl-latin">' + glFmt(cu.fu[c]) + '</b> ' + GL_CUR_LBL_[c]; });
+  return '<div class="gl-bline gl-cust-today" style="border-top:1px dashed #e2e8f0;margin-top:3px;padding-top:3px;font-size:11px;color:#64748b;"><span>📅 الرصيد اليوم' + (cu.asOf ? ' ' + glEsc(cu.asOf) : '') + '</span>' +
+    (parts.length ? '<span title="حركات مرحّلة بتاريخ بعد اليوم — لا تدخل الرصيد المعروض">⏳ بعد اليوم ' + parts.join(' · ') + '</span>' : '') + '</div>';
+}
 function glBalBankPendLoad_() {
-  if (!document.querySelector('#glBalRoot .gl-bpend')) return;
+  var needCust = !!document.querySelector('#glBalRoot .gl-bcard') && GL.accounts.some(function (a) { return a.kind === 'custody' && !a.isGroup; });
+  if (!document.querySelector('#glBalRoot .gl-bpend') && !needCust) return;
   var C = GL._bankPend;
   var paint = function () { document.querySelectorAll('#glBalRoot .gl-bpend').forEach(function (el) { el.innerHTML = glBalBankPendHtml_(el.dataset.code); }); };
-  if (C && C.data && Date.now() - C.t < 60000) { paint(); return; }
-  glRun('glBankPending', [], function (res) { GL._bankPend = { t: Date.now(), data: res.pending || {} }; paint(); }, function () {});
+  var custOk = !needCust || (C && C.cust && C.sig === glCustSig_());
+  if (C && C.data && custOk && Date.now() - C.t < 60000) { paint(); return; }
+  var sig0 = glCustSig_();
+  glRun('glBankPending', [], function (res) {
+    GL._bankPend = { t: Date.now(), data: res.pending || {}, cust: res.custFut || null, asOf: res.asOf || '', sig: sig0 }; paint();
+    // العهد: عُرض الرصيد اليوم بعد وصول custFut (أو تغيّرت الأرصدة أثناء الطلب ⇒ جلب أحدث مرة واحدة)
+    if (needCust && GL.tab === 'home' && !GL._balEd && document.getElementById('glBalRoot')) {
+      if (sig0 === glCustSig_()) { GL._bpRetry = 0; glBalCustRepaint_(); } else if ((GL._bpRetry = (GL._bpRetry || 0) + 1) <= 2) glBalBankPendLoad_();
+    }
+  }, function () {});
+}
+function glBalCustRepaint_() {   // يحدّث بطاقات العهد وإجمالي أقسامها فقط (بلا إعادة رسم الشاشة كلها)
+  var L = glBalLayout_(); if (!L || !L.secs) return;
+  var root = document.getElementById('glBalRoot'); if (!root) return;
+  L.secs.forEach(function (sec) {
+    if (sec.t === 'top') return;
+    var accs = glBalAccs_(sec); if (!accs.some(function (a) { return a.kind === 'custody'; })) return;
+    var el = root.querySelector('.gl-sec[data-sid="' + sec.id + '"]'); if (!el) return;
+    var tmp = document.createElement('div'); tmp.innerHTML = glBalSecHtml_(sec, false);
+    if (tmp.firstChild) el.parentNode.replaceChild(tmp.firstChild, el);
+  });
 }
 function glRenderHome() {
   var box = document.getElementById('glBody'), ed = GL._balEd, L = ed || glBalLayout_();

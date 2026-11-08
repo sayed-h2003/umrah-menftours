@@ -121,7 +121,7 @@ $$ declare f jsonb := case when jsonb_typeof(a -> 1) = 'object' then a -> 1 else
           and (ffrom is null or (d is not null and d >= ffrom)) and (fto is null or (d is not null and d <= fto))
           and (fmin is null or not (amount < fmin)) and (fmax is null or not (amount > fmax))),
   g as (select q.*, regexp_match(gd, '⟦src:gl-([^⟧]+)⟧') gm from q),
-  gl as (select distinct on (source_key) source_key, entry_id from gl_entries where status <> 'ملغى' and source_key like 'AUTO:CP:%' order by source_key, seq, entry_id desc)
+  gl as (select distinct on (source_key) source_key, entry_id from gl_entries where status <> 'ملغى' and source_key like 'AUTO:CP:%' order by source_key, seq desc, entry_id desc)   -- الصف الأحدث (الأخير بالشيت) يغلب
   select coalesce(jsonb_agg(jsonb_build_object('id', g.id, 'client', g.client, 'ptype', g.ptype, 'date', g.date, 'amount', g.amount, 'currency', g.currency,
             'desc', case when gm is not null then _rx_trim(regexp_replace(gd, '\s*⟦src:gl-[^⟧]+⟧\s*', ' ', 'g')) else gd end, 'serial', '',
             'glId', case when gm is not null then gm[1] else coalesce((select gl.entry_id from gl where gl.source_key = 'AUTO:CP:' || g.id), '') end) order by g.rn desc), '[]'::jsonb) into res from g;

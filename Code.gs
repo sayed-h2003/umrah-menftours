@@ -2461,6 +2461,7 @@ if (
       logBookingRowDiff_(session.username, finalId, oldRowSnapshot, rowValues);
     } else {
       logChange_(session.username, "إنشاء إشعار جديد", finalId, "-", "-", "تم إنشاء إشعار وصول رقم " + finalId);
+      if (session.username === 'TelegramBot') { try { storeBotMark_(finalId); } catch (eBm) {} }   // (V4.378) وسم viaBot بـSupabase (bookings_via_bot)
     }
   });
 
@@ -14465,6 +14466,10 @@ var ACC_BOND_BASE_ = [
   { key: 'رسوم التنفيذ',     cur: 'EGP' },
   { key: 'الإعاشة',          cur: 'SAR' }
 ];
+// 🪦 (V4.378) شاهد الحذف: بند حذفه المالك من حساب عميل×رحلة لا تُعيد المزامنة التلقائية إنشاءه أبداً (كانت _syncTripAccounts_ تُنشئ
+// كل بند «ناقص» عند أي تغيير بالكشف/التسعير فتعود البنود المحذوفة — حتى بلا سعر). تُرفع الشاهدة فقط بإدراج صريح للبند من «توليد البنود».
+var ACC_REMOVED_SHEET = 'ClientAccounts_Removed';
+var ACC_REMOVED_HEADERS = ['العميل','اسم الرحلة','مفتاح البند','البيان','حُذف بواسطة','حُذف في'];
 var ACC_PAY_HEADERS   = ['المعرف','العميل','اسم الرحلة','النوع','التاريخ','المبلغ','العملة','سعر الصرف','البيان','أنشئ بواسطة','أنشئ في','الرقم التسلسلي'];
 var ACC_META_HEADERS  = ['العميل','اسم الرحلة','نمط الحساب','لقطة الأعداد','تنبيه مقروء','عُدّل بواسطة','عُدّل في','اسم العرض'];
 // 🔗 (V4.31) دمج ثابت لرحلات عميل بكشف الحساب — يبقى مفعّلاً حتى يُفكّ صراحةً بزر «فك الدمج»
@@ -14670,6 +14675,7 @@ function saveNotifSettings(authToken, settings) {
     if (settings && settings[t.key] === false) clean[t.key] = false;
   });
   PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(clean));
+  try { storeKvPush_(['NOTIF_TOGGLES']); } catch (eKv) {}   // (V4.378)
   _NOTIF_MEMO_ = null;
   try { _supaCfgKick_(); } catch (eSc) {}   // ⚡ (V4.378) مرآة app_config
   try { clearCachedData_(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}   // 🔔 (V4.324) تنبيهات الجرس المعطَّلة تختفي من القائمة فوراً
@@ -14717,6 +14723,7 @@ function saveAlertCenter(authToken, map) {
     var cur = _notifCfg_(), next = {};
     NOTIF_TYPES_.forEach(function (t) { var v = plain.hasOwnProperty(t.key) ? plain[t.key] : cur[t.key] !== false; if (!v) next[t.key] = false; if (v !== (cur[t.key] !== false)) changed.push(t.key + (v ? ' ✔' : ' ✘')); });
     PropertiesService.getScriptProperties().setProperty('NOTIF_TOGGLES', JSON.stringify(next));
+  try { storeKvPush_(['NOTIF_TOGGLES']); } catch (eKv) {}   // (V4.378)
     _NOTIF_MEMO_ = null;
     try { _supaCfgKick_(); } catch (eSc) {}   // ⚡ (V4.378) مرآة app_config
     try { clearCachedData_(NOTIF_CACHE_KEY); _notifVerBump_(); } catch (eC) {}
@@ -15191,7 +15198,8 @@ function saveAccPricing(authToken, cfg) {
     clean.barcodePeriods.push({ from: from, to: to, price: price });
   });
   PropertiesService.getScriptProperties().setProperty('ACC_PRICING', JSON.stringify(clean));
-  _ACC_PRICING_MEMO_ = null;   // ⚡ (V4.177) إبطال ذاكرة الطلب حتى يقرأ ما بعده القيم الجديدة
+  _ACC_PRICING_MEMO_ = null;
+  try { storeKvPush_(['ACC_PRICING']); } catch (eKv) {}   // (V4.378) نسخة قراءة بـSupabase (app_kv)   // ⚡ (V4.177) إبطال ذاكرة الطلب حتى يقرأ ما بعده القيم الجديدة
   logChange_(session.username, 'تعديل تسعير الحسابات', '-', 'ACC_PRICING', '-',
     clean.roomFeePeriods.length + ' فترة رسوم غرفة، رسوم غرفة المشرف ' + clean.supRoomFee + ' ج');
   return { success: true, cfg: clean };
@@ -15517,6 +15525,7 @@ function saveAccItemsBulk(authToken, client, trip, itemsArr, asAuto) {
   });
   if (!rows.length) return { success: false, error: 'لا توجد بنود صالحة' };
   sh.getRange(sh.getLastRow() + 1, 1, rows.length, ACC_ITEMS_HEADERS.length).setValues(rows);
+  _accTombClear_(client, trip, rows.map(function (r) { return _accTombKey_(r[3]); }));   // 🪦 (V4.378) إدراج صريح لبند ⇒ يُرفع شاهد حذفه
   _accEnsureMeta_(authToken, client, trip, session.username);
   logChange_(session.username, 'توليد بنود حساب', client, trip, '-', n + ' بند مولَّد');
   return { success: true, count: n, created: created };
@@ -15531,15 +15540,17 @@ function deleteAccItemsBulk(authToken, ids) {
   var sh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
   if (sh.getLastRow() < 2) return { success: false, error: 'لا توجد بنود' };
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
-  var toDelete = [], client = '', trip = '', hbSkipped = 0;
+  var toDelete = [], client = '', trip = '', hbSkipped = 0, tombs = [];
   for (var i = 0; i < vals.length; i++) {
     if (idSet[String(vals[i][0])] && ACC_HB_RX_.test(String(vals[i][3] || ''))) { hbSkipped++; continue; }   // 🏨 (V4.326) حجوزات الفنادق لا تُحذف من هنا
     if (idSet[String(vals[i][0])]) {
       toDelete.push(i + 2);
       client = String(vals[i][1] || client); trip = String(vals[i][2] || trip);
+      tombs.push({ client: String(vals[i][1] || '').trim(), trip: String(vals[i][2] || '').trim(), desc: vals[i][3] });   // 🪦 (V4.378)
     }
   }
   if (!toDelete.length) return { success: false, error: hbSkipped ? _accHbMsg_() : 'البنود غير موجودة' };
+  _accTombAdd_(tombs, session.username);   // 🪦 (V4.378) لا تعيدها المزامنة التلقائية
   // الحذف من الأسفل للأعلى حتى لا تنزاح أرقام الصفوف
   for (var j = toDelete.length - 1; j >= 0; j--) sh.deleteRow(toDelete[j]);
   logChange_(session.username, 'حذف بنود حساب دفعة واحدة', client, trip, toDelete.length + ' بند', '-');
@@ -15652,6 +15663,7 @@ function deleteAccItem(authToken, id, screenOnly) {
         String(vals[i][3]).replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '') + ' = ' + vals[i][8] + ' ' + vals[i][5], '-');
       // 🔁 بند ترحيل رصيد: يُحذف طرفه المقابل معه تلقائيًا فيعود الرصيد لرحلته الأصلية
       var marker = _accCfMarkerOf_(vals[i][3]);
+      _accTombAdd_([{ client: String(vals[i][1] || '').trim(), trip: String(vals[i][2] || '').trim(), desc: vals[i][3] }], session.username);   // 🪦 (V4.378) لا تعيده المزامنة التلقائية
       sh.deleteRow(i + 2);
       var partners = marker ? _accCfFindAndDelete_(marker, ACC_ITEMS_SHEET, String(id)) : [];
       return { success: true, cfLinked: !!marker, cfDeletedIds: partners };
@@ -16462,6 +16474,60 @@ function _accBondKey_(desc) {
   return desc; // البنود المخصصة تُطابَق ببيانها الكامل
 }
 
+// 🪦 (V4.378) شواهد الحذف — مفتاح الشاهد = مفتاح مطابقة البند (نفس مفتاح التوليد والمزامنة) بعد إزالة علامات الربط المخفية
+function _accTombKey_(desc) { return _accBondKey_(String(desc || '').replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '')); }
+// بنود لا يُسجَّل لها شاهد: ترحيل الرصيد بين الرحلات (يُحذف بطرفيه ويُنشأ يدوياً) وحجوزات الفنادق (لها مسارها الخاص _glScrHideAdd_)
+function _accTombSkip_(desc) { desc = String(desc || ''); return !!_accCfMarkerOf_(desc) || ACC_HB_RX_.test(desc); }
+// يقرأ شواهد رحلة (أو كل الرحلات إن trip فارغة) ⇒ { 'عميل|رحلة': { مفتاح: 1 } } — لا يُنشئ الشيت عند القراءة
+function _accTombRead_(trip) {
+  var out = {};
+  try {
+    var sh = getSpreadsheet_().getSheetByName(ACC_REMOVED_SHEET);
+    if (!sh || sh.getLastRow() < 2) return out;
+    sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues().forEach(function (r) {
+      var c = String(r[0] || '').trim(), t = String(r[1] || '').trim(), k = String(r[2] || '').trim();
+      if (!c || !k || (trip && t !== trip)) return;
+      (out[c + '|' + t] = out[c + '|' + t] || {})[k] = 1;
+    });
+  } catch (e) { Logger.log('tomb read: ' + e); }
+  return out;
+}
+// يسجّل شواهد: rows = [{client, trip, desc}] — بلا تكرار؛ أي فشل لا يمنع الحذف نفسه
+function _accTombAdd_(rows, username) {
+  try {
+    rows = (rows || []).filter(function (x) { return x && x.client && x.trip && x.trip !== 'عام' && !_accTombSkip_(x.desc) && String(x.desc || '').trim(); });
+    if (!rows.length) return 0;
+    var have = _accTombRead_(''), now = new Date(), add = [], seen = {};
+    rows.forEach(function (x) {
+      var k = _accTombKey_(x.desc), id = x.client + '|' + x.trip;
+      if (!k || (have[id] && have[id][k]) || seen[id + '|' + k]) return;
+      seen[id + '|' + k] = 1;
+      add.push([x.client, x.trip, k, String(x.desc).replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '').slice(0, 200), username || '', now]);
+    });
+    if (!add.length) return 0;
+    var sh = _accSheet_(ACC_REMOVED_SHEET, ACC_REMOVED_HEADERS);
+    sh.getRange(sh.getLastRow() + 1, 1, add.length, ACC_REMOVED_HEADERS.length).setValues(add);
+    return add.length;
+  } catch (e) { Logger.log('tomb add: ' + e); return 0; }
+}
+// يرفع شواهد عميل×رحلة لمفاتيح معيّنة (إدراج صريح من «توليد البنود»)
+function _accTombClear_(client, trip, keys) {
+  try {
+    var sh = getSpreadsheet_().getSheetByName(ACC_REMOVED_SHEET);
+    if (!sh || sh.getLastRow() < 2 || !keys || !keys.length) return 0;
+    var want = {}; keys.forEach(function (k) { want[k] = 1; });
+    var vals = sh.getRange(2, 1, sh.getLastRow() - 1, ACC_REMOVED_HEADERS.length).getValues(), keep = [], n = 0;
+    vals.forEach(function (r) {
+      if (String(r[0] || '').trim() === client && String(r[1] || '').trim() === trip && want[String(r[2] || '').trim()]) { n++; return; }
+      keep.push(r);
+    });
+    if (!n) return 0;
+    sh.getRange(2, 1, vals.length, ACC_REMOVED_HEADERS.length).clearContent();
+    if (keep.length) sh.getRange(2, 1, keep.length, ACC_REMOVED_HEADERS.length).setValues(keep);
+    return n;
+  } catch (e) { Logger.log('tomb clear: ' + e); return 0; }
+}
+
 // 📐 البنود المطلوبة لعميل×رحلة بنمط «بنود» (نفس أسطر التوليد) مع الأسعار السارية بتاريخ سفر الرحلة
 // price=null يعني «لا سعر مثبتًا لهذا البند» — المزامنة تُبقي السعر الموجود بالصف كما هو
 function _accBondsDesired_(authToken, client, trip) {
@@ -16589,6 +16655,8 @@ function _syncTripAccounts_(authToken, trip, username) {
   var sh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
   var itemVals = sh.getLastRow() >= 2 ? sh.getRange(2, 1, sh.getLastRow() - 1, ACC_ITEMS_HEADERS.length).getValues() : [];
   var now = new Date();
+  // 🪦 (V4.378) بنود حذفها المالك لا تُنشأ ثانية تلقائياً، والمزامنة لا تُنشئ بنداً بلا سعر/قيمة (يبقى ما هو موجود كما هو)
+  var tombAll = _accTombRead_(trip), tombed = function (cl, key) { var t = tombAll[cl + '|' + trip]; return !!(t && t[key]); };
   var newRows = [], toDelete = {}, updatedRows = {}, created = 0, updated = 0, removed = 0;
   // ⚡ حالة لقطة الأعداد بعد المزامنة — تُحسَب من الذاكرة (بلا نداءات getClientTripStats إضافية)
   var statsHashByClient = {}, hasManualByClient = {};
@@ -16625,7 +16693,7 @@ function _syncTripAccounts_(authToken, trip, username) {
           } else if (!(_accIsProgDisc_(r) && _accNum_(r[8]))) { toDelete[i] = true; removed++; }
         } else if (isVz) haveVz = true;   // بند يدوي/معدّل بنفس الاسم ⇒ لا يُضاف بند تلقائي ثانٍ
       });
-      if (!haveVz && vzN > 0) {
+      if (!haveVz && vzN > 0 && !tombed(client, ACC_MODE_VZ_)) {
         var vp = vzP !== null ? vzP : 0;
         newRows.push([_accId_('I'), client, trip, ACC_MODE_VZ_, 'كبير', 'EGP', vzN, vp, Math.round(vzN * vp * 100) / 100, 'لا', '', username, now, '', '', '', '', 'نعم', '', 'لا']);
         created++;
@@ -16665,6 +16733,7 @@ function _syncTripAccounts_(authToken, trip, username) {
         var d = desired[desc];
         if (d.done) return;
         var dPrice = d.price === null ? 0 : d.price;
+        if (tombed(client, _accTombKey_(desc)) || (!d.disc && !(dPrice > 0))) return;   // 🪦 (V4.378) محذوف سابقاً / بلا سعر ⇒ لا يُنشأ تلقائياً (سطر «خصم» الثابت V4.305 يبقى استثناءً مقصوداً ما لم يُحذف)
         var value = Math.round(d.count * dPrice * 100) / 100;
         newRows.push([_accId_('I'), client, trip, desc, d.cat, 'EGP', d.count, dPrice, value, d.disc ? 'نعم' : 'لا', '', username, now, '', '', '', '', 'نعم', '', 'لا']);
         created++;
@@ -16709,6 +16778,7 @@ function _syncTripAccounts_(authToken, trip, username) {
         var l = desiredK[key];
         if (l.done) return;
         var price = (l.price !== null) ? l.price : l.fallback;
+        if (tombed(client, key) || !(price > 0)) return;   // 🪦 (V4.378) محذوف سابقاً / بلا سعر أو قيمة ⇒ لا يُنشأ تلقائياً
         var value = Math.round(l.count * price * (l.nights > 0 ? l.nights : 1) * 100) / 100;
         newRows.push([_accId_('I'), client, trip, l.desc, l.cat, l.currency, l.count, price, value, 'لا', '', username, now, '', '', l.nights || '', l.company || '', 'نعم', '', l.isDirect ? 'نعم' : 'لا']);
         created++;
@@ -18300,6 +18370,20 @@ function accGenerateDraft(authToken, client, trip, mode) {
       push('تأشيرة المشرف', 'مشرف', 'SAR', _supOwn.sups, 0, 0, '', _supOwn.names.join('، '));
     }
   }
+  // 🪦 (V4.378) كل بند مقترح يُوسَم: exists (موجود بالحساب) · removed (حذفه المالك سابقاً) · sel (الاختيار الافتراضي بنافذة التوليد):
+  // الناقص فقط، غير المحذوف، وبنمط «بنود» ذو السعر فقط — البقية تُترك للمالك يحدّدها صراحةً (لا يُدرج شيء إلا بتأكيده)
+  try {
+    var _have = {}, _iSh = _accSheet_(ACC_ITEMS_SHEET, ACC_ITEMS_HEADERS);
+    if (_iSh.getLastRow() >= 2) _iSh.getRange(2, 1, _iSh.getLastRow() - 1, 4).getValues().forEach(function (r) {
+      if (String(r[1] || '').trim() === client && String(r[2] || '').trim() === trip) _have[_accTombKey_(r[3])] = 1;
+    });
+    var _tb = _accTombRead_(trip)[client + '|' + trip] || {};
+    items.forEach(function (it) {
+      var k = _accTombKey_(it.desc);
+      it.exists = !!_have[k]; it.removed = !!_tb[k];
+      it.sel = !it.exists && !it.removed && (mode !== 'بنود' || (it.price || 0) > 0);
+    });
+  } catch (eTm) { items.forEach(function (it) { it.sel = true; }); }
   return { success: true, items: items, counts: { a: row.adults, c: row.children, i: row.infants, t: row.total } };
 }
 
@@ -23279,6 +23363,7 @@ function saveMfExecPolicy(authToken, list) {
   });
   PropertiesService.getScriptProperties().setProperty('MF_EXEC_POLICY', JSON.stringify(clean));
   _MF_EXEC_POLICY_MEMO_ = null;
+  try { storeKvPush_(['MF_EXEC_POLICY']); } catch (eKv) {}   // (V4.378)
   try { _mfClearBootstrapCache_(); } catch (e) {}   // execFee الفعّال تغيّر ⇒ أبطِل كاش لقطة الوزارة
   logChange_(session.username, 'تعديل سياسة رسوم التنفيذ', '-', 'MF_EXEC_POLICY', '-', clean.length + ' جهة');
   return { success: true, policy: clean };

@@ -569,9 +569,9 @@ begin
   return res;
 end $$;
 
--- ===== 11) المعلّق لكل بنك: glBankPending =====
+-- ===== 11) المعلّق لكل بنك: glBankPending (+ V4.378: ما بعد اليوم لكل عهدة «custFut» ليعرض الأرصدة «الرصيد اليوم» للعهد = الكامل − custFut) =====
 create or replace function glx_bank_pending_raw(p_today text default null) returns jsonb language plpgsql stable as
-$$ declare v_todayk text := _glx_dkey(coalesce(p_today, _glx_today())); v_accs jsonb; v_due jsonb; res jsonb; begin
+$$ declare v_today text := coalesce(p_today, _glx_today()); v_todayk text := _glx_dkey(coalesce(p_today, _glx_today())); v_accs jsonb; v_due jsonb; res jsonb; begin
   perform _glx_guard();
   v_accs := _glx_aux('accounts'); v_due := _glx_aux('due');
   with ln as materialized (
@@ -581,8 +581,19 @@ $$ declare v_todayk text := _glx_dkey(coalesce(p_today, _glx_today())); v_accs j
   f as (select * from ln where dk <> '' and dk collate "C" > v_todayk),
   g as (
     select code, coalesce(_glx_acc(d, c order by ord) filter (where cur = 'EGP'), 0) e, coalesce(_glx_acc(d, c order by ord) filter (where cur = 'SAR'), 0) s,
-           coalesce(_glx_acc(d, c order by ord) filter (where cur = 'USD'), 0) u from f group by code)
-  select jsonb_build_object('success', true, 'pending', coalesce(jsonb_object_agg(code, jsonb_build_object('EGP', e, 'SAR', s, 'USD', u)), '{}'::jsonb)) into res from g;
+           coalesce(_glx_acc(d, c order by ord) filter (where cur = 'USD'), 0) u from f group by code),
+  cl as materialized (   -- 👜 العهد: سطور مرحّلة بتاريخ السطر (لا الاستحقاق) بعد اليوم
+    select l.ord, _glx_str(l.raw -> 4) code, _glx_cur(l.raw -> 7) cur, _glx_num(l.raw -> 5) d, _glx_num(l.raw -> 6) c,
+           _glx_num(l.raw -> 9) bd, _glx_num(l.raw -> 10) bc, _glx_dkey(_glx_date(l.raw -> 2)) k
+      from gl_lines l where l.status = 'مرحّل' and l.account_code in (select a.key from jsonb_each(v_accs) a where a.value ->> 'kind' = 'custody')),
+  cf as (select * from cl where k <> '' and k collate "C" > v_todayk),
+  cg as (
+    select code, coalesce(_glx_acc(d, c order by ord) filter (where cur = 'EGP'), 0) e, coalesce(_glx_acc(d, c order by ord) filter (where cur = 'SAR'), 0) s,
+           coalesce(_glx_acc(d, c order by ord) filter (where cur = 'USD'), 0) u, coalesce(_glx_acc(bd, bc order by ord), 0) b from cf group by code)
+  select jsonb_build_object('success', true,
+      'pending', coalesce((select jsonb_object_agg(code, jsonb_build_object('EGP', e, 'SAR', s, 'USD', u)) from g), '{}'::jsonb),
+      'custFut', coalesce((select jsonb_object_agg(code, jsonb_build_object('EGP', e, 'SAR', s, 'USD', u, 'base', b)) from cg), '{}'::jsonb),
+      'asOf', v_today) into res;
   return res;
 end $$;
 
