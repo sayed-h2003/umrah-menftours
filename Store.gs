@@ -771,3 +771,10 @@ function _outboxDrain_(maxMs) {
   return n;
 }
 function outboxDrainNow() { requireScriptOwner_(); var n = _outboxDrain_(60000); Logger.log('outbox: فُرّغ ' + n); return n; }
+
+// (V4.380) المحرر يشغّل الدوال بلا معاملات ⇒ دوال مستقلة لكل حالة
+function supaWriteOnMinistry() { return supaWriteOn('mf'); }
+function supaWriteOnVisa() { return supaWriteOn('vz'); }
+function supaWriteOffMinistry() { return supaWriteOff('mf'); }
+function supaWriteOffVisa() { return supaWriteOff('vz'); }
+function supaWriteOffAll() { return supaWriteOff(); }
