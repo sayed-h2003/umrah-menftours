@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.378  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.381  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7782,7 +7782,7 @@ var LF_ = (function () {
     getMinistryBootstrap: { need: ['ministry', 'core', 'kv'], rpc: 'rx_call2' }, getMinistryTripLinks: { need: ['ministry', 'core', 'kv'], rpc: 'rx_call2' },
     getVisaBootstrap: { need: ['visa', 'core', 'bookings', 'misc'], rpc: 'rx_call2' }, getVisaTripLinks: { need: ['visa', 'core'], rpc: 'rx_call2' },
     getClientsBalances: { need: ['acc'], rpc: 'rx_call2' }, getTripClientsBalances: { need: ['acc'], rpc: 'rx_call2' }, getAllClientsSummary: { need: ['acc', 'core'], rpc: 'rx_call2' },
-    getGeneralPayments: { need: ['acc', '@gl'], rpc: 'rx_call2' }, getAllBookingsAuth: { need: ['bookings', 'bots'], rpc: 'rx_call2' },
+    getGeneralPayments: { need: ['acc', '@gl'], rpc: 'rx_call2' }, getAllBookingsAuth: { need: ['bookings', 'bots'], rpc: 'rx_call2' }, searchDynamicBookings: { need: ['bookings'], rpc: 'rx_call2' },
     /* ⚡ (V4.378) التهيئة من Postgres (009_boot_config.sql): الإعدادات (app_config) · قراءات صغيرة · سجل التعديلات · حفظ التفضيلات · نداء الإقلاع الموحّد.
        'cfg'/'audit'/'glkick' مجموعات «إعلانية» يضيفها الخادم لـ store.groups حين تُرفع بياناتها (SupaSync.gs). السجل: بعد كتابة محلية حديثة (90 ث) ⇒ Apps Script كي ترى فعلتك فوراً. */
     getNotifSettings: RB('getNotifSettings', ['cfg']), getSessionDurationConfig: RB('getSessionDurationConfig', ['cfg']), getBookingsSortDefault: RB('getBookingsSortDefault', ['cfg']),
@@ -9381,7 +9381,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.380";
+var CLIENT_APP_VERSION = "4.381";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
