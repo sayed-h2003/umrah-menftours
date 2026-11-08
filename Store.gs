@@ -725,3 +725,46 @@ function supaDiagNow() {
   var a = _supaReq_('get', 'audit_log?select=*&limit=1'); L.push('audit_log → ' + a.code + ' ' + String(a.text).slice(0, 200));
   var out = L.join('\n'); Logger.log(out); return out;
 }
+
+/* ---------------- (V4.379) الكتابة من Postgres: تفعيلها + تفريغ صندوق الإخراج ----------------
+   016_ministry_write.sql: rw_call('saveMinistryFile') يكتب بـPostgres مباشرة من المتصفح ويضع أثره الجانبي (سجل التتبع المحصّن · إشعارات الجرس) في app_outbox.
+   هنا: supaWriteOn('mf') لتفعيل المسار (يعلن المجموعة 'wmf') · supaWriteOff() للإيقاف · _outboxDrain_ يفرّغ الصندوق (يُستدعى من audFlushCron كل دقيقة). */
+function supaWriteOn(which) {
+  requireScriptOwner_();
+  which = which || 'mf';
+  if (which !== 'mf') throw new Error('غير مدعوم بعد: ' + which);
+  if (!_stActive_() || !_stCfg_().set.mf_files) throw new Error('فعّل مجموعة ministry أولاً (storeCutoverMinistryApply) — الكتابة بـPostgres تحتاج أن يكون المخزن هو مصدر ملفات الوزارة');
+  var r = _supaReq_('post', 'rpc/rw_call', { p_fn: 'saveMinistryFile', p_args: [] });
+  var txt = String(r.text || '');
+  if (r.code === 404 || /PGRST202|Could not find/.test(txt)) throw new Error('شغّل 016_ministry_write.sql في Supabase أولاً');
+  PropertiesService.getScriptProperties().setProperty('SUPA_W_MF', '1');
+  var m = 'تم تفعيل حفظ ملفات الوزارة من Supabase (SUPA_W_MF=1) — سجّل خروجاً ودخولاً ليظهر. للإيقاف: supaWriteOff()';
+  Logger.log(m); return m;
+}
+function supaWriteOff() {
+  requireScriptOwner_();
+  PropertiesService.getScriptProperties().deleteProperty('SUPA_W_MF');
+  var m = 'أُوقف حفظ ملفات الوزارة من Supabase — الحفظ يرجع لـApps Script'; Logger.log(m); return m;
+}
+function _outboxDrain_(maxMs) {
+  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY') || _supaP_('SUPA_W_MF') !== '1') return 0;
+  var t0 = Date.now(), n = 0;
+  while (Date.now() - t0 < (maxMs || 20000)) {
+    var r = _supaReq_('get', 'app_outbox?done_at=is.null&order=id.asc&limit=100&select=id,kind,payload');
+    if (r.code !== 200) { Logger.log('outbox read ' + r.code + ' ' + String(r.text).slice(0, 160)); break; }
+    var rows = []; try { rows = JSON.parse(r.text || '[]'); } catch (e) {}
+    if (!rows.length) break;
+    var recs = [], ids = [];
+    rows.forEach(function (x) {
+      ids.push(x.id); var p = x.payload || {};
+      if (x.kind === 'audit') recs.push({ user: p.user, action: p.action, record: p.record, field: p.field, old: p.old, 'new': p['new'] });
+      else if (x.kind === 'notif') { try { _notifPush_(p.type, p.message, '', p.trip || '', p.perm || '', p.user || ''); } catch (eN) { Logger.log('outbox notif: ' + eN.message); } }
+    });
+    if (recs.length) _audLog_(recs);   // تفشل ⇒ _audFail_ (البوابة تُغلق) كغيرها — ولا نُعلّم المنجَز
+    var u = _supaReq_('patch', 'app_outbox?id=in.(' + ids.join(',') + ')', { done_at: new Date().toISOString() });
+    if (u.code < 200 || u.code >= 300) { Logger.log('outbox mark ' + u.code + ' ' + String(u.text).slice(0, 160)); break; }
+    n += ids.length;
+  }
+  return n;
+}
+function outboxDrainNow() { requireScriptOwner_(); var n = _outboxDrain_(60000); Logger.log('outbox: فُرّغ ' + n); return n; }

@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.378";
+var APP_VERSION = "4.379";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -23478,6 +23478,8 @@ function _mfNextSeq_() {
   try {
     var props = PropertiesService.getScriptProperties();
     var next = (parseInt(props.getProperty('MF_SEQ_CTR'), 10) || 0) + 1;
+    // (V4.379) الحفظ من Postgres (016_ministry_write.sql) يعطي seq = أعلى seq + 1 دون هذا العداد ⇒ لا يجوز أن يقلّ العداد عن أعلى seq قائم
+    try { (_MF_ALL_MEMO_ || _mfReadAll_() || []).forEach(function (x) { var q = Number(x && x.seq) || 0; if (q >= next) next = q + 1; }); } catch (eSq) {}
     props.setProperty('MF_SEQ_CTR', String(next));
     return next;
   } finally { _resRelease_(lock, true); }

@@ -7738,6 +7738,7 @@ var LF_ = (function () {
   function glRpc(rpc, body, cb, fn, need) {
     if (!glRpcReady(need) || typeof fetch !== 'function') return false;
     var KF = need ? 'stFails' : 'glFails', KO = need ? 'stOff' : 'glOff';
+    var isW = (rpc === 'rw_call');   /* (V4.379) كتابة: بلا طلب مزدوج (hedge) · مهلة أطول · فشلها لا يعطّل القراءات */
     var c = SP.cfg, t0 = now(), done = false, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var fin = function (res, why) {
       if (done) return; done = true; clearTimeout(to);
@@ -7746,25 +7747,26 @@ var LF_ = (function () {
       try { cb(res); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
     };
     var soft = function () { fin(null, 'soft'); };
-    var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; }, 6000);
+    var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } }, isW ? 25000 : 6000);
     try {
       // (V4.376) اتصال أول بطيء بـSupabase (شوهد ≈6 ث للاتصال الأولي) ⇒ طلب ثانٍ مطابق بعد 1.5 ث والأسبق يفوز (قراءات فقط ⇒ آمن) — يحجب الانتظار حتى مهلة 6 ث
       var hedged = false, go = function () {
         return fetch(c.url + '/rest/v1/rpc/' + rpc, { method: 'POST', headers: { apikey: c.anon, Authorization: 'Bearer ' + c.token, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body || {}), signal: ctl ? ctl.signal : undefined });
       };
-      var hedgeT = setTimeout(function () { if (!done && !hedged) { hedged = true; try { go().then(handle, function () {}); } catch (eh) {} } }, 1500);
+      var hedgeT = isW ? 0 : setTimeout(function () { if (!done && !hedged) { hedged = true; try { go().then(handle, function () {}); } catch (eh) {} } }, 1500);
       var handle = function (r) { clearTimeout(hedgeT);
           if (r.ok) return r.json().then(function (j) { if (j && j.success === true) fin(j); else soft(); });
           if (r.status === 401) { spReset(); soft(); return; }   // الرمز منتهٍ/غير صالح ⇒ يُعاد إصداره ويُستعمل المسار القديم الآن
           return r.json().then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) {
             // أخطاء عمل متوقعة (صلاحية 42501 · gl_aux لم يُرفع بعد 55000 · عمل غير مدعوم 0A000 · رسالة العمل P0001) ⇒ المسار القديم يعطي الرسالة الأصلية بلا تعطيل
             if (/^(42501|55000|0A000|P0001)$/.test(String(j.code || ''))) { soft(); return; }
+            if (isW) { fin(null, 'http ' + r.status); return; }
             SP[KF] = (SP[KF] || 0) + 1;
             if (r.status === 404 || r.status === 403 || SP[KF] >= 4) { SP[KO] = true; console.warn('LF supa gl: معطَّل لهذه الجلسة', r.status, j.code || '', rpc); }
             fin(null, 'http ' + r.status);
           });
       };
-      go().then(handle, function () { if (!hedged) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; fin(null, 'net'); } });
+      go().then(handle, function () { if (!hedged) { if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } fin(null, 'net'); } });
     } catch (e) { fin(null, 'ex'); }
     return true;
   }
@@ -7786,6 +7788,8 @@ var LF_ = (function () {
     getNotifSettings: RB('getNotifSettings', ['cfg']), getSessionDurationConfig: RB('getSessionDurationConfig', ['cfg']), getBookingsSortDefault: RB('getBookingsSortDefault', ['cfg']),
     getTripNamesList: RB('getTripNamesList', ['core']), listTripPricings: RB('listTripPricings', ['acc']), getHousingNote: RB('getHousingNote', ['misc']),
     checkTripConflictsPreview: RB('checkTripConflictsPreview', ['core']),
+    /* ✍️ (V4.379) كتابة: saveMinistryFile عبر rw_call (016_ministry_write.sql). 'wmf' يعلنها الخادم بعد supaWriteOn('mf'). أي رفض/انقطاع ⇒ Apps Script كما كان */
+    saveMinistryFile: { need: ['ministry', 'core', 'kv', 'wmf'], rpc: 'rw_call' },
     getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { skip: function () { return now() - (S.lastWAt || 0) < 90000; } }),
     saveUiPref: { need: ['misc'], rpc: 'app_save_ui_pref', body: function (a) { return { p_screen: a[1], p_prefs: a[2] === undefined ? null : a[2] }; }, out: function () { return { success: true }; } },
     getAppBootstrap: { need: ['cfg', 'core', 'bookings', 'acc', 'misc', '@dv'], rpc: 'app_boot', body: function () { return {}; }, out: function (r) { return { success: true, parts: r.parts || {}, serverMs: r.serverMs }; } },
@@ -9375,7 +9379,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.378";
+var CLIENT_APP_VERSION = "4.379";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
