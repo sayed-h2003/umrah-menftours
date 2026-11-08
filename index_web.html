@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.375  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.376  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7547,6 +7547,7 @@ var LF_ = (function () {
       if (!r || !r.enabled || !r.token) { SP.st = 3; return; }
       SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, gl: !!r.glStore }; SP.st = 2;   // gl: قيود الحسابات في Postgres (GL_STORE=supabase) ⇒ يُسمح بقراءة شاشاتها منه
       try { sessionStorage.setItem(spStoreKey(), JSON.stringify(SP.cfg)); } catch (e2) {}
+      try { if (!document.getElementById('spPre')) { var lk = document.createElement('link'); lk.id = 'spPre'; lk.rel = 'preconnect'; lk.href = String(r.url || '').replace(/\/+$/, ''); lk.crossOrigin = 'anonymous'; document.head.appendChild(lk); } } catch (e3) {}   // (V4.376) اتصال مسبق: يخفي زمن TLS الأول
     }).withFailureHandler(function () { SP.st = 0; SP.next = now() + 60000; }).supaIssueToken(window.authToken);
   }
   function spReset() {
@@ -7580,8 +7581,12 @@ var LF_ = (function () {
     var soft = function () { fin(null, 'soft'); };
     var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); SP.glFails = (SP.glFails || 0) + 1; if (SP.glFails >= 4) SP.glOff = true; }, 6000);
     try {
-      fetch(c.url + '/rest/v1/rpc/' + rpc, { method: 'POST', headers: { apikey: c.anon, Authorization: 'Bearer ' + c.token, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body || {}), signal: ctl ? ctl.signal : undefined })
-        .then(function (r) {
+      // (V4.376) اتصال أول بطيء بـSupabase (شوهد ≈6 ث للاتصال الأولي) ⇒ طلب ثانٍ مطابق بعد 1.5 ث والأسبق يفوز (قراءات فقط ⇒ آمن) — يحجب الانتظار حتى مهلة 6 ث
+      var hedged = false, go = function () {
+        return fetch(c.url + '/rest/v1/rpc/' + rpc, { method: 'POST', headers: { apikey: c.anon, Authorization: 'Bearer ' + c.token, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body || {}), signal: ctl ? ctl.signal : undefined });
+      };
+      var hedgeT = setTimeout(function () { if (!done && !hedged) { hedged = true; try { go().then(handle, function () {}); } catch (eh) {} } }, 1500);
+      var handle = function (r) { clearTimeout(hedgeT);
           if (r.ok) return r.json().then(function (j) { if (j && j.success === true) fin(j); else soft(); });
           if (r.status === 401) { spReset(); soft(); return; }   // الرمز منتهٍ/غير صالح ⇒ يُعاد إصداره ويُستعمل المسار القديم الآن
           return r.json().then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) {
@@ -7591,7 +7596,8 @@ var LF_ = (function () {
             if (r.status === 404 || r.status === 403 || SP.glFails >= 4) { SP.glOff = true; console.warn('LF supa gl: معطَّل لهذه الجلسة', r.status, j.code || '', rpc); }
             fin(null, 'http ' + r.status);
           });
-        }, function () { SP.glFails = (SP.glFails || 0) + 1; if (SP.glFails >= 4) SP.glOff = true; fin(null, 'net'); });
+      };
+      go().then(handle, function () { if (!hedged) { SP.glFails = (SP.glFails || 0) + 1; if (SP.glFails >= 4) SP.glOff = true; fin(null, 'net'); } });
     } catch (e) { fin(null, 'ex'); }
     return true;
   }
@@ -9136,7 +9142,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.375";
+var CLIENT_APP_VERSION = "4.376";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
