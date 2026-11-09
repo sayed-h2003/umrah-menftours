@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.414  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.415  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7793,7 +7793,7 @@ var LF_ = (function () {
       try { var sl = (window.__SRC = window.__SRC || []); sl.push([fn || rpc, res ? 'pg' : 'as', now() - t0, why || '', now()]); if (sl.length > 600) sl.shift(); } catch (eS) {}   // (V4.410) لوحة «مصدر البيانات»
       try { cb(res, why); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
     };
-    var soft = function () { fin(null, 'soft'); };
+    var soft = function (m) { fin(null, m ? 'soft: ' + String(m).slice(0, 140) : 'soft'); };   /* (V4.415) سبب الرجوع يظهر بلوحة «مصدر البيانات» */
     var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } }, isW ? 25000 : 9000);
     try {
       // (V4.376) اتصال أول بطيء بـSupabase (شوهد ≈6 ث للاتصال الأولي) ⇒ طلب ثانٍ مطابق بعد 1.5 ث والأسبق يفوز (قراءات فقط ⇒ آمن) — يحجب الانتظار حتى مهلة 6 ث
@@ -7802,15 +7802,16 @@ var LF_ = (function () {
       };
       var hedgeT = isW ? 0 : setTimeout(function () { if (!done && !hedged) { hedged = true; try { go().then(handle, function () {}); } catch (eh) {} } }, 1500);
       var handle = function (r) { clearTimeout(hedgeT);
-          if (r.ok) return r.json().then(function (j) { if (j && j.success === true) fin(j); else soft(); });
+          if (r.ok) return r.json().then(function (j) { if (j && j.success === true) fin(j); else soft(j && (j.error || j.message || j.code || (j.d && j.d.error))); });
           if (r.status === 401) { spReset(); soft(); return; }   // الرمز منتهٍ/غير صالح ⇒ يُعاد إصداره ويُستعمل المسار القديم الآن
           return r.json().then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) {
             // أخطاء عمل متوقعة (صلاحية 42501 · gl_aux لم يُرفع بعد 55000 · عمل غير مدعوم 0A000 · رسالة العمل P0001) ⇒ المسار القديم يعطي الرسالة الأصلية بلا تعطيل
-            if (/^(42501|55000|0A000|P0001)$/.test(String(j.code || ''))) { soft(); return; }
-            if (isW) { fin(null, 'http ' + r.status); return; }
+            if (/^(42501|55000|0A000|P0001)$/.test(String(j.code || ''))) { soft((j.code || '') + ' ' + (j.message || '')); return; }
+            var em = ' ' + (j.code || '') + ' ' + String(j.message || j.hint || j.details || '').slice(0, 140);
+            if (isW) { fin(null, 'http ' + r.status + em); return; }
             SP[KF] = (SP[KF] || 0) + 1;
             if (r.status === 404 || r.status === 403 || SP[KF] >= 4) { SP[KO] = true; console.warn('LF supa gl: معطَّل لهذه الجلسة', r.status, j.code || '', rpc); }
-            fin(null, 'http ' + r.status);
+            fin(null, 'http ' + r.status + em);
           });
       };
       go().then(handle, function () { if (!hedged) { if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } fin(null, 'net'); } });
@@ -9692,7 +9693,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.414";
+var CLIENT_APP_VERSION = "4.415";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
