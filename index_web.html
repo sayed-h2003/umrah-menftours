@@ -29081,12 +29081,21 @@ function _accRender_() {
 
   main += '</div>';
 
+  /* 🐛 (V4.408) إعادة الرسم كانت تُصفِّر تمرير الشريط الجانبي وصفحة الكشف فيقفز التركيز لأول رحلة بعد فتح رحلة أخرى —
+     نحفظ موضع التمرير (لنفس العميل) ونعيده، ونُبقي الرحلة المفتوحة ظاهرة بالشريط */
+  var _oldSide = body.querySelector('.acc-side'), _oldMain = body.querySelector('.acc-main'), _sameCl = !!(_oldSide && body._accCl === d.client);
+  var _sideTop = _sameCl ? _oldSide.scrollTop : 0, _mainTop = _sameCl ? (window.pageYOffset || document.documentElement.scrollTop || 0) : 0;
   body.innerHTML =
     '<div class="acc-workspace">' +
       '<div class="acc-side">' +
         '<div class="acc-side-title">رحلات العميل (' + entries.length + ')</div>' + sideHtml + '</div>' +
       '<div class="acc-main">' + main + '</div>' +
     '</div>';
+  body._accCl = d.client;
+  try {
+    var _ns = body.querySelector('.acc-side'); if (_ns) { _ns.scrollTop = _sideTop; var _sc = _ns.querySelector('.acc-trip-item.sel'); if (_sc) { var _r1 = _ns.getBoundingClientRect(), _r2 = _sc.getBoundingClientRect(); if (_r2.top < _r1.top || _r2.bottom > _r1.bottom) _sc.scrollIntoView({ block: 'nearest' }); } }
+    if (_sameCl && _mainTop) window.scrollTo(0, _mainTop);
+  } catch (eSc) {}
 }
 
 // ---------- أفعال عامة ----------

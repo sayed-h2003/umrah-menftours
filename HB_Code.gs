@@ -5206,7 +5206,7 @@ function deletePayment(id, token, force) {
       { clientName: rowVals[1], recordKey: 'PAY:' + rowVals[0] });
     SpreadsheetApp.flush(); // يختفي الصف فورًا من كشف الحساب بعد الحذف
     try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eM) {}
-    try { if (typeof hbGlLiveTouch_ === 'function') hbGlLiveTouch_(); } catch (eL) {}   // ⚡ (V4.330) قيدها بالحسابات العامة يُحدَّث فوراً
+    try { if (typeof hbGlLiveMark_ === 'function') hbGlLiveMark_('حذف دفعة'); } catch (eL) {}   // ⚡ (V4.408) علامة «مستحق» فقط — كان hbGlLiveTouch_ يشغّل مزامنة القيود كاملة داخل نداء الحذف فينتهي بمهلة الاتصال؛ تلتقطها مهمة الدقيقة/المزامنة اللحظية
     return { ok: true, forced: forced };
   } catch (e) {
     return { ok: false, error: e.message };

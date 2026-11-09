@@ -4712,7 +4712,8 @@ var HBLF = (function () {
 
   /* ---------- منع الإجراءات المعتمدة على الرصيد قبل التأكيد ----------
      على window بمرحلة الالتقاط: يسبق مستمع document (أزرار الدفعات داخل برنامج العمرة) وonclick الأزرار نفسها */
-  var BAL_RX = /^\s*(openPaymentModal|openBatchModal|openLinkedPaymentModal|editPaymentRow|deletePaymentRow|hbPayFix_|showManualEntryRow|saveManualEntry|printStatement|shareStatementPdf_|shareStatementImage_)\(/;
+  /* (V4.408) تعديل/حذف دفعة بمعرّفها لا يعتمد على الرصيد المعروض فلا يُحجب بانتظار التحقق (كان يبتلع الضغطة بلا إجراء) */
+  var BAL_RX = /^\s*(openPaymentModal|openBatchModal|openLinkedPaymentModal|hbPayFix_|showManualEntryRow|saveManualEntry|printStatement|shareStatementPdf_|shareStatementImage_)\(/;
   function guard(ev) {
     if (!blocked()) return;
     var t = ev.target && ev.target.closest ? ev.target.closest('[onclick]') : null;
