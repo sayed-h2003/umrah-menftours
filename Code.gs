@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.384";
+var APP_VERSION = "4.385";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2392,7 +2392,7 @@ if (
   _vals[BOOKINGS_COL_.makkahHotel]    = bookingData.makkahHotel || "";
   _vals[BOOKINGS_COL_.makkahCheckIn]  = bookingData.makkahCheckIn || "";
   _vals[BOOKINGS_COL_.makkahCheckOut] = bookingData.makkahCheckOut || "";
-  _vals[BOOKINGS_COL_.internalTransferDate] = bookingData.internalTransferDate || "";
+  _vals[BOOKINGS_COL_.internalTransferDate] = _noJunk_(bookingData.internalTransferDate);
   _vals[BOOKINGS_COL_.internalTransferTime] = bookingData.internalTransferTime || "";
   _vals[BOOKINGS_COL_.extraMovements] = typeof bookingData.extraMovements === "string" ? bookingData.extraMovements : JSON.stringify(bookingData.extraMovements || []);
   _vals[BOOKINGS_COL_.notes]          = bookingData.notes || "";
@@ -3396,7 +3396,7 @@ function buildAllMovements_(bookingData) {
 
     // الانتقال إلى مكة
     movements.push({
-      date: bookingData.internalTransferDate || bookingData.madinahCheckOut,
+      date: _noJunk_(bookingData.internalTransferDate) || bookingData.madinahCheckOut,
       time: bookingData.internalTransferTime || "",
       type:
         "التحرك من المدينة (" +
@@ -3441,7 +3441,7 @@ function buildAllMovements_(bookingData) {
 
     // الانتقال إلى المدينة
     movements.push({
-      date: bookingData.internalTransferDate || bookingData.makkahCheckOut,
+      date: _noJunk_(bookingData.internalTransferDate) || bookingData.makkahCheckOut,
       time: bookingData.internalTransferTime || "",
       type:
         "التحرك من مكة (" +
@@ -3682,7 +3682,7 @@ function buildBookingNoticeHtml_(b, asFragment) {
   // 🛡️ fmtDate() في getPrintDataForView_ تُرجع "-" (وليس "") للخانة الفارغة — لو اعتمدنا على || مباشرة
   // فإن "-" نص غير فارغ (truthy) فيفشل السقوط التلقائي لتاريخ خروج الفندق عند ترك الحقل الاختياري
   // فارغاً، فيختفي التحرك الداخلي من الإشعار المطبوع بالكامل. لازم استبعاد "-" صراحة هنا.
-  var _hasTransferDate = b.internalTransferDate && b.internalTransferDate !== "-";
+  var _hasTransferDate = !!_noJunk_(b.internalTransferDate);
   var _fallbackCheckOut = (b.direction === "مكة أولاً") ? (b.makkahCheckOut || "") : (b.madinahCheckOut || "");
   var transferDate = _singleCity ? "" : (_hasTransferDate ? b.internalTransferDate : ((_fallbackCheckOut && _fallbackCheckOut !== "-") ? _fallbackCheckOut : ""));
 
@@ -4068,7 +4068,7 @@ return {
       madinahCheckOut: fmtDate(B(row, 'madinahCheckOut')),
       makkahHotel: makkahHotelDisplay,
       makkahCheckOut: fmtDate(B(row, 'makkahCheckOut')),
-      internalTransferDate: fmtDate(B(row, 'internalTransferDate')),
+      internalTransferDate: fmtDate(_noJunk_(B(row, 'internalTransferDate'))),
       internalTransferTime: fmtTime(B(row, 'internalTransferTime')),
       // ----------------------------------------------------
       // 📎 (V4.157) يحتاجها generateBookingPdfForShare لبناء صفحات الأسماء والمرفقات
@@ -6650,6 +6650,9 @@ function getOnlineUsersNow(authToken) {
 
 var PRINT_TOKEN_DURATION_SECONDS = 86400; // 24 ساعة - مدة كافية للمشاركة
 
+// 🧹 (V4.385) قيم نصية بلا معنى ("[]" "{}" "null" "undefined" "-") تُعامل كفراغ — لا تُقبل أبداً كتاريخ/وقت ولا تُحفَظ
+function _noJunk_(v) { var t = (v === null || v === undefined) ? '' : String(v).trim(); return (t === '[]' || t === '{}' || t === 'null' || t === 'undefined' || t === '-') ? '' : t; }
+
 // تُستدعى من داخل النظام بعد تسجيل الدخول فقط، عند الضغط على "طباعة" أو "مشاركة"
 function generatePrintAccessToken(authToken, bookingId) {
   requireAuth_(authToken);
@@ -6670,7 +6673,13 @@ function resolvePrintAccessToken_(printToken) {
   if (!printToken) return null;
   var cache = CacheService.getScriptCache();
   var bookingId = cache.get('printtoken_' + printToken);
-  Logger.log("🔍 محاولة قراءة توكن: " + printToken + " | النتيجة: " + bookingId); // إضافة مؤقتة
+  // ⚡ (V4.385) رموز 's-…' تُنشأ من Postgres (rx_print_token) بلا نداء Apps Script — يُتحقق منها هنا بنداء واحد سريع
+  if (!bookingId && /^s-[0-9a-f]{64}$/.test(String(printToken))) {
+    try {
+      var r = _supaReq_('GET', 'print_tokens?select=booking_id&token=eq.' + encodeURIComponent(printToken) + '&exp=gt.' + encodeURIComponent(new Date().toISOString()) + '&limit=1');
+      if (r.code === 200) { var rows = JSON.parse(r.text || '[]'); if (rows && rows[0] && rows[0].booking_id) bookingId = String(rows[0].booking_id); }
+    } catch (eS) { Logger.log('print token supa: ' + eS); }
+  }
   return bookingId || null;
 }
 
@@ -7457,7 +7466,7 @@ function getAllBookings_() {
       makkahHotel: B(r, 'makkahHotel') ? B(r, 'makkahHotel').toString() : "",
       makkahCheckIn: formatDateString(B(r, 'makkahCheckIn')),
       makkahCheckOut: formatDateString(B(r, 'makkahCheckOut')),
-      internalTransferDate: formatDateString(B(r, 'internalTransferDate')),
+      internalTransferDate: formatDateString(_noJunk_(B(r, 'internalTransferDate'))),
       internalTransferTime: formatTimeString(B(r, 'internalTransferTime')),
       extraMovements: B(r, 'extraMovements') ? B(r, 'extraMovements').toString() : "[]",
       notes: B(r, 'notes') ? B(r, 'notes').toString() : "",

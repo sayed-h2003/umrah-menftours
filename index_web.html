@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.384  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.385  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7675,7 +7675,7 @@ var LF_ = (function () {
      التجديد: supaIssueToken (Apps Script) قبل انتهاء الرمز بساعة والرمز الحالي يبقى صالحاً أثناءه. التخزين: sessionStorage كما كان + نسخة localStorage
      (رمز قصير العمر فقط، يُمسح بالخروج) كي لا تنتظر أول قراءة بعد إعادة فتح المتصفح نداء الرمز. */
   function spSet(r) {
-    SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, gl: !!r.glStore, st: { groups: (r.store && r.store.groups) || [], dv: !!(r.store && r.store.dv) } }; SP.st = 2;   // st (المرحلة 4): المجموعات الحيّة بالمخزن + هل data_versions بـ Postgres مرجع النبضة
+    SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, webUrl: r.webUrl || '', gl: !!r.glStore, st: { groups: (r.store && r.store.groups) || [], dv: !!(r.store && r.store.dv) } }; SP.st = 2;   // st (المرحلة 4): المجموعات الحيّة بالمخزن + هل data_versions بـ Postgres مرجع النبضة
     // gl: قيود الحسابات في Postgres (GL_STORE=supabase) ⇒ يُسمح بقراءة شاشاتها منه
     try { sessionStorage.setItem(spStoreKey(), JSON.stringify(SP.cfg)); } catch (e2) {}
     try { localStorage.setItem('lf_supa_ls|' + user(), JSON.stringify(SP.cfg)); } catch (e2b) {}
@@ -8193,7 +8193,7 @@ var LF_ = (function () {
   api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
   api.verify = verifySub;
   api.showBar = function (id) { var s = S.subs[id]; if (!s) return; s.snooze = 0; if (s.fresh) conflictBar(s); };
-  api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit; api.spAdopt = spAdopt; api.stRpc = glRpc; api.stRoute = stRoute;
+  api.webUrl = function () { try { spInit(); return (SP.cfg && SP.cfg.webUrl) || ''; } catch (e) { return ''; } }; api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit; api.spAdopt = spAdopt; api.stRpc = glRpc; api.stRoute = stRoute;
   api._sp = SP; api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
   return api;
 })();
@@ -9385,7 +9385,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.384";
+var CLIENT_APP_VERSION = "4.385";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -33693,8 +33693,8 @@ function _toggleSingleCityBlocks_(dir) {
     document.querySelectorAll('#extraMovementsContainer .movement-row').forEach(function(row) {
       var sel = row.querySelector('.move-type-select');
       var t = (sel && sel.value === 'اخرى') ? ((row.querySelector('.custom-move-input') || {}).value || '') : (sel ? sel.value : '');
-      var mv = { type: t, date: (row.querySelector('.move-date-field') || {}).value || '',
-        time: (row.querySelector('.move-time-field') || {}).value || '', buses: (row.querySelector('.move-buses-field') || {}).value || '' };
+      var mv = { type: t, date: _noJunkV_((row.querySelector('.move-date-field') || {}).value),
+        time: _noJunkV_((row.querySelector('.move-time-field') || {}).value), buses: (row.querySelector('.move-buses-field') || {}).value || '' };
       var fromMak = t.indexOf('من مكة') > -1 && (t.indexOf('المدينة') > -1 || t.indexOf('مدينة') > -1);
       var fromMad = (t.indexOf('من المدينة') > -1 || t.indexOf('من مدينة') > -1) && t.indexOf('مكة') > -1;
       if (fromMak || fromMad) {
@@ -33858,6 +33858,10 @@ function _toggleSingleCityBlocks_(dir) {
     (segs || []).forEach(function(s) { addTransportSegmentRow(s); });
   }
 
+  // (V4.385) "[]" وأخواتها لا تُقبل تاريخاً/وقتاً أبداً
+  function _noJunkV_(v) { var t = (v === null || v === undefined) ? '' : String(v).trim(); return (t === '[]' || t === '{}' || t === 'null' || t === 'undefined' || t === '-') ? '' : t; }
+  window._noJunkV_ = _noJunkV_;
+
   function addExtraMovementRow(data = {}) {
 
   var container = document.getElementById('extraMovementsContainer');
@@ -33865,7 +33869,8 @@ function _toggleSingleCityBlocks_(dir) {
   var id = "move_" + Date.now() + Math.floor(Math.random() * 100);
 
   // (V4.384) تنظيف قيم قديمة غير صالحة: "[]" كتاريخ، ونص مثل «النقل بمعرفة العميل» داخل حقل رقمي
-  function _cleanStr_(v) { v = (v === null || v === undefined) ? "" : String(v).trim(); return (v === "[]" || v === "{}" || v === "null" || v === "undefined") ? "" : v; }
+  function _cleanStr_(v) { return _noJunkV_(v); }
+  function _cleanStr_old_(v) { v = (v === null || v === undefined) ? "" : String(v).trim(); return (v === "[]" || v === "{}" || v === "null" || v === "undefined") ? "" : v; }
   var dateVal = _cleanStr_(data.date);
   data.toDate = _cleanStr_(data.toDate);
   var timeVal = _cleanStr_(data.time);
@@ -35532,7 +35537,7 @@ currentTicketTemporary = false;
         return s.value === 'من مكة الى المدينة' || s.value === 'من المدينة الى مكة';
       });
       if (!_hasCT && (b.direction === 'المدينة أولاً' || b.direction === 'مكة أولاً')) {
-        var _tDate = (b.internalTransferDate && b.internalTransferDate !== '-') ? b.internalTransferDate
+        var _tDate = _noJunkV_(b.internalTransferDate) ? b.internalTransferDate
           : (b.direction === 'مكة أولاً' ? b.makkahCheckOut : b.madinahCheckOut);
         if (_tDate && _tDate !== '-') {
           addExtraMovementRow({
@@ -35769,9 +35774,9 @@ function _submitFormImpl_(event) {
     var movementsArray = [];
     document.querySelectorAll('#extraMovementsContainer .movement-row').forEach(row => {
       movementsArray.push({
-        date: row.querySelector('.move-date-field').value,
+        date: _noJunkV_(row.querySelector('.move-date-field').value),
         toDate: row.querySelector('.move-todate-field') ? row.querySelector('.move-todate-field').value : '',
-        time: row.querySelector('.move-time-field').value,
+        time: _noJunkV_(row.querySelector('.move-time-field').value),
         
 type:
 (
@@ -36024,9 +36029,9 @@ function buildMovements(b){
     if (b.madinahCheckOut && !hasCityTransfers) {
       arr.push({
         // 📌 تاريخ التحرك الداخلي دائماً تلقائي (تاريخ خروج فندق المدينة) — لا خانة يدوية له
-        date: b.internalTransferDate || b.madinahCheckOut,
+        date: _noJunkV_(b.internalTransferDate) || b.madinahCheckOut,
         // 🕐 توقيت التحرك الداخلي الأساسي: اختياري، فارغ افتراضياً إلى أن يكتبه المستخدم صراحةً
-        time: b.internalTransferTime || "",
+        time: _noJunkV_(b.internalTransferTime),
         type: "التحرك من المدينة إلى مكة",
         buses: b.busCount || ""
       });
@@ -36061,8 +36066,8 @@ function buildMovements(b){
 
     if (b.makkahCheckOut && !hasCityTransfers) {
       arr.push({
-        date: b.internalTransferDate || b.makkahCheckOut,
-        time: b.internalTransferTime || "",
+        date: _noJunkV_(b.internalTransferDate) || b.makkahCheckOut,
+        time: _noJunkV_(b.internalTransferTime),
         type: "التحرك من مكة إلى المدينة",
         buses: b.busCount || ""
       });
@@ -38164,57 +38169,35 @@ function formatTimeOnly(value){
 
 
 function printBookingPattern(id) {
-
-  // (V4.384) فتح نافذة الطباعة فوراً (قبل أي نداء خادم) كي لا يحجبها المتصفح، وجلب الرمز + رابط التطبيق بالتوازي
-  // (كانا متتاليين ≈ 5.7s + 4.4s). رابط التطبيق ثابت فيُخزَّن محلياً فلا يُطلب إلا مرة واحدة.
-  var win = null;
-  try {
-    win = window.open('', '_blank');
-    if (win && win.document) {
-      win.document.write('<html dir="rtl"><head><meta charset="utf-8"><title>جاري تجهيز الإشعار…</title></head>' +
-        '<body style="font-family:Tahoma,Arial,sans-serif;text-align:center;padding:60px;color:#444">' +
-        '<div style="font-size:42px">⏳</div><div style="font-size:18px;margin-top:12px">جاري تجهيز الإشعار للطباعة…</div></body></html>');
-    }
-  } catch (e) { win = null; }
-
+  // (V4.385) لا انتظار لـApps Script: الرمز من Postgres (rx_print_token ≈ 0.3 ث) ورابط التطبيق من إعدادات Supabase أو المخزَّن محلياً.
   var baseUrl = '';
-  try { baseUrl = localStorage.getItem('_webAppUrl_') || ''; } catch (e) {}
-  var tokenRes = null, urlDone = !!baseUrl, tokenDone = false, failed = false;
-
-  function fail(msg, err) {
-    if (failed) return; failed = true;
-    console.error(err);
-    try { if (win && !win.closed) win.close(); } catch (e) {}
-    alert(msg);
+  try { baseUrl = (typeof LF_ !== 'undefined' && LF_.webUrl && LF_.webUrl()) || localStorage.getItem('_webAppUrl_') || ''; } catch (e) {}
+  if (baseUrl) { try { localStorage.setItem('_webAppUrl_', baseUrl); } catch (e) {} }
+  var win = null, failed = false;
+  function fail(msg, err) { if (failed) return; failed = true; if (err) console.error(err); try { if (win && !win.closed) win.close(); } catch (e) {} alert(msg); }
+  function open_(token) {
+    if (failed) return;
+    var u = baseUrl + '?page=print&t=' + encodeURIComponent(token);
+    if (win && !win.closed) win.location.href = u; else window.open(u, '_blank');
   }
-  function go() {
-    if (failed || !urlDone || !tokenDone) return;
-    if (!tokenRes || !tokenRes.token) { fail('تعذر إنشاء رابط طباعة آمن'); return; }
-    var printUrl = baseUrl + '?page=print&t=' + encodeURIComponent(tokenRes.token);
-    if (win && !win.closed) { win.location.href = printUrl; }
-    else { window.open(printUrl, '_blank'); }
+  function slowPath() {
+    try { win = window.open('', '_blank'); if (win && win.document) win.document.write('<html dir="rtl"><head><meta charset="utf-8"><title>جاري تجهيز الإشعار…</title></head><body style="font-family:Tahoma,Arial,sans-serif;text-align:center;padding:60px;color:#444"><div style="font-size:42px">⏳</div><div style="font-size:18px;margin-top:12px">جاري تجهيز الإشعار للطباعة…</div></body></html>'); } catch (e) { win = null; }
+    var tokenRes = null, urlDone = !!baseUrl, tokenDone = false;
+    function go() { if (failed || !urlDone || !tokenDone) return; if (!tokenRes || !tokenRes.token) { fail('تعذر إنشاء رابط طباعة آمن'); return; } open_(tokenRes.token); }
+    google.script.run.withSuccessHandler(function (r) { tokenRes = r; tokenDone = true; go(); }).withFailureHandler(function (err) { fail('تعذر إنشاء رابط طباعة آمن', err); }).generatePrintAccessToken(window.authToken, id);
+    if (!baseUrl) google.script.run.withSuccessHandler(function (u) { baseUrl = u || ''; if (baseUrl) { try { localStorage.setItem('_webAppUrl_', baseUrl); } catch (e) {} } urlDone = true; go(); }).withFailureHandler(function (err) { fail('تعذر فتح صفحة الطباعة', err); }).getWebAppUrl(window.authToken);
   }
-
-  google.script.run
-    .withSuccessHandler(function (r) { tokenRes = r; tokenDone = true; go(); })
-    .withFailureHandler(function (err) { fail('تعذر إنشاء رابط طباعة آمن', err); })
-    .generatePrintAccessToken(window.authToken, id);
-
-  if (!baseUrl) {
-    google.script.run
-      .withSuccessHandler(function (u) {
-        baseUrl = u || '';
-        if (baseUrl) { try { localStorage.setItem('_webAppUrl_', baseUrl); } catch (e) {} }
-        urlDone = true; go();
-      })
-      .withFailureHandler(function (err) { fail('تعذر فتح صفحة الطباعة', err); })
-      .getWebAppUrl(window.authToken);
+  if (baseUrl && typeof LF_ !== 'undefined' && LF_.glRpc) {
+    try { win = window.open('about:blank', '_blank'); } catch (e) { win = null; }
+    var ok = LF_.glRpc('rx_print_token', { p_booking: String(id) }, function (res) {
+      if (res && res.token) open_(res.token);
+      else { try { if (win && !win.closed) win.close(); } catch (e) {} win = null; slowPath(); }
+    }, 'printToken', []);
+    if (ok === false) { try { if (win && !win.closed) win.close(); } catch (e) {} win = null; slowPath(); }
+    return;
   }
+  slowPath();
 }
-
-
-
-
 
 /* ===============================
    بناء HTML قابل للمشاركة (نسخة من executePrint، بترجع النص بدل ما تفتح نافذة طباعة)
@@ -50171,7 +50154,13 @@ function _glpPick(i) {
   _glpHide();
   try { inp.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
 }
-document.addEventListener('focusin', function (e) { if (e.target.classList && e.target.classList.contains('gl-acc')) { e.target.select && e.target.select(); _glpShow(e.target); } }, true);
+/* (V4.385) قائمة اختيار الحساب كانت تنفتح وحدها عند العودة للنافذة/التبويب: المتصفح يعيد التركيز تلقائياً على آخر حقل (focusin بلا نقر).
+   الآن: تُغلق عند مغادرة النافذة، ولا تُفتح من focusin الناتج عن عودة النافذة (خلال 600ms)، وتُفتح فقط بتفاعل المستخدم (نقر/لمس/كتابة/Tab). */
+var _glpWinAt_ = 0;
+window.addEventListener('blur', function () { try { _glpHide(); } catch (e) {} });
+window.addEventListener('focus', function () { _glpWinAt_ = Date.now(); try { if (_GLP_.inp && document.activeElement === _GLP_.inp) _glpHide(); } catch (e) {} });
+document.addEventListener('visibilitychange', function () { if (document.hidden) { try { _glpHide(); } catch (e) {} } else _glpWinAt_ = Date.now(); });
+document.addEventListener('focusin', function (e) { if (e.target.classList && e.target.classList.contains('gl-acc')) { if (Date.now() - _glpWinAt_ < 600 || !document.hasFocus()) return; e.target.select && e.target.select(); _glpShow(e.target); } }, true);
 document.addEventListener('input', function (e) { if (e.target.classList && e.target.classList.contains('gl-acc')) { e.target.dataset.code = ''; _glpShow(e.target); } }, true);
 document.addEventListener('focusout', function (e) { if (e.target.classList && e.target.classList.contains('gl-acc')) setTimeout(function () { if (document.activeElement !== _GLP_.inp) _glpHide(); }, 120); }, true);
 document.addEventListener('keydown', function (e) {
