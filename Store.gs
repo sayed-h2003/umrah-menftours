@@ -732,13 +732,13 @@ function supaDiagNow() {
 function supaWriteOn(which) {
   requireScriptOwner_();
   which = which || 'mf';
-  var W = { mf: { prop: 'SUPA_W_MF', tbl: 'mf_files', fn: 'saveMinistryFile', label: 'ملفات الوزارة', grp: 'ministry' }, vz: { prop: 'SUPA_W_VZ', tbl: 'vz_files', fn: 'saveVisaFile', label: 'مجموعات التأشيرات', grp: 'visa' } }[which];
-  if (!W) throw new Error('غير مدعوم بعد: ' + which + ' (المتاح: mf · vz)');
+  var W = { mf: { prop: 'SUPA_W_MF', tbl: 'mf_files', fn: 'saveMinistryFile', label: 'ملفات الوزارة', grp: 'ministry' }, vz: { prop: 'SUPA_W_VZ', tbl: 'vz_files', fn: 'saveVisaFile', label: 'مجموعات التأشيرات', grp: 'visa' }, bk: { prop: 'SUPA_W_BK', tbl: 'bookings', fn: 'saveBookingToServer', label: 'الإشعارات', grp: 'bookings' } }[which];
+  if (!W) throw new Error('غير مدعوم بعد: ' + which + ' (المتاح: mf · vz · bk)');
   if (!_stActive_() || !_stCfg_().set[W.tbl]) throw new Error('فعّل مجموعة ' + W.grp + ' أولاً — الكتابة بـPostgres تحتاج أن يكون المخزن هو مصدر ' + W.label);
   var r = _supaReq_('post', 'rpc/rw_call', { p_fn: W.fn, p_args: [] });
   var txt = String(r.text || '');
-  if (r.code === 404 || /PGRST202|Could not find/.test(txt)) throw new Error('شغّل ملف SQL الخاص بالكتابة في Supabase أولاً (016 للوزارة · 017 للتأشيرات)');
-  if (/غير مدعومة/.test(txt)) throw new Error('الدالة ' + W.fn + ' غير موجودة في Supabase — شغّل 017_visa_write.sql');
+  if (r.code === 404 || /PGRST202|Could not find/.test(txt)) throw new Error('شغّل ملف SQL الخاص بالكتابة في Supabase أولاً (016 للوزارة · 017 للتأشيرات · 024 للإشعارات)');
+  if (/غير مدعومة/.test(txt)) throw new Error('الدالة ' + W.fn + ' غير موجودة في Supabase — شغّل ملف SQL الخاص بالكتابة (017 للتأشيرات · 024 للإشعارات)');
   PropertiesService.getScriptProperties().setProperty(W.prop, '1');
   var m = 'تم تفعيل حفظ ' + W.label + ' من Supabase (' + W.prop + '=1) — سجّل خروجاً ودخولاً ليظهر. للإيقاف: supaWriteOff(\'' + which + '\')';
   Logger.log(m); return m;
@@ -746,11 +746,11 @@ function supaWriteOn(which) {
 function supaWriteOff(which) {
   requireScriptOwner_();
   var P = PropertiesService.getScriptProperties();
-  if (!which) { P.deleteProperty('SUPA_W_MF'); P.deleteProperty('SUPA_W_VZ'); } else P.deleteProperty(which === 'vz' ? 'SUPA_W_VZ' : 'SUPA_W_MF');
+  if (!which) { P.deleteProperty('SUPA_W_MF'); P.deleteProperty('SUPA_W_VZ'); P.deleteProperty('SUPA_W_BK'); } else P.deleteProperty(which === 'vz' ? 'SUPA_W_VZ' : (which === 'bk' ? 'SUPA_W_BK' : 'SUPA_W_MF'));
   var m = 'أُوقف الحفظ من Supabase (' + (which || 'الكل') + ') — الحفظ يرجع لـApps Script'; Logger.log(m); return m;
 }
 function _outboxDrain_(maxMs) {
-  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY') || (_supaP_('SUPA_W_MF') !== '1' && _supaP_('SUPA_W_VZ') !== '1')) return 0;
+  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY') || (_supaP_('SUPA_W_MF') !== '1' && _supaP_('SUPA_W_VZ') !== '1' && _supaP_('SUPA_W_BK') !== '1')) return 0;
   var t0 = Date.now(), n = 0;
   while (Date.now() - t0 < (maxMs || 20000)) {
     var r = _supaReq_('get', 'app_outbox?done_at=is.null&order=id.asc&limit=100&select=id,kind,payload');
@@ -761,6 +761,13 @@ function _outboxDrain_(maxMs) {
     rows.forEach(function (x) {
       ids.push(x.id); var p = x.payload || {};
       if (x.kind === 'audit') recs.push({ user: p.user, action: p.action, record: p.record, field: p.field, old: p.old, 'new': p['new'] });
+      else if (x.kind === 'bkdiff') {   // (V4.388) أثر تدقيق حفظ الإشعار من Postgres: إنشاء ⇒ سطر إنشاء · تعديل ⇒ فرق حقل بحقل (نفس logBookingRowDiff_)
+        try {
+          var rv = function (row) { return (row || []).map(function (c) { return (c && typeof c === 'object' && c['$d'] !== undefined) ? new Date(c['$d']) : c; }); };
+          if (p.isNew) logChange_(p.user, 'إنشاء إشعار جديد', String(p.id), '-', '-', 'تم إنشاء إشعار وصول رقم ' + p.id);
+          else logBookingRowDiff_(p.user, String(p.id), rv(p.old), rv(p['new']));
+        } catch (eB) { Logger.log('outbox bkdiff: ' + eB.message); }
+      }
       else if (x.kind === 'notif') { try { _notifPush_(p.type, p.message, '', p.trip || '', p.perm || '', p.user || ''); } catch (eN) { Logger.log('outbox notif: ' + eN.message); } }
     });
     if (recs.length) _audLog_(recs);   // تفشل ⇒ _audFail_ (البوابة تُغلق) كغيرها — ولا نُعلّم المنجَز
@@ -775,6 +782,8 @@ function outboxDrainNow() { requireScriptOwner_(); var n = _outboxDrain_(60000);
 // (V4.380) المحرر يشغّل الدوال بلا معاملات ⇒ دوال مستقلة لكل حالة
 function supaWriteOnMinistry() { return supaWriteOn('mf'); }
 function supaWriteOnVisa() { return supaWriteOn('vz'); }
+function supaWriteOnBookings() { return supaWriteOn('bk'); }   // (V4.388)
+function supaWriteOffBookings() { return supaWriteOff('bk'); }
 function supaWriteOffMinistry() { return supaWriteOff('mf'); }
 function supaWriteOffVisa() { return supaWriteOff('vz'); }
 function supaWriteOffAll() { return supaWriteOff(); }

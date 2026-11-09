@@ -3088,3 +3088,10 @@
 2. **Apps Script:** استبدل `Accounts.gs` و`Code.gs` و`Store.gs` و`SupaSync.gs` و`LiveSync.gs` و`index_web.html` وانشر.
 3. من المحرر شغّل مرة واحدة بالترتيب: `supaBootSyncNow()` ثم `storeKvBackfill()` ثم `storeBotsBackfill()` ثم `supaDvSeedNow()` (كلٌّ بلا متغيرات).
 4. سجّل الخروج ثم الدخول، وراجع Console: أسطر `⚡ supabase …`.
+
+## حفظ الإشعار من Postgres (V4.388 — يحتاج 023 + 024 ومجموعة bookings حيّة بالمخزن)
+1. شغّل `supabase/023_required_fields.sql` ثم `supabase/024_save_booking.sql` في Supabase SQL Editor، وارفع `Code.gs` `Store.gs` `SupaSync.gs` `index_web.html` وانشر.
+2. من المحرر: `supaAuthSeedNow()` (يرفع الحقول الإلزامية لـ app_config) ثم `supaWriteOnBookings()` (يفعّل `SUPA_W_BK=1`) ثم سجّل خروجاً ودخولاً.
+3. الاختبار: احفظ إشعاراً جديداً وآخر معدّلاً — الكونسول يجب أن يظهر `⚡ supabase saveBookingToServer` بأقل من ثانية. سجل التعديلات يلتحق خلال دقيقة (صندوق الإخراج `bkdiff`).
+4. الرجوع الفوري: `supaWriteOffBookings()`. أي خطأ تحقق/تذكرة مؤقتة/بوت ⇒ المسار القديم تلقائياً.
+5. كود التحقق وبناء التحركات بالمتصفح (`BKSRV_`) منسوخ آلياً من `Code.gs`: بعد أي تعديل على `validateMovementsLogic_` أو `buildAllMovements_` شغّل `python3 tools/sync_booking_client.py` ثم `node tools/test_booking_client.js`.

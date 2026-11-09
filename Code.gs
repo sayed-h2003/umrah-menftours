@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.387";
+var APP_VERSION = "4.388";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2230,6 +2230,21 @@ function _nextBookingId_() {
   } finally {
     _resRelease_(lock, true);   // قراءة فقط داخل القفل
   }
+}
+
+/* ⚡ (V4.388) ما بعد حفظ الإشعار من Postgres (rw_call): الأثران اللذان يحتاجان منطق Apps Script — مزامنة الإشعار→الرحلة وتسعير دورة النقل —
+   يُنفَّذان بالخلفية بعد أن يرى المستخدم «تم الحفظ». الكتابة نفسها تمت بـPostgres (024_save_booking.sql). */
+function bookingAfterSaveBg(authToken, finalId, bookingData) {
+  requireAuth_(authToken);
+  bookingData = bookingData || {};
+  var out = { success: true, id: finalId };
+  try { _cacheBust_('booking'); } catch (eC) { Logger.log('bookingAfterSaveBg cache: ' + eC); }
+  try { _propagateBookingChangesToTrip_(finalId, bookingData); } catch (e) { Logger.log('propagate booking→trip failed: ' + e); }
+  try {
+    var tr = _vzTransportAfterSave_(finalId, bookingData);
+    if (tr) { out.transport = tr; if (tr.warning) out.transportWarning = tr.warning; }
+  } catch (eT) { Logger.log('bookingAfterSaveBg transport: ' + eT); }
+  return out;
 }
 
 function saveBookingToServer(authToken, bookingData) {

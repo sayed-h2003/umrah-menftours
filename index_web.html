@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.387  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.388  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7754,7 +7754,7 @@ var LF_ = (function () {
       if (done) return; done = true; clearTimeout(to);
       if (res) { SP[KF] = 0; try { console.info('⚡ supabase', fn || rpc, (now() - t0) + 'ms'); } catch (e0) {} }
       else { try { console.info('↩︎ apps-script', fn || rpc, why || ''); } catch (e1) {} }
-      try { cb(res); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
+      try { cb(res, why); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
     };
     var soft = function () { fin(null, 'soft'); };
     var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } }, isW ? 25000 : 6000);
@@ -7783,6 +7783,8 @@ var LF_ = (function () {
   /* ⚡ (المرحلة 4) المرحلة 4 — قراءات الرحلات/المعتمرين/الحركات/العملاء/القوائم + النبضة والمتصلون من Postgres (007_core_reads.sql + 008_app_poll.sql).
      fn ⇒ المجموعات الحيّة المطلوبة (يعلنها الخادم بـ supaIssueToken().store.groups). الرد {success, d: نفس ما ترجعه دالة Apps Script حرفياً, dv: بصمات لحظة القراءة}.
      أي خطأ/رفض/انقطاع/مجموعة غير حيّة ⇒ النداء الأصلي لـ Apps Script كما كان. المفتاح: localStorage.lf_supa_off='1'. الكتابات لا تمر من هنا إطلاقاً. */
+  var BKSTASH_ = new WeakMap();
+  function _RAWRUN_() { return (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null; }
   function RB(fn, need) { return { need: need, rpc: 'rx_boot', body: function (a) { return { p_fn: fn, p_args: a }; } }; }
   var STRPC = {
     getTripsList: { need: ['core', 'bookings', 'acc'] }, getTripPilgrims: { need: ['core'] }, getTripDraft: { need: ['core'] }, getTripHotelsList: { need: ['core'] },
@@ -7801,6 +7803,26 @@ var LF_ = (function () {
     /* ✍️ (V4.379) كتابة: saveMinistryFile عبر rw_call (016_ministry_write.sql). 'wmf' يعلنها الخادم بعد supaWriteOn('mf'). أي رفض/انقطاع ⇒ Apps Script كما كان */
     saveMinistryFile: { need: ['ministry', 'core', 'kv', 'wmf'], rpc: 'rw_call' },
     saveVisaFile: { need: ['visa', 'core', 'bookings', 'misc', 'kv', 'wvz'], rpc: 'rw_call' },   /* (V4.380) 017_visa_write.sql */
+    /* ✍️ (V4.388) حفظ الإشعار من Postgres (024_save_booking.sql): التحقق وبناء التحركات بالمتصفح بنفس كود الخادم (BKSRV_) · أي خطأ تحقق/نقص ⇒ Apps Script بالرسالة المهيكلة نفسها.
+       'wbk' يعلنها الخادم بعد supaWriteOn('bk'). الأثر الجانبي (مزامنة الرحلة · تسعير النقل) بالخلفية: bookingAfterSaveBg. */
+    saveBookingToServer: { need: ['bookings', 'core', 'cfg', 'wbk'], rpc: 'rw_call',
+      pre: function (a) {
+        try {
+          var b = a[1]; if (!b || typeof b !== 'object' || !window.BKSRV_) return false;
+          if (b.__fromTelegramBot__ || (b.ticketTemporary === true && String(b.ticketFileId || '').trim())) return false;
+          var c = JSON.parse(JSON.stringify(b)); c.__strictDates__ = true;
+          if (BKSRV_.validate(c)) return false;   // خطأ تحقق ⇒ الخادم القديم يعرضه بشكله المهيكل
+          var mv = BKSRV_.build(c);   // نفس الكائن بعد الفرز الموضعي للتحركات (كما بالخادم)
+          var str = function (v) { return typeof v === 'string' ? v : JSON.stringify(v || []); };
+          BKSTASH_.set(b, { mv: mv, strs: { extraMovements: str(c.extraMovements), transportSegments: str(c.transportSegments), attachmentsJson: str(c.attachmentsJson) } });
+          return true;
+        } catch (e) { return false; }
+      },
+      body: function (a) { var st = BKSTASH_.get(a[1]) || {}; return { p_fn: 'saveBookingToServer', p_args: [null, a[1], { v: 'c1', movements: st.mv || [], strs: st.strs || {} }] }; },
+      after: function (a, d) {
+        if (!d || d.success !== true) return;
+        try { _RAWRUN_().withSuccessHandler(function (r) { if (r && r.transportWarning) { try { _showPopup(r.transportWarning, 'error'); } catch (e) {} } }).withFailureHandler(function () {}).bookingAfterSaveBg(window.authToken, d.id, a[1]); } catch (e) {}
+      } },
     getRequiredFieldsConfig: { need: ['cfg'], rpc: 'rx_call2' },   /* (V4.387) 023_required_fields.sql */
     getNotifications: { need: ['misc', 'cfg'], rpc: 'rx_call2' },   /* (V4.385) جرس التنبيهات من Postgres — 022_notifications.sql */
     getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { revalidate: function () { return now() - (S.lastWAt || 0) < 90000; } }),   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
@@ -7814,9 +7836,10 @@ var LF_ = (function () {
     var d = STRPC[fn]; if (!d) return false;
     if (d.skip && d.skip()) return false;   // (V4.378) مثلاً سجل التعديلات بعد كتابة محلية حديثة
     var ep = S.epoch, a = (args || []).slice(); a[0] = null;   // لا يُرسل رمز الجلسة؛ الهوية من JWT
-    return glRpc(d.rpc || 'rx_call', d.body ? d.body(a) : { p_fn: fn, p_args: a }, function (res) {
+    if (d.pre && d.pre(a) === false) return false;   // (V4.388) تحضير/تحقق بالمتصفح قبل الكتابة؛ false ⇒ Apps Script
+    return glRpc(d.rpc || 'rx_call', d.body ? d.body(a) : { p_fn: fn, p_args: a }, function (res, why) {
       if (ep !== S.epoch) { cb(null, 'epoch'); return; }
-      if (!res) { cb(null, 'fail'); return; }
+      if (!res) { cb(null, why || 'fail'); return; }
       cb({ d: d.out ? d.out(res) : res.d, dv: res.dv || null });
     }, fn, d.need);
   }
@@ -7832,9 +7855,15 @@ var LF_ = (function () {
         var a = Array.prototype.slice.call(arguments);
         var viaApps = function () { var n = getPrev(); if (s) n = n.withSuccessHandler(s); if (f) n = n.withFailureHandler(f); if (hasUo) n = n.withUserObject(uo); n[prop].apply(n, a); };
         if (!stRoute(prop, a, function (x, why) {
-          if (!x) { if (why !== 'epoch') viaApps(); return; }
+          if (!x) {
+            if (why === 'epoch') return;
+            // (V4.388) إشعار جديد وفشل غامض (مهلة/خطأ شبكة بعد إرسال الكتابة): قد يكون حُفظ فعلاً ⇒ لا نعيد الحفظ آلياً (يتفادى إشعاراً مكرراً)
+            if (prop === 'saveBookingToServer' && why && why !== 'soft' && a[1] && !String(a[1].id || '').trim()) { if (f) f(new Error('تعذّر التأكد من حفظ الإشعار الجديد (انقطاع/مهلة) — افتح سجل الإشعارات وتأكد أنه لم يُحفَظ قبل إعادة المحاولة'), uo); return; }
+            viaApps(); return;
+          }
           try { learn(x.dv); } catch (eL) {}   // بصمات لحظة القراءة ⇒ الشاشات الأخرى تتحدّث إن تغيّر شيء
           if (s) s(x.d, uo);
+          try { if (STRPC[prop] && STRPC[prop].after) STRPC[prop].after(a, x.d); } catch (eAf) {}
           try { var _dd = STRPC[prop]; if (_dd && _dd.revalidate && _dd.revalidate()) { var n2 = getPrev(); if (s) n2 = n2.withSuccessHandler(s); n2 = n2.withFailureHandler(function () {}); if (hasUo) n2 = n2.withUserObject(uo); n2[prop].apply(n2, a); } } catch (eRv) {}   // تصحيح بالخلفية بعد كتابة حديثة
           if (prop === 'getClientAccount' && a[1]) {   // (V4.383) مزامنة حجوزات الفنادق لهذا العميل بالخلفية (كانت داخل القراءة) — مرة/دقيقة لكل عميل
             try { var ck = String(a[1]), tn = Date.now(); window._caBgAt = window._caBgAt || {};
@@ -9489,7 +9518,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.387";
+var CLIENT_APP_VERSION = "4.388";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -57535,6 +57564,665 @@ function aiSettingsTest_(btn) {
   #appTabsMenu .sep { border-top: 1px solid #e2e8f0; margin: 4px 0; }
   @media (max-width: 767px) { .app-tab { max-width: 150px; } .app-tab:not(.on) .x { display: none; } }
 </style>
+<script>
+/*BKSRV_BEGIN — مولَّدة آلياً من Code.gs بـ tools/sync_booking_client.py (لا تُعدَّل يدوياً)*/
+window.BKSRV_ = (function () {
+function _noJunk_(v) { var t = (v === null || v === undefined) ? '' : String(v).trim(); return (t === '[]' || t === '{}' || t === 'null' || t === 'undefined' || t === '-') ? '' : t; }
+
+// تُستدعى من داخل النظام بعد تسجيل الدخول فقط، عند الضغط على "طباعة" أو "مشاركة"
+function generatePrintAccessToken(authToken, bookingId) {
+  requireAuth_(authToken);
+  if (!bookingId) {
+    throw new Error("رقم الإشعار مطلوب");
+  }
+  var printToken = Utilities.getUuid() + '-' + Utilities.getUuid();
+  var cache = CacheService.getScriptCache();
+  cache.put('printtoken_' + printToken, String(bookingId), PRINT_TOKEN_DURATION_SECONDS);
+  Logger.log("✅ تم إنشاء توكن طباعة: " + printToken + " لرقم الإشعار: " + bookingId); // إضافة مؤقتة
+  return { token: printToken };
+}
+
+function _fmtDT_(d) {
+  if (!d) return '';
+  var dd = ('0' + d.getDate()).slice(-2);
+  var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+  var yyyy = d.getFullYear();
+  var hh = ('0' + d.getHours()).slice(-2);
+  var mi = ('0' + d.getMinutes()).slice(-2);
+  return dd + '/' + mm + '/' + yyyy + ' — ' + hh + ':' + mi;
+}
+
+function _portSaudiSide_(portVal, which) {
+  var s = String(portVal || "").trim();
+  if (!s) return "";
+  var parts = s.split(/\s*→\s*|\s*←\s*|\s*⟶\s*|\s*⟵\s*|\s+-\s+|\s*\/\s*|\s+—\s+|\s+–\s+/)
+               .map(function(x){ return x.trim(); })
+               .filter(Boolean);
+  if (parts.length < 2) return s;
+  return which === 'departure' ? parts[0] : parts[parts.length - 1];
+}
+
+function _deriveStaySegments_(b) {
+  var extras = b.extraMovements || [];
+  if (typeof extras === 'string') { try { extras = JSON.parse(extras); } catch (e) { extras = []; } }
+  if (!Array.isArray(extras)) extras = [];
+  var originOf = function(t) {
+    t = String(t || '').trim();
+    if (t.indexOf('من مكة') > -1 && (t.indexOf('المدينة') > -1 || t.indexOf('مدينة') > -1)) return 'مكة';
+    if ((t.indexOf('من المدينة') > -1 || t.indexOf('من مدينة') > -1) && t.indexOf('مكة') > -1) return 'المدينة';
+    return '';
+  };
+  var toMs = function(ds, ts) {
+    var m = String(ds || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return null;
+    var t = String(ts || '').match(/^(\d{1,2}):(\d{2})/);
+    return new Date(+m[3], +m[2] - 1, +m[1], t ? +t[1] : 0, t ? +t[2] : 0).getTime();
+  };
+  var transfers = [], others = [];
+  extras.forEach(function(mv) {
+    var o = originOf(mv.type);
+    var ms = toMs(mv.date, mv.time);
+    if (o && ms !== null) transfers.push({ date: mv.date, time: mv.time || '', buses: mv.buses || '', origin: o, ms: ms });
+    else others.push(mv);
+  });
+  transfers.sort(function(a, b2) { return a.ms - b2.ms; });
+  var start = (b.direction === 'المدينة أولاً') ? 'المدينة' : 'مكة';
+  if (!transfers.length || (b.direction !== 'المدينة أولاً' && b.direction !== 'مكة أولاً')) {
+    return { derived: false, others: others, transfers: [] };
+  }
+  var segs = [], cur = start, sDate = b.arrivalDate || '';
+  for (var i = 0; i < transfers.length; i++) {
+    if (transfers[i].origin !== cur) return { derived: false, others: others, transfers: [] }; // تسلسل غير متسق — التحقق سيرفضه برسالته
+    segs.push({ city: cur, s: sDate, e: transfers[i].date });
+    transfers[i].from = cur;
+    cur = (cur === 'المدينة') ? 'مكة' : 'المدينة';
+    transfers[i].to = cur;
+    sDate = transfers[i].date;
+  }
+  segs.push({ city: cur, s: sDate, e: b.departureDate || '' });
+  return { derived: true, segments: segs, transfers: transfers, others: others, firstCity: start, lastCity: cur };
+}
+
+function validateMovementsLogic_(data) {
+
+  // يبني كائن الخطأ المُهيكَل بشكل موحّد لكل نقاط الفشل في الدالة
+  function _err_(code, title, detail, meta) {
+    return { code: code, title: title, detail: detail, meta: meta || {} };
+  }
+
+  // ==================================================
+  // تنظيف وقراءة الوقت بشكل آمن جدًا
+  // ==================================================
+  function parseTimeSafe(timeStr) {
+    if (!timeStr || typeof timeStr !== "string") return { h: 0, m: 0 };
+
+    var clean = timeStr
+      .trim()
+      .replace(/[^\d:]/g, ""); // يحذف أي رموز أو حروف
+
+    var parts = clean.split(":");
+
+    var h = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+
+    if (isNaN(h)) h = 0;
+    if (isNaN(m)) m = 0;
+
+    return { h: h, m: m };
+  }
+
+  // ==================================================
+  // تحويل تاريخ + وقت
+  // ==================================================
+  function toDateTime(dateStr, timeStr) {
+    if (!dateStr) return null;
+
+    var p = dateStr.split('/');
+    var day = parseInt(p[0], 10);
+    var month = parseInt(p[1], 10) - 1;
+    var year = parseInt(p[2], 10);
+
+    var t = parseTimeSafe(timeStr);
+
+    return new Date(year, month, day, t.h, t.m);
+  }
+
+  // ==================================================
+  // قراءة تاريخ + وقت بصيغة مرنة (date + time معًا)
+  // ==================================================
+  function parseDateTimeFlexible(str, extraTime) {
+    if (!str) return null;
+
+    var parts = str.split(' ');
+    var datePart = parts[0];
+    var timePart = parts[1] || extraTime;
+
+    return toDateTime(datePart, timePart);
+  }
+
+  // ==================================================
+  // Arrival / Departure
+  // ==================================================
+  var arrival = toDateTime(data.arrivalDate, data.arrivalTime);
+  var departure = toDateTime(data.departureDate, data.departureTime);
+
+  // 🛡️ وضع "التساهل مع المسودة" (strict=false، الافتراضي لـ saveTripDraft): وقت إنشاء الرحلة
+  // للتسويق قد لا تكون تواريخ الوصول/المغادرة مُدخَلة بعد — هذا وضع طبيعي متوقَّع، فلا نمنع حفظ
+  // المسودة بسببه. لكن لو التواريخ الأساسية موجودة، نكمل فحص التحركات الفعلية كالمعتاد بحثاً عن
+  // أي تعارض منطقي حقيقي حتى في المسودة (هذا ما كان مفقوداً بالكامل من قبل لمسار المسودات)
+  if (!arrival || !departure) {
+    if (data.__strictDates__) {
+      return _err_('BAD_ARRIVAL_DEPARTURE', 'تواريخ الوصول والمغادرة غير مكتملة',
+        'تواريخ الوصول أو المغادرة غير صحيحة أو غير مكتملة — تأكد من إدخال التاريخ والساعة في الحقلين قبل الحفظ.');
+    }
+    return null; // مسودة بلا تواريخ أساسية بعد — لا شيء نتحقق منه حالياً، هذا متوقَّع وليس خطأ
+  }
+
+  // ==================================================
+  // الفنادق
+  // ==================================================
+  var madinahStart = parseDateTimeFlexible(data.madinahCheckIn);
+  var madinahEnd = parseDateTimeFlexible(data.madinahCheckOut);
+  var makkahStart = parseDateTimeFlexible(data.makkahCheckIn);
+  var makkahEnd = parseDateTimeFlexible(data.makkahCheckOut);
+
+  // ==================================================
+  // التحركات الإضافية
+  // ==================================================
+  var extra = [];
+  try {
+    extra = data.extraMovements || [];
+    if (typeof extra === "string") {
+      extra = JSON.parse(extra);
+    }
+  } catch (e) {
+    return _err_('BAD_MOVEMENTS_JSON', 'تعذّرت قراءة بيانات التحركات',
+      'يوجد خطأ في تنسيق بيانات التحركات الإضافية ولا يمكن قراءتها — جرّب حذف آخر تحرك أضفته وإعادة إدخاله.');
+  }
+
+  // ==================================================
+  // ترتيب زمني دقيق
+  // ==================================================
+  // 🛡️ حماية: أي حركة إضافية بلا تاريخ (خانة فاضية نسيها المستخدم) كانت بتخلي parseDateTimeFlexible
+  // يرجّع null، وبعدين .getTime() على null بيرمي استثناء يوقف الحفظ بالكامل بصمت تام (بدون أي رسالة
+  // تصل للواجهة، لأن الخطأ بيحصل جوه الفانكشن قبل ما توصل لأي return { success:false, error: ... }) —
+  // فبدل ما نخليها تنهار، نتحقق الأول ونرجّع رسالة تفصيلية توضح بالظبط أي حركة ناقصة تاريخها
+  for (var _mi = 0; _mi < extra.length; _mi++) {
+    if (!parseDateTimeFlexible(extra[_mi].date, extra[_mi].movementTime || extra[_mi].time)) {
+      return _err_('MISSING_MOVEMENT_DATE', 'حركة بلا تاريخ محدد',
+        'الحركة "' + (extra[_mi].type || 'بلا نوع') + '" لم يُحدَّد لها تاريخ — أكمل التاريخ أو احذف هذه الحركة الفارغة قبل الحفظ.',
+        { movementType: extra[_mi].type || '', movementIndex: _mi });
+    }
+  }
+  extra.sort(function (a, b) {
+    var d1 = parseDateTimeFlexible(a.date, a.movementTime || a.time).getTime();
+    var d2 = parseDateTimeFlexible(b.date, b.movementTime || b.time).getTime();
+    return d1 - d2;
+  });
+
+  // ==================================================
+  // 🏨 (V4.03 — الخيار ب) مقاطع الإقامة الإضافية: رحلة قد تعود لنفس المدينة مرة أخرى
+  // (مكة ← المدينة ← مكة). الحقول الأساسية = أول إقامة بكل مدينة، وكل عودة لاحقة تُسجَّل
+  // كتحرك من نوع «إقامة إضافية بمكة/بالمدينة» بتاريخي من/إلى. المحرك يبني الجدول الزمني
+  // الكامل من كل المقاطع ويتحقق من الاتصال الزمني بدل رفض الرحلات متعددة المقاطع المنطقية.
+  // ==================================================
+  var STAY_MAK = 'إقامة إضافية بمكة', STAY_MAD = 'إقامة إضافية بالمدينة';
+  var madIntervals = [], makIntervals = [];
+
+  // 🧭 (V4.04) الاشتقاق التلقائي للجدول الزمني من تحركات الانتقال بين المدينتين:
+  // لو سُجّلت انتقالات (من مكة الى المدينة / العكس) فهي وحدها تحدد فترات التواجد —
+  // المدينة الأولى من الاتجاه، وكل انتقال يبدّل المدينة، والفترات: وصول→انتقال1→انتقال2→…→مغادرة.
+  // بهذا تُقبل رحلة (مكة ← المدينة ← مكة مرة أخرى) بشكل طبيعي تمامًا.
+  var _cityTransfers = [];
+  extra.forEach(function(mm) {
+    var tt = (mm.type || '').trim();
+    if (tt === STAY_MAK || tt === STAY_MAD) return;
+    var isFromMak = tt.indexOf('من مكة') > -1 && (tt.indexOf('المدينة') > -1 || tt.indexOf('مدينة') > -1);
+    var isFromMad = (tt.indexOf('من المدينة') > -1 || tt.indexOf('من مدينة') > -1) && tt.indexOf('مكة') > -1;
+    if (!isFromMak && !isFromMad) return;
+    var dtt = parseDateTimeFlexible(mm.date, mm.movementTime || mm.time);
+    if (!dtt) return;
+    _cityTransfers.push({ dt: dtt, origin: isFromMak ? 'مكة' : 'المدينة' });
+  });
+  _cityTransfers.sort(function(a, b) { return a.dt - b.dt; });
+
+  var _derivedOk = false;
+  if (_cityTransfers.length && (data.direction === 'المدينة أولاً' || data.direction === 'مكة أولاً')) {
+    var _cur = (data.direction === 'المدينة أولاً') ? 'المدينة' : 'مكة';
+    var _segStart = arrival, _consistent = true;
+    var _tmpMad = [], _tmpMak = [];
+    for (var _ct = 0; _ct < _cityTransfers.length; _ct++) {
+      if (_cityTransfers[_ct].origin !== _cur) { _consistent = false; break; } // انتقال من مدينة ليس بها — الحلقة الرئيسية سترفع الخطأ التفصيلي
+      (_cur === 'المدينة' ? _tmpMad : _tmpMak).push([_segStart, _cityTransfers[_ct].dt]);
+      _cur = (_cur === 'المدينة') ? 'مكة' : 'المدينة';
+      _segStart = _cityTransfers[_ct].dt;
+    }
+    if (_consistent) {
+      (_cur === 'المدينة' ? _tmpMad : _tmpMak).push([_segStart, departure]);
+      madIntervals = _tmpMad;
+      makIntervals = _tmpMak;
+      _derivedOk = true;
+    }
+  }
+  if (!_derivedOk) {
+    if (madinahStart && madinahEnd) madIntervals.push([madinahStart, madinahEnd]);
+    if (makkahStart && makkahEnd) makIntervals.push([makkahStart, makkahEnd]);
+  }
+  var stayCount = 0;
+  for (var _si = 0; _si < extra.length; _si++) {
+    var _sm = extra[_si];
+    var _st = (_sm.type || '').trim();
+    if (_st !== STAY_MAK && _st !== STAY_MAD) continue;
+    stayCount++;
+    var _sFrom = parseDateTimeFlexible(_sm.date);
+    var _sTo = parseDateTimeFlexible(_sm.toDate);
+    if (!_sFrom || !_sTo) {
+      return _err_('STAY_DATES_MISSING', 'مقطع إقامة بلا تاريخين',
+        'المقطع "' + _st + '" يحتاج تاريخ بداية وتاريخ نهاية معاً — أكمل التاريخين أو احذف المقطع.',
+        { movementType: _st });
+    }
+    if (_sTo.getTime() <= _sFrom.getTime()) {
+      return _err_('STAY_RANGE_INVALID', 'مدى مقطع الإقامة غير صحيح',
+        'نهاية المقطع "' + _st + '" (' + _fmtDT_(_sTo) + ') يجب أن تكون بعد بدايته (' + _fmtDT_(_sFrom) + ').',
+        { movementType: _st });
+    }
+    (_st === STAY_MAD ? madIntervals : makIntervals).push([_sFrom, _sTo]);
+  }
+  var _dayOf_ = function(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  var _inAny_ = function(intervals, dt) {
+    for (var q = 0; q < intervals.length; q++) {
+      if (dt >= intervals[q][0] && dt <= intervals[q][1]) return true;
+    }
+    return false;
+  };
+  // عند وجود مقاطع إضافية: تحقق اتصال الجدول الزمني كاملاً — يبدأ يوم الوصول، بلا فجوات
+  // ولا تداخل بين المقاطع (نهاية كل مقطع = بداية التالي بنفس اليوم)، وينتهي يوم المغادرة
+  if (stayCount > 0) {
+    var segs = madIntervals.map(function(iv) { return { s: iv[0], e: iv[1], city: 'المدينة' }; })
+      .concat(makIntervals.map(function(iv) { return { s: iv[0], e: iv[1], city: 'مكة' }; }))
+      .sort(function(a, b) { return a.s - b.s; });
+    if (segs.length) {
+      if (_dayOf_(segs[0].s) !== _dayOf_(arrival)) {
+        return _err_('TIMELINE_START_MISMATCH', 'بداية الإقامات لا تطابق الوصول',
+          'أول مقطع إقامة (' + segs[0].city + ' من ' + _fmtDT_(segs[0].s) + ') لا يبدأ يوم الوصول (' + _fmtDT_(arrival) + ') — عدّل تواريخ السكن حتى يتصل الجدول الزمني.');
+      }
+      for (var sg = 1; sg < segs.length; sg++) {
+        if (_dayOf_(segs[sg].s) !== _dayOf_(segs[sg - 1].e)) {
+          return _err_('TIMELINE_GAP', 'فجوة أو تداخل بين مقاطع الإقامة',
+            'مقطع ' + segs[sg - 1].city + ' ينتهي ' + _fmtDT_(segs[sg - 1].e) + ' بينما المقطع التالي (' + segs[sg].city + ') يبدأ ' + _fmtDT_(segs[sg].s) + ' — يجب أن تكون نهاية كل مقطع هي نفس يوم بداية المقطع التالي.');
+        }
+      }
+      if (_dayOf_(segs[segs.length - 1].e) !== _dayOf_(departure)) {
+        return _err_('TIMELINE_END_MISMATCH', 'نهاية الإقامات لا تطابق المغادرة',
+          'آخر مقطع إقامة (' + segs[segs.length - 1].city + ') ينتهي ' + _fmtDT_(segs[segs.length - 1].e) + ' بينما المغادرة ' + _fmtDT_(departure) + ' — عدّل التواريخ حتى يتصل الجدول الزمني.');
+      }
+    }
+  }
+
+  var trackedLocation = "";
+
+  // ==================================================
+  // الحلقة الرئيسية
+  // ==================================================
+  for (var i = 0; i < extra.length; i++) {
+
+    var m = extra[i];
+
+    var moveDate = parseDateTimeFlexible(m.date, m.time);
+
+    if (!moveDate) continue;
+
+    var type = (m.type || "").trim();
+    var moveDateLabel = m.date + (m.time ? (' ' + m.time) : '');
+
+    // 🏨 مقاطع الإقامة الإضافية سبق التحقق منها ببناء الجدول الزمني أعلاه — ليست «حركة» هنا
+    if (type === STAY_MAK || type === STAY_MAD) continue;
+
+    // ==================================================
+    // 1. خارج مدة الرحلة (بدقة الساعة)
+    // ==================================================
+    if (moveDate.getTime() < arrival.getTime()) {
+      return _err_('MOVEMENT_BEFORE_ARRIVAL', 'حركة قبل موعد الوصول',
+        'الحركة "' + type + '" مؤرَّخة قبل وصول المعتمرين فعلياً — تحقق من التاريخ المُدخَل لهذه الحركة.',
+        { movementType: type, movementDate: moveDateLabel, referenceLabel: 'وقت الوصول', referenceDate: _fmtDT_(arrival) });
+    }
+
+    if (moveDate.getTime() > departure.getTime()) {
+      return _err_('MOVEMENT_AFTER_DEPARTURE', 'حركة بعد موعد المغادرة',
+        'الحركة "' + type + '" مؤرَّخة بعد مغادرة المعتمرين فعلياً — تحقق من التاريخ المُدخَل لهذه الحركة.',
+        { movementType: type, movementDate: moveDateLabel, referenceLabel: 'وقت المغادرة', referenceDate: _fmtDT_(departure) });
+    }
+
+    // ==================================================
+    // 2. تحديد الموقع المتوقع
+    // ==================================================
+    var currentExpectedLocation = "";
+
+    // 🧭 لتحركات الانتقال على يوم حدود بين مقطعين (المعتمر بالمدينتين حسابياً في نفس اليوم):
+    // مدينة المنشأ المذكورة في نوع التحرك هي الحاسمة لو كانت فترات إقامتها تشمل هذا التاريخ
+    var _origin = type.indexOf('من مكة') > -1 ? 'مكة'
+      : (type.indexOf('من المدينة') > -1 || type.indexOf('من مدينة') > -1) ? 'المدينة' : '';
+
+    if (trackedLocation !== "") {
+
+      currentExpectedLocation = trackedLocation;
+
+    } else if (_origin && _inAny_(_origin === 'مكة' ? makIntervals : madIntervals, moveDate)) {
+
+      currentExpectedLocation = _origin;
+
+    } else if (_inAny_(madIntervals, moveDate)) {
+
+      currentExpectedLocation = "المدينة";
+
+    } else if (_inAny_(makIntervals, moveDate)) {
+
+      currentExpectedLocation = "مكة";
+
+    } else {
+
+      currentExpectedLocation =
+        (type.includes("المدينة") || type.includes("مدينة")) ? "المدينة" : "مكة";
+    }
+
+    // ==================================================
+    // 3. انتقال بين المدن
+    // ==================================================
+    if (type.includes("إلى") || type.includes("من")) {
+
+      if (type.includes("مكة") && (type.includes("المدينة") || type.includes("مدينة"))) {
+
+        if (type.indexOf("مكة") < type.indexOf("المدينة") || type.includes("من مكة")) {
+
+          if (currentExpectedLocation !== "مكة") {
+            return _err_('CITY_TRANSFER_MISMATCH', 'تحرك غير منطقي بين المدينتين',
+              'لا يمكن تسجيل تحرك من مكة بينما المعتمر في ' + currentExpectedLocation + ' وقت هذه الحركة — تحقق من ترتيب التواريخ.',
+              { movementType: type, movementDate: moveDateLabel, currentLocation: currentExpectedLocation });
+          }
+
+          trackedLocation = "المدينة";
+
+        } else {
+
+          if (currentExpectedLocation !== "المدينة") {
+            return _err_('CITY_TRANSFER_MISMATCH', 'تحرك غير منطقي بين المدينتين',
+              'لا يمكن تسجيل تحرك من المدينة بينما المعتمر في ' + currentExpectedLocation + ' وقت هذه الحركة — تحقق من ترتيب التواريخ.',
+              { movementType: type, movementDate: moveDateLabel, currentLocation: currentExpectedLocation });
+          }
+
+          trackedLocation = "مكة";
+        }
+      }
+
+      continue;
+    }
+
+    // ==================================================
+    // 4. مزارات المدينة
+    // ==================================================
+    if (type.includes("المدينة") || type.includes("مدينة")) {
+
+      if (currentExpectedLocation !== "المدينة") {
+        return _err_('MADINAH_TOUR_MISMATCH', 'مزارات المدينة في غير موضعها',
+          'الحركة "' + type + '" مسجَّلة أثناء تواجد المعتمر في ' + currentExpectedLocation + '، وليس المدينة — تحقق من تاريخ هذه المزارات.',
+          { movementType: type, movementDate: moveDateLabel, currentLocation: currentExpectedLocation });
+      }
+
+      // 🛡️ لو تاريخ دخول فندق المدينة غير مُدخَل بعد، moveDate < null كانت بترمي استثناء صامت —
+      // الآن رسالة واضحة بدل الكراش
+      if (!madIntervals.length) {
+        return _err_('MADINAH_HOTEL_DATE_MISSING', 'تاريخ فندق المدينة غير محدَّد',
+          'لا يمكن التحقق من حركة "' + type + '" لأن تاريخ دخول فندق المدينة غير مُدخَل بعد — أكمله أولاً في قسم بيانات الفندق.',
+          { movementType: type });
+      }
+      if (moveDate < madIntervals[0][0]) {
+        return _err_('MADINAH_TOUR_BEFORE_CHECKIN', 'مزارات قبل الوصول للفندق',
+          'الحركة "' + type + '" مؤرَّخة قبل موعد دخول فندق المدينة — تحقق من التاريخ.',
+          { movementType: type, movementDate: moveDateLabel, referenceLabel: 'دخول فندق المدينة', referenceDate: _fmtDT_(madIntervals[0][0]) });
+      }
+    }
+
+    // ==================================================
+    // 5. مزارات مكة
+    // ==================================================
+    if (type.includes("مكة")) {
+
+      if (currentExpectedLocation !== "مكة") {
+        return _err_('MAKKAH_TOUR_MISMATCH', 'مزارات مكة في غير موضعها',
+          'الحركة "' + type + '" مسجَّلة أثناء تواجد المعتمر في ' + currentExpectedLocation + '، وليس مكة — تحقق من تاريخ هذه المزارات.',
+          { movementType: type, movementDate: moveDateLabel, currentLocation: currentExpectedLocation });
+      }
+
+      // 🛡️ نفس الحماية لو تاريخ دخول فندق مكة غير مُدخَل بعد
+      if (!makIntervals.length) {
+        return _err_('MAKKAH_HOTEL_DATE_MISSING', 'تاريخ فندق مكة غير محدَّد',
+          'لا يمكن التحقق من حركة "' + type + '" لأن تاريخ دخول فندق مكة غير مُدخَل بعد — أكمله أولاً في قسم بيانات الفندق.',
+          { movementType: type });
+      }
+      if (moveDate < makIntervals[0][0]) {
+        return _err_('MAKKAH_TOUR_BEFORE_CHECKIN', 'مزارات قبل الوصول للفندق',
+          'الحركة "' + type + '" مؤرَّخة قبل موعد دخول فندق مكة — تحقق من التاريخ.',
+          { movementType: type, movementDate: moveDateLabel, referenceLabel: 'دخول فندق مكة', referenceDate: _fmtDT_(makIntervals[0][0]) });
+      }
+    }
+  }
+
+  return null;
+}
+
+function buildAllMovements_(bookingData) {
+
+  var movements = [];
+
+  // عدد الباصات
+  var mainBuses = bookingData.busCount || bookingData.buses || "";
+
+  // أسماء المواقع
+  var arrivalPort = _portSaudiSide_(bookingData.arrivalPort || "", 'arrival');
+  var arrivalFlight = bookingData.arrivalFlight || "";
+
+  var departurePort = _portSaudiSide_(bookingData.departurePort || "", 'departure');
+  var departureFlight = bookingData.departureFlight || "";
+
+  var madinahHotel = bookingData.madinahHotel || "";
+  var makkahHotel = bookingData.makkahHotel || "";
+
+  // 🧭 (V4.05) المسار الموحد: انتقالات مدن مُدخلة → المقاطع تولّد البيان كله (بلا تكرار، والمغادرة من آخر مقطع فعلي)
+  var dv = _deriveStaySegments_(bookingData);
+  if (dv.derived) {
+    var hotelOf = function(c) { return c === 'المدينة' ? (madinahHotel || 'غير محدد') : (makkahHotel || 'غير محدد'); };
+    movements.push({
+      date: bookingData.arrivalDate, time: bookingData.arrivalTime,
+      type: 'استقبال وصول من ' + arrivalPort + ' على رحلة رقم ' + arrivalFlight + ' إلى ' + dv.firstCity + ' (' + hotelOf(dv.firstCity) + ')',
+      buses: mainBuses
+    });
+    dv.transfers.forEach(function(tr, ti) {
+      movements.push({
+        date: tr.date,
+        time: tr.time || (ti === 0 ? (bookingData.internalTransferTime || '') : ''),
+        type: 'التحرك من ' + tr.from + ' (' + hotelOf(tr.from) + ') إلى ' + tr.to + ' (' + hotelOf(tr.to) + ')',
+        buses: tr.buses || mainBuses
+      });
+    });
+    movements.push({
+      date: bookingData.departureDate, time: bookingData.departureTime,
+      type: 'التوجه إلى ' + departurePort + ' للمغادرة على رحلة رقم ' + departureFlight + ' من ' + dv.lastCity + ' (' + hotelOf(dv.lastCity) + ')',
+      buses: mainBuses
+    });
+    // التحركات غير الانتقالية فقط (المزارات وغيرها) — الانتقالات مُثِّلت أعلاه بتفاصيلها فلا تُكرَّر
+    dv.others.forEach(function(m) {
+      movements.push({ date: m.date || '', time: m.time || '', type: m.type || m.movementType || '', buses: m.buses || m.busCount || mainBuses });
+    });
+    movements.sort(function(a, b2) {
+      var pk = function(o) {
+        var m = String(o.date || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (!m) return 8640000000000000;
+        var t = String(o.time || '').match(/^(\d{1,2}):(\d{2})/);
+        return new Date(+m[3], +m[2] - 1, +m[1], t ? +t[1] : 0, t ? +t[2] : 0).getTime();
+      };
+      return pk(a) - pk(b2);
+    });
+    return movements;
+  }
+
+  if (bookingData.direction === "المدينة أولاً") {
+
+    // استقبال المدينة
+    movements.push({
+      date: bookingData.arrivalDate,
+      time: bookingData.arrivalTime,
+      type:
+        "استقبال وصول من " +
+        arrivalPort +
+        " على رحلة رقم " +
+        arrivalFlight +
+        " إلى المدينة (" +
+        madinahHotel +
+        ")",
+      buses: mainBuses
+    });
+
+    // الانتقال إلى مكة
+    movements.push({
+      date: _noJunk_(bookingData.internalTransferDate) || bookingData.madinahCheckOut,
+      time: bookingData.internalTransferTime || "",
+      type:
+        "التحرك من المدينة (" +
+        madinahHotel +
+        ") إلى مكة (" +
+        makkahHotel +
+        ")",
+      buses: mainBuses
+    });
+
+    // المغادرة من مكة
+    movements.push({
+      date: bookingData.departureDate,
+      time: bookingData.departureTime,
+      type:
+        "التوجه إلى " +
+        departurePort +
+        " للمغادرة على رحلة رقم " +
+        departureFlight +
+        " من مكة (" +
+        makkahHotel +
+        ")",
+      buses: mainBuses
+    });
+
+  } else if (bookingData.direction === "مكة أولاً") {
+
+    // استقبال مكة
+    movements.push({
+      date: bookingData.arrivalDate,
+      time: bookingData.arrivalTime,
+      type:
+        "استقبال وصول من " +
+        arrivalPort +
+        " على رحلة رقم " +
+        arrivalFlight +
+        " إلى مكة (" +
+        makkahHotel +
+        ")",
+      buses: mainBuses
+    });
+
+    // الانتقال إلى المدينة
+    movements.push({
+      date: _noJunk_(bookingData.internalTransferDate) || bookingData.makkahCheckOut,
+      time: bookingData.internalTransferTime || "",
+      type:
+        "التحرك من مكة (" +
+        makkahHotel +
+        ") إلى المدينة (" +
+        madinahHotel +
+        ")",
+      buses: mainBuses
+    });
+
+    // المغادرة من المدينة
+    movements.push({
+      date: bookingData.departureDate,
+      time: bookingData.departureTime,
+      type:
+        "التوجه إلى " +
+        departurePort +
+        " للمغادرة على رحلة رقم " +
+        departureFlight +
+        " من المدينة (" +
+        madinahHotel +
+        ")",
+      buses: mainBuses
+    });
+
+  } else if (bookingData.direction === "مكة فقط" || bookingData.direction === "المدينة فقط") {
+    // 🏙️ (V4.16) إقامة أحادية المدينة — بلا أي تحرك داخلي: الوصول والمغادرة لنفس المدينة فقط
+    var _onlyCity = (bookingData.direction === "مكة فقط") ? "مكة" : "المدينة";
+    var _onlyHotel = (_onlyCity === "مكة") ? makkahHotel : madinahHotel;
+    movements.push({
+      date: bookingData.arrivalDate,
+      time: bookingData.arrivalTime,
+      type: "استقبال وصول من " + arrivalPort + " على رحلة رقم " + arrivalFlight + " إلى " + _onlyCity + " (" + _onlyHotel + ")",
+      buses: mainBuses
+    });
+    movements.push({
+      date: bookingData.departureDate,
+      time: bookingData.departureTime,
+      type: "التوجه إلى " + departurePort + " للمغادرة على رحلة رقم " + departureFlight + " من " + _onlyCity + " (" + _onlyHotel + ")",
+      buses: mainBuses
+    });
+  }
+
+  // التحركات الإضافية
+  var extra = bookingData.extraMovements || [];
+
+  if (typeof extra === "string") {
+    try {
+      extra = JSON.parse(extra);
+    } catch (e) {
+      extra = [];
+    }
+  }
+
+  extra.forEach(function(m) {
+
+    var movementText = m.type || m.movementType || "";
+
+    // تحسين أسماء التحركات الشائعة القديمة
+    if (movementText === "من مكة الى المدينة") {
+      movementText =
+        "التحرك من مكة (" +
+        makkahHotel +
+        ") إلى المدينة (" +
+        madinahHotel +
+        ")";
+    }
+
+    if (movementText === "من المدينة الى مكة") {
+      movementText =
+        "التحرك من المدينة (" +
+        madinahHotel +
+        ") إلى مكة (" +
+        makkahHotel +
+        ")";
+    }
+
+    movements.push({
+      date: m.date || "",
+      time: m.time || "",
+      type: movementText,
+      buses: m.buses || m.busCount || ""
+    });
+
+  });
+
+  return movements;
+}
+
+return { validate: validateMovementsLogic_, build: buildAllMovements_ };
+})();
+/*BKSRV_END*/
+</script>
 <script>
 /* 📑 (V4.324) تبويبات داخل البرنامج (مثل نماذج Access): كل تبويب «شاشة» بحالتها — فتح شاشة جديدة (＋ أو Ctrl/الضغط بالعجلة على أي
    شاشة بالقائمة) لا يغلق الحالية، والتنقل بينها بضغطة. الشاشات العادية تبقى في الصفحة فتعود بحالتها (فلاتر/تمرير/بيانات) بلا إعادة
