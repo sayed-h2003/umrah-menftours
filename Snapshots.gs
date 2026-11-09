@@ -48,7 +48,7 @@ function _snapEntryTake_(id, r, lines, action, user) {
     var sid = _snapId_('E');
     var packed = _snapPack_({ r: r, l: lines || [] });
     _snapAppend_(_snapGlSheet_(), [sid, _snapNowTxt_(), String(user || ''), String(action || ''), String(id)], packed);
-    if (/^قبل حذف/.test(String(action || ''))) _rbQueueGlEntry_(String(id), r, lines || [], packed, user);   // 🗑️ (V4.400) كل قيد يُحذف يدخل سلة المحذوفات
+    if (/^قبل (حذف|رفض دفعة|سحب دفعة)/.test(String(action || ''))) _rbQueueGlEntry_(String(id), r, lines || [], packed, user);   // 🗑️ (V4.400) كل قيد يُحذف يدخل سلة المحذوفات
     return sid;
   } catch (e) { Logger.log('snapEntryTake: ' + e.message); return ''; }
 }
@@ -638,6 +638,23 @@ function snapScreens(authToken) {
    تُودَع بالجدول recycle_bin (035) بصورتها الكاملة {r, l}، وتُستعاد بـ recycleRestoreAs من شاشة السلة بنفس منطق «استعادة نسخة سابقة».
    فشل الإيداع لا يوقف الحذف (يبقى سجل اللقطات GL_Snapshots احتياطاً).
    ============================================================ */
+var _RB_USER_ = '';
+var RB_GENERIC_KINDS_ = { booking: 1, movements: 1, trip: 1, pilgrims: 1, client: 1, acc_item: 1, agent_item: 1, visa_file: 1, ministry_file: 1, receipt: 1, quota: 1, supervisor: 1, catering: 1, housing: 1, user: 1, company: 1, gl_account: 1, hb_payment: 1, hb_charter: 1, sheet_row: 1 };
+// يحجز صفاً سيُحذف من ورقة بسلة المحذوفات (قبل deleteRow): prefix = بادئة العنوان · cols = فهارس أعمدة تُكمل العنوان · detail من بقية الخلايا
+function _rbDel_(sh, rowIdx, kind, prefix, cols, user, noFlush) {
+  try { var row = sh.getRange(rowIdx, 1, 1, sh.getLastColumn()).getValues()[0]; _rbQueueVals_(sh, row, kind, prefix, cols, user); if (!noFlush) _rbFlush_(); }
+  catch (e) { Logger.log('rbDel: ' + e.message); }
+}
+function _rbQueueVals_(sh, row, kind, prefix, cols, user) {
+  try {
+    var cell = function (x) { return (x instanceof Date) ? Utilities.formatDate(x, 'Africa/Cairo', 'dd/MM/yyyy') : String(x == null ? '' : x).replace(/\s+/g, ' ').trim(); };
+    var lab = (cols || [0]).map(function (i) { return cell(row[i]); }).filter(Boolean).join(' — ');
+    var det = row.map(cell).filter(Boolean).join(' | ');
+    _RB_Q_.push({ kind: kind, label: String(prefix || '') + (lab ? ' ' + lab : ''), detail: det.slice(0, 500), user: String(user || _RB_USER_ || ''),
+      payload: { ss: sh.getParent().getId(), sheet: sh.getName(), p: _snapPack_(row) } });
+    if (_RB_Q_.length >= 40) _rbFlush_();
+  } catch (e) { Logger.log('rbQueueVals: ' + e.message); }
+}
 var _RB_Q_ = [], _RB_SKIP_ = false;   // _RB_SKIP_: لقطات صادرة من Postgres (حُفظ الحذف بسلته أصلاً)
 function _rbQueueGlEntry_(id, r, lines, packed, user) {
   try {
@@ -682,6 +699,18 @@ function recycleRestoreAs(authToken, ids) {
         _glPerm_(authToken, 'edit');
         if (!d || !d.r) throw new Error('بيانات العنصر تالفة');
         _snapEntryApply_(session, d, String(p.id || d.r[0]), 'سلة المحذوفات', true);
+      } else if (RB_GENERIC_KINDS_[x.kind] && p.ss) {
+        if (!d || !d.length) throw new Error('بيانات العنصر تالفة');
+        var tsh = SpreadsheetApp.openById(String(p.ss)).getSheetByName(String(p.sheet));
+        if (!tsh) throw new Error('الورقة ' + p.sheet + ' غير موجودة');
+        var tl = tsh.getLastRow(), same = false;
+        if (tl >= 2) {
+          var ex = tsh.getRange(2, 1, tl - 1, Math.min(d.length, tsh.getLastColumn(), 4)).getValues(), n4 = Math.min(d.length, 4);
+          same = ex.some(function (r) { for (var q = 0; q < n4; q++) if (String(r[q]) !== String(d[q])) return false; return true; });
+        }
+        if (same) throw new Error('الصف موجود الآن بالفعل بالورقة ' + p.sheet);
+        tsh.getRange(tl + 1, 1, 1, d.length).setValues([d]);
+        try { clearAllCache_(); } catch (eC) {}
       } else if (x.kind === 'acc_payment' || x.kind === 'agent_payment' || x.kind === 'sheet_row') {
         if (!d || !d.length) throw new Error('بيانات العنصر تالفة');
         _snapRowApply_(session, String(p.sheet), String(p.key), d, 'سلة المحذوفات', true);

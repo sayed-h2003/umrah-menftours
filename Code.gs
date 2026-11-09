@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.401";
+var APP_VERSION = "4.402";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2263,8 +2263,8 @@ function recycleRestore(authToken) { return recycleList(authToken); }
 function recycleDelete(authToken) { return recycleList(authToken); }
 function recycleEmpty(authToken) { return recycleList(authToken); }
 function recycleSetDays(authToken) { return recycleList(authToken); }
-// (V4.401) آثار حفظ كشف الرحلة بعد كتابتها من Postgres (037): سجل الفروق · المشرفون · التنبيهات · الكاش · مزامنة حسابات العملاء · دليل العملاء.
-// jobId = بند kashfsave بصندوق الإخراج (يحمل الصفوف القديمة والقائمة الجديدة). المتصفح ينفّذها فوراً، وإلا يتولاها _outboxDrain_ بعد ~دقيقتين.
+// (V4.401/402) بعد حفظ كشف الرحلة من Postgres (037): سجل الفروق والمشرفون والتنبيهات ودليل العملاء كلها تتم داخل Postgres؛
+// ما يبقى هنا فقط مزامنة بنود حسابات العملاء التلقائية (_syncTripAccounts_ — محرك التسعير لم يُنقل بعد). jobId = بند kashfsave.
 function kashfAfterSaveBg(authToken, jobId) {
   var session = requireAuth_(authToken);
   var r = _supaReq_('get', 'app_outbox?id=eq.' + encodeURIComponent(String(jobId)) + '&kind=eq.kashfsave&done_at=is.null&select=id,payload');
@@ -2275,19 +2275,8 @@ function kashfAfterSaveBg(authToken, jobId) {
   return out;
 }
 function _kashfAfterSave_(p, authToken, username) {
-  var tripName = String(p.trip || ''), pilgrims = p.pilgrims || [], user = String(username || p.user || '');
-  var rv = function (row) { return (row || []).map(function (c) { return (c && typeof c === 'object' && c['$d'] !== undefined) ? new Date(c['$d']) : c; }); };
-  var oldThisTrip = (p.old || []).map(rv), C = _robustColMap_(_getPilgrimsSheet_(), PILGRIMS_HEADERS_), res = { success: true };
-  try { _logKashfDiff_(user, tripName, oldThisTrip, pilgrims, C); } catch (e) { Logger.log('kashf diff log failed: ' + e); }
-  try { _syncTripSupervisorsFromKashf_(tripName, pilgrims, user); } catch (eSup) { Logger.log('supervisors sync failed: ' + eSup); }
-  try { _pushKashfChangeNotifications_(tripName, oldThisTrip, pilgrims, C, user); } catch (eN) { Logger.log('kashf change notifications failed: ' + eN); }
-  ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'].forEach(function (k) { try { clearCachedData_(k); } catch (eC) {} });
-  try { _cacheBust_('pilgrims'); } catch (eB) {}
-  try { res.accSync = _syncTripAccounts_(authToken || null, tripName, user); } catch (eS) { Logger.log('acc sync failed: ' + eS); }
-  try {
-    var cd = _clientDirEnsure_(pilgrims.map(function (x) { return x.client; }), user);
-    if (cd) { res.clientsAdded = cd.added; if (cd.error) res.clientsWarning = cd.error; if (Object.keys(cd.existing || {}).length) res.clientsAliases = cd.existing; }
-  } catch (eCd) { Logger.log('client dir ensure failed: ' + eCd); res.clientsWarning = 'تعذّر تسجيل العملاء الجدد بدليل العملاء: ' + (eCd.message || eCd); }
+  var tripName = String(p.trip || ''), res = { success: true };
+  try { res.accSync = _syncTripAccounts_(authToken || null, tripName, String(username || p.user || '')); } catch (eS) { Logger.log('acc sync failed: ' + eS); }
   return res;
 }
 function vzCacheClearBg(authToken) { requireAuth_(authToken); try { _vzClearCache_(); } catch (e) {} return { success: true }; }   // (V4.396) بعد دفعة وكيل من Postgres
@@ -3082,6 +3071,7 @@ function deleteBookingRecord(authToken, id) {
       var company = B(data[i], 'company') || "";
       var client = B(data[i], 'client') || "";
 
+      _RB_USER_ = session.username; _rbDel_(sheet, i + 1, 'booking', 'إشعار ' + id, [1], session.username);
       sheet.deleteRow(i + 1);
       deleteBookingMovements_(id);
       // 🔧 (V4.50) فرض تطبيق الحذف فوراً قبل مسح الـ Cache — بدونه القراءة التالية قد تعيد الصف
@@ -3607,9 +3597,11 @@ function deleteBookingMovements_(bookingId) {
       data[i][1].toString() === bookingId.toString()
     ) {
 
+      _rbDel_(sheet, i + 1, 'movements', 'تحرك للإشعار ' + bookingId, [1], '', true);
       sheet.deleteRow(i + 1);
     }
   }
+  _rbFlush_();
 }
 
 
@@ -6328,6 +6320,7 @@ function deleteUserAccount(authToken, targetRow, expectedUsername) {
     }
   }
 
+  _rbDel_(sheet, targetRow, 'user', 'مستخدم', [0, 1], session.username);
   sheet.deleteRow(targetRow);
 
   logChange_(session.username, "حذف مستخدم", targetUsername, "-", "-", "تم حذف الحساب نهائياً");
@@ -11168,6 +11161,7 @@ function deleteCompanySetting(authToken, targetRow, companyName) {
 
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Agents_Settings");
+  _rbDel_(sheet, targetRow, 'company', 'إعدادات شركة/وكيل', [0, 1, 2], '');
   sheet.deleteRow(targetRow);
 
   logChange_(session.username, "حذف شركة", companyName || "-", "-", companyName || "-", "-");
@@ -15656,7 +15650,8 @@ function deleteAccItemsBulk(authToken, ids) {
   if (!toDelete.length) return { success: false, error: hbSkipped ? _accHbMsg_() : 'البنود غير موجودة' };
   _accTombAdd_(tombs, session.username);   // 🪦 (V4.378) لا تعيدها المزامنة التلقائية
   // الحذف من الأسفل للأعلى حتى لا تنزاح أرقام الصفوف
-  for (var j = toDelete.length - 1; j >= 0; j--) sh.deleteRow(toDelete[j]);
+  for (var j = toDelete.length - 1; j >= 0; j--) { _rbDel_(sh, toDelete[j], 'acc_item', 'بند حساب', [1, 2], session.username, true); sh.deleteRow(toDelete[j]); }
+  _rbFlush_();
   logChange_(session.username, 'حذف بنود حساب دفعة واحدة', client, trip, toDelete.length + ' بند', '-');
   return { success: true, count: toDelete.length, hbSkipped: hbSkipped };
 }
@@ -15676,7 +15671,7 @@ function _accCfFindAndDelete_(marker, exceptSheetName, exceptId) {
     for (var i = 0; i < vals.length; i++) {
       var id = String(vals[i][0]);
       if (cfg[0] === exceptSheetName && id === exceptId) continue;
-      if (_accCfMarkerOf_(vals[i][cfg[2]]) === marker) { sh.deleteRow(i + 2); deleted.push(id); break; }
+      if (_accCfMarkerOf_(vals[i][cfg[2]]) === marker) { _rbDel_(sh, i + 2, 'sheet_row', 'طرف مقابل لترحيل رصيد', [1, 2], ''); sh.deleteRow(i + 2); deleted.push(id); break; }
     }
   });
   return deleted;
@@ -15760,6 +15755,7 @@ function deleteAccItem(authToken, id, screenOnly) {
         var hk = _accHbKeyOf_(vals[i][3]), lk = _glLock_(); lk.waitLock(60000);
         try { _glScrHideAdd_(['hb|' + hk + '|' + String(vals[i][1])]); } finally { _glUnlock_(lk); }
         logChange_(session.username, 'إزالة حجز فندقي من الشاشة فقط', String(vals[i][1]), String(vals[i][2]), String(vals[i][3]).replace(/\s*⟦(?:cf|src):[^⟧]+⟧\s*$/i, '') + ' = ' + vals[i][8] + ' ' + vals[i][5], 'القيد يبقى بالحسابات العامة');
+        _rbDel_(sh, i + 2, 'acc_item', 'بند حساب (حجز فندقي — إزالة من الشاشة)', [1, 2], session.username);
         sh.deleteRow(i + 2);
         return { success: true, screenOnly: true };
       }
@@ -15768,6 +15764,7 @@ function deleteAccItem(authToken, id, screenOnly) {
       // 🔁 بند ترحيل رصيد: يُحذف طرفه المقابل معه تلقائيًا فيعود الرصيد لرحلته الأصلية
       var marker = _accCfMarkerOf_(vals[i][3]);
       _accTombAdd_([{ client: String(vals[i][1] || '').trim(), trip: String(vals[i][2] || '').trim(), desc: vals[i][3] }], session.username);   // 🪦 (V4.378) لا تعيده المزامنة التلقائية
+      _rbDel_(sh, i + 2, 'acc_item', 'بند حساب', [1, 2], session.username);
       sh.deleteRow(i + 2);
       var partners = marker ? _accCfFindAndDelete_(marker, ACC_ITEMS_SHEET, String(id)) : [];
       return { success: true, cfLinked: !!marker, cfDeletedIds: partners };
@@ -17227,6 +17224,7 @@ function deleteCateringContract(authToken, contractNo, rowId) {
     if (ix < 0 && contractNo) for (var i = 0; i < data.length; i++) if (String(data[i][0] || '').trim() === contractNo) { ix = i; break; }
     if (ix < 0) return true;
     delId = String(data[ix][CC_I_.id] || '').trim(); delNo = String(data[ix][0] || '').trim();
+    _rbDel_(sh, ix + 2, 'catering', 'اتفاقية إعاشة', [0, 1], '');
     sh.deleteRow(ix + 2);
     SpreadsheetApp.flush();
     return false;
@@ -19050,6 +19048,7 @@ function deleteTrip(authToken, targetRow) {
 
   var sheet = _getTripsSheet_();
   var name = String(sheet.getRange(Number(targetRow), 1).getValue() || "").trim();
+  _rbDel_(sheet, Number(targetRow), 'trip', 'رحلة', [0], session.username);
   sheet.deleteRow(Number(targetRow));
   logChange_(session.username, "حذف", name, "حذف رحلة", name, "-");
   clearAllCache_();
@@ -19508,8 +19507,9 @@ function deleteClientRecord(authToken, row) {
   // 🗑️ معتمرو هذا العميل بدون رحلة (إن وُجدوا) يُحذفون معه — من الأسفل للأعلى حتى لا تتزحزح أرقام الصفوف
   if (withoutTripRows.length) {
     withoutTripRows.sort(function(a, b) { return b - a; });
-    withoutTripRows.forEach(function(rn) { pSheet.deleteRow(rn); });
+    withoutTripRows.forEach(function(rn) { _rbDel_(pSheet, rn, 'pilgrims', 'معتمر بلا رحلة (حُذف مع عميله ' + name + ')', [1, 2], session.username, true); pSheet.deleteRow(rn); });
   }
+  _rbDel_(sheet, row, 'client', 'عميل', [0], session.username, true); _rbFlush_();
   sheet.deleteRow(row);
   clearAllCache_();
   logChange_(session.username, 'حذف عميل', name, '-', '-', withoutTripRows.length ? ('حُذف معه ' + withoutTripRows.length + ' معتمر بدون رحلة') : '-');
@@ -20451,7 +20451,8 @@ function deleteGlobalPilgrims(authToken, keys) {
   keys = (keys || []).map(function(k) { return String(k || "").trim(); }).filter(Boolean);
   if (!keys.length) return { success: false, error: "لا يوجد اختيار" };
 
-  _backupSpreadsheet_('قبل حذف مجمّع من سجل المعتمرين');
+  try { if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY')) _backupSpreadsheet_('قبل حذف مجمّع من سجل المعتمرين'); } catch (eBk) { _backupSpreadsheet_('قبل حذف مجمّع من سجل المعتمرين'); }   // 🗑️ (V4.402) مع Supabase: الصفوف تدخل سلة المحذوفات بدل نسخة الملف كله
+
 
   var sheet = _getPilgrimsSheet_();
   var lastRow = sheet.getLastRow();
@@ -20464,10 +20465,11 @@ function deleteGlobalPilgrims(authToken, keys) {
   data.forEach(function(r) {
     var pass = String(P(r, 'passport') || "").trim(), name = String(P(r, 'name') || "").trim();
     var match = keys.indexOf(pass) !== -1 || (!pass && keys.indexOf(name) !== -1);
-    if (match) removed++; else kept.push(r);
+    if (match) { removed++; _rbQueueVals_(sheet, r, 'pilgrims', 'معتمر (حذف مجمّع من السجل العام)', [1, 2, 8], session.username); } else kept.push(r);
   });
   sheet.getRange(2, 1, lastRow - 1, width).clearContent();
   if (kept.length) sheet.getRange(2, 1, kept.length, width).setValues(kept);
+  _rbFlush_();
   clearAllCache_();
   logChange_(session.username, "حذف مجمّع من سجل المعتمرين", keys.join("، "), "معتمر", "-", "صفوف: " + removed);
   return { success: true, removed: removed };
@@ -23713,6 +23715,7 @@ function deleteRoomFeeReceipt(authToken, receiptNo) {
     var list = _mfReadReceipts_();
     hit = list.filter(function(x) { return x.receiptNo === _mfStr_(receiptNo); })[0];
     if (!hit) return { success: false, error: 'الإيصال غير موجود' };
+    _rbDel_(sh, hit._row, 'receipt', 'إيصال رسوم غرفة', [0, 1], '');
     sh.deleteRow(hit._row);
   } finally { _resRelease_(lock); }
   logChange_(session.username, 'حذف إيصال رسوم غرفة', hit.receiptNo, hit.company, hit.amount, '-');
@@ -23856,6 +23859,7 @@ function deleteMinistrySupervisor(authToken, name) {
   var sh = _accSheet_(MF_SUP_SHEET, MF_SUP_HEADERS);
   var hit = _mfReadSupervisors_().filter(function(x) { return x.name === _mfStr_(name); })[0];
   if (!hit) return { success: false, error: 'المشرف غير موجود' };
+  _rbDel_(sh, hit._row, 'supervisor', 'مشرف وزارة', [0], '');
   sh.deleteRow(hit._row);
   SpreadsheetApp.flush();
   logChange_(session.username, 'حذف مشرف', hit.name, '-', hit.name, '-');
@@ -24717,6 +24721,7 @@ function deleteMfQuotaTransfer(authToken, id) {
   try {
     hit = _mfReadQuotaTransfers_().filter(function(t) { return t.id === id; })[0];
     if (!hit) return { success: false, error: 'سجل الترحيل غير موجود' };
+    _rbDel_(sh, hit._row, 'quota', 'ترحيل حصة وزارة', [0, 1], '');
     sh.deleteRow(hit._row);
   } finally { _resRelease_(lock); }
   logChange_(session.username, 'حذف ترحيل حصة أفراد شهرية', hit.company, 'الترحيل',
@@ -24836,6 +24841,7 @@ function deleteMinistryFile(authToken, id) {
   try {
     hit = _mfReadAll_().filter(function(x) { return x.id === _mfStr_(id); })[0];
     if (!hit) return { success: false, error: 'الملف غير موجود' };
+    _rbDel_(sh, hit._row, 'ministry_file', 'ملف وزارة', [0, 1, 2], '');
     sh.deleteRow(hit._row);
   } finally { _resRelease_(lock); }   // يدفع الحذف للورقة (بدل flush المنفصل)
   _mfClearBootstrapCache_();
@@ -24857,7 +24863,8 @@ function deleteMinistryFilesBatch(authToken, ids) {
   try {
     var all = _mfReadAll_();
     hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
-    hits.forEach(function (hit) { sh.deleteRow(hit._row); });
+    hits.forEach(function (hit) { _rbDel_(sh, hit._row, 'ministry_file', 'ملف وزارة', [0, 1, 2], '', true); sh.deleteRow(hit._row); });
+    _rbFlush_();
   } finally { _resRelease_(lock); }
   hits.forEach(function (hit) {
     logChange_(session.username, 'حذف ملف مراجعة وزارة (جماعي)', 'MF:' + hit.id, '-',
@@ -26852,6 +26859,7 @@ function deleteVisaFile(authToken, id) {
   try {
     hit = _vzReadAll_().filter(function (x) { return x.id === _mfStr_(id); })[0];
     if (!hit) return { success: false, error: 'القيد غير موجود' };
+    _rbDel_(sh, hit._row, 'visa_file', 'ملف تأشيرة', [1, 2, 5], '');
     sh.deleteRow(hit._row);
   } finally { _resRelease_(lock); }
   logChange_(session.username, 'حذف قيد تأشيرات', 'VZ:' + hit.id, 'قيد ' + (hit.ref || hit.seq) + ' — ' + (hit.agent || '-'), '-', '-');
@@ -26874,10 +26882,12 @@ function deleteVisaFilesBatch(authToken, ids) {
     var all = _vzReadAll_();
     hits = all.filter(function (x) { return ids.indexOf(x.id) >= 0; }).sort(function (a, b) { return b._row - a._row; });
     hits.forEach(function (hit) {
+      _rbDel_(sh, hit._row, 'visa_file', 'ملف تأشيرة', [1, 2, 5], '', true);
       sh.deleteRow(hit._row);
       if (hit.agent) _vzAg[hit.agent] = 1;
     });
   } finally { _resRelease_(lock); }
+  _rbFlush_();
   hits.forEach(function (hit) {
     logChange_(session.username, 'حذف قيد تأشيرات (جماعي)', 'VZ:' + hit.id, 'قيد ' + (hit.ref || hit.seq) + ' — ' + (hit.agent || '-'), '-', '-');
   });
@@ -27330,6 +27340,7 @@ function deleteAgentAccItem(authToken, id) {
   var hit = _vzReadItems_('').filter(function (x) { return x.id === _mfStr_(id); })[0];
   if (!hit) return { success: false, error: 'البند غير موجود' };
   if (_vzGlSrc_(hit.notes)) return { success: false, error: _vzGlLockMsg_(_vzGlSrc_(hit.notes)) };
+  _rbDel_(_accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS), hit._row, 'agent_item', 'بند حساب وكيل', [1, 2], session.username);
   _accSheet_(VZ_ITEMS_SHEET, VZ_ITEMS_HEADERS).deleteRow(hit._row);
   logChange_(session.username, 'حذف بند حساب وكيل', 'AI:' + hit.id, hit.desc, '-', '-');
   _vzClearCache_();
@@ -27345,9 +27356,11 @@ function deleteAgentAccItemsBatch(authToken, ids) {
   var glN = hits.filter(function (x) { return _vzGlSrc_(x.notes); }).length;   // 🧑‍💼 (V4.328) نسخ القيود لا تُحذف من هنا
   hits = hits.filter(function (x) { return !_vzGlSrc_(x.notes); });
   hits.forEach(function (hit) {
+    _rbDel_(sh, hit._row, 'agent_item', 'بند حساب وكيل', [1, 2], session.username, true);
     sh.deleteRow(hit._row);
     logChange_(session.username, 'حذف بند حساب وكيل (جماعي)', 'AI:' + hit.id, hit.desc, '-', '-');
   });
+  _rbFlush_();
   _vzClearCache_();
   return { success: true, count: hits.length, glSkipped: glN };
 }
@@ -27962,7 +27975,8 @@ function deleteHousingAgreement(authToken, id) {
   var ash = _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS);
   _vzAllocReadAll_().filter(function (x) { return x.agrId === id; })
     .sort(function (x, y) { return y._row - x._row; })
-    .forEach(function (x) { ash.deleteRow(x._row); });
+    .forEach(function (x) { _rbDel_(ash, x._row, 'housing', 'تخصيص سكن (حُذف مع اتفاقيته)', [0, 1], '', true); ash.deleteRow(x._row); });
+  _rbDel_(_accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS), a._row, 'housing', 'اتفاقية سكن', [0, 1], '');
   _accSheet_(VZ_HAGR_SHEET, VZ_HAGR_HEADERS).deleteRow(a._row);
   _vzHaClearCache_();
   logChange_(session.username, 'حذف اتفاقية سكن' + ((a.kind || 'سكن') === 'إعاشة' ? ' (إعاشة)' : ''), 'HA:' + a.id,
@@ -28094,6 +28108,7 @@ function deleteHousingAllocation(authToken, id) {
   id = _mfStr_(id);
   var x = _vzAllocReadAll_().filter(function (a) { return a.id === id; })[0];
   if (!x) throw new Error('التخصيص غير موجود');
+  _rbDel_(_accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS), x._row, 'housing', 'تخصيص سكن', [0, 1], '');
   _accSheet_(VZ_HALLOC_SHEET, VZ_HALLOC_HEADERS).deleteRow(x._row);
   _vzHaClearCache_();
   logChange_(session.username, 'حذف تخصيص سكن', 'HL:' + x.id, 'مجموعة ' + x.groupRef,

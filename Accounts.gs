@@ -768,6 +768,7 @@ function glDeleteAccount(authToken, code) {
     if (_glAccounts_().list.some(function (x) { return x.parent === acc.code; })) throw new Error('لا يمكن حذف حساب له حسابات فرعية');
     var used = _glRows_('lines').some(function (r) { return _glStr_(r[4]) === acc.code; });
     if (used) throw new Error('لا يمكن حذف حساب عليه قيود — يمكنك إيقافه بدل الحذف');
+    _rbDel_(_glSheet_('accounts'), acc._row, 'gl_account', 'حساب من الدليل', [0, 1], session.username);
     _glSheet_('accounts').deleteRow(acc._row);
     _GL_ACC_MEMO_ = null;
     logChange_(session.username, 'حذف حساب من الدليل', 'GL:' + acc.code, acc.name, acc.code, '-');
@@ -1428,6 +1429,7 @@ function glMergeAccounts(authToken, from, to, dry) {
       var rb2 = aSh.getRange(rowB + 2, 1, 1, GL_SHEETS_.accounts.headers.length).getValues()[0];
       if (String(rb2[9]).indexOf(al) < 0) { rb2[9] = (_glStr_(rb2[9]) + ' ' + al).trim(); aSh.getRange(rowB + 2, 1, 1, rb2.length).setValues([rb2]); }
     });
+    _rbDel_(aSh, rowA + 2, 'gl_account', 'حساب مدموج في غيره', [0, 1], '');
     aSh.deleteRow(rowA + 2);
     _GL_ACC_MEMO_ = null; _GL_SET_MEMO_ = null;
     try { CacheService.getScriptCache().removeAll(['gll_accs', 'gll_accs2', 'gll_ents']); } catch (eC) {}
@@ -4576,10 +4578,12 @@ function glCpDelete(authToken, payIds) {
         if (!idset[String(vals[i][0])]) continue;
         logChange_(session.username, 'حذف ' + (String(vals[i][3]) === 'تحويل' ? 'تحويل عملة' : 'دفعة حساب') + ' (شاشة التوجيه)', String(vals[i][1]), String(vals[i][2]), vals[i][5] + ' ' + vals[i][6], '-');
         var marker = _accCfMarkerOf_(vals[i][8]);
+        _rbDel_(sh, i + 2, 'acc_payment', 'دفعة حساب (شاشة التوجيه)', [1, 2], session.username, true);
         sh.deleteRow(i + 2);
         if (marker) try { _accCfFindAndDelete_(marker, ACC_PAY_SHEET, String(vals[i][0])); } catch (e) {}
         del++;
       }
+      _rbFlush_();
     }
     var rows = _glRows_('cpdir').filter(function (r) { return !idset[_glStr_(r[0])]; });
     _glCpDirWrite_(rows);
@@ -8267,7 +8271,8 @@ function glHbDeletePays(authToken, ids) {
     var vals = sh.getRange(2, 1, last - 1, 10).getValues(), rows = [], gone = [];
     vals.forEach(function (r, i) { var id = _glStr_(r[7]) || ('row' + (i + 2)); if (want[id]) { rows.push(i + 2); gone.push(id + ' — ' + _glStr_(r[1]) + ' ' + _glNum_(r[3])); } });
     if (!rows.length) throw new Error('لم أجد الدفعات المحددة بالسجل (ربما حُذفت أو تغيّر ترتيبها — حدّث الشاشة)');
-    rows.sort(function (a, b) { return b - a; }).forEach(function (r) { sh.deleteRow(r); });
+    rows.sort(function (a, b) { return b - a; }).forEach(function (r) { _rbDel_(sh, r, 'hb_payment', 'دفعة بسجل حجوزات الفنادق', [1, 2, 3], session.username, true); sh.deleteRow(r); });
+    _rbFlush_();
     var rev = _glHbPayRev_(), ch = false; ids.forEach(function (id) { if (rev[id]) { delete rev[id]; ch = true; } });
     if (ch) _glHbWriteAll_('hbpay', Object.keys(rev).map(function (k) { var r = rev[k]; return [k, r.cash || '', r.cur || '', r.amount || '', r.rate || '', r.by, r.at, r.party || '', r.linkGroup || '']; }));
     _GL_HB_MEMO_ = null; try { CacheService.getScriptCache().remove(_glCK_('hbread')); } catch (e) {}
@@ -8718,6 +8723,7 @@ function glHbDeleteCharter(authToken, id) {
   var session = _glPerm_(authToken, 'delete', 'hb');
   var r = _glHbCharterRows_().filter(function (x) { return x.id === _glStr_(id); })[0];
   if (!r) throw new Error('العقد غير موجود');
+  _rbDel_(_glSheet_('hbchar'), r._row, 'hb_charter', 'عقد شارت', [0, 1, 2], session.username);
   _glSheet_('hbchar').deleteRow(r._row);
   logChange_(session.username, 'حذف عقد شارت', 'GL:hbchar', '-', '-', r.name + ' ' + r.from + ' → ' + r.to);
   return { success: true };

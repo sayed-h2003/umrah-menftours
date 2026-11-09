@@ -773,7 +773,7 @@ function _outboxDrain_(maxMs) {
         } catch (eB) { Logger.log('outbox bkdiff: ' + eB.message); }
       }
       else if (x.kind === 'tripsnap') { try { _tripSnapTakeState_(String(p.trip), String(p.user || ''), String(p.action || ''), p.state, !!p.base); } catch (eT) { Logger.log('outbox tripsnap: ' + eT.message); } }
-      else if (x.kind === 'kashfsave') {   // (V4.401) آثار حفظ الكشف من Postgres — المتصفح ينفّذها فوراً؛ وإلا بعد ~دقيقتين هنا
+      else if (x.kind === 'kashfsave') {   // (V4.401/402) مزامنة حسابات العملاء بعد حفظ الكشف من Postgres — المتصفح ينفّذها فوراً؛ وإلا بعد ~دقيقتين هنا
         if (Date.now() / 1000 - Number(p.at || 0) < 120) { ids.pop(); return; }
         try { _kashfAfterSave_(p, null, String(p.user || '')); } catch (eK) { Logger.log('outbox kashfsave: ' + eK.message); }
       }
