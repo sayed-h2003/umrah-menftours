@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.413";
+var APP_VERSION = "4.414";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6592,6 +6592,34 @@ function resumeSession(deviceKey) {
     };
   }
   try { p.deleteProperty(pk); } catch (e) {}
+  return { success: false, error: 'revoked' };
+}
+
+/* ⧉ (V4.414) «تسليم الجلسة» لتبويب جديد: الرابط المباشر لـApps Script (خارج غلاف GitHub) لا يصله مفتاح الجهاز المخزَّن بالغلاف فكان يطلب الدخول.
+   الآن: التبويب الحالي يطلب رمزاً لمرة واحدة (appHandoffIssue، صالح دقيقتين) يُمرَّر بالرابط (ho=)، والتبويب الجديد يستبدله بجلسة جديدة (appHandoffRedeem)
+   — فلا يخرج رمز الجلسة ولا مفتاح الجهاز بالرابط أبداً، ولا يُستعمل الرمز مرتين. يعمل سواء فُتح الرابط داخل الغلاف أو خارجه. */
+function appHandoffIssue(authToken) {
+  var s = requireAuth_(authToken), code = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  CacheService.getScriptCache().put('ho_' + code, JSON.stringify({ u: String(s.username), t: Date.now() }), 120);
+  return { success: true, code: code };
+}
+function appHandoffRedeem(code) {
+  code = String(code || '').replace(/[^0-9a-f]/gi, '');
+  if (code.length < 32) return { success: false, error: 'bad' };
+  var c = CacheService.getScriptCache(), raw = c.get('ho_' + code); c.remove('ho_' + code);   // لمرة واحدة
+  if (!raw) return { success: false, error: 'expired' };
+  var o = null; try { o = JSON.parse(raw); } catch (e) {}
+  if (!o || !o.u || Date.now() - (o.t || 0) > 120000) return { success: false, error: 'expired' };
+  var data = getSpreadsheet_().getSheetByName('Users').getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(o.u)) continue;
+    var isActive = data[i][3];
+    if (isActive === false || String(isActive).toLowerCase() === 'false') break;
+    var token = createSession_(String(data[i][0]), data[i][2], data[i][4]);
+    return { success: true, resumed: true, username: String(data[i][0]), fullName: String(data[i][2] || ''), permissions: data[i][4], token: token, deviceKey: '',
+      mustChangePwd: data[i][5] === true || String(data[i][5]).toLowerCase() === 'true', userRow: i + 1,
+      supa: (typeof _supaBootCfg_ === 'function') ? _supaBootCfg_(String(data[i][0]), data[i][2], data[i][4]) : undefined };
+  }
   return { success: false, error: 'revoked' };
 }
 

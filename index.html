@@ -116,9 +116,10 @@
     /* ⧉ (V4.408) فتح شاشة بتبويب جديد داخل هذا الغلاف: الرابط ?go=<مفتاح الشاشة> يُمرَّر لإطار البرنامج، فيستأنف الدخول بمفتاح الجهاز
        المحفوظ هنا (نفس تخزين الغلاف) بدل أن يُفتح رابط Apps Script مباشرةً خارج الغلاف فيطلب تسجيل الدخول من جديد */
     (function () {
-      var fr = document.getElementById('app'), base = fr.getAttribute('data-src'), go = '';
-      try { go = new URLSearchParams(location.search).get('go') || ''; } catch (e) {}
-      fr.src = go ? base + (base.indexOf('?') > -1 ? '&' : '?') + 'go=' + encodeURIComponent(go) : base;
+      var fr = document.getElementById('app'), base = fr.getAttribute('data-src'), go = '', ho = '';
+      try { var q = new URLSearchParams(location.search); go = q.get('go') || ''; ho = q.get('ho') || ''; } catch (e) {}
+      fr.src = go ? base + (base.indexOf('?') > -1 ? '&' : '?') + 'go=' + encodeURIComponent(go) + (ho ? '&ho=' + encodeURIComponent(ho) : '') : base;
+      if (ho) { try { history.replaceState(null, '', location.pathname + '?go=' + encodeURIComponent(go)); } catch (e) {} }   // الرمز لمرة واحدة — لا يبقى بشريط العنوان
       fr.addEventListener('load', function () { try { fr.contentWindow.postMessage({ type: 'mf-wrap', url: location.origin + location.pathname }, '*'); } catch (e) {} });
     })();
   </script>

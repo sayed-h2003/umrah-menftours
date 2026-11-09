@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.413  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.414  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8448,6 +8448,20 @@ function xcApply_() {
 // يُستدعى عند فتح شاشة الدخول: لو للجهاز مفتاح (محلياً أو محفوظاً بصفحة الغلاف) ندخل تلقائياً بلا كلمة مرور
 function _devAutoLogin_() {
   if (window._devAutoTried || window.authToken) return; window._devAutoTried = true;
+  /* ⧉ (V4.414) رمز تسليم الجلسة من التبويب الأصلي (ho=) ⇒ جلسة فورية بلا شاشة دخول؛ فشله يرجع للمسار المعتاد (مفتاح الجهاز) */
+  try {
+    if (window.google && google.script && google.script.url && google.script.url.getLocation) {
+      google.script.url.getLocation(function (loc) {
+        var ho = loc && loc.parameter && loc.parameter.ho; if (!ho || window.authToken) return;
+        var btn0 = document.getElementById('btnLogin'); if (btn0) btn0.innerHTML = '⏳ جاري فتح جلستك…';
+        window._RAW_RUN_ && window._RAW_RUN_().withSuccessHandler(function (res) {
+          if (window.authToken) return;
+          if (res && res.success && res.token) { _sessAdopt_(res); try { handleLogin({ preventDefault: function () {}, __presetRes: res }); } catch (e) { console.error(e); } }
+          else if (btn0) btn0.innerHTML = '🔐 تسجيل الدخول';
+        }).withFailureHandler(function () { if (btn0) btn0.innerHTML = '🔐 تسجيل الدخول'; }).appHandoffRedeem(String(ho));
+      });
+    }
+  } catch (eHo) {}
   var go = function (dk) {
     if (!dk || window.authToken) return;
     window._devKeyTop = dk;
@@ -8908,7 +8922,14 @@ window.addEventListener('message', function (ev) {   // (V4.408) رابط الغ
 });
 window.openKeyInBrowserTab_ = function (key) {
   var base = window._wrapUrl_ || _appBaseUrl_(); if (!base || !key) return false;
-  try { window.open(base + (base.indexOf('?') > -1 ? '&' : '?') + 'go=' + encodeURIComponent(key), '_blank'); return true; } catch (e) { return false; }
+  var w = null; try { w = window.open('about:blank', '_blank'); } catch (e) { w = null; }   // يُفتح فوراً بضغطة المستخدم (وإلا حجبه مانع النوافذ) ثم يُوجَّه
+  var url = base + (base.indexOf('?') > -1 ? '&' : '?') + 'go=' + encodeURIComponent(key), fin = function (code) {
+    var u = url + (code ? '&ho=' + encodeURIComponent(code) : '');
+    try { if (w) { w.location.href = u; } else window.open(u, '_blank'); } catch (e2) {}
+  };
+  try { w && w.document && (w.document.title = 'جاري الفتح…'); } catch (e3) {}
+  try { google.script.run.withSuccessHandler(function (r) { fin(r && r.success ? r.code : ''); }).withFailureHandler(function () { fin(''); }).appHandoffIssue(window.authToken); } catch (e4) { fin(''); }
+  return true;
 };
 window.openCurrentInBrowserTab_ = function () {
   var k = (typeof window.appCurKey_ === 'function') ? window.appCurKey_() : '';
@@ -9671,7 +9692,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.413";
+var CLIENT_APP_VERSION = "4.414";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
