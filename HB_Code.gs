@@ -4975,6 +4975,7 @@ function updatePayment(id, fields, token) {
   try {
     var actingUser = requirePermission_(token, 'payments', 'edit');
     var sh = ensurePaymentsSheet_();
+    if (hbLedgerClosed_()) return hbLedgerReplacePay_(actingUser, sh, id, fields);   // (V4.411) تعديل بنظام السندات: سند جديد بطرف/أطراف مقابلة ثم نقل القديمة للسلة
     hbGlOnlyGuardRow_(sh, id);
     var rowIdx = findPaymentRowById_(sh, id);
     if (rowIdx === -1) throw new Error('الدفعة غير موجودة (ربما حُذفت)');
@@ -5213,6 +5214,92 @@ function deletePayment(id, token, force) {
   }
 }
 
+
+/* 🗑️ (V4.411) سلة دفعات الحجوزات المحذوفة (شيت مخفي): كل دفعة تُحذف من كشف الفندق تُحفظ هنا بصفها الكامل وتُستعاد بـ hbRestorePayments */
+var HB_PAY_BIN_SHEET_ = 'سلة دفعات الحجوزات المحذوفة';
+function hbPayBinSheet_() {
+  var ss = getSS_(), sh = ss.getSheetByName(HB_PAY_BIN_SHEET_);
+  if (!sh) {
+    sh = ss.insertSheet(HB_PAY_BIN_SHEET_);
+    sh.getRange(1, 1, 1, 5).setValues([['وقت الحذف', 'المستخدم', 'معرّف الدفعة', 'الطرف', 'الصف (JSON)']]).setFontWeight('bold');
+    sh.setFrozenRows(1); try { sh.hideSheet(); } catch (e) {}
+  }
+  return sh;
+}
+// حذف دفعات متعددة بنداء واحد: ids = [معرّف…] · القيد/المسجَّلة من الحسابات العامة أو المغلقة بالتوحيد ⇒ للمدير فقط (حذف من كشف الفندق فقط)
+function deletePaymentsBulk(ids, token) {
+  try {
+    var actingUser = requirePermission_(token, 'payments', 'delete');
+    ids = (ids || []).map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+    if (!ids.length) throw new Error('لم تُحدَّد دفعات');
+    if (ids.length > 500) throw new Error('الحد الأقصى 500 دفعة بالمرة');
+    var isAdmin = !!actingUser && actingUser.role === 'admin', closed = hbLedgerClosed_(), glOnly = false;
+    try { glOnly = !!hbGlOnlyFrom_(); } catch (e0) {}
+    if ((closed || glOnly) && !isAdmin) throw new Error('حذف الدفعات من كشف الفندق يحتاج المدير (التسجيل بالتوحيد/الحسابات العامة)');
+    var sh = ensurePaymentsSheet_(), last = sh.getLastRow();
+    if (last < 2) throw new Error('لا توجد دفعات');
+    var all = sh.getRange(2, 1, last - 1, PAYMENTS_COLS_).getValues(), want = {}; ids.forEach(function (i) { want[i] = 1; });
+    var hit = [];
+    for (var i = 0; i < all.length; i++) { var pid = String(all[i][7] || ''); if (want[pid]) hit.push({ row: i + 2, vals: all[i], id: pid }); }
+    var bin = hbPayBinSheet_(), now = new Date(), who = (actingUser && (actingUser.displayName || actingUser.username)) || '';
+    var binRows = hit.map(function (h) { return [now, who, h.id, String(h.vals[1] || ''), JSON.stringify(h.vals.map(function (v) { return v instanceof Date ? { $d: v.getTime() } : v; }))]; });
+    if (binRows.length) bin.getRange(bin.getLastRow() + 1, 1, binRows.length, 5).setValues(binRows);   // أولاً: السلة ثم الحذف
+    hit.sort(function (a, b) { return b.row - a.row; }).forEach(function (h) { sh.deleteRow(h.row); });
+    hit.forEach(function (h) {
+      hbLogChange_(actingUser, 'حذف دفعة', h.vals[1], '[حذف دفعة جماعي] ' + h.vals[2], h.vals[3], '', { clientName: h.vals[1], recordKey: 'PAY:' + h.id });
+      try { glLinkSavePayMeta_(h.id, { glCash: '' }, actingUser); } catch (eM) {}
+    });
+    SpreadsheetApp.flush();
+    try { if (typeof invalidatePaymentsMemo_ === 'function') invalidatePaymentsMemo_(); } catch (eM2) {}
+    try { if (typeof hbGlLiveMark_ === 'function') hbGlLiveMark_('حذف دفعة'); } catch (eL) {}
+    return { ok: true, deleted: hit.map(function (h) { return h.id; }), missing: ids.length - hit.length };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+// استعادة دفعات من سلة الحجوزات (آخر نسخة لكل معرّف) — للمدير
+function hbRestorePayments(token, ids) {
+  try {
+    var u = requirePermission_(token, 'payments', 'delete');
+    if (u.role !== 'admin') throw new Error('الاستعادة للمدير فقط');
+    var want = {}; (ids || []).forEach(function (i) { want[String(i)] = 1; });
+    var bin = hbPayBinSheet_(), last = bin.getLastRow(); if (last < 2) throw new Error('السلة فارغة');
+    var rows = bin.getRange(2, 1, last - 1, 5).getValues(), sh = ensurePaymentsSheet_(), seen = {}, out = [];
+    var exist = {}; if (sh.getLastRow() > 1) sh.getRange(2, 8, sh.getLastRow() - 1, 1).getValues().forEach(function (r) { exist[String(r[0])] = 1; });
+    for (var i = rows.length - 1; i >= 0; i--) {
+      var id = String(rows[i][2]); if (!want[id] || seen[id] || exist[id]) continue; seen[id] = 1;
+      var v = JSON.parse(rows[i][4]).map(function (x) { return x && typeof x === 'object' && x.$d != null ? new Date(x.$d) : x; });
+      out.push(v);
+    }
+    if (out.length) sh.getRange(sh.getLastRow() + 1, 1, out.length, PAYMENTS_COLS_).setValues(out);
+    SpreadsheetApp.flush();
+    try { invalidatePaymentsMemo_(); } catch (e1) {}
+    try { hbGlLiveMark_('دفعة'); } catch (e2) {}
+    return { ok: true, restored: out.length };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
+// تعديل دفعة والتوحيد مفعّل: القيد القديم لا يُعدَّل بالمكان — يُسجَّل سند جديد (طرف/أطراف مقابلة إلزامية) فإن نجح نُقلت القديمة للسلة
+function hbLedgerReplacePay_(actingUser, sh, id, fields) {
+  if (/^GL:/.test(String(id || ''))) throw new Error('هذه الدفعة مرحّلة من الحسابات العامة (' + String(id).slice(3) + ') — عدّلها من القيد نفسه هناك، أو احذفها من هنا (للمدير) وسجّل بديلها');
+  var rowIdx = findPaymentRowById_(sh, id); if (rowIdx === -1) throw new Error('الدفعة غير موجودة (ربما حُذفت)');
+  var cur = sh.getRange(rowIdx, 1, 1, PAYMENTS_COLS_).getValues()[0];
+  var dirLabel = fields.direction ? resolveDirectionLabel_(fields.direction) : cur[2];
+  var dirKey = dirLabel === 'استلمنا منه' ? 'in' : (dirLabel === 'دفعنا له' ? 'out' : '');
+  if (!dirKey) throw new Error('البنود اليدوية (مدين/دائن يدوي) لا تُعدَّل بنظام السندات — سجّل قيد يومية من الحسابات العامة');
+  var pay = { partyName: fields.partyName !== undefined ? (fields.partyName || cur[1]) : cur[1], date: fields.date || cur[0],
+    amount: fields.amount !== undefined ? fields.amount : cur[3], note: fields.note !== undefined ? fields.note : cur[4], direction: dirKey, force: true,
+    glCash: fields.glCash, glCur: fields.glCur, glAmount: fields.glAmount, glExtra: fields.glExtra };
+  var a = _ledgerScrAllowed_('hb', actingUser.username, actingUser.role === 'admin'); if (!a.ok) throw new Error(a.why || HB_LEDGER_MSG_);
+  var r = hbLedgerSubmitPay_(actingUser, pay);
+  if (!r.ok) return r;   // ⛔ لا حذف للقديمة إن لم يُسجَّل البديل (يشمل LEDGER_NEED_CP)
+  var bin = hbPayBinSheet_();
+  bin.getRange(bin.getLastRow() + 1, 1, 1, 5).setValues([[new Date(), actingUser.displayName || actingUser.username || '', String(id), String(cur[1] || ''),
+    JSON.stringify(cur.map(function (v) { return v instanceof Date ? { $d: v.getTime() } : v; }))]]);
+  sh.deleteRow(rowIdx);
+  try { glLinkSavePayMeta_(String(id), { glCash: '' }, actingUser); } catch (eM) {}
+  hbLogChange_(actingUser, 'حذف دفعة', cur[1], '[استبدال دفعة بسند ' + (r.voucherNo || '') + ']', cur[3], pay.amount, { clientName: cur[1], recordKey: 'PAY:' + id });
+  SpreadsheetApp.flush(); try { invalidatePaymentsMemo_(); } catch (e3) {}
+  r.replaced = true; r.message = '⏳ استُبدلت الدفعة بسند ' + (r.voucherNo || '') + ' بانتظار الاعتماد — والقديمة بسلة الحجوزات (للمدير استعادتها)';
+  return r;
+}
 
 // ==========================================================
 // ==========================================================

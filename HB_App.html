@@ -2464,6 +2464,8 @@
           <select id="pGlCur" class="form-select form-select-sm" style="width:90px;" onchange="glPayCurChanged_()"><option value="SAR">ريال</option><option value="EGP">جنيه</option><option value="USD">دولار</option></select>
           <input type="text" id="pGlAmount" class="form-control form-control-sm" placeholder="المبلغ بالعملة المدفوع بها" style="direction:ltr;text-align:center;">
         </div>
+        <div id="pGlExtra"></div>
+        <div class="d-flex align-items-center gap-2 mt-1"><button type="button" class="btn btn-sm btn-outline-primary py-0" onclick="glPayExtraAdd_()">➕ طرف مقابل آخر</button><span class="small" id="pGlShare1"></span></div>
         <div class="small text-muted mt-1" id="pGlHint">المبلغ أعلاه بالريال يبقى كما هو في كشف الحساب — العملة الفعلية للحسابات العامة فقط (تُحوَّل تلقائيًا عبر وسيط العملات).</div>
       </div>
     </div>
@@ -5456,7 +5458,7 @@ function renderTable(res) {
     var cls = r.excluded ? 'excluded-row' : (r.dateIso === todayIso ? ('today-row' + (i === lastTodayIdx ? ' last-today' : '')) : '');
     var actionBtns;
     if (r.paymentId) {
-      actionBtns = (hasLevel_('payments', 'edit') ? '<button type="button" class="btn-sm-icon edit" onclick="editPaymentRow(\'' + r.paymentId + '\')">✎</button> ' : '') +
+      actionBtns = (STMT_BULK_.on && hasLevel_('payments', 'delete') ? '<input type="checkbox" class="stmt-bsel" data-id="' + escapeHtml(r.paymentId) + '"' + (STMT_BULK_.sel[r.paymentId] ? ' checked' : '') + ' onchange="stmtBulkPick_(this)" style="margin-inline-end:6px;"> ' : '') + (hasLevel_('payments', 'edit') ? '<button type="button" class="btn-sm-icon edit" onclick="editPaymentRow(\'' + r.paymentId + '\')">✎</button> ' : '') +
         (hasLevel_('payments', 'delete') ? '<button type="button" class="btn-sm-icon del" onclick="deletePaymentRow(\'' + r.paymentId + '\')">🗑</button>' : '');
     } else if (r.bookingKey) {
       actionBtns = hasLevel_('bookings', 'edit') ? '<button type="button" class="btn-sm-icon edit" onclick="openBookingEditModal(\'' + r.bookingKey + '\')" title="تعديل بيانات الحجز">✎</button>' : '';
@@ -5509,6 +5511,57 @@ function renderTable(res) {
   var emptyRow = rows.length ? '' : '<tr><td colspan="12" class="text-center text-muted py-3">لا توجد صفوف مطابقة لفلاتر الأعمدة</td></tr>';
   document.getElementById('tableBody').innerHTML = openingRow + bodyRows + emptyRow + totalRow;
   applyColVisibility();
+  try { stmtBulkBar_(); } catch (eB) {}
+}
+/* 🗑️ (V4.411) حذف متعدد لدفعات كشف الفندق بنداء واحد (بلا تحقق أرصدة لكل دفعة ولا إعادة تحميل لكل صف) + «تحديد المكرر» + تراجع عن آخر حذف (سلة الحجوزات) */
+var STMT_BULK_ = { on: false, sel: {}, last: [], busy: false };
+function stmtBulkRows_() { return ((lastStatementRes_ && lastStatementRes_.rows) || []).filter(function (r) { return r.paymentId; }); }
+function stmtBulkPick_(el) { if (el.checked) STMT_BULK_.sel[el.getAttribute('data-id')] = 1; else delete STMT_BULK_.sel[el.getAttribute('data-id')]; stmtBulkBar_(); }
+function stmtBulkToggle_() { STMT_BULK_.on = !STMT_BULK_.on; STMT_BULK_.sel = {}; if (lastStatementRes_) renderTable(lastStatementRes_); else stmtBulkBar_(); }
+function stmtBulkAll_(on) { STMT_BULK_.sel = {}; if (on) stmtBulkRows_().forEach(function (r) { STMT_BULK_.sel[r.paymentId] = 1; }); renderTable(lastStatementRes_); }
+function stmtBulkDups_() {
+  var seen = {}, n = 0; STMT_BULK_.sel = {};
+  stmtBulkRows_().forEach(function (r) {
+    var k = [r.dateIso || r.dateDisp, r.debit == null ? '' : r.debit, r.credit == null ? '' : r.credit, String(r.note || '').replace(/\s+/g, ' ').trim()].join('|');
+    if (seen[k]) { STMT_BULK_.sel[r.paymentId] = 1; n++; } else seen[k] = 1;
+  });
+  renderTable(lastStatementRes_); showToast(n ? ('حُدِّدت ' + n + ' دفعة مكررة (تبقى الأولى من كل مجموعة) — راجعها ثم احذف') : 'لا توجد دفعات مكررة (نفس التاريخ والمبلغ والبيان)');
+}
+function stmtBulkDelete_() {
+  var ids = Object.keys(STMT_BULK_.sel); if (!ids.length || STMT_BULK_.busy) return;
+  if (!confirm('حذف ' + ids.length + ' دفعة من كشف هذا الفندق؟\n• تُحفظ بسلة دفعات الحجوزات ويمكن التراجع فوراً.\n• الدفعات المنسوخة من الحسابات العامة تُحذف من هنا فقط (قيودها بالحسابات تبقى).')) return;
+  STMT_BULK_.busy = true; stmtBulkBar_();
+  google.script.run.withSuccessHandler(function (res) {
+    STMT_BULK_.busy = false;
+    if (!res || !res.ok) { stmtBulkBar_(); return alert('فشل الحذف: ' + ((res && res.error) || '')); }
+    STMT_BULK_.last = res.deleted || []; STMT_BULK_.sel = {};
+    showToast('🗑️ حُذفت ' + (res.deleted || []).length + ' دفعة' + (res.missing ? ' (' + res.missing + ' غير موجودة)' : ''));
+    if (cacheData) loadData(); else stmtBulkBar_();
+  }).withFailureHandler(function (e) { STMT_BULK_.busy = false; stmtBulkBar_(); alert('خطأ: ' + e.message); }).deletePaymentsBulk(ids, currentSessionToken);
+}
+function stmtBulkUndo_() {
+  if (!STMT_BULK_.last.length || STMT_BULK_.busy) return; STMT_BULK_.busy = true; stmtBulkBar_();
+  google.script.run.withSuccessHandler(function (res) {
+    STMT_BULK_.busy = false;
+    if (!res || !res.ok) { stmtBulkBar_(); return alert('تعذّر التراجع: ' + ((res && res.error) || '')); }
+    STMT_BULK_.last = []; showToast('↩️ استُعيدت ' + res.restored + ' دفعة'); if (cacheData) loadData(); else stmtBulkBar_();
+  }).withFailureHandler(function (e) { STMT_BULK_.busy = false; stmtBulkBar_(); alert('خطأ: ' + e.message); }).hbRestorePayments(currentSessionToken, STMT_BULK_.last);
+}
+function stmtBulkBar_() {
+  var cf = document.getElementById('stmtCfBar'); if (!cf || !cf.parentNode) return;
+  var bar = document.getElementById('stmtBulkBar');
+  if (!bar) { bar = document.createElement('div'); bar.id = 'stmtBulkBar'; bar.className = 'd-flex flex-wrap align-items-center gap-1 mb-1'; cf.parentNode.insertBefore(bar, cf); }
+  if (!hasLevel_('payments', 'delete')) { bar.innerHTML = ''; return; }
+  var n = Object.keys(STMT_BULK_.sel).length, b = STMT_BULK_.busy ? ' disabled' : '';
+  bar.innerHTML = !STMT_BULK_.on ? '<button type="button" class="btn btn-sm btn-outline-danger"' + b + ' onclick="stmtBulkToggle_()">🗑 حذف متعدد للدفعات</button>' +
+      (STMT_BULK_.last.length ? ' <button type="button" class="btn btn-sm btn-outline-secondary"' + b + ' onclick="stmtBulkUndo_()">↩️ تراجع عن آخر حذف (' + STMT_BULK_.last.length + ')</button>' : '')
+    : '<span class="small fw-bold" style="color:#b91c1c;">وضع الحذف المتعدد — المحدد: ' + n + '</span>' +
+      '<button type="button" class="btn btn-sm btn-outline-warning"' + b + ' onclick="stmtBulkDups_()">🔁 حدّد المكرر</button>' +
+      '<button type="button" class="btn btn-sm btn-outline-secondary"' + b + ' onclick="stmtBulkAll_(true)">تحديد الكل</button>' +
+      '<button type="button" class="btn btn-sm btn-outline-secondary"' + b + ' onclick="stmtBulkAll_(false)">مسح</button>' +
+      '<button type="button" class="btn btn-sm btn-danger"' + (n && !STMT_BULK_.busy ? '' : ' disabled') + ' onclick="stmtBulkDelete_()">' + (STMT_BULK_.busy ? '⏳ جارٍ الحذف…' : '🗑 حذف المحدد (' + n + ')') + '</button>' +
+      (STMT_BULK_.last.length ? '<button type="button" class="btn btn-sm btn-outline-secondary"' + b + ' onclick="stmtBulkUndo_()">↩️ تراجع (' + STMT_BULK_.last.length + ')</button>' : '') +
+      '<button type="button" class="btn btn-sm btn-light"' + b + ' onclick="stmtBulkToggle_()">إنهاء</button>';
 }
 
 // نداء مشترك لبناء إجراءات تراجع/إعادة تسجيل رقم القيد — تُستخدَم من كشف الحساب وكل الحجوزات
@@ -5780,6 +5833,7 @@ function openPaymentEditModal(p, onSaved) {
         done();
         if (!res.ok) return alert('فشل التعديل: ' + res.error);
         paymentModalEl.hide();
+        if (res.replaced) { showToast(res.message || 'استُبدلت الدفعة بسند بانتظار الاعتماد'); if (onSaved) onSaved(); return; }   // (V4.411) سند جديد: لا تراجع بنفس المعرّف
         showToast('تم حفظ التعديل');
         pushUndo_({
           label: 'تعديل دفعة (' + afterFields.partyName + ')',
@@ -10511,6 +10565,33 @@ function glPayFormFill_(m) {
   document.getElementById('pGlCur').value = (m && m.cur) || 'SAR';
   document.getElementById('pGlAmount').value = m && m.amount ? m.amount : '';
   glPayCurChanged_();
+  var ex = document.getElementById('pGlExtra'); if (ex) ex.innerHTML = '';   // (V4.411) الأطراف الإضافية تبدأ فارغة
+  glPayShareCalc_();
+}
+/* ➕ (V4.411) أكثر من طرف مقابل (حتى بعملات مختلفة): كل طرف إضافي له حساب + عملته + مبلغه الفعلي + حصته من مبلغ الدفعة بالريال؛ حصة الطرف الأول = الباقي */
+function glPayExtraAdd_() {
+  var box = document.getElementById('pGlExtra'); if (!box) return;
+  var d = document.createElement('div'); d.className = 'pGlExRow d-flex gap-1 align-items-center mt-1 flex-wrap';
+  d.innerHTML = '<select class="form-select form-select-sm pgx-cash" style="flex:1 1 170px;" onchange="glPayExChanged_(this)">' + glPayCashOptions_('') + '</select>' +
+    '<select class="form-select form-select-sm pgx-cur" style="width:78px;" onchange="glPayExChanged_(this)"><option value="SAR">ريال</option><option value="EGP">جنيه</option><option value="USD">دولار</option></select>' +
+    '<input type="text" class="form-control form-control-sm pgx-amt" placeholder="المبلغ بعملته" style="width:105px;direction:ltr;text-align:center;" disabled>' +
+    '<input type="text" class="form-control form-control-sm pgx-share" placeholder="الحصة (ريال)" style="width:100px;direction:ltr;text-align:center;" oninput="glPayShareCalc_()">' +
+    '<button type="button" class="btn btn-sm btn-outline-danger py-0" onclick="this.parentNode.remove();glPayShareCalc_()">✕</button>';
+  box.appendChild(d); glPayShareCalc_();
+}
+function glPayExChanged_(el) {
+  var row = el.closest('.pGlExRow'), sel = row.querySelector('.pgx-cash'), o = sel.options[sel.selectedIndex], c = o && o.getAttribute('data-cur');
+  var cur = row.querySelector('.pgx-cur'); if (el === sel && c) cur.value = c;
+  var amt = row.querySelector('.pgx-amt'); amt.disabled = cur.value === 'SAR'; if (cur.value === 'SAR') amt.value = '';
+}
+document.addEventListener('input', function (e) { if (e.target && e.target.id === 'pAmount') { try { glPayShareCalc_(); } catch (x) {} } });
+function glPayShareCalc_() {
+  var t = document.getElementById('pGlShare1'); if (!t) return;
+  var rows = document.querySelectorAll('#pGlExtra .pGlExRow'); if (!rows.length) { t.textContent = ''; return; }
+  var total = parseFloat(String(document.getElementById('pAmount').value || '').replace(/[,٬\s]/g, '')) || 0, sum = 0;
+  rows.forEach(function (r) { sum += parseFloat(String(r.querySelector('.pgx-share').value || '').replace(/[,٬\s]/g, '')) || 0; });
+  var rest = Math.round((total - sum) * 100) / 100;
+  t.innerHTML = 'حصة الطرف الأول: <b style="color:' + (rest > 0 ? '#166534' : '#b91c1c') + ';">' + rest + ' ريال</b>';
 }
 function glPayCashChanged_() {
   var sel = document.getElementById('pGlCash'), o = sel.options[sel.selectedIndex], c = o && o.getAttribute('data-cur');
@@ -10522,7 +10603,12 @@ function glPayCurChanged_() {
 }
 function glPayFormVals_() {
   if (!GLL.linked || document.getElementById('pGlBox').style.display === 'none') return {};
-  return { glCash: document.getElementById('pGlCash').value, glCur: document.getElementById('pGlCur').value, glAmount: document.getElementById('pGlAmount').value };
+  var o = { glCash: document.getElementById('pGlCash').value, glCur: document.getElementById('pGlCur').value, glAmount: document.getElementById('pGlAmount').value };
+  var ex = []; document.querySelectorAll('#pGlExtra .pGlExRow').forEach(function (r) {
+    ex.push({ cash: r.querySelector('.pgx-cash').value, cur: r.querySelector('.pgx-cur').value, amount: r.querySelector('.pgx-amt').value, share: r.querySelector('.pgx-share').value });
+  });
+  if (ex.length) o.glExtra = ex;
+  return o;
 }
 function glFillPaymentCells_(rows) {
   var cells = document.querySelectorAll('#paymentsTbody .gll-cell');

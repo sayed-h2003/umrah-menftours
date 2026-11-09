@@ -110,12 +110,24 @@ function _ledgerSubmit_(session, fam, p) {
   var date = _glDate_(p.date) || Utilities.formatDate(new Date(), _tz_() || 'Africa/Cairo', 'dd/MM/yyyy');
   if (!party) throw new Error('الطرف مطلوب');
   if (!(amount > 0)) throw new Error('المبلغ غير صالح');
-  var cpCode = _glStr_(p.cp); if (!cpCode) return { success: false, code: 'LEDGER_NEED_CP', error: LEDGER_NEED_CP_MSG_ };
-  var accs = _glAccounts_().map, cpA = accs[cpCode];
-  if (!cpA || cpA.isGroup || cpA.active === false) throw new Error('الحساب المقابل ' + cpCode + ' غير صالح (اختر حساباً فرعياً نشطاً)');
-  if (cpA.currency && cpA.currency !== _glCur_(p.cashCur || cur) && /^(safe|bank|custody)$/.test(cpA.kind || '')) throw new Error('الحساب المقابل «' + cpA.name + '» بعملة ' + cpA.currency + ' والدفعة بعملة ' + cur);
-  var pA = _ledgerPartyAcc_(fam, party, p.company);
-  if (pA.code === cpCode) throw new Error('الحساب المقابل هو نفس حساب الطرف');
+  /* (V4.411) طرف مقابل واحد أو أكثر: p.cps = [{code, cur, amt (بعملة الطرف المقابل), share (حصته من مبلغ الدفعة بعملتها)}] — وإلا الطرف الواحد القديم (p.cp/cashCur/cashAmt) */
+  var accs = _glAccounts_().map, cpList = [];
+  if (p.cps && p.cps.length) cpList = p.cps.map(function (x) { return { code: _glStr_(x.code), cur: _glCur_(x.cur || cur), amt: _glR2_(_glNum_(x.amt)), share: _glR2_(_glNum_(x.share)) }; });
+  else { var c0 = _glStr_(p.cp); cpList = [{ code: c0, cur: p.cashCur ? _glCur_(p.cashCur) : cur, amt: _glR2_(_glNum_(p.cashAmt)), share: amount }]; }
+  if (!cpList.length || cpList.some(function (x) { return !x.code; })) return { success: false, code: 'LEDGER_NEED_CP', error: LEDGER_NEED_CP_MSG_ };
+  var shSum = 0; cpList.forEach(function (x) { shSum += x.share; });
+  if (Math.abs(_glR2_(shSum) - amount) > 0.009) throw new Error('مجموع حصص الأطراف المقابلة (' + _glR2_(shSum) + ') لا يساوي مبلغ الدفعة (' + amount + ' ' + cur + ')');
+  var pA = _ledgerPartyAcc_(fam, party, p.company), cpNames = [];
+  cpList.forEach(function (x) {
+    var a = accs[x.code];
+    if (!(x.share > 0)) throw new Error('حصة الطرف المقابل ' + x.code + ' يجب أن تكون موجبة');
+    if (!a || a.isGroup || a.active === false) throw new Error('الحساب المقابل ' + x.code + ' غير صالح (اختر حساباً فرعياً نشطاً)');
+    if (a.currency && a.currency !== x.cur && /^(safe|bank|custody)$/.test(a.kind || '')) throw new Error('الحساب المقابل «' + a.name + '» بعملة ' + a.currency + ' والدفعة بعملة ' + x.cur);
+    if (pA.code === x.code) throw new Error('الحساب المقابل هو نفس حساب الطرف');
+    if (x.cur !== cur && !(x.amt > 0)) throw new Error('أدخل المبلغ بعملة الحساب المقابل (' + x.cur + ') للحساب ' + a.name);
+    cpNames.push(x.code + ' — ' + a.name);
+  });
+  var cpA = { code: cpList[0].code, name: cpNames.join(' + ') };
   var dups = _ledgerDups_(fam, pA, party, amount, cur, date);
   if (dups.length && !p.force) return { success: false, dup: true, dups: dups, error: '🔁 دفعة مشابهة مسجَّلة بالفعل (نفس الطرف والمبلغ في نفس اليوم) — راجعها أو أكّد التسجيل' };
   var dirIn = (fam === 'ap' || fam === 'hb') ? p.dir === 'in' : p.dir !== 'out';   // عميل: قبض افتراضياً · وكيل/فندق: حسب الاتجاه
@@ -123,18 +135,18 @@ function _ledgerSubmit_(session, fam, p) {
   var desc = _glStr_(p.desc) || ((dirIn ? 'دفعة من ' : 'دفعة إلى ') + party);
   var trip = fam === 'cp' ? (_glStr_(p.trip) || '') : '';
   var partyLine = { account: pA.code, debit: dirIn ? 0 : amount, credit: dirIn ? amount : 0, currency: cur, rate: rate, trip: trip === 'عام' ? '' : trip, company: _glStr_(p.company), desc: desc };
-  var cashLine = { account: cpCode, debit: dirIn ? amount : 0, credit: dirIn ? 0 : amount, currency: cur, rate: rate, desc: desc };
-  // 💱 (V4.357) الحساب المقابل بعملة أخرى (مثل خزينة بالجنيه لسداد فندق بالريال): سطر الطرف بعملته، والنقدية بمبلغها
-  // الفعلي بعملتها (cashCur/cashAmt) — وسعر النقدية يُحسب بدقة بحيث يتساوى المعادل بالجنيه
-  var cCur = p.cashCur ? _glCur_(p.cashCur) : cur, cAmt = _glR2_(_glNum_(p.cashAmt));
-  if (cCur !== cur) {
-    if (!(cAmt > 0)) throw new Error('أدخل المبلغ بعملة الحساب المقابل (' + cCur + ')');
-    var baseAmt = amount * rate;
-    cashLine.currency = cCur; cashLine.debit = dirIn ? cAmt : 0; cashLine.credit = dirIn ? 0 : cAmt;
-    cashLine.rate = cCur === 'EGP' ? 1 : baseAmt / cAmt; cashLine.exact = true;
-    if (cCur === 'EGP') { partyLine.rate = cAmt / amount; partyLine.exact = true; }
-  }
-  var e = { date: date, type: type, desc: desc, ref: 'SCR:' + fam, company: _glStr_(p.company), lines: [cashLine, partyLine] };
+  // 💱 (V4.357/V4.411) كل طرف مقابل بعملته: المعادل الأساسي = حصته × سعر عملة الدفعة (أو مبلغه نفسه لو بالجنيه) وسعره يُحسب بدقة؛ وسطر الطرف يأخذ مجموع المعادلات
+  var cashLines = [], baseTot = 0, anyEx = false;
+  cpList.forEach(function (x) {
+    var ln = { account: x.code, debit: dirIn ? x.share : 0, credit: dirIn ? 0 : x.share, currency: cur, rate: rate, desc: desc }, base = x.share * rate;
+    if (x.cur !== cur) {
+      anyEx = true; base = x.cur === 'EGP' ? x.amt : x.share * rate;
+      ln.currency = x.cur; ln.debit = dirIn ? x.amt : 0; ln.credit = dirIn ? 0 : x.amt; ln.rate = x.cur === 'EGP' ? 1 : base / x.amt; ln.exact = true;
+    }
+    baseTot += base; cashLines.push(ln);
+  });
+  if (anyEx && cur !== 'EGP' && Math.abs(baseTot - amount * rate) > 0.0001) { partyLine.rate = baseTot / amount; partyLine.exact = true; }
+  var e = { date: date, type: type, desc: desc, ref: 'SCR:' + fam, company: _glStr_(p.company), lines: cashLines.concat([partyLine]) };
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     var v = _glValidate_(e, {}), seq = _glNextEntrySeq_(1), id = _glEntryId_(seq), vno = _glNextVoucherNo_(type);
@@ -144,7 +156,7 @@ function _ledgerSubmit_(session, fam, p) {
     lSh.getRange(lSh.getLastRow() + 1, 1, w.lRows.length, w.lRows[0].length).setValues(w.lRows);
     var q = _ledgerSheet_();
     q.getRange(q.getLastRow() + 1, 1, 1, LEDGER_Q_.headers.length).setValues([[id, fam, party, trip, date, dirIn ? amount : -amount, cur, user, _glNow_(),
-      dups.length ? dups.map(function (d) { return d.where + ': ' + d.ref + ' ' + d.date; }).join(' · ') : '', LEDGER_PEND_, '', '', '', vno, cpA.code + ' — ' + cpA.name]]);
+      dups.length ? dups.map(function (d) { return d.where + ': ' + d.ref + ' ' + d.date; }).join(' · ') : '', LEDGER_PEND_, '', '', '', vno, cpNames.join(' + ')]]);
     if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(user, id, null, _audSnapRows_(w.eRow, w.lRows), 'دفعة من شاشة ⇒ طابور الاعتماد');
     logChange_(user, 'دفعة من الشاشة بانتظار الاعتماد', 'GL:' + id, LEDGER_FAMS_[fam] || fam, '-', party + ' — ' + amount + ' ' + cur + ' — سند ' + vno + (dups.length ? ' (⚠️ تكرار محتمل)' : ''));
     try { _glBotQ_('vch_new', _glBotWho_(_glBotEntryInfo_(id, w.eRow, w.lRows), session)); } catch (eB) {}

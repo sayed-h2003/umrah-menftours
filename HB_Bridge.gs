@@ -424,7 +424,18 @@ function hbLedgerPayArgs_(payment) {
   return { party: String(payment.partyName || '').trim(), date: hbPayDmy_(payment.date), amount: parseAmountLoose_(payment.amount), currency: 'SAR',
     desc: String(payment.note || '').trim() ? String(payment.note).trim() + ' — ' + String(payment.partyName || '').trim() : '',
     cp: String(payment.glCash || '').trim(), dir: payment.direction === 'in' ? 'in' : 'out', force: !!payment.force,
-    cashCur: cur !== 'SAR' ? cur : '', cashAmt: cur !== 'SAR' ? payment.glAmount : '' };
+    cashCur: cur !== 'SAR' ? cur : '', cashAmt: cur !== 'SAR' ? payment.glAmount : '',
+    cps: hbLedgerCps_(payment) };
+}
+// (V4.411) أطراف مقابلة متعددة: glExtra = [{cash, cur, amount, share}] — حصة الطرف الأول = الإجمالي − مجموع الحصص الأخرى
+function hbLedgerCps_(payment) {
+  var ex = (payment.glExtra || []).filter(function (x) { return x && String(x.cash || '').trim(); });
+  if (!ex.length) return null;
+  var total = parseAmountLoose_(payment.amount) || 0, sum = 0, out = [];
+  ex.forEach(function (x) { var sh = parseAmountLoose_(x.share) || 0; sum += sh; out.push({ code: String(x.cash).trim(), cur: String(x.cur || 'SAR').toUpperCase(), amt: parseAmountLoose_(x.amount) || 0, share: sh }); });
+  var cur0 = String(payment.glCur || 'SAR').toUpperCase();
+  out.unshift({ code: String(payment.glCash || '').trim(), cur: cur0, amt: parseAmountLoose_(payment.glAmount) || 0, share: Math.round((total - sum) * 100) / 100 });
+  return out;
 }
 function hbLedgerSubmitPay_(actingUser, payment) {
   try { return hbLedgerOut_(_ledgerSubmit_(hbLedgerSess_(actingUser), 'hb', hbLedgerPayArgs_(payment))); }

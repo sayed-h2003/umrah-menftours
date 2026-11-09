@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.410  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.411  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9657,7 +9657,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.410";
+var CLIENT_APP_VERSION = "4.411";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -10337,6 +10337,7 @@ function srcPanel_() {
     '<div style="background:#fff;border-radius:12px;max-width:980px;width:100%;padding:14px 16px;direction:rtl;font-size:12.5px;">' +
     '<div class="d-flex align-items-center gap-2 mb-2"><b style="font-size:15px;">🧭 مصدر البيانات — الجلسة الحالية</b><span class="ms-auto"></span>' +
     '<button class="btn btn-outline-secondary btn-sm" onclick="window.__SRC=[];window.__GSR=[];srcPanel_();srcPanel_()">🧹 تصفير العدّ</button> ' +
+    '<button class="btn btn-success btn-sm fw-bold" onclick="srcCopy_(this)">📋 نسخ النتائج</button> ' +
     '<button class="btn btn-outline-primary btn-sm" onclick="srcPanel_();srcPanel_()">🔄 تحديث</button> ' +
     '<button class="btn btn-outline-dark btn-sm" onclick="document.getElementById(\'srcPanel\').remove()">✕</button></div>' +
     '<div class="mb-2" style="background:#f1f5f9;border-radius:8px;padding:6px 10px;">' +
@@ -10350,7 +10351,24 @@ function srcPanel_() {
     '</tbody></table></div>' +
     (notCalled.length ? '<details><summary class="small text-muted">دوال مدعومة بـPostgres لم تُستخدم بعد بهذه الجلسة (' + notCalled.length + ')</summary><div dir="ltr" class="small text-muted" style="text-align:left;">' + notCalled.map(glEscSafe_).join(' · ') + '</div></details>' : '') +
     '<div class="small text-muted mt-2">الأحمر 🔴 هو ما يلزم نقله لاحقاً. ما يظهر هنا يخص ما استخدمتَه فقط — افتح الشاشات التي تهمك ثم راجع اللوحة.</div></div></div>';
+  // نص النسخ (للإرسال): ترويسة الحالة ثم سطر لكل دالة — الحالة | pg ن·متوسط | as ن·متوسط | سبب
+  var L = ['مصدر البيانات — V' + (window.CLIENT_APP_VERSION || '') + ' — ' + new Date().toLocaleString('en-GB'),
+    'Postgres: ' + (info.ready ? 'جاهز' : 'غير جاهز') + (info.off || info.stOff || info.glOff ? ' (معطَّل مؤقتاً)' : '') + ' | قيود GL بـPG: ' + (info.gl ? 'نعم' : 'لا') + ' | dv بـPG: ' + (info.dv ? 'نعم' : 'لا'),
+    'مجموعات حيّة: ' + ((info.groups || []).join(', ') || 'لا شيء'),
+    'الملخص: PG فقط ' + cnt[3] + ' · مختلط ' + cnt[2] + ' · مدعومة وترتد ' + cnt[1] + ' · Apps Script فقط ' + cnt[0], ''];
+  rows.forEach(function (r) { L.push([r.st, r.f, 'PG ' + r.m.pg + '×' + avg(r.m.pgMs, r.m.pg), 'AS ' + r.m.as + '×' + avg(r.m.asMs, r.m.as), r.m.why].join(' | ')); });
+  if (notCalled.length) L.push('', 'مدعومة ولم تُستخدم: ' + notCalled.join(', '));
+  window.__srcRep = L.join('\n');
   var w = document.createElement('div'); w.innerHTML = h; document.body.appendChild(w.firstChild);
+}
+function srcCopy_(btn) {
+  var t = window.__srcRep || '', ok = function () { if (btn) { btn.textContent = '✅ نُسخ — الصقه في المحادثة'; setTimeout(function () { btn.textContent = '📋 نسخ النتائج'; }, 2500); } };
+  var fb = function () {
+    try { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0;'; document.body.appendChild(ta); ta.select(); var r = document.execCommand('copy'); ta.remove(); if (r) { ok(); return; } } catch (e) {}
+    try { prompt('انسخ النص (Ctrl+C):', t); } catch (e2) {}
+  };
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(ok, fb); return; } } catch (e) {}
+  fb();
 }
 function glEscSafe_(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 window.__src = srcPanel_;
