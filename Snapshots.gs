@@ -46,7 +46,9 @@ function _snapEntryTake_(id, r, lines, action, user) {
   try {
     if (!r) return '';
     var sid = _snapId_('E');
-    _snapAppend_(_snapGlSheet_(), [sid, _snapNowTxt_(), String(user || ''), String(action || ''), String(id)], _snapPack_({ r: r, l: lines || [] }));
+    var packed = _snapPack_({ r: r, l: lines || [] });
+    _snapAppend_(_snapGlSheet_(), [sid, _snapNowTxt_(), String(user || ''), String(action || ''), String(id)], packed);
+    if (/^قبل حذف/.test(String(action || ''))) _rbQueueGlEntry_(String(id), r, lines || [], packed, user);   // 🗑️ (V4.400) كل قيد يُحذف يدخل سلة المحذوفات
     return sid;
   } catch (e) { Logger.log('snapEntryTake: ' + e.message); return ''; }
 }
@@ -93,10 +95,15 @@ function glEntrySnapRestore(authToken, sid) {
   if (!hit) throw new Error('النسخة غير موجودة');
   var d = _snapUnpack_(hit.v.slice(5)), id = String(hit.v[4]);
   if (!d || !d.r) throw new Error('بيانات النسخة تالفة');
+  return _snapEntryApply_(session, d, id, String(hit.v[1]) + ' (' + String(hit.v[3]) + ')', false);
+}
+// يكتب القيد (رأس + أسطر) من صورة {r,l}: noReplace ⇒ يرفض إن كان القيد موجوداً (استعادة من سلة المحذوفات). مشترك بين «استعادة نسخة سابقة» والسلة.
+function _snapEntryApply_(session, d, id, noteTxt, noReplace) {
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     _GL_ACC_MEMO_ = null;
     var f = _glFindEntry_(id), curLines = f ? _glLinesOf_(id) : [];
+    if (f && noReplace) throw new Error('القيد ' + id + ' موجود الآن بالفعل');
     if (_glLocked_(d.r[2])) throw new Error('تاريخ النسخة في فترة مقفلة حتى ' + _glSettings_().lockDate);
     if (f && _glLocked_(f.r[2])) throw new Error('القيد الحالي في فترة مقفلة حتى ' + _glSettings_().lockDate);
     var accs = _glAccounts_().map, db = 0, cr = 0;
@@ -111,7 +118,7 @@ function glEntrySnapRestore(authToken, sid) {
     else eSh.getRange(eSh.getLastRow() + 1, 1, 1, r.length).setValues([r]);
     if ((d.l || []).length) lSh.getRange(lSh.getLastRow() + 1, 1, d.l.length, d.l[0].length).setValues(d.l);
     if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(session.username, id, f ? _audSnapRows_(f.r, curLines) : null, _audSnapRows_(r, d.l), 'استعادة نسخة سابقة للقيد');
-    logChange_(session.username, 'استعادة نسخة سابقة للقيد', 'GL:' + id, 'النسخة', String(hit.v[1]) + ' (' + String(hit.v[3]) + ')', f ? 'استُبدل القيد الحالي' : 'أُعيد القيد المحذوف');
+    logChange_(session.username, noReplace ? 'استعادة قيد من سلة المحذوفات' : 'استعادة نسخة سابقة للقيد', 'GL:' + id, 'النسخة', noteTxt, f ? 'استُبدل القيد الحالي' : 'أُعيد القيد المحذوف');
     try { _glSyncVoucherPays_(id, session.username); } catch (eS) {}
     var delta = {};
     if (f && _glStr_(f.r[5]) === GL_ST_POSTED_) _glLineDelta_(curLines, -1, delta);
@@ -615,4 +622,53 @@ function snapApply(authToken, pid, screenKey, picks, tokens) {
 function snapScreens(authToken) {
   _snapAdmin_(authToken);
   return { success: true, screens: SNAP_SCREENS_.map(function (s) { return { k: s.k, label: s.label, filter: s.filter || '' }; }) };
+}
+
+
+/* ============================================================
+   🗑️ (V4.400) سلة المحذوفات — عناصر Apps Script (قيود الحسابات العامة: سندات القبض/الصرف · الخزينة · إيداع/سحب البنوك · العهد · القيود اليومية)
+   تُودَع بالجدول recycle_bin (035) بصورتها الكاملة {r, l}، وتُستعاد بـ recycleRestoreAs من شاشة السلة بنفس منطق «استعادة نسخة سابقة».
+   فشل الإيداع لا يوقف الحذف (يبقى سجل اللقطات GL_Snapshots احتياطاً).
+   ============================================================ */
+var _RB_Q_ = [];
+function _rbQueueGlEntry_(id, r, lines, packed, user) {
+  try {
+    var tot = 0; (lines || []).forEach(function (l) { tot += Math.max(Number(l[9]) || 0, 0); });
+    var type = _glStr_(r[3]), st = _glStr_(r[5]);
+    _RB_Q_.push({ kind: 'gl_entry', label: type + ' ' + id, detail: (_glStr_(r[4]) || '') + ' — ' + (Math.round(tot * 100) / 100) + ' ج (' + st + ')', user: String(user || ''), payload: { id: id, p: packed } });
+    if (_RB_Q_.length >= 40) _rbFlush_();
+  } catch (e) { Logger.log('rbQueue: ' + e.message); }
+}
+function _rbFlush_() {
+  if (!_RB_Q_.length) return;
+  var items = _RB_Q_; _RB_Q_ = [];
+  try {
+    if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY')) return;
+    var r = _supaReq_('post', 'rpc/rb_put_ext', { p_items: items });
+    if (r.code < 200 || r.code >= 300) Logger.log('rb_put_ext ' + r.code + ' ' + String(r.text).slice(0, 160));
+  } catch (e) { Logger.log('rbFlush: ' + e.message); }
+}
+// استعادة عناصر Apps Script من السلة (ids = معرّفات recycle_bin). صلاحية: أدمن أو recycle.edit
+function recycleRestoreAs(authToken, ids) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'recycle.edit')) throw new Error('لا تملك صلاحية الاستعادة من سلة المحذوفات');
+  ids = (Array.isArray(ids) ? ids : [ids]).map(function (x) { return parseInt(x, 10); }).filter(function (x) { return x > 0; });
+  if (!ids.length) return { success: false, error: 'لا يوجد اختيار' };
+  var r = _supaReq_('get', 'recycle_bin?id=in.(' + ids.join(',') + ')&src=eq.as&restored_at=is.null&select=id,kind,label,payload');
+  if (r.code !== 200) throw new Error('تعذّر قراءة السلة (' + r.code + ')');
+  var rows = []; try { rows = JSON.parse(r.text || '[]'); } catch (e) {}
+  var ok = 0, errs = [];
+  rows.forEach(function (x) {
+    try {
+      if (x.kind !== 'gl_entry') throw new Error('نوع غير مدعوم للاستعادة: ' + x.kind);
+      _glPerm_(authToken, 'edit');
+      var p = x.payload || {}, d = _snapUnpack_(Array.isArray(p.p) ? p.p : [p.p]);
+      if (!d || !d.r) throw new Error('بيانات العنصر تالفة');
+      var id = String(p.id || d.r[0]);
+      _snapEntryApply_(session, d, id, 'سلة المحذوفات', true);
+      _supaReq_('patch', 'recycle_bin?id=eq.' + x.id, { restored_at: new Date().toISOString(), restored_by: session.username });
+      ok++;
+    } catch (e) { errs.push(String(x.label || x.id) + ': ' + (e.message || e)); }
+  });
+  return { success: errs.length === 0, restored: ok, errors: errs };
 }

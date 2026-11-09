@@ -1883,7 +1883,7 @@ function glVoidEntry(authToken, id, reason, wantDelta) {
     if (_autoK && !_glCanEditAuto_(session)) throw new Error('إلغاء القيد التلقائي يحتاج صلاحية تعديل «القيود التلقائية والاعتماد» — أو عدّل/احذف مصدره بالشاشة');
     if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
     if (st === GL_ST_DRAFT_) {   // المسودة تُحذف نهائياً (لم تؤثر على أي رصيد)
-      (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(id), f.r, _glLinesOf_(_glStr_(id)), 'قبل حذف قيد مسودة', session.username);   // ⏪ (V4.346)
+      (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(id), f.r, _glLinesOf_(_glStr_(id)), 'قبل حذف قيد مسودة', session.username); (typeof _rbFlush_ === 'function') && _rbFlush_();   // ⏪ (V4.346)
       if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(session.username, _glStr_(id), _audSnapRows_(f.r, _glLinesOf_(_glStr_(id))), null, 'حذف قيد مسودة');   // 🛡️ (V4.345)
       _glDeleteLinesOf_([_glStr_(id)]);
       _glSheet_('entries').deleteRow(f.row);
@@ -1933,7 +1933,7 @@ function glDeleteEntry(authToken, id) {
     if (_glStr_(f.r[3]) === 'قيد إقفال') throw new Error('قيد إقفال السنة يُلغى من «الإعدادات ← إعادة فتح السنة»');
     if (_glLocked_(f.r[2])) throw new Error('القيد في فترة مقفلة حتى ' + _glSettings_().lockDate);
     var _delLines = _glLinesOf_(_glStr_(id));   // ⚡ (V4.232) قبل الحذف — للدلتا (المرحّل فقط يؤثر)
-    (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(id), f.r, _delLines, 'قبل حذف قيد نهائياً', session.username);   // ⏪ (V4.346) يُستعاد من «القيود المحذوفة»
+    (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(id), f.r, _delLines, 'قبل حذف قيد نهائياً', session.username); (typeof _rbFlush_ === 'function') && _rbFlush_();   // ⏪ (V4.346) يُستعاد من «القيود المحذوفة»
     if (typeof _audEntryDiff_ === 'function') _audEntryDiff_(session.username, _glStr_(id), _audSnapRows_(f.r, _delLines), null, 'حذف قيد نهائياً');   // 🛡️ (V4.345) صورة كاملة قبل الحذف
     if (_glStr_(f.r[5]) === GL_ST_POSTED_) _glBotQ_('entry_void', _glBotWho_(Object.assign(_glBotEntryInfo_(_glStr_(id), f.r, _delLines), { deleted: true }), session));   // 📲 (V4.254)
     _glDeleteLinesOf_([_glStr_(id)]);
@@ -1977,7 +1977,7 @@ function glDeleteEntriesBulk(authToken, ids) {
       pendKeys.push('CCY:' + id); if (/^AUTO:/.test(sk)) pendKeys.push(sk);
       sums.push(id + ' ' + _glStr_(r[3]) + ' ' + _glNum_(r[8]));
     });
-    if (typeof _snapEntryTake_ === 'function') del.forEach(function (id) { _snapEntryTake_(id, eRows[at[id]], byE[id] || [], 'قبل حذف مجمع', session.username); });   // ⏪ (V4.346)
+    if (typeof _snapEntryTake_ === 'function') del.forEach(function (id) { _snapEntryTake_(id, eRows[at[id]], byE[id] || [], 'قبل حذف مجمع', session.username); }); if (typeof _rbFlush_ === 'function') _rbFlush_();   // ⏪ (V4.346)
     if (typeof _audEntryDiff_ === 'function') del.forEach(function (id) { _audEntryDiff_(session.username, id, _audSnapRows_(eRows[at[id]], byE[id] || []), null, 'حذف مجمع نهائي للقيود'); });   // 🛡️ (V4.345)
     _glDeleteLinesOf_(del);                                              // أسطرها أولاً (فلا يبقى سطر بلا رأس يؤثر بالأرصدة)
     var sh = _glSheet_('entries'), fresh = _glRows_('entries'), rowsDel = [];

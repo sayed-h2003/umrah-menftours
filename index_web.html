@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.399  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.400  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -1797,6 +1797,9 @@ input[type="date"]:not(:focus):not(:valid) {
     <div class="side-grp g-admin">⚙️ الإدارة</div>
     <a id="link-auditLog-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('auditLog'); closeAppSidebarOnMobile();">
       <i class="fas fa-history me-2 text-warning"></i> سجل التعديلات
+    </a>
+    <a id="link-recycleBin-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('recycleBin'); closeAppSidebarOnMobile();">
+      <i class="fas fa-trash-restore me-2 text-warning"></i> سلة المحذوفات
     </a>
     <a id="link-users-side" class="nav-link smart-action d-none px-3 py-2 rounded" onclick="switchPage('users'); closeAppSidebarOnMobile();">
       <i class="fas fa-users-cog me-2 text-warning"></i> إدارة المستخدمين
@@ -5831,6 +5834,30 @@ input[type="date"]:not(:focus):not(:valid) {
   </div>
 </div>
 
+<div id="section-recycleBin" class="page-section container-fluid my-3 px-3">
+  <div class="mb-2 d-flex flex-wrap align-items-end gap-2">
+    <div><h4 class="fw-bold mb-0">🗑️ سلة المحذوفات</h4>
+    <div class="text-muted small">كل ما يُحذف من البرنامج (إشعارات · رحلات · معتمرون · بنود ودفعات الحسابات · القيود المحاسبية وسندات القبض والصرف والخزينة والبنوك والعهد) محفوظ هنا للاستعادة</div></div>
+    <div class="ms-auto small text-muted" id="rbRetention"></div>
+  </div>
+  <div class="card border-0 shadow-sm mb-2"><div class="card-body p-2 d-flex flex-wrap gap-2 align-items-center">
+    <select id="rbKind" class="form-select form-select-sm" style="width:auto" onchange="RBS.kind=this.value;RBS.page=0;rbLoad_()"></select>
+    <input id="rbQ" class="form-control form-control-sm" style="width:200px" placeholder="بحث: رقم/اسم/وصف…" onkeydown="if(event.key==='Enter'){RBS.q=this.value.trim();RBS.page=0;rbLoad_()}">
+    <input id="rbUser" class="form-control form-control-sm" style="width:130px" placeholder="المستخدم" onkeydown="if(event.key==='Enter'){RBS.user=this.value.trim();RBS.page=0;rbLoad_()}">
+    <button class="btn btn-sm btn-outline-dark" onclick="RBS.q=document.getElementById('rbQ').value.trim();RBS.user=document.getElementById('rbUser').value.trim();RBS.page=0;rbLoad_()">🔍 بحث</button>
+    <label class="mb-0 small"><input type="checkbox" id="rbShowRestored" onchange="RBS.restored=this.checked;RBS.page=0;rbLoad_()"> إظهار المستعادة</label>
+    <label class="mb-0 small ms-auto">عدد العمليات بالصفحة
+      <select id="rbLimit" class="form-select form-select-sm d-inline-block" style="width:auto" onchange="RBS.limit=+this.value;RBS.page=0;rbLoad_()"><option>20</option><option>50</option><option>100</option></select></label>
+  </div></div>
+  <div class="d-flex flex-wrap gap-2 mb-2" id="rbActions"></div>
+  <div class="card shadow-sm border-0"><div class="table-responsive">
+    <table class="table table-sm mb-0 align-middle" style="font-size:13px;min-width:820px;">
+      <thead class="table-light"><tr><th style="width:34px"><input type="checkbox" id="rbAll" onchange="rbSelAll_(this.checked)"></th><th>النوع</th><th>العنصر</th><th>التفاصيل</th><th>حُذف بواسطة</th><th>توقيت الحذف</th><th>يُحذف نهائياً</th><th style="width:110px"></th></tr></thead>
+      <tbody id="rbBody"><tr><td colspan="8" class="text-center text-muted py-4">⏳</td></tr></tbody>
+    </table></div></div>
+  <div id="rbPager" class="d-flex flex-wrap gap-2 align-items-center justify-content-center my-2 small"></div>
+</div>
+
 <div id="section-auditLog" class="page-section container-fluid my-3 px-3">
 
   <!-- عنوان -->
@@ -5893,7 +5920,6 @@ input[type="date"]:not(:focus):not(:valid) {
           <span class="small text-nowrap">دخول/خروج</span>
         </label>
         <button type="button" class="btn btn-sm btn-dark fw-bold" onclick="audOpen_()" title="سجل غير قابل للتلاعب في ملف مستقل مع فحص السلامة">🛡️ السجل المحصّن</button>
-        <button type="button" class="btn btn-sm btn-outline-danger fw-bold" onclick="rbOpen_()" title="كل ما حُذف من البرنامج (إشعار/رحلة/معتمرون/بند أو دفعة حساب…) محفوظ مدة قابلة للتعديل ويُستعاد بصلاحية">🗑️ سلة المحذوفات</button>
         <button type="button" class="btn btn-sm btn-outline-dark fw-bold" onclick="snapOpen_()" title="نقاط الاستعادة اليومية/الفورية + القيود والدفعات المحذوفة">⏪ التراجع الزمني</button>
       </div>
     </div>
@@ -7899,6 +7925,7 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     recycleRestore: { need: ['wbk'], rpc: 'rw_call' },
     recycleDelete: { need: ['wbk'], rpc: 'rw_call' },
     recycleSetDays: { need: ['wbk'], rpc: 'rw_call' },
+    recycleEmpty: { need: ['wbk'], rpc: 'rw_call' },
     deleteGlobalPilgrims: { need: ['core', 'wbk'], rpc: 'rw_call', after: function (a, d) { try { if (d && d.success !== false) _RAWRUN_().withFailureHandler(function () {}).cacheBustBg(window.authToken, 'pilgrims'); } catch (e) {} } },
     getRequiredFieldsConfig: { need: ['cfg'], rpc: 'rx_call2' },   /* (V4.387) 023_required_fields.sql */
     getNotifications: { need: ['misc', 'cfg'], rpc: 'rx_call2' },   /* (V4.385) جرس التنبيهات من Postgres — 022_notifications.sql */
@@ -8569,6 +8596,11 @@ function toggleAdminOnlyLinks_() {
     else el.classList.add("d-none");
   });
 
+  // 🗑️ (V4.400) سلة المحذوفات: الأدمن أو من مُنح recycle.view
+  ['link-recycleBin-side'].forEach(function (id) {
+    var el = document.getElementById(id); if (!el) return;
+    if (hasPermission('admin') || hasPermission('recycle.view')) el.classList.remove('d-none'); else el.classList.add('d-none');
+  });
   // رابط سجل التعديلات: يظهر لصاحب صلاحية admin أو AUDIT_LOG تحديداً
   ['link-auditLog', 'link-auditLog-side'].forEach(function (id) {
     var el = document.getElementById(id);
@@ -9595,7 +9627,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.399";
+var CLIENT_APP_VERSION = "4.400";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -9743,7 +9775,7 @@ var PERM_SCREENS = [
   { key: 'bookings',  label: 'الإشعارات (الحجوزات)' },
   { key: 'trips',     label: 'الرحلات' },
   { key: 'tripundo',  label: '↩️ التراجع/الرجوع لنقطة بسجل تعديلات الرحلات (الأدمن افتراضياً)' },
-  { key: 'recycle', label: '🗑️ سلة المحذوفات: عرض=الاطلاع · تعديل=استعادة · حذف=حذف نهائي (الأدمن افتراضياً)' },
+  { key: 'recycle', label: '🗑️ سلة المحذوفات: عرض=الاطلاع · تعديل=استعادة (الحذف النهائي وإفراغ السلة للأدمن فقط)' },
   { key: 'snaprestore', label: '⏪ استعادة النسخ السابقة للقيود والدفعات (الأدمن افتراضياً)' },
   { key: 'kashf',     label: 'كشف المعتمرين / التسكين' },
   { key: 'registry',  label: 'السجل العام للمعتمرين' },
@@ -26057,53 +26089,63 @@ function snapEntryRestore_(sid, btn) {
     });
   }, { title: 'استعادة نسخة سابقة', danger: false });
 }
-/* 🗑️ (V4.399) سلة المحذوفات — واجهة الاطلاع/الاستعادة/الحذف النهائي + مدة الاحتفاظ (للأدمن). تعمل مع Postgres (035) فقط. */
-var RBS = { kind: '', q: '', restored: false, sel: {} };
-var RB_KINDS = { booking: '📄 إشعار', trip: '🧳 رحلة', pilgrims: '👥 معتمرون', acc_item: '🧾 بند حساب', acc_payment: '💵 دفعة حساب' };
-function rbOpen_() {
-  if (!hasPermission('recycle.view')) { _showPopup('لا تملك صلاحية سلة المحذوفات', 'error'); return; }
-  var box = _snapOv_('_rbOv', '🗑️ سلة المحذوفات');
-  RBS.sel = {}; box.innerHTML = '<div id="_rbHead"></div><div id="_rbBody"></div>'; rbLoad_();
+/* 🗑️ (V4.400) شاشة سلة المحذوفات: أحدث الحذف أولاً · 20/50/100 بالصفحة · توقيت الحذف + المستخدم · استعادة مفردة أو جماعية · حذف نهائي/إفراغ للأدمن.
+   عناصر Postgres (src=pg) تُستعاد بـ recycleRestore، وعناصر Apps Script (قيود الحسابات العامة، src=as) بـ recycleRestoreAs. */
+var RBS = { kind: '', q: '', user: '', restored: false, limit: 20, page: 0, sel: {}, items: [] };
+var RB_KINDS = { booking: '📄 إشعارات', trip: '🧳 رحلات', pilgrims: '👥 معتمرون', acc_item: '🧾 بنود حسابات', acc_payment: '💵 دفعات حسابات', gl_entry: '📒 قيود وسندات (قبض/صرف/خزينة/بنوك/عهد)' };
+function rbInit_() {
+  var sel = document.getElementById('rbKind'); if (sel && !sel.options.length) sel.innerHTML = '<option value="">كل الأنواع</option>' + Object.keys(RB_KINDS).map(function (k) { return '<option value="' + k + '">' + RB_KINDS[k] + '</option>'; }).join('');
+  RBS.sel = {}; rbLoad_();
 }
 function rbLoad_() {
-  var b = document.getElementById('_rbBody'); if (!b) return; b.innerHTML = '<div class="text-center text-muted py-4">⏳</div>';
-  _snapRun_('recycleList', [{ kind: RBS.kind, q: RBS.q, restored: RBS.restored }], function (r) {
-    var res = (r && r.d) ? r.d : r, e = escapeHtml_; RBS.res = res; if (!res || !res.items) { b.innerHTML = '<div class="text-danger p-3">تعذّر التحميل</div>'; return; }
-    var kinds = res.kinds || {}, tot = 0; Object.keys(kinds).forEach(function (k) { tot += kinds[k]; });
-    var h = document.getElementById('_rbHead');
-    h.innerHTML = '<div class="d-flex gap-1 flex-wrap align-items-center mb-2 small">' +
-      '<button class="btn btn-sm ' + (RBS.kind ? 'btn-outline-secondary' : 'btn-dark') + '" onclick="RBS.kind=\'\';rbLoad_()">الكل (' + tot + ')</button>' +
-      Object.keys(RB_KINDS).map(function (k) { return '<button class="btn btn-sm ' + (RBS.kind === k ? 'btn-dark' : 'btn-outline-secondary') + '" onclick="RBS.kind=\'' + k + '\';rbLoad_()">' + RB_KINDS[k] + (kinds[k] ? ' (' + kinds[k] + ')' : '') + '</button>'; }).join('') +
-      '<input class="form-control form-control-sm" style="width:190px" placeholder="بحث…" value="' + e(RBS.q) + '" onkeydown="if(event.key===\'Enter\'){RBS.q=this.value.trim();rbLoad_()}">' +
-      '<label class="mb-0 ms-1"><input type="checkbox" ' + (RBS.restored ? 'checked' : '') + ' onchange="RBS.restored=this.checked;rbLoad_()"> المستعادة</label>' +
-      '<span class="ms-auto text-muted">⏳ الاحتفاظ ' + res.days + ' يوماً' + (res.canSettings ? ' <button class="btn btn-sm btn-outline-dark py-0" onclick="rbSetDays_(' + res.days + ')">تعديل</button>' : '') + '</span></div>' +
-      '<div class="d-flex gap-1 mb-2">' + (res.canRestore ? '<button class="btn btn-sm btn-success" onclick="rbRestore_(this)">↩️ استعادة المحدد</button>' : '') +
-      (res.canDelete ? '<button class="btn btn-sm btn-outline-danger" onclick="rbPurge_(this)">🗑️ حذف نهائي للمحدد</button>' : '') + '</div>';
-    if (!res.items.length) { b.innerHTML = '<div class="text-muted p-3">السلة فارغة.</div>'; return; }
-    b.innerHTML = '<div class="table-responsive"><table class="table table-sm" style="font-size:12.5px;"><thead><tr><th></th><th>النوع</th><th>العنصر</th><th>التفاصيل</th><th>صفوف</th><th>حُذف بواسطة</th><th>وقت الحذف</th><th>يُحذف نهائياً</th></tr></thead><tbody>' +
-      res.items.map(function (x) {
-        return '<tr' + (x.restored ? ' class="text-muted"' : '') + '><td>' + (x.restored ? '' : '<input type="checkbox" onchange="RBS.sel[' + x.id + ']=this.checked">') + '</td><td>' + e(RB_KINDS[x.kind] || x.kind) + '</td><td><b>' + e(x.label) + '</b></td><td>' + e(x.detail) + '</td><td>' + x.n + '</td><td>' + e(x.by) + '</td><td class="gl-latin" style="white-space:nowrap">' + e(_tsMdy_(x.at)) + '</td><td class="gl-latin">' +
-          (x.restored ? '<span class="badge bg-success">استُعيد ' + e(_tsMdy_(x.restoredAt)) + ' — ' + e(x.restoredBy) + '</span>' : e(x.exp)) + '</td></tr>';
-      }).join('') + '</tbody></table></div>';
-  }, b);
+  var b = document.getElementById('rbBody'); if (!b) return; b.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">⏳ جاري التحميل…</td></tr>';
+  var r = google.script.run.withSuccessHandler(function (r) {
+    var res = (r && r.d) ? r.d : r, e = escapeHtml_; if (!res || !res.items) { b.innerHTML = '<tr><td colspan="8" class="text-danger p-3">تعذّر التحميل</td></tr>'; return; }
+    RBS.items = res.items; RBS.res = res; RBS.sel = {};
+    var kinds = res.kinds || {}, ks = document.getElementById('rbKind'), tot = 0; Object.keys(kinds).forEach(function (k) { tot += kinds[k]; });
+    if (ks) Array.prototype.forEach.call(ks.options, function (o) { var k = o.value; o.text = (k ? RB_KINDS[k] : 'كل الأنواع') + ' (' + (k ? (kinds[k] || 0) : tot) + ')'; });
+    document.getElementById('rbAll').checked = false;
+    document.getElementById('rbRetention').innerHTML = '⏳ مدة الاحتفاظ: <b>' + res.days + '</b> يوماً' + (res.canSettings ? ' <button class="btn btn-sm btn-outline-dark py-0" onclick="rbSetDays_(' + res.days + ')">تعديل</button>' : '');
+    document.getElementById('rbActions').innerHTML = (res.canRestore ? '<button class="btn btn-sm btn-success" onclick="rbRestore_(rbSelIds_())">↩️ استعادة المحدد</button>' : '') +
+      (res.canDelete ? '<button class="btn btn-sm btn-outline-danger" onclick="rbPurge_()">🗑️ حذف نهائي للمحدد</button><button class="btn btn-sm btn-danger" onclick="rbEmpty_()">⚠️ إفراغ السلة كلها</button>' : '') +
+      '<button class="btn btn-sm btn-outline-secondary" onclick="rbLoad_()">🔄 تحديث</button>';
+    if (!res.items.length) b.innerHTML = '<tr><td colspan="8" class="text-muted text-center p-4">لا توجد عناصر.</td></tr>';
+    else b.innerHTML = res.items.map(function (x) {
+      return '<tr' + (x.restored ? ' class="text-muted"' : '') + '><td>' + (x.restored ? '' : '<input type="checkbox" class="rbck" onchange="RBS.sel[' + x.id + ']=this.checked">') + '</td><td>' + e(RB_KINDS[x.kind] || x.kind) + '</td><td><b>' + e(x.label) + '</b></td><td style="max-width:340px">' + e(x.detail) + '</td><td>' + e(x.by) + '</td><td class="gl-latin" style="white-space:nowrap">' + e(_tsMdy_(x.at)) + (x.at.length > 16 ? ':' + e(x.at.slice(17)) : '') + '</td><td class="gl-latin">' +
+        (x.restored ? '<span class="badge bg-success">استُعيد ' + e(_tsMdy_(x.restoredAt)) + ' — ' + e(x.restoredBy) + '</span>' : e(x.exp)) + '</td><td>' + (!x.restored && res.canRestore ? '<button class="btn btn-sm btn-outline-success py-0" onclick="rbRestore_([' + x.id + '])">↩️ استعادة</button>' : '') + '</td></tr>';
+    }).join('');
+    var pages = Math.max(1, Math.ceil(res.total / res.limit)), pg = res.page;
+    document.getElementById('rbPager').innerHTML = '<button class="btn btn-sm btn-outline-secondary" ' + (pg <= 0 ? 'disabled' : '') + ' onclick="RBS.page=' + (pg - 1) + ';rbLoad_()">السابق ›</button><span>صفحة <b>' + (pg + 1) + '</b> من ' + pages + ' — الإجمالي ' + res.total + '</span><button class="btn btn-sm btn-outline-secondary" ' + (pg + 1 >= pages ? 'disabled' : '') + ' onclick="RBS.page=' + (pg + 1) + ';rbLoad_()">‹ التالي</button>';
+  }).withFailureHandler(function (er) { b.innerHTML = '<tr><td colspan="8" class="text-danger p-3">❌ ' + escapeHtml_((er && er.message) || er) + '</td></tr>'; });
+  r.recycleList(window.authToken, { kind: RBS.kind, q: RBS.q, user: RBS.user, restored: RBS.restored, limit: RBS.limit, page: RBS.page });
 }
+function rbSelAll_(on) { RBS.sel = {}; Array.prototype.forEach.call(document.querySelectorAll('#rbBody .rbck'), function (c) { c.checked = on; }); if (on) RBS.items.forEach(function (x) { if (!x.restored) RBS.sel[x.id] = true; }); }
 function rbSelIds_() { return Object.keys(RBS.sel).filter(function (k) { return RBS.sel[k]; }).map(Number); }
-function rbRestore_(btn) {
-  var ids = rbSelIds_(); if (!ids.length) { _showPopup('حدّد عنصراً أو أكثر أولاً', 'error'); return; }
-  btn.disabled = true;
-  _snapRun_('recycleRestore', [ids], function (r) {
-    var d = (r && r.d) ? r.d : r; btn.disabled = false; RBS.sel = {};
-    _showPopup('تمت استعادة ' + (d.restored || 0) + ' عنصر' + ((d.errors && d.errors.length) ? '\n⚠️ ' + d.errors.join('\n') : ''), (d.errors && d.errors.length) ? 'error' : 'success'); rbLoad_();
-  });
+function rbCall_(fn, args, ok) {
+  var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (er) { _showPopup((er && er.message) || er, 'error'); });
+  r[fn].apply(r, [window.authToken].concat(args));
 }
-function rbPurge_(btn) {
+function rbRestore_(ids) {
+  if (!ids || !ids.length) { _showPopup('حدّد عنصراً أو أكثر أولاً', 'error'); return; }
+  var src = {}; RBS.items.forEach(function (x) { src[x.id] = x.src; });
+  var pg = ids.filter(function (i) { return src[i] !== 'as'; }), as = ids.filter(function (i) { return src[i] === 'as'; }), tot = 0, errs = [], left = (pg.length ? 1 : 0) + (as.length ? 1 : 0);
+  var done = function (r) { var d = (r && r.d) ? r.d : r; tot += (d && d.restored) || 0; if (d && d.errors) errs = errs.concat(d.errors); if (--left <= 0) { _showPopup('تمت استعادة ' + tot + ' عنصر' + (errs.length ? '\n⚠️ ' + errs.join('\n') : ''), errs.length ? 'error' : 'success'); rbLoad_(); } };
+  if (pg.length) rbCall_('recycleRestore', [pg], done);
+  if (as.length) rbCall_('recycleRestoreAs', [as], done);
+}
+function rbPurge_() {
   var ids = rbSelIds_(); if (!ids.length) { _showPopup('حدّد عنصراً أو أكثر أولاً', 'error'); return; }
-  if (!confirm('حذف نهائي لـ ' + ids.length + ' عنصر من السلة؟ لا يمكن التراجع.')) return;
-  _snapRun_('recycleDelete', [ids], function () { RBS.sel = {}; rbLoad_(); });
+  if (!confirm('حذف نهائي لـ ' + ids.length + ' عنصر من السلة؟ لا يمكن التراجع عنه.')) return;
+  rbCall_('recycleDelete', [ids], function () { rbLoad_(); });
+}
+function rbEmpty_() {
+  if (!confirm('إفراغ سلة المحذوفات بالكامل؟ ستُحذف كل العناصر نهائياً ولا يمكن استعادتها.')) return;
+  if (prompt('للتأكيد اكتب: افراغ') !== 'افراغ') return;
+  rbCall_('recycleEmpty', [], function () { rbLoad_(); });
 }
 function rbSetDays_(cur) {
   var v = prompt('مدة الاحتفاظ بالمحذوفات (بالأيام، 1–3650):', cur); if (v === null) return;
-  _snapRun_('recycleSetDays', [String(v).trim()], function (r) { var d = (r && r.d) ? r.d : r; if (d && d.success === false) _showPopup(d.error || 'تعذّر', 'error'); rbLoad_(); });
+  rbCall_('recycleSetDays', [String(v).trim()], function (r) { var d = (r && r.d) ? r.d : r; if (d && d.success === false) _showPopup(d.error || 'تعذّر', 'error'); rbLoad_(); });
 }
 function snapOpen_() {
   var box = _snapOv_('_snapOv', '⏪ التراجع الزمني');
@@ -26539,6 +26581,11 @@ document
     return;
   }
 
+  if (page === "recycleBin" && !hasPermission("recycle.view")) {
+    alert("هذه الشاشة متاحة فقط لمن مُنح صلاحية سلة المحذوفات أو ALL");
+    return;
+  }
+
   if (page === "stats" && !hasPermission("all") && !hasPermission("STATS")) {
     alert("هذه الشاشة متاحة فقط لمستخدم بصلاحية لوحة الإحصائيات أو ALL");
     return;
@@ -26651,6 +26698,8 @@ document
   if (page === 'auditLog') {
     loadAuditLogTable();
   }
+
+  if (page === 'recycleBin') { rbInit_(); }
 
   if (page === 'ministry') {
     if (typeof mfInit === 'function') mfInit();

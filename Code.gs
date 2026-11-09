@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.399";
+var APP_VERSION = "4.400";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2261,6 +2261,7 @@ function cacheBustBg(authToken, scope) { requireAuth_(authToken); scope = String
 function recycleList(authToken) { requireAuth_(authToken); throw new Error('سلة المحذوفات تعمل مع Supabase — فعّل الكتابة (supaWriteOnBookings) وشغّل 035'); }
 function recycleRestore(authToken) { return recycleList(authToken); }
 function recycleDelete(authToken) { return recycleList(authToken); }
+function recycleEmpty(authToken) { return recycleList(authToken); }
 function recycleSetDays(authToken) { return recycleList(authToken); }
 function vzCacheClearBg(authToken) { requireAuth_(authToken); try { _vzClearCache_(); } catch (e) {} return { success: true }; }   // (V4.396) بعد دفعة وكيل من Postgres
 function bookingCacheBustBg(authToken) { requireAuth_(authToken); try { _cacheBust_('booking'); } catch (e) {} return { success: true }; }   // (V4.389) بعد حذف/اعتماد من Postgres
