@@ -8887,8 +8887,12 @@ function _refreshHomeScreenMenu() {
 /* ⧉ (V4.385) فتح أي شاشة بتبويب منفصل بالمتصفح: الرابط ?go=<مفتاح الشاشة> (صفحة | gl:تبويب[:حساب] | hotels:صفحة | trip:اسم | accounts:عميل).
    التبويب الجديد يدخل تلقائياً (الجلسة/مفتاح الجهاز بنفس المتصفح) ثم يفتح الشاشة عبر appGo_ */
 function _appBaseUrl_() { var u = ''; try { u = (window.LF_ && LF_.webUrl && LF_.webUrl()) || localStorage.getItem('_webAppUrl_') || ''; } catch (e) {} return u; }
+window.addEventListener('message', function (ev) {   // (V4.408) رابط الغلاف الذي يحتضن البرنامج (يرسله الغلاف بعد تحميل الإطار)
+  var d = ev.data; if (!d || typeof d !== 'object' || d.type !== 'mf-wrap') return;
+  try { if (ev.source !== window.top) return; if (/^https:\/\/[^/]+\//.test(String(d.url || ''))) window._wrapUrl_ = String(d.url); } catch (e) {}
+});
 window.openKeyInBrowserTab_ = function (key) {
-  var base = _appBaseUrl_(); if (!base || !key) return false;
+  var base = window._wrapUrl_ || _appBaseUrl_(); if (!base || !key) return false;
   try { window.open(base + (base.indexOf('?') > -1 ? '&' : '?') + 'go=' + encodeURIComponent(key), '_blank'); return true; } catch (e) { return false; }
 };
 window.openCurrentInBrowserTab_ = function () {
@@ -8896,6 +8900,23 @@ window.openCurrentInBrowserTab_ = function () {
   if (!k) { try { _showPopup('لا توجد شاشة لفتحها', 'warning'); } catch (e) {} return; }
   if (!window.openKeyInBrowserTab_(k)) { try { _showPopup('رابط التطبيق غير متاح بعد — أعد المحاولة بعد لحظات', 'warning'); } catch (e) {} }
 };
+/* ⧉ (V4.408) زر «فتح في تبويب» عائم فوق أي نموذج/نافذة مفتوحة (الزر الأصلي بالشريط العلوي يحجبه النموذج) */
+(function () {
+  function sync() {
+    try {
+      var open = !!document.querySelector('.modal.show, .cc-edit-backdrop, .transient-overlay'), b = document.getElementById('openTabFloat');
+      if (!open || !window._wrapUrl_) { if (b) b.style.display = 'none'; return; }
+      if (!b) {
+        b = document.createElement('button'); b.id = 'openTabFloat'; b.type = 'button'; b.title = 'فتح الشاشة الحالية في تبويب منفصل'; b.textContent = '⧉';
+        b.style.cssText = 'position:fixed;bottom:14px;left:14px;z-index:2147483000;width:38px;height:38px;border-radius:50%;border:0;background:#1e3d59;color:#fff;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:pointer;';
+        b.onclick = function () { try { openCurrentInBrowserTab_(); } catch (e) {} };
+        document.body.appendChild(b);
+      }
+      b.style.display = 'block';
+    } catch (e) {}
+  }
+  document.addEventListener('shown.bs.modal', sync); document.addEventListener('hidden.bs.modal', sync);
+})();
 function _applyDeepLink_() {
   if (window._deepLinkDone_) return; window._deepLinkDone_ = true;
   try {
@@ -9155,8 +9176,8 @@ function _fastLoginAdopt_(r, user) {
   var g = window._authGate; if (!g || g.done) return; g.done = true;
   if (r && r.success && r.token) {
     var ph = g.ph; window.authToken = r.token;
-    try { if (window.currentUser) { window.currentUser.token = r.token; window.currentUser.deviceKey = r.deviceKey; window.currentUser.userRow = r.userRow; window.currentUser.mustChangePwd = !!r.mustChangePwd; } } catch (e) {}
-    try { localStorage.setItem('authToken', r.token); sessionStorage.setItem('authToken', r.token); var u2 = {}; for (var k in window.currentUser) u2[k] = window.currentUser[k]; localStorage.setItem('smartManagerUser', JSON.stringify(u2)); } catch (e) {}
+    try { if (window.currentUser) { if (r.permissions != null) { window.currentUser.permissions = r.permissions; delete window.currentUser._permSet; } if (r.fullName) window.currentUser.fullName = r.fullName; window.currentUser.token = r.token; window.currentUser.deviceKey = r.deviceKey; window.currentUser.userRow = r.userRow; window.currentUser.mustChangePwd = !!r.mustChangePwd; } } catch (e) {}
+    try { localStorage.setItem('authToken', r.token); sessionStorage.setItem('authToken', r.token); var u2 = {}; for (var k in window.currentUser) { if (k !== '_permSet' && k !== '_permSrc') u2[k] = window.currentUser[k]; } localStorage.setItem('smartManagerUser', JSON.stringify(u2)); } catch (e) {}
     try { if (r.deviceKey) _devKeySet_(r.deviceKey); else _devKeySet_(''); } catch (e) {}
     try { _tsPost_({ t: 'login', token: r.token, user: r.username || user || '' }); } catch (e) {}
     try { if (r.supa && r.supa.enabled && r.supa.url && r.supa.anon) localStorage.setItem('lf_supa_pub', JSON.stringify({ url: r.supa.url, anon: r.supa.anon, glStore: !!r.supa.glStore, store: r.supa.store || null, webUrl: r.supa.webUrl || '' })); } catch (e) {}
@@ -9851,9 +9872,19 @@ function _expandPerms(list) {
 function _currentPermsSet() {
   var u = window.currentUser;
   if (!u) return {};
-  if (u._permSet) return u._permSet;
-  var list = Array.isArray(u.permissions) ? u.permissions : String(u.permissions || '').split(',');
-  u._permSet = _expandPerms(list);
+  /* 🐛 (V4.408) الدخول السريع من Postgres كان يرجع الصلاحيات نصاً JSON ('["admin","…"]') فيُقسَّم بالفاصلة خطأً فلا يُعرَف admin،
+     ثم تُحفَظ المجموعة المحسوبة _permSet مع المستخدم بـlocalStorage فتبقى خاطئة بعد كل ريفريش حتى تُمسح ملفات الارتباط.
+     الآن: التحليل يقبل المصفوفة/JSON/النص بأي فاصل (, ، ; |)، والمجموعة تُعاد حسابها كلما تغيّر مصدرها ولا تُحفَظ. */
+  var src = Array.isArray(u.permissions) ? u.permissions.join(',') : String(u.permissions || '');
+  if (u._permSet && u._permSrc === src) return u._permSet;
+  var list;
+  if (Array.isArray(u.permissions)) list = u.permissions;
+  else {
+    var t = src.trim(), arr = null;
+    if (t.charAt(0) === '[') { try { arr = JSON.parse(t); } catch (e) {} }
+    list = Array.isArray(arr) ? arr : t.split(/\s*[,،;|]\s*/);
+  }
+  u._permSet = _expandPerms(list); u._permSrc = src;
   return u._permSet;
 }
 function _isAdminUser() {
