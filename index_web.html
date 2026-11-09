@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.400  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.401  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7921,6 +7921,8 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     assignPilgrimToTrip: { need: ['core', 'wbk'], rpc: 'rw_call' },
     assignPilgrimsBulk: { need: ['core', 'wbk'], rpc: 'rw_call' },
     /* (V4.399) 035/036 — سلة المحذوفات + الحذف المجمّع من السجل العام (بديل النسخة الكاملة للملف) */
+    /* (V4.401) 037_save_trip_pilgrims.sql — حفظ كشف الرحلة؛ آثاره (سجل/مشرفون/تنبيهات/حسابات/دليل العملاء) بنداء خلفي kashfAfterSaveBg */
+    saveTripPilgrims: { need: ['core', 'wbk'], rpc: 'rw_call', after: function (a, d) { try { if (d && d.success !== false && d.job) _RAWRUN_().withSuccessHandler(function (r) { try { if (typeof _kashfClientsAfterSave_ === 'function') _kashfClientsAfterSave_(r); } catch (e) {} }).withFailureHandler(function () {}).kashfAfterSaveBg(window.authToken, d.job); } catch (e) {} } },
     recycleList: { need: ['wbk'], rpc: 'rx_call2' },
     recycleRestore: { need: ['wbk'], rpc: 'rw_call' },
     recycleDelete: { need: ['wbk'], rpc: 'rw_call' },
@@ -9627,7 +9629,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.400";
+var CLIENT_APP_VERSION = "4.401";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -26092,7 +26094,7 @@ function snapEntryRestore_(sid, btn) {
 /* 🗑️ (V4.400) شاشة سلة المحذوفات: أحدث الحذف أولاً · 20/50/100 بالصفحة · توقيت الحذف + المستخدم · استعادة مفردة أو جماعية · حذف نهائي/إفراغ للأدمن.
    عناصر Postgres (src=pg) تُستعاد بـ recycleRestore، وعناصر Apps Script (قيود الحسابات العامة، src=as) بـ recycleRestoreAs. */
 var RBS = { kind: '', q: '', user: '', restored: false, limit: 20, page: 0, sel: {}, items: [] };
-var RB_KINDS = { booking: '📄 إشعارات', trip: '🧳 رحلات', pilgrims: '👥 معتمرون', acc_item: '🧾 بنود حسابات', acc_payment: '💵 دفعات حسابات', gl_entry: '📒 قيود وسندات (قبض/صرف/خزينة/بنوك/عهد)' };
+var RB_KINDS = { booking: '📄 إشعارات', trip: '🧳 رحلات', pilgrims: '👥 معتمرون', acc_item: '🧾 بنود حسابات', acc_payment: '💵 دفعات حسابات', agent_payment: '🤝 دفعات وكلاء', gl_entry: '📒 قيود وسندات (قبض/صرف/خزينة/بنوك/عهد)' };
 function rbInit_() {
   var sel = document.getElementById('rbKind'); if (sel && !sel.options.length) sel.innerHTML = '<option value="">كل الأنواع</option>' + Object.keys(RB_KINDS).map(function (k) { return '<option value="' + k + '">' + RB_KINDS[k] + '</option>'; }).join('');
   RBS.sel = {}; rbLoad_();

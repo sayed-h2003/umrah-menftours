@@ -145,8 +145,11 @@ function _snapRowSheet_() {
 }
 // row: قيم الصف كاملة كما بالورقة · key: معرّف السجل (العمود الأول)
 function _snapRowTake_(sheetName, key, row, action, user) {
-  try { _snapAppend_(_snapRowSheet_(), [_snapId_('R'), _snapNowTxt_(), String(user || ''), String(action || ''), String(sheetName), String(key)], _snapPack_(row)); }
-  catch (e) { Logger.log('snapRowTake: ' + e.message); }
+  try {
+    var packed = _snapPack_(row);
+    _snapAppend_(_snapRowSheet_(), [_snapId_('R'), _snapNowTxt_(), String(user || ''), String(action || ''), String(sheetName), String(key)], packed);
+    if (/^قبل حذف/.test(String(action || '')) && !_RB_SKIP_) { _rbQueueRow_(String(sheetName), String(key), row, packed, user); _rbFlush_(); }   // 🗑️ (V4.400)
+  } catch (e) { Logger.log('snapRowTake: ' + e.message); }
 }
 function snapRowList(authToken, sheetName, key) {
   requireAuth_(authToken);
@@ -167,6 +170,10 @@ function snapRowRestore(authToken, sid) {
   if (!hit) throw new Error('النسخة غير موجودة');
   var name = String(hit[4]), key = String(hit[5]), row = _snapUnpack_(hit.slice(6));
   if (!row || !row.length) throw new Error('بيانات النسخة تالفة');
+  return _snapRowApply_(session, name, key, row, String(hit[1]) + ' (' + String(hit[3]) + ')', false);
+}
+// يكتب صفاً (دفعة…) بالورقة: noReplace ⇒ يرفض إن كان موجوداً (استعادة من سلة المحذوفات)
+function _snapRowApply_(session, name, key, row, noteTxt, noReplace) {
   var at = -1, lock = LockService.getScriptLock(); lock.waitLock(30000);
   // 🔒 ⚡ (V4.367) قفل السكربت وحده لم يعد يمنع كتّاب الأوراق بأقفال المورد ⇒ كل الموارد معاً بعده (كلها أو لا شيء، قبل أي كتابة)
   var rl = _resAllTry_(30000);
@@ -176,9 +183,10 @@ function snapRowRestore(authToken, sid) {
     var n = t.getLastRow(), ids = n >= 2 ? t.getRange(2, 1, n - 1, 1).getValues() : [];
     for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === key) { at = i + 2; break; }
     var cur = at > 0 ? t.getRange(at, 1, 1, Math.max(row.length, t.getLastColumn())).getValues()[0] : null;
+    if (cur && noReplace) throw new Error('الصف ' + key + ' موجود الآن بالفعل');
     if (cur) _snapRowTake_(name, key, cur, 'قبل الاستعادة', session.username);
     if (at > 0) t.getRange(at, 1, 1, row.length).setValues([row]); else t.getRange(n + 1, 1, 1, row.length).setValues([row]);
-    logChange_(session.username, 'استعادة نسخة سابقة لصف', name + ':' + key, 'النسخة', String(hit[1]) + ' (' + String(hit[3]) + ')', at > 0 ? 'استُبدل الصف الحالي' : 'أُعيد الصف المحذوف');
+    logChange_(session.username, noReplace ? 'استعادة صف من سلة المحذوفات' : 'استعادة نسخة سابقة لصف', name + ':' + key, 'النسخة', noteTxt, at > 0 ? 'استُبدل الصف الحالي' : 'أُعيد الصف المحذوف');
   } finally { _resRelease_(rl); lock.releaseLock(); }
   try { if (typeof _vzClearCache_ === 'function') _vzClearCache_(); } catch (e) {}
   return { success: true, recreated: at < 0 };
@@ -630,7 +638,7 @@ function snapScreens(authToken) {
    تُودَع بالجدول recycle_bin (035) بصورتها الكاملة {r, l}، وتُستعاد بـ recycleRestoreAs من شاشة السلة بنفس منطق «استعادة نسخة سابقة».
    فشل الإيداع لا يوقف الحذف (يبقى سجل اللقطات GL_Snapshots احتياطاً).
    ============================================================ */
-var _RB_Q_ = [];
+var _RB_Q_ = [], _RB_SKIP_ = false;   // _RB_SKIP_: لقطات صادرة من Postgres (حُفظ الحذف بسلته أصلاً)
 function _rbQueueGlEntry_(id, r, lines, packed, user) {
   try {
     var tot = 0; (lines || []).forEach(function (l) { tot += Math.max(Number(l[9]) || 0, 0); });
@@ -638,6 +646,15 @@ function _rbQueueGlEntry_(id, r, lines, packed, user) {
     _RB_Q_.push({ kind: 'gl_entry', label: type + ' ' + id, detail: (_glStr_(r[4]) || '') + ' — ' + (Math.round(tot * 100) / 100) + ' ج (' + st + ')', user: String(user || ''), payload: { id: id, p: packed } });
     if (_RB_Q_.length >= 40) _rbFlush_();
   } catch (e) { Logger.log('rbQueue: ' + e.message); }
+}
+function _rbQueueRow_(sheet, key, row, packed, user) {
+  try {
+    var isAcc = sheet === ACC_PAY_SHEET, c = function (i) { return String(row[i] == null ? '' : row[i]); };
+    _RB_Q_.push({ kind: isAcc ? 'acc_payment' : (sheet === VZ_PAY_SHEET ? 'agent_payment' : 'sheet_row'),
+      label: (isAcc ? 'دفعة ' + c(1) + ' — ' + c(2) : (sheet === VZ_PAY_SHEET ? 'دفعة وكيل ' + key : sheet + ' ' + key)),
+      detail: row.slice(1, 9).map(function (x) { return (x instanceof Date) ? Utilities.formatDate(x, 'Africa/Cairo', 'dd/MM/yyyy') : String(x == null ? '' : x); }).join(' | '),
+      user: String(user || ''), payload: { sheet: sheet, key: key, p: packed } });
+  } catch (e) { Logger.log('rbQueueRow: ' + e.message); }
 }
 function _rbFlush_() {
   if (!_RB_Q_.length) return;
@@ -660,12 +677,15 @@ function recycleRestoreAs(authToken, ids) {
   var ok = 0, errs = [];
   rows.forEach(function (x) {
     try {
-      if (x.kind !== 'gl_entry') throw new Error('نوع غير مدعوم للاستعادة: ' + x.kind);
-      _glPerm_(authToken, 'edit');
       var p = x.payload || {}, d = _snapUnpack_(Array.isArray(p.p) ? p.p : [p.p]);
-      if (!d || !d.r) throw new Error('بيانات العنصر تالفة');
-      var id = String(p.id || d.r[0]);
-      _snapEntryApply_(session, d, id, 'سلة المحذوفات', true);
+      if (x.kind === 'gl_entry') {
+        _glPerm_(authToken, 'edit');
+        if (!d || !d.r) throw new Error('بيانات العنصر تالفة');
+        _snapEntryApply_(session, d, String(p.id || d.r[0]), 'سلة المحذوفات', true);
+      } else if (x.kind === 'acc_payment' || x.kind === 'agent_payment' || x.kind === 'sheet_row') {
+        if (!d || !d.length) throw new Error('بيانات العنصر تالفة');
+        _snapRowApply_(session, String(p.sheet), String(p.key), d, 'سلة المحذوفات', true);
+      } else throw new Error('نوع غير مدعوم للاستعادة: ' + x.kind);
       _supaReq_('patch', 'recycle_bin?id=eq.' + x.id, { restored_at: new Date().toISOString(), restored_by: session.username });
       ok++;
     } catch (e) { errs.push(String(x.label || x.id) + ': ' + (e.message || e)); }

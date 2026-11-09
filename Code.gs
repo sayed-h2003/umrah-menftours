@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.400";
+var APP_VERSION = "4.401";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2263,6 +2263,33 @@ function recycleRestore(authToken) { return recycleList(authToken); }
 function recycleDelete(authToken) { return recycleList(authToken); }
 function recycleEmpty(authToken) { return recycleList(authToken); }
 function recycleSetDays(authToken) { return recycleList(authToken); }
+// (V4.401) آثار حفظ كشف الرحلة بعد كتابتها من Postgres (037): سجل الفروق · المشرفون · التنبيهات · الكاش · مزامنة حسابات العملاء · دليل العملاء.
+// jobId = بند kashfsave بصندوق الإخراج (يحمل الصفوف القديمة والقائمة الجديدة). المتصفح ينفّذها فوراً، وإلا يتولاها _outboxDrain_ بعد ~دقيقتين.
+function kashfAfterSaveBg(authToken, jobId) {
+  var session = requireAuth_(authToken);
+  var r = _supaReq_('get', 'app_outbox?id=eq.' + encodeURIComponent(String(jobId)) + '&kind=eq.kashfsave&done_at=is.null&select=id,payload');
+  var rows = []; try { rows = JSON.parse(r.text || '[]'); } catch (e) {}
+  if (!rows.length) return { success: true, already: true };
+  var out = _kashfAfterSave_(rows[0].payload || {}, authToken, session.username);
+  try { _supaReq_('patch', 'app_outbox?id=eq.' + rows[0].id, { done_at: new Date().toISOString() }); } catch (e2) {}
+  return out;
+}
+function _kashfAfterSave_(p, authToken, username) {
+  var tripName = String(p.trip || ''), pilgrims = p.pilgrims || [], user = String(username || p.user || '');
+  var rv = function (row) { return (row || []).map(function (c) { return (c && typeof c === 'object' && c['$d'] !== undefined) ? new Date(c['$d']) : c; }); };
+  var oldThisTrip = (p.old || []).map(rv), C = _robustColMap_(_getPilgrimsSheet_(), PILGRIMS_HEADERS_), res = { success: true };
+  try { _logKashfDiff_(user, tripName, oldThisTrip, pilgrims, C); } catch (e) { Logger.log('kashf diff log failed: ' + e); }
+  try { _syncTripSupervisorsFromKashf_(tripName, pilgrims, user); } catch (eSup) { Logger.log('supervisors sync failed: ' + eSup); }
+  try { _pushKashfChangeNotifications_(tripName, oldThisTrip, pilgrims, C, user); } catch (eN) { Logger.log('kashf change notifications failed: ' + eN); }
+  ['trips_list_cache', 'registry_cache', 'acc_client_stats_idx_v2'].forEach(function (k) { try { clearCachedData_(k); } catch (eC) {} });
+  try { _cacheBust_('pilgrims'); } catch (eB) {}
+  try { res.accSync = _syncTripAccounts_(authToken || null, tripName, user); } catch (eS) { Logger.log('acc sync failed: ' + eS); }
+  try {
+    var cd = _clientDirEnsure_(pilgrims.map(function (x) { return x.client; }), user);
+    if (cd) { res.clientsAdded = cd.added; if (cd.error) res.clientsWarning = cd.error; if (Object.keys(cd.existing || {}).length) res.clientsAliases = cd.existing; }
+  } catch (eCd) { Logger.log('client dir ensure failed: ' + eCd); res.clientsWarning = 'تعذّر تسجيل العملاء الجدد بدليل العملاء: ' + (eCd.message || eCd); }
+  return res;
+}
 function vzCacheClearBg(authToken) { requireAuth_(authToken); try { _vzClearCache_(); } catch (e) {} return { success: true }; }   // (V4.396) بعد دفعة وكيل من Postgres
 function bookingCacheBustBg(authToken) { requireAuth_(authToken); try { _cacheBust_('booking'); } catch (e) {} return { success: true }; }   // (V4.389) بعد حذف/اعتماد من Postgres
 

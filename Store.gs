@@ -762,8 +762,8 @@ function _outboxDrain_(maxMs) {
       ids.push(x.id); var p = x.payload || {};
       if (x.kind === 'audit') recs.push({ user: p.user, action: p.action, record: p.record, field: p.field, old: p.old, 'new': p['new'] });
       else if (x.kind === 'snaprow') {   // (V4.393) لقطة استرجاع صف (قبل حذف/تعديل دفعة) بنفس _snapRowTake_ — تُسجَّل بالخلفية بعد الكتابة من Postgres
-        try { _snapRowTake_(String(p.sheet), String(p.key), (p.row || []).map(function (c) { return (c && typeof c === 'object' && c['$d'] !== undefined) ? new Date(c['$d']) : c; }), String(p.action || ''), String(p.user || '')); }
-        catch (eSn) { Logger.log('outbox snaprow: ' + eSn.message); }
+        try { _RB_SKIP_ = true; _snapRowTake_(String(p.sheet), String(p.key), (p.row || []).map(function (c) { return (c && typeof c === 'object' && c['$d'] !== undefined) ? new Date(c['$d']) : c; }), String(p.action || ''), String(p.user || '')); }
+        catch (eSn) { Logger.log('outbox snaprow: ' + eSn.message); } finally { _RB_SKIP_ = false; }
       }
       else if (x.kind === 'bkdiff') {   // (V4.388) أثر تدقيق حفظ الإشعار من Postgres: إنشاء ⇒ سطر إنشاء · تعديل ⇒ فرق حقل بحقل (نفس logBookingRowDiff_)
         try {
@@ -773,6 +773,10 @@ function _outboxDrain_(maxMs) {
         } catch (eB) { Logger.log('outbox bkdiff: ' + eB.message); }
       }
       else if (x.kind === 'tripsnap') { try { _tripSnapTakeState_(String(p.trip), String(p.user || ''), String(p.action || ''), p.state, !!p.base); } catch (eT) { Logger.log('outbox tripsnap: ' + eT.message); } }
+      else if (x.kind === 'kashfsave') {   // (V4.401) آثار حفظ الكشف من Postgres — المتصفح ينفّذها فوراً؛ وإلا بعد ~دقيقتين هنا
+        if (Date.now() / 1000 - Number(p.at || 0) < 120) { ids.pop(); return; }
+        try { _kashfAfterSave_(p, null, String(p.user || '')); } catch (eK) { Logger.log('outbox kashfsave: ' + eK.message); }
+      }
       else if (x.kind === 'accmoved') {   // (V4.398) المتصفح ينفّذها فوراً؛ إن لم يصل (أُغلقت الصفحة) نتولاها هنا بعد ~دقيقتين
         if (Date.now() / 1000 - Number(p.at || 0) < 120) { ids.pop(); return; }
         try { _accAfterPilgrimsMoved_(p.clients || [], String(p.from || ''), String(p.to || ''), String(p.user || ''), null); } catch (eM) { Logger.log('outbox accmoved: ' + eM.message); }
