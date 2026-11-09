@@ -3120,6 +3120,7 @@ if (HB_EMBED) {
 window.PERF_ = (function () {
   var D = {}, on = true, timer = null;
   function add(fn, ms, ok) {
+    try { if (fn && fn !== 'perfReport') { var q = (window.__HBS = window.__HBS || {}), z = q[fn] || (q[fn] = { n: 0, ms: 0, max: 0, fail: 0 }); z.n++; z.ms += ms; if (ms > z.max) z.max = ms; if (!ok) z.fail++; } } catch (eS) {}   // (V4.413) تجميع تراكمي للوحة مصدر البيانات
     if (!on || !fn || fn === 'perfReport') return;
     var a = D[fn] || (D[fn] = [fn, 0, 0, 0, 0, 0]);
     a[1]++; a[2] += ms; if (ms > a[3]) a[3] = ms; if (ms > 3000) a[4]++; if (!ok) a[5]++;
@@ -12694,6 +12695,36 @@ function shareStatsTable_() {
   shareViaPrintPdf_(data, name, document.getElementById('srShareBtn'), '📤 مشاركة PDF', 'arrivals', 794,
     shareSafeName_('stats', SR_TAB_LABELS_[srActiveTab_]));
 }
+</script>
+<script>
+/* 🧭 (V4.413) لوحة «مصدر البيانات» لبرنامج الحجوزات: كل نداءات هذه الصفحة تعمل حالياً من Apps Script/الشيتات (لا مسار Postgres لها قبل المرحلة 2).
+   زر 🧭 أسفل اليسار (أو hbSrc()) ⇒ جدول بكل دالة نُدِيَت بهذه الجلسة وعدد نداءاتها ومتوسط وأقصى زمنها + زر نسخ للإرسال. */
+function hbSrc() {
+  var old = document.getElementById('hbSrcPanel'); if (old) { old.remove(); return; }
+  var Z = window.__HBS || {}, rows = Object.keys(Z).map(function (k) { var z = Z[k]; return { f: k, n: z.n, avg: Math.round(z.ms / z.n), max: z.max, fail: z.fail, tot: z.ms }; }).sort(function (a, b) { return b.tot - a.tot; });
+  var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var L = ['مصدر البيانات — برنامج الحجوزات — ' + new Date().toLocaleString('en-GB'), 'كل الدوال: 🔴 Apps Script/الشيتات (لا مسار Postgres)  | عدد الدوال: ' + rows.length, ''];
+  rows.forEach(function (r) { L.push(['🔴', r.f, 'AS ' + r.n + '×' + r.avg + 'ms', 'أقصى ' + r.max + 'ms', r.fail ? 'فشل ' + r.fail : ''].join(' | ')); });
+  window.__hbSrcRep = L.join('\n');
+  var d = document.createElement('div'); d.id = 'hbSrcPanel';
+  d.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.55);overflow:auto;padding:20px;direction:rtl;';
+  d.onclick = function (e) { if (e.target === d) d.remove(); };
+  d.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:900px;margin:0 auto;padding:14px 16px;font-size:12.5px;color:#0f172a;">' +
+    '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><b style="font-size:15px;">🧭 مصدر البيانات — برنامج الحجوزات</b><span style="margin-inline-start:auto;"></span>' +
+    '<button class="btn btn-sm btn-success" onclick="hbSrcCopy(this)">📋 نسخ النتائج</button> <button class="btn btn-sm btn-outline-secondary" onclick="window.__HBS={};hbSrc();hbSrc()">🧹 تصفير</button> <button class="btn btn-sm btn-outline-dark" onclick="hbSrc()">✕</button></div>' +
+    '<div style="background:#fef2f2;border-radius:8px;padding:6px 10px;margin-bottom:8px;">🔴 كل ما بهذه الصفحة يعمل الآن من Apps Script/الشيتات — نقله لـSupabase هو المرحلة 2 (نسخ جداول الدفعات والحسابات وحجوزات مكة/المدينة).</div>' +
+    '<div style="max-height:62vh;overflow:auto;"><table class="table table-sm table-bordered" style="font-size:12px;"><thead class="table-light"><tr><th>الدالة</th><th>عدد النداءات</th><th>المتوسط</th><th>الأقصى</th><th>فشل</th></tr></thead><tbody>' +
+    rows.map(function (r) { return '<tr><td dir="ltr" style="text-align:left;">' + esc(r.f) + '</td><td>' + r.n + '</td><td>' + r.avg + 'ms</td><td>' + r.max + 'ms</td><td>' + (r.fail || '') + '</td></tr>'; }).join('') +
+    '</tbody></table></div></div>';
+  document.body.appendChild(d);
+}
+function hbSrcCopy(btn) {
+  var t = window.__hbSrcRep || '', ok = function () { btn.textContent = '✅ نُسخ — الصقه في المحادثة'; setTimeout(function () { btn.textContent = '📋 نسخ النتائج'; }, 2500); };
+  var fb = function () { try { var ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0;'; document.body.appendChild(ta); ta.select(); var r = document.execCommand('copy'); ta.remove(); if (r) { ok(); return; } } catch (e) {} try { prompt('انسخ النص:', t); } catch (e2) {} };
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(ok, fb); return; } } catch (e) {}
+  fb();
+}
+(function () { try { var b = document.createElement('button'); b.type = 'button'; b.title = 'مصدر البيانات (Apps Script/الشيتات)'; b.textContent = '🧭'; b.style.cssText = 'position:fixed;bottom:12px;left:12px;z-index:2147482000;width:34px;height:34px;border-radius:50%;border:0;background:#1e3d59;color:#fff;opacity:.55;cursor:pointer;font-size:16px;'; b.onclick = hbSrc; document.body.appendChild(b); } catch (e) {} })();
 </script>
 </body>
 </html>

@@ -175,6 +175,38 @@ function _reconAp_(X, out, claimed) {
   });
 }
 
+/* 🔎 (V4.413) لماذا لم تُطابَق دفعة الفندق؟ تشخيص + مرشَّحات: (١) الطرف غير مربوط بحساب عام (أشهر سبب: اسم بالحجوزات يختلف عن اسم الحساب، مثل «فندق بدر الماسة» ≠ «فندق بدر الماسة 1448 هـ»)
+   ⇒ يُقترح الحساب الأقرب اسماً؛ (٢) الطرف مربوط ⇒ قيود مرحَّلة على حساب الطرف بنفس الاتجاه والمبلغ (±0.5 ريال / 1.5% لغير الريال) وخلال ±30 يوماً (الأقرب تاريخاً أولاً) */
+function _reconHbWhy_(X, p, base, parties, claimed) {
+  var pk = _glHbKey_(p.party || ''), codes = {}, any = false;
+  Object.keys(parties).forEach(function (c) { if (_glHbKey_(parties[c]) === pk) { codes[c] = 1; any = true; } });
+  var note = '', sar = _glRates_().SAR || 1;
+  if (!any) {
+    var sim = [];
+    Object.keys(X.accs).forEach(function (c) { var a = X.accs[c]; if (!a || a.isGroup || a.active === false) return; var k = _glHbKey_(a.name || ''); if (k && pk && (k.indexOf(pk) >= 0 || pk.indexOf(k) >= 0)) sim.push(c + ' ' + a.name); });
+    return { cands: [], note: 'الطرف «' + p.party + '» غير مربوط بحساب عام بخريطة الأطراف' + (sim.length ? ' — حسابات مشابهة: ' + sim.slice(0, 3).join(' · ') : '') + ' (اربطه من «ربط الأطراف» ثم أعد المطابقة)' };
+  }
+  var want = base.amount > 0 ? 'in' : 'out', pa = Math.abs(base.amount), pd = _reconDay_(_glDKey_(base.date)), out = [], DENY = /^(AUTO:(HB:|HBOPEN|TRIP:|CI:|CAT|TR|MF|VZ|OPEN|CP:)|CLOSE:)/;
+  Object.keys(X.L).forEach(function (eid) {
+    var e = X.E[eid]; if (!e || e.st !== GL_ST_POSTED_ || claimed[eid] || DENY.test(e.sk) || e.type === 'قيد افتتاحي' || e.type === 'قيد إقفال') return;
+    var net = 0, sarSide = true, hit = false;
+    (X.L[eid] || []).forEach(function (l) {
+      if (!codes[_glStr_(l[4])]) return; hit = true;
+      var cur = _glCur_(l[7]), n = _glNum_(l[6]) - _glNum_(l[5]);   // دائن − مدين: موجب = استلمنا منه
+      if (cur !== 'SAR') { sarSide = false; n = (_glNum_(l[10]) - _glNum_(l[9])) / sar; }
+      net += n;
+    });
+    if (!hit || !net) return;
+    if ((net > 0 ? 'in' : 'out') !== want) return;
+    var ga = Math.abs(net); if (Math.abs(ga - pa) > (sarSide ? 0.5 : Math.max(0.5, pa * 0.015))) return;
+    var dd = Math.abs(_reconDay_(_glDKey_(e.date)) - pd); if (dd > 30) return;
+    out.push({ entry: eid, date: e.date, amount: _glR2_(ga), voucher: e.vno, desc: e.desc, type: e.type, dd: dd });
+  });
+  out.sort(function (a, b) { return a.dd - b.dd; });
+  if (!out.length) note = 'الطرف مربوط بحساب لكن لا قيد مطابق (الاتجاه/المبلغ/±30 يوماً)';
+  return { cands: out.slice(0, 5), note: note };
+}
+
 /* ---------- 🏨 دفعات الحجوزات ---------- */
 function _reconHb_(X, out) {
   var c = _glHbCfg_(); if (!c.ssId) return;
@@ -186,10 +218,16 @@ function _reconHb_(X, out) {
     pays.push({ id: id, party: party, date: _glAutoDate_(r[0]), dir: dir, amount: amt, note: _glStr_(r[4]), link: _glStr_(r[9]) });
   });
   var refs = _glHbPayRefs_(pays);
+  var claimed0 = {}; Object.keys(refs).forEach(function (k) { if (refs[k] && refs[k].entry) claimed0[refs[k].entry] = 1; });
+  var hbP = {}; try { hbP = _glHbMirrorParties_(); } catch (eP) {}
   pays.forEach(function (p) {
     var ref = refs[p.id], base = { party: p.party, date: p.date, amount: /استلمنا/.test(p.dir) ? p.amount : -p.amount, cur: 'SAR', desc: p.note };
     if (ref && ref.how === 'ignored') { base.status = 'ignored'; out.push(_reconRow_('hb', 'hb:' + p.id, base)); return; }
-    if (!ref || !ref.entry) { base.status = 'noentry'; base.note = 'دفعة بكشف الفندق بلا قيد مطابق'; out.push(_reconRow_('hb', 'hb:' + p.id, base)); return; }
+    if (!ref || !ref.entry) {
+      base.status = 'noentry'; base.note = 'دفعة بكشف الفندق بلا قيد مطابق';
+      try { var dg = _reconHbWhy_(X, p, base, hbP, claimed0); base.cands = dg.cands; if (dg.note) base.note += ' — ' + dg.note; } catch (eD) {}
+      out.push(_reconRow_('hb', 'hb:' + p.id, base)); return;
+    }
     var e = X.E[ref.entry]; base.entry = ref.entry; base.voucher = ref.voucher; base.how = { manual: 'ربط يدوي', match: 'مطابقة تلقائية' }[ref.how] || (/^GL:/.test(p.id) ? 'نسخة قيد' : 'قيد تلقائي');
     base.status = (!e || e.st === GL_ST_VOID_) ? 'void' : 'ok';
     out.push(_reconRow_('hb', 'hb:' + p.id, base));
@@ -246,7 +284,7 @@ function glReconRun(authToken, opts) {
       if (Date.now() - t0 > 250000) return;
       try {
         // ① دفعة بلا قيد ولها مرشَّح وحيد مطابق تماماً (نفس اليوم والمبلغ) ⇒ ربط
-        if (r.status === 'noentry' && r.fam !== 'hb' && r.cands.length === 1 && r.cands[0].dd === 0) { _reconLinkSet_(r.key, r.cands[0].entry, 'link', user); fixed.link++; return; }
+        if (r.status === 'noentry' && r.cands.length === 1 && r.cands[0].dd === 0) { _reconLinkSet_(r.key, r.cands[0].entry, 'link', user); fixed.link++; return; }
         // ② قيد بلا نسخة بالشاشة ⇒ إنشاء النسخة من القيد
         if (r.status === 'nopay' && !touchedMirror[r.entry]) {
           touchedMirror[r.entry] = 1;
@@ -362,6 +400,20 @@ function glReconAct(authToken, act) {
     } else _reconLinkSet_(key, '', act.a === 'noent' ? 'noent' : '', user);
     logChange_(user, act.a === 'link' ? 'ربط دفعة بقيد (مطابقة)' : (act.a === 'noent' ? 'دفعة لا تحتاج قيداً (مطابقة)' : 'فك ربط دفعة بقيد (مطابقة)'), key, 'القيد', '-', _glStr_(act.entry) || '-');
     return { success: true };
+  }
+  if (act.a === 'linkMany') {   // (V4.413) ربط عدة دفعات بقيودها بنداء واحد: act.items = [{key, entry}]
+    _glPerm_(authToken, 'edit');
+    var items = (act.items || []).slice(0, 300), okN = 0, bad = [];
+    items.forEach(function (it) {
+      try {
+        var k2 = _glStr_(it.key), e3 = _glStr_(it.entry), f4 = _glFindEntry_(e3);
+        if (!/^(cp|ap|hb):/.test(k2)) throw new Error('مفتاح غير صالح');
+        if (!f4 || _glStr_(f4.r[5]) !== GL_ST_POSTED_) throw new Error('قيد غير صالح ' + e3);
+        _reconLinkSet_(k2, e3, 'link', user); okN++;
+      } catch (e5) { bad.push((it && it.key) + ': ' + e5.message); }
+    });
+    logChange_(user, 'ربط دفعات بقيودها (جماعي)', 'GL:recon', 'الربط', '-', okN + ' من ' + items.length);
+    return { success: true, linked: okN, failed: bad.slice(0, 10) };
   }
   if (act.a === 'mirror') {
     _glPerm_(authToken, 'edit');
