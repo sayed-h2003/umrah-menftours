@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.402  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.403  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7911,6 +7911,8 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     transferAccPaymentsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
     updateAccPaymentsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
     /* (V4.397) 033_trip_writes.sql — ترحيل الأرصدة · حذف رحلة · ملاحظة التسكين والترتيب المدموج */
+    /* (V4.403) 038_transfer_items.sql — نقل حجوزات فنادق بين رحلات؛ مزامنة الرحلتين بنداء خلفي accSyncBg */
+    transferAccItemsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call', after: function (a, d) { try { if (d && d.success !== false && d.job) _RAWRUN_().withFailureHandler(function () {}).accSyncBg(window.authToken, d.trips || [], d.job); } catch (e) {} } },
     carryForwardTripBalance: { need: ['acc', 'wbk'], rpc: 'rw_call' },
     deleteTrip: { need: ['core', 'wbk'], rpc: 'rw_call' },
     saveHousingNote: { need: ['misc', 'wbk'], rpc: 'rw_call' },
@@ -9629,7 +9631,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.402";
+var CLIENT_APP_VERSION = "4.403";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

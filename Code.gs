@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.402";
+var APP_VERSION = "4.403";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2278,6 +2278,14 @@ function _kashfAfterSave_(p, authToken, username) {
   var tripName = String(p.trip || ''), res = { success: true };
   try { res.accSync = _syncTripAccounts_(authToken || null, tripName, String(username || p.user || '')); } catch (eS) { Logger.log('acc sync failed: ' + eS); }
   return res;
+}
+// (V4.403) مزامنة حسابات رحلات بعد كتابة من Postgres (بند accsync): نفس _syncTripAccounts_ لكل رحلة، ثم تعليم البند منجزاً
+function accSyncBg(authToken, trips, jobId) {
+  var session = requireAuth_(authToken), synced = 0;
+  try { _ACC_HB_CITY_MEMO_ = null; } catch (e0) {}
+  (trips || []).forEach(function (t) { t = String(t || '').trim(); if (!t || t === 'عام') return; try { var rs = _syncTripAccounts_(authToken, t, session.username); if (rs && (rs.created || rs.updated || rs.removed)) synced++; } catch (eS) { Logger.log('accSyncBg: ' + eS.message); } });
+  try { if (jobId) _supaReq_('patch', 'app_outbox?id=eq.' + encodeURIComponent(String(jobId)) + '&kind=eq.accsync', { done_at: new Date().toISOString() }); } catch (e2) {}
+  return { success: true, resynced: synced };
 }
 function vzCacheClearBg(authToken) { requireAuth_(authToken); try { _vzClearCache_(); } catch (e) {} return { success: true }; }   // (V4.396) بعد دفعة وكيل من Postgres
 function bookingCacheBustBg(authToken) { requireAuth_(authToken); try { _cacheBust_('booking'); } catch (e) {} return { success: true }; }   // (V4.389) بعد حذف/اعتماد من Postgres
