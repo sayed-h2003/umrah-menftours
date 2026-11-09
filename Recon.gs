@@ -229,9 +229,10 @@ function glReconRun(authToken, opts) {
   opts = opts || {};
   var session = opts.fix ? _glAdminPerm_(authToken) : _glPerm_(authToken, 'view', 'stmt');
   var fams = opts.fams && opts.fams.length ? opts.fams : ['cp', 'ap', 'hb'], t0 = Date.now(), fixed = { link: 0, mirror: 0, resync: 0 }, errs = [];
+  var lastX = null;
   var run = function () {
     _RECON_LNK_MEMO_ = null;
-    var X = _reconCtx_(), out = [], claimed = {};
+    var X = _reconCtx_(), out = [], claimed = {}; lastX = X;
     if (fams.indexOf('cp') >= 0) try { _reconCp_(X, out, claimed); } catch (e) { errs.push('عملاء العمرة: ' + e.message); }
     if (fams.indexOf('ap') >= 0) try { _reconAp_(X, out, claimed); } catch (e) { errs.push('الوكلاء: ' + e.message); }
     if (fams.indexOf('hb') >= 0) try { _reconHb_(X, out); } catch (e) { errs.push('الحجوزات: ' + e.message); }
@@ -274,9 +275,70 @@ function glReconRun(authToken, opts) {
       return [RECON_FAM_[r.fam], r.key, r.party, r.trip, r.date, r.amount, r.cur, r.desc, r.entry, r.voucher, RECON_ST_[r.status] || r.status, r.note, now]; }));
     _glSetSetting_('recon_last', JSON.stringify({ at: now, by: session.username, n: rows.length, bad: rows.filter(function (r) { return r.status !== 'ok' && r.status !== 'ignored'; }).length }));
   } catch (eS) { errs.push('حفظ الفهرس: ' + eS.message); }
+  try { _reconCross_(lastX, rows); } catch (eX) { errs.push('الأطراف المرتبطة: ' + eX.message); }   // (V4.407) دفعة بين طرفين (عميل⇄وكيل⇄فندق)
   var sum = {}; rows.forEach(function (r) { var k = r.fam + '|' + r.status; sum[k] = (sum[k] || 0) + 1; });
   return { success: true, rows: rows.filter(function (r) { return opts.all || (r.status !== 'ok' && r.status !== 'ignored'); }).slice(0, 3000), sum: sum, total: rows.length, fixed: fixed, errors: errs, ms: Date.now() - t0 };
 }
+/* (V4.407) دفعة بين طرفين: القيد الواحد قد يمس عميلاً ووكيلاً وفندقاً معاً (مثلاً عميل سدّد للوكيل) — يظهر بقسم كل طرف وتُعرض الأطراف الأخرى بالسطر */
+function _reconCross_(X, rows) {
+  if (!X) return;
+  var parties = {}; try { parties = _glHbMirrorParties_() || {}; } catch (e0) {}
+  rows.forEach(function (r) {
+    if (!r.entry || !X.L[r.entry]) return;
+    var seen = {}, own = _glNorm_(r.party), list = [];
+    X.L[r.entry].forEach(function (l) {
+      var code = _glStr_(l[4]), a = X.accs[code], lbl = '', nm = '';
+      if (a && a.kind === 'client' && a.link) { lbl = 'عميل'; nm = a.link; }
+      else if (a && a.kind === 'agent') { lbl = 'وكيل'; nm = a.link || a.name; }
+      else if (parties[code]) { lbl = 'فندق'; nm = parties[code]; }
+      if (!lbl || _glNorm_(nm) === own || seen[lbl + nm]) return;
+      seen[lbl + nm] = 1; list.push(lbl + ': ' + nm);
+    });
+    if (list.length) r.cross = list.slice(0, 4);
+  });
+}
+
+/* ---------- 🔍 فحص الربط بالقيود لكل قسم (الحجوزات · عملاء العمرة · الوكلاء) ---------- */
+var UL_SEC_ = {
+  hb: { label: 'الحجوزات', fams: ['hb'], rx: /^AUTO:HB/ },
+  cp: { label: 'عملاء العمرة', fams: ['cp'], rx: /^AUTO:(TRIP|CI|CP):/ },
+  ap: { label: 'الوكلاء', fams: ['ap'], rx: /^AUTO:(AI|AP|VZ):/ }
+};
+var UL_KIND_ = { 'AUTO:HB:': 'حجز فندق', 'AUTO:HBP:': 'دفعة فندق', 'AUTO:HBL:': 'حجز فندق', 'AUTO:TRIP:': 'بنود العميل بالرحلة', 'AUTO:CI:': 'بنود العميل', 'AUTO:CP:': 'دفعة عميل', 'AUTO:AI:': 'بند حساب وكيل', 'AUTO:AP:': 'دفعة وكيل', 'AUTO:VZ:': 'مجموعة تأشيرات' };
+function _ulKind_(k) { var best = ''; Object.keys(UL_KIND_).forEach(function (p) { if (k.indexOf(p) === 0 && p.length > best.length) best = p; }); return best ? UL_KIND_[best] : 'قيد تلقائي'; }
+// sec: hb | cp | ap — يرجع دفعات القسم (من المطابقة) + مصادر القسم المخطَّطة مقابل قيودها (مرتبط · بلا قيد · قيد ملغى · قيد بلا مصدر)
+function glUnlinkedRun(authToken, sec) {
+  var session = _glPerm_(authToken, 'view', 'stmt'), S = UL_SEC_[sec]; if (!S) throw new Error('قسم غير معروف');
+  var t0 = Date.now(), errs = [];
+  var pays = glReconRun(authToken, { fams: S.fams, all: true });
+  var built = _glAutoBuild_(session.username, false), planned = {}, rows = [], cnt = { linked: 0, missing: 0, voided: 0, draft: 0, orphan: 0 };
+  var E = {}; _glRows_('entries').forEach(function (r) { var k = _glStr_(r[6]); if (/^AUTO:/.test(k) && S.rx.test(k)) { var o = { id: _glStr_(r[0]), st: _glStr_(r[5]), date: _glDate_(r[2]), desc: _glStr_(r[4]), vno: (/^VCH:(.+)$/.exec(k) || [])[1] || '' }; if (!E[k] || E[k].st === GL_ST_VOID_) E[k] = o; } });
+  (built.entries || []).forEach(function (e) {
+    if (!S.rx.test(e.key)) return; planned[e.key] = 1;
+    var x = E[e.key], st = !x ? 'missing' : (x.st === GL_ST_VOID_ ? 'voided' : (x.st === GL_ST_POSTED_ ? 'linked' : 'draft'));
+    cnt[st]++;
+    rows.push({ key: e.key, kind: _ulKind_(e.key), status: st, entry: x ? x.id : '', date: e.date || '', desc: String(e.desc || '').slice(0, 160), trip: e.trip || '', party: e.client || e.agent || '' });
+  });
+  Object.keys(E).forEach(function (k) {
+    if (planned[k] || E[k].st === GL_ST_VOID_) return; cnt.orphan++;
+    rows.push({ key: k, kind: _ulKind_(k), status: 'orphan', entry: E[k].id, date: E[k].date, desc: E[k].desc.slice(0, 160), trip: '', party: '', note: 'قيد تلقائي لم يعد له مصدر بالشاشات' });
+  });
+  var bad = rows.filter(function (r) { return r.status !== 'linked'; });
+  return { success: true, sec: sec, label: S.label, pays: pays, srcCounts: cnt, srcTotal: Object.keys(planned).length, sources: bad.slice(0, 1500), preCount: built.preCount || 0, warnings: (built.warnings || []).slice(0, 30), errors: errs, ms: Date.now() - t0 };
+}
+// تسجيل قيود مصادر «بلا قيد» الآن (مفاتيح AUTO فقط) — للمدير
+function glUnlinkedPost(authToken, keys) {
+  var session = _glAdminPerm_(authToken); keys = (Array.isArray(keys) ? keys : []).map(_glStr_).filter(function (k) { return /^AUTO:/.test(k); });
+  if (!keys.length) throw new Error('لا مفاتيح');
+  var only = {}; keys.forEach(function (k) { only[k] = 1; });
+  var lock = _glLock_(); lock.waitLock(60000);
+  try {
+    var r = _glAutoRun_(session.username, false, { bypass: true, onlyKeys: only });
+    logChange_(session.username, 'تسجيل قيود مصادر بلا قيد (فحص الربط)', 'GL:unlinked', '-', '-', 'جديد ' + r.created + ' · معدّل ' + r.updated + ' · محجوز ' + (r.blocked || []).length);
+    return { success: true, created: r.created, updated: r.updated, blocked: (r.blocked || []).slice(0, 20), errors: (r.errors || []).slice(0, 20) };
+  } finally { _glUnlock_(lock); }
+}
+
 function glReconLast(authToken) {
   _glPerm_(authToken, 'view', 'stmt');
   var o = null; try { o = JSON.parse(_glSettings_().recon_last || 'null'); } catch (e) {}

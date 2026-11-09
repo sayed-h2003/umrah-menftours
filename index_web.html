@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.406  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.407  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9635,7 +9635,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.406";
+var CLIENT_APP_VERSION = "4.407";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -57171,7 +57171,10 @@ var GLRP_ST_ = { ok: ['✅ مطابقة', '#16a34a'], diff: ['⚠️ فرق', '#
 var GLRP_FAM_ = { cp: '💳 عملاء العمرة', ap: '🧑‍💼 الوكلاء', hb: '🏨 الحجوزات' };
 function glRpView_() {
   var b = document.getElementById('glRpBox'); if (!b) return;
-  b.innerHTML = '<div class="d-flex gap-1 flex-wrap align-items-center mb-2">' +
+  b.innerHTML = '<div class="border rounded p-2 mb-2" style="background:#f8fafc;"><div class="fw-bold small mb-1" style="color:#1e3d59;">🔍 فحص الربط بالقيود لكل قسم على حدة (مرحلة التوحيد)</div>' +
+    '<div class="d-flex gap-1 flex-wrap"><button class="btn btn-sm btn-outline-dark" onclick="glUlRun_(\'hb\',this)">🏨 الحجوزات ودفعاتها</button><button class="btn btn-sm btn-outline-dark" onclick="glUlRun_(\'cp\',this)">💳 عملاء العمرة (بنود ودفعات)</button><button class="btn btn-sm btn-outline-dark" onclick="glUlRun_(\'ap\',this)">🧑‍💼 الوكلاء (بنود ودفعات)</button></div>' +
+    '<div class="small text-muted mt-1">كل زر يفحص قسمه فقط: دفعاته بقيودها + مصادره (حجوزات/بنود) هل لها قيد · ودفعة بين طرفين (عميل⇄وكيل⇄فندق) تظهر بقسم كل طرف مع الطرف الآخر.</div><div id="glUlBox" class="mt-2"></div></div>' +
+    '<div class="d-flex gap-1 flex-wrap align-items-center mb-2">' +
     (GL.isAdmin ? '<button class="btn btn-sm btn-success fw-bold" onclick="glRpRun_(true,this)" title="يفحص كل الدفعات ويصلح الآمن تلقائياً: ربط دفعة بقيد مرشَّح وحيد مطابق تماماً · إنشاء نسخة الشاشة الناقصة لقيد · إعادة مزامنة نسخة تختلف عن قيدها">🔗 مطابقة وإصلاح بضغطة</button>' : '') +
     '<button class="btn btn-sm btn-outline-primary" onclick="glRpRun_(false,this)">🔎 فحص فقط</button><span id="glRpLast" class="small text-muted"></span></div>' +
     '<div class="gl-note">يربط كل دفعة بالشاشات (عملاء العمرة · الوكلاء · الحجوزات) برقم قيدها ورقم سندها بالدفتر العام، ويعرض الفروق: دفعة بلا قيد · قيد بلا دفعة بالشاشة · فرق مبلغ/تاريخ · قيد ملغى · مكرر محتمل. لكل فرق: فتح القيد وتعديله، ربط يدوي، إنشاء النسخة الناقصة، أو حذف الدفعة (للمدير بأي تاريخ).</div><div id="glRpRes"></div>';
@@ -57185,6 +57188,48 @@ function glRpRun_(fix, btn) {
     if (fix) showToast('✅ أُصلح تلقائياً: ربط ' + r.fixed.link + ' · نسخ ' + r.fixed.mirror + ' · إعادة مزامنة ' + r.fixed.resync);
     if (r.errors.length) _showPopup(r.errors.join('\n'), 'warning');
   }, function (e) { btn.disabled = false; btn.innerHTML = o; _showPopup((e && e.message) || e, 'error'); });
+}
+/* 🔍 (V4.407) فحص الربط بالقيود لكل قسم: الحجوزات · عملاء العمرة · الوكلاء */
+var GLUL = { res: null, f: '' };
+function glUlRun_(sec, btn) {
+  var o = btn.innerHTML, box = document.getElementById('glUlBox'); btn.disabled = true; btn.innerHTML = '⏳ جاري الفحص…';
+  if (box) box.innerHTML = '<div class="text-muted small">⏳ يبني المصادر ويقارنها بالدفتر (قد يستغرق دقيقة)…</div>';
+  glRun('glUnlinkedRun', [sec], function (r) { btn.disabled = false; btn.innerHTML = o; GLUL.res = r; GLUL.f = ''; glUlRender_(); },
+    function (e) { btn.disabled = false; btn.innerHTML = o; if (box) box.innerHTML = '<div class="alert alert-danger py-1">❌ ' + glEsc((e && e.message) || e) + '</div>'; });
+}
+var GLUL_ST_ = { missing: ['❌ بلا قيد', '#dc2626'], voided: ['⛔ قيده ملغى', '#7f1d1d'], draft: ['📝 قيد مسودة', '#d97706'], orphan: ['👻 قيد بلا مصدر', '#7c3aed'], linked: ['✅ مرتبط', '#16a34a'] };
+function glUlRender_() {
+  var r = GLUL.res, box = document.getElementById('glUlBox'), E = glEsc; if (!r || !box) return;
+  var c = r.srcCounts || {}, ps = r.pays || {}, psum = ps.sum || {}, bad = 0, ok = 0, tot = 0;
+  Object.keys(psum).forEach(function (k) { var st = k.split('|')[1]; tot += psum[k]; if (st === 'ok') ok += psum[k]; else if (st !== 'ignored') bad += psum[k]; });
+  var card = function (t, v, col) { return '<div class="border rounded p-2" style="min-width:130px;background:#fff;"><div class="small text-muted">' + t + '</div><div class="fw-bold" style="font-size:18px;color:' + col + '">' + v + '</div></div>'; };
+  var srcRows = (r.sources || []).filter(function (x) { return !GLUL.f || x.status === GLUL.f; });
+  var payRows = (ps.rows || []);
+  var h = '<div class="fw-bold mb-1">' + E(r.label) + ' <span class="small text-muted">(' + (r.ms / 1000).toFixed(0) + ' ث)</span></div><div class="d-flex gap-2 flex-wrap mb-2">' +
+    card('مصادر مرتبطة بقيد', (c.linked || 0) + ' / ' + r.srcTotal, '#16a34a') + card('بلا قيد', c.missing || 0, c.missing ? '#dc2626' : '#16a34a') + card('قيدها ملغى', c.voided || 0, c.voided ? '#7f1d1d' : '#16a34a') +
+    card('قيد مسودة', c.draft || 0, c.draft ? '#d97706' : '#16a34a') + card('قيد بلا مصدر', c.orphan || 0, c.orphan ? '#7c3aed' : '#16a34a') + card('دفعات مطابقة', ok + ' / ' + tot, '#16a34a') + card('دفعات بفروق', bad, bad ? '#dc2626' : '#16a34a') + '</div>';
+  if (r.preCount) h += '<div class="small text-muted mb-1">ℹ️ ' + r.preCount + ' قيداً قبل تاريخ بدء الدفتر مُجمَّعة بقيد الافتتاحي (لا تظهر هنا).</div>';
+  (r.warnings || []).forEach(function (w) { h += '<div class="small" style="color:#b45309;">⚠️ ' + E(w) + '</div>'; });
+  h += '<div class="d-flex gap-1 flex-wrap align-items-center mb-1"><b class="small">المصادر:</b>' + ['', 'missing', 'voided', 'draft', 'orphan'].map(function (k) { return '<button class="btn btn-sm ' + (GLUL.f === k ? 'btn-dark' : 'btn-outline-secondary') + ' py-0" onclick="GLUL.f=\'' + k + '\';glUlRender_()">' + (k ? GLUL_ST_[k][0] : 'كل غير المرتبط') + '</button>'; }).join('') +
+    (GL.isAdmin && c.missing ? '<button class="btn btn-sm btn-success py-0 ms-auto" onclick="glUlPostAll_(this)">➕ تسجيل كل «بلا قيد» الآن (' + c.missing + ')</button>' : '') + '</div>';
+  h += srcRows.length ? '<div class="table-responsive" style="max-height:38vh;overflow:auto;"><table class="table table-sm" style="font-size:12.5px;"><thead style="position:sticky;top:0;background:#f8fafc;"><tr><th>الحالة</th><th>النوع</th><th>البيان</th><th>التاريخ</th><th>القيد</th><th></th></tr></thead><tbody>' +
+    srcRows.slice(0, 500).map(function (x) { var st = GLUL_ST_[x.status] || [x.status, '#64748b'];
+      return '<tr><td style="white-space:nowrap;color:' + st[1] + ';font-weight:700;">' + st[0] + '</td><td>' + E(x.kind) + '</td><td>' + E(x.desc) + (x.note ? '<div class="small text-muted">' + E(x.note) + '</div>' : '') + '</td><td class="gl-latin">' + E(x.date) + '</td><td class="gl-latin">' + (x.entry ? '<a href="#" onclick="glShowEntry(\'' + glJs(x.entry) + '\');return false;">' + E(x.entry) + '</a>' : '—') + '</td><td style="white-space:nowrap;">' +
+        (x.status === 'missing' && GL.isAdmin ? '<button class="btn btn-sm btn-outline-success py-0" onclick="glUlPost_(\'' + glJs(x.key) + '\',this)">➕ سجّل القيد</button>' : '') + (x.entry ? '<button class="btn btn-sm btn-outline-secondary py-0" onclick="glEditEntry(\'' + glJs(x.entry) + '\')">✏️</button>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>'
+    : '<div class="alert alert-success py-1 small">✅ كل مصادر هذا القسم مرتبطة بقيودها</div>';
+  h += '<div class="fw-bold small mt-2 mb-1">الدفعات (من المطابقة):</div>';
+  var pb = payRows.filter(function (x) { return x.status !== 'ok' && x.status !== 'ignored'; });
+  h += pb.length ? '<div class="table-responsive" style="max-height:38vh;overflow:auto;"><table class="table table-sm" style="font-size:12.5px;"><tbody>' + pb.slice(0, 400).map(function (x) { var st = GLRP_ST_[x.status] || [x.status, '#64748b'];
+    return '<tr><td style="white-space:nowrap;color:' + st[1] + ';font-weight:700;">' + st[0] + '</td><td>' + E(x.party) + (x.trip ? '<div class="small text-muted">' + E(x.trip) + '</div>' : '') + (x.cross ? '<div class="small" style="color:#7c3aed;">↔ ' + E(x.cross.join(' · ')) + '</div>' : '') + '</td><td class="gl-latin" style="white-space:nowrap;">' + glFmt(x.amount) + ' ' + E(x.cur) + '</td><td class="gl-latin">' + E(x.date) + '</td><td class="gl-latin">' + (x.entry ? E(x.entry) : '—') + '</td><td>' + E(x.desc) + (x.note ? '<div class="small" style="color:' + st[1] + '">' + E(x.note) + '</div>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div><div class="small text-muted">للربط/الإهمال/الحذف استعمل «🔎 فحص فقط» بالأسفل (يعرض أزرار كل دفعة).</div>'
+    : '<div class="alert alert-success py-1 small">✅ كل دفعات هذا القسم مطابقة لقيودها</div>';
+  var withX = payRows.filter(function (x) { return x.cross && x.status === 'ok'; }).length;
+  if (withX) h += '<div class="small text-muted mt-1">↔ ' + withX + ' دفعة مطابقة مرتبطة بطرف آخر (عميل⇄وكيل⇄فندق) — تظهر أيضاً بقسم الطرف الآخر.</div>';
+  box.innerHTML = h;
+}
+function glUlPost_(key, btn) { btn.disabled = true; glRun('glUnlinkedPost', [[key]], function (r) { showToast('✅ سُجّل ' + (r.created || 0) + ' قيد' + ((r.blocked || []).length ? ' · محجوز بفترة مقفلة' : '')); var sec = GLUL.res && GLUL.res.sec; var b = document.querySelector('#glUlBox'); if (sec && b) glUlRun_(sec, btn); }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); }); }
+function glUlPostAll_(btn) {
+  var keys = ((GLUL.res && GLUL.res.sources) || []).filter(function (x) { return x.status === 'missing'; }).map(function (x) { return x.key; }); if (!keys.length) return;
+  askConfirm_('تسجيل ' + keys.length + ' قيد (مصادر بلا قيد) الآن؟', function () { btn.disabled = true; btn.innerHTML = '⏳…'; glRun('glUnlinkedPost', [keys], function (r) { showToast('✅ سُجّل ' + (r.created || 0) + ' قيد · محجوز ' + (r.blocked || []).length); glUlRun_(GLUL.res.sec, btn); }, function (e) { btn.disabled = false; _showPopup((e && e.message) || e, 'error'); }); }, { title: 'تسجيل القيود' });
 }
 function glRpRender_() {
   var r = GLRP.res, box = document.getElementById('glRpRes'), E = glEsc; if (!r || !box) return;
