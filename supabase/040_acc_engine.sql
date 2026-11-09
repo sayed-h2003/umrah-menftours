@@ -274,3 +274,13 @@ begin
 
 revoke all on function _ae_normar(text), rx2_accgeneratedraft(jsonb, text) from public, anon, authenticated;
 grant execute on function _ae_normar(text), rx2_accgeneratedraft(jsonb, text) to service_role;
+
+-- = _accEnsureMeta_ (صف ميتا العميل×الرحلة بنمط «برنامج» + لقطة الأعداد JSON إن لم يوجد)
+create or replace function _ae_ensure_meta(client text, trip text, who text) returns void language plpgsql volatile set search_path = public as
+$$ begin
+  perform pg_advisory_xact_lock(hashtextextended('store:put:acc_meta', 0));
+  if exists (select 1 from store_rows where tbl = 'acc_meta' and _rx_trim(_rx_s(_rx_c(raw, 0))) = client and _rx_trim(_rx_s(_rx_c(raw, 1))) = trip) then return; end if;
+  insert into store_rows (tbl, rid, ord, raw) select 'acc_meta', substr(md5(random()::text || clock_timestamp()::text || client), 1, 20), coalesce(max(ord), 0) + 1,
+    jsonb_build_array(client, trip, 'برنامج', _ae_stats_json(client, trip), '', who, jsonb_build_object('$d', (extract(epoch from clock_timestamp()) * 1000)::bigint)) from store_rows where tbl = 'acc_meta';
+  update store_meta set ver = ver + 1, updated_at = now() where tbl = 'acc_meta'; end $$;
+revoke all on function _ae_ensure_meta(text, text, text) from public, anon, authenticated; grant execute on function _ae_ensure_meta(text, text, text) to service_role;

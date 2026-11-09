@@ -207,11 +207,36 @@ $$ declare id text := _rx_trim(coalesce(a ->> 1, '')); who text := coalesce(u, a
   return jsonb_build_object('success', true); end $$;
 
 -- ===== saveAccPaymentsBulk (دفعات متعددة ⇒ سندات مسودة) =====
+
+-- دفعات عادية مباشرة بالمخزن (حين نظام السندات موقوف) = مسار saveAccPaymentsBulk/saveAccPayment الأصلي بلا سند مسودة
+create or replace function _lg_direct_bulk(client text, trip text, lst jsonb, who text) returns jsonb language plpgsql volatile set search_path = public as
+$$ declare p jsonb; id text; amt float8; cur text; n int := 0; te float8 := 0; ts float8 := 0; created jsonb := '[]'::jsonb; nowj jsonb := jsonb_build_object('$d', (extract(epoch from clock_timestamp()) * 1000)::bigint); ids text[] := '{}'; dsc text; dt text; begin
+  perform pg_advisory_xact_lock(hashtextextended('store:put:acc_payments', 0));
+  for p in select * from jsonb_array_elements(lst) loop
+    amt := coalesce(_bk_pf(p -> 'amount'), 0); if amt <= 0 then continue; end if;
+    cur := case when (p ->> 'currency') = 'SAR' then 'SAR' else 'EGP' end; dsc := btrim(coalesce(p ->> 'desc', '')); dt := coalesce(p ->> 'date', '');
+    loop id := 'P' || _w_b36((extract(epoch from clock_timestamp()) * 1000)::bigint) || _w_b36((random() * 10000)::int); exit when not (id = any(ids)); end loop; ids := ids || id;
+    insert into store_rows (tbl, rid, ord, raw) select 'acc_payments', substr(md5(random()::text || clock_timestamp()::text || id), 1, 20), coalesce(max(ord), 0) + 1,
+      jsonb_build_array(id, client, trip, 'دفعة', dt, amt, cur, '', dsc, who, nowj, '') from store_rows where tbl = 'acc_payments';
+    n := n + 1; if cur = 'SAR' then ts := ts + amt; else te := te + amt; end if;
+    created := created || jsonb_build_object('id', id, 'trip', trip, 'ptype', 'دفعة', 'date', dt, 'amount', amt, 'currency', cur, 'rate', 0, 'desc', dsc, 'serial', '');
+  end loop;
+  if n = 0 then return jsonb_build_object('success', false, 'error', 'لا توجد دفعات صالحة (المبلغ مطلوب)'); end if;
+  update store_meta set ver = ver + 1, updated_at = now() where tbl = 'acc_payments';
+  if trip <> 'عام' then perform _ae_ensure_meta(client, trip, who); end if;
+  if n = 1 then
+    insert into app_outbox (kind, payload) values ('audit', jsonb_build_object('user', who, 'action', 'تسجيل دفعة حساب', 'record', client, 'field', trip, 'old', '-', 'new', (created -> 0 ->> 'amount') || ' ' || (created -> 0 ->> 'currency') || ' — ' || (created -> 0 ->> 'desc')));
+  else
+    insert into app_outbox (kind, payload) values ('audit', jsonb_build_object('user', who, 'action', 'تسجيل دفعات متعددة', 'record', client, 'field', trip, 'old', '-', 'new', n || ' دفعة (جنيه ' || te || ' / ريال ' || ts || ')'));
+  end if;
+  perform _w_dv_bump(_acc_dvs());
+  return jsonb_build_object('success', true, 'count', n, 'created', created, 'id', created -> 0 ->> 'id', 'serial', ''); end $$;
+
 create or replace function rw2_saveaccpaymentsbulk(a jsonb, u text) returns jsonb language plpgsql volatile set search_path = public as
 $$ declare client text := _rx_trim(coalesce(a ->> 1, '')); trip text := _rx_trim(coalesce(a ->> 2, '')); lst jsonb := a -> 3; who text := coalesce(u, app_user(), '-'); rws jsonb; begin
   if not app_has('accounts.add') then raise exception 'لا تملك صلاحية' using errcode = '42501'; end if;
   if client = '' or trip = '' or jsonb_typeof(lst) is distinct from 'array' or jsonb_array_length(lst) = 0 then return jsonb_build_object('success', false, 'error', 'لا توجد دفعات'); end if;
-  if not _lg_on() then raise exception 'غير مدعوم: التوحيد موقوف' using errcode = '0A000'; end if;
+  if not _lg_on() then return _lg_direct_bulk(client, trip, lst, who); end if;   -- (V4.406) التوحيد موقوف ⇒ دفعات مباشرة بالمخزن كما Code.gs
   select coalesce(jsonb_agg(jsonb_build_object('party', client, 'trip', trip, 'date', p ->> 'date', 'amount', _bk_pf(p -> 'amount'), 'currency', case when (p ->> 'currency') = 'SAR' then 'SAR' else 'EGP' end, 'desc', p ->> 'desc', 'cp', p ->> 'cp') order by o), '[]'::jsonb) into rws
     from jsonb_array_elements(lst) with ordinality t(p, o) where coalesce(_bk_pf(p -> 'amount'), 0) > 0;
   return _lg_from_screen('cp', rws, '{"bulk":true}'::jsonb, who); end $$;
@@ -240,7 +265,7 @@ begin
   end if;
   if not isedit and ptype <> 'تحويل' then
     -- 🏛️ دفعة جديدة عادية: سند مسودة بالحسابات العامة بانتظار الاعتماد (= _ledgerFromScreen_)
-    if not _lg_on() then raise exception 'غير مدعوم: التوحيد موقوف' using errcode = '0A000'; end if;
+    if not _lg_on() then return _lg_direct_bulk(client, trip, jsonb_build_array(jsonb_build_object('date', p ->> 'date', 'amount', amt, 'currency', cur, 'desc', dsc)), who) || jsonb_build_object('single', true); end if;
     return _lg_from_screen('cp', jsonb_build_array(jsonb_build_object('party', client, 'trip', trip, 'date', p ->> 'date', 'amount', amt, 'currency', cur, 'desc', dsc, 'cp', p ->> 'cp', 'dir', p ->> 'dir', 'force', _gs_truthy(p -> 'force'))), '{}'::jsonb, who);
   end if;
   perform pg_advisory_xact_lock(hashtextextended('store:put:acc_payments', 0));
@@ -274,8 +299,7 @@ begin
   end if;
 
   -- تحويل عملة جديد
-  if trip <> 'عام' and not exists (select 1 from store_rows where tbl = 'acc_meta' and btrim(_rx_s(raw -> 0)) = client and btrim(_rx_s(raw -> 1)) = trip) then
-    raise exception 'غير مدعوم: لا صف meta' using errcode = '0A000'; end if;
+  if trip <> 'عام' then perform _ae_ensure_meta(client, trip, who); end if;
   id := 'P' || _w_b36((extract(epoch from clock_timestamp()) * 1000)::bigint) || _w_b36((random() * 10000)::int);
   newraw := jsonb_build_array(id, client, trip, 'تحويل', coalesce(p ->> 'date', ''), amt, cur, rate, dsc, who, nowj, '');
   insert into store_rows (tbl, rid, ord, raw)
@@ -289,7 +313,7 @@ begin
 
 do $$ declare r record; begin
   for r in select p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-            where n.nspname = 'public' and (p.proname like '\_lg\_%' or p.proname in ('rw2_ledgerdecide', 'rw2_ledgercancel', 'rw2_saveaccpaymentsbulk', 'rw2_saveaccpayment', 'rx2_ledgercount', 'rx2_ledgerpendingfor', 'rx2_ledgerqueue')) loop
+            where n.nspname = 'public' and (p.proname like '\_lg\_%' or p.proname in ('rw2_ledgerdecide', 'rw2_ledgercancel', 'rw2_saveaccpaymentsbulk', 'rw2_saveaccpayment', '_lg_direct_bulk', 'rx2_ledgercount', 'rx2_ledgerpendingfor', 'rx2_ledgerqueue')) loop
     execute format('revoke all on function %s from public, anon, authenticated', r.sig);
     execute format('grant execute on function %s to service_role', r.sig);
   end loop;
