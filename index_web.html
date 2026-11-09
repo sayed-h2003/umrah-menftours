@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.409  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.410  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -1621,7 +1621,7 @@ input[type="date"]:not(:focus):not(:valid) {
       </button>
       <h6 class="fw-bold mb-0 text-white d-none d-sm-block" style="font-size: 15px;">Smart Manager Pro</h6>
       <!-- 🏷️ رقم الإصدار: تحقّق منه بعد كل نشر — لو لم يتغيّر فالنسخة المنشورة قديمة (أنشئ إصدار نشر جديد) -->
-      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;" title="رقم إصدار الواجهة — تحقق منه بعد كل نشر">V4.327</span>
+      <span class="badge bg-warning text-dark" id="appVersionBadge" style="font-size:10px;cursor:pointer;" onclick="srcPanel_()" title="رقم إصدار الواجهة — اضغط لعرض مصدر البيانات (Postgres / Apps Script)">V4.327</span>
     </div>
 
     <div class="d-flex align-items-center justify-content-center gap-2 flex-grow-1" style="min-width: 0;">
@@ -7781,6 +7781,7 @@ var LF_ = (function () {
       if (done) return; done = true; clearTimeout(to);
       if (res) { SP[KF] = 0; try { console.info('⚡ supabase', fn || rpc, (now() - t0) + 'ms'); } catch (e0) {} }
       else { try { console.info('↩︎ apps-script', fn || rpc, why || ''); } catch (e1) {} }
+      try { var sl = (window.__SRC = window.__SRC || []); sl.push([fn || rpc, res ? 'pg' : 'as', now() - t0, why || '', now()]); if (sl.length > 600) sl.shift(); } catch (eS) {}   // (V4.410) لوحة «مصدر البيانات»
       try { cb(res, why); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
     };
     var soft = function () { fin(null, 'soft'); };
@@ -8347,7 +8348,7 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
   api.refresh = function (id) { var s = S.subs[id]; if (s) refreshSub(s); };
   api.verify = verifySub;
   api.showBar = function (id) { var s = S.subs[id]; if (!s) return; s.snooze = 0; if (s.fresh) conflictBar(s); };
-  api.webUrl = function () { try { spInit(); return (SP.cfg && SP.cfg.webUrl) || ''; } catch (e) { return ''; } }; api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit; api.spAdopt = spAdopt; api.stRpc = glRpc; api.stRoute = stRoute;
+  api.webUrl = function () { try { spInit(); return (SP.cfg && SP.cfg.webUrl) || ''; } catch (e) { return ''; } }; api.glRpc = glRpc; api.glRpcReady = glRpcReady; api.spWarm = spInit; api.spAdopt = spAdopt; api.stRpc = glRpc; api.stRoute = stRoute; api.srcInfo = function () { try { spInit(); } catch (e) {} var st = (SP.cfg && SP.cfg.st) || {}; var sup = {}; Object.keys(STRPC).forEach(function (k) { sup[k] = { need: STRPC[k].need || [], w: STRPC[k].rpc === 'rw_call' }; }); return { ready: spReady(), groups: st.groups || [], dv: !!st.dv, gl: !!(SP.cfg && SP.cfg.gl), off: !!SP.off, stOff: !!SP.stOff, glOff: !!SP.glOff, last: SP.last || '', supported: sup }; };
   api._sp = SP; api._s = S; api._key = key; api._csig = csig; api._fresh = fresh; api._writeGroups = writeGroups; api._isWrite = isWrite;
   return api;
 })();
@@ -9656,7 +9657,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.409";
+var CLIENT_APP_VERSION = "4.410";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -10315,6 +10316,44 @@ var currentTicketTemporary = false;
   var _dynSearchCache = null;
   var _dynMovementsCache = null;
 
+/* 🧭 (V4.410) لوحة «مصدر البيانات»: اضغط شارة الإصدار أعلى الشاشة (أو اكتب __src() بالـConsole). تعرض لكل دالة نُدِيَت بهذه الجلسة:
+   🟢 Postgres فقط · 🟡 مختلط (ارتدّ أحياناً لـApps Script مع السبب) · 🟠 مدعومة بـPostgres لكنها ترتدّ دائماً · 🔴 Apps Script/الشيتات فقط (لا مسار Postgres لها بعد).
+   المصدر: window.__SRC (قرارات التوجيه) + window.__GSR (كل نداء Apps Script فعلي). تبدأ العدّ من فتح الصفحة؛ استخدم الشاشات ثم افتح اللوحة. */
+function srcPanel_() {
+  var old = document.getElementById('srcPanel'); if (old) { old.remove(); return; }
+  var info = {}; try { info = (window.LF_ && LF_.srcInfo && LF_.srcInfo()) || {}; } catch (e) {}
+  var M = {}, mk = function (f) { return M[f] || (M[f] = { pg: 0, pgMs: 0, as: 0, asMs: 0, why: '', f: f }); };
+  (window.__SRC || []).forEach(function (r) { var m = mk(r[0]); if (r[1] === 'pg') { m.pg++; m.pgMs += r[2]; } else if (r[3]) m.why = r[3]; });
+  (window.__GSR || []).forEach(function (r) { var m = mk(r[0]); m.as++; m.asMs += r[1]; });
+  var sup = info.supported || {}, rows = Object.keys(M).map(function (f) {
+    var m = M[f], isSup = !!sup[f] || /^(glx_|rx_|rw_)/.test(f), st, ord;
+    if (m.pg && !m.as) { st = '🟢 Postgres'; ord = 3; } else if (m.pg && m.as) { st = '🟡 مختلط'; ord = 2; } else if (isSup) { st = '🟠 مدعومة لكن ترتدّ'; ord = 1; } else { st = '🔴 Apps Script/الشيتات'; ord = 0; }
+    return { f: f, st: st, ord: ord, m: m };
+  }).filter(function (r) { return !/^(getAppVersion|appPulse|heartbeatOnline|getOnlineUsersNow)$/.test(r.f); }).sort(function (a, b) { return a.ord - b.ord || (b.m.as + b.m.pg) - (a.m.as + a.m.pg); });
+  var cnt = { 0: 0, 1: 0, 2: 0, 3: 0 }; rows.forEach(function (r) { cnt[r.ord]++; });
+  var avg = function (t, n) { return n ? Math.round(t / n) + 'ms' : '—'; };
+  var notCalled = Object.keys(sup).filter(function (f) { return !M[f]; });
+  var h = '<div style="position:fixed;inset:0;z-index:2147483100;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto;" onclick="if(event.target===this)this.remove()" id="srcPanel">' +
+    '<div style="background:#fff;border-radius:12px;max-width:980px;width:100%;padding:14px 16px;direction:rtl;font-size:12.5px;">' +
+    '<div class="d-flex align-items-center gap-2 mb-2"><b style="font-size:15px;">🧭 مصدر البيانات — الجلسة الحالية</b><span class="ms-auto"></span>' +
+    '<button class="btn btn-outline-secondary btn-sm" onclick="window.__SRC=[];window.__GSR=[];srcPanel_();srcPanel_()">🧹 تصفير العدّ</button> ' +
+    '<button class="btn btn-outline-primary btn-sm" onclick="srcPanel_();srcPanel_()">🔄 تحديث</button> ' +
+    '<button class="btn btn-outline-dark btn-sm" onclick="document.getElementById(\'srcPanel\').remove()">✕</button></div>' +
+    '<div class="mb-2" style="background:#f1f5f9;border-radius:8px;padding:6px 10px;">' +
+      'اتصال Postgres: <b>' + (info.ready ? '🟢 جاهز' : '🔴 غير جاهز (كل شيء من Apps Script)') + '</b>' + (info.off || info.stOff || info.glOff ? ' · ⚠️ عُطِّل مؤقتاً بعد أعطال متكررة' : '') + (info.last ? ' · آخر رفض: ' + glEscSafe_(info.last) : '') +
+      ' · قيود الحسابات بـPostgres: <b>' + (info.gl ? 'نعم' : 'لا') + '</b> · بصمات dv: <b>' + (info.dv ? 'بـPostgres' : 'Apps Script') + '</b><br>' +
+      'مجموعات البيانات الحيّة بـPostgres: ' + ((info.groups || []).length ? (info.groups || []).map(function (g) { return '<span class="badge bg-success me-1">' + glEscSafe_(g) + '</span>'; }).join('') : '<span class="text-danger">لا شيء</span>') +
+      '<div class="text-muted" style="font-size:11px;">رموز الكتابة: wbk=الحجوزات والحسابات · wmf=الوزارة · wvz=التأشيرات. غياب رمز يعني أن كتابات ذلك القسم ما زالت بـApps Script.</div></div>' +
+    '<div class="mb-2">🟢 ' + cnt[3] + ' · 🟡 ' + cnt[2] + ' · 🟠 ' + cnt[1] + ' · 🔴 ' + cnt[0] + ' <span class="text-muted">(من ' + rows.length + ' دالة نُدِيَت منذ فتح الصفحة)</span></div>' +
+    '<div style="max-height:52vh;overflow:auto;"><table class="table table-sm table-bordered mb-2" style="font-size:12px;"><thead class="table-light"><tr><th>الدالة</th><th>المصدر</th><th>Postgres</th><th>Apps Script</th><th>سبب الارتداد</th></tr></thead><tbody>' +
+    rows.map(function (r) { return '<tr><td dir="ltr" style="text-align:left;">' + glEscSafe_(r.f) + '</td><td>' + r.st + '</td><td>' + r.m.pg + ' · ' + avg(r.m.pgMs, r.m.pg) + '</td><td>' + r.m.as + ' · ' + avg(r.m.asMs, r.m.as) + '</td><td class="text-muted">' + glEscSafe_(r.m.why) + '</td></tr>'; }).join('') +
+    '</tbody></table></div>' +
+    (notCalled.length ? '<details><summary class="small text-muted">دوال مدعومة بـPostgres لم تُستخدم بعد بهذه الجلسة (' + notCalled.length + ')</summary><div dir="ltr" class="small text-muted" style="text-align:left;">' + notCalled.map(glEscSafe_).join(' · ') + '</div></details>' : '') +
+    '<div class="small text-muted mt-2">الأحمر 🔴 هو ما يلزم نقله لاحقاً. ما يظهر هنا يخص ما استخدمتَه فقط — افتح الشاشات التي تهمك ثم راجع اللوحة.</div></div></div>';
+  var w = document.createElement('div'); w.innerHTML = h; document.body.appendChild(w.firstChild);
+}
+function glEscSafe_(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+window.__src = srcPanel_;
 // 🩺 يقارن إصدار الخادم الفعلي المنشور (APP_VERSION في Code.gs) بإصدار الواجهة الحالي —
 // لو اختلفا، يبقى النشر الحالي (Deploy) قديم ولسه ما التقطش آخر تعديل بالكود، فنلوّن
 // شارة الإصدار بالأحمر ونطبع تحذيراً واضحاً بدل ما يفضل المستخدم يشك إن فيه مشكلة غامضة.
