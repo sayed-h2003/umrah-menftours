@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.394  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.395  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7784,6 +7784,7 @@ var LF_ = (function () {
      fn ⇒ المجموعات الحيّة المطلوبة (يعلنها الخادم بـ supaIssueToken().store.groups). الرد {success, d: نفس ما ترجعه دالة Apps Script حرفياً, dv: بصمات لحظة القراءة}.
      أي خطأ/رفض/انقطاع/مجموعة غير حيّة ⇒ النداء الأصلي لـ Apps Script كما كان. المفتاح: localStorage.lf_supa_off='1'. الكتابات لا تمر من هنا إطلاقاً. */
   var BKSTASH_ = new WeakMap();
+  function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailureHandler(function () {}).glOutboxKick(window.authToken); } catch (e) {} }   /* (V4.395) ينفّذ صادر الحسابات العامة (مرآة الدفعة/تليجرام) بالخلفية */
   function _RAWRUN_() { return (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null; }
   function RB(fn, need) { return { need: need, rpc: 'rx_boot', body: function (a) { return { p_fn: fn, p_args: a }; } }; }
   var STRPC = {
@@ -7848,7 +7849,14 @@ var LF_ = (function () {
     deleteAccPayment: { need: ['acc', 'wbk'], rpc: 'rw_call', pre: function (a) { return !a[2]; } },
     deleteAccItem: { need: ['acc', 'wbk'], rpc: 'rw_call', pre: function (a) { return !a[2]; } },
     deleteAccItemsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
-    saveAccPayment: { need: ['acc', 'wbk'], rpc: 'rw_call', pre: function (a) { var p = a[1]; return !!(p && (p.id || p.ptype === 'تحويل')); } },
+    /* (V4.395) 031_ledger.sql — نظام السندات من Postgres: الدفعة الجديدة/الجماعية ⇒ سند مسودة بالطابور · الاعتماد/الرفض/السحب · قراءات الطابور. آثارها الجانبية (مرآة الدفعة بالشاشة · تليجرام) تُنفَّذ بنداء glOutboxKick */
+    saveAccPayment: { need: ['acc', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
+    saveAccPaymentsBulk: { need: ['acc', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
+    ledgerCount: { need: ['glaux', '@gl'], rpc: 'rx_call2' },
+    ledgerPendingFor: { need: ['glaux', '@gl'], rpc: 'rx_call2' },
+    ledgerQueue: { need: ['glaux', '@gl'], rpc: 'rx_call2' },
+    ledgerDecide: { need: ['glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
+    ledgerCancel: { need: ['glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
     /* (V4.394) 030_acc_payment_moves.sql — نقل دفعة/دفعات بين رحلات + تعديل دفعات رحلة جماعياً */
     transferAccPayment: { need: ['acc', 'wbk'], rpc: 'rw_call' },
     transferAccPaymentsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
@@ -9548,7 +9556,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.394";
+var CLIENT_APP_VERSION = "4.395";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

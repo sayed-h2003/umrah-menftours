@@ -3110,3 +3110,10 @@
 
 ## V4.394 — نقل الدفعات وتعديلها جماعياً (030_acc_payment_moves.sql)
 شغّل `supabase/030_acc_payment_moves.sql` (بعد 029) وارفع `index_web.html` — المفتاح نفسه `supaWriteOnBookings()`. تنتقل: `transferAccPayment` · `transferAccPaymentsBulk` · `updateAccPaymentsBulk` (لقطات الاسترجاع وسجل التعديلات بالخلفية). الرحلة الهدف بلا صف meta للعميل ⇒ Apps Script تلقائياً.
+
+## V4.395 — نظام السندات (Ledger) من Postgres (031_ledger.sql)
+**ما ينتقل:** الدفعة الجديدة العادية والحفظ الجماعي للدفعات من شاشة حسابات العملاء ⇒ سند مسودة بالطابور (`_glw_save_core`)؛ `ledgerDecide` (اعتماد = `_glw_post_core` · رفض = `_glw_void_core`) و`ledgerCancel`؛ قراءات `ledgerQueue`/`ledgerCount`/`ledgerPendingFor`. فحص التكرار، الحساب المقابل، Maker-Checker (لا يعتمد المُدخِل دفعته إلا المدير بعلامة «اعتماد ذاتي»)، وإعداد `ledger_scr` لكل شاشة — كلها منقولة.
+**يتطلب:** 001..003 و019 و026..030، ومجموعتا `glaux` و`@gl` (GL_STORE=supabase) حيّتين، و`supaWriteOnBookings()` مفعّلاً. ملف `031_ledger.sql` يستبدل تعريف `rw2_saveaccpayment` من 029.
+**مهم — صادر الحسابات العامة:** كتابات GL من Postgres تترك آثارها بجدول `gl_outbox` (مرآة الدفعة بشاشة العميل `mirror:voucher_pays` · تنبيه تليجرام · `gl:dirty`). أُضيف مستهلك Apps Script: `_glOutboxDrain_` (يُستدعى من `audFlushCron` كل دقيقة) و`glOutboxKick` (المتصفح بعد كل حفظ/اعتماد/رفض/سحب فتظهر الدفعة بشاشتها خلال ثوانٍ). اختباره: اعتمد دفعة ثم راجع كشف العميل — يجب أن تظهر؛ وإن تأخرت شغّل `glOutboxDrainNow()` من المحرر.
+**يبقى على Apps Script تلقائياً:** أسرتا الوكلاء/الفنادق (ap/hb) · عملة نقدية مختلفة · أكثر من حساب طرف محتمل بلا تمييز بالشركة · أي خطأ تحقق (الرسالة الأصلية تصل منه).
+**تنبيه:** سجل التتبع لهذه القيود يُكتب بسلسلة `gl_audit` (Postgres) لا بـ`_audEntryDiff_` — راجع شاشة سجل الحسابات بعد أول اعتماد.

@@ -781,6 +781,39 @@ function _outboxDrain_(maxMs) {
   }
   return n;
 }
+/* ⚡ (V4.395) صندوق صادر الحسابات العامة (gl_outbox — 003): كتابات السندات من Postgres (031_ledger.sql: دفعة من شاشة ⇒ سند مسودة · اعتماد/رفض) تترك آثارها الجانبية هنا
+   فتنفّذها Apps Script بنفس دوالها: مرآة الدفعات بالشاشات/كشف الفندق (_glSyncVoucherPays_) · تنبيه تليجرام (_glBotQ_) · علامة إعادة بناء AUTO (gl_dirty) · بصمات الكاش.
+   تُستدعى من audFlushCron كل دقيقة ومن glOutboxKick (المتصفح بعد الاعتماد فتظهر الدفعة بشاشتها خلال ثوانٍ). فشل بند لا يوقف الباقي (يُسجَّل last_error ويُعاد لاحقاً حتى 5 محاولات). */
+function _glOutboxDrain_(maxMs) {
+  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY') || _supaP_('SUPA_W_BK') !== '1') return 0;
+  var t0 = Date.now(), n = 0;
+  while (Date.now() - t0 < (maxMs || 20000)) {
+    var r = _supaReq_('get', 'gl_outbox?done_at=is.null&attempts=lt.5&order=id.asc&limit=40&select=id,kind,payload,attempts');
+    if (r.code !== 200) { Logger.log('gl_outbox read ' + r.code + ' ' + String(r.text).slice(0, 160)); break; }
+    var rows = []; try { rows = JSON.parse(r.text || '[]'); } catch (e) {}
+    if (!rows.length) break;
+    rows.forEach(function (x) {
+      var p = x.payload || {}, err = '';
+      try {
+        if (x.kind === 'mirror:voucher_pays') { _glSyncVoucherPays_(String(p.entryId), String(p.user || '')); }
+        else if (/^bot:/.test(x.kind)) {
+          var info = Object.assign({}, p); if (Array.isArray(info.parties)) info.parties = info.parties.join(' ← ');
+          _glBotQ_(String(x.kind).slice(4), info);
+        }
+        else if (x.kind === 'gl:dirty') { try { CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600); } catch (e1) {} }
+        else if (x.kind === 'dv_bump') { try { if (typeof _dvBump_ === 'function') _dvBump_((p.groups || []).filter(function (g) { return LF_GROUPS_.indexOf(g) >= 0; })); } catch (e2) {} }
+      } catch (eX) { err = String(eX && eX.message || eX).slice(0, 300); Logger.log('gl_outbox ' + x.kind + ': ' + err); }
+      var patch = err ? { attempts: (x.attempts || 0) + 1, last_error: err } : { done_at: new Date().toISOString() };
+      var u = _supaReq_('patch', 'gl_outbox?id=eq.' + x.id, patch);
+      if (!err && u.code >= 200 && u.code < 300) n++;
+    });
+    if (rows.length < 40) break;
+  }
+  return n;
+}
+function glOutboxKick(authToken) { requireAuth_(authToken); return { success: true, n: _glOutboxDrain_(20000) }; }
+function glOutboxDrainNow() { requireScriptOwner_(); var n = _glOutboxDrain_(60000); Logger.log('gl_outbox: فُرّغ ' + n); return n; }
+
 function outboxDrainNow() { requireScriptOwner_(); var n = _outboxDrain_(60000); Logger.log('outbox: فُرّغ ' + n); return n; }
 
 // (V4.380) المحرر يشغّل الدوال بلا معاملات ⇒ دوال مستقلة لكل حالة

@@ -167,7 +167,7 @@ function _audFlushQ_(maxMs) {
 function _audFlushSoft_() {
   try { if (!_audQKeys_().length) return 0; return _audFlushQ_(8000); } catch (e) { _audFail_(e); return 0; }
 }
-function audFlushCron() { try { if (typeof _outboxDrain_ === 'function') _outboxDrain_(20000); } catch (eO) { Logger.log('outbox: ' + eO.message); } try { _audFlushQ_(240000); } catch (e) { _audFail_(e); } }   // (V4.379) صندوق إخراج Postgres أولاً ثم طابور السجل
+function audFlushCron() { try { if (typeof _outboxDrain_ === 'function') _outboxDrain_(20000); } catch (eO) { Logger.log('outbox: ' + eO.message); } try { if (typeof _glOutboxDrain_ === 'function') _glOutboxDrain_(20000); } catch (eG) { Logger.log('gl_outbox: ' + eG.message); } try { _audFlushQ_(240000); } catch (e) { _audFail_(e); } }   // (V4.379) صندوق إخراج Postgres أولاً ثم طابور السجل
 function _audSetOk_() {
   var p = PropertiesService.getScriptProperties();
   if (p.getProperty(AUD_PROP_FAIL_)) p.deleteProperty(AUD_PROP_FAIL_);
