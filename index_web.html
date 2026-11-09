@@ -51844,7 +51844,7 @@ function glEntryVoucherFit_(e) {
   var br = glFxBridgeCode_(), ls = (e.lines || []).filter(function (l) { return !br || l.account !== br; });   // (V4.247) أسطر الوسيط يعيد الخادم إنشاءها
   if (k === 'ptransfer') {
     var dr = ls.filter(function (l) { return l.debit > 0; }), cr = ls.filter(function (l) { return l.credit > 0; });
-    return dr.length === 1 && cr.length === 1 ? { kind: k, to: dr[0], from: cr[0] } : null;
+    return dr.length >= 1 && cr.length >= 1 ? { kind: k, to: dr[0], from: cr[0], tos: dr, froms: cr } : null;   // (V4.409) متعدد الأطراف
   }
   var V = GL_VOUCHERS_[k], side = V.mainSide === 'D' ? 'debit' : 'credit', other = side === 'debit' ? 'credit' : 'debit';
   var mains = ls.filter(function (l) { return l[side] > 0; }), cs = ls.filter(function (l) { return l[other] > 0; });
@@ -51901,12 +51901,15 @@ function glEntryDlg(kind, entry) {
       '<div id="glJTot" class="gl-note mt-2"></div>';
   } else if (kind === 'ptransfer') {
     body = '<div class="row g-2">' +
-      '<div class="col-md-6 gl-box"><div class="gl-lbl">من حساب (المحوِّل — دائن)</div>' + glAccInput('glPtFrom', '', '') + '</div>' +
-      '<div class="col-md-6 gl-box"><div class="gl-lbl">إلى حساب (المستلم — مدين)</div>' + glAccInput('glPtTo', '', '') + '</div>' +
-      '<div class="col-md-4"><label class="gl-lbl">المبلغ</label><input id="glPtAmt" class="form-control form-control-sm gl-latin" oninput="glPtCalc()"></div>' +
+      '<div class="col-md-6 gl-box"><div class="gl-lbl">من حساب (المحوِّل — دائن)</div><div id="glPtFromBox">' + glPtRowHtml_('from') + '</div>' +
+        '<button type="button" class="btn btn-outline-primary btn-sm py-0 mt-1" onclick="glPtAddRow(\'from\')">➕ طرف دائن آخر</button></div>' +
+      '<div class="col-md-6 gl-box"><div class="gl-lbl">إلى حساب (المستلم — مدين)</div><div id="glPtToBox">' + glPtRowHtml_('to') + '</div>' +
+        '<button type="button" class="btn btn-outline-primary btn-sm py-0 mt-1" onclick="glPtAddRow(\'to\')">➕ طرف مدين آخر</button></div>' +
+      '<div class="col-md-4"><label class="gl-lbl">إجمالي المبلغ</label><input id="glPtAmt" class="form-control form-control-sm gl-latin" oninput="glPtCalc()"></div>' +
       '<div class="col-md-2"><label class="gl-lbl">العملة</label>' + glCurSelect('glPtCur', 'SAR') + '</div>' +
       '<div class="col-md-2"><label class="gl-lbl">سعر الريال/الدولار</label><input id="glPtRate" class="form-control form-control-sm gl-latin" placeholder="سعر اليوم" oninput="this.dataset.manual=this.value?1:\'\';glPtCalc()"></div>' +
-      '<div class="col-md-12"><div class="small text-muted">البيان يُكتب تلقائياً: «تحويل من …» على المستلم و«تحويل إلى …» على المحوِّل — وما تكتبه في خانة البيان أعلاه يُضاف كملاحظة. ' +
+      '<div class="col-md-12"><div class="small text-muted">تحويل متعدد الأطراف: أضف أكثر من طرف مدين و/أو دائن؛ عند تعدد أطراف جانب يظهر مبلغ كل طرف (اترك مبلغاً واحداً فارغاً ليُحسب الباقي تلقائياً) ويجب أن يساوي مجموع كل جانب الإجمالي. ' +
+        'البيان يُكتب تلقائياً: «تحويل من …» على المستلم و«تحويل إلى …» على المحوِّل — وما تكتبه في خانة البيان أعلاه يُضاف كملاحظة. ' +
         'لو عملة الحسابين مختلفة يُحسب المبلغ المقابل بالسعر ويُسجَّل عبر «وسيط تحويل العملات».</div><div id="glPtPrev" class="gl-note mt-1"></div></div></div>';
   } else if (kind === 'fx') {
     // 💱 (V4.219) مثل الـ ERP: سعر بيع الريال والدولار بتاريخ القيد تلقائياً ⇒ المبلغ المضاف يُحسب تلقائياً (ويمكن كتابته يدوياً)،
@@ -51977,14 +51980,21 @@ function glEntryDlg(kind, entry) {
     if (!e.id) glFxAutoRates_();
   }
   if (kind === 'ptransfer') {
-    ['glPtFrom', 'glPtTo'].forEach(function (c) { var i = document.querySelector('#glDlgBody .' + c); if (i) i.addEventListener('change', glPtCalc); });
+    (function () { var dl = document.getElementById('glDlgBody'); if (dl && !dl._ptWired) { dl._ptWired = 1; dl.addEventListener('change', function (ev) { if (ev.target && ev.target.classList && ev.target.classList.contains('gl-acc') && ev.target.closest('.glPtRow')) glPtCalc(); }); } })();
     var pc = document.querySelector('#glDlgBody .glPtCur'); if (pc) pc.addEventListener('change', glPtCalc);
     var pf = e.id ? glEntryVoucherFit_(e) : null;
     if (pf && pf.kind === 'ptransfer') {
-      var fi = document.querySelector('#glDlgBody .glPtFrom'), ti = document.querySelector('#glDlgBody .glPtTo');
-      fi.dataset.code = pf.from.account; fi.value = glAccLabel(pf.from.account); ti.dataset.code = pf.to.account; ti.value = glAccLabel(pf.to.account);
-      document.getElementById('glPtAmt').value = pf.from.credit; if (pc) pc.value = pf.from.currency;
-      if (pf.from.currency !== 'EGP') { var rr = document.getElementById('glPtRate'); rr.value = glR2Rate(pf.from.rate); rr.dataset.manual = 1; }
+      /* (V4.409) صفوف متعددة: مبلغ كل صف بعملة التحويل (= عملة أول طرف دائن) — يُحوَّل من عملة حسابه بالأسعار المحفوظة بالسطر */
+      var pCur = pf.from.currency, pRate = pCur === 'EGP' ? 1 : (+pf.from.rate || 1);
+      var toCur = function (l) { var v = (+l.credit || +l.debit || 0); if (l.currency === pCur) return v; var r = l.currency === 'EGP' ? 1 : (+l.rate || 1); return Math.round(v * r / pRate * 100) / 100; };
+      var fillRows = function (side, arr) {
+        var box = document.getElementById(side === 'from' ? 'glPtFromBox' : 'glPtToBox'); box.innerHTML = '';
+        arr.forEach(function (l) { var w = document.createElement('div'); w.innerHTML = glPtRowHtml_(side, l.account, arr.length > 1 ? String(toCur(l)) : ''); box.appendChild(w.firstChild); });
+      };
+      fillRows('from', pf.froms); fillRows('to', pf.tos);
+      document.getElementById('glPtAmt').value = pf.froms.reduce(function (t, l) { return t + toCur(l); }, 0).toFixed(2).replace(/\.?0+$/, ''); if (pc) pc.value = pCur;
+      if (pCur !== 'EGP') { var rr = document.getElementById('glPtRate'); rr.value = glR2Rate(pf.from.rate); rr.dataset.manual = 1; }
+      try { glQaDecorate_(); } catch (eQ) {}
       var dd = document.getElementById('glEDesc'); if (dd && /^تحويل من /.test(dd.value)) dd.value = '';
     } else if (GL._ptPreset) {
       var ps = GL._ptPreset, f2 = document.querySelector('#glDlgBody .glPtFrom'), t2 = document.querySelector('#glDlgBody .glPtTo');
@@ -52178,33 +52188,83 @@ function glVAddLine(side) {
   });
   glVCalc();
 }
-// ⇄ (V4.247) أسطر «تحويل بين طرفين»: مبلغ واحد بعملته — لو عملة أحد الحسابين ثابتة ومختلفة يُحسب مقابلها بالسعر
+// ⇄ (V4.409) تحويل متعدد الأطراف: كل جانب (دائن/مدين) قائمة صفوف {حساب، مبلغ}. جانب بصف واحد ⇒ مبلغه = الإجمالي.
+function glPtRowHtml_(side, code, amt) {
+  var cls = side === 'from' ? 'glPtFrom' : 'glPtTo';
+  return '<div class="d-flex gap-1 mb-1 glPtRow" data-side="' + side + '"><div class="flex-grow-1">' + glAccInput(cls, '', code || '') + '</div>' +
+    '<input class="form-control form-control-sm gl-latin glPtRA" style="width:105px;display:none;" placeholder="المبلغ" value="' + glEsc(amt || '') + '" oninput="glPtCalc()">' +
+    '<button type="button" class="btn btn-outline-danger btn-sm py-0 glPtDel" style="display:none;" title="حذف هذا الطرف" onclick="glPtDelRow(this)">✕</button></div>';
+}
+function glPtSync_() {   // إظهار خانات مبالغ الصفوف/أزرار الحذف فقط للجانب المتعدد
+  ['from', 'to'].forEach(function (sd) {
+    var rows = document.querySelectorAll('#glDlgBody .glPtRow[data-side="' + sd + '"]'), multi = rows.length > 1;
+    Array.prototype.forEach.call(rows, function (r) { r.querySelector('.glPtRA').style.display = multi ? '' : 'none'; r.querySelector('.glPtDel').style.display = multi ? '' : 'none'; });
+  });
+}
+function glPtAddRow(side, code, amt) {
+  var box = document.getElementById(side === 'from' ? 'glPtFromBox' : 'glPtToBox'); if (!box) return null;
+  var w = document.createElement('div'); w.innerHTML = glPtRowHtml_(side, code, amt); var r = w.firstChild; box.appendChild(r);
+  try { glQaDecorate_(); } catch (e) {}
+  glPtSync_(); glPtCalc();
+  var i = r.querySelector('.gl-acc'); if (i && !code) { try { i.focus(); } catch (e) {} }
+  return r;
+}
+function glPtDelRow(btn) { var r = btn.closest('.glPtRow'); if (r) r.remove(); glPtSync_(); glPtCalc(); }
+function glPtSideRows_(side, T) {
+  var out = Array.prototype.map.call(document.querySelectorAll('#glDlgBody .glPtRow[data-side="' + side + '"]'), function (r) {
+    var ra = r.querySelector('.glPtRA'); return { acc: glAccVal(r.querySelector('.gl-acc')), raw: String(ra.value || '').trim(), amt: glNum(ra.value), txt: String(r.querySelector('.gl-acc').value || '').trim() };
+  });
+  if (out.length === 1) { out[0].amt = T; return out; }
+  out = out.filter(function (x) { return x.acc || x.raw || x.txt; });
+  var blank = out.filter(function (x) { return !x.raw; }), sum = 0; out.forEach(function (x) { if (x.raw) sum += x.amt; });
+  if (blank.length === 1) blank[0].amt = Math.round((T - sum) * 100) / 100;
+  return out;
+}
 function glPtLines_(note) {
   var q = function (c) { return document.querySelector('#glDlgBody .' + c); };
-  var from = glAccVal(q('glPtFrom')), to = glAccVal(q('glPtTo')), amt = glNum((document.getElementById('glPtAmt') || {}).value), cur = (q('glPtCur') || {}).value || 'SAR';
+  var amt = glNum((document.getElementById('glPtAmt') || {}).value), cur = (q('glPtCur') || {}).value || 'SAR';
   var d = glDlgDate_(), rIn = document.getElementById('glPtRate'), rCur = cur === 'EGP' ? 1 : glR2Rate(glNum(rIn && rIn.value) || glRateAt(cur, d));
   var rr = function (c) { return c === 'EGP' ? 1 : (c === cur ? rCur : glRateAt(c, d)); };
-  var fa = GL.map[from], ta = GL.map[to], fc = (fa && fa.currency) || cur, tc = (ta && ta.currency) || cur;
-  var conv = function (c) { return c === cur ? amt : Math.round(amt * rr(cur) / rr(c) * 100) / 100; };
-  var fAmt = conv(fc), tAmt = conv(tc), nm = function (a, c) { return a ? (a.link || a.name) : (c || '…'); };
+  var conv = function (c, a) { return c === cur ? a : Math.round(a * rr(cur) / rr(c) * 100) / 100; };
+  var nm = function (a, c) { return a ? (a.link || a.name) : (c || '…'); };
+  var froms = glPtSideRows_('from', amt), tos = glPtSideRows_('to', amt);
   note = String(note || '').trim(); if (/^تحويل من /.test(note)) note = '';
-  var o = { from: from, to: to, amt: amt, fc: fc, tc: tc, fAmt: fAmt, tAmt: tAmt, lines: [] };
-  o.desc = 'تحويل من ' + nm(fa, from) + ' إلى ' + nm(ta, to) + (note ? ' — ' + note : '');
-  // ✍️ (V4.277) بيان ذكي حسب نوع الطرف (بنك/خزينة/عهدة): عند المستلم «… - تحويل من بنك مصر» وعند المحوِّل «… - تحويل على بنك مصر / إلى عهدة …»
-  var vIn = from ? (glSideVerb_(from, false) || 'تحويل من ' + nm(fa, from)) : 'تحويل من ' + nm(fa, from), vOut = to ? (glSideVerb_(to, true) || 'تحويل إلى ' + nm(ta, to)) : 'تحويل إلى ' + nm(ta, to);
+  var o = { from: froms[0] ? froms[0].acc : '', to: tos[0] ? tos[0].acc : '', amt: amt, froms: froms, tos: tos, lines: [], err: '' };
+  var names = function (rows) { return rows.map(function (x) { return nm(GL.map[x.acc], x.acc); }).join('، '); };
+  o.desc = 'تحويل من ' + names(froms) + ' إلى ' + names(tos) + (note ? ' — ' + note : '');
+  var many = froms.length > 1 || tos.length > 1;
+  var vIn = (!many && froms[0] && froms[0].acc && glSideVerb_(froms[0].acc, false)) || 'تحويل من ' + names(froms),
+      vOut = (!many && tos[0] && tos[0].acc && glSideVerb_(tos[0].acc, true)) || 'تحويل إلى ' + names(tos);
   if (!/^تحويل/.test(vIn)) vIn = 'تحويل ' + vIn; if (!/^تحويل/.test(vOut)) vOut = 'تحويل ' + vOut;
-  o.lines.push({ account: to, debit: tAmt, currency: tc, rate: rr(tc), desc: glJoinDesc_(note, vIn) });
-  o.lines.push({ account: from, credit: fAmt, currency: fc, rate: rr(fc), desc: glJoinDesc_(note, vOut) });
-  if (fc !== tc) glFxSmartDesc_(o.lines, '');
+  var curs = {}, sumF = 0, sumT = 0;
+  tos.forEach(function (x) { var a = GL.map[x.acc], c = (a && a.currency) || cur; curs[c] = 1; sumT += x.amt || 0;
+    o.lines.push({ account: x.acc, debit: conv(c, x.amt), currency: c, rate: rr(c), desc: glJoinDesc_(note, vIn) }); });
+  froms.forEach(function (x) { var a = GL.map[x.acc], c = (a && a.currency) || cur; curs[c] = 1; sumF += x.amt || 0;
+    o.lines.push({ account: x.acc, credit: conv(c, x.amt), currency: c, rate: rr(c), desc: glJoinDesc_(note, vOut) }); });
+  o.sumF = Math.round(sumF * 100) / 100; o.sumT = Math.round(sumT * 100) / 100; o.multiCur = Object.keys(curs).length > 1;
+  o.fc = o.multiCur ? 'X' : cur; o.tc = o.multiCur ? 'Y' : cur;   // (توافق) fc !== tc ⇔ عملتان مختلفتان
+  if (o.multiCur) glFxSmartDesc_(o.lines, '');
   return o;
+}
+function glPtCheck_(o) {   // رسالة خطأ للتحقق (أو '')
+  if (!o.froms.length || !o.tos.length || o.froms.some(function (x) { return !x.acc; }) || o.tos.some(function (x) { return !x.acc; })) return 'اختر كل الحسابات (أو احذف الصفوف الفارغة)';
+  if (o.froms.concat(o.tos).some(function (x) { return !(x.amt > 0); })) return 'أدخل مبلغاً موجباً لكل طرف';
+  if (o.froms.length === 1 && o.tos.length === 1 && o.from === o.to) return 'الحسابان متطابقان';
+  if (!o.amt) return 'أدخل المبلغ';
+  if (Math.abs(o.sumF - o.amt) > 0.009) return 'مجموع الأطراف الدائنة (' + glFmt(o.sumF) + ') لا يساوي الإجمالي (' + glFmt(o.amt) + ')';
+  if (Math.abs(o.sumT - o.amt) > 0.009) return 'مجموع الأطراف المدينة (' + glFmt(o.sumT) + ') لا يساوي الإجمالي (' + glFmt(o.amt) + ')';
+  return '';
 }
 function glPtCalc() {
   var el = document.getElementById('glPtPrev'); if (!el) return;
+  glPtSync_();
   var o = glPtLines_((document.getElementById('glEDesc') || {}).value);
-  if (!o.from || !o.to || !o.amt) { el.innerHTML = 'اختر الحسابين وأدخل المبلغ'; return; }
-  el.innerHTML = '<table class="gl-tbl"><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>البيان</th></tr></thead><tbody>' + o.lines.map(function (l) {
-    return '<tr><td style="text-align:right;">' + glEsc(glAccLabel(l.account)) + '</td><td class="gl-latin">' + (l.debit ? glFmt(l.debit) + ' ' + GL_CUR_LBL_[l.currency] : '') + '</td><td class="gl-latin">' + (l.credit ? glFmt(l.credit) + ' ' + GL_CUR_LBL_[l.currency] : '') + '</td><td style="text-align:right;">' + glEsc(l.desc) + '</td></tr>'; }).join('') +
-    '</tbody></table>' + (o.fc !== o.tc ? '<small>💱 عملتان مختلفتان — يُضاف سطرا «وسيط تحويل العملات» تلقائياً عند الحفظ</small>' : '');
+  if (!o.amt || !o.froms.length || !o.tos.length) { el.innerHTML = 'اختر الحسابين وأدخل المبلغ'; return; }
+  var err = glPtCheck_(o);
+  el.innerHTML = (err ? '<div class="text-danger small mb-1">⚠️ ' + glEsc(err) + '</div>' : '') +
+    '<table class="gl-tbl"><thead><tr><th>الحساب</th><th>مدين</th><th>دائن</th><th>البيان</th></tr></thead><tbody>' + o.lines.map(function (l) {
+    return '<tr><td style="text-align:right;">' + glEsc(l.account ? glAccLabel(l.account) : '—') + '</td><td class="gl-latin">' + (l.debit ? glFmt(l.debit) + ' ' + GL_CUR_LBL_[l.currency] : '') + '</td><td class="gl-latin">' + (l.credit ? glFmt(l.credit) + ' ' + GL_CUR_LBL_[l.currency] : '') + '</td><td style="text-align:right;">' + glEsc(l.desc || '') + '</td></tr>';
+  }).join('') + '</tbody></table>' + (o.multiCur ? '<small>💱 أكثر من عملة — يُضاف سطرا «وسيط تحويل العملات» تلقائياً عند الحفظ</small>' : '');
 }
 // 💱 (V4.247) بيان ذكي لقيد بعملتين (جنيه + عملة أجنبية): يُلحق بكل سطر «قيمة <مبلغ العملة الأخرى> / <السعر>» مثل بيان الوسيط
 // (مثال: «دفعة ت ح/ سكن قيمة 100,000 جنيه / 13.98») — لا يُكرَّر لو موجود، ولا يمس سطور الوسيط
@@ -52364,10 +52424,8 @@ function glBuildEntry() {
     e.lines = ls.filter(function (l) { return l.account || l.debit || l.credit; }).map(function (l) { var o = Object.assign({}, l); delete o.manual; delete o._txt; return o; });
     glFxSmartDesc_(e.lines, e.desc);   // (V4.247) قيد بعملتين ⇒ «… قيمة 100,000 جنيه / 13.98»
   } else if (kind === 'ptransfer') {
-    var po = glPtLines_(e.desc);
-    if (!po.from || !po.to) throw new Error('اختر الحسابين');
-    if (po.from === po.to) throw new Error('الحسابان متطابقان');
-    if (!po.amt) throw new Error('أدخل المبلغ');
+    var po = glPtLines_(e.desc), pErr = glPtCheck_(po);
+    if (pErr) throw new Error(pErr);
     e.desc = po.desc; e.lines = po.lines;
   } else if (kind === 'fx') {
     var o = glFxLines_(e.desc);
