@@ -3101,3 +3101,6 @@
 
 ## V4.391 — كشف الرحلة getTripAccountsSummary من Postgres (027_trip_accounts_summary.sql)
 شغّل `supabase/027_trip_accounts_summary.sql` (يتطلب 006+007+012) وارفع `index_web.html`. قراءة فقط — لا مفتاح تفعيل: مجموعتا `acc` و`core` الحيّتان بالمخزن تكفيان. المطابقة: `tools/test_trip_summary_pg.js` (400 مجموعة بيانات عشوائية بينها 178 صف مدمج و617 بياناً ⇒ صفر فروق مع Code.gs).
+
+## V4.392 — كشف حساب الوكيل getAgentAccount من Postgres (028_agent_account.sql)
+شغّل `supabase/028_agent_account.sql` بعد 027 (يتطلب 011 و019 و027). قراءة فقط، بلا مفتاح تفعيل (مجموعتا `visa` و`bookings` الحيّتان تكفيان) وبصلاحية `visas.finance`. يحسب من Postgres: المجموعات، البنود، الدفعات (+بصمة الإصدار)، دورات النقل، الشركات، الرصيد. **أرقام القيود/السندات/الطرف المقابل والمسودات المعلّقة** (جداول الحسابات العامة) تصل بنداء خلفي `getAgentAccountExtras` فتظهر بعد لحظات من فتح الكشف. المطابقة: `tools/test_agent_account_pg.js` (500 مجموعة بيانات بينها 160 مجموعة تأشيرات و107 دورة نقل و302 بنداً و211 دفعة ⇒ صفر فروق).

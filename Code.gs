@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.391";
+var APP_VERSION = "4.392";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -27125,6 +27125,17 @@ function getTransportAgentCompanyPairs(authToken) {
 /* 🧾 (V4.134) كشف حساب الوكيل — يقبل «مفتاح حساب»: اسم الوكيل وحده (كل شركاته)
    أو «الوكيل - الشركة» (حساب فرعي منفصل/مشترك كما ضُبط من إعدادات حسابات الوكلاء).
    الدفعات والبنود تُخزَّن بنفس المفتاح فيبقى لكل حساب دفعاته المستقلة. */
+/* ⚡ (V4.392) ما لا يحسبه rx2_getagentaccount (Postgres): رقم القيد/السند/الطرف المقابل لكل بند ودفعة + سندات المسودة المعلّقة — يُنادى بالخلفية بعد عرض الكشف.
+   يعيد استخدام getAgentAccount نفسها (مسارها الكامل) ويستخرج الحقول الإضافية فقط. */
+function getAgentAccountExtras(authToken, agent, filters) {
+  var r = getAgentAccount(authToken, agent, filters);
+  if (!r || !r.success) return { success: false, error: (r && r.error) || 'تعذّر' };
+  var refs = {};
+  (r.items || []).forEach(function (x) { if (x.glEntry || x.glVch || x.glCp) refs['I' + x.id] = { entry: x.glEntry || '', voucher: x.glVch || '', cp: x.glCp || '' }; });
+  (r.payments || []).forEach(function (x) { if (x.glEntry || x.glVch || x.glCp) refs['P' + x.id] = { entry: x.glEntry || '', voucher: x.glVch || '', cp: x.glCp || '' }; });
+  return { success: true, refs: refs, ledgerPend: r.ledgerPend };
+}
+
 function getAgentAccount(authToken, agent, filters) {
   _vzFinancePerm_(authToken);   // 🔒 (V4.133) مالي
   agent = _mfStr_(agent);
