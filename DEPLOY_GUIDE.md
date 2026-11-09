@@ -3098,3 +3098,6 @@
 
 ## V4.390 — saveAccItem من Postgres (026_acc_item.sql)
 شغّل `supabase/026_acc_item.sql` (بعد 024/025) — يعمل بنفس مفتاح `supaWriteOnBookings()` (لا خطوة بالمحرر). إضافة/تعديل بند حساب عميل بأقل من ثانية؛ بند حجز فندقي أو عميل×رحلة بلا صف meta ⇒ Apps Script تلقائياً. الدفعات والحذف والجماعي ما زالت على Apps Script (لها لقطات استرجاع وشواهد حذف وروابط ترحيل رصيد).
+
+## V4.391 — كشف الرحلة getTripAccountsSummary من Postgres (027_trip_accounts_summary.sql)
+شغّل `supabase/027_trip_accounts_summary.sql` (يتطلب 006+007+012) وارفع `index_web.html`. قراءة فقط — لا مفتاح تفعيل: مجموعتا `acc` و`core` الحيّتان بالمخزن تكفيان. المطابقة: `tools/test_trip_summary_pg.js` (400 مجموعة بيانات عشوائية بينها 178 صف مدمج و617 بياناً ⇒ صفر فروق مع Code.gs).
