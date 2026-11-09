@@ -5716,18 +5716,19 @@ function _glCsPendCounts_(code, cfg, all) {   // عدّادات الشيت: من
 function _glCsPvAll_() { try { return PropertiesService.getScriptProperties().getProperties() || {}; } catch (e) { return {}; } }
 // قائمة الشيتات المربوطة + آخر نتيجة مخزّنة لكل شيت (بلا فتح أي شيت) — تُعرض فوراً بينما يُحدَّث كل شيت على حدة
 function glCsPendAccounts(authToken, force) {
-  var session = _glPerm_(authToken, 'view', 'sheets'), accM = _glAccounts_().map, all = _glCsPvAll_(), out = [], tot = 0, now = Date.now();
+  var session = _glPerm_(authToken, 'view', 'sheets'), accM = _glAccounts_().map, all = _glCsPvAll_(), out = [], tot = 0, now = Date.now(), grps = [];
   _glCsCodes_().forEach(function (code) {
     var cfg = _glCsCfg_(code); if (!cfg || !cfg.id) return;
     var cnt = _glCsPendCounts_(code, cfg, all), m = null; try { m = all['GL_CS_PV_' + code] ? JSON.parse(all['GL_CS_PV_' + code]) : null; } catch (e) {}
     var ok = _glCsPvOk_(m, cfg), grp = ok ? _glCsPvGet_(code, m) : undefined;
-    if (grp) { grp.name = (accM[code] || {}).name || code; try { _glCsSuspBkSugg_([grp]); } catch (eB) {} }
+    if (grp) { grp.name = (accM[code] || {}).name || code; grps.push(grp); }
     tot += cnt.p + cnt.s;
     out.push({ code: code, name: (accM[code] || {}).name || code, url: 'https://docs.google.com/spreadsheets/d/' + cfg.id, pending: cnt.p, susp: cnt.s,
       scan: !!force || cnt.p > 0 || cnt.s > 0,   // نفس شرط glCsPendAll القديم: بلا force لا يُفحص إلا ما فيه صفوف
       cache: ok ? { t: m.t, age: now - (m.t || 0), young: now - (m.t || 0) < GL_CS_PV_YOUNG_ } : null,
       group: grp === undefined ? null : grp, hasGroup: grp !== undefined });
   });
+  try { _glCsSuspBkSugg_(grps); } catch (eB) {}   // (V4.409) مرة واحدة لكل المجموعات (كانت لكل شيت)
   return { success: true, accounts: out, now: now, autoSusp: _glStr_(_glSettings_().cs_auto_susp) === 'نعم', canApprove: _sessionHasPerm_(session, 'admin') || _sessionHasPerm_(session, 'gl.edit'), csPend: tot, suspAccs: _glCsSuspAccs_() };
 }
 // معاينة شيت واحد (للاستدعاء المتوازي من الشاشة): { group|null, t, hit } أو { success:false, error }
@@ -5769,11 +5770,11 @@ function glCsAutoSuspSet(authToken, on) {
    المطابقة بالمعادل بالريال (فارق ≤ 2% أو 5 ريال للريال، ≤ 4% لعملة أخرى بسعر صرف تقريبي) وتاريخ دخول خلال ±30 يوماً.
    أفضل 3 اقتراحات لكل صف (الأقرب مبلغاً ثم تاريخاً) — الحساب المقترح هو حساب الطرف المربوط بخريطة الحسابات. */
 var GL_SUSP_BK_DAYS_ = 30;
-function _glCsSuspBkSugg_(groups) {
-  var any = (groups || []).some(function (g) { return g.susp && g.susp.length; });
-  if (!any || !_glHbOn_()) return;
-  var H = _glHbRead_(), map = _glHbMap_(), accs = _glAccounts_().map, rates = _glRates_(), ents = _glHbEntryIds_();
-  var dDay = function (s) { var k = _glDKey_(_glDate_(s)); return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : null; };
+/* ⚡ (V4.409) مرشَّحو حجوزات الفنادق لاقتراح مطابقة المبالغ المعلّقة: قراءة ملف الحجوزات (فتح ملف خارجي + 34 عموداً) كانت تتكرر بكل نداء
+   (معاينة كل شيت بالتوازي ⇒ N مرة) فتثقل شاشة صفوف الشيتات الناقصة؛ الآن تُبنى مرة وتُخزَّن 90 ثانية بالكاش المشترك */
+function _glCsBkCands_() {
+  var cc = null; try { cc = CacheService.getScriptCache(); var raw = cc.get('gl_cs_bkc_v1'); if (raw) { var o = JSON.parse(raw); if (o && o.out && o.in) return o; } } catch (eC) {}
+  var H = _glHbRead_(), map = _glHbMap_(), accs = _glAccounts_().map, ents = _glHbEntryIds_();
   var side = function (name, wantSale) {
     var m = map[_glHbKey_(name)];
     if (!m || !GL_HB_TYPES_[m.type]) return { code: '', name: name, unmapped: 1 };   // اسم جديد غير مربوط ⇒ يُقترح مع تنبيه الربط أولاً
@@ -5785,7 +5786,7 @@ function _glCsSuspBkSugg_(groups) {
   var cands = { out: [], in: [] };
   H.bookings.forEach(function (b) {
     if (b.status === 'لاغي') return;
-    var day = dDay(b.ci); if (day === null) return;
+    var day = _glCsDDay_(b.ci); if (day === null) return;
     var e = ents['AUTO:HB:' + b.key], ref = b.hotelRef || b.inner || ('صف ' + b.row);
     var lbl = 'حجز ' + ref + ' · ' + b.hotel + ' · دخول ' + String(b.ci || '').slice(0, 5);
     var sp = b.supplier && b.cost.hasPrice && b.cost.value > 0 ? side(b.supplier, false) : null;
@@ -5793,6 +5794,14 @@ function _glCsSuspBkSugg_(groups) {
     var cl = b.client && b.sale.hasPrice && b.sale.value > 0 ? side(b.client, true) : null;
     if (cl) cands.in.push({ code: cl.code, name: cl.name, unmapped: cl.unmapped || 0, sar: b.sale.value, day: day, label: lbl + (b.supplier ? ' · ' + b.supplier : ''), entry: e ? e.id : '', key: b.key });
   });
+  try { if (cc) { var j = JSON.stringify(cands); if (j.length < 95000) cc.put('gl_cs_bkc_v1', j, 90); } } catch (eP) {}
+  return cands;
+}
+function _glCsDDay_(s) { var k = _glDKey_(_glDate_(s)); return k ? Date.UTC(+k.slice(0, 4), +k.slice(4, 6) - 1, +k.slice(6, 8)) / 864e5 : null; }
+function _glCsSuspBkSugg_(groups) {
+  var any = (groups || []).some(function (g) { return g.susp && g.susp.length; });
+  if (!any || !_glHbOn_()) return;
+  var rates = _glRates_(), dDay = _glCsDDay_, cands = _glCsBkCands_();
   var toSar = function (amt, cur) {
     cur = _glCur_(cur || 'SAR');
     if (cur === 'SAR') return amt;
