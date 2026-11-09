@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.398  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.399  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -5893,6 +5893,7 @@ input[type="date"]:not(:focus):not(:valid) {
           <span class="small text-nowrap">دخول/خروج</span>
         </label>
         <button type="button" class="btn btn-sm btn-dark fw-bold" onclick="audOpen_()" title="سجل غير قابل للتلاعب في ملف مستقل مع فحص السلامة">🛡️ السجل المحصّن</button>
+        <button type="button" class="btn btn-sm btn-outline-danger fw-bold" onclick="rbOpen_()" title="كل ما حُذف من البرنامج (إشعار/رحلة/معتمرون/بند أو دفعة حساب…) محفوظ مدة قابلة للتعديل ويُستعاد بصلاحية">🗑️ سلة المحذوفات</button>
         <button type="button" class="btn btn-sm btn-outline-dark fw-bold" onclick="snapOpen_()" title="نقاط الاستعادة اليومية/الفورية + القيود والدفعات المحذوفة">⏪ التراجع الزمني</button>
       </div>
     </div>
@@ -7893,6 +7894,12 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     movePilgrimsBulk: { need: ['core', 'wbk'], rpc: 'rw_call', after: function (a, d) { _accMovedKick_(d, a[2], a[3]); } },
     assignPilgrimToTrip: { need: ['core', 'wbk'], rpc: 'rw_call' },
     assignPilgrimsBulk: { need: ['core', 'wbk'], rpc: 'rw_call' },
+    /* (V4.399) 035/036 — سلة المحذوفات + الحذف المجمّع من السجل العام (بديل النسخة الكاملة للملف) */
+    recycleList: { need: ['wbk'], rpc: 'rx_call2' },
+    recycleRestore: { need: ['wbk'], rpc: 'rw_call' },
+    recycleDelete: { need: ['wbk'], rpc: 'rw_call' },
+    recycleSetDays: { need: ['wbk'], rpc: 'rw_call' },
+    deleteGlobalPilgrims: { need: ['core', 'wbk'], rpc: 'rw_call', after: function (a, d) { try { if (d && d.success !== false) _RAWRUN_().withFailureHandler(function () {}).cacheBustBg(window.authToken, 'pilgrims'); } catch (e) {} } },
     getRequiredFieldsConfig: { need: ['cfg'], rpc: 'rx_call2' },   /* (V4.387) 023_required_fields.sql */
     getNotifications: { need: ['misc', 'cfg'], rpc: 'rx_call2' },   /* (V4.385) جرس التنبيهات من Postgres — 022_notifications.sql */
     getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { revalidate: function () { return now() - (S.lastWAt || 0) < 90000; } }),   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
@@ -9588,7 +9595,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.398";
+var CLIENT_APP_VERSION = "4.399";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -9736,6 +9743,7 @@ var PERM_SCREENS = [
   { key: 'bookings',  label: 'الإشعارات (الحجوزات)' },
   { key: 'trips',     label: 'الرحلات' },
   { key: 'tripundo',  label: '↩️ التراجع/الرجوع لنقطة بسجل تعديلات الرحلات (الأدمن افتراضياً)' },
+  { key: 'recycle', label: '🗑️ سلة المحذوفات: عرض=الاطلاع · تعديل=استعادة · حذف=حذف نهائي (الأدمن افتراضياً)' },
   { key: 'snaprestore', label: '⏪ استعادة النسخ السابقة للقيود والدفعات (الأدمن افتراضياً)' },
   { key: 'kashf',     label: 'كشف المعتمرين / التسكين' },
   { key: 'registry',  label: 'السجل العام للمعتمرين' },
@@ -26048,6 +26056,54 @@ function snapEntryRestore_(sid, btn) {
       try { glAfterChange(); } catch (e2) {}
     });
   }, { title: 'استعادة نسخة سابقة', danger: false });
+}
+/* 🗑️ (V4.399) سلة المحذوفات — واجهة الاطلاع/الاستعادة/الحذف النهائي + مدة الاحتفاظ (للأدمن). تعمل مع Postgres (035) فقط. */
+var RBS = { kind: '', q: '', restored: false, sel: {} };
+var RB_KINDS = { booking: '📄 إشعار', trip: '🧳 رحلة', pilgrims: '👥 معتمرون', acc_item: '🧾 بند حساب', acc_payment: '💵 دفعة حساب' };
+function rbOpen_() {
+  if (!hasPermission('recycle.view')) { _showPopup('لا تملك صلاحية سلة المحذوفات', 'error'); return; }
+  var box = _snapOv_('_rbOv', '🗑️ سلة المحذوفات');
+  RBS.sel = {}; box.innerHTML = '<div id="_rbHead"></div><div id="_rbBody"></div>'; rbLoad_();
+}
+function rbLoad_() {
+  var b = document.getElementById('_rbBody'); if (!b) return; b.innerHTML = '<div class="text-center text-muted py-4">⏳</div>';
+  _snapRun_('recycleList', [{ kind: RBS.kind, q: RBS.q, restored: RBS.restored }], function (r) {
+    var res = (r && r.d) ? r.d : r, e = escapeHtml_; RBS.res = res; if (!res || !res.items) { b.innerHTML = '<div class="text-danger p-3">تعذّر التحميل</div>'; return; }
+    var kinds = res.kinds || {}, tot = 0; Object.keys(kinds).forEach(function (k) { tot += kinds[k]; });
+    var h = document.getElementById('_rbHead');
+    h.innerHTML = '<div class="d-flex gap-1 flex-wrap align-items-center mb-2 small">' +
+      '<button class="btn btn-sm ' + (RBS.kind ? 'btn-outline-secondary' : 'btn-dark') + '" onclick="RBS.kind=\'\';rbLoad_()">الكل (' + tot + ')</button>' +
+      Object.keys(RB_KINDS).map(function (k) { return '<button class="btn btn-sm ' + (RBS.kind === k ? 'btn-dark' : 'btn-outline-secondary') + '" onclick="RBS.kind=\'' + k + '\';rbLoad_()">' + RB_KINDS[k] + (kinds[k] ? ' (' + kinds[k] + ')' : '') + '</button>'; }).join('') +
+      '<input class="form-control form-control-sm" style="width:190px" placeholder="بحث…" value="' + e(RBS.q) + '" onkeydown="if(event.key===\'Enter\'){RBS.q=this.value.trim();rbLoad_()}">' +
+      '<label class="mb-0 ms-1"><input type="checkbox" ' + (RBS.restored ? 'checked' : '') + ' onchange="RBS.restored=this.checked;rbLoad_()"> المستعادة</label>' +
+      '<span class="ms-auto text-muted">⏳ الاحتفاظ ' + res.days + ' يوماً' + (res.canSettings ? ' <button class="btn btn-sm btn-outline-dark py-0" onclick="rbSetDays_(' + res.days + ')">تعديل</button>' : '') + '</span></div>' +
+      '<div class="d-flex gap-1 mb-2">' + (res.canRestore ? '<button class="btn btn-sm btn-success" onclick="rbRestore_(this)">↩️ استعادة المحدد</button>' : '') +
+      (res.canDelete ? '<button class="btn btn-sm btn-outline-danger" onclick="rbPurge_(this)">🗑️ حذف نهائي للمحدد</button>' : '') + '</div>';
+    if (!res.items.length) { b.innerHTML = '<div class="text-muted p-3">السلة فارغة.</div>'; return; }
+    b.innerHTML = '<div class="table-responsive"><table class="table table-sm" style="font-size:12.5px;"><thead><tr><th></th><th>النوع</th><th>العنصر</th><th>التفاصيل</th><th>صفوف</th><th>حُذف بواسطة</th><th>وقت الحذف</th><th>يُحذف نهائياً</th></tr></thead><tbody>' +
+      res.items.map(function (x) {
+        return '<tr' + (x.restored ? ' class="text-muted"' : '') + '><td>' + (x.restored ? '' : '<input type="checkbox" onchange="RBS.sel[' + x.id + ']=this.checked">') + '</td><td>' + e(RB_KINDS[x.kind] || x.kind) + '</td><td><b>' + e(x.label) + '</b></td><td>' + e(x.detail) + '</td><td>' + x.n + '</td><td>' + e(x.by) + '</td><td class="gl-latin" style="white-space:nowrap">' + e(_tsMdy_(x.at)) + '</td><td class="gl-latin">' +
+          (x.restored ? '<span class="badge bg-success">استُعيد ' + e(_tsMdy_(x.restoredAt)) + ' — ' + e(x.restoredBy) + '</span>' : e(x.exp)) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }, b);
+}
+function rbSelIds_() { return Object.keys(RBS.sel).filter(function (k) { return RBS.sel[k]; }).map(Number); }
+function rbRestore_(btn) {
+  var ids = rbSelIds_(); if (!ids.length) { _showPopup('حدّد عنصراً أو أكثر أولاً', 'error'); return; }
+  btn.disabled = true;
+  _snapRun_('recycleRestore', [ids], function (r) {
+    var d = (r && r.d) ? r.d : r; btn.disabled = false; RBS.sel = {};
+    _showPopup('تمت استعادة ' + (d.restored || 0) + ' عنصر' + ((d.errors && d.errors.length) ? '\n⚠️ ' + d.errors.join('\n') : ''), (d.errors && d.errors.length) ? 'error' : 'success'); rbLoad_();
+  });
+}
+function rbPurge_(btn) {
+  var ids = rbSelIds_(); if (!ids.length) { _showPopup('حدّد عنصراً أو أكثر أولاً', 'error'); return; }
+  if (!confirm('حذف نهائي لـ ' + ids.length + ' عنصر من السلة؟ لا يمكن التراجع.')) return;
+  _snapRun_('recycleDelete', [ids], function () { RBS.sel = {}; rbLoad_(); });
+}
+function rbSetDays_(cur) {
+  var v = prompt('مدة الاحتفاظ بالمحذوفات (بالأيام، 1–3650):', cur); if (v === null) return;
+  _snapRun_('recycleSetDays', [String(v).trim()], function (r) { var d = (r && r.d) ? r.d : r; if (d && d.success === false) _showPopup(d.error || 'تعذّر', 'error'); rbLoad_(); });
 }
 function snapOpen_() {
   var box = _snapOv_('_snapOv', '⏪ التراجع الزمني');

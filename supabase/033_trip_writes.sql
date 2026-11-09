@@ -59,6 +59,7 @@ $$ declare n int := coalesce(_bk_pf(a -> 1), 0)::int; rid_ text; raw_ jsonb; nm 
   select rid, raw into rid_, raw_ from store_rows where tbl = 'trips' order by ord, rid offset (n - 2) limit 1;
   if rid_ is null then raise exception 'غير مدعوم: الصف غير موجود' using errcode = '0A000'; end if;
   nm := _rx_trim(_rx_s(_rx_c(raw_, 0)));
+  perform _rb_on('trip', 'رحلة ' || nm, '', who);   -- (035)
   delete from store_rows where tbl = 'trips' and rid = rid_;
   update store_meta set ver = ver + 1, updated_at = now() where tbl = 'trips';
   insert into app_outbox (kind, payload) values ('audit', jsonb_build_object('user', who, 'action', 'حذف', 'record', nm, 'field', 'حذف رحلة', 'old', nm, 'new', '-'));

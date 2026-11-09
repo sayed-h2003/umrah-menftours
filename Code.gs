@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.398";
+var APP_VERSION = "4.399";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2255,6 +2255,13 @@ function accAfterMovedBg(authToken, clients, fromTrip, toTrip, jobId) {
   try { _cacheBust_('pilgrims'); } catch (e3) {}
   return { success: true, accNote: note };
 }
+// (V4.399) بعد حذف/استعادة من Postgres: تفريغ كاش Apps Script للنطاق (pilgrims|booking|trips)
+function cacheBustBg(authToken, scope) { requireAuth_(authToken); scope = String(scope || ''); if (['pilgrims', 'booking', 'trips'].indexOf(scope) !== -1) { try { _cacheBust_(scope); } catch (e) {} } return { success: true }; }
+// سلة المحذوفات تعمل من Postgres فقط — بدائل واضحة إن لم تكن الكتابة من Supabase مفعّلة
+function recycleList(authToken) { requireAuth_(authToken); throw new Error('سلة المحذوفات تعمل مع Supabase — فعّل الكتابة (supaWriteOnBookings) وشغّل 035'); }
+function recycleRestore(authToken) { return recycleList(authToken); }
+function recycleDelete(authToken) { return recycleList(authToken); }
+function recycleSetDays(authToken) { return recycleList(authToken); }
 function vzCacheClearBg(authToken) { requireAuth_(authToken); try { _vzClearCache_(); } catch (e) {} return { success: true }; }   // (V4.396) بعد دفعة وكيل من Postgres
 function bookingCacheBustBg(authToken) { requireAuth_(authToken); try { _cacheBust_('booking'); } catch (e) {} return { success: true }; }   // (V4.389) بعد حذف/اعتماد من Postgres
 

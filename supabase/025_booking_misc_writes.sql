@@ -11,6 +11,7 @@ $$ declare id text := btrim(coalesce(a ->> 1, '')); m jsonb; ixid int; ixc int; 
   select rid, raw into oldrid, oldraw from store_rows where tbl = 'bookings' and btrim(_rx_s(raw -> ixid)) = id limit 1;
   if oldrid is null then return jsonb_build_object('success', false, 'error', 'الإشعار غير موجود'); end if;
   co := _rx_s(oldraw -> ixc); cl := _rx_s(oldraw -> ixcl);
+  perform _rb_on('booking', 'إشعار ' || id, co || ' - ' || cl, who);   -- (035) سلة المحذوفات: الإشعار + تحركاته
   delete from store_rows where tbl = 'bookings' and rid = oldrid;
   update store_meta set ver = ver + 1, updated_at = now() where tbl = 'bookings';
   if exists (select 1 from store_meta where tbl = 'movements') then

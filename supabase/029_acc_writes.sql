@@ -44,6 +44,7 @@ $$ declare id text := _rx_s(a -> 1); who text := coalesce(u, app_user(), '-'); r
   insert into app_outbox (kind, payload) values ('snaprow', jsonb_build_object('sheet', 'ClientAccounts_Payments', 'key', id, 'row', raw_, 'action', 'قبل حذف دفعة', 'user', who));
   insert into app_outbox (kind, payload) values ('audit', jsonb_build_object('user', who, 'action', 'حذف ' || case when _rx_s(_rx_c(raw_, 3)) = 'تحويل' then 'تحويل عملة' else 'دفعة حساب' end,
     'record', _rx_s(_rx_c(raw_, 1)), 'field', _rx_s(_rx_c(raw_, 2)), 'old', coalesce(raw_ ->> 5, '') || ' ' || coalesce(raw_ ->> 6, ''), 'new', '-'));
+  perform _rb_on('acc_payment', 'دفعة ' || _rx_s(_rx_c(raw_, 1)) || ' — ' || _rx_s(_rx_c(raw_, 2)), coalesce(raw_ ->> 5, '') || ' ' || coalesce(raw_ ->> 6, ''), who);   -- (035)
   delete from store_rows where tbl = 'acc_payments' and rid = rid_;
   update store_meta set ver = ver + 1, updated_at = now() where tbl = 'acc_payments';
   perform _w_dv_bump(_acc_dvs());
@@ -63,6 +64,7 @@ $$ declare id text := _rx_s(a -> 1); who text := coalesce(u, app_user(), '-'); r
   insert into app_outbox (kind, payload) values ('audit', jsonb_build_object('user', who, 'action', 'حذف بند حساب', 'record', _rx_s(_rx_c(raw_, 1)), 'field', _rx_s(_rx_c(raw_, 2)),
     'old', regexp_replace(d, '\s*⟦(?:cf|src):[^⟧]+⟧\s*$', '', 'i') || ' = ' || coalesce(raw_ ->> 8, '') || ' ' || coalesce(raw_ ->> 5, ''), 'new', '-'));
   perform _acc_tomb_add(_rx_trim(_rx_s(_rx_c(raw_, 1))), _rx_trim(_rx_s(_rx_c(raw_, 2))), d, who);
+  perform _rb_on('acc_item', 'بند حساب ' || _rx_s(_rx_c(raw_, 1)) || ' — ' || _rx_s(_rx_c(raw_, 2)), regexp_replace(d, '\s*⟦(?:cf|src):[^⟧]+⟧\s*$', '', 'i') || ' = ' || coalesce(raw_ ->> 8, '') || ' ' || coalesce(raw_ ->> 5, ''), who);   -- (035)
   delete from store_rows where tbl = 'acc_items' and rid = rid_;
   update store_meta set ver = ver + 1, updated_at = now() where tbl = 'acc_items';
   perform _w_dv_bump(_acc_dvs());
@@ -85,6 +87,7 @@ $$ declare ids jsonb := a -> 1; who text := coalesce(u, app_user(), '-'); r reco
     perform _acc_tomb_add(_rx_trim(_rx_s(_rx_c(r.raw, 1))), _rx_trim(_rx_s(_rx_c(r.raw, 2))), _rx_s(_rx_c(r.raw, 3)), who);
   end loop;
   if n = 0 then return jsonb_build_object('success', false, 'error', case when hb > 0 then 'هذا البند حجز فندقي من برنامج الحجوزات (له قيده بالحسابات العامة) — يُعدَّل من شاشة الحجوزات، ويمكن نقله لرحلة بزر 🔀' else 'البنود غير موجودة' end); end if;
+  perform _rb_on('acc_item', n || ' بند حساب — ' || cl, tr, who);   -- (035)
   delete from store_rows where tbl = 'acc_items' and rid = any(rids);
   update store_meta set ver = ver + 1, updated_at = now() where tbl = 'acc_items';
   insert into app_outbox (kind, payload) values ('audit', jsonb_build_object('user', who, 'action', 'حذف بنود حساب دفعة واحدة', 'record', cl, 'field', tr, 'old', n || ' بند', 'new', '-'));
