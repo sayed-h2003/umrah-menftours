@@ -278,7 +278,7 @@ function _supaStoreInfo0_() {
    ============================================================================ */
 function _supaBootOn_() { return _supaOn_() && _supaP_('SUPA_BOOT') !== 'off'; }
 function _supaCfgBuild_() {
-  return { app_version: { version: String(APP_VERSION) }, notif_settings: _notifSettingsObj_(), session_cfg: _sessionDurationObj_(), sort_mode: _sortModeObj_(),
+  return { app_version: { version: String(APP_VERSION) }, notif_settings: _notifSettingsObj_(), session_cfg: _sessionDurationObj_(), sort_mode: _sortModeObj_(), required_fields: _requiredFieldsObj_(),
     perm_maps: { legacy: (typeof _PERM_LEGACY_MAP_ !== 'undefined' ? _PERM_LEGACY_MAP_ : {}), screens: (typeof _PERM_SCREENS_ !== 'undefined' ? _PERM_SCREENS_ : []) } };   // ⚡ (V4.385) لدخول Postgres السريع (app_login)
 }
 function _supaCfgPush_(force) {

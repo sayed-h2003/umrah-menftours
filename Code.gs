@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.386";
+var APP_VERSION = "4.387";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -11448,6 +11448,9 @@ function validateRequiredFields_(bookingData) {
 // يُستدعى من أي مستخدم مسجّل دخول (لازم لعرض/تحقق النموذج)
 function getRequiredFieldsConfig(authToken) {
   requireAuth_(authToken);
+  return _requiredFieldsObj_();
+}
+function _requiredFieldsObj_() {   // ⚡ (V4.387) نفس الناتج يُرفع لـ app_config (SupaSync.gs) فيقرأه المتصفح من Postgres
   var props = PropertiesService.getScriptProperties();
   var saved = props.getProperty('REQUIRED_FIELDS');
   var current;
@@ -11472,6 +11475,7 @@ function saveRequiredFieldsConfig(authToken, fieldIds) {
   var cleaned = fieldIds.filter(function(id){ return validIds.indexOf(id) !== -1; });
 
   PropertiesService.getScriptProperties().setProperty('REQUIRED_FIELDS', JSON.stringify(cleaned));
+  try { _supaCfgKick_(); } catch (eSc) {}   // ⚡ (V4.387) مرآة app_config
   logChange_(session.username, "تعديل إعدادات النظام", "-", "الحقول الإلزامية", "-", cleaned.join('، ') || "لا يوجد");
 
   return { success: true, required: cleaned };
