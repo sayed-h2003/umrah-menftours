@@ -103,7 +103,7 @@ function _mgConv_(t, v, key) {
 }
 
 /* ---------- قراءة الأوراق ---------- */
-function _mgSS_(which) { return which === 'gl' ? _glSS_() : which === 'hb' ? getSS_() : getSpreadsheet_(); }
+function _mgSS_(which) { return which === 'gl' ? _glSS_() : getSpreadsheet_(); }
 function _mgSheet_(which, name) {
   var k = which + '|' + name;
   if (MG_CACHE_[k] !== undefined) return MG_CACHE_[k];
@@ -240,11 +240,6 @@ var MG_SPECS_ = [
   { t: 'gl_bank_due', ss: 'gl', sheet: 'GL_BankDue', pk: ['key'], req: ['key'], rowObj: 'data', cols: [['key', 0, 'S']] },
   { t: 'gl_maker_checker', ss: 'gl', sheet: 'GL_MakerChecker', pk: ['id'], req: ['id'], rowObj: 'data', cols: [['id', 0, 'S'], ['status', 'الحالة', 's']] },
   { t: 'gl_charters', ss: 'gl', sheet: 'GL_HB_Charters', pk: ['id'], req: ['id'], rowObj: 'data', cols: [['id', 0, 'S']] },
-  // 🏨 (المرحلة 2) جداول HB — نسخ خام بلا مرآة منمّطة (nomirror). حجوزات مكة/المدينة snap = نسخة قراءة فقط من ملف المصدر
-  { t: 'hb_payments', ss: 'hb', sheet: 'سجل الدفعات', nomirror: true, pk: ['id'], cols: [] },
-  { t: 'hb_profiles', ss: 'hb', sheet: 'بيانات الحسابات', nomirror: true, pk: ['id'], cols: [] },
-  { t: 'hb_mecca', ss: 'hbsrc', snap: 'mecca', sheet: 'حجوزات مكة', nomirror: true, pk: ['id'], cols: [] },
-  { t: 'hb_medina', ss: 'hbsrc', snap: 'medina', sheet: 'حجوزات المدينة', nomirror: true, pk: ['id'], cols: [] },
   { t: 'gl_deleted', ss: 'gl', sheet: 'GL_Deleted', pk: ['id'], wipe: true, req: ['del_id'], rowObj: 'payload', cols: [['del_id', 0, 'S'], ['role', 1, 's']], chunk: 200 }
 ];
 

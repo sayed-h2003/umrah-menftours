@@ -26,7 +26,6 @@ var ST_GROUPS_ = {
   visa: ['vz_files', 'vz_items', 'vz_payments', 'vz_housing_agreements', 'vz_housing_allocations', 'vz_transport_prices', 'vz_agent_prices', 'agent_company_accounts', 'transport_overrides'],
   misc: ['app_users', 'user_ui_prefs', 'notifications', 'housing_notes', 'merged_housing', 'catering_contracts'],
   // جداول ملف الحسابات الجانبية التي لا يقرؤها أي برنامج آخر مباشرة من الشيت. (gl_accounts/gl_settings خارجها: HB_GlLink.gs:64,68 و HB_Code.gs:4685 يقرؤونها من الشيت)
-  hb: ['hb_payments', 'hb_profiles', 'hb_mecca', 'hb_medina'],
   glaux: ['gl_batches', 'gl_pending', 'gl_pay_direct', 'gl_auto_log', 'gl_statements', 'gl_attachments', 'gl_fx_daily', 'gl_hb_map', 'gl_hb_pay', 'gl_hb_trip', 'gl_hb_mirror', 'gl_hb_keep_erp',
           'gl_recon_links', 'gl_auto_override', 'gl_bank_due', 'gl_maker_checker', 'gl_charters', 'gl_deleted']
 };
@@ -53,23 +52,21 @@ function _stExpand_(list) {
 }
 function _stCfg_() {
   if (_ST_CFG_) return _ST_CFG_;
-  var cfg = { on: false, set: {}, bySheet: { main: {}, gl: {}, hb: {} } };
+  var cfg = { on: false, set: {}, bySheet: { main: {}, gl: {} } };
   try {
     var raw = _supaP_('STORE_TABLES');
     if (raw && _supaP_('SUPA_URL') && _supaP_('SUPA_SERVICE_KEY')) {
       cfg.set = _stExpand_(raw);
       var specs = _stSpecs_();
-      Object.keys(cfg.set).forEach(function (t) { var sp = specs[t]; if (sp.snap) { cfg.on = true; return; } cfg.bySheet[_stWhich_(sp)][sp.sheet] = sp; cfg.on = true; });
+      Object.keys(cfg.set).forEach(function (t) { var sp = specs[t]; cfg.bySheet[sp.ss === 'gl' ? 'gl' : 'main'][sp.sheet] = sp; cfg.on = true; });
     }
-  } catch (e) { cfg = { on: false, set: {}, bySheet: { main: {}, gl: {}, hb: {} } }; }
+  } catch (e) { cfg = { on: false, set: {}, bySheet: { main: {}, gl: {} } }; }
   _ST_CFG_ = cfg; return cfg;
 }
-function _stWhich_(sp) { return sp.ss === 'gl' ? 'gl' : sp.ss === 'hb' ? 'hb' : 'main'; }
-function _stSsOf_(sp) { return sp.ss === 'gl' ? _glSS_() : sp.ss === 'hb' ? getSS_() : getSpreadsheet_(); }
 function _stActive_() { return _stCfg_().on; }
 // للاختبارات/بعد تغيير المفتاح: إعادة قراءة المفتاح وتفريغ الصور
 function _stReset_() { _ST_CFG_ = null; _ST_IMG_ = {}; _ST_SHEETS_ = {}; _ST_WRAP_ = {}; _ST_BYPASS_ = false; _ST_FLUSHING_ = false; _ST_EX_ = null; _ST_WARM_ = {}; _ST_FAIL_ = null; }
-function _stSpecFor_(which, sheetName) { if (_ST_BYPASS_) return null; var m = _stCfg_().bySheet[which === 'gl' ? 'gl' : which === 'hb' ? 'hb' : 'main']; return m.hasOwnProperty(sheetName) ? m[sheetName] : null; }
+function _stSpecFor_(which, sheetName) { if (_ST_BYPASS_) return null; var m = _stCfg_().bySheet[which === 'gl' ? 'gl' : 'main']; return m.hasOwnProperty(sheetName) ? m[sheetName] : null; }
 
 /* ---------------- الغلاف (نقطة الاختناق) ---------------- */
 function _stWrapSS_(ss, which) {
@@ -406,7 +403,7 @@ function _stFlushOne_(sp, im) {
   var d = _stDiff_(im), hdrJs = JSON.stringify(_stEncRow_(im.hdr)), hdrChanged = hdrJs !== im.hdrOrig;
   if (!d.up.length && !d.del.length && !hdrChanged && !im.metaDirty) { im.dirty = false; return; }
   var hdrDec = im.hdr, mir = null;
-  var mirrorOn = !sp.nomirror;
+  var mirrorOn = true;
   var parts = Math.max(1, Math.ceil(d.up.length / ST_CHUNK_)), ver = im.ver, first = true, expect = Number(im.ver), lastRes = null;
   for (var k = 0; k < parts; k++) {
     var a = k * ST_CHUNK_, b = a + ST_CHUNK_;
@@ -485,11 +482,11 @@ function _stWrapLock_(l) {
 function _stSheetRaw_(sp) {   // الشيت الحقيقي متجاوزاً الطبقة ⇒ {exists, hdr, rows:[cells]} (الصفوف الفارغة بالوسط تبقى · الذيل يُقصّ)
   var save = _ST_BYPASS_; _ST_BYPASS_ = true;
   try {
-    var ss = sp.snap ? SpreadsheetApp.openById(getSourceSettings_().spreadsheetId) : _stSsOf_(sp), sh = ss.getSheetByName(sp.snap ? getSourceSettings_()[sp.snap + 'Sheet'] : sp.sheet);
+    var ss = sp.ss === 'gl' ? _glSS_() : getSpreadsheet_(), sh = ss.getSheetByName(sp.sheet);
     if (!sh) return { exists: false, hdr: [], rows: [] };
-    var lr = sh.getLastRow(), lc = sh.getLastColumn(), h0 = sp.snap ? Math.max(1, Number(getSourceSettings_()[sp.snap + 'StartRow']) - 1) : 1;   // صف الترويسة = قبل أول صف بيانات
-    if (lr < h0 || lc < 1) return { exists: true, hdr: [], rows: [] };
-    var vals = sh.getRange(h0, 1, lr - h0 + 1, lc).getValues(), rows = vals.slice(1);
+    var lr = sh.getLastRow(), lc = sh.getLastColumn();
+    if (lr < 1 || lc < 1) return { exists: true, hdr: [], rows: [] };
+    var vals = sh.getRange(1, 1, lr, lc).getValues(), rows = vals.slice(1);
     var n = rows.length; while (n > 0 && _stBlank_(rows[n - 1])) n--;
     return { exists: true, hdr: _stTrimCells_(vals[0]), rows: rows.slice(0, n) };
   } finally { _ST_BYPASS_ = save; }
@@ -500,16 +497,16 @@ function _stSeedTable_(sp) {
   if (!src.exists) return { exists: false, rows: 0 };
   var parts = Math.max(1, Math.ceil(up.length / ST_CHUNK_)), skipped = 0, keep = [];
   for (var k = 0; k < parts; k++) {
-    var m = sp.nomirror ? { mirror: null, stubs: [], skipped: 0 } : _stMirror_(sp, src.hdr, upMir.slice(k * ST_CHUNK_, (k + 1) * ST_CHUNK_), []);
+    var m = _stMirror_(sp, src.hdr, upMir.slice(k * ST_CHUNK_, (k + 1) * ST_CHUNK_), []);
     skipped += m.skipped;
-    if (m.mirror) m.mirror.up.forEach(function (o) { keep.push(sp.wipe ? o.store_rid : _stPkOf_(sp, o)); });
+    m.mirror.up.forEach(function (o) { keep.push(sp.wipe ? o.store_rid : _stPkOf_(sp, o)); });
     var p = { t: sp.t, up: up.slice(k * ST_CHUNK_, (k + 1) * ST_CHUNK_), del: [], exists: true, mirror: m.mirror, stubs: m.stubs, seeded: true, hdr: _stEncRow_(src.hdr) };
     if (k === 0) p.wipe = true;
     _stRpc_('store_put', { p: p });
   }
   // مفاتيح مكررة بالشيت (آخر صف يغلب) ⇒ قائمة keep بلا تكرار
   var seen = {}; keep = keep.filter(function (x) { var s = JSON.stringify(x); if (seen[s]) return false; seen[s] = 1; return true; });
-  var pr = sp.nomirror ? null : _stRpc_('store_mirror_prune', { p_tbl: sp.t, m: { t: sp.t, mode: sp.wipe ? 'rid' : 'pk', pk: sp.pk }, keep: keep });
+  var pr = _stRpc_('store_mirror_prune', { p_tbl: sp.t, m: { t: sp.t, mode: sp.wipe ? 'rid' : 'pk', pk: sp.pk }, keep: keep });
   return { exists: true, rows: rows.length, mirrorSkipped: skipped, pruned: pr && pr.pruned };
 }
 function _stMoneyCols_(sp) { return ST_MONEY_[sp.t] || []; }
@@ -620,7 +617,7 @@ function storeRollback(group) {
       if (!st.exists) { log.push('↩︎ ' + t + ': لا بيانات بالمخزن — تُرك الشيت'); return; }
       var save = _ST_BYPASS_; _ST_BYPASS_ = true;
       try {
-        var ss = _stSsOf_(sp), sh = ss.getSheetByName(sp.sheet) || ss.insertSheet(sp.sheet);
+        var ss = sp.ss === 'gl' ? _glSS_() : getSpreadsheet_(), sh = ss.getSheetByName(sp.sheet) || ss.insertSheet(sp.sheet);
         var hdr = (st.hdr || []).map(_stDec_), rows = st.rows.map(function (r) { return (r[2] || []).map(_stDec_); });
         var W = Math.max(hdr.length, rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0), 1), pad = function (r) { var x = r.slice(); while (x.length < W) x.push(''); return x; };
         var last = sh.getLastRow(), lc = Math.max(sh.getLastColumn(), W);
@@ -841,12 +838,3 @@ function supaWriteOffBookings() { return supaWriteOff('bk'); }
 function supaWriteOffMinistry() { return supaWriteOff('mf'); }
 function supaWriteOffVisa() { return supaWriteOff('vz'); }
 function supaWriteOffAll() { return supaWriteOff(); }
-
-
-/* 🏨 (المرحلة 2) نسخ حجوزات مكة/المدينة (للقراءة فقط — ملف المصدر منفصل): تُعاد النسخة كاملة. من المحرر: hbSnapSync() */
-function hbSnapSync() {
-  requireScriptOwner_();
-  var on = _stCfg_().set, specs = _stSpecs_(), log = [];
-  ['hb_mecca', 'hb_medina'].forEach(function (t) { if (on[t]) { var r = _stSeedTable_(specs[t]); log.push(t + ': ' + (r.exists ? r.rows + ' صف' : 'الشيت غير موجود')); } });
-  Logger.log(log.join(' | ') || 'لا جدول مفعَّل — فعّل المجموعة hb بـ storeCutover(\'hb\')'); return log;
-}
