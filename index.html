@@ -109,12 +109,22 @@
   <div id="offline">⚠️ لا يوجد اتصال بالإنترنت <button onclick="reloadApp()">🔄 إعادة التحميل</button></div>
 
   <div id="app-wrap">
-    <iframe id="app" title="إدارة رحلات العمرة" src="https://script.google.com/macros/s/AKfycbzmZ7ubyNlqjum0SlNSDqmIAN1VqDNd9FU-eM6Ihqg17-MAb_QnV7cDKCGaVJ_6-2iA7g/exec"
+    <iframe id="app" title="إدارة رحلات العمرة" data-src="https://script.google.com/macros/s/AKfycbzmZ7ubyNlqjum0SlNSDqmIAN1VqDNd9FU-eM6Ihqg17-MAb_QnV7cDKCGaVJ_6-2iA7g/exec"
             allow="clipboard-write; clipboard-read; web-share"></iframe>
   </div>
+  <script>
+    /* ⧉ (V4.408) فتح شاشة بتبويب جديد داخل هذا الغلاف: الرابط ?go=<مفتاح الشاشة> يُمرَّر لإطار البرنامج، فيستأنف الدخول بمفتاح الجهاز
+       المحفوظ هنا (نفس تخزين الغلاف) بدل أن يُفتح رابط Apps Script مباشرةً خارج الغلاف فيطلب تسجيل الدخول من جديد */
+    (function () {
+      var fr = document.getElementById('app'), base = fr.getAttribute('data-src'), go = '';
+      try { go = new URLSearchParams(location.search).get('go') || ''; } catch (e) {}
+      fr.src = go ? base + (base.indexOf('?') > -1 ? '&' : '?') + 'go=' + encodeURIComponent(go) : base;
+      fr.addEventListener('load', function () { try { fr.contentWindow.postMessage({ type: 'mf-wrap', url: location.origin + location.pathname }, '*'); } catch (e) {} });
+    })();
+  </script>
 
   <script>
-    var APP_SRC = document.getElementById('app').src;
+    var APP_SRC = document.getElementById('app').getAttribute('data-src');
     function reloadApp() {
       var fr = document.getElementById('app'), sp = document.getElementById('splash');
       document.getElementById('splashMsg').textContent = 'جاري تحميل البرنامج…';
