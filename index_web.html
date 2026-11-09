@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.397  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.398  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7784,7 +7784,8 @@ var LF_ = (function () {
      fn ⇒ المجموعات الحيّة المطلوبة (يعلنها الخادم بـ supaIssueToken().store.groups). الرد {success, d: نفس ما ترجعه دالة Apps Script حرفياً, dv: بصمات لحظة القراءة}.
      أي خطأ/رفض/انقطاع/مجموعة غير حيّة ⇒ النداء الأصلي لـ Apps Script كما كان. المفتاح: localStorage.lf_supa_off='1'. الكتابات لا تمر من هنا إطلاقاً. */
   var BKSTASH_ = new WeakMap();
-  function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailureHandler(function () {}).glOutboxKick(window.authToken); } catch (e) {} }   /* (V4.395) ينفّذ صادر الحسابات العامة (مرآة الدفعة/تليجرام) بالخلفية */
+  function _accMovedKick_(d, from, to) { try { if (d && d.success !== false && d.accJob && d.clients && d.clients.length) _RAWRUN_().withFailureHandler(function () {}).accAfterMovedBg(window.authToken, d.clients, from, to, d.accJob); } catch (e) {} }
+function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailureHandler(function () {}).glOutboxKick(window.authToken); } catch (e) {} }   /* (V4.395) ينفّذ صادر الحسابات العامة (مرآة الدفعة/تليجرام) بالخلفية */
   function _RAWRUN_() { return (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null; }
   function RB(fn, need) { return { need: need, rpc: 'rx_boot', body: function (a) { return { p_fn: fn, p_args: a }; } }; }
   var STRPC = {
@@ -7887,6 +7888,11 @@ var LF_ = (function () {
     deleteTrip: { need: ['core', 'wbk'], rpc: 'rw_call' },
     saveHousingNote: { need: ['misc', 'wbk'], rpc: 'rw_call' },
     saveMergedHousing: { need: ['misc', 'wbk'], rpc: 'rw_call', body: function (a) { return { p_fn: 'saveMergedHousing', p_args: [null, a[1], a[2], JSON.stringify(a[3] || [])] }; } },
+    /* (V4.398) 034_pilgrim_moves.sql — نقل/تخصيص المعتمرين بين الرحلات؛ تبعية حسابات العملاء بنداء خلفي (accmoved) واللقطات/السجل عبر صندوق الإخراج */
+    movePilgrimBetweenTrips: { need: ['core', 'wbk'], rpc: 'rw_call', after: function (a, d) { _accMovedKick_(d, a[2], a[3]); } },
+    movePilgrimsBulk: { need: ['core', 'wbk'], rpc: 'rw_call', after: function (a, d) { _accMovedKick_(d, a[2], a[3]); } },
+    assignPilgrimToTrip: { need: ['core', 'wbk'], rpc: 'rw_call' },
+    assignPilgrimsBulk: { need: ['core', 'wbk'], rpc: 'rw_call' },
     getRequiredFieldsConfig: { need: ['cfg'], rpc: 'rx_call2' },   /* (V4.387) 023_required_fields.sql */
     getNotifications: { need: ['misc', 'cfg'], rpc: 'rx_call2' },   /* (V4.385) جرس التنبيهات من Postgres — 022_notifications.sql */
     getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { revalidate: function () { return now() - (S.lastWAt || 0) < 90000; } }),   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
@@ -9582,7 +9588,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.397";
+var CLIENT_APP_VERSION = "4.398";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

@@ -3127,3 +3127,9 @@
 - اعتماد الإشعار «معتمد»: المتصفح يفحص الحقول الإلزامية ومنطق التحركات (BKSRV_) على نسخة الإشعار المحمّلة، وPostgres يعيد فحص الحقول الإلزامية القابلة للمطابقة بأعمدة الإشعار؛ أي نقص ⇒ Apps Script يعرض كل الأخطاء. إلغاء الاعتماد كما V4.389.
 - `deleteTrip` (برقم صف الشيت) · `saveHousingNote` · `saveMergedHousing`.
 **لم يُنقل (له أنظمة فرعية لم تُنقل):** `saveTrip` (نشر تعديل الرحلة للإشعارات/الكشوف/الحسابات) · `saveTripPilgrims` · `movePilgrimBetweenTrips`/`movePilgrimsBulk`/`assignPilgrimToTrip`/`assignPilgrimsBulk` (لقطات الرحلة `_tripSnap*` + تسوية الحسابات `_accAfterPilgrimsMoved_` + كشف التعارض) · `deleteGlobalPilgrims` (نسخة احتياطية كاملة للملف قبل الحذف) · `accGenerateDraft` (محرك التسعير).
+
+## V4.398 — نقل المعتمرين بين الرحلات وتخصيصهم (034_pilgrim_moves.sql)
+شغّل `supabase/034_pilgrim_moves.sql` (يتطلب 006+007+009 و033) وارفع `Code.gs` و`Store.gs` و`index_web.html`؛ المفتاح نفسه `supaWriteOnBookings()`.
+- تنتقل: `movePilgrimBetweenTrips` · `movePilgrimsBulk` · `assignPilgrimToTrip` · `assignPilgrimsBulk` بنفس منطق Code.gs: المحارم/التوابع (`mahramPid`)، منع التكرار، كشف تعارض التواريخ (`force`)، مسح الغرفة/الإشعار/الفنادق وإعادة تسكين من بقي بنفس الغرفة (رباعي).
+- الآثار الجانبية عبر صندوق الإخراج: لقطات الرحلة (`tripsnap` — لقطة «قبل» تُبنى في Postgres قبل التعديل) · سجل التعديلات (`audit`) · تبعية حسابات العملاء (`accmoved`): المتصفح ينفّذها فوراً بنداء `accAfterMovedBg`، وإن لم يصل يتولاها `_outboxDrain_` بعد ~دقيقتين.
+- اختُبر محلياً: نقل مع تابع، تكرار، غرفة مشتركة، نقل مجمّع، تخصيص (صف بلا رحلة / نسخ جديد).

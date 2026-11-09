@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.397";
+var APP_VERSION = "4.398";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2247,6 +2247,14 @@ function bookingAfterSaveBg(authToken, finalId, bookingData) {
   return out;
 }
 
+// (V4.398) بعد نقل معتمرين من Postgres: حسابات العملاء تتبع النقل (نفس _accAfterPilgrimsMoved_) ثم يُعلَّم بند accmoved منجزاً
+function accAfterMovedBg(authToken, clients, fromTrip, toTrip, jobId) {
+  var session = requireAuth_(authToken), note = '';
+  try { note = _accAfterPilgrimsMoved_(clients || [], String(fromTrip || ''), String(toTrip || ''), session.username, authToken).note; } catch (e) { Logger.log('accAfterMovedBg: ' + e.message); return { success: false, error: String(e.message || e) }; }
+  try { if (jobId) _supaReq_('patch', 'app_outbox?id=eq.' + encodeURIComponent(String(jobId)) + '&kind=eq.accmoved', { done_at: new Date().toISOString() }); } catch (e2) {}
+  try { _cacheBust_('pilgrims'); } catch (e3) {}
+  return { success: true, accNote: note };
+}
 function vzCacheClearBg(authToken) { requireAuth_(authToken); try { _vzClearCache_(); } catch (e) {} return { success: true }; }   // (V4.396) بعد دفعة وكيل من Postgres
 function bookingCacheBustBg(authToken) { requireAuth_(authToken); try { _cacheBust_('booking'); } catch (e) {} return { success: true }; }   // (V4.389) بعد حذف/اعتماد من Postgres
 
@@ -12908,6 +12916,19 @@ function _tripSnapTake_(trip, user, action) {
     if (R.rows.length >= TRIP_SNAP_KEEP_) { var del = R.rows.slice(0, R.rows.length - TRIP_SNAP_KEEP_ + 1).map(function (x) { return x.row; }).sort(function (a, b) { return b - a; }); del.forEach(function (rw) { R.sh.deleteRow(rw); }); }
     return id;
   } catch (e) { Logger.log('trip snapshot: ' + e.message); }
+}
+// (V4.398) لقطة جاهزة الحالة (تُبنى في Postgres قبل/بعد التعديل): state = {t:{…}, p:[{…}]} مع تواريخ {$d} · isBase ⇒ لا تُكتب إلا إن لم توجد لقطات للرحلة
+function _tripSnapTakeState_(trip, user, action, state, isBase) {
+  try {
+    trip = String(trip || '').trim(); if (!trip || !state) return;
+    var rv = function (o) { if (o && typeof o === 'object') { if (o['$d'] !== undefined && Object.keys(o).length === 1) return new Date(o['$d']); if (Array.isArray(o)) return o.map(rv); var r = {}; Object.keys(o).forEach(function (k) { r[k] = rv(o[k]); }); return r; } return o; };
+    var R = _tripSnapRows_(trip); if (isBase && R.rows.length) return;
+    var packed = _tripSnapPack_(rv({ t: state.t || null, p: state.p || [] })); if (!packed) return;
+    var id = 'S' + Date.now().toString(36) + Math.floor(Math.random() * 1000).toString(36);
+    R.sh.appendRow([id, trip, new Date(), user || '', action || '', packed]);
+    if (R.rows.length >= TRIP_SNAP_KEEP_) { var del = R.rows.slice(0, R.rows.length - TRIP_SNAP_KEEP_ + 1).map(function (x) { return x.row; }).sort(function (a, b) { return b - a; }); del.forEach(function (rw) { R.sh.deleteRow(rw); }); }
+    return id;
+  } catch (e) { Logger.log('trip snapshot state: ' + e.message); }
 }
 function _tripSnapEnsureBase_(trip, user) {
   try { trip = String(trip || '').trim(); if (!trip) return; if (!_tripSnapRows_(trip).rows.length) _tripSnapTake_(trip, user, 'خط الأساس (قبل أول تعديل مُلتقَط)'); } catch (e) { Logger.log('trip snap base: ' + e.message); }

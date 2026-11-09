@@ -772,8 +772,14 @@ function _outboxDrain_(maxMs) {
           else logBookingRowDiff_(p.user, String(p.id), rv(p.old), rv(p['new']));
         } catch (eB) { Logger.log('outbox bkdiff: ' + eB.message); }
       }
+      else if (x.kind === 'tripsnap') { try { _tripSnapTakeState_(String(p.trip), String(p.user || ''), String(p.action || ''), p.state, !!p.base); } catch (eT) { Logger.log('outbox tripsnap: ' + eT.message); } }
+      else if (x.kind === 'accmoved') {   // (V4.398) المتصفح ينفّذها فوراً؛ إن لم يصل (أُغلقت الصفحة) نتولاها هنا بعد ~دقيقتين
+        if (Date.now() / 1000 - Number(p.at || 0) < 120) { ids.pop(); return; }
+        try { _accAfterPilgrimsMoved_(p.clients || [], String(p.from || ''), String(p.to || ''), String(p.user || ''), null); } catch (eM) { Logger.log('outbox accmoved: ' + eM.message); }
+      }
       else if (x.kind === 'notif') { try { _notifPush_(p.type, p.message, '', p.trip || '', p.perm || '', p.user || ''); } catch (eN) { Logger.log('outbox notif: ' + eN.message); } }
     });
+    if (!ids.length) break;   // (V4.398) كلها accmoved حديثة — ننتظر المتصفح
     if (recs.length) _audLog_(recs);   // تفشل ⇒ _audFail_ (البوابة تُغلق) كغيرها — ولا نُعلّم المنجَز
     var u = _supaReq_('patch', 'app_outbox?id=in.(' + ids.join(',') + ')', { done_at: new Date().toISOString() });
     if (u.code < 200 || u.code >= 300) { Logger.log('outbox mark ' + u.code + ' ' + String(u.text).slice(0, 160)); break; }
