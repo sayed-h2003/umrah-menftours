@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.385  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.386  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -1653,6 +1653,8 @@ input[type="date"]:not(:focus):not(:valid) {
       </div>
     </div>
 
+    <!-- ⧉ (V4.385) فتح الشاشة الحالية (حتى كشف الرحلة/النماذج المفتوحة) في تبويب منفصل بالمتصفح -->
+    <button id="openNewTabBtn" class="btn btn-sm btn-outline-light flex-shrink-0 d-none" type="button" onclick="openCurrentInBrowserTab_()" title="فتح هذه الشاشة في تبويب منفصل بالمتصفح" style="padding: 4px 10px;"><i class="fas fa-up-right-from-square"></i></button>
     <!-- 🔔 (V4.32) جرس التنبيهات — عميل جديد على رحلة / تغيّر تسكين أو عدد أو فندق لعميل له حساب مسجَّل -->
     <div class="dropdown flex-shrink-0 d-none" id="notifBellWrap">
       <button id="notifBellBtn" class="btn btn-sm btn-outline-light position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" onclick="_notifOpen_()" title="التنبيهات" style="padding: 4px 10px;">
@@ -7399,13 +7401,21 @@ function _runExec_(getReal, st, fn, args, attempt, busyN) {
     var realObj = google.script.run, getReal = (desc && desc.get) ? function () { return desc.get.call(google.script); } : function () { return realObj; };
     window._RAW_RUN_ = getReal;
     var NOWRAP = { resumeSession: 1, loginUser: 1, logoutUserSession: 1 };
+    var AUTHFREE = { loginUser: 1, resumeSession: 1, perfPing: 1 };
     var mk = function (st) {
       return new Proxy({}, { get: function (t, prop) {
         if (prop === 'withSuccessHandler') return function (f) { return mk({ ok: f, fail: st.fail, uo: st.uo, hasUo: st.hasUo }); };
         if (prop === 'withFailureHandler') return function (f) { return mk({ ok: st.ok, fail: f, uo: st.uo, hasUo: st.hasUo }); };
         if (prop === 'withUserObject') return function (o) { return mk({ ok: st.ok, fail: st.fail, uo: o, hasUo: true }); };
         if (typeof prop !== 'string' || prop === 'then') return undefined;
-        return function () { _runExec_(getReal, st, prop, Array.prototype.slice.call(arguments), NOWRAP[prop] ? 9 : 0); };
+        return function () {
+          var a = Array.prototype.slice.call(arguments), g = window._authGate;
+          if (g && !g.done && !AUTHFREE[prop] && a.some(function (x) { return x === g.ph; })) {   // (V4.385) رمز جلسة معلّق (دخول سريع): احجز النداء حتى يصل الرمز الحقيقي
+            g.q.push(function (tok) { a = a.map(function (x) { return x === g.ph ? tok : x; }); _runExec_(getReal, st, prop, a, NOWRAP[prop] ? 9 : 0); });
+            return;
+          }
+          _runExec_(getReal, st, prop, a, NOWRAP[prop] ? 9 : 0);
+        };
       } });
     };
     Object.defineProperty(google.script, 'run', { configurable: true, get: function () { return mk({}); } });
@@ -7791,7 +7801,8 @@ var LF_ = (function () {
     /* ✍️ (V4.379) كتابة: saveMinistryFile عبر rw_call (016_ministry_write.sql). 'wmf' يعلنها الخادم بعد supaWriteOn('mf'). أي رفض/انقطاع ⇒ Apps Script كما كان */
     saveMinistryFile: { need: ['ministry', 'core', 'kv', 'wmf'], rpc: 'rw_call' },
     saveVisaFile: { need: ['visa', 'core', 'bookings', 'misc', 'kv', 'wvz'], rpc: 'rw_call' },   /* (V4.380) 017_visa_write.sql */
-    getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { skip: function () { return now() - (S.lastWAt || 0) < 90000; } }),
+    getNotifications: { need: ['misc', 'cfg'], rpc: 'rx_call2' },   /* (V4.385) جرس التنبيهات من Postgres — 022_notifications.sql */
+    getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { revalidate: function () { return now() - (S.lastWAt || 0) < 90000; } }),   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
     saveUiPref: { need: ['misc'], rpc: 'app_save_ui_pref', body: function (a) { return { p_screen: a[1], p_prefs: a[2] === undefined ? null : a[2] }; }, out: function () { return { success: true }; } },
     getAppBootstrap: { need: ['cfg', 'core', 'bookings', 'acc', 'misc', '@dv'], rpc: 'app_boot', body: function () { return {}; }, out: function (r) { return { success: true, parts: r.parts || {}, serverMs: r.serverMs }; } },
     heartbeatOnline: { need: ['@dv'], rpc: 'app_heartbeat', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count }; } },
@@ -7823,6 +7834,7 @@ var LF_ = (function () {
           if (!x) { if (why !== 'epoch') viaApps(); return; }
           try { learn(x.dv); } catch (eL) {}   // بصمات لحظة القراءة ⇒ الشاشات الأخرى تتحدّث إن تغيّر شيء
           if (s) s(x.d, uo);
+          try { var _dd = STRPC[prop]; if (_dd && _dd.revalidate && _dd.revalidate()) { var n2 = getPrev(); if (s) n2 = n2.withSuccessHandler(s); n2 = n2.withFailureHandler(function () {}); if (hasUo) n2 = n2.withUserObject(uo); n2[prop].apply(n2, a); } } catch (eRv) {}   // تصحيح بالخلفية بعد كتابة حديثة
           if (prop === 'getClientAccount' && a[1]) {   // (V4.383) مزامنة حجوزات الفنادق لهذا العميل بالخلفية (كانت داخل القراءة) — مرة/دقيقة لكل عميل
             try { var ck = String(a[1]), tn = Date.now(); window._caBgAt = window._caBgAt || {};
               if (!window._caBgAt[ck] || tn - window._caBgAt[ck] > 60000) { window._caBgAt[ck] = tn; getPrev().withFailureHandler(function () {}).clientAccountBg(window.authToken, ck); } } catch (eBg) {}
@@ -8725,6 +8737,32 @@ function _refreshHomeScreenMenu() {
   }).join('');
 }
 
+/* ⧉ (V4.385) فتح أي شاشة بتبويب منفصل بالمتصفح: الرابط ?go=<مفتاح الشاشة> (صفحة | gl:تبويب[:حساب] | hotels:صفحة | trip:اسم | accounts:عميل).
+   التبويب الجديد يدخل تلقائياً (الجلسة/مفتاح الجهاز بنفس المتصفح) ثم يفتح الشاشة عبر appGo_ */
+function _appBaseUrl_() { var u = ''; try { u = (window.LF_ && LF_.webUrl && LF_.webUrl()) || localStorage.getItem('_webAppUrl_') || ''; } catch (e) {} return u; }
+window.openKeyInBrowserTab_ = function (key) {
+  var base = _appBaseUrl_(); if (!base || !key) return false;
+  try { window.open(base + (base.indexOf('?') > -1 ? '&' : '?') + 'go=' + encodeURIComponent(key), '_blank'); return true; } catch (e) { return false; }
+};
+window.openCurrentInBrowserTab_ = function () {
+  var k = (typeof window.appCurKey_ === 'function') ? window.appCurKey_() : '';
+  if (!k) { try { _showPopup('لا توجد شاشة لفتحها', 'warning'); } catch (e) {} return; }
+  if (!window.openKeyInBrowserTab_(k)) { try { _showPopup('رابط التطبيق غير متاح بعد — أعد المحاولة بعد لحظات', 'warning'); } catch (e) {} }
+};
+function _applyDeepLink_() {
+  if (window._deepLinkDone_) return; window._deepLinkDone_ = true;
+  try {
+    var btn = document.getElementById('openNewTabBtn'); if (btn) btn.classList.remove('d-none');
+    if (!(window.google && google.script && google.script.url && google.script.url.getLocation)) return;
+    google.script.url.getLocation(function (loc) {
+      try {
+        var go = loc && loc.parameter && loc.parameter.go; if (!go) return;
+        setTimeout(function () { try { if (typeof window.appGo_ === 'function') window.appGo_(String(go)); } catch (e) { console.error('deepLink', e); } }, 1500);
+      } catch (e) {}
+    });
+  } catch (e) {}
+}
+
 function handleLogin(e) {
   e.preventDefault();
   // 🐛 (V4.188) النموذج مربوط بمعالجَين (onsubmit بالوسم + مستمع احتياطي عند الإقلاع) فكانت نفس ضغطة
@@ -8744,16 +8782,18 @@ function handleLogin(e) {
 var _supaCfg_ = res.supa; try { delete res.supa; } catch (eS) {}   // ⚡ (V4.378) رمز Supabase القادم مع الدخول: يُعتمد فوراً ولا يُحفظ بـ localStorage
 window.currentUser = res;
 window.authToken = res.token || null;
-try { if (_supaCfg_ && window.LF_ && LF_.spAdopt) LF_.spAdopt(_supaCfg_); } catch (eS2) {}   // قبل نداء الإقلاع وأول قراءة ⇒ تذهب لـ Supabase من اللحظة الأولى
+try { if (_supaCfg_ && window.LF_ && LF_.spAdopt) LF_.spAdopt(_supaCfg_); } catch (eS2) {}
+try { if (_supaCfg_ && _supaCfg_.enabled && _supaCfg_.url && _supaCfg_.anon) localStorage.setItem('lf_supa_pub', JSON.stringify({ url: _supaCfg_.url, anon: _supaCfg_.anon, glStore: !!_supaCfg_.glStore, store: _supaCfg_.store || null, webUrl: _supaCfg_.webUrl || '' })); } catch (eS3) {}   // (V4.385) لدخول Postgres السريع بالمرة القادمة   // قبل نداء الإقلاع وأول قراءة ⇒ تذهب لـ Supabase من اللحظة الأولى
 // 📱 (V4.319) مفتاح الجهاز للاستئناف الصامت بعد انتهاء الجلسة (يُحفظ هنا وفي صفحة الغلاف)
 if (res.deviceKey) _devKeySet_(res.deviceKey); else if (!res.resumed) _devKeySet_('');   // جهاز مشترك (بلا «تذكّر») ⇒ لا مفتاح قديم يبقى
 try { _loginNote_(''); } catch(e) {}
 window._sessExpiredShown = false;
 // 🔄 (V4.298-fix) رمز الجلسة في localStorage (يبقى بعد الريفريش داخل إطار Apps Script المعزول)
-try { localStorage.setItem('authToken', res.token || ''); } catch(e) {}
-try { sessionStorage.setItem('authToken', res.token || ''); } catch(e) {}
-try { localStorage.setItem('smartManagerUser', JSON.stringify(res)); } catch(e) {}
-try { _tsInit_(); _tsPost_({ t: 'login', token: res.token || '', user: res.username || '' }); } catch(e) {}   // 🗂️ (V4.350)
+var _tkS_ = (res.token && String(res.token).indexOf('pending-') === 0) ? '' : (res.token || '');   // (V4.385) رمز «معلّق» أثناء الدخول السريع لا يُحفَظ
+try { localStorage.setItem('authToken', _tkS_); } catch(e) {}
+try { sessionStorage.setItem('authToken', _tkS_); } catch(e) {}
+try { var _resS_ = {}; for (var _k_ in res) _resS_[_k_] = res[_k_]; _resS_.token = _tkS_; localStorage.setItem('smartManagerUser', JSON.stringify(_resS_)); } catch(e) {}
+try { _tsInit_(); _tsPost_({ t: 'login', token: _tkS_, user: res.username || '' }); } catch(e) {}   // 🗂️ (V4.350)
 // 🚀 (V4.200) نداء الإقلاع الموحّد — يُرسَل قبل أي تحميل آخر فتأخذ كل التحميلات الأولى بياناتها منه
 try { if (typeof _bootStart_ === 'function') _bootStart_(); } catch(e) {}
 // 🔔 (V4.125) مفاتيح تفعيل التنبيهات — تُحمَّل مبكراً فتحترمها التنبيهات المحسوبة بالواجهة
@@ -8889,6 +8929,7 @@ appDiv.style.backgroundColor = "white";
               // تطبيق تفضيل المستخدم للشاشة الرئيسية عند الفتح
               _runStep('تحديث قائمة الشاشة الافتراضية', _refreshHomeScreenMenu);
               _runStep('تطبيق الشاشة الافتراضية للمستخدم', _applyHomeScreen);
+            _runStep('فتح الشاشة المطلوبة من الرابط (go=)', _applyDeepLink_);
             }
 
             // بدء مؤقّت الجلسة بناءً على المدة المُعدَّة في الإعدادات
@@ -8908,18 +8949,80 @@ appDiv.style.backgroundColor = "white";
       }
     };
   if (e && e.__presetRes) { _onLoginRes_(e.__presetRes); return; }   // (V4.319) دخول تلقائي بمفتاح الجهاز
-  google.script.run
-    .withSuccessHandler(_onLoginRes_)
-    .withFailureHandler(function(err) {
-      window.__step('🔐 [دخول ✗] فشل الاتصال بالخادم أثناء loginUser', (err && err.message) || err);
-      btn.innerHTML = "🔐 تسجيل الدخول";
-      _showPopup('خطأ: ' + (err && (err.message || err) || 'تعذّر الاتصال بالسيرفر'), 'error', 'تعذّر تسجيل الدخول');
-    })
-    .loginUser(
-      document.getElementById("loginUsername").value,
-      document.getElementById("loginPassword").value,
-      !(document.getElementById("loginRemember") && !document.getElementById("loginRemember").checked)
-    );
+  var _lu_ = document.getElementById("loginUsername").value, _lp_ = document.getElementById("loginPassword").value,
+      _lr_ = !(document.getElementById("loginRemember") && !document.getElementById("loginRemember").checked);
+  var slowLogin = function () {
+    google.script.run
+      .withSuccessHandler(_onLoginRes_)
+      .withFailureHandler(function(err) {
+        window.__step('🔐 [دخول ✗] فشل الاتصال بالخادم أثناء loginUser', (err && err.message) || err);
+        btn.innerHTML = "🔐 تسجيل الدخول";
+        _showPopup('خطأ: ' + (err && (err.message || err) || 'تعذّر الاتصال بالسيرفر'), 'error', 'تعذّر تسجيل الدخول');
+      })
+      .loginUser(_lu_, _lp_, _lr_);
+  };
+  // ⚡ (V4.385) دخول سريع من Postgres (app_login ≈0.3 ث بدل loginUser ≈10 ث): نجاح فقط يُقبل، وجلسة Apps Script تُنشأ بالخلفية وتُحجَز نداءاتها حتى تصل
+  _fastLogin_(_lu_, _lp_, function (fr) {
+    if (!fr) { slowLogin(); return; }
+    window.__step('🔐 [دخول ⚡] قبول سريع من Postgres');
+    var ph = 'pending-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    window._authGate = { ph: ph, q: [], done: false };
+    fr.token = ph;
+    _onLoginRes_(fr);
+    google.script.run
+      .withSuccessHandler(function (r) { _fastLoginAdopt_(r, _lu_); })
+      .withFailureHandler(function () { setTimeout(function () { google.script.run.withSuccessHandler(function (r) { _fastLoginAdopt_(r, _lu_); }).withFailureHandler(function () { _fastLoginAdopt_(null, _lu_); }).loginUser(_lu_, _lp_, _lr_); }, 1500); })
+      .loginUser(_lu_, _lp_, _lr_);
+  });
+}
+
+function _sha256Hex_(str, cb) {
+  try {
+    if (!(window.crypto && crypto.subtle && window.TextEncoder)) return cb(null);
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(str))).then(function (b) {
+      cb(Array.prototype.map.call(new Uint8Array(b), function (x) { return ('0' + x.toString(16)).slice(-2); }).join(''));
+    }, function () { cb(null); });
+  } catch (e) { cb(null); }
+}
+// يُرجع كائناً بشكل رد loginUser (مع supa) عند النجاح، وإلا null ⇒ المسار القديم
+function _fastLogin_(user, pass, cb) {
+  var pub = null, done = false;
+  try { pub = JSON.parse(localStorage.getItem('lf_supa_pub') || 'null'); } catch (e) {}
+  if (!pub || !pub.url || !pub.anon || typeof fetch !== 'function') return cb(null);
+  var fin = function (v) { if (done) return; done = true; clearTimeout(to); cb(v); };
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null); }, 3500);
+  _sha256Hex_(pass, function (h) {
+    if (!h) return fin(null);
+    fetch(pub.url + '/rest/v1/rpc/app_login', { method: 'POST', headers: { apikey: pub.anon, Authorization: 'Bearer ' + pub.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_user: user, p_hash: h }), signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j || j.success !== true || !j.token) return fin(null);
+        fin({ success: true, fullName: String(j.fullName || ''), permissions: j.permissionsRaw, token: null, username: String(j.username || user), mustChangePwd: false, userRow: 0, fast: true,
+          supa: { success: true, enabled: true, url: pub.url, anon: pub.anon, token: j.token, expiresAt: j.expiresAt, glStore: !!pub.glStore, store: pub.store || undefined, webUrl: pub.webUrl || '' } });
+      }, function () { fin(null); });
+  });
+}
+// وصل ردّ loginUser الحقيقي بالخلفية: اعتماد الجلسة وتحرير النداءات المحجوزة (أو إخراج المستخدم لو رُفض فعلياً)
+function _fastLoginAdopt_(r, user) {
+  var g = window._authGate; if (!g || g.done) return; g.done = true;
+  if (r && r.success && r.token) {
+    var ph = g.ph; window.authToken = r.token;
+    try { if (window.currentUser) { window.currentUser.token = r.token; window.currentUser.deviceKey = r.deviceKey; window.currentUser.userRow = r.userRow; window.currentUser.mustChangePwd = !!r.mustChangePwd; } } catch (e) {}
+    try { localStorage.setItem('authToken', r.token); sessionStorage.setItem('authToken', r.token); var u2 = {}; for (var k in window.currentUser) u2[k] = window.currentUser[k]; localStorage.setItem('smartManagerUser', JSON.stringify(u2)); } catch (e) {}
+    try { if (r.deviceKey) _devKeySet_(r.deviceKey); else _devKeySet_(''); } catch (e) {}
+    try { _tsPost_({ t: 'login', token: r.token, user: r.username || user || '' }); } catch (e) {}
+    try { if (r.supa && r.supa.enabled && r.supa.url && r.supa.anon) localStorage.setItem('lf_supa_pub', JSON.stringify({ url: r.supa.url, anon: r.supa.anon, glStore: !!r.supa.glStore, store: r.supa.store || null, webUrl: r.supa.webUrl || '' })); } catch (e) {}
+    var q = g.q; g.q = [];
+    q.forEach(function (f) { try { f(r.token); } catch (e) { console.error('authGate', e); } });
+    if (r.mustChangePwd) { try { showForceChangePasswordModal(); } catch (e) {} }
+  } else {
+    var q2 = g.q; g.q = []; window._authGate = null;
+    var denied = r && r.success === false;   // الحساب مرفوض فعلياً (كلمة مرور تغيّرت/حساب معطّل) أو تعذّر الاتصال
+    try { _showPopup(denied ? (r.error || 'تعذّر تأكيد الجلسة') : 'تعذّر الاتصال بالخادم — أعد تسجيل الدخول', 'error', 'انتهت الجلسة'); } catch (e) {}
+    try { window.authToken = null; localStorage.removeItem('authToken'); localStorage.removeItem('smartManagerUser'); sessionStorage.removeItem('authToken'); } catch (e) {}
+    setTimeout(function () { try { location.reload(); } catch (e) {} }, 1800);
+  }
 }
 
 
@@ -9385,7 +9488,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.385";
+var CLIENT_APP_VERSION = "4.386";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -47840,9 +47943,14 @@ function vzAccClearOne(k) {
 }
 function vzAccFetch() {
   var b = document.getElementById('vzAccBody');
-  if (b) b.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
+  // (V4.385) عرض فوري لآخر كشف محمَّل لهذا الوكيل (ذاكرة الجلسة) ثم تحديثه بالخلفية — لا انتظار 5–10 ث عند كل فتح
+  window._vzAccMem_ = window._vzAccMem_ || {};
+  var _ck_ = String(VZ._accKey || ''), _cached_ = window._vzAccMem_[_ck_], _shown_ = false;
+  if (_cached_) { VZ._acc = _cached_; VZ._accTransport = _cached_.transportRuns || []; try { vzAccRender(); _shown_ = true; } catch (eC) {} }
+  else if (b) b.innerHTML = '<div class="text-muted text-center py-4">⏳ جاري التحميل…</div>';
   google.script.run
     .withSuccessHandler(function (res) {
+      if (res && res.success) window._vzAccMem_[_ck_] = res;
       if (!res || !res.success) { if (b) b.innerHTML = '<div class="alert alert-danger">' + vzEsc((res && res.error) || 'تعذّر التحميل') + '</div>'; return; }
       VZ._acc = res;
       var cs = document.getElementById('vzAccComp');
@@ -47858,7 +47966,7 @@ function vzAccFetch() {
       vzAccRender();
       try { _ledgerPendRender_('ap', res.ledgerPend || []); } catch (eLp) {}   // 🏛️ (V4.349) — ⚡ (V4.351) ضمن نفس الاستجابة
     })
-    .withFailureHandler(function (e) { if (b) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
+    .withFailureHandler(function (e) { if (b && !_shown_) b.innerHTML = '<div class="alert alert-danger">❌ ' + vzEsc(e && e.message ? e.message : e) + '</div>'; })
     .getAgentAccount(window.authToken, VZ._accKey, VZ._accF);
 }
 // شرائح الفلاتر النشطة مع X لكل فلتر — تظهر بالشاشة وتُطبَع بالكشف
@@ -57550,6 +57658,7 @@ function aiSettingsTest_(btn) {
     switchPage(page || 'entry');
   };
   window.appGo_ = go;
+  window.appCurKey_ = curKey;
   var canOpen = function (key) { var pg = pageOf(key); return !!document.getElementById('section-' + pg) && (typeof _canOpenScreen_ !== 'function' || _canOpenScreen_(pg)); };
   var deactivate = function (t) {
     if (!t) return;
@@ -57655,6 +57764,7 @@ function aiSettingsTest_(btn) {
     var a = e.target.closest && e.target.closest('#appSidebar a.nav-link'); if (!a) return;
     var k = sideKey(a); if (!k) return;
     e.preventDefault(); e.stopPropagation();
+    if (window.openKeyInBrowserTab_ && window.openKeyInBrowserTab_(k)) return;   // (V4.385) تبويب منفصل حقيقي بالمتصفح؛ وإلا التبويب الداخلي كما كان
     open(k);
     try { if (typeof closeAppSidebarOnMobile === 'function') closeAppSidebarOnMobile(); } catch (x) {}
   };

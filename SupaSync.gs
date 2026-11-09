@@ -278,7 +278,8 @@ function _supaStoreInfo0_() {
    ============================================================================ */
 function _supaBootOn_() { return _supaOn_() && _supaP_('SUPA_BOOT') !== 'off'; }
 function _supaCfgBuild_() {
-  return { app_version: { version: String(APP_VERSION) }, notif_settings: _notifSettingsObj_(), session_cfg: _sessionDurationObj_(), sort_mode: _sortModeObj_() };
+  return { app_version: { version: String(APP_VERSION) }, notif_settings: _notifSettingsObj_(), session_cfg: _sessionDurationObj_(), sort_mode: _sortModeObj_(),
+    perm_maps: { legacy: (typeof _PERM_LEGACY_MAP_ !== 'undefined' ? _PERM_LEGACY_MAP_ : {}), screens: (typeof _PERM_SCREENS_ !== 'undefined' ? _PERM_SCREENS_ : []) } };   // ⚡ (V4.385) لدخول Postgres السريع (app_login)
 }
 function _supaCfgPush_(force) {
   if (!_supaBootOn_()) return 'off';
@@ -383,3 +384,14 @@ function _supaBootSync_() {
 }
 // فحص فوري من المحرر لكل ما سبق
 function supaBootSyncNow() { requireScriptOwner_(); var r = _supaBootSync_(); Logger.log(r); return r; }
+
+
+/* ⚡ (V4.385) دخول سريع: شغّلها مرة واحدة من المحرر بعد تشغيل 021_fast_login.sql — ترفع سرّ JWT (جدول app_secrets بلا أي منح للمتصفح) + خرائط الصلاحيات */
+function supaAuthSeedNow() {
+  requireScriptOwner_();
+  if (!_supaOn_() || !_supaP_('SUPA_JWT_SECRET')) { Logger.log('SUPA_ENABLED/SUPA_JWT_SECRET غير مضبوطة'); return 'off'; }
+  var ok = _supaUpsert_('app_secrets', [{ k: 'jwt_secret', v: _supaP_('SUPA_JWT_SECRET') }], 'k');
+  var c = _supaCfgPush_(true);
+  Logger.log('app_secrets: ' + (ok ? 'ok' : 'fail') + ' | app_config: ' + c);
+  return ok ? 'ok' : 'fail';
+}
