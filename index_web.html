@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.417  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.418  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8458,8 +8458,8 @@ function _devAutoLogin_() {
         window._RAW_RUN_ && window._RAW_RUN_().withSuccessHandler(function (res) {
           if (window.authToken) return;
           if (res && res.success && res.token) { _sessAdopt_(res); try { handleLogin({ preventDefault: function () {}, __presetRes: res }); } catch (e) { console.error(e); } }
-          else if (btn0) btn0.innerHTML = '🔐 تسجيل الدخول';
-        }).withFailureHandler(function () { if (btn0) btn0.innerHTML = '🔐 تسجيل الدخول'; }).appHandoffRedeem(String(ho));
+          else { if (btn0) btn0.innerHTML = '🔐 تسجيل الدخول'; try { _loginNote_('تعذّر تسليم الجلسة للتبويب الجديد (' + ((res && res.error) || 'لا رد') + ') — سجّل الدخول مرة واحدة'); } catch (eN) {} console.warn('handoff redeem', res && res.error); }
+        }).withFailureHandler(function (er) { if (btn0) btn0.innerHTML = '🔐 تسجيل الدخول'; try { _loginNote_('تعذّر تسليم الجلسة: ' + ((er && er.message) || er)); } catch (eN) {} }).appHandoffRedeem(String(ho));
       });
     }
   } catch (eHo) {}
@@ -8929,7 +8929,7 @@ window.openKeyInBrowserTab_ = function (key) {
     try { if (w) { w.location.href = u; } else window.open(u, '_blank'); } catch (e2) {}
   };
   try { w && w.document && (w.document.title = 'جاري الفتح…'); } catch (e3) {}
-  try { google.script.run.withSuccessHandler(function (r) { fin(r && r.success ? r.code : ''); }).withFailureHandler(function () { fin(''); }).appHandoffIssue(window.authToken); } catch (e4) { fin(''); }
+  try { google.script.run.withSuccessHandler(function (r) { if (!(r && r.success)) console.warn('handoff issue', r); fin(r && r.success ? r.code : ''); }).withFailureHandler(function (er) { console.warn('handoff issue fail', er); fin(''); }).appHandoffIssue(window.authToken); } catch (e4) { fin(''); }
   return true;
 };
 window.openCurrentInBrowserTab_ = function () {
@@ -9693,7 +9693,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.417";
+var CLIENT_APP_VERSION = "4.418";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -50392,6 +50392,14 @@ var GL_SUPA_ = {
   glPendingList: { rpc: 'glx_pending_list', aux: 1, body: function () { return {}; } }
 };
 function glRun(fn, args, ok, fail) {
+  /* (V4.418) تخطيط الأرصدة الشخصي (scope=mine) يُحفظ في Postgres (044) — لا يمس gl_aux فلا يحجب القراءات؛ العام/الفشل ⇒ Apps Script */
+  if (fn === 'glBalLayoutSave' && args && args[1] === 'mine') {
+    try {
+      if (typeof LF_ !== 'undefined' && LF_.glRpc && LF_.glRpc('glx_bal_save', { p_layout: args[0] || '', p_scope: 'mine' }, function (res) {
+        if (res && res.success) ok(res); else { GL._wAt = Date.now(); google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) { if (fail) fail(e); else _showPopup((e && e.message) || String(e), 'error'); }).glBalLayoutSave(window.authToken, args[0], 'mine'); }
+      }, fn)) return;
+    } catch (eB) { console.error('bal supa', eB); }
+  }
   var ro = GL_RO_RX_.test(fn);
   if (!ro) { GL._wAt = Date.now(); var ok0 = ok; ok = function (res) { GL._wAt = Date.now(); glDataChanged_(); if (res && res.mirQ) glMirFlushSoon_(); if (ok0) ok0(res); }; }
   var viaApps = function () {

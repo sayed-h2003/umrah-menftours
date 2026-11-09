@@ -1,7 +1,7 @@
 -- V4.417: glBootstrap من Postgres (إقلاع الحسابات العامة) — نفس مخرجات Accounts.gs:glBootstrap.
 -- المصادر: gl_aux (accounts/hbnames/pendlist/meta — يرفعها SupaSync) · gl_settings · gl_fx_daily · gl_lines (أرصدة حيّة).
 -- لا يرد «same» أبداً (الأرصدة حيّة بينما ver من gl_aux قد يتأخر دقيقة) — الرد الكامل سريع بـPostgres.
--- مؤجَّل لـApps Script (0A000): تفعيل «تخصيص الصلاحيات» bal_user_cust=نعم (تخطيط كل مستخدم بخصائص السكربت).
+-- (V4.418) تخطيط كل مستخدم من الجدول gl_bal_user (044) بدل خصائص السكربت.
 create or replace function glx_bootstrap_raw() returns jsonb language plpgsql stable as
 $$ declare
   v_accs jsonb; v_hb jsonb; v_pl jsonb; v_meta jsonb; v_ver text;
@@ -20,7 +20,6 @@ begin
   -- الإعدادات
   select jsonb_build_object('startDate', '01/07/2026', 'baseCurrency', 'EGP', 'rate_SAR', '13.3', 'rate_USD', '50')
          || coalesce(jsonb_object_agg(s2.key, regexp_replace(coalesce(s2.value, ''), '^\s+|\s+$', '', 'g')) filter (where coalesce(s2.key, '') <> ''), '{}'::jsonb) into st from gl_settings s2;
-  if coalesce(st ->> 'bal_user_cust', '') = 'نعم' then raise exception 'تخصيص الصلاحيات: Apps Script' using errcode = '0A000'; end if;
   select coalesce(jsonb_object_agg(b.key, case when st ? b.key and st ->> b.key <> '' then st -> b.key else b.value end), '{}'::jsonb) into brand from jsonb_each(def_brand) b;
   st := st || jsonb_build_object('vchBrand', brand);
   v_rates := jsonb_build_object('EGP', 1, 'SAR', coalesce(nullif(_glx_pf(st ->> 'rate_SAR'), 0), 13.3), 'USD', coalesce(nullif(_glx_pf(st ->> 'rate_USD'), 0), 50));
@@ -71,7 +70,8 @@ begin
        'EQUITY', jsonb_build_object('label', 'حقوق ملكية', 'normal', 'C'), 'REV', jsonb_build_object('label', 'إيرادات', 'normal', 'C'), 'EXP', jsonb_build_object('label', 'مصروفات', 'normal', 'D')),
     'kinds', jsonb_build_object('safe', 'خزينة', 'bank', 'بنك', 'custody', 'عهدة', 'client', 'عميل', 'agent', 'وكيل', 'supplier', 'مورد', 'trip', 'رحلة عمرة', 'fx', 'وسيط عملات', 'roomfee', 'رسوم غرفة', 'other', ''),
     'entryTypes', jsonb_build_array('قيد يومية', 'سند قبض', 'سند صرف', 'إيداع بنكي', 'سحب بنكي', 'صرف عهدة', 'تسوية عهدة', 'تحويل نقدية', 'تحويل عملة', 'تحويل بين طرفين', 'قيد افتتاحي', 'قيد مستورد', 'قيد تلقائي', 'قيد إقفال'),
-    'accounts', v_list, 'balances', v_bal, 'can', v_can, 'balMine', '', 'balUserOn', false,
+    'accounts', v_list, 'balances', v_bal, 'can', v_can, 'balMine', (case when coalesce(st ->> 'bal_user_cust', '') = 'نعم' then coalesce((select b.layout from gl_bal_user b where b.username = lower(coalesce(app_user(), ''))), '') else '' end),
+    'balUserOn', coalesce(st ->> 'bal_user_cust', '') = 'نعم',
     'csPend', coalesce(nullif(v_meta ->> 'csPend', '')::int, 0),
     'pendingCount', (select count(*) from jsonb_array_elements(coalesce(v_pl -> 'rows', '[]'::jsonb)) e where coalesce(e ->> 'status', '') <> 'مرفوض'),
     'tripMode', (st ->> 'trip_mode') = 'نعم');

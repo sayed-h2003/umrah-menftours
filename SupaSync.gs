@@ -152,6 +152,27 @@ function supaGlMetaSync_() {
   if (ok) P.setProperty('SUPA_GLMETA', js);
   return ok ? 'ok' : 'fail';
 }
+/* (V4.418) تخطيط الأرصدة الشخصي لكل مستخدم: نقل مرة واحدة من خصائص السكربت GL_BALU_<user> إلى جدول gl_bal_user (044) — شغّلها يدوياً مرة */
+function supaBalUserMigrateNow() {
+  requireScriptOwner_();
+  if (!_supaOn_()) return 'Supabase غير مفعّل';
+  var all = PropertiesService.getScriptProperties().getProperties(), rows = [];
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf('GL_BALU_') !== 0 || !all[k]) return;
+    rows.push({ username: k.slice(8), layout: all[k], updated_at: new Date().toISOString() });
+  });
+  var ok = rows.length ? _supaUpsert_('gl_bal_user', rows, 'username') : true;
+  Logger.log('gl_bal_user: ' + rows.length + ' تخطيط → ' + (ok ? 'تم' : 'فشل'));
+  return rows.length + (ok ? ' تخطيط نُقل' : ' فشل');
+}
+function _supaBalUserPut_(username, json) {   // مرآة اختيارية عند حفظ المستخدم عبر Apps Script (احتياطي)
+  try {
+    if (!_supaOn_()) return;
+    var u = String(username || '').toLowerCase().replace(/[^a-z0-9_.\u0600-\u06FF]/g, '_').slice(0, 60);
+    if (json) _supaUpsert_('gl_bal_user', [{ username: u, layout: json, updated_at: new Date().toISOString() }], 'username');
+    else _supaReq_('DELETE', 'gl_bal_user?username=eq.' + encodeURIComponent(u));
+  } catch (e) {}
+}
 function supaGlAuxSyncNow() { requireScriptOwner_(); var r = supaGlAuxSync_(true); Logger.log('gl_aux: ' + r + ' (GL_STORE=' + _supaP_('GL_STORE') + ')'); return r; }
 
 function _supaSynced_() { try { return JSON.parse(_supaP_('SUPA_SYNCED') || '{}') || {}; } catch (e) { return {}; } }

@@ -646,6 +646,7 @@ function glBalLayoutSave(authToken, layout, scope) {
   if (!admin && !_glBalUserOn_()) throw new Error('تخصيص الأرصدة الشخصي غير مفعَّل — اطلب من المدير تفعيل «تخصيص الصلاحيات»');
   var P = PropertiesService.getScriptProperties(), k = _glBalUserKey_(session.username);
   if (json) P.setProperty(k, json); else P.deleteProperty(k);
+  try { _supaBalUserPut_(session.username, json); } catch (eSb) {}   // (V4.418) مرآة لـPostgres
   return { success: true, scope: scope, layout: json };
 }
 function glBalUserCustSet(authToken, on) {
