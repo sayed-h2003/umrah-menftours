@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.392  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.393  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7844,6 +7844,11 @@ var LF_ = (function () {
           }).withFailureHandler(function () {}).getAgentAccountExtras(window.authToken, a[1], a[2]);
         } catch (e) {}
       } },
+    /* (V4.393) 029_acc_writes.sql — حذف دفعة/بند/جماعي + تعديل دفعة + تحويل عملة جديد من Postgres؛ دفعة جديدة عادية وحذف «من الشاشة فقط» وترحيل الرصيد/الفنادق ⇒ Apps Script */
+    deleteAccPayment: { need: ['acc', 'wbk'], rpc: 'rw_call', pre: function (a) { return !a[2]; } },
+    deleteAccItem: { need: ['acc', 'wbk'], rpc: 'rw_call', pre: function (a) { return !a[2]; } },
+    deleteAccItemsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
+    saveAccPayment: { need: ['acc', 'wbk'], rpc: 'rw_call', pre: function (a) { var p = a[1]; return !!(p && (p.id || p.ptype === 'تحويل')); } },
     getRequiredFieldsConfig: { need: ['cfg'], rpc: 'rx_call2' },   /* (V4.387) 023_required_fields.sql */
     getNotifications: { need: ['misc', 'cfg'], rpc: 'rx_call2' },   /* (V4.385) جرس التنبيهات من Postgres — 022_notifications.sql */
     getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { revalidate: function () { return now() - (S.lastWAt || 0) < 90000; } }),   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
@@ -9539,7 +9544,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.392";
+var CLIENT_APP_VERSION = "4.393";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

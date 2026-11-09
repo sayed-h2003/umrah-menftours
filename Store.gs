@@ -761,6 +761,10 @@ function _outboxDrain_(maxMs) {
     rows.forEach(function (x) {
       ids.push(x.id); var p = x.payload || {};
       if (x.kind === 'audit') recs.push({ user: p.user, action: p.action, record: p.record, field: p.field, old: p.old, 'new': p['new'] });
+      else if (x.kind === 'snaprow') {   // (V4.393) لقطة استرجاع صف (قبل حذف/تعديل دفعة) بنفس _snapRowTake_ — تُسجَّل بالخلفية بعد الكتابة من Postgres
+        try { _snapRowTake_(String(p.sheet), String(p.key), (p.row || []).map(function (c) { return (c && typeof c === 'object' && c['$d'] !== undefined) ? new Date(c['$d']) : c; }), String(p.action || ''), String(p.user || '')); }
+        catch (eSn) { Logger.log('outbox snaprow: ' + eSn.message); }
+      }
       else if (x.kind === 'bkdiff') {   // (V4.388) أثر تدقيق حفظ الإشعار من Postgres: إنشاء ⇒ سطر إنشاء · تعديل ⇒ فرق حقل بحقل (نفس logBookingRowDiff_)
         try {
           var rv = function (row) { return (row || []).map(function (c) { return (c && typeof c === 'object' && c['$d'] !== undefined) ? new Date(c['$d']) : c; }); };
