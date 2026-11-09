@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.395  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.396  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7852,6 +7852,9 @@ var LF_ = (function () {
     /* (V4.395) 031_ledger.sql — نظام السندات من Postgres: الدفعة الجديدة/الجماعية ⇒ سند مسودة بالطابور · الاعتماد/الرفض/السحب · قراءات الطابور. آثارها الجانبية (مرآة الدفعة بالشاشة · تليجرام) تُنفَّذ بنداء glOutboxKick */
     saveAccPayment: { need: ['acc', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
     saveAccPaymentsBulk: { need: ['acc', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
+    /* (V4.396) 032_ledger_agents.sql — دفعات الوكلاء بنظام السندات (جديدة/لصق ⇒ سند مسودة · تعديل دفعة) */
+    saveAgentPayment: { need: ['visa', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); try { if (d && d.success !== false) _RAWRUN_().withFailureHandler(function () {}).vzCacheClearBg(window.authToken); } catch (e) {} } },
+    saveAgentPaymentsBatch: { need: ['visa', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
     ledgerCount: { need: ['glaux', '@gl'], rpc: 'rx_call2' },
     ledgerPendingFor: { need: ['glaux', '@gl'], rpc: 'rx_call2' },
     ledgerQueue: { need: ['glaux', '@gl'], rpc: 'rx_call2' },
@@ -9556,7 +9559,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.395";
+var CLIENT_APP_VERSION = "4.396";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
