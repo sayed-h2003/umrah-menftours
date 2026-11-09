@@ -141,6 +141,17 @@ function supaGlAuxSync_(force) {
   P.setProperty('SUPA_GLAUX_VER', ver);
   return 'ok';
 }
+// (V4.417) gl_aux.meta = {url, csPend}: ما يحتاجه glBootstrap من حالة الشيتات (يتغيّر بلا تغيّر GL_DATA_VER) — يُرفع عند التغيّر فقط
+function supaGlMetaSync_() {
+  if (!_supaOn_() || _supaP_('GL_STORE') !== 'supabase') return 'skip';
+  var id = _glSSId_(), m = { url: id ? 'https://docs.google.com/spreadsheets/d/' + id + '/edit' : '', csPend: 0 };
+  try { m.csPend = _glCsPendTotal_() || 0; } catch (e) {}
+  var js = JSON.stringify(m), P = PropertiesService.getScriptProperties();
+  if (P.getProperty('SUPA_GLMETA') === js) return 'same';
+  var ok = _supaUpsert_('gl_aux', [{ key: 'meta', data: m, ver: _glVerFresh_(), updated_at: new Date().toISOString() }], 'key');
+  if (ok) P.setProperty('SUPA_GLMETA', js);
+  return ok ? 'ok' : 'fail';
+}
 function supaGlAuxSyncNow() { requireScriptOwner_(); var r = supaGlAuxSync_(true); Logger.log('gl_aux: ' + r + ' (GL_STORE=' + _supaP_('GL_STORE') + ')'); return r; }
 
 function _supaSynced_() { try { return JSON.parse(_supaP_('SUPA_SYNCED') || '{}') || {}; } catch (e) { return {}; } }
@@ -175,6 +186,7 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
     }
     try { _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (المرحلة 4)
     var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
+    try { supaGlMetaSync_(); } catch (eGm) { Logger.log('supaGlMeta: ' + eGm); }   // ⚡ (V4.417) رابط ملف الحسابات + عدد صفوف شيتات العهد الناقصة (لـ glx_bootstrap)
     var b378 = _supaBootSync_();   // ⚡ (V4.378) app_config + حالة القيود + سجل التعديلات
     return 'ok work=' + work + ' glaux=' + gx + ' boot=' + b378 + ' ms=' + (Date.now() - t0);
   } finally { try { lk.releaseLock(); } catch (e) {} }
