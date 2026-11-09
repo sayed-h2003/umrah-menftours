@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.396  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.397  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7826,7 +7826,25 @@ var LF_ = (function () {
       } },
     /* (V4.389) 025_booking_misc_writes.sql — حذف الإشعار + إلغاء الاعتماد من Postgres (الاعتماد «معتمد» يبقى على Apps Script) */
     deleteBookingRecord: { need: ['bookings', 'core', 'wbk'], rpc: 'rw_call', after: function (a, d) { if (d && d.success === true) { try { _RAWRUN_().withFailureHandler(function () {}).bookingCacheBustBg(window.authToken); } catch (e) {} } } },
-    toggleApprovalStatus: { need: ['bookings', 'core', 'wbk'], rpc: 'rw_call', pre: function (a) { return a[2] !== 'معتمد'; }, after: function (a, d) { if (d && d.success === true) { try { _RAWRUN_().withFailureHandler(function () {}).bookingCacheBustBg(window.authToken); } catch (e) {} } } },
+    toggleApprovalStatus: { need: ['bookings', 'core', 'wbk'], rpc: 'rw_call',
+      /* (V4.397) 033_trip_writes.sql — «معتمد»: فحص المتصفح (إلزامية + منطق التحركات بنفس كود الخادم) على نسخة الإشعار المحمّلة؛ أي نقص ⇒ Apps Script يعرض كل الأخطاء */
+      pre: function (a) {
+        if (a[2] !== 'معتمد') { BKSTASH_.set(a, null); return true; }
+        try {
+          var lst = window.localBookingsCache; if (!Array.isArray(lst) || !window.BKSRV_) return false;
+          var bk = lst.filter(function (x) { return x && String(x.id) === String(a[1]); })[0]; if (!bk) return false;
+          var c = JSON.parse(JSON.stringify(bk)), cfg = null;
+          try { cfg = (JSON.parse(localStorage.getItem('_reqFieldsCfg_') || 'null') || {}).res; } catch (e0) {}
+          if (!cfg || !cfg.catalog) return false;
+          var dir = String(c.direction || '').trim(), skip = {}; if (dir === 'مكة فقط') skip.madinahHotel = 1; else if (dir === 'المدينة فقط') skip.makkahHotel = 1;
+          var miss = (cfg.required || []).filter(function (id) { if (skip[id]) return false; var v = c[id]; return v === undefined || v === null || String(v).trim() === ''; });
+          if (miss.length) return false;
+          c.__strictDates__ = true; if (BKSRV_.validate(c)) return false;
+          BKSTASH_.set(a, { v: 'c1' }); return true;
+        } catch (e) { return false; }
+      },
+      body: function (a) { var st = BKSTASH_.get(a); return { p_fn: 'toggleApprovalStatus', p_args: st ? [null, a[1], a[2], st] : [null, a[1], a[2]] }; },
+      after: function (a, d) { if (d && d.success === true) { try { _RAWRUN_().withFailureHandler(function () {}).bookingCacheBustBg(window.authToken); } catch (e) {} } } },
     saveAccItem: { need: ['acc', 'wbk'], rpc: 'rw_call' },   /* (V4.390) 026_acc_item.sql — بند حساب عميل (إضافة/تعديل) من Postgres؛ الحجز الفندقي/بلا meta ⇒ Apps Script */
     getTripAccountsSummary: { need: ['acc', 'core'], rpc: 'rx_call2' },   /* (V4.391) 027_trip_accounts_summary.sql — كشف الرحلة؛ مطابقة 400 مجموعة بيانات عشوائية مع Code.gs (tools/test_trip_summary_pg.js) */
     /* (V4.392) 028_agent_account.sql — كشف حساب الوكيل من Postgres؛ أرقام القيود/السندات والمسودات المعلّقة (جداول GL) تصل بنداء خلفي getAgentAccountExtras وتُدمج بالكشف المفتوح */
@@ -7864,6 +7882,11 @@ var LF_ = (function () {
     transferAccPayment: { need: ['acc', 'wbk'], rpc: 'rw_call' },
     transferAccPaymentsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
     updateAccPaymentsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
+    /* (V4.397) 033_trip_writes.sql — ترحيل الأرصدة · حذف رحلة · ملاحظة التسكين والترتيب المدموج */
+    carryForwardTripBalance: { need: ['acc', 'wbk'], rpc: 'rw_call' },
+    deleteTrip: { need: ['core', 'wbk'], rpc: 'rw_call' },
+    saveHousingNote: { need: ['misc', 'wbk'], rpc: 'rw_call' },
+    saveMergedHousing: { need: ['misc', 'wbk'], rpc: 'rw_call', body: function (a) { return { p_fn: 'saveMergedHousing', p_args: [null, a[1], a[2], JSON.stringify(a[3] || [])] }; } },
     getRequiredFieldsConfig: { need: ['cfg'], rpc: 'rx_call2' },   /* (V4.387) 023_required_fields.sql */
     getNotifications: { need: ['misc', 'cfg'], rpc: 'rx_call2' },   /* (V4.385) جرس التنبيهات من Postgres — 022_notifications.sql */
     getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { revalidate: function () { return now() - (S.lastWAt || 0) < 90000; } }),   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
@@ -9559,7 +9582,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.396";
+var CLIENT_APP_VERSION = "4.397";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

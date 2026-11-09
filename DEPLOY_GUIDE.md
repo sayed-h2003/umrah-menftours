@@ -3120,3 +3120,10 @@
 
 ## V4.396 — دفعات الوكلاء بنظام السندات (032_ledger_agents.sql)
 شغّل `supabase/032_ledger_agents.sql` بعد 031 (و028)؛ يمدّد `_lg_submit` لأسرة الوكلاء (`ap`: حساب طرف بفئة وكيل، اتجاه `in`/`out`، فحص تكرار بدفعات الوكلاء) وينقل `saveAgentPayment` (جديدة ⇒ سند مسودة · تعديل مع فحص التعارض ولقطة استرجاع) و`saveAgentPaymentsBatch` (لصق دفعات). تعديل دفعة منسوخة من قيد (⟦src:gl-⟧) يبقى على Apps Script. الأسرة `hb` (الفنادق) ما زالت على Apps Script.
+
+## V4.397 — ترحيل الأرصدة · اعتماد الإشعار · حذف رحلة · التسكين المدموج (033_trip_writes.sql)
+شغّل `supabase/033_trip_writes.sql` (بعد 025/029؛ يستبدل `rw2_toggleapprovalstatus` من 025) وارفع `index_web.html`؛ المفتاح نفسه `supaWriteOnBookings()`.
+- `carryForwardTripBalance`: يحسب الرصيد بـ`_acc_calc` وينشئ البند/الدفعة المقابلين بعلامة ⟦cf:⟧ كما الأصل (يتطلب صف meta للرحلتين وإلا Apps Script).
+- اعتماد الإشعار «معتمد»: المتصفح يفحص الحقول الإلزامية ومنطق التحركات (BKSRV_) على نسخة الإشعار المحمّلة، وPostgres يعيد فحص الحقول الإلزامية القابلة للمطابقة بأعمدة الإشعار؛ أي نقص ⇒ Apps Script يعرض كل الأخطاء. إلغاء الاعتماد كما V4.389.
+- `deleteTrip` (برقم صف الشيت) · `saveHousingNote` · `saveMergedHousing`.
+**لم يُنقل (له أنظمة فرعية لم تُنقل):** `saveTrip` (نشر تعديل الرحلة للإشعارات/الكشوف/الحسابات) · `saveTripPilgrims` · `movePilgrimBetweenTrips`/`movePilgrimsBulk`/`assignPilgrimToTrip`/`assignPilgrimsBulk` (لقطات الرحلة `_tripSnap*` + تسوية الحسابات `_accAfterPilgrimsMoved_` + كشف التعارض) · `deleteGlobalPilgrims` (نسخة احتياطية كاملة للملف قبل الحذف) · `accGenerateDraft` (محرك التسعير).
