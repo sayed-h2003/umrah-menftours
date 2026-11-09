@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.388";
+var APP_VERSION = "4.389";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -2246,6 +2246,8 @@ function bookingAfterSaveBg(authToken, finalId, bookingData) {
   } catch (eT) { Logger.log('bookingAfterSaveBg transport: ' + eT); }
   return out;
 }
+
+function bookingCacheBustBg(authToken) { requireAuth_(authToken); try { _cacheBust_('booking'); } catch (e) {} return { success: true }; }   // (V4.389) بعد حذف/اعتماد من Postgres
 
 function saveBookingToServer(authToken, bookingData) {
   try {
