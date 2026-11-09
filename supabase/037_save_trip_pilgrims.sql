@@ -6,7 +6,7 @@
 -- • تنبيهات الجرس (عميل جديد · تغيّر تسكين/عدد/فندق لعميل له حساب) ⇒ مخزن notifications (تحترم مفاتيح التفعيل)
 -- • تسجيل العملاء الجدد بدليل العملاء ⇒ مخزن clients (بنفس تطبيع الأسماء) ويُرجَع clientsAdded للمتصفح مباشرة
 -- • لقطات الرحلة (tripsnap) ⇒ صندوق الإخراج. الكاش: لا حاجة (القراءة من Postgres وبصمات dv).
--- الباقي بـApps Script مؤقتاً: مزامنة حسابات العملاء التلقائية (_syncTripAccounts_ — محرك تسعير يُنقل بإصدار مستقل) بوظيفة kashfsave. يتطلب 034 و006+007+009+010.
+-- مزامنة حسابات العملاء التلقائية (برنامج/تأشيرة وباركود) ⇒ محرك 040 داخل Postgres؛ لا يبقى بـApps Script إلا عملاء نمط «بنود» ببنود تلقائية (بند kashfsave). يتطلب 034 و040 و006+007+009+010.
 create or replace function _stp_set(r jsonb, ixh jsonb, k text, v jsonb) returns jsonb language sql immutable as
 $$ select case when (ixh ->> k) is null then r else jsonb_set(r, array[(ixh ->> k)], v) end $$;
 
@@ -213,7 +213,7 @@ $$ declare
   ix jsonb := _pm_ix(); ixh jsonb := _rx_map('pilgrims', _rx_h_pil()); i_tr int := (ix ->> 'tripName')::int; i_ps int := (ix ->> 'passport')::int; i_nm int := (ix ->> 'name')::int; i_pid int := (ix ->> 'pid')::int;
   i_rm int := (ix ->> 'roomNo')::int; i_bk int := (ix ->> 'bookingId')::int; i_hm int := (ix ->> 'hotelMadinah')::int; i_hk int := (ix ->> 'hotelMakkah')::int;
   w int := greatest(jsonb_array_length(_rx_hdr('pilgrims')), (select max(v::int) + 1 from jsonb_each_text(ixh) e(k, v)));
-  nocl text[]; oldrows jsonb; oldkeys text[]; newkeys text[]; p jsonb; idx int := 0; base_ord bigint; kept jsonb := '{}'::jsonb; rec record; pass text; pid text; nm text; kk text; nt jsonb; jid bigint; fx jsonb; conf jsonb; chk jsonb; row_ jsonb; n_new int := 0;
+  nocl text[]; oldrows jsonb; oldkeys text[]; newkeys text[]; p jsonb; idx int := 0; base_ord bigint; kept jsonb := '{}'::jsonb; rec record; pass text; pid text; nm text; kk text; nt jsonb; jid bigint; fx jsonb; acc jsonb; conf jsonb; chk jsonb; row_ jsonb; n_new int := 0;
 begin
   if trip = '' then raise exception 'اسم الرحلة مطلوب' using errcode = 'P0001'; end if;
   select array_agg(btrim(x ->> 'name')) into nocl from jsonb_array_elements(pil) x where btrim(coalesce(x ->> 'name', '')) <> '' and btrim(coalesce(x ->> 'client', '')) = '';
@@ -259,10 +259,13 @@ begin
   select coalesce(jsonb_agg(jsonb_build_object('name', x ->> 'name', 'passport', coalesce(x ->> 'passport', ''))), '[]'::jsonb) into chk from jsonb_array_elements(pil) x;
   conf := rx_trip_conflicts_raw(to_jsonb(trip), chk);
   fx := _stp_effects(trip, who, oldrows, pil);
-  insert into app_outbox (kind, payload) values ('kashfsave', jsonb_build_object('trip', trip, 'user', who, 'old', '[]'::jsonb, 'pilgrims', '[]'::jsonb, 'at', extract(epoch from now()))) returning id into jid;
+  acc := _ae_sync_trip(trip, who);   -- مزامنة حسابات العملاء (برنامج/تأشيرة وباركود) داخل Postgres — محرك 040
+  if coalesce((acc ->> 'needsAs')::boolean, false) then   -- عملاء بنمط «بنود» ببنود تلقائية ⇒ محركهم بـApps Script
+    insert into app_outbox (kind, payload) values ('kashfsave', jsonb_build_object('trip', trip, 'user', who, 'old', '[]'::jsonb, 'pilgrims', '[]'::jsonb, 'at', extract(epoch from now()))) returning id into jid;
+  end if;
   insert into app_outbox (kind, payload) values ('tripsnap', jsonb_build_object('trip', trip, 'user', who, 'action', 'حفظ الكشف', 'state', _ts_state(trip)));
   perform _w_dv_bump(array['pilgrims', 'trips']);
-  return jsonb_build_object('success', true, 'count', jsonb_array_length(pil), 'conflicts', coalesce(conf, '[]'::jsonb), 'job', jid, 'clientsAdded', fx -> 'clientsAdded', 'clientsAliases', fx -> 'clientsAliases'); end $$;
+  return jsonb_build_object('success', true, 'count', jsonb_array_length(pil), 'conflicts', coalesce(conf, '[]'::jsonb), 'job', jid, 'accSync', acc, 'clientsAdded', fx -> 'clientsAdded', 'clientsAliases', fx -> 'clientsAliases'); end $$;
 
 revoke all on function _stp_set(jsonb, jsonb, text, jsonb), _stp_row(jsonb, int, jsonb, int, text), rw2_savetrippilgrims(jsonb, text), _stp_aud(text, jsonb, text, text), _stp_notif(text, text, text, text, text, text), _stp_cnorm(text), _stp_sigs(jsonb, text), _stp_effects(text, text, jsonb, jsonb), _stp_jtxt(jsonb) from public, anon, authenticated;
 grant execute on function _stp_set(jsonb, jsonb, text, jsonb), _stp_row(jsonb, int, jsonb, int, text), rw2_savetrippilgrims(jsonb, text), _stp_aud(text, jsonb, text, text), _stp_notif(text, text, text, text, text, text), _stp_cnorm(text), _stp_sigs(jsonb, text), _stp_effects(text, text, jsonb, jsonb), _stp_jtxt(jsonb) to service_role;
