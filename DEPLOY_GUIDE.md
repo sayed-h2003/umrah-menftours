@@ -3095,3 +3095,6 @@
 3. الاختبار: احفظ إشعاراً جديداً وآخر معدّلاً — الكونسول يجب أن يظهر `⚡ supabase saveBookingToServer` بأقل من ثانية. سجل التعديلات يلتحق خلال دقيقة (صندوق الإخراج `bkdiff`).
 4. الرجوع الفوري: `supaWriteOffBookings()`. أي خطأ تحقق/تذكرة مؤقتة/بوت ⇒ المسار القديم تلقائياً.
 5. كود التحقق وبناء التحركات بالمتصفح (`BKSRV_`) منسوخ آلياً من `Code.gs`: بعد أي تعديل على `validateMovementsLogic_` أو `buildAllMovements_` شغّل `python3 tools/sync_booking_client.py` ثم `node tools/test_booking_client.js`.
+
+## V4.390 — saveAccItem من Postgres (026_acc_item.sql)
+شغّل `supabase/026_acc_item.sql` (بعد 024/025) — يعمل بنفس مفتاح `supaWriteOnBookings()` (لا خطوة بالمحرر). إضافة/تعديل بند حساب عميل بأقل من ثانية؛ بند حجز فندقي أو عميل×رحلة بلا صف meta ⇒ Apps Script تلقائياً. الدفعات والحذف والجماعي ما زالت على Apps Script (لها لقطات استرجاع وشواهد حذف وروابط ترحيل رصيد).
