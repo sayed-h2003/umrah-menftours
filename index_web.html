@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.411  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.412  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7640,7 +7640,7 @@ var LF_ = (function () {
       if (!bar) { bar = document.createElement('div'); bar.id = 'lfConflict'; bar.dir = 'rtl'; document.body.appendChild(bar); }
       bar._sub = sub;
       bar.style.cssText = 'position:fixed;top:calc(64px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);z-index:2147483050;background:#b45309;color:#fff;border-radius:12px;padding:8px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.28);display:flex;gap:10px;align-items:center;max-width:94vw;';
-      bar.innerHTML = '<span>🔄 عدّل مستخدم آخر بيانات هذه الشاشة' + (sub.label ? ' (' + sub.label + ')' : '') + ' — لديك تعديلات غير محفوظة فلم تُستبدل.</span>';
+      bar.innerHTML = '<span>' + (sub.opts && sub.opts.conflict ? '🔄 تغيّر السجل الذي تعدّله بعد فتحك له (من مستخدم آخر أو عملية خلفية)' + (sub.label ? ' (' + sub.label + ')' : '') + ' — لديك تعديلات غير محفوظة فلم تُستبدل.' : '🔄 عدّل مستخدم آخر بيانات هذه الشاشة' + (sub.label ? ' (' + sub.label + ')' : '') + ' — لديك تعديلات غير محفوظة فلم تُستبدل.') + '</span>';
       var b = document.createElement('button'); b.className = 'btn btn-sm btn-light'; b.textContent = 'عرض الأحدث (تجاهل تعديلاتي)';
       b.onclick = function () { bar.remove(); applySub(sub, true); };
       var x = document.createElement('button'); x.className = 'btn btn-sm btn-outline-light'; x.textContent = 'لاحقاً';
@@ -8119,7 +8119,12 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     if (S.subs[s.id] !== s) return;
     if (!s.fresh) { if (force) { s.force = true; s.lastCs = ''; refreshKey(s); } return; }   // ⚡ (V4.367) «عرض الأحدث» بلا تحديث محفوظ ⇒ جلب كامل
     // ⚡ (V4.367) تعديل جارٍ ⇒ الشريط (مرة، لا إعادة بناء كل 5 ث، ولا شيء خلال مهلة «لاحقاً») ويبقى التحديث معلّقاً حتى ينتهي التعديل
-    if (!force && subDirty(s)) { s.pend = true; if (!(s.snooze > now())) conflictBar(s); return; }
+    /* 🐛 (V4.412) opts.conflict(fresh): هل تغيّر فعلاً ما تعدّله أنت؟ — الشاشات التي تعرّفه لا تُنبَّه ولا تتعلّق لتغيّر بيانات أخرى بالشاشة
+       (أرصدة/ملفات غيرك/عمليات خلفية)؛ تُطبَّق التحديثات بصمت وتبقى مسودتك. بدونه يبقى السلوك القديم */
+    if (!force && subDirty(s)) {
+      var hard = true; try { if (s.opts.conflict) hard = !!s.opts.conflict(s.fresh); } catch (eC) { hard = true; }
+      if (hard) { s.pend = true; if (!(s.snooze > now())) conflictBar(s); return; }
+    }
     try { var cb = document.getElementById('lfConflict'); if (cb && cb._sub === s) cb.remove(); } catch (e) {}
     var d = s.fresh; s.fresh = null; s.pend = false; s.lastCs = csig(d);
     api.morphing = true;
@@ -9657,7 +9662,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.411";
+var CLIENT_APP_VERSION = "4.412";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -40973,7 +40978,7 @@ function mfLoad(force, quiet) {
     // ⚡ (V4.367) بلا أرصدة أكّدها الخادم بعد في هذه الصفحة ⇒ لا عرض من المتصفح (وإلا ظهرت أرصدة الشركات صفراً/«لا يكفي» كاذبة)
     sub: 'scr:mf', label: 'ملفات الوزارة', noCache: !!(quiet && MF.loaded) || !MF._balOk,
     visible: function () { return _lfShown_('mfTableWrap'); },
-    dirty: _mfDirty_,
+    dirty: _mfDirty_, conflict: _mfConflict_,
     done: function (ok, err, changed) {
       if (ok && !changed && cachedBal) { MF.balances = cachedBal; MF._balOk = true; try { mfRenderAlerts(); } catch (e) {} }
       cachedBal = null;
@@ -41013,6 +41018,15 @@ function mfLoad(force, quiet) {
 }
 // ⚡ (V4.367) تعديلات غير محفوظة بشاشة الوزارة: نموذج الملف مفتوح (أو مصغَّر — #mfFormBox يبقى بالـDOM)، أو تعديل سريع في
 // مكانه، أو نافذة الربط الجماعي. MF._draft نفسه لا يُفرَّغ عند الإغلاق فلا يصلح وحده مؤشراً
+// (V4.412) تعارض حقيقي فقط: الملف الجاري تعديله (بالنموذج أو بالتعديل السريع) تغيّرت بياناته المحفوظة أو حُذف بالنسخة الأحدث
+function _mfConflict_(fresh) {
+  var id = MF.editRowId || (document.getElementById('mfFormBox') && MF._draft && MF._draft.id) || '';
+  if (!id) return false;   // نموذج ملف جديد / تحرير جماعي: لا سجل واحد يتعارض
+  var nf = ((fresh && fresh.files) || []).filter(function (f) { return String(f.id) === String(id); })[0], of = (MF.files || []).filter(function (f) { return String(f.id) === String(id); })[0];
+  if (!of) return false;
+  if (!nf) return true;   // حُذف
+  return JSON.stringify(mfPayload(nf)) !== JSON.stringify(mfPayload(of));
+}
 function _mfDirty_() {
   return !!(document.getElementById('mfFormBox') || MF.editRowId || document.querySelector('.mf-bulk-edit-backdrop'));
 }
