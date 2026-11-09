@@ -784,7 +784,7 @@ var SOURCE_LAST_COL = 34; // من العمود A إلى العمود AH كما �
 var _SS_MEMO_ = null;
 function getSS_() {
   if (!_SS_MEMO_) _SS_MEMO_ = hbProgramSS_();   // (H4) ملف بيانات الحجوزات بمعرّفه — المشروع الآن مرتبط بشيت العمرة
-  return _SS_MEMO_;
+  return (typeof _stWrapSS_ === 'function') ? _stWrapSS_(_SS_MEMO_, 'hb') : _SS_MEMO_;   // 🏨 (المرحلة 2) بلا تفعيل يرجع المصنّف نفسه
 }
 
 // نسخة داخلية بلا صلاحية — تُستخدَم من كل مكان بالكود يحتاج قراءة إعدادات المصدر (قراءة
