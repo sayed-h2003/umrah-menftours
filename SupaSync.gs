@@ -173,6 +173,77 @@ function _supaBalUserPut_(username, json) {   // مرآة اختيارية عن�
     else _supaReq_('DELETE', 'gl_bal_user?username=eq.' + encodeURIComponent(u));
   } catch (e) {}
 }
+/* ============================================================
+   👥 (V4.419) المستخدمون: app_users بـPostgres = المرجع الوحيد (USERS_SOT=1). ورقة Users مرآة قراءة فقط (باتجاه واحد).
+   usersSotOn() لتفعيل · usersSotOff() للتراجع · usersMirrorNow() لإعادة كتابة الورقة يدوياً.
+   ============================================================ */
+function _usersSot_() { try { return _supaOn_() && _supaP_('USERS_SOT') === '1'; } catch (e) { return false; } }
+function _usersPermStr_(v) { return Array.isArray(v) ? v.join(',') : String(v == null ? '' : v); }
+// صفوف PG بشكل getDataRange().getValues(): [رأس, [username, hash, fullName, active, permissions, mustChangePwd], …]
+function _usersData_() {
+  var r = _supaReq_('get', 'app_users?select=username,password_hash,full_name,active,permissions,must_change_pwd&order=ord.asc.nullslast,username.asc');
+  if (r.code !== 200) throw new Error('تعذّر قراءة المستخدمين من Postgres (' + r.code + ')');
+  var rows = JSON.parse(r.text || '[]');
+  var out = [['Username', 'Password', 'FullName', 'Active', 'Permissions', 'MustChangePwd']];
+  rows.forEach(function (u) { out.push([String(u.username), String(u.password_hash || ''), String(u.full_name || ''), !(u.active === false || String(u.active).toLowerCase() === 'false'), _usersPermStr_(u.permissions), u.must_change_pwd === true || String(u.must_change_pwd).toLowerCase() === 'true']); });
+  return out;
+}
+// بيانات المستخدمين للقراءة (PG عند التفعيل وإلا الورقة)
+function _usersGrid_() { return _usersSot_() ? _usersData_() : getSpreadsheet_().getSheetByName('Users').getDataRange().getValues(); }
+// تمرير دالة إدارة مستخدم لـPostgres بجلسة المنادي (احتياطي: إن سقط مسار المتصفح المباشر) — الورقة لا تُكتب أبداً بوضع SOT
+function _usersProxy_(authToken, fn, args, read) {
+  var session = requireAuth_(authToken), t = _supaTokenFor_(session);
+  if (!t || !t.enabled) throw new Error('Supabase غير متاح');
+  var path = read ? 'rx_call2' : 'rw_call';
+  var r = UrlFetchApp.fetch(t.url + '/rest/v1/rpc/' + path, { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: t.anon, Authorization: 'Bearer ' + t.token }, payload: JSON.stringify({ p_fn: fn, p_args: [null].concat(args || []) }) });
+  var j = {}; try { j = JSON.parse(r.getContentText() || '{}'); } catch (e) {}
+  if (r.getResponseCode() >= 300) throw new Error(String(j.message || j.hint || ('Postgres ' + r.getResponseCode())));
+  return j.d;
+}
+// مرآة باتجاه واحد PG → ورقة Users (تُعاد الكتابة عند تغيّر users_rev فقط)
+function usersMirrorTick_(force) {
+  if (!_usersSot_()) return 'off';
+  var rr = _supaReq_('get', 'users_rev?select=rev&id=eq.1'), rev = '';
+  try { rev = String((JSON.parse(rr.text || '[]')[0] || {}).rev); } catch (e) {}
+  var P = PropertiesService.getScriptProperties();
+  if (!force && rev && P.getProperty('USERS_MIRROR_REV') === rev) return 'same';
+  var d = _usersData_(), sh = getSpreadsheet_().getSheetByName('Users');
+  if (!sh) return 'no-sheet';
+  var last = sh.getLastRow();
+  if (last > 1) sh.getRange(2, 1, last - 1, Math.max(6, sh.getLastColumn())).clearContent();
+  if (d.length > 1) {
+    try { sh.getRange(2, 5, d.length - 1, 1).setDataValidation(null); } catch (e2) {}
+    sh.getRange(2, 1, d.length - 1, 6).setValues(d.slice(1));
+  }
+  try { _cacheBust_('users'); } catch (e3) {}
+  if (rev) P.setProperty('USERS_MIRROR_REV', rev);
+  return 'ok ' + (d.length - 1);
+}
+function usersMirrorNow() { requireScriptOwner_(); var r = usersMirrorTick_(true); Logger.log('users mirror: ' + r); return r; }
+// تفعيل: يملأ app_users بما ينقصه من الورقة (لا يكتب فوق صف موجود)، يوقف مزامنة الورقة→PG لجدول المستخدمين، ثم يضبط USERS_SOT=1
+function usersSotOn() {
+  requireScriptOwner_();
+  if (!_supaOn_()) throw new Error('Supabase غير مفعّل');
+  var chk = _supaReq_('get', 'app_users?select=ord,updated_at&limit=1');
+  if (chk.code !== 200) throw new Error('شغّل supabase/045_users_sot.sql أولاً (' + chk.code + ' ' + String(chk.text).slice(0, 120) + ')');
+  var have = {}; try { JSON.parse(_supaReq_('get', 'app_users?select=username').text || '[]').forEach(function (u) { have[String(u.username)] = 1; }); } catch (e) {}
+  var data = getSpreadsheet_().getSheetByName('Users').getDataRange().getValues(), add = [];
+  for (var i = 1; i < data.length; i++) {
+    var nm = String(data[i][0] || '').trim(); if (!nm || have[nm]) continue;
+    var ps = String(data[i][4] || '').trim(), pl = ps ? ps.split(/[,،;|]/).map(function (x) { return x.trim(); }).filter(Boolean) : [];
+    add.push({ username: nm, password_hash: String(data[i][1] || ''), full_name: String(data[i][2] || ''), active: !(data[i][3] === false || String(data[i][3]).toLowerCase() === 'false'),
+      permissions: pl, must_change_pwd: data[i][5] === true || String(data[i][5]).toLowerCase() === 'true' });
+  }
+  if (add.length && !_supaUpsert_('app_users', add, 'username')) throw new Error('تعذّر نقل مستخدمي الورقة الناقصين إلى Postgres');
+  var P = PropertiesService.getScriptProperties();
+  P.setProperty('USERS_SOT', '1');
+  try { _ST_CFG_ = null; } catch (e1) {}
+  var m = usersMirrorTick_(true);
+  var msg = 'تم: Postgres مرجع المستخدمين (نُقل ' + add.length + ' ناقص من الورقة) — مرآة الورقة: ' + m + ' | للتراجع usersSotOff()';
+  Logger.log(msg); return msg;
+}
+function usersSotOff() { requireScriptOwner_(); PropertiesService.getScriptProperties().deleteProperty('USERS_SOT'); try { _ST_CFG_ = null; } catch (e) {} var m = 'أُوقف: الورقة مرجع المستخدمين من جديد (آخر مرآة من Postgres بقيت بها)'; Logger.log(m); return m; }
 function supaGlAuxSyncNow() { requireScriptOwner_(); var r = supaGlAuxSync_(true); Logger.log('gl_aux: ' + r + ' (GL_STORE=' + _supaP_('GL_STORE') + ')'); return r; }
 
 function _supaSynced_() { try { return JSON.parse(_supaP_('SUPA_SYNCED') || '{}') || {}; } catch (e) { return {}; } }
@@ -207,6 +278,7 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
     }
     try { _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (المرحلة 4)
     var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
+    try { usersMirrorTick_(false); } catch (eUm) { Logger.log('usersMirror: ' + eUm); }   // (V4.419) مرآة المستخدمين PG→الورقة
     try { supaGlMetaSync_(); } catch (eGm) { Logger.log('supaGlMeta: ' + eGm); }   // ⚡ (V4.417) رابط ملف الحسابات + عدد صفوف شيتات العهد الناقصة (لـ glx_bootstrap)
     var b378 = _supaBootSync_();   // ⚡ (V4.378) app_config + حالة القيود + سجل التعديلات
     return 'ok work=' + work + ' glaux=' + gx + ' boot=' + b378 + ' ms=' + (Date.now() - t0);
@@ -285,7 +357,7 @@ function supaDvSeedNow() { requireScriptOwner_(); var r = _dvPgReconcile_(); Log
 function _supaStoreInfo_() {
   var out = _supaStoreInfo0_();
   // ⚡ (V4.378) مجموعات «زائفة» تعلن جاهزية ما يُقرأ من app_config/audit_log: cfg (الإعدادات) · glkick (عدّادات القيود) · audit (سجل التعديلات)
-  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); if (_supaP_('SUPA_KV_OK') === '1') out.groups.push('kv'); if (_supaP_('SUPA_BOT_OK') === '1') out.groups.push('bots'); if (_supaP_('SUPA_W_MF') === '1') out.groups.push('wmf'); if (_supaP_('SUPA_W_VZ') === '1') out.groups.push('wvz'); if (_supaP_('SUPA_W_BK') === '1') out.groups.push('wbk'); } catch (e) {}   // (V4.378) kv = ACC_PRICING/MF_EXEC_POLICY/NOTIF_TOGGLES منسوخة · bots = bookings_via_bot معبّأة
+  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); if (_supaP_('SUPA_KV_OK') === '1') out.groups.push('kv'); if (_supaP_('SUPA_BOT_OK') === '1') out.groups.push('bots'); if (_supaP_('SUPA_W_MF') === '1') out.groups.push('wmf'); if (_supaP_('SUPA_W_VZ') === '1') out.groups.push('wvz'); if (_supaP_('SUPA_W_BK') === '1') out.groups.push('wbk'); if (_usersSot_()) out.groups.push('wusr'); } catch (e) {}   // (V4.378) kv = ACC_PRICING/MF_EXEC_POLICY/NOTIF_TOGGLES منسوخة · bots = bookings_via_bot معبّأة
   return out;
 }
 function _supaStoreInfo0_() {

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.418  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.419  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7940,6 +7940,12 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     /* (V4.399) 035/036 — سلة المحذوفات + الحذف المجمّع من السجل العام (بديل النسخة الكاملة للملف) */
     /* (V4.401) 037_save_trip_pilgrims.sql — حفظ كشف الرحلة؛ آثاره (سجل/مشرفون/تنبيهات/دليل العملاء) داخل Postgres، ومزامنة حسابات العملاء فقط بنداء خلفي kashfAfterSaveBg */
     saveTripPilgrims: { need: ['core', 'wbk'], rpc: 'rw_call', after: function (a, d) { try { if (d && d.success !== false) { if (typeof _kashfClientsAfterSave_ === 'function') _kashfClientsAfterSave_(d); if (d.job) _RAWRUN_().withFailureHandler(function () {}).kashfAfterSaveBg(window.authToken, d.job); } } catch (e) {} } },
+    /* (V4.419) 045_users_sot.sql — إدارة المستخدمين من Postgres (app_users = المرجع؛ الورقة مرآة). 'wusr' يعلنها الخادم بعد usersSotOn() */
+    getAllUsersForAdmin: { need: ['wusr'], rpc: 'rx_call2' },
+    addNewUser: { need: ['wusr'], rpc: 'rw_call' }, changeUserPassword: { need: ['wusr'], rpc: 'rw_call' }, setUserActiveStatus: { need: ['wusr'], rpc: 'rw_call' },
+    updateUserPermissions: { need: ['wusr'], rpc: 'rw_call' }, updateUsername: { need: ['wusr'], rpc: 'rw_call' }, updateUserFullName: { need: ['wusr'], rpc: 'rw_call' },
+    deleteUserAccount: { need: ['wusr'], rpc: 'rw_call' },
+    changeMyPassword: { need: ['wusr'], rpc: 'rw_call', after: function (a, d) { try { if (d && d.success !== false) _devKeySet_(''); } catch (e) {} } },
     recycleList: { need: ['wbk'], rpc: 'rx_call2' },
     recycleRestore: { need: ['wbk'], rpc: 'rw_call' },
     recycleDelete: { need: ['wbk'], rpc: 'rw_call' },
@@ -9693,7 +9699,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.418";
+var CLIENT_APP_VERSION = "4.419";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

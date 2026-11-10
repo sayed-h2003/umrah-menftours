@@ -57,6 +57,7 @@ function _stCfg_() {
     var raw = _supaP_('STORE_TABLES');
     if (raw && _supaP_('SUPA_URL') && _supaP_('SUPA_SERVICE_KEY')) {
       cfg.set = _stExpand_(raw);
+      if (typeof _usersSot_ === 'function' && _usersSot_()) delete cfg.set['app_users'];   // (V4.419) Postgres هو المرجع — لا مزامنة ورقة→PG للمستخدمين
       var specs = _stSpecs_();
       Object.keys(cfg.set).forEach(function (t) { var sp = specs[t]; cfg.bySheet[sp.ss === 'gl' ? 'gl' : 'main'][sp.sheet] = sp; cfg.on = true; });
     }

@@ -694,7 +694,15 @@ function recycleRestoreAs(authToken, ids) {
   var ok = 0, errs = [];
   rows.forEach(function (x) {
     try {
-      var p = x.payload || {}, d = _snapUnpack_(Array.isArray(p.p) ? p.p : [p.p]);
+      var p = x.payload || {}, d = null;
+      if (x.kind === 'user') {   // (V4.419) مستخدم محذوف: يُستعاد إلى app_users بـPostgres (والمرآة تُعيده للورقة)
+        if (!_sessionHasPerm_(session, 'admin')) throw new Error('استعادة المستخدمين للمدير فقط');
+        var ur = _supaReq_('post', 'rpc/users_restore', { p_row: p.row || null }), uj = {}; try { uj = JSON.parse(ur.text || '{}'); } catch (eU) {}
+        if (ur.code >= 300 || !uj.success) throw new Error(uj.error || uj.message || ('تعذّرت الاستعادة (' + ur.code + ')'));
+        _supaReq_('patch', 'recycle_bin?id=eq.' + x.id, { restored_at: new Date().toISOString(), restored_by: session.username });
+        ok++; return;
+      }
+      d = _snapUnpack_(Array.isArray(p.p) ? p.p : [p.p]);
       if (x.kind === 'gl_entry') {
         _glPerm_(authToken, 'edit');
         if (!d || !d.r) throw new Error('بيانات العنصر تالفة');

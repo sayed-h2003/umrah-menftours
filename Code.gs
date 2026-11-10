@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.418";
+var APP_VERSION = "4.419";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6048,9 +6048,7 @@ function _secLoginOk_(scope, id) { try { CacheService.getScriptCache().remove(_s
 
 function loginUser(username, password, remember) {
   try { _secLoginCheck_('u', username); } catch (eLk) { return { success: false, error: eLk.message }; }
-  var ss = getSpreadsheet_();
-  var sheet = ss.getSheetByName("Users");
-  var data = sheet.getDataRange().getValues();
+  var data = _usersGrid_();   // (V4.419) Postgres (app_users) عند USERS_SOT وإلا ورقة Users
   
   for (var i = 1; i < data.length; i++) {
     if (data[i][0] == username && checkPasswordMatch_(password, data[i][1])) {
@@ -6192,6 +6190,7 @@ function requireSettingsBasicPermission_(authToken) {
 // يرجع كل المستخدمين بدون كلمات المرور نفسها (لا داعي لإرسالها للمتصفح أبداً)
 function getAllUsersForAdmin(authToken) {
   requireAdminPermission_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'getAllUsersForAdmin', [], true);   // (V4.419)
 
   var cached = getCachedData_('users_cache');
   if (cached) return cached;
@@ -6220,6 +6219,7 @@ function getAllUsersForAdmin(authToken) {
 // يضيف مستخدماً جديداً - الباسورد يُشفّر تلقائياً قبل التخزين، لا حاجة لتشغيل أي دالة يدوية بعدها
 function addNewUser(authToken, newUsername, newPassword, fullName, permissions) {
   requireAdminPermission_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'addNewUser', Array.prototype.slice.call(arguments, 1));   // (V4.419) Postgres هو المرجع
 
   if (!newUsername || !newPassword) {
     throw new Error("اسم المستخدم وكلمة المرور مطلوبان");
@@ -6255,6 +6255,7 @@ function addNewUser(authToken, newUsername, newPassword, fullName, permissions) 
 // يغيّر كلمة مرور مستخدم موجود بالاعتماد على رقم صفه في الشيت (row) القادم من getAllUsersForAdmin
 function changeUserPassword(authToken, targetRow, newPassword) {
   requireAdminPermission_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'changeUserPassword', Array.prototype.slice.call(arguments, 1));   // (V4.419) Postgres هو المرجع
 
   if (!targetRow || !newPassword) {
     throw new Error("بيانات غير مكتملة");
@@ -6271,6 +6272,7 @@ function changeUserPassword(authToken, targetRow, newPassword) {
 // يفعّل أو يعطّل حساب مستخدم
 function setUserActiveStatus(authToken, targetRow, isActive) {
   requireAdminPermission_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'setUserActiveStatus', Array.prototype.slice.call(arguments, 1));   // (V4.419) Postgres هو المرجع
 
   if (!targetRow) {
     throw new Error("بيانات غير مكتملة");
@@ -6288,6 +6290,7 @@ function setUserActiveStatus(authToken, targetRow, isActive) {
 // حذف مستخدم نهائياً — صلاحية admin/ALL فقط، مع حماية من حذف النفس أو آخر حساب admin
 function deleteUserAccount(authToken, targetRow, expectedUsername) {
   var session = requireAdminPermission_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'deleteUserAccount', Array.prototype.slice.call(arguments, 1));   // (V4.419) Postgres هو المرجع
 
   if (!targetRow) {
     return { success: false, error: "بيانات غير مكتملة" };
@@ -6340,6 +6343,7 @@ function deleteUserAccount(authToken, targetRow, expectedUsername) {
 
 function updateUserPermissions(authToken, targetRow, newPermissions) {
   var session = requireAdminPermission_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'updateUserPermissions', Array.prototype.slice.call(arguments, 1));   // (V4.419) Postgres هو المرجع
   if (!targetRow) throw new Error("بيانات غير مكتملة");
   var ss = getSpreadsheet_();
   var sheet = ss.getSheetByName("Users");
@@ -6374,6 +6378,7 @@ function _refreshSessionPermissions_(token, newPermissions) {
 // الجلسات النشطة تحتفظ بالاسم القديم حتى انتهائها، والدخول التالي يكون بالاسم الجديد.
 function updateUsername(authToken, targetRow, newUsername) {
   requireAdminPermission_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'updateUsername', Array.prototype.slice.call(arguments, 1));   // (V4.419) Postgres هو المرجع
   if (!targetRow) throw new Error("بيانات غير مكتملة");
   newUsername = String(newUsername || "").trim();
   if (!newUsername) return { success: false, error: "اسم المستخدم لا يمكن أن يكون فارغاً" };
@@ -6407,6 +6412,7 @@ function updateUsername(authToken, targetRow, newUsername) {
 // يغيّر الاسم الكامل لمستخدم موجود (العمود C / FullName) — صلاحية admin فقط، بلا قيد تكرار (الأسماء قد تتكرر).
 function updateUserFullName(authToken, targetRow, newFullName) {
   requireAdminPermission_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'updateUserFullName', Array.prototype.slice.call(arguments, 1));   // (V4.419) Postgres هو المرجع
   if (!targetRow) throw new Error("بيانات غير مكتملة");
   newFullName = String(newFullName || "").trim();
   if (!newFullName) return { success: false, error: "الاسم الكامل لا يمكن أن يكون فارغاً" };
@@ -6576,7 +6582,7 @@ function resumeSession(deviceKey) {
   try { o = JSON.parse(p.getProperty(pk) || 'null'); } catch (e) { o = null; }
   var now = Date.now();
   if (!o || !o.u || now > (o.exp || 0)) { try { p.deleteProperty(pk); } catch (e) {} return { success: false, error: 'expired' }; }
-  var data = getSpreadsheet_().getSheetByName('Users').getDataRange().getValues();
+  var data = _usersGrid_();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) !== String(o.u)) continue;
     var isActive = data[i][3];
@@ -6610,7 +6616,7 @@ function appHandoffRedeem(code) {
   if (!raw) return { success: false, error: 'expired' };
   var o = null; try { o = JSON.parse(raw); } catch (e) {}
   if (!o || !o.u || Date.now() - (o.t || 0) > 120000) return { success: false, error: 'expired' };
-  var data = getSpreadsheet_().getSheetByName('Users').getDataRange().getValues();
+  var data = _usersGrid_();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) !== String(o.u)) continue;
     var isActive = data[i][3];
@@ -10772,6 +10778,7 @@ function verifyMyGeminiKey_() {
 
 function changeMyPassword(authToken, oldPassword, newPassword) {
   var session = requireAuth_(authToken);
+  if (_usersSot_()) return _usersProxy_(authToken, 'changeMyPassword', Array.prototype.slice.call(arguments, 1));   // (V4.419) Postgres هو المرجع
   if (!oldPassword || !newPassword) {
     throw new Error("بيانات غير مكتملة");
   }
