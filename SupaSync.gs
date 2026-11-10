@@ -504,7 +504,8 @@ function _supaStoreInfo0_() {
   try {
     if (typeof _stCfg_ !== 'function' || typeof ST_GROUPS_ === 'undefined') return out;
     var cfg = _stCfg_(); if (!cfg.on) return out;
-    Object.keys(ST_GROUPS_).forEach(function (g) { if (ST_GROUPS_[g].every(function (t) { return cfg.set[t]; })) out.groups.push(g); });
+    var sot = _usersSot_();   // (V4.433) app_users بمرجع Postgres (V4.419) يُعدّ «حيّاً» — حذفه من مزامنة الورقة كان يُسقط مجموعة misc كاملة فترتد شاشات كثيرة لـApps Script
+    Object.keys(ST_GROUPS_).forEach(function (g) { if (ST_GROUPS_[g].every(function (t) { return cfg.set[t] || (t === 'app_users' && sot); })) out.groups.push(g); });
     out.dv = _dvPgOn_() && _supaP_('DV_PG_SEEDED') === '1';
   } catch (e) {}
   return out;
