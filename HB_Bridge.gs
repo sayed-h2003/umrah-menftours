@@ -45,6 +45,13 @@ function hbSsoLogin(code) {
   try {
     code = String(code || '').replace(/[^\w-]/g, '');
     var cache = CacheService.getScriptCache(), raw = code ? cache.get('hbsso_' + code) : null;
+    if (!raw && code && typeof _supaOn_ === 'function' && _supaOn_()) {   // (V4.422) الرمز صدر من Postgres (048): حذف ذرّي = استعمال واحد
+      try {
+        var dr = _supaReq_('delete', 'hb_sso?code=eq.' + encodeURIComponent(code) + '&expires_at=gt.' + encodeURIComponent(new Date().toISOString()), null, 'return=representation'), rr = [];
+        try { rr = JSON.parse(dr.text || '[]'); } catch (eJ0) {}
+        if (dr.code < 300 && rr.length) raw = JSON.stringify({ u: rr[0].username, admin: !!rr[0].is_admin, cap: rr[0].cap || 'view' });
+      } catch (ePg) { Logger.log('hbsso pg: ' + ePg); }
+    }
     if (!raw) throw new Error('انتهت صلاحية رابط الدخول — افتح برنامج الحجوزات من جديد من برنامج العمرة، أو سجّل الدخول يدويًا');
     cache.remove('hbsso_' + code);
     var info = JSON.parse(raw), sh = ensureUsersSheet_(), rowIdx = findUserRow_(sh, info.u), row = null;
