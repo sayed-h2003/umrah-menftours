@@ -5238,10 +5238,158 @@ function _glCsHash_(x) {
   return h.toString(36);
 }
 function _glCsOpen_(cfg) {
+  if (cfg && cfg.conn && cfg.conn.code) return _glCsVirt_(cfg);   // 🔌 (V4.438) شيت موصول: الصورة من قاعدة البيانات بلا فتح الشيت الخارجي
   var ss; try { ss = SpreadsheetApp.openById(cfg.id); } catch (e) { throw new Error('تعذّر فتح شيت العهدة — تأكد من الرابط ومن مشاركته مع حساب البرنامج: ' + e.message); }
   var sh = cfg.tab ? ss.getSheetByName(cfg.tab) : ss.getSheets()[0];
   if (!sh) throw new Error('الورقة «' + cfg.tab + '» غير موجودة بشيت العهدة');
   return { ss: ss, sh: sh };
+}
+/* ============================================================
+   🔌 (V4.438) موصل شيتات العهدة/الخزينة/البنك — 061_custody_connector.sql
+   الشيت الخارجي يدفع صورته لقاعدة البيانات (سكربت صغير داخله يولّده البرنامج: فور أي تعديل + كل دقيقة)، والبرنامج يقرأ
+   الصورة من القاعدة عبر «شيت افتراضي» بنفس واجهة الشيت (getRange/getValues/setValue…) — فكل منطق المزامنة والاعتماد
+   وفحص التكرار يعمل كما هو حرفياً بلا فتح الشيت. كتابة رقم القيد ⇒ طابور cs_queue يكتبه الموصل بالشيت بنفسه (مع بصمة الصف
+   لتحديد الصف الصحيح لو أُدرجت/حُذفت صفوف قبل الكتابة). البرنامج لا يحتاج أي صلاحية على شيتات العهدة إطلاقاً.
+   ============================================================ */
+var _GL_CS_CONN_ = {};
+function _glCsConnGet_(code, need) {
+  if (_GL_CS_CONN_[code]) return _GL_CS_CONN_[code];
+  var r = _supaReq_('post', 'rpc/cs_get', { p_code: code });
+  if (r.code >= 300) throw new Error('تعذّر قراءة شيت العهدة من قاعدة البيانات (' + r.code + '): ' + String(r.text).slice(0, 200));
+  var d = JSON.parse(r.text || 'null');
+  if (need !== false && (!d || !d.rows || !d.rows.length)) throw new Error('لم تصل بيانات شيت العهدة بعد عبر الموصل — افتح الشيت مرة أو شغّل setup من «الإضافات ← Apps Script» بالشيت');
+  if (d) _GL_CS_CONN_[code] = d;
+  return d;
+}
+// بصمة الصف بلا عمود الكتابة (نفس الدالة حرفياً داخل الموصل csSig_)
+function _glCsSig_(row, skip) {
+  return (row || []).map(function (x, i) {
+    if (i === skip || x === null || x === undefined) return '';
+    if (typeof x === 'object' && x.$d !== undefined) return 'd' + x.$d;
+    return String(x).trim();
+  }).join('\u241f').replace(/\u241f+$/, '');
+}
+function _glCsVirt_(cfg) {
+  var code = cfg.conn.code, d = _glCsConnGet_(code), fr = d.firstRow || 1;
+  var dec = function (v) { return (v && typeof v === 'object' && v.$d !== undefined) ? new Date(v.$d) : (v === null || v === undefined ? '' : v); };
+  var enc = function (v) { if (v instanceof Date) return isNaN(v.getTime()) ? '' : { $d: v.getTime() }; return v === null || v === undefined ? '' : v; };
+  var rng = function (r, c, nr, nc) {
+    nr = nr || 1; nc = nc || 1;
+    var o = {
+      getValues: function () {
+        var out = [];
+        for (var i = 0; i < nr; i++) { var row = d.rows[r + i - fr] || [], a = []; for (var j = 0; j < nc; j++) a.push(dec(row[c - 1 + j])); out.push(a); }
+        return out;
+      },
+      getValue: function () { return o.getValues()[0][0]; },
+      setNumberFormat: function () { return o; },
+      setValue: function (v) { return o.setValues([[v]]); },
+      setValues: function (arr) {
+        var cells = {};
+        (arr || []).forEach(function (a, i) {
+          (a || []).forEach(function (v, j) {
+            var rr = r + i, cc = c + j, idx = rr - fr; if (idx < 0) return;
+            while (d.rows.length <= idx) d.rows.push([]);
+            var row = d.rows[idx];
+            cells[rr + '|' + cc] = { v: enc(v), sig: _glCsSig_(row, cc - 1) };
+            while (row.length < cc) row.push('');
+            row[cc - 1] = enc(v);
+          });
+        });
+        if (Object.keys(cells).length) {
+          var q = _supaReq_('post', 'rpc/cs_queue', { p_code: code, p_cells: cells });
+          if (q.code >= 300) throw new Error('تعذّر تسجيل رقم القيد لشيت العهدة: ' + String(q.text).slice(0, 200));
+        }
+        return o;
+      }
+    };
+    return o;
+  };
+  var sh = {
+    getLastRow: function () { return d.rows.length ? fr + d.rows.length - 1 : 0; },
+    getLastColumn: function () { return d.lastCol || d.rows.reduce(function (m, r) { return Math.max(m, (r || []).length); }, 0); },
+    getRange: rng, getName: function () { return d.tab || cfg.tab || ''; }
+  };
+  return { ss: { getName: function () { return d.title || cfg.title || ''; } }, sh: sh, conn: true };
+}
+// إعداد الموصل لحساب عهدة مربوط بشيت: يولّد مفتاحاً جديداً (يُبطل أي موصل سابق) ويعيد نص السكربت الذي يُلصق بالشيت
+function glCsConnectorSetup(authToken, code) {
+  var session = _glAdminPerm_(authToken);
+  code = _glStr_(code); var cfg = _glCsCfg_(code);
+  if (!cfg || !cfg.id) throw new Error('اربط الشيت أولاً (رابط شيت العهدة) ثم أنشئ الموصل');
+  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_ANON_KEY')) throw new Error('إعداد Supabase ناقص (SUPA_URL / SUPA_ANON_KEY)');
+  var key = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+  var r = _supaReq_('post', 'rpc/cs_setup', { p_code: code, p_key: key, p_sheet_id: cfg.id });
+  if (r.code >= 300) throw new Error('تعذّر إعداد الموصل (طبّق 061): ' + String(r.text).slice(0, 200));
+  cfg.conn = { code: code, at: _glNow_(), by: session.username };
+  _glSetSetting_('custsheet:' + code, JSON.stringify(cfg)); _GL_SET_MEMO_ = null;
+  logChange_(session.username, 'إنشاء موصل شيت عهدة', 'GL:' + code, 'شيت العهدة', '-', cfg.title || cfg.id);
+  return { success: true, script: _glCsConnScript_(code, key, cfg), status: glCsConnStatus_(code) };
+}
+function glCsConnectorOff(authToken, code) {
+  var session = _glAdminPerm_(authToken);
+  code = _glStr_(code); var cfg = _glCsCfg_(code);
+  try { _supaReq_('post', 'rpc/cs_off', { p_code: code }); } catch (e) {}
+  delete cfg.conn; _glSetSetting_('custsheet:' + code, JSON.stringify(cfg)); _GL_SET_MEMO_ = null;
+  logChange_(session.username, 'إيقاف موصل شيت عهدة', 'GL:' + code, 'شيت العهدة', '-', 'رجوع لفتح الشيت مباشرة');
+  return { success: true };
+}
+function glCsConnStatus(authToken, code) { _glPerm_(authToken, 'view', 'sheets'); return { success: true, status: glCsConnStatus_(_glStr_(code)) }; }
+function glCsConnStatus_(code) {
+  var cfg = _glCsCfg_(code), d = null;
+  if (!cfg.conn) return { on: false };
+  try { d = _glCsConnGet_(code, false); } catch (e) { return { on: true, error: e.message }; }
+  return { on: true, at: cfg.conn.at, by: cfg.conn.by, pushedAt: d && d.pushedAt || 0, changedAt: d && d.changedAt || 0, pulledAt: d && d.pulledAt || 0,
+    rows: d && d.rows ? d.rows.length : 0, pending: d && d.pending ? Object.keys(d.pending).length : 0, agent: d && d.agent || '' };
+}
+function _glCsConnScript_(code, key, cfg) {
+  var C = { url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), code: code, key: key, tab: cfg.tab || '', ver: 'cs-1' };
+  return [
+    '/* 🔌 موصل شيت العهدة ببرنامج العمرة — لا تعدّل هذا الملف. يرسل الشيت لقاعدة بيانات البرنامج فور أي تعديل وكل دقيقة،',
+    '   ويكتب أرقام القيود التي يسجّلها البرنامج بعمود القيد. التشغيل: اختر الدالة setup ثم ▶ تشغيل ووافق على الصلاحيات (مرة واحدة). */',
+    'var CS = ' + JSON.stringify(C) + ';',
+    'function setup() {',
+    '  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });',
+    '  var ss = SpreadsheetApp.getActive();',
+    '  ScriptApp.newTrigger(\'csOnEdit\').forSpreadsheet(ss).onEdit().create();',
+    '  ScriptApp.newTrigger(\'csOnChange\').forSpreadsheet(ss).onChange().create();',
+    '  ScriptApp.newTrigger(\'csTick\').timeBased().everyMinutes(1).create();',
+    '  var r = csSync_(true, 30000); ss.toast(\'✅ تم ربط الشيت بالبرنامج — \' + r, \'موصل العهدة\', 10);',
+    '}',
+    'function csOnEdit(e) { csSync_(false, 3000); }',
+    'function csOnChange(e) { csSync_(false, 3000); }',
+    'function csTick() { csSync_(false, 20000); }',
+    'function csEnc_(v) { if (Object.prototype.toString.call(v) === \'[object Date]\') return isNaN(v.getTime()) ? \'\' : { $d: v.getTime() }; if (typeof v === \'number\' && !isFinite(v)) return \'\'; return v; }',
+    'function csSig_(row, skip) { return (row || []).map(function (x, i) { if (i === skip || x === null || x === undefined) return \'\'; if (typeof x === \'object\' && x.$d !== undefined) return \'d\' + x.$d; return String(x).trim(); }).join(\'\\u241f\').replace(/\\u241f+$/, \'\'); }',
+    'function csSheet_() { var ss = SpreadsheetApp.getActive(), sh = CS.tab ? ss.getSheetByName(CS.tab) : ss.getSheets()[0]; if (!sh) throw new Error(\'الورقة غير موجودة: \' + CS.tab); return sh; }',
+    'function csCall_(fn, body) {',
+    '  var r = UrlFetchApp.fetch(CS.url + \'/rest/v1/rpc/\' + fn, { method: \'post\', contentType: \'application/json\', headers: { apikey: CS.anon, Authorization: \'Bearer \' + CS.anon }, payload: JSON.stringify(body), muteHttpExceptions: true });',
+    '  if (r.getResponseCode() >= 300) throw new Error(fn + \' \' + r.getResponseCode() + \': \' + r.getContentText().slice(0, 300));',
+    '  return JSON.parse(r.getContentText() || \'null\');',
+    '}',
+    'function csSync_(force, wait) {',
+    '  var lk = LockService.getDocumentLock(); if (!lk.tryLock(wait || 3000)) return \'مشغول\';',
+    '  try {',
+    '    var ss = SpreadsheetApp.getActive(), sh = csSheet_(), last = sh.getLastRow(), lc = Math.min(26, Math.max(1, sh.getLastColumn()));',
+    '    var rows = (last >= 1 ? sh.getRange(1, 1, last, lc).getValues() : []).map(function (r) { return r.map(csEnc_); });',
+    '    var h = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(rows) + \'|\' + sh.getName(), Utilities.Charset.UTF_8));',
+    '    var P = PropertiesService.getDocumentProperties(), send = force || h !== P.getProperty(\'cs_h\') || Date.now() - (+P.getProperty(\'cs_at\') || 0) > 600000;',
+    '    var res = csCall_(\'cs_push\', { p_code: CS.code, p_key: CS.key, p: send ? { sheetId: ss.getId(), tab: sh.getName(), title: ss.getName(), firstRow: 1, lastCol: lc, rows: rows, hash: h, agent: CS.ver } : { sheetId: ss.getId(), agent: CS.ver } });',
+    '    if (send) { P.setProperty(\'cs_h\', h); P.setProperty(\'cs_at\', String(Date.now())); }',
+    '    var pend = (res && res.pending) || {}, done = {}, n = 0;',
+    '    Object.keys(pend).forEach(function (k) {',
+    '      var it = pend[k], obj = it && typeof it === \'object\' && it.v !== undefined, v = obj ? it.v : it, r = +k.split(\'|\')[0], c = +k.split(\'|\')[1], t = r;',
+    '      if (obj && it.sig !== undefined && csSig_(rows[r - 1], c - 1) !== it.sig) {   // الصف تحرّك (إدراج/حذف) ⇒ نبحث عنه ببصمته',
+    '        var hits = []; rows.forEach(function (rw, i) { if (csSig_(rw, c - 1) === it.sig) hits.push(i + 1); }); t = hits.length === 1 ? hits[0] : 0;',
+    '      }',
+    '      if (t) { sh.getRange(t, c).setNumberFormat(\'@\').setValue(v && typeof v === \'object\' && v.$d !== undefined ? new Date(v.$d) : v); n++; }',
+    '      done[k] = it;',
+    '    });',
+    '    if (Object.keys(done).length) { csCall_(\'cs_ack\', { p_code: CS.code, p_key: CS.key, p_done: done }); if (n) P.deleteProperty(\'cs_h\'); }',
+    '    return (send ? \'أُرسل \' + rows.length + \' صف\' : \'بلا تغيير\') + (n ? \' · كُتب \' + n + \' رقم قيد\' : \'\');',
+    '  } finally { lk.releaseLock(); }',
+    '}'
+  ].join('\n');
 }
 // (V4.226) أعمدة المزامنة قابلة للتغيير من إعدادات شيت العهدة — الافتراضي: رقم القيد بالعمود H (بدل F سابقاً)
 var GL_CS_COLS_DEF_ = { in: 'A', out: 'B', desc: 'C', date: 'D', party: 'G', qaid: 'H' };
@@ -5613,6 +5761,7 @@ function glCustSheetSave(authToken, code, cfg) {
     });
     o.cols = cc;
   }
+  var _oldC = _glCsCfg_(a.code); if (_oldC.conn && _oldC.id === o.id) o.conn = _oldC.conn;   // 🔌 (V4.438) الموصل يبقى مع نفس الشيت
   var S = _glCsOpen_(o);
   o.tab = S.sh.getName(); o.title = S.ss.getName(); o.cur = _glCur_(a.currency || cfg.cur || 'SAR'); o.auto = !!cfg.auto;   // (V4.249) الافتراضي ريال ويمكن تغييره
   o.dupAutoLink = cfg.dupAutoLink !== false;   // (V4.284) ربط تلقائي صامت للصف المطابق لقيد قائم بنفس الطرف (افتراضي مُفعّل) — يقلّل زحمة الاعتمادات
@@ -5701,7 +5850,7 @@ function _glCsPvGet_(code, m) {   // صفوف المجموعة المخزّنة 
   if (!m.g) return m.big ? undefined : null;
   try { var c = CacheService.getScriptCache().get('gl_cs_pv_' + code); return c ? JSON.parse(c) : undefined; } catch (e) { return undefined; }
 }
-function _glCsLastUpd_(cfg) { try { return DriveApp.getFileById(cfg.id).getLastUpdated().getTime() || 0; } catch (e) { return 0; } }
+function _glCsLastUpd_(cfg) { if (cfg && cfg.conn && cfg.conn.code) { try { return +(_glCsConnGet_(cfg.conn.code, false) || {}).changedAt || 0; } catch (eC) { return 0; } } try { return DriveApp.getFileById(cfg.id).getLastUpdated().getTime() || 0; } catch (e) { return 0; } }
 // معاينة شيت واحد: من الكاش لو بصمته لم تتغيّر (بلا فتح الشيت)، وإلا معاينة كاملة ثم تخزين. force ⇒ تجاوز الكاش
 function _glCsPendOne_(code, user, force) {
   var cfg = _glCsCfg_(code); if (!cfg || !cfg.id) throw new Error('لم يُربط شيت لهذه العهدة بعد');

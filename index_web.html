@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.437  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.438  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9723,7 +9723,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.437";
+var CLIENT_APP_VERSION = "4.438";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -54254,9 +54254,17 @@ function glCustSheetDlg(code) {
           (GL.isAdmin ? '<button class="btn btn-success btn-sm fw-bold" onclick="glCsRun_(\'' + jc + '\',false,this)">🔄 مزامنة الآن</button>' : '') +
           '<button class="btn btn-outline-warning btn-sm" onclick="glCsDupDlg_(\'' + jc + '\')" title="قيود من هذا الشيت مسجّلة أيضاً من شاشات البرنامج">🔁 فحص التكرار</button>' : '') +
         (L ? '<span class="small text-muted ms-auto">آخر مزامنة <span class="gl-latin">' + glEsc(L.at) + '</span> (' + glEsc(L.by) + '): جديدة ' + L.created + ' · معدّلة ' + L.updated + ' · بانتظار الاعتماد ' + L.pending + '</span>' : '') +
-      '</div><div id="glCsRes" class="mt-2"></div>';
+      '</div>' + (c.id ? '<div id="glCsConn" class="mt-2" style="border:1px dashed #94a3b8;border-radius:10px;padding:8px 12px;background:#f8fafc;font-size:12.5px;">' +
+        '<b>🔌 موصل قاعدة البيانات</b> ' + (c.conn ? '<span class="badge bg-success">مُفعّل</span>' : '<span class="badge bg-secondary">غير مُفعّل — البرنامج يفتح الشيت مباشرة</span>') +
+        ' <span id="glCsConnSt" class="text-muted"></span><div class="mt-1 d-flex gap-2 flex-wrap">' +
+        (GL.isAdmin ? '<button class="btn btn-sm btn-outline-primary" onclick="glCsConnSetup_(\'' + jc + '\',this)">' + (c.conn ? '🔁 تجديد الموصل (مفتاح جديد)' : '🔌 إنشاء الموصل') + '</button>' +
+          (c.conn ? '<button class="btn btn-sm btn-outline-danger" onclick="glCsConnOff_(\'' + jc + '\',this)">إيقاف الموصل</button>' : '') : '') +
+        '</div><div class="small text-muted mt-1">الموصل سكربت صغير داخل شيت العهدة: يرسل الشيت لقاعدة البيانات فور أي تعديل وكل دقيقة، ويكتب أرقام القيود بنفسه — فلا يفتح البرنامج الشيت ولا يحتاج صلاحية عليه، والمزامنة أسرع.</div>' +
+        '<div id="glCsConnBox"></div></div>' : '') +
+      '<div id="glCsRes" class="mt-2"></div>';
     glDlg('🔗 شيت ' + ({ safe: 'الخزينة', bank: 'البنك' }[(GL.map[code] || {}).kind] || 'العهدة') + ' — ' + glEsc(a.name) + ' <span class="gl-latin">(' + glEsc(a.code) + ')</span>' + (c.title ? ' · 📄 ' + glEsc(c.title) + ' / ' + glEsc(c.tab || '') : ''), h, 1080);
     glCsMultiSync_();
+    if (c.conn) glCsConnSt_(code);
     if (c.id) glCsRun_(code, true);
   });
 }
@@ -54268,6 +54276,40 @@ function glCsMultiSync_() {
     if (any) { e.value = ''; e.placeholder = '—'; e.readOnly = true; e.style.background = '#f1f5f9'; }
     else { e.readOnly = false; e.style.background = ''; if (!e.value) e.value = f[1]; }
   });
+}
+// 🔌 (V4.438) موصل شيت العهدة: حالة الإرسال · إنشاء (يعرض السكربت للصق) · إيقاف
+function glCsConnSt_(code) {
+  glRun('glCsConnStatus', [code], function (r) {
+    var e = document.getElementById('glCsConnSt'), st = (r && r.status) || {}; if (!e) return;
+    var ago = function (ms) { if (!ms) return 'لم يصل بعد'; var m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'الآن' : ('منذ ' + m + ' د'); };
+    e.innerHTML = st.error ? '❌ ' + glEsc(st.error) : ('آخر اتصال من الشيت: <b>' + ago(st.pushedAt) + '</b> · آخر تغيير: ' + ago(st.changedAt) + ' · ' + (st.rows || 0) + ' صف' +
+      (st.pending ? ' · <b style="color:#b45309;">' + st.pending + ' رقم قيد بانتظار كتابته بالشيت</b>' : '') + (st.pushedAt && Date.now() - st.pushedAt > 180000 ? ' · <b style="color:#b91c1c;">⚠️ الموصل لا يتصل — افتح الشيت وتأكد من تشغيل setup</b>' : ''));
+  }, function () {});
+}
+function glCsConnSetup_(code, btn) {
+  showElegantConfirm({ icon: '🔌', title: 'موصل شيت العهدة', message: 'سيُنشأ مفتاح جديد للموصل (أي موصل سابق لهذا الشيت يتوقف حتى تلصق السكربت الجديد). متابعة؟', buttons: [
+    { label: 'نعم، أنشئ', class: 'btn-primary', onClick: function () {
+      if (btn) btn.disabled = true;
+      glRun('glCsConnectorSetup', [code], function (r) {
+        if (btn) btn.disabled = false;
+        var box = document.getElementById('glCsConnBox'); if (!box) return;
+        box.innerHTML = '<div class="alert alert-info mt-2 mb-1" style="font-size:12.5px;line-height:1.9;"><b>خطوات التفعيل (مرة واحدة):</b><br>' +
+          '1) افتح شيت العهدة ⇐ <b>الإضافات ← Apps Script</b>.<br>2) امسح المحتوى والصق السكربت أدناه بالكامل ثم 💾 حفظ.<br>' +
+          '3) اختر الدالة <b>setup</b> من القائمة أعلى المحرر ثم ▶ <b>تشغيل</b> ووافق على الصلاحيات (حساب صاحب الشيت).<br>' +
+          '4) يظهر بالشيت «✅ تم ربط الشيت بالبرنامج». بعدها كل تعديل يصل فوراً، وأرقام القيود تُكتب بالشيت خلال دقيقة.<br>' +
+          '<span class="text-danger">🔒 السكربت يحوي مفتاحاً سرياً لهذا الشيت وحده — لا تنشره خارج الشيت.</span></div>' +
+          '<textarea id="glCsConnTxt" class="form-control gl-latin" dir="ltr" rows="8" style="font-size:11px;" readonly></textarea>' +
+          '<button class="btn btn-sm btn-success mt-1" onclick="var t=document.getElementById(\'glCsConnTxt\');t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand(\'copy\');}showToast(\'📋 نُسخ السكربت\')">📋 نسخ السكربت</button>';
+        document.getElementById('glCsConnTxt').value = r.script || '';
+        glCsConnSt_(code);
+      }, function (e) { if (btn) btn.disabled = false; _showPopup((e && e.message) || e, 'error'); });
+    } }, { label: 'إلغاء', class: 'btn-outline-secondary', onClick: function () {} }] });
+}
+function glCsConnOff_(code, btn) {
+  showElegantConfirm({ icon: '⛔', title: 'إيقاف الموصل', message: 'يعود البرنامج لفتح الشيت مباشرة (يتطلب مشاركة الشيت مع حساب البرنامج). متابعة؟', buttons: [
+    { label: 'نعم، أوقف', class: 'btn-danger', onClick: function () {
+      glRun('glCsConnectorOff', [code], function () { showToast('أُوقف الموصل'); glCustSheetDlg(code); }, function (e) { _showPopup((e && e.message) || e, 'error'); });
+    } }, { label: 'إلغاء', class: 'btn-outline-secondary', onClick: function () {} }] });
 }
 function glCsSave_(code, btn) {
   var o = { url: glVal('glCsUrl'), tab: glVal('glCsTab'), startRow: glVal('glCsRow'), auto: document.getElementById('glCsAuto').checked, cols: {}, cur: (document.getElementById('glCsCur') || {}).value || 'SAR',
