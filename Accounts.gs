@@ -2491,7 +2491,7 @@ function _glStmtHb_(ctx) {
   try {
     if (_glHbOn_()) {   // ⚡ (V4.252) بيانات العرض فقط (الفندق/التواريخ/بلا سعر) ⇒ كاش دقيقتين بدل فتح ملف الحجوزات مع كل كشف
       var ck = _glCK_('hbread'), got = _glCGet_(ck);
-      if (got) ctx.hb = got; else { ctx.hb = _glHbRead_(); _glCPut_(ck, ctx.hb, 120); }
+      if (got) ctx.hb = got; else { ctx.hb = _glHbReadSnap_() || _glHbRead_(); _glCPut_(ck, ctx.hb, 120); }   // (V4.420) نسخة Postgres إن فُعّلت وحديثة
     }
   } catch (e) { ctx.hb = false; }
   return ctx.hb;

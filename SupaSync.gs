@@ -244,6 +244,107 @@ function usersSotOn() {
   Logger.log(msg); return msg;
 }
 function usersSotOff() { requireScriptOwner_(); PropertiesService.getScriptProperties().deleteProperty('USERS_SOT'); try { _ST_CFG_ = null; } catch (e) {} var m = 'أُوقف: الورقة مرجع المستخدمين من جديد (آخر مرآة من Postgres بقيت بها)'; Logger.log(m); return m; }
+/* ============================================================
+   🏨 (V4.420) نسخة قراءة من بيانات برنامج الحجوزات بـPostgres (046_hb_snap.sql) — المرحلة 2 من HB_UNIFICATION_PLAN.md
+   الشيتات تبقى المصدر (لا شيء يُكتب بها من هنا). hbSnapOn() للتفعيل · hbSnapVerify() للمطابقة مع القراءة الحيّة ·
+   hbSnapReadOn() لاستعمال النسخة بكشوف الحسابات (يشترط نجاح المطابقة) · hbSnapOff() للإيقاف.
+   ============================================================ */
+function _hbSnapOn_() { try { return _supaOn_() && _supaP_('HB_SNAP') === '1'; } catch (e) { return false; } }
+function _hbSnapEnc_(rows, startRow) { return rows.map(function (r, i) { return [startRow + i, _stEncRow_(r)]; }).filter(function (x) { return !_stBlank_(x[1]); }); }
+function _hbSnapMd5_(str) { return Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, str, Utilities.Charset.UTF_8).map(function (b) { var v = (b < 0 ? b + 256 : b).toString(16); return v.length === 1 ? '0' + v : v; }).join(''); }
+// يقرأ الشيتات الخمسة كما يقرؤها _glHbRead_ تماماً (نفس الأعمدة والصفوف) ⇒ { mk, md, pay, meta, prof } بصفوف مرمّزة [rn, cells]
+function _hbSnapRead_() {
+  var c = _glHbCfg_(); if (!c.ssId) throw new Error('لم يُربط ملف برنامج الحجوزات بعد');
+  var ss = SpreadsheetApp.openById(c.ssId), src = (c.srcId && c.srcId !== c.ssId) ? SpreadsheetApp.openById(c.srcId) : ss, out = {};
+  var rd = function (book, name, from, cols) {
+    var sh = book.getSheetByName(name); if (!sh) return [];
+    var last = sh.getLastRow(); if (last < from) return [];
+    return _hbSnapEnc_(sh.getRange(from, 1, last - from + 1, cols).getValues(), from);
+  };
+  out.mk = rd(src, c.mk, c.mkRow, 34); out.md = rd(src, c.md, c.mdRow, 34);
+  out.pay = rd(ss, c.pay, 1, 10); out.meta = rd(ss, 'البيانات المحاسبية للدفعات', 1, 6); out.prof = rd(ss, c.prof, 1, 7);
+  return out;
+}
+function hbSnapSync_(force) {
+  if (!_hbSnapOn_()) return 'off';
+  var P = PropertiesService.getScriptProperties(), nowMs = Date.now();
+  if (!force && nowMs - (+P.getProperty('HB_SNAP_AT') || 0) < 110000) return 'throttled';
+  P.setProperty('HB_SNAP_AT', String(nowMs));
+  var data = _hbSnapRead_(), same = {}, up = [], t0 = Date.now();
+  Object.keys(data).forEach(function (t) {
+    var js = JSON.stringify(data[t]), h = _hbSnapMd5_(js) + ':' + data[t].length;
+    if (!force && P.getProperty('HB_SNAP_H_' + t) === h) { same[t] = h; return; }
+    up.push({ t: t, rows: data[t], h: h });
+  });
+  var CH = 400, done = [];
+  up.forEach(function (u) {
+    if (Date.now() - t0 > 40000) return;
+    var parts = Math.max(1, Math.ceil(u.rows.length / CH)), ok = true;
+    for (var k = 0; k < parts && ok; k++) {
+      var r = _supaReq_('post', 'rpc/hb_snap_put', { p_tbl: u.t, p_part: k + 1, p_parts: parts, p_rows: u.rows.slice(k * CH, (k + 1) * CH), p_hash: u.h });
+      if (r.code >= 300) { Logger.log('hb_snap_put ' + u.t + ' ' + r.code + ' ' + String(r.text).slice(0, 160)); ok = false; }
+    }
+    if (ok) { P.setProperty('HB_SNAP_H_' + u.t, u.h); done.push(u.t); }
+  });
+  if (Object.keys(same).length) _supaReq_('post', 'rpc/hb_snap_touch', { p_hashes: same });
+  return 'رُفع: ' + (done.join(',') || '—') + ' | دون تغيير: ' + (Object.keys(same).join(',') || '—');
+}
+function hbSnapOn() {
+  requireScriptOwner_();
+  if (!_supaOn_()) throw new Error('Supabase غير مفعّل');
+  var chk = _supaReq_('get', 'hb_snap_meta?select=tbl&limit=1');
+  if (chk.code !== 200) throw new Error('شغّل supabase/046_hb_snap.sql أولاً (' + chk.code + ')');
+  PropertiesService.getScriptProperties().setProperty('HB_SNAP', '1');
+  var r = hbSnapSync_(true); Logger.log('hb_snap: ' + r); return r;
+}
+function hbSnapOff() { requireScriptOwner_(); var P = PropertiesService.getScriptProperties(); P.deleteProperty('HB_SNAP'); P.deleteProperty('HB_SNAP_READ'); return 'أُوقفت نسخة الحجوزات (ورجعت القراءة من الشيتات)'; }
+function hbSnapSyncNow() { requireScriptOwner_(); var r = hbSnapSync_(true); Logger.log('hb_snap: ' + r); return r; }
+// مطابقة: القراءة الحيّة من الشيتات (_glHbRead_) مقابل نسخة Postgres — نفس الحقول الحاكمة (مفتاح/عميل/مورد/تواريخ/بيع/تكلفة/دفعات)
+function hbSnapVerify() {
+  requireScriptOwner_();
+  var s = hbSnapSync_(true); _GL_HB_MEMO_ = null;
+  var live = _glHbRead_(), r = _supaReq_('post', 'rpc/hbx_read_raw', {});
+  if (r.code !== 200) throw new Error('hbx_read_raw: ' + r.code + ' ' + String(r.text).slice(0, 200));
+  var pg = JSON.parse(r.text), L = [], bad = 0;
+  var cmp = function (what, a, b, fields, keyf) {
+    var ma = {}, mb = {}; a.forEach(function (x) { ma[keyf(x)] = x; }); b.forEach(function (x) { mb[keyf(x)] = x; });
+    var n = 0, miss = 0, extra = 0, diff = 0, ex = [];
+    Object.keys(ma).forEach(function (k) {
+      var x = ma[k], y = mb[k]; if (!y) { miss++; if (ex.length < 5) ex.push('ناقص بـPG: ' + k); return; }
+      fields.forEach(function (f) {
+        var va = f(x), vb = f(y); if (typeof va === 'number') { va = Math.round(va * 100) / 100; vb = Math.round(vb * 100) / 100; }
+        if (JSON.stringify(va) !== JSON.stringify(vb)) { diff++; if (ex.length < 5) ex.push(k + ': ' + JSON.stringify(va) + ' ≠ ' + JSON.stringify(vb)); }
+      });
+      n++;
+    });
+    Object.keys(mb).forEach(function (k) { if (!ma[k]) { extra++; if (ex.length < 5) ex.push('زائد بـPG: ' + k); } });
+    var ok = !miss && !extra && !diff; if (!ok) bad++;
+    L.push((ok ? '✓ ' : '✗ ') + what + ': حيّ ' + a.length + ' · PG ' + b.length + (ok ? '' : ' — ناقص ' + miss + ' · زائد ' + extra + ' · فروق حقول ' + diff + '\n   ' + ex.join('\n   ')));
+  };
+  var F = function (p) { return function (x) { return p.split('.').reduce(function (o, k) { return o == null ? o : o[k]; }, x); }; };
+  cmp('الحجوزات', live.bookings, pg.bookings, ['city', 'row', 'qaid', 'inner', 'client', 'hotel', 'ci', 'co', 'nights', 'supplier', 'status', 'hotelRef', 'sale.value', 'sale.hasPrice', 'sale.rooms', 'sale.breakdown', 'cost.value', 'cost.hasPrice', 'cost.breakdown', 'rooms'].map(F), function (x) { return x.key; });
+  cmp('الدفعات', live.pays, pg.pays, ['date', 'party', 'dir', 'amount', 'note', 'qaid', 'linkId', 'meta'].map(F), function (x) { return x.id; });
+  var lp = Object.keys(live.prof).map(function (k) { return { k: k, v: live.prof[k] }; }), pp = Object.keys(pg.prof).map(function (k) { return { k: k, v: pg.prof[k] }; });
+  cmp('بيانات الحسابات', lp, pp, ['v.name', 'v.type', 'v.notes', 'v.agent', 'v.role', 'v.code'].map(F), function (x) { return x.k; });
+  var out = (bad ? '⚠️ فروق بـ' + bad + ' من 3\n' : '✅ مطابقة كاملة — يمكن تفعيل hbSnapReadOn()\n') + L.join('\n') + '\n(مزامنة: ' + s + ')';
+  PropertiesService.getScriptProperties().setProperty('HB_SNAP_VERIFIED', bad ? '' : String(Date.now()));
+  Logger.log(out); return out;
+}
+function hbSnapReadOn() {
+  requireScriptOwner_();
+  var v = +PropertiesService.getScriptProperties().getProperty('HB_SNAP_VERIFIED') || 0;
+  if (!_hbSnapOn_() || Date.now() - v > 86400000) throw new Error('شغّل hbSnapVerify() أولاً (يجب أن تنجح المطابقة خلال آخر 24 ساعة)');
+  PropertiesService.getScriptProperties().setProperty('HB_SNAP_READ', '1'); return 'كشوف الحسابات تقرأ بيانات الحجوزات من Postgres (عمر النسخة ≤ 4 دقائق وإلا ترجع للشيتات تلقائياً)';
+}
+// قراءة بنفس شكل _glHbRead_ من Postgres (عرض فقط) — null إن لم تُفعَّل/قديمة/فشلت ⇒ الاستدعاء يرجع للشيتات
+function _glHbReadSnap_() {
+  try {
+    if (!_hbSnapOn_() || _supaP_('HB_SNAP_READ') !== '1') return null;
+    var r = _supaReq_('post', 'rpc/hbx_read_raw', {}); if (r.code !== 200) return null;
+    var j = JSON.parse(r.text); if (!j || typeof j.ageSec !== 'number' || j.ageSec > 240) return null;
+    return { bookings: j.bookings, pays: j.pays, prof: j.prof };
+  } catch (e) { return null; }
+}
 function supaGlAuxSyncNow() { requireScriptOwner_(); var r = supaGlAuxSync_(true); Logger.log('gl_aux: ' + r + ' (GL_STORE=' + _supaP_('GL_STORE') + ')'); return r; }
 
 function _supaSynced_() { try { return JSON.parse(_supaP_('SUPA_SYNCED') || '{}') || {}; } catch (e) { return {}; } }
@@ -278,6 +379,7 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
     }
     try { _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (المرحلة 4)
     var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
+    try { hbSnapSync_(false); } catch (eHs) { Logger.log('hbSnap: ' + eHs); }   // (V4.420) نسخة قراءة الحجوزات
     try { usersMirrorTick_(false); } catch (eUm) { Logger.log('usersMirror: ' + eUm); }   // (V4.419) مرآة المستخدمين PG→الورقة
     try { supaGlMetaSync_(); } catch (eGm) { Logger.log('supaGlMeta: ' + eGm); }   // ⚡ (V4.417) رابط ملف الحسابات + عدد صفوف شيتات العهد الناقصة (لـ glx_bootstrap)
     var b378 = _supaBootSync_();   // ⚡ (V4.378) app_config + حالة القيود + سجل التعديلات
