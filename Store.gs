@@ -581,6 +581,30 @@ function accClientPricesCheck() {
   L.push('نصّ JSON أقصر بالمخزن (ربما فقدان فترات): ' + shorter.length + (shorter.length ? ' — ' + shorter.slice(0, 30).join('، ') : ''));
   var out = L.join('\n'); Logger.log(out); return out;
 }
+/* (V4.429) تشخيص بند التأشيرات بنمط «بنود»: لكل مجموعة «تم إصدار الموفا» × رحلة × عميل بتفصيلها يقارن عدّ Apps Script بعدّ Postgres — للقراءة فقط */
+function accVisaCheck() {
+  requireScriptOwner_();
+  var files = _vzReadAll_(), L = [], pairs = 0, bad = 0, seen = {};
+  var issued = files.filter(function (f) { return String(f.status || '').trim() === 'تم إصدار الموفا'; });
+  L.push('مجموعات التأشيرات: ' + files.length + ' · «تم إصدار الموفا»: ' + issued.length);
+  issued.forEach(function (f) {
+    var trips = _vzTripsOf_(f);
+    if (!trips.length) L.push('⚠ مجموعة ' + (f.ref || f.id) + ': بلا رحلة معرَّفة (tripName="' + f.tripName + '") — لن تظهر ببند أي رحلة');
+    trips.forEach(function (t) {
+      (f.breakdown || []).forEach(function (b) {
+        var nm = String(b.name || '').trim(), k = nm + '|' + t;
+        if (!nm || seen[k] || pairs >= 80) return; seen[k] = 1; pairs++;
+        var as = _accVisaGroupsFor_(nm, t), pg = null;
+        try { var r = _supaReq_('post', 'rpc/ae_vz_check', { p_client: nm, p_trip: t }); pg = JSON.parse(r.text); } catch (e) { pg = { error: String(e) }; }
+        var ok = pg && +pg.count === +as.count;
+        if (!ok) bad++;
+        L.push((ok ? '✓ ' : '✗ ') + nm + ' × ' + t + ' : AS=' + as.count + ' · PG=' + (pg && pg.count != null ? pg.count : JSON.stringify(pg)));
+      });
+    });
+  });
+  L.push(bad ? '⛔ فروق: ' + bad + ' من ' + pairs : '✅ تطابق (' + pairs + ' زوج)');
+  var out = L.join('\n'); Logger.log(out); return out;
+}
 function storeCompare(group) { requireScriptOwner_(); return _stCompareTables_(_stTablesOf_(group)).text; }
 function _stHasGl_(tables) { return tables.some(function (t) { return _stSpecs_()[t].ss === 'gl'; }); }
 function _stSetFlag_(tables, on) {

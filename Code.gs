@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.428";
+var APP_VERSION = "4.429";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -6679,8 +6679,19 @@ function _onlineRemove_(token) {
 }
 // نبضة خفيفة يرسلها المتصفح دورياً (كل دقيقة تقريباً) — تُحدِّث "آخر ظهور" لهذا التوكن فقط،
 // وتعيد العدد الحالي (بلا أسماء) كي يتحدَّث الرقم بجوار الأيقونة بلا نداء إضافي منفصل
+// V4.429: تسجيل الحضور بـPostgres أيضاً (مرة كل 50 ث لكل مستخدم) — القائمة والعدّاد من مصدر واحد
+function _onlinePgMirror_(username, fullName) {
+  try {
+    if (typeof _supaOn_ !== 'function' || !_supaOn_()) return;
+    var c = CacheService.getScriptCache(), k = 'onl_pg_' + username;
+    if (c.get(k)) return;
+    c.put(k, '1', 50);
+    _supaReq_('post', 'rpc/app_presence_put', { p_user: String(username), p_name: String(fullName || username) });
+  } catch (e) {}
+}
 function heartbeatOnline(authToken) {
   var session = requireAuth_(authToken);
+  _onlinePgMirror_(session.username, session.fullName);
   var map = _onlinePrune_();
   map[authToken] = { username: session.username, fullName: session.fullName || session.username, ts: Date.now() };
   _onlineWrite_(map);
@@ -6697,6 +6708,7 @@ function appPulse(authToken, p) {
   try { if (typeof _dvAll_ === 'function') out.dv = _dvAll_(); } catch (eDv) {}   // ⚡ (V4.367) بصمات البيانات مع النبضة الموحّدة
   // ⚡ (V4.364) لم تعد النبضة تفرّغ طابور السجل المحصّن (كانت تفتح ملفه داخل نداء المستخدم) — يفرّغه مشغّل كل دقيقة audFlushCron وفتح شاشة السجل
   if (p.online) {
+    _onlinePgMirror_(session.username, session.fullName);
     var map = _onlinePrune_();
     map[authToken] = { username: session.username, fullName: session.fullName || session.username, ts: Date.now() };
     _onlineWrite_(map);
@@ -24918,11 +24930,29 @@ function deleteMinistryFilesBatch(authToken, ids) {
 }
 
 // سجل تعديلات ملف واحد
+// V4.429: سجل تعديلات مجموعة/ملف = صفوف الشيت + صفوف Postgres (المسجَّلة وقت الكتابة بـPostgres، ولا تصل للشيت إلا بعد تفريغ الطابور) — مدموجة بلا تكرار ومرتّبة الأحدث أولاً
+function _histMergePg_(key, out) {
+  try {
+    if (typeof _supaOn_ !== 'function' || !_supaOn_()) return out;
+    var r = _supaReq_('get', 'audit_log?select=ts_str,username,action,field,old_value,new_value&record_id=eq.' + encodeURIComponent(key) + '&limit=500');
+    if (r.code !== 200) return out;
+    var rows = JSON.parse(r.text) || [], seen = {};
+    var sk = function (e) { return [e.who, e.action, e.field, e.oldVal, e.newVal, String(e.when).slice(0, 16)].join('\u0001'); };
+    out.forEach(function (e) { seen[sk(e)] = 1; });
+    rows.forEach(function (x) {
+      var e = { when: String(x.ts_str || ''), who: String(x.username || ''), action: String(x.action || ''), field: String(x.field || ''), oldVal: String(x.old_value || ''), newVal: String(x.new_value || '') };
+      if (!seen[sk(e)]) { seen[sk(e)] = 1; out.push(e); }
+    });
+    var key2 = function (w) { var m = String(w).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/); return m ? m[3] + m[2] + m[1] + m[4] + m[5] + m[6] : ''; };
+    out.sort(function (a, b) { return key2(b.when) < key2(a.when) ? -1 : key2(b.when) > key2(a.when) ? 1 : 0; });
+  } catch (e) {}
+  return out;
+}
 function getMinistryFileHistory(authToken, id) {
   _mfPerm_(authToken, 'view');
   var sh = ensureAuditLogSheet_();
   var last = sh.getLastRow();
-  if (last < 2) return { success: true, entries: [] };
+  if (last < 2) return { success: true, entries: _histMergePg_('MF:' + _mfStr_(id), []) };
   var vals = sh.getRange(2, 1, last - 1, 7).getValues();
   var key = 'MF:' + _mfStr_(id);
   var tz = _tz_() || 'Asia/Riyadh';
@@ -24936,7 +24966,7 @@ function getMinistryFileHistory(authToken, id) {
       field: _mfStr_(vals[i][4]), oldVal: _mfStr_(vals[i][5]), newVal: _mfStr_(vals[i][6])
     });
   }
-  return { success: true, entries: out };
+  return { success: true, entries: _histMergePg_(key, out) };
 }
 
 // 🔗 ربط شاشة الرحلات: أي رحلة مرتبطة بملف مراجعة + الرحلات التي تسافر خلال 3 أيام ولم تُراجع
@@ -26602,7 +26632,7 @@ function getVisaFileHistory(authToken, id) {
   _vzPerm_(authToken, 'view');
   var sh = ensureAuditLogSheet_();
   var last = sh.getLastRow();
-  if (last < 2) return { success: true, entries: [] };
+  if (last < 2) return { success: true, entries: _histMergePg_('VZ:' + _mfStr_(id), []) };
   var vals = sh.getRange(2, 1, last - 1, 7).getValues();
   var key = 'VZ:' + _mfStr_(id);
   var tz = _tz_() || 'Asia/Riyadh';
@@ -26616,7 +26646,7 @@ function getVisaFileHistory(authToken, id) {
       field: _mfStr_(vals[i][4]), oldVal: _mfStr_(vals[i][5]), newVal: _mfStr_(vals[i][6])
     });
   }
-  return { success: true, entries: out };
+  return { success: true, entries: _histMergePg_(key, out) };
 }
 // ⚡ (V4.234) إعادة حساب أرصدة مفاتيح حسابات الوكلاء المتأثرة فقط (بلا إعادة بناء getVisaBootstrap الكامل)
 // — تُرجَع مطلقة (لا دلتا) فلا انحراف؛ يُطابق تماماً ما يبنيه getVisaBootstrap لتلك المفاتيح.
