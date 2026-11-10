@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.433";
+var APP_VERSION = "4.434";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -18460,6 +18460,7 @@ function accGenerateDraft(authToken, client, trip, mode) {
     // 🛂 (V4.203) بطلب صريح: عدد التأشيرات من مجموعات التأشيرات الفعلية (الموفا الصادرة) لهذا العميل×الرحلة
     var _vzG = _accVisaGroupsFor_(client, trip);
     if (_vzG.count > 0) push(_vzG.desc, 'كبير', 'SAR', _vzG.count, pr('تأشيرات'), 0, '');
+    else push('تأشيرات', 'كبير', 'SAR', 0, pr('تأشيرات'), 0, '');   // (V4.434) البند يظهر دائماً — بلا عدد حين لا تطابق مجموعة
     visaPilgrims.forEach(function(p) {
       push('تأشيرة ' + p.name + ' (' + p.notes + ')', 'كبير', 'SAR', 1, 0, 0, '');
     });

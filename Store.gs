@@ -632,6 +632,17 @@ function accClientTripDiag(client, tripSub) {
   Object.keys(trips).forEach(function (t) {
     try { var r = _supaReq_('post', 'rpc/ae_diag', { p_client: client, p_trip: t }); L.push('PG ae_diag [' + t + '] → ' + String(r.text).slice(0, 900)); } catch (e) { L.push('ae_diag خطأ: ' + e); }
     try { var g = _supaReq_('post', 'rpc/ae_gen_check', { p_client: client, p_trip: t }); var gj = JSON.parse(g.text); L.push('PG ae_gen_check [' + t + '] مسعّر=' + gj.hasPricingRow + ' مفاتيح=' + (gj.pricingKeys || []).join('،') + ' عملاء الرحلة=' + (gj.clientsInTrip || []).join(' | ') + ' نجاح=' + gj.success + (gj.error ? ' خطأ=' + gj.error : '')); (gj.items || []).forEach(function (x) { L.push('   ' + x.d + ' · عدد ' + x.n + ' · سعر ' + x.p + ' ' + x.cur + (x.ex ? ' · موجود' : '') + (x.sel ? ' · محدد' : '')); }); } catch (eG) { L.push('ae_gen_check خطأ: ' + eG + ' ' + (g && g.text)); }
+    try {
+      var mf = JSON.parse(_supaReq_('post', 'rpc/ae_mf_check', { p_trip: t }).text) || [];
+      L.push('ملفات الوزارة المرتبطة بالرحلة: ' + (mf.length ? '' : 'لا يوجد'));
+      mf.forEach(function (x) { L.push('   ملف ' + x.fileNo + ' · مراجعة=' + (x.reviewDate || 'غير مراجَع') + ' · نوع=' + (x.reviewType || '') + ' · رسوم الغرفة=' + x.roomFee + ' · أسماء البنود=' + (x.names || []).join(' | ')); });
+      (gj && gj.clientsInTrip || []).forEach(function (cn) {
+        if (!cn || cn === client || /مشرف/.test(cn)) return;
+        var g2 = JSON.parse(_supaReq_('post', 'rpc/ae_gen_check', { p_client: cn, p_trip: t }).text);
+        L.push('PG ae_gen_check باسم عميل الرحلة الفعلي «' + cn + '» مسعّر=' + g2.hasPricingRow + ' نجاح=' + g2.success + (g2.error ? ' خطأ=' + g2.error : '') + ' أعداد=' + JSON.stringify(g2.counts));
+        (g2.items || []).forEach(function (x) { L.push('   ' + x.d + ' · عدد ' + x.n + ' · سعر ' + x.p + ' ' + x.cur + (x.ex ? ' · موجود' : '') + (x.sel ? ' · محدد' : '')); });
+      });
+    } catch (eM) { L.push('تشخيص إضافي خطأ: ' + eM); }
     L.push('AS _accVisaGroupsFor_ [' + t + '] → count=' + _accVisaGroupsFor_(client, t).count);
   });
   var out = L.join('\n'); Logger.log(out); return out;
