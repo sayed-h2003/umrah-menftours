@@ -394,6 +394,7 @@ function hbUserSaveFromMain(authToken, username, p) {
     if (p.displayName) sh.getRange(rowIdx, 2).setValue(p.displayName);
     sh.getRange(rowIdx, 5, 1, 3).setValues([[role, JSON.stringify(perms), p.active !== false]]);
     invalidateUserRecordCache_(username);
+    try { hbSnapSyncUsers_(); } catch (eSn) {}   // (V4.423) نسخة Postgres لخريطة الصلاحيات
     hbLogChange_({ username: session.username, displayName: session.username }, 'المستخدمون', username,
       (created ? 'إنشاء مستخدم حجوزات من برنامج العمرة' : 'تعديل صلاحيات الحجوزات من برنامج العمرة') + ' (' + (role === 'admin' ? 'مدير' : 'مستخدم') + ')', '', '');
     try { logChange_(session.username, 'صلاحيات الفنادق', username, created ? 'إنشاء' : 'تعديل', '', JSON.stringify(perms).slice(0, 400)); } catch (eL) {}

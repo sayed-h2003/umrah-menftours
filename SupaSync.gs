@@ -263,7 +263,23 @@ function _hbSnapRead_() {
   };
   out.mk = rd(src, c.mk, c.mkRow, 34); out.md = rd(src, c.md, c.mdRow, 34);
   out.pay = rd(ss, c.pay, 1, 10); out.meta = rd(ss, 'البيانات المحاسبية للدفعات', 1, 6); out.prof = rd(ss, c.prof, 1, 7);
+  out.hbusers = _hbSnapUsers_();
   return out;
+}
+// (V4.423) مستخدمو برنامج الحجوزات (شيت «المستخدمون») بعد حجب الملح وكلمة المرور (العمودان 3 و4) — لخريطة الصلاحيات بـPostgres
+function _hbSnapUsers_() {
+  var sh = null; try { sh = hbProgramSS_().getSheetByName(USERS_SHEET_NAME); } catch (e) {}
+  if (!sh || sh.getLastRow() < 1) return [];
+  return _hbSnapEnc_(sh.getRange(1, 1, sh.getLastRow(), 8).getValues().map(function (r) { return [r[0], r[1], '', '', r[4], r[5], r[6], '']; }), 1);
+}
+// رفع فوري لمستخدمي الحجوزات فقط (بعد حفظ صلاحياتهم من برنامج العمرة) فيرى المدير تعديله مباشرة
+function hbSnapSyncUsers_() {
+  if (!_hbSnapOn_()) return 'off';
+  var rows = _hbSnapUsers_(), h = _hbSnapMd5_(JSON.stringify(rows)) + ':' + rows.length, P = PropertiesService.getScriptProperties();
+  if (P.getProperty('HB_SNAP_H_hbusers') === h) return 'same';
+  var r = _supaReq_('post', 'rpc/hb_snap_put', { p_tbl: 'hbusers', p_part: 1, p_parts: 1, p_rows: rows, p_hash: h });
+  if (r.code < 300) { P.setProperty('HB_SNAP_H_hbusers', h); return 'ok'; }
+  Logger.log('hbusers snap ' + r.code + ' ' + String(r.text).slice(0, 160)); return 'fail';
 }
 function hbSnapSync_(force) {
   if (!_hbSnapOn_()) return 'off';
