@@ -631,6 +631,7 @@ function accClientTripDiag(client, tripSub) {
   // ما يراه Postgres فعلاً لهذا العميل × كل رحلة تطابق النص (يكشف تاريخ الذهاب/صف التسعير/التأشيرات التي يحسبها المولّد)
   Object.keys(trips).forEach(function (t) {
     try { var r = _supaReq_('post', 'rpc/ae_diag', { p_client: client, p_trip: t }); L.push('PG ae_diag [' + t + '] → ' + String(r.text).slice(0, 900)); } catch (e) { L.push('ae_diag خطأ: ' + e); }
+    try { var g = _supaReq_('post', 'rpc/ae_gen_check', { p_client: client, p_trip: t }); var gj = JSON.parse(g.text); L.push('PG ae_gen_check [' + t + '] مسعّر=' + gj.hasPricingRow + ' مفاتيح=' + (gj.pricingKeys || []).join('،') + ' عملاء الرحلة=' + (gj.clientsInTrip || []).join(' | ') + ' نجاح=' + gj.success + (gj.error ? ' خطأ=' + gj.error : '')); (gj.items || []).forEach(function (x) { L.push('   ' + x.d + ' · عدد ' + x.n + ' · سعر ' + x.p + ' ' + x.cur + (x.ex ? ' · موجود' : '') + (x.sel ? ' · محدد' : '')); }); } catch (eG) { L.push('ae_gen_check خطأ: ' + eG + ' ' + (g && g.text)); }
     L.push('AS _accVisaGroupsFor_ [' + t + '] → count=' + _accVisaGroupsFor_(client, t).count);
   });
   var out = L.join('\n'); Logger.log(out); return out;
