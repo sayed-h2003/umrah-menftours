@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.435  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.436  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -4195,6 +4195,7 @@ input[type="date"]:not(:focus):not(:valid) {
       <!-- 🕘 (V4.90) سجل تعديلات هذا الحساب: كل عملية تمت عليه (بند/دفعة/دمج/تسعير...) — من الإنشاء حتى الآن -->
       <button class="btn btn-outline-light btn-sm" onclick="_accHistoryOpen_()" title="سجل كل التعديلات التي تمت على حساب هذا العميل — الحقل والقيمة القديمة والجديدة والقائم بها وتاريخها">🕘 سجل تعديلات الحساب</button>
       <!-- 🧾 (V4.203) بنود الوزارة والتأشيرات غير المرتبطة برحلات لهذا العميل — اختيار وتسعير وإدراج -->
+      <button class="btn btn-light btn-sm fw-bold" onclick="_dqOpen_()" title="(V4.436) رحلات غير موجودة بكشف الرحلات بحسابات العملاء + أسماء عملاء غير مسجَّلة بدليل العملاء — لكل العملاء، مع نقل/حذف/دمج">🧹 تدقيق العملاء والرحلات</button>
       <button class="btn btn-light btn-sm fw-bold" onclick="_accUnlinkedOpen_()" title="رسوم الغرفة (ملفات الوزارة المراجَعة) والتأشيرات (الموفا الصادرة) لهذا العميل غير المرتبطة بأي رحلة — اختر ما تريد وأدرجه في حسابه">🏛️ بنود الوزارة والتأشيرات</button>
       <button id="accQuickPayBtn" class="btn btn-warning btn-sm fw-bold d-none" onclick="_accQuickPayOpen_()" title="تسجيل دفعة عامة أو عدة دفعات لعملاء مختلفين مباشرة بدون فتح أي حساب أولاً">💠 تسجيل دفعات عامة</button>
       <button class="btn btn-outline-light btn-sm" onclick="_accGenLedgerOpen_()" title="عرض وفلترة كل الدفعات العامة عبر كل العملاء">📋 سجل الدفعات العامة</button>
@@ -7918,6 +7919,10 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     deleteAccItemsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
     /* (V4.435) 058 — اعتماد لقطة أعداد الحساب / تعليم التنبيه كمقروء من Postgres */
     accResolveAlert: { need: ['acc', 'wbk'], rpc: 'rw_call' },
+    /* (V4.436) 059 — تدقيق العملاء والرحلات + نقل/حذف رحلة غير موجودة + دمج اسم عميل */
+    accDataAudit: { need: ['acc', 'core', 'ministry', 'visa'], rpc: 'rx_call2' },
+    accOrphanFix: { need: ['acc', 'core', 'wbk'], rpc: 'rw_call' },
+    clientMergeName: { need: ['acc', 'core', 'bookings', 'ministry', 'visa', 'wbk'], rpc: 'rw_call' },
     /* (V4.395) 031_ledger.sql — نظام السندات من Postgres: الدفعة الجديدة/الجماعية ⇒ سند مسودة بالطابور · الاعتماد/الرفض/السحب · قراءات الطابور. آثارها الجانبية (مرآة الدفعة بالشاشة · تليجرام) تُنفَّذ بنداء glOutboxKick */
     saveAccPayment: { need: ['acc', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
     saveAccPaymentsBulk: { need: ['acc', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
@@ -9714,7 +9719,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.435";
+var CLIENT_APP_VERSION = "4.436";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -17586,10 +17591,9 @@ function _loadClientSelectNames_(cb) {
     if (dl) dl.innerHTML = window._clientSelectNames.map(function(n) { return '<option value="' + escapeHtml_(n) + '">'; }).join('');
     if (cb) cb();
   }
-  google.script.run
-    .withSuccessHandler(function(list) { (list || []).forEach(function(n) { if (n) names[n] = true; }); finish(); })
-    .withFailureHandler(finish)
-    .getKnownClientNames(window.authToken);
+  // 🔒 (V4.436) الاقتراحات من دليل العملاء الرسمي وحده — كانت تضم أيضاً أسماء حرة من كشوف الرحلات، فيُقترح اسم مكتوب خطأً
+  // (مثل «ايجبشيان المنيا») كأنه عميل مسجَّل ويتكرّر. الحفظ يرفض الآن أي عميل غير مسجَّل بالدليل
+  done++;
   google.script.run
     .withSuccessHandler(function(list) { (list || []).forEach(function(c) { if (c && c.name) names[c.name] = true; }); finish(); })
     .withFailureHandler(finish)
@@ -27959,6 +27963,115 @@ function _accComboPick_(name) {
 
 
 /* ============================================================
+   🧹 (V4.436) تدقيق العملاء والرحلات (لكل العملاء) — 059_data_integrity.sql
+   • رحلات غير موجودة بكشف الرحلات ومرتبطة بعميل (معتمرون/بنود/دفعات): «نقل إلى رحلة» (المعتمر المكرَّر بنفس الجواز بالرحلة الهدف
+     يُحذف لسلة المحذوفات، وغير المكرَّر يُنقل؛ البنود والدفعات تنتقل) أو «حذف» (لسلة المحذوفات).
+   • أسماء عملاء مستخدمة وغير مسجَّلة بدليل العملاء: «دمج في» العميل الصحيح (كل الكشوف والحسابات والتسعير والإشعارات والوزارة والتأشيرات).
+   ============================================================ */
+var _DQ_ = null;
+function _dqSim_(a, b) {
+  var ka = _clientKey_(a), kb = _clientKey_(b); if (!ka || !kb) return 0;
+  if (ka === kb) return 1;
+  if (kb.indexOf(ka) >= 0 || ka.indexOf(kb) >= 0) return 0.9;
+  var ta = ka.split(' ').filter(function (w) { return w.length > 1; }), tb = kb.split(' ');
+  var hit = ta.filter(function (w) { return tb.indexOf(w) >= 0; }).length, tok = ta.length ? hit / ta.length : 0;
+  var sa = _clientSkel_(a), sb = _clientSkel_(b), L = Math.max(sa.length, sb.length);
+  var lev = L ? 1 - _levenshtein_(sa, sb) / L : 0;
+  return Math.max(tok * 0.85, lev);
+}
+function _dqBest_(name, list, min) {
+  var best = '', bs = 0;
+  (list || []).forEach(function (x) { if (x === name) return; var sc = _dqSim_(name, x); if (sc > bs) { bs = sc; best = x; } });
+  return bs >= (min || 0.6) ? best : '';
+}
+function _dqOpen_() {
+  var ov = document.getElementById('_dqOv');
+  if (!ov) {
+    ov = document.createElement('div'); ov.id = '_dqOv'; ov.dir = 'rtl';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 8px;';
+    ov.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:1100px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
+      '<div style="display:flex;align-items:center;gap:8px;padding:12px 16px;background:#1e3a5f;color:#fff;border-radius:14px 14px 0 0;"><b style="flex:1;">🧹 تدقيق العملاء والرحلات — كل العملاء</b>' +
+      '<button class="btn btn-sm btn-light" onclick="_dqLoad_()">🔄 تحديث</button><button class="btn btn-sm btn-light" onclick="document.getElementById(\'_dqOv\').remove()">✕</button></div>' +
+      '<div id="_dqBody" style="padding:14px 16px;"></div></div>';
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
+  }
+  _dqLoad_();
+}
+function _dqLoad_() {
+  var b = document.getElementById('_dqBody'); if (!b) return;
+  b.innerHTML = '<div class="text-muted p-3">⏳ جاري فحص كل الكشوف والحسابات…</div>';
+  google.script.run.withSuccessHandler(function (r) {
+    if (!r || r.success === false) { b.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml_((r && r.error) || 'تعذّر الفحص') + '</div>'; return; }
+    _DQ_ = r; _dqRender_();
+  }).withFailureHandler(function (e) { b.innerHTML = '<div class="alert alert-danger">❌ ' + escapeHtml_(e && e.message ? e.message : e) + '</div>'; }).accDataAudit(window.authToken);
+}
+function _dqRender_() {
+  var b = document.getElementById('_dqBody'), r = _DQ_; if (!b || !r) return;
+  var E = escapeHtml_, h = '';
+  h += '<datalist id="_dqTripsDL">' + (r.trips || []).map(function (t) { return '<option value="' + E(t) + '">'; }).join('') + '</datalist>';
+  h += '<datalist id="_dqCliDL">' + (r.clients || []).map(function (t) { return '<option value="' + E(t) + '">'; }).join('') + '</datalist>';
+  h += '<h6 class="fw-bold mt-1">✈️ رحلات بحسابات العملاء غير موجودة بكشف الرحلات (' + (r.orphanTrips || []).length + ')</h6>';
+  h += '<div class="small text-muted mb-2">غالباً اسم قديم لرحلة أُعيدت تسميتها ثم حُفظ كشفها من صفحة مفتوحة بالاسم القديم، أو رحلة حُذفت. «نقل» ينقل البنود والدفعات للرحلة الصحيحة، ويحذف المعتمرين المكرَّرين بنفس الجواز (لسلة المحذوفات) وينقل غير المكرَّرين.</div>';
+  if (!(r.orphanTrips || []).length) h += '<div class="alert alert-success py-2">✅ لا توجد</div>';
+  else {
+    h += '<table class="table table-sm table-bordered align-middle" style="font-size:12.5px;"><thead class="table-light"><tr><th>العميل</th><th>الرحلة غير الموجودة</th><th>معتمرون</th><th>بنود</th><th>دفعات</th><th style="width:34%;">نقل إلى الرحلة الصحيحة</th><th></th></tr></thead><tbody>';
+    r.orphanTrips.forEach(function (o, i) {
+      var sug = _dqBest_(o.trip, r.trips, 0.55);
+      h += '<tr><td>' + E(o.client) + '</td><td><b>' + E(o.trip) + '</b></td><td>' + o.pil + '</td><td>' + o.items + '</td><td>' + o.pays + '</td>' +
+        '<td><input id="_dqT' + i + '" class="form-control form-control-sm" list="_dqTripsDL" value="' + E(sug) + '" placeholder="🔎 اختر رحلة"></td>' +
+        '<td style="white-space:nowrap;"><button class="btn btn-sm btn-primary" onclick="_dqFix_(' + i + ',\'move\')">⇦ نقل</button> ' +
+        '<button class="btn btn-sm btn-outline-danger" onclick="_dqFix_(' + i + ',\'delete\')">🗑️ حذف</button></td></tr>';
+    });
+    h += '</tbody></table>';
+  }
+  h += '<h6 class="fw-bold mt-3">👤 أسماء عملاء غير مسجَّلة بدليل العملاء (' + (r.strayClients || []).length + ')</h6>';
+  h += '<div class="small text-muted mb-2">«دمج» يستبدل الاسم الخطأ بالعميل الصحيح في كل الكشوف والحسابات والتسعير والإشعارات وملفات الوزارة ومجموعات التأشيرات. لو كان عميلاً جديداً فعلاً سجّله من «دليل العملاء».</div>';
+  if (!(r.strayClients || []).length) h += '<div class="alert alert-success py-2">✅ لا توجد</div>';
+  else {
+    h += '<table class="table table-sm table-bordered align-middle" style="font-size:12.5px;"><thead class="table-light"><tr><th>الاسم غير المسجَّل</th><th>معتمرون</th><th>حسابات</th><th>وزارة</th><th>تأشيرات</th><th style="width:34%;">دمج في العميل الصحيح</th><th></th></tr></thead><tbody>';
+    r.strayClients.forEach(function (c, i) {
+      var sug = _dqBest_(c.name, r.clients, 0.6);
+      h += '<tr><td><b>' + E(c.name) + '</b></td><td>' + c.pil + '</td><td>' + c.acc + '</td><td>' + c.mf + '</td><td>' + c.vz + '</td>' +
+        '<td><input id="_dqC' + i + '" class="form-control form-control-sm" list="_dqCliDL" value="' + E(sug) + '" placeholder="🔎 اختر العميل"></td>' +
+        '<td><button class="btn btn-sm btn-primary" onclick="_dqMerge_(' + i + ')">⇦ دمج</button></td></tr>';
+    });
+    h += '</tbody></table>';
+  }
+  b.innerHTML = h;
+}
+function _dqAfter_(msg) { showToast(msg); try { if (typeof _accData !== 'undefined' && _accData && typeof _accLoad_ === 'function') _accLoad_(); } catch (e) {} _dqLoad_(); }
+function _dqFix_(i, act) {
+  var o = (_DQ_.orphanTrips || [])[i]; if (!o) return;
+  var tg = act === 'move' ? String((document.getElementById('_dqT' + i) || {}).value || '').trim() : '';
+  if (act === 'move' && (_DQ_.trips || []).indexOf(tg) < 0) { _showPopup('اختر رحلة موجودة من القائمة', 'error'); return; }
+  var msg = act === 'move'
+    ? 'نقل «' + o.trip + '» للعميل «' + o.client + '» إلى الرحلة «' + tg + '»؟\n• البنود (' + o.items + ') والدفعات (' + o.pays + ') تنتقل\n• المعتمرون (' + o.pil + '): المكرَّر بنفس الجواز بالرحلة الهدف يُحذف لسلة المحذوفات، وغير المكرَّر يُنقل'
+    : 'حذف «' + o.trip + '» من حساب «' + o.client + '»؟\nالبنود (' + o.items + ') والدفعات (' + o.pays + ') والمعتمرون (' + o.pil + ') تذهب لسلة المحذوفات (قابلة للاستعادة).';
+  showElegantConfirm({ icon: act === 'move' ? '⇦' : '🗑️', title: act === 'move' ? 'نقل رحلة غير موجودة' : 'حذف رحلة غير موجودة', message: msg, buttons: [
+    { label: act === 'move' ? 'نعم، انقل' : 'نعم، احذف', class: act === 'move' ? 'btn-primary' : 'btn-danger', onClick: function () {
+      google.script.run.withSuccessHandler(function (r) {
+        if (!r || !r.success) { _showPopup((r && r.error) || 'تعذّر التنفيذ', 'error'); return; }
+        _dqAfter_(act === 'move' ? '✅ نُقلت: بنود ' + r.items + ' · دفعات ' + r.pays + ' · معتمرون نُقلوا ' + r.pilMoved + ' · مكرَّرون حُذفوا ' + r.pilDeleted : '🗑️ حُذفت (بسلة المحذوفات)');
+      }).withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); })
+        .accOrphanFix(window.authToken, { client: o.client, trip: o.trip, action: act, target: tg });
+    } },
+    { label: 'إلغاء', class: 'btn-outline-secondary', onClick: function () {} }] });
+}
+function _dqMerge_(i) {
+  var c = (_DQ_.strayClients || [])[i]; if (!c) return;
+  var to = String((document.getElementById('_dqC' + i) || {}).value || '').trim();
+  if ((_DQ_.clients || []).indexOf(to) < 0) { _showPopup('اختر عميلاً مسجَّلاً من القائمة', 'error'); return; }
+  showElegantConfirm({ icon: '⇦', title: 'دمج اسم عميل', message: 'استبدال «' + c.name + '» بـ«' + to + '» في كل الكشوف والحسابات والتسعير والإشعارات وملفات الوزارة ومجموعات التأشيرات؟', buttons: [
+    { label: 'نعم، ادمج', class: 'btn-primary', onClick: function () {
+      google.script.run.withSuccessHandler(function (r) {
+        if (!r || !r.success) { _showPopup((r && r.error) || 'تعذّر الدمج', 'error'); return; }
+        _dqAfter_('✅ دُمج «' + c.name + '» في «' + to + '»');
+      }).withFailureHandler(function (e) { _showPopup(e && e.message ? e.message : e, 'error'); }).clientMergeName(window.authToken, c.name, to);
+    } },
+    { label: 'إلغاء', class: 'btn-outline-secondary', onClick: function () {} }] });
+}
+/* ============================================================
    🧾 (V4.203) لوحة «بنود الوزارة والتأشيرات غير المرتبطة برحلات» لعميل — مثل كشف حساب الوكيل
    بجزءين تحت بعض (الجنيه ثم الريال) كما في كشف حساب العميل الحالي: تحديد ما يُدرَج + سعر قابل
    للتعديل (تسعير العميل بتاريخ البند، وإلا سعر التكلفة بلون مميز) ثم «إدراج المحدد» في القسم «عام».
@@ -28881,7 +28994,7 @@ function _accTripRef_(k) {
   var row = (_accData.trips || []).find(function (r) { return r.trip === k; });
   return (row && row.tripRef) || (_accData.tripRefs || {})[k] || '';
 }
-function _accRefChip_(k) { var r = _accTripRef_(k); return r ? ' <span class="acc-tref" title="كود الرحلة">' + escapeHtml_(r) + '</span>' : ''; }
+function _accRefChip_(k) { var r = _accTripRef_(k); if (!r && k && k !== 'عام') return ' <span class="acc-tref" style="background:#fef2f2;color:#b91c1c;border-color:#fecaca;cursor:pointer;" title="هذه الرحلة بلا كود — غالباً غير موجودة بكشف الرحلات (اسم قديم/مكرَّر). اضغط للتدقيق والإصلاح" onclick="event.stopPropagation();_dqOpen_()">⚠️ ليست بكشف الرحلات؟</span>'; return r ? ' <span class="acc-tref" title="كود الرحلة">' + escapeHtml_(r) + '</span>' : ''; }
 function _accTripLabelTxt_(k) { var r = _accTripRef_(k); return _accTripDisplay_(k) + (r ? ' · ' + r : ''); }
 // اسم مخصَّص بالكشف ⇒ تلميح بالاسم الحقيقي للرحلة
 function _accRealTitle_(k) { var dl = _accTripDisplay_(k); return (k && k !== 'عام' && dl !== k) ? ' title="الاسم الأصلي: ' + escapeHtml_(k) + '"' : ''; }

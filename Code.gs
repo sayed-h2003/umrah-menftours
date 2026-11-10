@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.435";
+var APP_VERSION = "4.436";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -19149,6 +19149,9 @@ function deleteTrip(authToken, targetRow) {
 
   var sheet = _getTripsSheet_();
   var name = String(sheet.getRange(Number(targetRow), 1).getValue() || "").trim();
+  // 🔒 (V4.436) لا تُحذف رحلة لها معتمرون بكشفها — كانوا يبقون «يتامى» باسم رحلة غير موجودة وتظهر رحلة وهمية بحسابات العملاء
+  var _pc = 0; try { _pc = (_accClientStatsIdx_() && Object.keys(_accClientStatsIdx_().c || {}).reduce(function (a, cl) { var e = (_accClientStatsIdx_().c[cl] || {})[name]; return a + (e ? e.t : 0); }, 0)) || 0; } catch (eP) { _pc = 0; }
+  if (name && _pc > 0) throw new Error('🚫 لا يمكن حذف الرحلة «' + name + '» وبكشفها ' + _pc + ' معتمر — انقلهم لرحلة أخرى أو احذفهم من الكشف أولاً.');
   _rbDel_(sheet, Number(targetRow), 'trip', 'رحلة', [0], session.username);
   sheet.deleteRow(Number(targetRow));
   logChange_(session.username, "حذف", name, "حذف رحلة", name, "-");
@@ -19281,6 +19284,7 @@ function _cascadeClientRename_(oldName, newName) {
     n += _renameInSheetCol_('Bookings', 'العميل', oldName, newName);               // إشعارات الوصول
     n += _renameInSheetCol_(MF_SHEET, 'العميل', oldName, newName);                 // ملفات الوزارة (لو الاسم مفرد)
     n += _renameInJsonCol_(MF_SHEET, 'بنود العميل (JSON)', oldName, newName, 'name');
+    try { n += _renameInJsonCol_(VZ_FILES_SHEET, VZ_FILES_HEADERS[8], oldName, newName, 'name'); } catch (eVz) {}   // (V4.436) بنود عملاء مجموعات التأشيرات
   } finally { _resRelease_(rl); if (!hadSl) { try { sl.releaseLock(); } catch (eR) {} } }
   try { clearAllCache_(); } catch (e) {}
   try { _mfClearBootstrapCache_(); } catch (e) {}
@@ -19541,6 +19545,27 @@ function _clientDirKey_(s) {
 function _clientDirNorm_(s) { return _normalizeArabicName_(_clientDirKey_(s)).toLowerCase(); }
 function _clientDirIsReserved_(name) { return name === 'مشرف' || String(name).indexOf('المشرف') === 0; }
 // يُسجّل بدليل العملاء كل اسم غير مسجَّل (مقارنة بعد التطبيع) — يرجع {added:[], existing:{name:canonical}, failed:[{name,error}], error}
+// 🔒 (V4.436) حارس حفظ كشف المعتمرين (= _stp_guard بـPostgres):
+//  • الرحلة يجب أن تكون موجودة بكشف الرحلات — كشف مفتوح باسم قديم (أُعيدت تسمية الرحلة أو حُذفت) كان يُنشئ معتمرين «يتامى»
+//    باسم رحلة غير موجودة، فتظهر رحلة وهمية بحساب العميل.
+//  • كل عميل يجب أن يكون مسجَّلاً بدليل العملاء (بعد التطبيع) — كان الاسم المكتوب خطأً يُسجَّل تلقائياً عميلاً جديداً بلا تأكيد.
+function _kashfGuard_(tripName, pilgrims) {
+  var ti = _tripNameIndex_();
+  if (ti.n && !ti.exact[tripName]) throw new Error('🚫 الرحلة «' + tripName + '» غير موجودة بكشف الرحلات (ربما أُعيدت تسميتها أو حُذفت) — أغلق الكشف وافتحه من شاشة الرحلات ثم احفظ. لم يُحفظ شيء.');
+  var have = {}, bad = [], seen = {};
+  try {
+    var sh = _ensureClientsDirSheet_(), last = sh.getLastRow();
+    if (last < 2) return;
+    sh.getRange(2, 1, last - 1, 1).getValues().forEach(function (r) { var n = String(r[0] || '').trim(); if (n) have[_clientDirNorm_(n)] = 1; });
+  } catch (e) { return; }
+  (pilgrims || []).forEach(function (p) {
+    if (!String(p && p.name || '').trim()) return;
+    var c = String(p.client || '').trim(); if (!c || _clientDirIsReserved_(c)) return;
+    var k = _clientDirNorm_(c); if (have[k] || seen[k]) return; seen[k] = 1; bad.push(c);
+  });
+  if (bad.length) throw new Error('🚫 عملاء غير مسجَّلين بدليل العملاء: ' + bad.slice(0, 8).join('، ') + (bad.length > 8 ? ' …' : '') +
+    ' — اختر العميل الصحيح من القائمة، أو سجّله أولاً كعميل جديد (لا يُسجَّل عميل تلقائياً). لم يُحفظ شيء.');
+}
 function _clientDirEnsure_(names, username) {
   var out = { added: [], existing: {}, failed: [], error: '' };
   var uniq = {}, todo = [];
@@ -20599,6 +20624,7 @@ function saveTripPilgrims(authToken, tripName, pilgrims) {
       _noClientNames_.slice(0, 12).join("، ") + (_noClientNames_.length > 12 ? " …" : ""));
   }
 
+  _kashfGuard_(tripName, pilgrims);   // 🔒 (V4.436) رحلة موجودة + عملاء مسجَّلون بالدليل فقط
   _tripSnapEnsureBase_(tripName, session.username);   // ↩️ (V4.343) لقطة أساس قبل أول تعديل مُلتقَط
   var sheet = _getPilgrimsSheet_();
   var lastRow = sheet.getLastRow();
@@ -28782,3 +28808,9 @@ function _tgFltOnCallback_(cq) {
   }
   return false;
 }
+
+// 🧹 (V4.436) تدقيق العملاء والرحلات — تعمل من Postgres وحده (059_data_integrity.sql). هذه نسخ احتياطية تشرح السبب إن لم يصل Postgres
+function _dqPgOnly_() { return { success: false, error: 'أداة التدقيق تعمل من Postgres فقط — شغّل supabase/059_data_integrity.sql وتأكد أن «مصدر البيانات» يُظهر Postgres جاهزاً، ثم أعد المحاولة' }; }
+function accDataAudit(authToken) { requireAuth_(authToken); return _dqPgOnly_(); }
+function accOrphanFix(authToken, p) { requireAuth_(authToken); return _dqPgOnly_(); }
+function clientMergeName(authToken, from, to) { requireAuth_(authToken); return _dqPgOnly_(); }
