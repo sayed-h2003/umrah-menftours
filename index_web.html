@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.425  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.426  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9704,7 +9704,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.425";
+var CLIENT_APP_VERSION = "4.426";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -50406,7 +50406,7 @@ var GL_SUPA_ = {
 /* ✍️ (V4.425) كتابة القيود من Postgres (051_gl_write_path.sql) — حفظ/ترحيل/إلغاء/حذف قيد. الخادم يعلن المجموعة 'wgl' بعد glWriteOn().
    أخطاء العمل (فترة مقفلة/صلاحية/عدم اتزان…) تُعرض كما هي من Postgres؛ الحالات المرفوضة صراحةً 0A000 (قيود AUTO/CUST · due · اعتماد معلَّق · مسودة SCR) فقط هي التي تُنفَّذ بـApps Script حتى يُنقل محرك القيود التلقائية.
    لا إعادة محاولة بـApps Script عند انقطاع/مهلة (قد يكون الحفظ تمّ) — تُعرض رسالة تطلب مراجعة القيد. لا تُحجب القراءات بعدها (لا تغيّر gl_aux). */
-var GL_PGW_ = { glSaveEntry: 1, glPostEntry: 1, glVoidEntry: 1, glDeleteEntry: 1 };
+var GL_PGW_ = { glSaveEntry: 1, glPostEntry: 1, glVoidEntry: 1, glDeleteEntry: 1, glSaveEntriesBulk: 1, glVoidEntriesBulk: 1, glDeleteEntriesBulk: 1 };
 function glRun(fn, args, ok, fail) {
   if (GL_PGW_[fn] && typeof LF_ !== 'undefined' && LF_.glRpc && !(function () { try { return localStorage.getItem('lf_supa_off') === '1'; } catch (e) { return false; } })()) {
     var errOut = function (m) { if (fail) fail(new Error(m)); else _showPopup(m, 'error'); };
