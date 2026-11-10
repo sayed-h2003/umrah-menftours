@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.423  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.424  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9704,7 +9704,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.423";
+var CLIENT_APP_VERSION = "4.424";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -50394,6 +50394,7 @@ var GL_SUPA_ = {
   glTrialBalance: { rpc: 'glx_trial_balance', aux: 0, body: function (a) { return { p_from: a[0] || '', p_to: a[1] || '' }; } },
   glLedger: { rpc: 'glx_ledger', aux: 1, body: function (a) { return { p_code: a[0], p_from: a[1] || '', p_to: a[2] || '' }; } },
   glStatement: { rpc: 'glx_statement', aux: 1, when: function (a) { return !!(a[3] && a[3].fast); }, body: function (a) { return { p_code: a[0], p_from: a[1] || '', p_to: a[2] || '', p_opts: { fast: true } }; } },
+  glStatementHb: { rpc: 'glx_statement_hb', aux: 1, body: function (a) { return { p_code: a[0], p_from: a[1] || '', p_to: a[2] || '' }; } },   /* (V4.424) 050 — بيانات الحجز بالكشف من نسخة 046 */
   glTreasury: { rpc: 'glx_treasury', aux: 1, body: function (a) { return { p_code: a[0], p_from: a[1] || '', p_to: a[2] || '' }; } },
   glPartyBalances: { rpc: 'glx_party_balances', aux: 1, body: function (a) { return { p_groups: a[0] || [] }; } },
   glBankPending: { rpc: 'glx_bank_pending', aux: 1, body: function () { return {}; } },
