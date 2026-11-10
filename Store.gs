@@ -628,6 +628,11 @@ function accClientTripDiag(client, tripSub) {
     L.push('مجموعة ' + (f.ref || f.id) + ' · حالة=' + f.status + ' · رحلة="' + f.tripName + '"' + (f.extraTrips ? ' + "' + f.extraTrips + '"' : '') + ' · عدد العميل=' + cnt + ' · عدد المجموعة=' + f.visaCount);
   });
   L.push('— عدد المجموعات المعروضة ' + Math.min(n, 25) + ' من ' + n);
+  // ما يراه Postgres فعلاً لهذا العميل × كل رحلة تطابق النص (يكشف تاريخ الذهاب/صف التسعير/التأشيرات التي يحسبها المولّد)
+  Object.keys(trips).forEach(function (t) {
+    try { var r = _supaReq_('post', 'rpc/ae_diag', { p_client: client, p_trip: t }); L.push('PG ae_diag [' + t + '] → ' + String(r.text).slice(0, 900)); } catch (e) { L.push('ae_diag خطأ: ' + e); }
+    L.push('AS _accVisaGroupsFor_ [' + t + '] → count=' + _accVisaGroupsFor_(client, t).count);
+  });
   var out = L.join('\n'); Logger.log(out); return out;
 }
 function storeCompare(group) { requireScriptOwner_(); return _stCompareTables_(_stTablesOf_(group)).text; }
