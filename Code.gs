@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.434";
+var APP_VERSION = "4.435";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -16399,19 +16399,58 @@ function _accTripNameSet_() {
 }
 // 🛂 مجموعات التأشيرات «تم إصدار الموفا» لعميل: trip = اسم رحلة (أساسية أو إضافية بالمجموعة)،
 // أو '' = كل المجموعات، أو null = المجموعات غير المرتبطة بأي رحلة فقط. يُعيد تفصيل كل مجموعة.
+// 🛂 (V4.435) جوازات معتمري العميل×الرحلة {جواز:1} — لربط مجموعات التأشيرات/ملفات الوزارة بالحساب برقم الجواز
+// حين لا يطابق اسم العميل/الرحلة بالبنود حرفياً (= _ae_pass_set بـPostgres)
+function _accPKey_(s) { return String(s == null ? '' : s).replace(/^P:/, '').replace(/[\s\u00a0\ufeff]+/g, '').toUpperCase(); }
+function _accClientPassSet_(client, trip) {
+  var out = {}, n = 0;
+  try {
+    var sh = _getPilgrimsSheet_(); if (!sh || sh.getLastRow() < 2) return { set: out, n: 0 };
+    var C = _robustColMap_(sh, PILGRIMS_HEADERS_), P = _cellReader_(C, PILGRIMS_COL_);
+    var tn = _normalizeArabicName_(trip).toLowerCase();
+    sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues().forEach(function (r) {
+      if (String(P(r, 'client') || '').trim() !== client) return;
+      if (_normalizeArabicName_(String(P(r, 'tripName') || '')).toLowerCase() !== tn) return;
+      var k = _accPKey_(P(r, 'passport')); if (k && !out[k]) { out[k] = 1; n++; }
+    });
+  } catch (e) {}
+  return { set: out, n: n };
+}
+function _accSelHits_(sel, ps) {
+  var seen = {}, n = 0;
+  (Array.isArray(sel) ? sel : []).forEach(function (x) {
+    var k = _accPKey_(x); if (!k || k.charAt(0) === '#' || k.indexOf('IDX:') === 0 || seen[k]) return;
+    seen[k] = 1; if (ps[k]) n++;
+  });
+  return n;
+}
+function _accTripIn_(trips, trip) {
+  var t = _normalizeArabicName_(trip).toLowerCase();
+  return trips.some(function (x) { return _normalizeArabicName_(x).toLowerCase() === t; });
+}
+function _accHasClientLine_(bd, tripNames) {
+  return (bd || []).some(function (b) { var k = _normalizeArabicName_(b && b.name).toLowerCase(); return k && !tripNames[k]; });
+}
 function _accVzGroupsList_(client, trip) {
   client = String(client || '').trim();
   var out = [];
   if (!client) return out;
   var files = [], vzPrices = null;
   try { files = _vzReadAll_(); } catch (e) { return out; }
+  var _byPass = !!(trip && typeof trip === 'string'), _ps = null, _tn = null;
   files.forEach(function (f) {
     if (String(f.status || '').trim() !== 'تم إصدار الموفا') return;   // (V4.203) بطلب صريح: الموفا الصادرة فقط
-    var trips = _vzTripsOf_(f);
+    var trips = _vzTripsOf_(f), tin = true;
     if (trip === null) { if (trips.length) return; }
-    else if (trip) { if (trips.indexOf(String(trip).trim()) < 0) return; }
+    else if (trip) { tin = _accTripIn_(trips, String(trip).trim()); if (!tin && !_byPass) return; }
     var n = 0;
-    (f.breakdown || []).forEach(function (b) { if (_accNameMatch_(b.name, client)) n += _mfNum_(b.count); });
+    if (tin) (f.breakdown || []).forEach(function (b) { if (_accNameMatch_(b.name, client)) n += _mfNum_(b.count); });
+    // 🛂 (V4.435) لا تطابق بالاسم/الرحلة ⇒ برقم الجواز (المختارون بالمجموعة ∩ معتمرو العميل×الرحلة)
+    if (!n && _byPass) {
+      if (!_ps) _ps = _accClientPassSet_(client, String(trip).trim());
+      if (!_tn) _tn = _accTripNameSet_();
+      if (_ps.n && (!(f.breakdown || []).length || _accHasClientLine_(f.breakdown, _tn))) n = _accSelHits_(f.selected, _ps.set);
+    }
     if (!n) return;
     // (V4.212) مجموعات بلا تاريخ مسجَّل كانت تظهر بلا تاريخ، فلا يُطابَق سعر العميل بتاريخ البند ويُعرض الريال صفراً:
     // التاريخ ← تاريخ المجموعة وإلا تاريخ إنشائها، والتكلفة ← سعر المجموعة وإلا سعر تأشيرة الوكيل بذلك التاريخ
@@ -16444,17 +16483,23 @@ function _accMfFeesList_(client, trip) {
   var files = [];
   try { files = _mfReadAll_(); } catch (e) { return out; }
   var cfg = _accPricing_(), tripNames = _accTripNameSet_();
+  var _byPass = !!(trip && typeof trip === 'string'), _ps = null;
   files.forEach(function (f) {
     if (!_mfStr_(f.reviewDate)) return;
-    var trips = _mfTripsOf_(f);
+    var trips = _mfTripsOf_(f), tin = true;
     if (trip === null) { if (trips.length) return; }
-    else if (trip) { if (trips.indexOf(String(trip).trim()) < 0) return; }
+    else if (trip) { tin = _accTripIn_(trips, String(trip).trim()); if (!tin && !_byPass) return; }
     var n = 0, sups = 0;
-    (f.breakdown || []).forEach(function (b) {
+    if (tin) (f.breakdown || []).forEach(function (b) {
       if (tripNames[_normalizeArabicName_(b.name).toLowerCase()]) return;   // بند رحلة = مصروف رحلة
       if (!_accNameMatch_(b.name, client)) return;
       n += _mfNum_(b.count); sups += _mfNum_(b.sups);
     });
+    // 🛂 (V4.435) لا تطابق بالاسم/الرحلة ⇒ برقم الجواز (= _ae_mf_fees)
+    if (!n && !sups && _byPass) {
+      if (!_ps) _ps = _accClientPassSet_(client, String(trip).trim());
+      if (_ps.n && _accHasClientLine_(f.breakdown, tripNames)) n = _accSelHits_(f.selected, _ps.set);
+    }
     if (!n && !sups) return;
     var c = _mfCompute_(f, cfg);
     var lines = [];

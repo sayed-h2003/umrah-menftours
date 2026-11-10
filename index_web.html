@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.434  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.435  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7781,26 +7781,33 @@ var LF_ = (function () {
     });
   }
   function glRpcReady(need) { spInit(); spCooldown(); if (!spReady()) return false; return need ? (!SP.stOff && stHas(need)) : (SP.cfg.gl === true && !SP.glOff); }
+  /* ⚡ (V4.435) تقارير الحسابات الثقيلة: مهلة أطول وبلا طلب مزدوج (كان الطلب المزدوج يضاعف الحمل على القاعدة فتتجاوز المهلة)،
+     ومهلتها لا تُحتسب بعدّاد الإخفاق العام — كانت 4 مهلات للخزينة/القيود/الأرصدة تعطّل كل قراءات Postgres دقيقتين
+     (فترتدّ بوتستراب التأشيرات والإقلاع وحفظ المجموعة لـApps Script). الآن تبريد لكل دالة على حدة بعد مهلتين متتاليتين. */
+  var SLOW_RX_ = { glTreasury: 1, glListEntries: 1, glPartyBalances: 1, glStatementHb: 1, glStatement: 1, glBankPending: 1, getAllMovementsAuth: 1, getUnifiedStatement: 1, glAccountStatement: 1, glTrialBalance: 1 };
   function glRpc(rpc, body, cb, fn, need) {
     if (!glRpcReady(need) || typeof fetch !== 'function') return false;
+    SP.fnOffAt = SP.fnOffAt || {}; SP.fnF = SP.fnF || {};
+    if (fn && SP.fnOffAt[fn]) { if (now() - SP.fnOffAt[fn] < 120000) return false; delete SP.fnOffAt[fn]; SP.fnF[fn] = 0; }
     var KF = need ? 'stFails' : 'glFails', KO = need ? 'stOff' : 'glOff';
-    var isW = (rpc === 'rw_call');   /* (V4.379) كتابة: بلا طلب مزدوج (hedge) · مهلة أطول · فشلها لا يعطّل القراءات */
+    var isW = (rpc === 'rw_call'), slow = !!(fn && SLOW_RX_[fn]);   /* (V4.379) كتابة: بلا طلب مزدوج (hedge) · مهلة أطول · فشلها لا يعطّل القراءات */
     var c = SP.cfg, t0 = now(), done = false, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var fin = function (res, why) {
       if (done) return; done = true; clearTimeout(to);
-      if (res) { SP[KF] = 0; try { console.info('⚡ supabase', fn || rpc, (now() - t0) + 'ms'); } catch (e0) {} }
+      if (res) { SP[KF] = 0; if (fn) SP.fnF[fn] = 0; try { console.info('⚡ supabase', fn || rpc, (now() - t0) + 'ms'); } catch (e0) {} }
       else { try { console.info('↩︎ apps-script', fn || rpc, why || ''); } catch (e1) {} }
       try { var sl = (window.__SRC = window.__SRC || []); sl.push([fn || rpc, res ? 'pg' : 'as', now() - t0, why || '', now()]); if (sl.length > 600) sl.shift(); } catch (eS) {}   // (V4.410) لوحة «مصدر البيانات»
       try { cb(res, why); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
     };
     var soft = function (m) { fin(null, m ? 'soft: ' + String(m).slice(0, 400) : 'soft'); };   /* (V4.415) سبب الرجوع يظهر بلوحة «مصدر البيانات» */
-    var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } }, isW ? 25000 : 9000);
+    var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout');
+      if (!isW && fn) { SP.fnF[fn] = (SP.fnF[fn] || 0) + 1; if (SP.fnF[fn] >= 2) SP.fnOffAt[fn] = now(); } }, isW ? 25000 : (slow ? 24000 : 9000));
     try {
       // (V4.376) اتصال أول بطيء بـSupabase (شوهد ≈6 ث للاتصال الأولي) ⇒ طلب ثانٍ مطابق بعد 1.5 ث والأسبق يفوز (قراءات فقط ⇒ آمن) — يحجب الانتظار حتى مهلة 6 ث
       var hedged = false, go = function () {
         return fetch(c.url + '/rest/v1/rpc/' + rpc, { method: 'POST', headers: { apikey: c.anon, Authorization: 'Bearer ' + c.token, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body || {}), signal: ctl ? ctl.signal : undefined });
       };
-      var hedgeT = isW ? 0 : setTimeout(function () { if (!done && !hedged) { hedged = true; try { go().then(handle, function () {}); } catch (eh) {} } }, 1500);
+      var hedgeT = (isW || slow) ? 0 : setTimeout(function () { if (!done && !hedged) { hedged = true; try { go().then(handle, function () {}); } catch (eh) {} } }, 1500);
       var handle = function (r) { clearTimeout(hedgeT);
           if (r.ok) return r.json().then(function (j) { if (j && j.success === true) fin(j); else soft(j && (j.error || j.message || j.code || (j.d && j.d.error))); });
           if (r.status === 401) { spReset(); soft(); return; }   // الرمز منتهٍ/غير صالح ⇒ يُعاد إصداره ويُستعمل المسار القديم الآن
@@ -7909,6 +7916,8 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     deleteAccPayment: { need: ['acc', 'wbk'], rpc: 'rw_call', pre: function (a) { return !a[2]; } },
     deleteAccItem: { need: ['acc', 'wbk'], rpc: 'rw_call', pre: function (a) { return !a[2]; } },
     deleteAccItemsBulk: { need: ['acc', 'wbk'], rpc: 'rw_call' },
+    /* (V4.435) 058 — اعتماد لقطة أعداد الحساب / تعليم التنبيه كمقروء من Postgres */
+    accResolveAlert: { need: ['acc', 'wbk'], rpc: 'rw_call' },
     /* (V4.395) 031_ledger.sql — نظام السندات من Postgres: الدفعة الجديدة/الجماعية ⇒ سند مسودة بالطابور · الاعتماد/الرفض/السحب · قراءات الطابور. آثارها الجانبية (مرآة الدفعة بالشاشة · تليجرام) تُنفَّذ بنداء glOutboxKick */
     saveAccPayment: { need: ['acc', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
     saveAccPaymentsBulk: { need: ['acc', 'glaux', '@gl', 'wbk'], rpc: 'rw_call', after: function (a, d) { _glKick_(d); } },
@@ -9705,7 +9714,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.434";
+var CLIENT_APP_VERSION = "4.435";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -17775,10 +17784,41 @@ function _clientCheckSimilar_(val, onUse, onNew, onCancel) {
 
 /* ---------- قائمة البحث التنبئي تحت خانة العميل (تعمل مع كل خانات العملاء في البرنامج) ---------- */
 var _CAC_ = { inp: null, box: null, list: [], idx: -1 };
+// 🔒 (V4.435) بنود العملاء بملفات الوزارة ومجموعات التأشيرات: الاسم يُختار فقط من قائمة (العملاء + الرحلات) — لا كتابة يدوية
+function _bdAllowed_(kind) {
+  var t = kind === 'mf' ? (MF.trips || []) : (VZ.trips || []), c = kind === 'mf' ? (MF.clients || []) : (VZ.clients || []), seen = {}, out = [];
+  var kn = []; try { kn = _clientKnownNames_() || []; } catch (eK) {}
+  c.concat(kn, t.map(function (x) { return (x && x.name) || x; })).forEach(function (n) { n = String(n || '').trim(); if (n && !seen[n]) { seen[n] = 1; out.push(n); } });
+  return out;
+}
+function _bdIsTrip_(kind, n) { return ((kind === 'mf' ? MF.trips : VZ.trips) || []).some(function (x) { return String((x && x.name) || x || '').trim() === n; }); }
+// الاسم المسجَّل بالقائمة المطابق (حرفياً أو بعد التطبيع) — وإلا null
+function _bdResolve_(kind, v) {
+  v = String(v || '').trim(); if (!v) return null;
+  var L = _bdAllowed_(kind); if (L.indexOf(v) >= 0) return v;
+  var k = _clientKey_(v), hit = L.filter(function (n) { return _clientKey_(n) === k; });
+  return hit.length === 1 ? hit[0] : null;
+}
+function _bdBadNames_(kind, bd) {
+  var bad = [];
+  (bd || []).forEach(function (b) { var n = String((b && b.name) || '').trim(); if (n && !_bdResolve_(kind, n) && bad.indexOf(n) < 0) bad.push(n); });
+  return bad;
+}
+// عند مغادرة الخانة: يُثبَّت الاسم المسجَّل، أو تُعلَّم الخانة بالأحمر لأن الاسم ليس من القائمة
+function _bdNameCommit_(kind, i, el) {
+  var d = kind === 'mf' ? MF._draft : VZ._draft; if (!d || !d.breakdown || !d.breakdown[i]) return;
+  var v = String(el.value || '').trim(), r = _bdResolve_(kind, v);
+  if (r && r !== v) { el.value = r; if (kind === 'mf') mfBdSet(i, 'name', r); else vzBdSet(i, 'name', r); }
+  var bad = !!v && !r;
+  el.style.borderColor = bad ? '#dc2626' : ''; el.style.background = bad ? '#fef2f2' : '';
+  el.title = bad ? 'اختر الاسم من قائمة العملاء والرحلات — الكتابة اليدوية غير مسموحة' : '';
+  if (bad) showToast('🔒 «' + v + '» ليس من قائمة العملاء والرحلات — اختر الاسم من القائمة');
+}
 function _cacRank_(q) {
-  var names = _clientKnownNames_();
+  var _src = _CAC_.inp && _CAC_.inp.dataset && _CAC_.inp.dataset.cacSrc;
+  var names = _src ? _bdAllowed_(_src) : _clientKnownNames_();
   var k = _clientKey_(q), sk = _clientSkel_(q);
-  if (!k) return names.filter(function (n) { return !_clientValIsSupervisor_(n); }).slice(0, 12).map(function (n) { return { n: n, s: 0 }; });
+  if (!k) return names.filter(function (n) { return _src || !_clientValIsSupervisor_(n); }).slice(0, _src ? 40 : 12).map(function (n) { return { n: n, s: 0 }; });
   var toks = k.split(' ');
   var res = [];
   names.forEach(function (n) {
@@ -17791,7 +17831,7 @@ function _cacRank_(q) {
     if (s) res.push({ n: n, s: s });
   });
   res.sort(function (a, b) { return b.s - a.s || a.n.length - b.n.length || a.n.localeCompare(b.n, 'ar'); });
-  return res.slice(0, 12);
+  return res.slice(0, _src ? 40 : 12);
 }
 function _cacHl_(name, q) {
   var esc = escapeHtml_(name), k = _clientKey_(q);
@@ -17820,11 +17860,13 @@ function _cacShow_(inp) {
   var list = _cacRank_(q);
   _CAC_.list = list; _CAC_.idx = list.length && q.trim() ? 0 : -1;
   var b = _cacBox_();
-  var exact = q.trim() && _findKnownClientNorm_(q);
+  var _bsrc = inp.dataset && inp.dataset.cacSrc;
+  var exact = q.trim() && (_bsrc ? _bdResolve_(_bsrc, q) : _findKnownClientNorm_(q));
   var html = list.map(function (x, i) {
-    return '<div data-cac-i="' + i + '" style="padding:7px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;' + (i === _CAC_.idx ? 'background:#e0f2fe;' : '') + '">👤 ' + _cacHl_(x.n, q) + '</div>';
+    return '<div data-cac-i="' + i + '" style="padding:7px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;' + (i === _CAC_.idx ? 'background:#e0f2fe;' : '') + '">' + (_bsrc && _bdIsTrip_(_bsrc, x.n) ? '🧳 ' : '👤 ') + _cacHl_(x.n, q) + '</div>';
   }).join('');
-  if (q.trim() && !exact) {
+  if (_bsrc) { if (q.trim() && !exact) html += '<div style="padding:7px 12px;color:#b91c1c;background:#fef2f2;font-size:11.5px;">🔒 الكتابة اليدوية غير مسموحة — اختر العميل أو الرحلة من القائمة</div>'; }
+  else if (q.trim() && !exact) {
     html += '<div style="padding:7px 12px;color:#92400e;background:#fffbeb;font-size:11.5px;">' +
       (list.length ? '💡 اختر من القائمة لو كان العميل مسجَّلاً — وإلا سيُطلب تسجيله كعميل جديد' : '➕ لا يوجد عميل بهذا الاسم — سيُطلب تسجيله كعميل جديد عند مغادرة الخانة') + '</div>';
   }
@@ -29212,7 +29254,7 @@ function _accRun_(fnName, args, okMsg, localPatch) {
     .withSuccessHandler(function(res) {
       if (res && res.success) {
         if (okMsg) alert(okMsg);
-        if (localPatch) { localPatch(res); _accRender_(); }
+        if (localPatch) { if (_accData) { localPatch(res); _accRender_(); } }   // (V4.435) الحساب أُغلق/أُعيد تحميله قبل وصول الرد ⇒ لا شيء
         else _accLoad_();
       }
       else alert('❌ ' + ((res && res.error) || 'فشلت العملية'));
@@ -43432,7 +43474,7 @@ function mfFormRender() {
   h += '<table class="mf-mini" style="background:#fff;"><thead><tr><th style="width:34%;">العميل / الرحلة</th><th style="width:13%;">معتمرين</th>' +
     '<th style="width:13%;">مشرفين</th><th>ملاحظات</th><th style="width:36px;"></th></tr></thead><tbody>';
   (d.breakdown || []).forEach(function (b, i) {
-    h += '<tr><td><input class="form-control form-control-sm mf-bd-name" list="mfCliList" value="' + mfEsc(b.name) + '" oninput="mfBdSet(' + i + ',\'name\',this.value)"></td>' +
+    h += '<tr><td><input class="form-control form-control-sm mf-bd-name" data-cac="1" data-cac-src="mf" autocomplete="off" placeholder="🔎 ابحث واختر العميل/الرحلة" value="' + mfEsc(b.name) + '"' + (mfStr(b.name) && !_bdResolve_('mf', b.name) ? ' style="border-color:#dc2626;background:#fef2f2;" title="ليس من القائمة — اختر من القائمة"' : '') + ' oninput="mfBdSet(' + i + ',\'name\',this.value)" onchange="_bdNameCommit_(\'mf\',' + i + ',this)"></td>' +
       '<td><input class="form-control form-control-sm" value="' + mfEsc(b.count) + '" oninput="mfBdSet(' + i + ',\'count\',this.value)"></td>' +
       '<td><input class="form-control form-control-sm" value="' + mfEsc(b.sups) + '" oninput="mfBdSet(' + i + ',\'sups\',this.value)"></td>' +
       '<td><input class="form-control form-control-sm" value="' + mfEsc(b.note) + '" oninput="mfBdSet(' + i + ',\'note\',this.value)"></td>' +
@@ -44105,6 +44147,10 @@ function mfInferSingleStay_(d) {
 function mfSaveDraft() {
   var d = MF._draft;
   if (!mfStr(d.company)) { _showPopup('اختر الشركة المصرية', 'error'); return; }
+  // 🔒 (V4.435) أسماء بنود العملاء من القائمة فقط (تُصحَّح تلقائياً لو طابقت بعد التطبيع)
+  (d.breakdown || []).forEach(function (b) { var r = _bdResolve_('mf', b.name); if (r) b.name = r; });
+  var _bdBad = _bdBadNames_('mf', d.breakdown);
+  if (_bdBad.length) { _showPopup('🔒 أسماء بنود العملاء يجب اختيارها من قائمة العملاء والرحلات (لا كتابة يدوية):\n• ' + _bdBad.join('\n• '), 'error', 'اسم ليس من القائمة'); return; }
   // 🚫 (V4.329) رقم الملف لا يتكرر (الخادم يرفض أيضاً)
   var _fk = _dupKeyC_(d.fileNo), _fo = d.id ? (MF.files || []).filter(function (x) { return x.id === d.id; })[0] : null;
   if (_fk && (!_fo || _dupKeyC_(_fo.fileNo) !== _fk)) {
@@ -47497,7 +47543,7 @@ function vzBdRender() {
   box.innerHTML = ((d.breakdown || []).length
     ? '<table class="vz-tab" style="margin-bottom:4px;"><thead><tr><th style="width:60%;">العميل</th><th style="width:22%;">العدد</th><th style="width:18%;">حذف</th></tr></thead><tbody>' +
       (d.breakdown || []).map(function (b, i) {
-        return '<tr><td><input list="vzClientsDL" style="width:100%;font-size:12.5px;padding:6px 8px;border:1.5px solid var(--vzBorder);border-radius:8px;font-weight:600;" value="' + vzEsc(b.name) + '" oninput="vzBdSet(' + i + ',\'name\',this.value)" placeholder="اسم العميل"></td>' +
+        return '<tr><td><input data-cac="1" data-cac-src="vz" autocomplete="off" style="width:100%;font-size:12.5px;padding:6px 8px;border:1.5px solid ' + (mfStr(b.name) && !_bdResolve_('vz', b.name) ? '#dc2626;background:#fef2f2' : 'var(--vzBorder)') + ';border-radius:8px;font-weight:600;" value="' + vzEsc(b.name) + '" oninput="vzBdSet(' + i + ',\'name\',this.value)" onchange="_bdNameCommit_(\'vz\',' + i + ',this)" placeholder="🔎 ابحث واختر العميل/الرحلة"></td>' +
           '<td><input style="width:100%;font-size:12.5px;padding:6px 8px;border:1.5px solid var(--vzBorder);border-radius:8px;text-align:center;font-weight:700;" value="' + vzEsc(b.count) + '" oninput="vzBdSet(' + i + ',\'count\',this.value)" placeholder="عدد"></td>' +
           '<td><button class="vz-rowbtn" style="color:#dc2626;" title="حذف البند" onclick="vzBdDel(' + i + ')">🗑️</button></td></tr>';
       }).join('') + '</tbody></table>'
@@ -47919,6 +47965,10 @@ function _vzPickCommit_(quiet) {
   if (!quiet) _showPopup(msg, mfNum(d.visaCount) === pickedCount ? 'success' : 'warning');
 }
 function vzFormSave() {
+  // 🔒 (V4.435) أسماء بنود العملاء من القائمة فقط (تُصحَّح تلقائياً لو طابقت بعد التطبيع)
+  (VZ._draft.breakdown || []).forEach(function (b) { var r = _bdResolve_('vz', b.name); if (r) b.name = r; });
+  var _bdBad = _bdBadNames_('vz', VZ._draft.breakdown);
+  if (_bdBad.length) { VZ._tab = VZ._tab; _showPopup('🔒 أسماء بنود العملاء يجب اختيارها من قائمة العملاء والرحلات (لا كتابة يدوية):\n• ' + _bdBad.join('\n• '), 'error', 'اسم ليس من القائمة'); return; }
   var d = VZ._draft;
   // 🖱️ (V4.164) لو نافذة اختيار المعتمرين مفتوحة، الضغط على «حفظ» يعتمد اختياراتها الحالية ضمنياً
   // بلا حاجة لضغط «اعتماد الأسماء» بنفسه أولاً

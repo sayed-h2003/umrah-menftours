@@ -647,6 +647,35 @@ function accClientTripDiag(client, tripSub) {
   });
   var out = L.join('\n'); Logger.log(out); return out;
 }
+// 🩺 (V4.435) تشخيص لمرة واحدة: معتمرو (عميل × رحلة) بالشيت مقابل Postgres لكل صف يحوي النص sub + المولّد على رحلة الحساب نفسها
+// (مثال: accAccountTripDiag('ايجيبشان المنيا','المنيا رحلة 7 نوفمبر','المنيا')) — يكشف أي اختلاف بين الشيت و Postgres في اسم العميل/الرحلة
+function accAccountTripDiag(client, trip, sub) {
+  requireScriptOwner_();
+  client = String(client || 'ايجيبشان المنيا').trim(); trip = String(trip || 'المنيا رحلة 7 نوفمبر').trim(); sub = String(sub || 'المنيا').trim();
+  var L = [], sh = {}, pg = {};
+  try {
+    var ps = _getPilgrimsSheet_(), C = _robustColMap_(ps, PILGRIMS_HEADERS_), P = _cellReader_(C, PILGRIMS_COL_);
+    if (ps.getLastRow() >= 2) ps.getRange(2, 1, ps.getLastRow() - 1, ps.getLastColumn()).getValues().forEach(function (r) {
+      if (!String(P(r, 'name') || '').trim()) return;
+      var cl = String(P(r, 'client') || '').trim(), tn = String(P(r, 'tripName') || '').trim();
+      if (cl.indexOf(sub) < 0 && tn.indexOf(sub) < 0) return;
+      var k = cl + ' ⟂ ' + tn; sh[k] = (sh[k] || 0) + 1;
+    });
+  } catch (e) { L.push('قراءة الشيت خطأ: ' + e); }
+  try {
+    (JSON.parse(_supaReq_('post', 'rpc/ae_pil_diag', { p_sub: sub }).text) || []).forEach(function (x) { pg[x.client + ' ⟂ ' + x.trip] = x.n; });
+  } catch (e2) { L.push('ae_pil_diag خطأ (طبّق 058): ' + e2); }
+  L.push('معتمرون (العميل ⟂ الرحلة) — الشيت | Postgres:');
+  var keys = {}; Object.keys(sh).concat(Object.keys(pg)).forEach(function (k) { keys[k] = 1; });
+  Object.keys(keys).sort().forEach(function (k) { L.push((sh[k] === pg[k] ? '   ✅ ' : '   ❌ ') + k + ' — شيت ' + (sh[k] || 0) + ' | PG ' + (pg[k] || 0)); });
+  try {
+    var g = JSON.parse(_supaReq_('post', 'rpc/ae_gen_check', { p_client: client, p_trip: trip }).text);
+    L.push('PG المولّد [' + client + ' ⟂ ' + trip + '] نجاح=' + g.success + (g.error ? ' خطأ=' + g.error : '') + ' أعداد=' + JSON.stringify(g.counts || {}));
+    (g.items || []).forEach(function (x) { L.push('   ' + x.d + ' · عدد ' + x.n + ' · سعر ' + x.p + ' ' + x.cur + (x.sel ? ' · محدد' : '')); });
+  } catch (e3) { L.push('ae_gen_check خطأ: ' + e3); }
+  try { var v = _accVisaGroupsFor_(client, trip); L.push('AS تأشيرات [' + trip + '] → ' + v.count + ' ' + (v.desc || '')); } catch (e4) { L.push('AS خطأ: ' + e4); }
+  var out = L.join('\n'); Logger.log(out); return out;
+}
 function storeCompare(group) { requireScriptOwner_(); return _stCompareTables_(_stTablesOf_(group)).text; }
 function _stHasGl_(tables) { return tables.some(function (t) { return _stSpecs_()[t].ss === 'gl'; }); }
 function _stSetFlag_(tables, on) {
