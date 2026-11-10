@@ -3545,6 +3545,7 @@ function _glAmtTxt_(lines, accs) {
 }
 function _glApprovalOn_() { var s = _glSettings_(); return s.trip_mode === 'نعم' && s.auto_approve !== 'لا'; }
 function _glPendingRows_() { var o = {}; try { _glRowsW_('pending').forEach(function (r, i) { var k = _glStr_(r[0]); if (k) o[k] = { row: r, i: i }; }); } catch (e) {} return o; }
+function _glAutoPgOn_() { try { return _supaP_('SUPA_W_GLAUTO') === '1' && _supaP_('GL_STORE') === 'supabase'; } catch (e) { return false; } }
 function _glAutoApply_(built, user, dry, opts) {
   opts = opts || {};
   // ⚡ (V4.252) فتح الشيت للقراءة فقط — لا يُبطَل الكاش إلا لو هناك كتابة فعلية (المزامنة بلا تغيير لا تمس الإصدار)
@@ -3659,6 +3660,17 @@ function _glAutoApply_(built, user, dry, opts) {
   if (!dry && unkeep.length) _glOvrDrop_(unkeep, ['keep']);
   res.manualPending = Object.keys(frozenQ).length;
   if (dry || (!creates.length && !updates.length && !voids.length)) return res;
+  if (_glAutoPgOn_()) {   // ✍️ (V4.427) الكتابة بمعاملة واحدة بـPostgres (053) بدل إعادة كتابة الشيتات كاملةً — القرارات أعلاه كما هي
+    var pl = { user: user, creates: creates.map(function (c) { return { key: c.e.key, hash: c.hash, H: c.H, v: c.v }; }),
+      updates: updates.map(function (u) { return { id: _glStr_(eRows[u.ix][0]), key: u.e.key, hash: u.hash, H: u.H, v: u.v }; }),
+      voids: voids.map(function (ix) { return _glStr_(eRows[ix][0]); }) };
+    var rr = _supaReq_('post', 'rpc/gl_auto_write_raw', { p: pl }), rj = {};
+    try { rj = JSON.parse(rr.text || '{}'); } catch (eJ) {}
+    if (rr.code >= 300 || !rj.success) throw new Error('كتابة القيود التلقائية بـPostgres فشلت (' + rr.code + '): ' + String(rj.message || rr.text).slice(0, 200));
+    (rj.created || []).forEach(function (x, i) { var c = creates[i]; res.createdList.push({ id: x.id, desc: c.H.desc, base: c.v.totalBase, src: c.e.src || '', key: c.e.key }); });
+    _glBump_();
+    return res;
+  }
   _glTouch_('entries');
   // الكتابة: رؤوس القيود بمصفوفة واحدة، وأسطر القيود المتغيّرة تُستبدل بإعادة كتابة الشيت كاملاً مرة واحدة
   var now = _glNow_(), replaced = {}, voidIds = {};

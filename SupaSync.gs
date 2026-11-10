@@ -371,6 +371,16 @@ function glWriteOn() {
   var m = 'تم: قيود الحسابات العامة (حفظ/ترحيل/إلغاء/حذف) تُكتب من Postgres — سجّل خروجاً ودخولاً. للإيقاف glWriteOff()'; Logger.log(m); return m;
 }
 function glWriteOff() { requireScriptOwner_(); PropertiesService.getScriptProperties().deleteProperty('SUPA_W_GL'); return 'أُوقفت كتابة الحسابات العامة من Postgres (الكتابة بـApps Script)'; }
+/* (V4.427) كتابة دفعة القيود التلقائية من Postgres (053_gl_auto_write.sql): glAutoWriteOn() · glAutoWriteOff() */
+function glAutoWriteOn() {
+  requireScriptOwner_();
+  if (!_supaOn_() || _supaP_('GL_STORE') !== 'supabase') throw new Error('يتطلب Supabase مفعّلاً وGL_STORE=supabase');
+  var r = _supaReq_('post', 'rpc/gl_auto_write_raw', { p: { user: 'probe' } });
+  if (r.code === 404 || /PGRST202|Could not find/.test(String(r.text))) throw new Error('شغّل supabase/051 و053 أولاً');
+  PropertiesService.getScriptProperties().setProperty('SUPA_W_GLAUTO', '1');
+  var m = 'تم: مزامنة القيود التلقائية تكتب بـPostgres (معاملة ذرّية). للإيقاف glAutoWriteOff()'; Logger.log(m); return m;
+}
+function glAutoWriteOff() { requireScriptOwner_(); PropertiesService.getScriptProperties().deleteProperty('SUPA_W_GLAUTO'); return 'عادت كتابة القيود التلقائية للمسار القديم'; }
 function supaGlAuxSyncNow() { requireScriptOwner_(); var r = supaGlAuxSync_(true); Logger.log('gl_aux: ' + r + ' (GL_STORE=' + _supaP_('GL_STORE') + ')'); return r; }
 
 function _supaSynced_() { try { return JSON.parse(_supaP_('SUPA_SYNCED') || '{}') || {}; } catch (e) { return {}; } }
