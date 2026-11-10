@@ -605,6 +605,31 @@ function accVisaCheck() {
   L.push(bad ? '⛔ فروق: ' + bad + ' من ' + pairs : '✅ تطابق (' + pairs + ' زوج)');
   var out = L.join('\n'); Logger.log(out); return out;
 }
+/* (V4.430) تشخيص عميل×رحلة محددين: تسعير العميل (الفترات) + مجموعات التأشيرات المتعلقة بالعميل/الرحلة بحالاتها ورحلاتها. الافتراضي: ايجيبشان المنيا × المنيا رحلة 7 */
+function accClientTripDiag(client, tripSub) {
+  requireScriptOwner_();
+  client = String(client || 'ايجيبشان المنيا').trim(); tripSub = String(tripSub || 'المنيا رحلة 7').trim();
+  var L = [], norm = function (x) { return _normalizeArabicName_(x).toLowerCase(); }, nt = norm(tripSub);
+  var cp = _accClientPricing_(client);
+  if (!cp) {
+    L.push('تسعير «' + client + '»: لا يوجد صف مطابق بالاسم. الأسماء الموجودة: ' + (function () { try { var sp = _stSpecs_()['acc_client_prices'], src = _stSheetRaw_(sp); return src.rows.map(function (r) { return '[' + String(r[0]).trim() + ']'; }).join(' '); } catch (e) { return String(e); } })());
+  } else {
+    Object.keys(cp.items || {}).forEach(function (k) { L.push('تسعير ' + k + ' (' + cp.items[k].currency + '): ' + (cp.items[k].periods || []).map(function (q) { return q.price + ' من ' + q.from + ' إلى ' + (q.to || 'مفتوح'); }).join(' | ')); });
+  }
+  var trips = {}; _vzReadAll_().forEach(function (f) { _vzTripsOf_(f).forEach(function (t) { if (norm(t).indexOf(nt) >= 0) trips[t] = 1; }); });
+  L.push('رحلات التأشيرات المطابقة للنص: ' + (Object.keys(trips).join(' || ') || 'لا يوجد'));
+  var n = 0;
+  _vzReadAll_().forEach(function (f) {
+    var byTrip = _vzTripsOf_(f).some(function (t) { return norm(t).indexOf(nt) >= 0; });
+    var byCl = (f.breakdown || []).some(function (b) { return _accNameMatch_(b.name, client); });
+    if (!byTrip && !byCl) return;
+    if (n++ >= 25) return;
+    var cnt = 0; (f.breakdown || []).forEach(function (b) { if (_accNameMatch_(b.name, client)) cnt += _mfNum_(b.count); });
+    L.push('مجموعة ' + (f.ref || f.id) + ' · حالة=' + f.status + ' · رحلة="' + f.tripName + '"' + (f.extraTrips ? ' + "' + f.extraTrips + '"' : '') + ' · عدد العميل=' + cnt + ' · عدد المجموعة=' + f.visaCount);
+  });
+  L.push('— عدد المجموعات المعروضة ' + Math.min(n, 25) + ' من ' + n);
+  var out = L.join('\n'); Logger.log(out); return out;
+}
 function storeCompare(group) { requireScriptOwner_(); return _stCompareTables_(_stTablesOf_(group)).text; }
 function _stHasGl_(tables) { return tables.some(function (t) { return _stSpecs_()[t].ss === 'gl'; }); }
 function _stSetFlag_(tables, on) {
