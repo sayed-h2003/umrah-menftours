@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.424  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.425  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7793,7 +7793,7 @@ var LF_ = (function () {
       try { var sl = (window.__SRC = window.__SRC || []); sl.push([fn || rpc, res ? 'pg' : 'as', now() - t0, why || '', now()]); if (sl.length > 600) sl.shift(); } catch (eS) {}   // (V4.410) لوحة «مصدر البيانات»
       try { cb(res, why); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
     };
-    var soft = function (m) { fin(null, m ? 'soft: ' + String(m).slice(0, 140) : 'soft'); };   /* (V4.415) سبب الرجوع يظهر بلوحة «مصدر البيانات» */
+    var soft = function (m) { fin(null, m ? 'soft: ' + String(m).slice(0, 400) : 'soft'); };   /* (V4.415) سبب الرجوع يظهر بلوحة «مصدر البيانات» */
     var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout'); if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } }, isW ? 25000 : 9000);
     try {
       // (V4.376) اتصال أول بطيء بـSupabase (شوهد ≈6 ث للاتصال الأولي) ⇒ طلب ثانٍ مطابق بعد 1.5 ث والأسبق يفوز (قراءات فقط ⇒ آمن) — يحجب الانتظار حتى مهلة 6 ث
@@ -9704,7 +9704,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.424";
+var CLIENT_APP_VERSION = "4.425";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -50403,7 +50403,33 @@ var GL_SUPA_ = {
   glGetEntriesBulk: { rpc: 'glx_get_entries_bulk', aux: 1, body: function (a) { return { ids: a[0] || [] }; } },
   glPendingList: { rpc: 'glx_pending_list', aux: 1, body: function () { return {}; } }
 };
+/* ✍️ (V4.425) كتابة القيود من Postgres (051_gl_write_path.sql) — حفظ/ترحيل/إلغاء/حذف قيد. الخادم يعلن المجموعة 'wgl' بعد glWriteOn().
+   أخطاء العمل (فترة مقفلة/صلاحية/عدم اتزان…) تُعرض كما هي من Postgres؛ الحالات المرفوضة صراحةً 0A000 (قيود AUTO/CUST · due · اعتماد معلَّق · مسودة SCR) فقط هي التي تُنفَّذ بـApps Script حتى يُنقل محرك القيود التلقائية.
+   لا إعادة محاولة بـApps Script عند انقطاع/مهلة (قد يكون الحفظ تمّ) — تُعرض رسالة تطلب مراجعة القيد. لا تُحجب القراءات بعدها (لا تغيّر gl_aux). */
+var GL_PGW_ = { glSaveEntry: 1, glPostEntry: 1, glVoidEntry: 1, glDeleteEntry: 1 };
 function glRun(fn, args, ok, fail) {
+  if (GL_PGW_[fn] && typeof LF_ !== 'undefined' && LF_.glRpc && !(function () { try { return localStorage.getItem('lf_supa_off') === '1'; } catch (e) { return false; } })()) {
+    var errOut = function (m) { if (fail) fail(new Error(m)); else _showPopup(m, 'error'); };
+    try {
+      var sent = LF_.glRpc('rw_call', { p_fn: fn, p_args: [null].concat(args || []) }, function (res, why) {
+        if (res && res.d) {
+          GL._wAtPg = Date.now(); try { glDataChanged_(); } catch (e0) {}
+          try { if (res.d.success !== false) google.script.run.withFailureHandler(function () {}).glOutboxKick(window.authToken); } catch (e1) {}   // ينفّذ صندوق الصادر (مرآة الدفعات/تنبيه تليجرام) بالخلفية
+          ok(res.d); return;
+        }
+        var w = String(why || '');
+        if (/^soft: 0A000/.test(w)) { glRunApps_(fn, args, ok, fail); return; }   // استثناء صريح لم يُنقل بعد
+        var m = /^soft: (?:\d{5}|P\w{4}) ?(.*)$/.exec(w);
+        if (m && m[1]) { errOut(m[1]); return; }
+        if (/^soft: 42501/.test(w)) { errOut('لا تملك صلاحية هذه العملية'); return; }
+        errOut('تعذّر تأكيد الحفظ من قاعدة البيانات (' + (w || 'انقطاع') + ') — راجع القيد قبل إعادة المحاولة كي لا يتكرر');
+      }, fn, ['wgl']);
+      if (sent) return;
+    } catch (eW) { console.error('GL pg write', eW); }
+  }
+  return glRunApps_(fn, args, ok, fail);
+}
+function glRunApps_(fn, args, ok, fail) {
   /* (V4.418) تخطيط الأرصدة الشخصي (scope=mine) يُحفظ في Postgres (044) — لا يمس gl_aux فلا يحجب القراءات؛ العام/الفشل ⇒ Apps Script */
   if (fn === 'glBalLayoutSave' && args && args[1] === 'mine') {
     try {

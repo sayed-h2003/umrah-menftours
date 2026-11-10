@@ -702,6 +702,14 @@ function recycleRestoreAs(authToken, ids) {
         _supaReq_('patch', 'recycle_bin?id=eq.' + x.id, { restored_at: new Date().toISOString(), restored_by: session.username });
         ok++; return;
       }
+      if (x.kind === 'gl_entry_pg') {   // (V4.425) قيد حُذف من مسار Postgres: يُعاد حرفياً (الصف المنمّط + raw)
+        _glPerm_(authToken, 'edit');
+        var gr = _supaReq_('post', 'rpc/gl_restore_entry', { p_payload: p, p_user: session.username }), gj = {}; try { gj = JSON.parse(gr.text || '{}'); } catch (eG) {}
+        if (gr.code >= 300 || !gj.success) throw new Error(gj.error || gj.message || ('تعذّرت الاستعادة (' + gr.code + ')'));
+        _supaReq_('patch', 'recycle_bin?id=eq.' + x.id, { restored_at: new Date().toISOString(), restored_by: session.username });
+        try { _glBump_(); } catch (eB) {}
+        ok++; return;
+      }
       d = _snapUnpack_(Array.isArray(p.p) ? p.p : [p.p]);
       if (x.kind === 'gl_entry') {
         _glPerm_(authToken, 'edit');

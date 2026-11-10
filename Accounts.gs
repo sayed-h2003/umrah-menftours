@@ -2234,8 +2234,8 @@ function glVoucherPrint(authToken, id) {
 function _glNextVoucherNo_(type) {
   var pre = GL_VCH_PREFIX_[type]; if (!pre) return '';
   var key = 'seq_' + pre.replace('-', ''), last = parseInt(_glSettings_()[key], 10);
-  if (isNaN(last)) {
-    last = 0;
+  if (isNaN(last)) last = 0;
+  {   // (V4.425) السندات تُسجَّل الآن من Postgres أيضاً (rw2_glsaveentry) فلا يكفي عدّاد الإعداد وحده: نأخذ الأكبر مع الأرقام الموجودة فعلاً
     var rx = new RegExp('^(?:VCH:)?' + pre + '(\\d+)$');
     _glRows_('entries').forEach(function (r) {
       [_glStr_(r[6]), _glStr_(r[9])].forEach(function (v) { var m = v.match(rx); if (m && +m[1] > last) last = +m[1]; });

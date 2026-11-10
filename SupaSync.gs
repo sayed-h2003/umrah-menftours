@@ -361,6 +361,16 @@ function _glHbReadSnap_() {
     return { bookings: j.bookings, pays: j.pays, prof: j.prof };
   } catch (e) { return null; }
 }
+/* (V4.425) كتابة قيود الحسابات العامة من Postgres (051_gl_write_path.sql): glWriteOn() للتفعيل · glWriteOff() للإيقاف */
+function glWriteOn() {
+  requireScriptOwner_();
+  if (!_supaOn_() || _supaP_('GL_STORE') !== 'supabase') throw new Error('يتطلب Supabase مفعّلاً وGL_STORE=supabase');
+  var r = _supaReq_('post', 'rpc/rw_call', { p_fn: 'glSaveEntry', p_args: [] }), txt = String(r.text || '');
+  if (/غير مدعومة|PGRST202|Could not find/.test(txt)) throw new Error('شغّل supabase/051_gl_write_path.sql أولاً');
+  PropertiesService.getScriptProperties().setProperty('SUPA_W_GL', '1');
+  var m = 'تم: قيود الحسابات العامة (حفظ/ترحيل/إلغاء/حذف) تُكتب من Postgres — سجّل خروجاً ودخولاً. للإيقاف glWriteOff()'; Logger.log(m); return m;
+}
+function glWriteOff() { requireScriptOwner_(); PropertiesService.getScriptProperties().deleteProperty('SUPA_W_GL'); return 'أُوقفت كتابة الحسابات العامة من Postgres (الكتابة بـApps Script)'; }
 function supaGlAuxSyncNow() { requireScriptOwner_(); var r = supaGlAuxSync_(true); Logger.log('gl_aux: ' + r + ' (GL_STORE=' + _supaP_('GL_STORE') + ')'); return r; }
 
 function _supaSynced_() { try { return JSON.parse(_supaP_('SUPA_SYNCED') || '{}') || {}; } catch (e) { return {}; } }
@@ -475,7 +485,7 @@ function supaDvSeedNow() { requireScriptOwner_(); var r = _dvPgReconcile_(); Log
 function _supaStoreInfo_() {
   var out = _supaStoreInfo0_();
   // ⚡ (V4.378) مجموعات «زائفة» تعلن جاهزية ما يُقرأ من app_config/audit_log: cfg (الإعدادات) · glkick (عدّادات القيود) · audit (سجل التعديلات)
-  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); if (_supaP_('SUPA_KV_OK') === '1') out.groups.push('kv'); if (_supaP_('SUPA_BOT_OK') === '1') out.groups.push('bots'); if (_supaP_('SUPA_W_MF') === '1') out.groups.push('wmf'); if (_supaP_('SUPA_W_VZ') === '1') out.groups.push('wvz'); if (_supaP_('SUPA_W_BK') === '1') out.groups.push('wbk'); if (_usersSot_()) out.groups.push('wusr'); } catch (e) {}   // (V4.378) kv = ACC_PRICING/MF_EXEC_POLICY/NOTIF_TOGGLES منسوخة · bots = bookings_via_bot معبّأة
+  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); if (_supaP_('SUPA_KV_OK') === '1') out.groups.push('kv'); if (_supaP_('SUPA_BOT_OK') === '1') out.groups.push('bots'); if (_supaP_('SUPA_W_MF') === '1') out.groups.push('wmf'); if (_supaP_('SUPA_W_VZ') === '1') out.groups.push('wvz'); if (_supaP_('SUPA_W_BK') === '1') out.groups.push('wbk'); if (_usersSot_()) out.groups.push('wusr'); if (_supaP_('SUPA_W_GL') === '1') out.groups.push('wgl'); } catch (e) {}   // (V4.378) kv = ACC_PRICING/MF_EXEC_POLICY/NOTIF_TOGGLES منسوخة · bots = bookings_via_bot معبّأة
   return out;
 }
 function _supaStoreInfo0_() {

@@ -800,7 +800,7 @@ function _outboxDrain_(maxMs) {
    فتنفّذها Apps Script بنفس دوالها: مرآة الدفعات بالشاشات/كشف الفندق (_glSyncVoucherPays_) · تنبيه تليجرام (_glBotQ_) · علامة إعادة بناء AUTO (gl_dirty) · بصمات الكاش.
    تُستدعى من audFlushCron كل دقيقة ومن glOutboxKick (المتصفح بعد الاعتماد فتظهر الدفعة بشاشتها خلال ثوانٍ). فشل بند لا يوقف الباقي (يُسجَّل last_error ويُعاد لاحقاً حتى 5 محاولات). */
 function _glOutboxDrain_(maxMs) {
-  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY') || _supaP_('SUPA_W_BK') !== '1') return 0;
+  if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_SERVICE_KEY') || (_supaP_('SUPA_W_BK') !== '1' && _supaP_('SUPA_W_GL') !== '1')) return 0;
   var t0 = Date.now(), n = 0;
   while (Date.now() - t0 < (maxMs || 20000)) {
     var r = _supaReq_('get', 'gl_outbox?done_at=is.null&attempts=lt.5&order=id.asc&limit=40&select=id,kind,payload,attempts');
