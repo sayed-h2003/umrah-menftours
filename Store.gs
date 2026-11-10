@@ -565,6 +565,22 @@ function _stTablesOf_(group) {
   if (!t.length) throw new Error('مجموعة/جداول غير معروفة: ' + group + ' — المتاح: ' + Object.keys(ST_GROUPS_).join(' · ') + ' · all');
   return t;
 }
+/* (V4.428) تشخيص تسعير بنود العملاء (acc_client_prices): يقارن الشيت الحقيقي بالمخزن (Postgres) ويعرض ما ضاع — للقراءة فقط */
+function accClientPricesCheck() {
+  requireScriptOwner_();
+  var sp = _stSpecs_()['acc_client_prices'], src = _stSheetRaw_(sp), st = _stReadAll_('acc_client_prices'), L = [];
+  var key = function (r) { return String((r && r[0]) == null ? '' : (r[0] && r[0].$d ? '' : r[0])).trim(); };
+  var A = {}, B = {};
+  src.rows.forEach(function (r) { var k = key(r); if (k) A[k] = String(r[1] || '').length; });
+  (st.rows || []).forEach(function (r) { var c = r[2] || []; var k = key(c); if (k) B[k] = String(c[1] || '').length; });
+  var na = Object.keys(A).length, nb = Object.keys(B).length;
+  L.push('الشيت: ' + na + ' عميل بتسعير · المخزن (Postgres): ' + nb + ' عميل · المخزن موجود=' + !!st.exists + ' ver=' + st.ver);
+  var miss = Object.keys(A).filter(function (k) { return !B[k]; }), extra = Object.keys(B).filter(function (k) { return !A[k]; }), shorter = Object.keys(A).filter(function (k) { return B[k] && B[k] < A[k] * 0.7; });
+  L.push('بالشيت وليس بالمخزن: ' + miss.length + (miss.length ? ' — ' + miss.slice(0, 30).join('، ') : ''));
+  L.push('بالمخزن وليس بالشيت: ' + extra.length + (extra.length ? ' — ' + extra.slice(0, 30).join('، ') : ''));
+  L.push('نصّ JSON أقصر بالمخزن (ربما فقدان فترات): ' + shorter.length + (shorter.length ? ' — ' + shorter.slice(0, 30).join('، ') : ''));
+  var out = L.join('\n'); Logger.log(out); return out;
+}
 function storeCompare(group) { requireScriptOwner_(); return _stCompareTables_(_stTablesOf_(group)).text; }
 function _stHasGl_(tables) { return tables.some(function (t) { return _stSpecs_()[t].ss === 'gl'; }); }
 function _stSetFlag_(tables, on) {

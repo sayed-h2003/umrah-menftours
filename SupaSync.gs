@@ -322,6 +322,7 @@ function hbSnapVerify() {
   var live = _glHbRead_(), r = _supaReq_('post', 'rpc/hbx_read_raw', {});
   if (r.code !== 200) throw new Error('hbx_read_raw: ' + r.code + ' ' + String(r.text).slice(0, 200));
   var pg = JSON.parse(r.text), L = [], bad = 0;
+  var stab = function (v) { if (Array.isArray(v)) return v.map(stab); if (v && typeof v === 'object') { var o = {}; Object.keys(v).sort().forEach(function (k) { o[k] = stab(v[k]); }); return o; } return v; };   // (V4.428) ترتيب مفاتيح الكائن لا يُعدّ فرقاً
   var cmp = function (what, a, b, fields, keyf) {
     var ma = {}, mb = {}; a.forEach(function (x) { ma[keyf(x)] = x; }); b.forEach(function (x) { mb[keyf(x)] = x; });
     var n = 0, miss = 0, extra = 0, diff = 0, ex = [];
@@ -329,7 +330,7 @@ function hbSnapVerify() {
       var x = ma[k], y = mb[k]; if (!y) { miss++; if (ex.length < 5) ex.push('ناقص بـPG: ' + k); return; }
       fields.forEach(function (f) {
         var va = f(x), vb = f(y); if (typeof va === 'number') { va = Math.round(va * 100) / 100; vb = Math.round(vb * 100) / 100; }
-        if (JSON.stringify(va) !== JSON.stringify(vb)) { diff++; if (ex.length < 5) ex.push(k + ': ' + JSON.stringify(va) + ' ≠ ' + JSON.stringify(vb)); }
+        if (JSON.stringify(stab(va)) !== JSON.stringify(stab(vb))) { diff++; if (ex.length < 5) ex.push(k + ': ' + JSON.stringify(va) + ' ≠ ' + JSON.stringify(vb)); }
       });
       n++;
     });
