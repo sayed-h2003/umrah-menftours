@@ -799,7 +799,8 @@ function storeKvPush_(keys) {
 function storeKvBackfill() {
   requireScriptOwner_();
   var ok = storeKvPush_(KV_KEYS_);
-  var r = _supaReq_('post', 'rpc/kv_set', { p: { __seeded: '1' } });
+  var _wu = ''; try { _wu = ScriptApp.getService().getUrl() || ''; } catch (eU) {}
+  var r = _supaReq_('post', 'rpc/kv_set', { p: { __seeded: '1', WEBAPP_URL: _wu } });   // (V4.444) رابط التطبيق لروابط العميل المُنشأة من Postgres
   if (ok && r.code < 300) PropertiesService.getScriptProperties().setProperty('SUPA_KV_OK', '1');   // يعلنها supaIssueToken كمجموعة «kv» فيبدأ المتصفح بقراءة الوزارة/التأشيرات من Supabase
   var msg = (ok && r.code < 300) ? 'تم نسخ ' + KV_KEYS_.join(' · ') + ' إلى app_kv' : 'فشل النسخ (' + r.code + ' ' + String(r.text).slice(0, 200) + ') — تأكد من تشغيل 010_screens_reads.sql';
   Logger.log(msg); return msg;
@@ -888,6 +889,7 @@ function _outboxDrain_(maxMs) {
       else if (x.kind === 'glcat') {   // (V4.444) قيد الإعاشة التلقائي AUTO:CAT لاتفاقيات حُفظت/حُذفت/دُمجت من Postgres — حتى نقل محرك القيود (الدفعة 2)
         try { if (typeof _glCatPostNow_ === 'function' && (p.ids || []).length) _glCatPostNow_(String(p.user || ''), p.ids); } catch (eGc) { Logger.log('outbox glcat: ' + eGc.message); }
       }
+      else if (x.kind === 'tripren') { try { _tripSnapRename_(String(p.old || ''), String(p['new'] || '')); } catch (eTr) { Logger.log('outbox tripren: ' + eTr.message); } }   // (V4.444) إعادة تسمية رحلة من Postgres ⇒ لقطات التراجع (ورقة)
       else if (x.kind === 'kvset') {   // (V4.444) إعداد كُتب من Postgres (app_kv) ⇒ نفس الخاصية بـ Apps Script كي لا تختلف المسارات الاحتياطية
         try { var _kp = PropertiesService.getScriptProperties(); Object.keys(p.kv || {}).forEach(function (k) { var v = p.kv[k]; if (v === null || v === '') _kp.deleteProperty(k); else _kp.setProperty(k, String(v)); }); if (typeof clearAllCache_ === 'function') clearAllCache_(); } catch (eK) { Logger.log('outbox kvset: ' + eK.message); }
       }
@@ -946,6 +948,19 @@ function _glOutboxDrain_(maxMs) {
 function glOutboxKick(authToken) { requireAuth_(authToken); return { success: true, n: _glOutboxDrain_(20000) }; }
 function glOutboxDrainNow() { requireScriptOwner_(); var n = _glOutboxDrain_(60000); Logger.log('gl_outbox: فُرّغ ' + n); return n; }
 
+// (V4.444) جسر مؤقت حتى نقل محرك حجوزات الفنادق (الدفعتان 2 و3): كتابة من Postgres أدرجت بند accsync (عملاء نمط «بنود») ⇒ المتصفح يطلب تنفيذه فوراً
+function accAsKick(authToken) {
+  var session = requireAuth_(authToken), n = 0;
+  var r = _supaReq_('get', 'app_outbox?kind=eq.accsync&done_at=is.null&order=id.asc&limit=20&select=id,payload');
+  var rows = []; try { rows = JSON.parse(r.text || '[]'); } catch (e) {}
+  try { _ACC_HB_CITY_MEMO_ = null; } catch (e0) {}
+  rows.forEach(function (x) {
+    var p = x.payload || {};
+    (p.trips || []).forEach(function (t) { t = String(t || '').trim(); if (!t || t === 'عام') return; try { _syncTripAccounts_(authToken, t, String(p.user || session.username)); } catch (eT) { Logger.log('accAsKick ' + t + ': ' + eT); } });
+    try { _supaReq_('patch', 'app_outbox?id=eq.' + x.id + '&done_at=is.null', { done_at: new Date().toISOString() }); n++; } catch (e2) {}
+  });
+  return { success: true, n: n };
+}
 function outboxDrainNow() { requireScriptOwner_(); var n = _outboxDrain_(60000); Logger.log('outbox: فُرّغ ' + n); return n; }
 
 // (V4.380) المحرر يشغّل الدوال بلا معاملات ⇒ دوال مستقلة لكل حالة

@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.443  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: VV4.444  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8007,11 +8007,31 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     ['saveTransportRowEdit', 'deleteTransportRowEdit', 'applyTransportPriceToRuns', 'applyAgentPriceToGroups', 'saveVisaAgentPrices', 'saveVisaAgentTransportPrices',
      'saveAgentCompanyAccounts', 'saveAgentAccItem', 'saveAgentAccItemsBatch', 'postAgreementToAgentAccount', 'deleteAgentAccItem', 'deleteAgentPayment',
      'deleteAgentAccItemsBatch', 'deleteAgentPaymentsBatch'],
-    ['visa', 'core', 'bookings'], 'wvz']   /* 069 الوكلاء والنقل */
+    ['visa', 'core', 'bookings'], 'wvz'],   /* 069 الوكلاء والنقل */
+   [['getAccPricing', 'getClientTripStats', 'getTripsPilgrimsMap'],
+    ['setAccDisplayName', 'setAccMode', 'saveAccItemsBulk', 'updateAccItemsBulk', 'saveAccPricing', 'saveClientMergeGroupV2', 'deleteClientMergeGroup', 'clearClientMergeGroup',
+     'accFixOrphanLines', 'syncTripAccountsBg', 'accSyncBg', 'accAfterMovedBg'],
+    ['acc', 'core', 'kv'], 'wbk'],   /* 070 حسابات العملاء */
+   [['getClientUnlinkedFees'], ['insertClientUnlinkedFees'], ['acc', 'core', 'kv', 'ministry', 'visa'], 'wbk'],   /* 070 بنود الوزارة والتأشيرات غير المرتبطة */
+   [['getCompaniesSettings', 'getTripClientLinksInfo', 'getTripByName', 'getTripBookingCompare', 'getBookingLinkSuggestions', 'getBookingPilgrimNames', 'getRule70Bookings',
+     'checkBusPriceColumnsExist'],
+    ['addClientRecord', 'updateClientRecord', 'deleteClientRecord', 'saveCompanySetting', 'deleteCompanySetting', 'createTripClientLink', 'revokeTripClientLink',
+     'adoptBookingGroupToTrip', 'syncTripBookingByName', 'bookingAfterSaveBg', 'bookingCacheBustBg', 'cacheBustBg', 'kashfAfterSaveBg', 'saveGlobalPilgrim', 'saveTripDraft',
+     'runOneTimeReconciliation'],
+    ['core', 'bookings', 'visa', 'ministry'], 'wbk'],   /* 071 الرحلات والمعتمرين والإشعارات */
+   [['getTripAccommodationLevels'], ['applyTripPricing'], ['core', 'acc', 'kv'], 'wbk']   /* 071 تسعير الرحلة */
   ].forEach(function (b) {
     b[0].forEach(function (f) { if (!STRPC[f]) STRPC[f] = { need: b[2], rpc: 'rx_call2' }; });
     b[1].forEach(function (f) { if (!STRPC[f]) STRPC[f] = { need: b[2].concat([b[3]]), rpc: 'rw_call' }; });
   });
+  /* (V4.444) مسودة الرحلة: التحقق من منطق التحركات بالمتصفح بنفس كود الخادم (وضع التساهل)؛ خطأ ⇒ نفس رسالة MVERR محلياً بلا Apps Script */
+  STRPC.saveTripDraft.pre = function (a) {
+    try { if (!window.BKSRV_) return false; var e = BKSRV_.validate(JSON.parse(JSON.stringify(a[1] || {}))); return e ? new Error('MVERR::' + JSON.stringify(e)) : true; } catch (eV) { return false; }
+  };
+  /* رابط العميل: رابط التطبيق من app_kv وإلا من المتصفح */
+  var _clUrl_ = function (tok) { var b = ''; try { b = _appBaseUrl_(); } catch (e) {} return b && tok ? b + '?view=trip&t=' + tok : ''; };
+  STRPC.createTripClientLink.out = function (r) { var d = r.d || {}; if (!d.url) d.url = _clUrl_(d.token); return d; };
+  STRPC.getTripClientLinksInfo.out = function (r) { var d = r.d || {}; (d.links || []).forEach(function (l) { if (!l.url) l.url = _clUrl_(l.token); }); return d; };
   // يبدأ قراءة RPC؛ يرجع false إن لم تكن جاهزة (⇒ المسار القديم فوراً). cb({d, dv}) عند النجاح · cb(null, why) ⇒ المسار القديم ('epoch' ⇒ الجلسة تغيّرت فلا شيء)
   /* 🚀 (V4.442) 064_rx_cache.sql — القراءات الثقيلة عبر rxc: نتيجة محفوظة بالخادم ما دامت بياناتها لم تتغيّر (مللي ثانية بدل إعادة الحساب) */
   var RXC_ = { getTripsList: 1, getTripPilgrims: 1, getGlobalPilgrimsRegistry: 1, getAllMovementsAuth: 1, loadDropdownsData: 1, getClientsDirectory: 1, getTripDraft: 1,
@@ -8020,13 +8040,15 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     var d = STRPC[fn]; if (!d) return false;
     if (d.skip && d.skip()) return false;   // (V4.378) مثلاً سجل التعديلات بعد كتابة محلية حديثة
     var ep = S.epoch, a = (args || []).slice(); a[0] = null;   // لا يُرسل رمز الجلسة؛ الهوية من JWT
-    if (d.pre && d.pre(a) === false) return false;   // (V4.388) تحضير/تحقق بالمتصفح قبل الكتابة؛ false ⇒ Apps Script
+    var pv = d.pre ? d.pre(a) : true;
+    if (pv === false) return false;   // (V4.388) تحضير/تحقق بالمتصفح قبل الكتابة؛ false ⇒ Apps Script
+    if (pv instanceof Error) { setTimeout(function () { cb(null, pv); }, 0); return true; }   // (V4.444) خطأ تحقق محلي ⇒ معالج الفشل مباشرة
     var go = function (rpc, body) {
       return glRpc(rpc, body, function (res, why) {
         if (ep !== S.epoch) { cb(null, 'epoch'); return; }
         if (!res && why === 'norxc') { if (!go(d.rpc || 'rx_call', { p_fn: fn, p_args: a })) cb(null, 'fail'); return; }   // 064 لم يُطبَّق بعد ⇒ المسار المعتاد
         if (!res) { cb(null, why || 'fail'); return; }
-        cb({ d: d.out ? d.out(res) : res.d, dv: res.dv || null });
+        cb({ d: d.out ? d.out(res) : res.d, dv: res.dv || null, as: !!res.as });
       }, fn, d.need);
     };
     if (RXC_[fn] && !SP.noRxc && !d.body && /^rx_(call2?|boot)$/.test(d.rpc || 'rx_call')) return go('rxc', { p_fn: fn, p_args: a });
@@ -8046,10 +8068,12 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
         if (!stRoute(prop, a, function (x, why) {
           if (!x) {
             if (why === 'epoch') return;
+            if (why instanceof Error) { if (f) f(why, uo); return; }   // (V4.444) خطأ تحقق بالمتصفح
             // (V4.388) إشعار جديد وفشل غامض (مهلة/خطأ شبكة بعد إرسال الكتابة): قد يكون حُفظ فعلاً ⇒ لا نعيد الحفظ آلياً (يتفادى إشعاراً مكرراً)
             if (prop === 'saveBookingToServer' && why && why !== 'soft' && a[1] && !String(a[1].id || '').trim()) { if (f) f(new Error('تعذّر التأكد من حفظ الإشعار الجديد (انقطاع/مهلة) — افتح سجل الإشعارات وتأكد أنه لم يُحفَظ قبل إعادة المحاولة'), uo); return; }
             viaApps(); return;
           }
+          if (x.as) { try { _RAWRUN_().withFailureHandler(function () {}).accAsKick(window.authToken); } catch (eAs) {} }   // (V4.444) بند accsync (نمط «بنود») ⇒ تنفيذه فوراً
           try { learn(x.dv); } catch (eL) {}   // بصمات لحظة القراءة ⇒ الشاشات الأخرى تتحدّث إن تغيّر شيء
           if (s) s(x.d, uo);
           try { if (STRPC[prop] && STRPC[prop].after) STRPC[prop].after(a, x.d); } catch (eAf) {}
@@ -9759,7 +9783,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.443";
+var CLIENT_APP_VERSION = "V4.444";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
