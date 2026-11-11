@@ -5261,6 +5261,13 @@ function _glCsConnGet_(code, need) {
   if (d) _GL_CS_CONN_[code] = d;
   return d;
 }
+// ⏱️ (V4.439) وقت آخر تغيير لكل الشيتات الموصولة بنداء واحد خفيف {code: {changedAt, pushedAt, pending}}
+var _GL_CS_STAMPS_ = null;
+function _glCsStamps_() {
+  if (_GL_CS_STAMPS_) return _GL_CS_STAMPS_;
+  try { var r = _supaReq_('post', 'rpc/cs_stamps', {}); _GL_CS_STAMPS_ = r.code < 300 ? (JSON.parse(r.text || '{}') || {}) : {}; } catch (e) { _GL_CS_STAMPS_ = {}; }
+  return _GL_CS_STAMPS_;
+}
 // بصمة الصف بلا عمود الكتابة (نفس الدالة حرفياً داخل الموصل csSig_)
 function _glCsSig_(row, skip) {
   return (row || []).map(function (x, i) {
@@ -5323,6 +5330,7 @@ function glCsConnectorSetup(authToken, code) {
   if (r.code >= 300) throw new Error('تعذّر إعداد الموصل (طبّق 061): ' + String(r.text).slice(0, 200));
   cfg.conn = { code: code, at: _glNow_(), by: session.username };
   _glSetSetting_('custsheet:' + code, JSON.stringify(cfg)); _GL_SET_MEMO_ = null;
+  try { _glCsEnsureTrigger_(); } catch (eT) {}
   logChange_(session.username, 'إنشاء موصل شيت عهدة', 'GL:' + code, 'شيت العهدة', '-', cfg.title || cfg.id);
   return { success: true, script: _glCsConnScript_(code, key, cfg), status: glCsConnStatus_(code) };
 }
@@ -5850,7 +5858,7 @@ function _glCsPvGet_(code, m) {   // صفوف المجموعة المخزّنة 
   if (!m.g) return m.big ? undefined : null;
   try { var c = CacheService.getScriptCache().get('gl_cs_pv_' + code); return c ? JSON.parse(c) : undefined; } catch (e) { return undefined; }
 }
-function _glCsLastUpd_(cfg) { if (cfg && cfg.conn && cfg.conn.code) { try { return +(_glCsConnGet_(cfg.conn.code, false) || {}).changedAt || 0; } catch (eC) { return 0; } } try { return DriveApp.getFileById(cfg.id).getLastUpdated().getTime() || 0; } catch (e) { return 0; } }
+function _glCsLastUpd_(cfg) { if (cfg && cfg.conn && cfg.conn.code) { try { return +((_glCsStamps_()[cfg.conn.code] || {}).changedAt) || 0; } catch (eC) { return 0; } } try { return DriveApp.getFileById(cfg.id).getLastUpdated().getTime() || 0; } catch (e) { return 0; } }
 // معاينة شيت واحد: من الكاش لو بصمته لم تتغيّر (بلا فتح الشيت)، وإلا معاينة كاملة ثم تخزين. force ⇒ تجاوز الكاش
 function _glCsPendOne_(code, user, force) {
   var cfg = _glCsCfg_(code); if (!cfg || !cfg.id) throw new Error('لم يُربط شيت لهذه العهدة بعد');
@@ -5886,7 +5894,7 @@ function glCsPendAccounts(authToken, force) {
     if (grp) { grp.name = (accM[code] || {}).name || code; grps.push(grp); }
     tot += cnt.p + cnt.s;
     out.push({ code: code, name: (accM[code] || {}).name || code, url: 'https://docs.google.com/spreadsheets/d/' + cfg.id, pending: cnt.p, susp: cnt.s,
-      scan: !!force || cnt.p > 0 || cnt.s > 0,   // نفس شرط glCsPendAll القديم: بلا force لا يُفحص إلا ما فيه صفوف
+      scan: !!force || cnt.p > 0 || cnt.s > 0 || (cfg.conn && cfg.conn.code && +((_glCsStamps_()[cfg.conn.code] || {}).changedAt || 0) > +((m && m.lu) || 0)),   // 🔌 (V4.439) موصول تغيّر منذ آخر قراءة ⇒ يُفحص   // نفس شرط glCsPendAll القديم: بلا force لا يُفحص إلا ما فيه صفوف
       cache: ok ? { t: m.t, age: now - (m.t || 0), young: now - (m.t || 0) < GL_CS_PV_YOUNG_ } : null,
       group: grp === undefined ? null : grp, hasGroup: grp !== undefined });
   });
@@ -6631,8 +6639,8 @@ function _glCsSync_(code, user, opts) {
 }
 // المزامنة المجدولة لكل عهدة مربوطة فُعّل لها «تلقائي» — (V4.250) كلٌّ حسب تكراره (دقائق/ساعات) ولا تُكرَّر قبل موعدها
 function _glCsEveryMin_(cfg) { var e = (cfg && cfg.every) || {}, n = parseInt(e.n, 10) || 1; return e.unit === 'min' ? Math.max(1, n) : n * 60; }   // (V4.270) الحد الأدنى دقيقة واحدة
-function _glCsAutoAll_() {
-  _GL_SET_MEMO_ = null;
+function _glCsAutoAll_(onlyConn) {
+  _GL_SET_MEMO_ = null; _GL_CS_STAMPS_ = null;
   var set = _glSettings_(), res = [], P = PropertiesService.getScriptProperties(), last = {};
   try { last = JSON.parse(P.getProperty('GL_CS_LAST_AUTO') || '{}') || {}; } catch (e) {}
   var now = Date.now(), t0 = now, BUDGET = 90000;   // ⚡ (V4.264) ميزانية زمنية: لا تتجاوز الدورة الواحدة 90 ثانية (تُكمَل بالدورة التالية)
@@ -6644,6 +6652,7 @@ function _glCsAutoAll_() {
     if (Date.now() - t0 > BUDGET) return;   // نفدت الميزانية ⇒ البقية بالدورة القادمة
     var k = it.k, code = it.code, cfg; try { cfg = JSON.parse(set[k] || '{}'); } catch (e) { return; }
     if (!cfg || !cfg.id || !cfg.auto) return;
+    if (onlyConn && !(cfg.conn && cfg.conn.code)) return;   // 🌙 (V4.439) ساعات الخمول: الموصولة فقط (فحصها نداء خفيف)
     if (last[code] && now - last[code] < _glCsEveryMin_(cfg) * 60000 - 45000) return;   // لم يحن موعدها (هامش 45 ثانية لتذبذب المشغّل)
     if (busy) { busy = false; if (res.length) return; }   // البرنامج مشغول بحفظ مستخدم ⇒ أجّل الباقي
     // ⏳ (V4.258) «مهلة التأمين»: المزامنة المجدولة كانت تحجز القفل العام طوال قراءة كل شيتات العهد (كل دقيقة أحياناً)
@@ -6653,7 +6662,7 @@ function _glCsAutoAll_() {
     var sigs = {}; try { sigs = JSON.parse(P.getProperty('GL_CS_SIG') || '{}') || {}; } catch (eS) {}
     // ⚡ (V4.322) فحص رخيص قبل فتح/قراءة الشيت: لو لم يتغيّر «آخر تعديل» لملف الشيت منذ آخر مزامنة (وضمن نافذة المزامنة
     // الكاملة الاحتياطية 30 دقيقة) ⇒ تخطَّ الشيت بلا openById ولا قراءة كاملة. هذا يوفّر فتح وقراءة كل شيت غير متغيّر كل دورة.
-    var luNow = 0; try { luNow = DriveApp.getFileById(cfg.id).getLastUpdated().getTime(); } catch (eLU) { luNow = 0; }
+    var luNow = 0; try { luNow = (cfg.conn && cfg.conn.code) ? _glCsLastUpd_(cfg) : DriveApp.getFileById(cfg.id).getLastUpdated().getTime(); } catch (eLU) { luNow = 0; }   // 🔌 (V4.439) الموصول: من قاعدة البيانات
     if (luNow && sigs[code] && sigs[code].lu === luNow && now - (sigs[code].t || 0) < 1800000) { last[code] = now; return; }
     var pre = null, sig = '';
     try {
@@ -6683,7 +6692,8 @@ function _glCsAutoAll_() {
 function glCustSheetCron() {
   // ⚡ (V4.268) المشغّل القديم كان مضبوطاً كل دقيقة (يُعاد ضبطه فقط عند حفظ إعداد) — يُصحَّح ذاتياً مرة واحدة
   try { var P0 = PropertiesService.getScriptProperties(); if (P0.getProperty('GL_CS_TRIG_V') !== '322') { P0.setProperty('GL_CS_TRIG_V', '322'); _glCsEnsureTrigger_(); return; } } catch (eT) {}
-  if (_glIdleHours_()) return;   // 🌙 (V4.322) خمول ليلي 2ص–10ص: لا مزامنة خلفية مجدولة (المزامنة اليدوية من البرنامج تعمل في أي وقت)
+  var _idle = _glIdleHours_();
+  if (_idle && !Object.keys(_glSettings_()).some(function (k) { if (k.indexOf('custsheet:') !== 0) return false; try { var c = JSON.parse(_glSettings_()[k] || '{}'); return !!(c.auto && c.conn); } catch (e) { return false; } })) return;   // 🌙 (V4.322) خمول ليلي 2ص–10ص: لا مزامنة خلفية مجدولة — (V4.439) عدا الشيتات الموصولة (المزامنة اليدوية من البرنامج تعمل في أي وقت)
   // 🧱 (V4.300) حارس عدم-التداخل: كانت دورات المزامنة المجدولة تتكدّس فوق بعضها (دورة تستغرق دقائق والمشغّل كل دقيقة)
   // فتُشبع حصة Apps Script وتُبطّئ كل الشاشات وتُفشل الحفظ بـ«مهلة التأمين». الآن: نبضة في Properties — لو دورة سابقة
   // ما زالت تعمل (نبضتها خلال آخر ٥ دقائق) تُتخطى هذه الدورة تماماً، فلا تكدّس. تُحدَّث النبضة بالبداية وتُمحى بالنهاية.
@@ -6694,18 +6704,26 @@ function glCustSheetCron() {
     if (hb && Date.now() - hb < 300000) return;   // دورة سابقة قيد التنفيذ ⇒ تخطَّ
     PH.setProperty('GL_CS_CRON_HB', String(Date.now()));
   } catch (eH) { PH = null; }
-  try { _glCsAutoAll_(); } catch (e) { Logger.log('glCustSheetCron: ' + e.message); }   // (V4.258) القفل لكل شيت داخل _glCsAutoAll_
-  try { _glMirFlush_(20000); } catch (eQ) { Logger.log('mirror flush: ' + eQ.message); }   // ⚡ (V4.307) طابور النسخ لكشف الحجوزات (احتياطاً) — (V4.322) ميزانية 20 ثانية بدل 60 (الدورة الآن كل 10 دقائق لا كل دقيقة)
+  try { _glCsAutoAll_(_idle); } catch (e) { Logger.log('glCustSheetCron: ' + e.message); }   // (V4.258) القفل لكل شيت داخل _glCsAutoAll_
+  try { if (!_idle) _glMirFlush_(20000); } catch (eQ) { Logger.log('mirror flush: ' + eQ.message); }   // ⚡ (V4.307) طابور النسخ لكشف الحجوزات (احتياطاً) — (V4.322) ميزانية 20 ثانية بدل 60 (الدورة الآن كل 10 دقائق لا كل دقيقة)
   finally { try { if (PH) PH.deleteProperty('GL_CS_CRON_HB'); } catch (eF) {} }
 }
 function _glCsEnsureTrigger_() {
-  var set = _glSettings_(), minI = 0;
+  var set = _glSettings_(), minI = 0, connMin = 0;
   Object.keys(set).forEach(function (k) {
     if (k.indexOf('custsheet:') !== 0) return;
     var cfg; try { cfg = JSON.parse(set[k] || '{}'); } catch (e) { return; }
     if (!cfg || !cfg.id || !cfg.auto) return;
     var m = _glCsEveryMin_(cfg); if (!minI || m < minI) minI = m;
+    if (cfg.conn && cfg.conn.code && (!connMin || m < connMin)) connMin = m;
   });
+  // 🔌 (V4.439) شيت موصول: الفحص نداء واحد خفيف لقاعدة البيانات (بلا فتح أي شيت) ⇒ يُسمح بتكرار دقيقة واحدة (القيود تُسجَّل خلال دقيقة)
+  if (connMin && connMin < 10) {
+    ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'glCustSheetCron') ScriptApp.deleteTrigger(t); });
+    var st = [1, 5].filter(function (x) { return x <= connMin; }).pop() || 1;
+    ScriptApp.newTrigger('glCustSheetCron').timeBased().everyMinutes(st).create();
+    return { every: st };
+  }
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'glCustSheetCron') ScriptApp.deleteTrigger(t); });
   if (!minI) return { every: 0 };
   // ⚡ (V4.322) الحد الأدنى للتكرار الخلفي 10 دقائق (كان دقيقة واحدة ⇒ دورات تتكدّس 30-133 ثانية وتُبطّئ كل البرنامج).
