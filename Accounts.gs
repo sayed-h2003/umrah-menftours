@@ -5329,10 +5329,15 @@ function glCsConnectorSetup(authToken, code) {
   var r = _supaReq_('post', 'rpc/cs_setup', { p_code: code, p_key: key, p_sheet_id: cfg.id });
   if (r.code >= 300) throw new Error('تعذّر إعداد الموصل (طبّق 061): ' + String(r.text).slice(0, 200));
   cfg.conn = { code: code, at: _glNow_(), by: session.username };
+  _glCsConnEvery_(code, cfg);
   _glSetSetting_('custsheet:' + code, JSON.stringify(cfg)); _GL_SET_MEMO_ = null;
   try { _glCsEnsureTrigger_(); } catch (eT) {}
   logChange_(session.username, 'إنشاء موصل شيت عهدة', 'GL:' + code, 'شيت العهدة', '-', cfg.title || cfg.id);
   return { success: true, script: _glCsConnScript_(code, key, cfg), status: glCsConnStatus_(code) };
+}
+// ⏱️ (V4.440) تكرار فحص الموصل داخل الشيت = زمن مزامنة هذا الشيت (التلقائية مطفأة ⇒ كل ساعة احتياطاً؛ التعديلات تُرسل فوراً دائماً)
+function _glCsConnEvery_(code, cfg) {
+  try { _supaReq_('post', 'rpc/cs_set_every', { p_code: code, p_min: cfg && cfg.auto ? _glCsEveryMin_(cfg) : 60 }); } catch (e) { Logger.log('cs_set_every: ' + e.message); }
 }
 function glCsConnectorOff(authToken, code) {
   var session = _glAdminPerm_(authToken);
@@ -5351,7 +5356,7 @@ function glCsConnStatus_(code) {
     rows: d && d.rows ? d.rows.length : 0, pending: d && d.pending ? Object.keys(d.pending).length : 0, agent: d && d.agent || '' };
 }
 function _glCsConnScript_(code, key, cfg) {
-  var C = { url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), code: code, key: key, tab: cfg.tab || '', ver: 'cs-1' };
+  var C = { url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), code: code, key: key, tab: cfg.tab || '', ver: 'cs-2' };
   return [
     '/* 🔌 موصل شيت العهدة ببرنامج العمرة — لا تعدّل هذا الملف. يرسل الشيت لقاعدة بيانات البرنامج فور أي تعديل وكل دقيقة،',
     '   ويكتب أرقام القيود التي يسجّلها البرنامج بعمود القيد. التشغيل: اختر الدالة setup ثم ▶ تشغيل ووافق على الصلاحيات (مرة واحدة). */',
@@ -5361,12 +5366,21 @@ function _glCsConnScript_(code, key, cfg) {
     '  var ss = SpreadsheetApp.getActive();',
     '  ScriptApp.newTrigger(\'csOnEdit\').forSpreadsheet(ss).onEdit().create();',
     '  ScriptApp.newTrigger(\'csOnChange\').forSpreadsheet(ss).onChange().create();',
-    '  ScriptApp.newTrigger(\'csTick\').timeBased().everyMinutes(1).create();',
     '  var r = csSync_(true, 30000); ss.toast(\'✅ تم ربط الشيت بالبرنامج — \' + r, \'موصل العهدة\', 10);',
     '}',
     'function csOnEdit(e) { csSync_(false, 3000); }',
     'function csOnChange(e) { csSync_(false, 3000); }',
     'function csTick() { csSync_(false, 20000); }',
+    '// تكرار الفحص الاحتياطي = زمن مزامنة هذا الشيت بالبرنامج (يُضبط ذاتياً من رد قاعدة البيانات)',
+    'function csEnsureTick_(n) {',
+    '  n = Math.max(1, +n || 60); var P = PropertiesService.getDocumentProperties();',
+    '  if (+P.getProperty(\'cs_every\') === n && ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === \'csTick\'; })) return;',
+    '  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === \'csTick\') ScriptApp.deleteTrigger(t); });',
+    '  var b = ScriptApp.newTrigger(\'csTick\').timeBased();',
+    '  if (n < 60) b = b.everyMinutes([1, 5, 10, 15, 30].filter(function (x) { return x <= n; }).pop() || 1);',
+    '  else b = b.everyHours([1, 2, 4, 6, 8, 12].filter(function (x) { return x <= Math.round(n / 60); }).pop() || 1);',
+    '  b.create(); P.setProperty(\'cs_every\', String(n));',
+    '}',
     'function csEnc_(v) { if (Object.prototype.toString.call(v) === \'[object Date]\') return isNaN(v.getTime()) ? \'\' : { $d: v.getTime() }; if (typeof v === \'number\' && !isFinite(v)) return \'\'; return v; }',
     'function csSig_(row, skip) { return (row || []).map(function (x, i) { if (i === skip || x === null || x === undefined) return \'\'; if (typeof x === \'object\' && x.$d !== undefined) return \'d\' + x.$d; return String(x).trim(); }).join(\'\\u241f\').replace(/\\u241f+$/, \'\'); }',
     'function csSheet_() { var ss = SpreadsheetApp.getActive(), sh = CS.tab ? ss.getSheetByName(CS.tab) : ss.getSheets()[0]; if (!sh) throw new Error(\'الورقة غير موجودة: \' + CS.tab); return sh; }',
@@ -5384,6 +5398,7 @@ function _glCsConnScript_(code, key, cfg) {
     '    var P = PropertiesService.getDocumentProperties(), send = force || h !== P.getProperty(\'cs_h\') || Date.now() - (+P.getProperty(\'cs_at\') || 0) > 600000;',
     '    var res = csCall_(\'cs_push\', { p_code: CS.code, p_key: CS.key, p: send ? { sheetId: ss.getId(), tab: sh.getName(), title: ss.getName(), firstRow: 1, lastCol: lc, rows: rows, hash: h, agent: CS.ver } : { sheetId: ss.getId(), agent: CS.ver } });',
     '    if (send) { P.setProperty(\'cs_h\', h); P.setProperty(\'cs_at\', String(Date.now())); }',
+    '    try { if (res && res.every) csEnsureTick_(res.every); } catch (eT) {}',
     '    var pend = (res && res.pending) || {}, done = {}, n = 0;',
     '    Object.keys(pend).forEach(function (k) {',
     '      var it = pend[k], obj = it && typeof it === \'object\' && it.v !== undefined, v = obj ? it.v : it, r = +k.split(\'|\')[0], c = +k.split(\'|\')[1], t = r;',
@@ -5781,6 +5796,7 @@ function glCustSheetSave(authToken, code, cfg) {
   o.by = session.username; o.at = _glNow_();
   if (cfg.last === undefined) { var old = _glCsCfg_(a.code); if (old.last) o.last = old.last; }
   _glSetSetting_('custsheet:' + a.code, JSON.stringify(o));
+  if (o.conn && o.conn.code) _glCsConnEvery_(o.conn.code, o);   // 🔌 (V4.440) الموصل يتبع زمن المزامنة الجديد تلقائياً
   _GL_SET_MEMO_ = null; try { _glCsEnsureTrigger_(); } catch (eT) { Logger.log('custsheet trigger: ' + eT.message); }
   logChange_(session.username, 'ربط شيت عهدة', 'GL:' + a.code, 'شيت العهدة', '-', o.title + ' / ' + o.tab + (o.auto ? ' — تلقائي كل ' + o.every.n + (o.every.unit === 'min' ? ' دقيقة' : ' ساعة') : ''));
   return { success: true, cfg: o, rows: _glCsReadRows_(S.sh, o.startRow, o).length };
