@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.441  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.442  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7802,16 +7802,17 @@ var LF_ = (function () {
     };
     var soft = function (m) { fin(null, m ? 'soft: ' + String(m).slice(0, 400) : 'soft'); };   /* (V4.415) سبب الرجوع يظهر بلوحة «مصدر البيانات» */
     var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout');
-      if (!isW && fn) { SP.fnF[fn] = (SP.fnF[fn] || 0) + 1; if (SP.fnF[fn] >= 2) SP.fnOffAt[fn] = now(); } }, isW ? 25000 : (slow ? 24000 : 9000));
+      if (!isW && fn) { SP.fnF[fn] = (SP.fnF[fn] || 0) + 1; if (SP.fnF[fn] >= 2) SP.fnOffAt[fn] = now(); } }, isW ? 25000 : (slow ? 24000 : 15000));   // (V4.442) 15 ث: الارتداد لـ Apps Script أبطأ أصلاً (20–30 ث)
     try {
       // (V4.376) اتصال أول بطيء بـSupabase (شوهد ≈6 ث للاتصال الأولي) ⇒ طلب ثانٍ مطابق بعد 1.5 ث والأسبق يفوز (قراءات فقط ⇒ آمن) — يحجب الانتظار حتى مهلة 6 ث
       var hedged = false, go = function () {
         return fetch(c.url + '/rest/v1/rpc/' + rpc, { method: 'POST', headers: { apikey: c.anon, Authorization: 'Bearer ' + c.token, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body || {}), signal: ctl ? ctl.signal : undefined });
       };
-      var hedgeT = (isW || slow) ? 0 : setTimeout(function () { if (!done && !hedged) { hedged = true; try { go().then(handle, function () {}); } catch (eh) {} } }, 1500);
+      var hedgeT = (isW || slow || true) ? 0 : setTimeout(function () { if (!done && !hedged) { hedged = true; try { go().then(handle, function () {}); } catch (eh) {} } }, 1500);
       var handle = function (r) { clearTimeout(hedgeT);
           if (r.ok) return r.json().then(function (j) { if (j && j.success === true) fin(j); else soft(j && (j.error || j.message || j.code || (j.d && j.d.error))); });
-          if (r.status === 401) { spReset(); soft(); return; }   // الرمز منتهٍ/غير صالح ⇒ يُعاد إصداره ويُستعمل المسار القديم الآن
+          if (r.status === 401) { spReset(); soft(); return; }
+          if (rpc === 'rxc' && r.status === 404) { SP.noRxc = true; fin(null, 'norxc'); return; }   // (V4.442) 064 غير مطبَّق ⇒ لا يُعطّل Postgres   // الرمز منتهٍ/غير صالح ⇒ يُعاد إصداره ويُستعمل المسار القديم الآن
           return r.json().then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) {
             // أخطاء عمل متوقعة (صلاحية 42501 · gl_aux لم يُرفع بعد 55000 · عمل غير مدعوم 0A000 · رسالة العمل P0001) ⇒ المسار القديم يعطي الرسالة الأصلية بلا تعطيل
             if (/^(42501|55000|0A000|P0001)$/.test(String(j.code || ''))) { soft((j.code || '') + ' ' + (j.message || '')); return; }
@@ -7985,16 +7986,24 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     getOnlineUsersNow: { need: ['@dv'], rpc: 'app_online_users', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count, users: r.users }; } }
   };
   // يبدأ قراءة RPC؛ يرجع false إن لم تكن جاهزة (⇒ المسار القديم فوراً). cb({d, dv}) عند النجاح · cb(null, why) ⇒ المسار القديم ('epoch' ⇒ الجلسة تغيّرت فلا شيء)
+  /* 🚀 (V4.442) 064_rx_cache.sql — القراءات الثقيلة عبر rxc: نتيجة محفوظة بالخادم ما دامت بياناتها لم تتغيّر (مللي ثانية بدل إعادة الحساب) */
+  var RXC_ = { getTripsList: 1, getTripPilgrims: 1, getGlobalPilgrimsRegistry: 1, getAllMovementsAuth: 1, loadDropdownsData: 1, getClientsDirectory: 1, getTripDraft: 1,
+    getTripHotelsList: 1, getAllBookingsAuth: 1, getVisaTripLinks: 1, getMinistryTripLinks: 1, getVisaBootstrap: 1, getMinistryBootstrap: 1, getTripNamesList: 1 };
   function stRoute(fn, args, cb) {
     var d = STRPC[fn]; if (!d) return false;
     if (d.skip && d.skip()) return false;   // (V4.378) مثلاً سجل التعديلات بعد كتابة محلية حديثة
     var ep = S.epoch, a = (args || []).slice(); a[0] = null;   // لا يُرسل رمز الجلسة؛ الهوية من JWT
     if (d.pre && d.pre(a) === false) return false;   // (V4.388) تحضير/تحقق بالمتصفح قبل الكتابة؛ false ⇒ Apps Script
-    return glRpc(d.rpc || 'rx_call', d.body ? d.body(a) : { p_fn: fn, p_args: a }, function (res, why) {
-      if (ep !== S.epoch) { cb(null, 'epoch'); return; }
-      if (!res) { cb(null, why || 'fail'); return; }
-      cb({ d: d.out ? d.out(res) : res.d, dv: res.dv || null });
-    }, fn, d.need);
+    var go = function (rpc, body) {
+      return glRpc(rpc, body, function (res, why) {
+        if (ep !== S.epoch) { cb(null, 'epoch'); return; }
+        if (!res && why === 'norxc') { if (!go(d.rpc || 'rx_call', { p_fn: fn, p_args: a })) cb(null, 'fail'); return; }   // 064 لم يُطبَّق بعد ⇒ المسار المعتاد
+        if (!res) { cb(null, why || 'fail'); return; }
+        cb({ d: d.out ? d.out(res) : res.d, dv: res.dv || null });
+      }, fn, d.need);
+    };
+    if (RXC_[fn] && !SP.noRxc && !d.body && /^rx_(call2?|boot)$/.test(d.rpc || 'rx_call')) return go('rxc', { p_fn: fn, p_args: a });
+    return go(d.rpc || 'rx_call', d.body ? d.body(a) : { p_fn: fn, p_args: a });
   }
   // بديل r = google.script.run (المغلَّف) لدالة مدعومة: نفس واجهة withSuccessHandler/withFailureHandler/withUserObject
   function stRunner(getPrev, fn) {
@@ -9723,7 +9732,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.441";
+var CLIENT_APP_VERSION = "4.442";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
