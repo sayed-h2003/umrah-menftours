@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.442";
+var APP_VERSION = "4.443";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -12444,10 +12444,21 @@ function ensureAuditLogSheet_() {
 }
 
 // تسجيل تعديل واحد - لا يجب أن يوقف أي عملية حفظ حقيقية لو فشل هو نفسه، لذلك يُغلَّف دائماً بـ try/catch عند الاستدعاء
+// ⚡ (V4.443) أسطر سجل التعديلات المكتوبة بهذا الطلب ⇒ تُرفع لـ audit_log بنهايته بنفس مفتاح المزامنة الدورية (main, رقم الصف) — بلا تكرار
+var _AUD_PG_BUF_ = [];
+function _audPgFlush_() {
+  if (!_AUD_PG_BUF_.length) return;
+  var buf = _AUD_PG_BUF_; _AUD_PG_BUF_ = [];
+  try {
+    if (typeof _supaOn_ !== 'function' || !_supaOn_() || _supaP_('SUPA_AUD_OK') !== '1') return;
+    var rows = []; buf.forEach(function (x) { var o = _supaAuditRow_(x[0], x[1]); if (o) rows.push(o); });
+    if (rows.length) _supaUpsert_('audit_log', rows, 'src,rn');
+  } catch (e) { Logger.log('aud pg flush: ' + e.message); }
+}
 function logChange_(username, action, recordId, field, oldVal, newVal) {
   try {
     var sheet = ensureAuditLogSheet_();
-    sheet.appendRow([
+    var _row = [
       Utilities.formatDate(new Date(), _tz_() || "Asia/Riyadh", "dd/MM/yyyy HH:mm:ss"),
       username || "غير معروف",
       action || "-",
@@ -12455,7 +12466,9 @@ function logChange_(username, action, recordId, field, oldVal, newVal) {
       field || "-",
       oldVal === undefined || oldVal === null ? "-" : String(oldVal),
       newVal === undefined || newVal === null ? "-" : String(newVal)
-    ]);
+    ];
+    sheet.appendRow(_row);
+    try { _AUD_PG_BUF_.push([_row, sheet.getLastRow()]); } catch (eB) {}   // ⚡ (V4.443) يُرفع لـ audit_log بنهاية الطلب (يظهر بسجل التعديلات فوراً)
     _glMarkDirty_(action, recordId);
   } catch (e) {
     Logger.log("logChange_ failed: " + e.message);

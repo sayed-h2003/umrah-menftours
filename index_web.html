@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.442  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.443  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7979,7 +7979,14 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     deleteGlobalPilgrims: { need: ['core', 'wbk'], rpc: 'rw_call', after: function (a, d) { try { if (d && d.success !== false) _RAWRUN_().withFailureHandler(function () {}).cacheBustBg(window.authToken, 'pilgrims'); } catch (e) {} } },
     getRequiredFieldsConfig: { need: ['cfg'], rpc: 'rx_call2' },   /* (V4.387) 023_required_fields.sql */
     getNotifications: { need: ['misc', 'cfg'], rpc: 'rx_call2' },   /* (V4.385) جرس التنبيهات من Postgres — 022_notifications.sql */
-    getAuditLog: Object.assign(RB('getAuditLog', ['audit']), { revalidate: function () { return now() - (S.lastWAt || 0) < 90000; } }),   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
+    getAuditLog: RB('getAuditLog', ['audit']),
+    /* (V4.443) 065 — سجل تعديلات عنصر واحد من Postgres (بعد تحميل السجل القديم كاملاً: supaAuditBackfillAll ⇒ audfull) */
+    getTripChangeLog: { need: ['audit', 'audfull'], rpc: 'rx_call2' }, getClientAccountHistory: { need: ['audit', 'audfull'], rpc: 'rx_call2' },
+    getMinistryFileHistory: { need: ['audit', 'audfull'], rpc: 'rx_call2' }, getVisaFileHistory: { need: ['audit', 'audfull'], rpc: 'rx_call2' },
+    /* (V4.443) 066 — دوال ظهرت بالاستخدام اليومي: تعليم تنبيه مقروء · تسعير بنود العميل (قراءة/حفظ) · العملاء ذوو التنبيهات */
+    markNotificationRead: { need: ['misc', 'wbk'], rpc: 'rw_call' },
+    getClientPricing: { need: ['acc'], rpc: 'rx_call2' }, saveClientPricing: { need: ['acc', 'wbk'], rpc: 'rw_call' },
+    getClientsWithAlerts: { need: ['acc', 'core'], rpc: 'rx_call2' },   /* (V4.443) 065: كل الكتابات (Postgres وApps Script) تظهر بالسجل فوراً ⇒ أُلغيت إعادة التحقق من Apps Script بعد كل حفظ */   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
     saveUiPref: { need: ['misc'], rpc: 'app_save_ui_pref', body: function (a) { return { p_screen: a[1], p_prefs: a[2] === undefined ? null : a[2] }; }, out: function () { return { success: true }; } },
     getAppBootstrap: { need: ['cfg', 'core', 'bookings', 'acc', 'misc', '@dv'], rpc: 'app_boot', body: function () { return {}; }, out: function (r) { return { success: true, parts: r.parts || {}, serverMs: r.serverMs }; } },
     heartbeatOnline: { need: ['@dv'], rpc: 'app_heartbeat', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count }; } },
@@ -9732,7 +9739,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.442";
+var CLIENT_APP_VERSION = "4.443";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

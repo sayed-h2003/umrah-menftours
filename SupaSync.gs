@@ -496,7 +496,7 @@ function supaDvSeedNow() { requireScriptOwner_(); var r = _dvPgReconcile_(); Log
 function _supaStoreInfo_() {
   var out = _supaStoreInfo0_();
   // ⚡ (V4.378) مجموعات «زائفة» تعلن جاهزية ما يُقرأ من app_config/audit_log: cfg (الإعدادات) · glkick (عدّادات القيود) · audit (سجل التعديلات)
-  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); if (_supaP_('SUPA_KV_OK') === '1') out.groups.push('kv'); if (_supaP_('SUPA_BOT_OK') === '1') out.groups.push('bots'); if (_supaP_('SUPA_W_MF') === '1') out.groups.push('wmf'); if (_supaP_('SUPA_W_VZ') === '1') out.groups.push('wvz'); if (_supaP_('SUPA_W_BK') === '1') out.groups.push('wbk'); if (_usersSot_()) out.groups.push('wusr'); if (_supaP_('SUPA_W_GL') === '1') out.groups.push('wgl'); } catch (e) {}   // (V4.378) kv = ACC_PRICING/MF_EXEC_POLICY/NOTIF_TOGGLES منسوخة · bots = bookings_via_bot معبّأة
+  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); if (_supaP_('SUPA_AUD_OK') === '1' && _supaP_('SUPA_AUD_FULL') === '1') out.groups.push('audfull'); if (_supaP_('SUPA_KV_OK') === '1') out.groups.push('kv'); if (_supaP_('SUPA_BOT_OK') === '1') out.groups.push('bots'); if (_supaP_('SUPA_W_MF') === '1') out.groups.push('wmf'); if (_supaP_('SUPA_W_VZ') === '1') out.groups.push('wvz'); if (_supaP_('SUPA_W_BK') === '1') out.groups.push('wbk'); if (_usersSot_()) out.groups.push('wusr'); if (_supaP_('SUPA_W_GL') === '1') out.groups.push('wgl'); } catch (e) {}   // (V4.378) kv = ACC_PRICING/MF_EXEC_POLICY/NOTIF_TOGGLES منسوخة · bots = bookings_via_bot معبّأة
   return out;
 }
 function _supaStoreInfo0_() {
@@ -576,6 +576,26 @@ function _supaAuditRow_(row, rn) {
   var screen = _auditScreen_(action, field, recordId);
   return { src: 'main', rn: rn, ts_str: tsStr, ts_ms: tsDate ? tsDate.getTime() : null, t_ms: tsDate ? tsDate.getTime() : _auditTsNum_(tsStr), username: username, action: action, record_id: recordId, field: field,
     old_value: _supaAuditClean_(row[5]), new_value: _supaAuditClean_(row[6]), screen: screen, screen_label: AUDIT_SCREEN_LABELS_[screen] || 'أخرى' };
+}
+// 📜 (V4.443) تحميل كامل سجل التعديلات القديم لـ Postgres (مرة واحدة) — المزامنة الدورية تحمل آخر 6000 صف فقط، فشاشات «سجل التعديلات»
+// للرحلة/ملف الوزارة/مجموعة التأشيرات/حساب العميل تنتقل لـ Postgres فقط بعد اكتماله (مجموعة audfull). قابل للاستكمال: لو توقف عند حد
+// زمن التنفيذ شغّله مرة أخرى فيكمل من حيث وقف. شغّله من المحرر: supaAuditBackfillAll
+function supaAuditBackfillAll() {
+  requireScriptOwner_();
+  var P = PropertiesService.getScriptProperties(), sh = ensureAuditLogSheet_(), lastRow = sh.getLastRow(), t0 = Date.now();
+  var winFrom = Math.max(2, lastRow - SUPA_AUD_WIN_ + 1);   // ما بعده تحمله المزامنة الدورية أصلاً
+  var at = parseInt(P.getProperty('SUPA_AUD_BF_ROW') || '1', 10) || 1, n = 0;
+  for (var s = Math.max(2, at + 1); s < winFrom; s += SUPA_AUD_CHUNK_) {
+    if (Date.now() - t0 > 300000) { var m = 'توقف عند الصف ' + (s - 1) + ' من ' + (winFrom - 1) + ' (حد زمن التنفيذ) — شغّل الدالة مرة أخرى لتكمل'; Logger.log(m); return m; }
+    var e = Math.min(winFrom - 1, s + SUPA_AUD_CHUNK_ - 1), vals = sh.getRange(s, 1, e - s + 1, 7).getValues(), rows = [];
+    vals.forEach(function (r, i) { var o = _supaAuditRow_(r, s + i); if (o) rows.push(o); });
+    if (!_supaUpsert_('audit_log', rows, 'src,rn')) { Logger.log('فشل الرفع عند الصف ' + s); return 'fail'; }
+    n += rows.length; P.setProperty('SUPA_AUD_BF_ROW', String(e));
+  }
+  P.setProperty('SUPA_AUD_FULL', '1');
+  try { if (typeof _dvBump_ === 'function') _dvBump_(['audit']); } catch (eD) {}
+  var msg = '✅ اكتمل تحميل سجل التعديلات القديم (' + n + ' سطر بهذا التشغيل) — شاشات السجل تعمل الآن من Postgres';
+  Logger.log(msg); return msg;
 }
 function supaAuditSync_() {
   if (!_supaBootOn_()) return 'off';
