@@ -885,6 +885,12 @@ function _outboxDrain_(maxMs) {
         } catch (eB) { Logger.log('outbox bkdiff: ' + eB.message); }
       }
       else if (x.kind === 'tripsnap') { try { _tripSnapTakeState_(String(p.trip), String(p.user || ''), String(p.action || ''), p.state, !!p.base); } catch (eT) { Logger.log('outbox tripsnap: ' + eT.message); } }
+      else if (x.kind === 'glcat') {   // (V4.444) قيد الإعاشة التلقائي AUTO:CAT لاتفاقيات حُفظت/حُذفت/دُمجت من Postgres — حتى نقل محرك القيود (الدفعة 2)
+        try { if (typeof _glCatPostNow_ === 'function' && (p.ids || []).length) _glCatPostNow_(String(p.user || ''), p.ids); } catch (eGc) { Logger.log('outbox glcat: ' + eGc.message); }
+      }
+      else if (x.kind === 'kvset') {   // (V4.444) إعداد كُتب من Postgres (app_kv) ⇒ نفس الخاصية بـ Apps Script كي لا تختلف المسارات الاحتياطية
+        try { var _kp = PropertiesService.getScriptProperties(); Object.keys(p.kv || {}).forEach(function (k) { var v = p.kv[k]; if (v === null || v === '') _kp.deleteProperty(k); else _kp.setProperty(k, String(v)); }); if (typeof clearAllCache_ === 'function') clearAllCache_(); } catch (eK) { Logger.log('outbox kvset: ' + eK.message); }
+      }
       else if (x.kind === 'accsync') {   // (V4.403) مزامنة حسابات رحلات بعد كتابة Postgres — المتصفح ينفّذها فوراً؛ وإلا بعد ~دقيقتين
         if (Date.now() / 1000 - Number(p.at || 0) < 120) { ids.pop(); return; }
         try { _ACC_HB_CITY_MEMO_ = null; (p.trips || []).forEach(function (t) { try { _syncTripAccounts_(null, String(t), String(p.user || '')); } catch (eT) {} }); } catch (eA) { Logger.log('outbox accsync: ' + eA.message); }

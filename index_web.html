@@ -7924,7 +7924,8 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     accDataAudit: { need: ['acc', 'core', 'ministry', 'visa'], rpc: 'rx_call2' },
     /* (V4.437) 060 — المهام اللاحقة لحفظ الوزارة/التأشيرات (فحص تطابق الشركة والوكيل + الأرصدة) من Postgres؛ مزامنة السكن وحدها تبقى Apps Script */
     mfAfterSaveBg: { need: ['ministry', 'core', 'visa', 'acc'], rpc: 'rx_call2' },
-    vzAfterSaveBg: { need: ['visa', 'core', 'ministry'], rpc: 'rx_call2', pre: function (a) { return !(a[1] && !Array.isArray(a[1]) && a[1].syncHousing); } },
+    vzAfterSaveBg: { need: ['visa', 'core', 'ministry', 'wvz'], rpc: 'rw_call' },   /* (V4.444) 068: يشمل مزامنة السكن (syncHousing) */
+    getCateringContractHistory: { need: ['audit', 'audfull', 'visa'], rpc: 'rx_call2' },
     xcCheckTrips: { need: ['visa', 'core', 'ministry'], rpc: 'rx_call2' },
     accOrphanFix: { need: ['acc', 'core', 'wbk'], rpc: 'rw_call' },
     clientMergeName: { need: ['acc', 'core', 'bookings', 'ministry', 'visa', 'wbk'], rpc: 'rw_call' },
@@ -7992,6 +7993,20 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     heartbeatOnline: { need: ['@dv'], rpc: 'app_heartbeat', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count }; } },
     getOnlineUsersNow: { need: ['@dv'], rpc: 'app_online_users', body: function () { return {}; }, out: function (r) { return { success: true, count: r.count, users: r.users }; } }
   };
+  /* 🚚 (V4.444) دفعات الهجرة الكاملة: كل وظائف المجال ⇒ Postgres (rx_call2 للقراءة · rw_call للكتابة). المفتاح: [قائمة القراءات, قائمة الكتابات, مجموعات القراءة, مجموعة الكتابة] */
+  [[['getMinistrySupervisorsOnly', 'suggestMinistrySupervisors', 'getRoomFeeLedger', 'getMfIndividualQuotaStats', 'getMfIndividualFileCandidates', 'getMfHousingForSelectedPilgrims'],
+    ['saveMinistrySupervisor', 'bulkSaveMinistrySupervisors', 'bulkShareMinistrySupervisors', 'deleteMinistrySupervisor', 'saveRoomFeeReceipt', 'deleteRoomFeeReceipt', 'saveMfQuotaTransfer',
+     'deleteMfQuotaTransfer', 'setMinistryFileApproved', 'bulkSetMfFileType', 'deleteMinistryFilesBatch', 'importMinistryFilesBatch', 'saveMinistryFilesBulk', 'saveMfExecPolicy'],
+    ['ministry', 'core'], 'wmf'],   /* 067 الوزارة */
+   [['getHousingAgreements', 'getHousingCateringByGroup', 'getCateringContracts', 'findDuplicateCateringContracts', 'getMergedHousing', 'getPilgrimsForMergedHousing',
+     'getHousingShareSuggestions', 'vzCacheClearBg'],
+    ['saveHousingAgreement', 'saveHousingAllocation', 'deleteHousingAgreement', 'deleteHousingAllocation', 'saveCateringContracts', 'deleteCateringContract', 'mergeCateringDuplicates',
+     'deleteVisaFilesBatch', 'importVisaFilesBatch', 'saveVisaFilesBulk', 'setVisaFileEntryNo', 'xcApply'],
+    ['visa', 'core', 'misc'], 'wvz']   /* 068 التأشيرات والسكن والإعاشة */
+  ].forEach(function (b) {
+    b[0].forEach(function (f) { if (!STRPC[f]) STRPC[f] = { need: b[2], rpc: 'rx_call2' }; });
+    b[1].forEach(function (f) { if (!STRPC[f]) STRPC[f] = { need: b[2].concat([b[3]]), rpc: 'rw_call' }; });
+  });
   // يبدأ قراءة RPC؛ يرجع false إن لم تكن جاهزة (⇒ المسار القديم فوراً). cb({d, dv}) عند النجاح · cb(null, why) ⇒ المسار القديم ('epoch' ⇒ الجلسة تغيّرت فلا شيء)
   /* 🚀 (V4.442) 064_rx_cache.sql — القراءات الثقيلة عبر rxc: نتيجة محفوظة بالخادم ما دامت بياناتها لم تتغيّر (مللي ثانية بدل إعادة الحساب) */
   var RXC_ = { getTripsList: 1, getTripPilgrims: 1, getGlobalPilgrimsRegistry: 1, getAllMovementsAuth: 1, loadDropdownsData: 1, getClientsDirectory: 1, getTripDraft: 1,
