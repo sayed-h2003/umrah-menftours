@@ -8002,7 +8002,12 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
      'getHousingShareSuggestions', 'vzCacheClearBg'],
     ['saveHousingAgreement', 'saveHousingAllocation', 'deleteHousingAgreement', 'deleteHousingAllocation', 'saveCateringContracts', 'deleteCateringContract', 'mergeCateringDuplicates',
      'deleteVisaFilesBatch', 'importVisaFilesBatch', 'saveVisaFilesBulk', 'setVisaFileEntryNo', 'xcApply'],
-    ['visa', 'core', 'misc'], 'wvz']   /* 068 التأشيرات والسكن والإعاشة */
+    ['visa', 'core', 'misc'], 'wvz'],   /* 068 التأشيرات والسكن والإعاشة */
+   [['getTransportAccountsData', 'getTransportAgentCompanyPairs', 'getAgentCompanyAccounts', 'getAgentByCompany', 'getAgentAccRowHistory', 'getAgentAcctVisaStats'],
+    ['saveTransportRowEdit', 'deleteTransportRowEdit', 'applyTransportPriceToRuns', 'applyAgentPriceToGroups', 'saveVisaAgentPrices', 'saveVisaAgentTransportPrices',
+     'saveAgentCompanyAccounts', 'saveAgentAccItem', 'saveAgentAccItemsBatch', 'postAgreementToAgentAccount', 'deleteAgentAccItem', 'deleteAgentPayment',
+     'deleteAgentAccItemsBatch', 'deleteAgentPaymentsBatch'],
+    ['visa', 'core', 'bookings'], 'wvz']   /* 069 الوكلاء والنقل */
   ].forEach(function (b) {
     b[0].forEach(function (f) { if (!STRPC[f]) STRPC[f] = { need: b[2], rpc: 'rx_call2' }; });
     b[1].forEach(function (f) { if (!STRPC[f]) STRPC[f] = { need: b[2].concat([b[3]]), rpc: 'rw_call' }; });
