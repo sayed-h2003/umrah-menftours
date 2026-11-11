@@ -5325,15 +5325,34 @@ function glCsConnectorSetup(authToken, code) {
   code = _glStr_(code); var cfg = _glCsCfg_(code);
   if (!cfg || !cfg.id) throw new Error('اربط الشيت أولاً (رابط شيت العهدة) ثم أنشئ الموصل');
   if (!_supaP_('SUPA_URL') || !_supaP_('SUPA_ANON_KEY')) throw new Error('إعداد Supabase ناقص (SUPA_URL / SUPA_ANON_KEY)');
-  var key = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
-  var r = _supaReq_('post', 'rpc/cs_setup', { p_code: code, p_key: key, p_sheet_id: cfg.id });
-  if (r.code >= 300) throw new Error('تعذّر إعداد الموصل (طبّق 061): ' + String(r.text).slice(0, 200));
-  cfg.conn = { code: code, at: _glNow_(), by: session.username };
-  _glCsConnEvery_(code, cfg);
-  _glSetSetting_('custsheet:' + code, JSON.stringify(cfg)); _GL_SET_MEMO_ = null;
+  // 📚 (V4.441) ملف واحد بعدة عهد (ورقة لكل عهدة) ⇒ سكربت واحد للملف يخدم كل أوراقه الموصولة، لكل ورقة مفتاحها. مشروع Apps Script واحد فقط
+  // لكل ملف، فلا يمكن لصق سكربتين. تجديد الموصل يجدّد مفاتيح كل عهد الملف معاً (السكربت الواحد يحمل مفاتيحها كلها).
+  var set = _glSettings_(), sheets = [];
+  Object.keys(set).forEach(function (k) {
+    if (k.indexOf('custsheet:') !== 0) return;
+    var c0; try { c0 = JSON.parse(set[k] || '{}'); } catch (e) { return; }
+    var cd = k.slice(10);
+    if (c0 && c0.id === cfg.id && (cd === code || c0.conn)) sheets.push({ code: cd, cfg: c0 });
+  });
+  var tabs = {}; sheets.forEach(function (x) {
+    var t = _glStr_(x.cfg.tab) || '(الأولى)';
+    if (tabs[t]) throw new Error('العهدتان ' + tabs[t] + ' و' + x.code + ' مربوطتان بنفس الورقة «' + t + '» — لكل عهدة ورقة مستقلة');
+    tabs[t] = x.code;
+  });
+  var list = [];
+  sheets.forEach(function (x) {
+    var key = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+    var r = _supaReq_('post', 'rpc/cs_setup', { p_code: x.code, p_key: key, p_sheet_id: x.cfg.id });
+    if (r.code >= 300) throw new Error('تعذّر إعداد الموصل (طبّق 061): ' + String(r.text).slice(0, 200));
+    x.cfg.conn = { code: x.code, at: _glNow_(), by: session.username };
+    _glCsConnEvery_(x.code, x.cfg);
+    _glSetSetting_('custsheet:' + x.code, JSON.stringify(x.cfg));
+    list.push({ code: x.code, key: key, tab: x.cfg.tab || '' });
+    logChange_(session.username, 'إنشاء موصل شيت عهدة', 'GL:' + x.code, 'شيت العهدة', '-', x.cfg.title || x.cfg.id);
+  });
+  _GL_SET_MEMO_ = null;
   try { _glCsEnsureTrigger_(); } catch (eT) {}
-  logChange_(session.username, 'إنشاء موصل شيت عهدة', 'GL:' + code, 'شيت العهدة', '-', cfg.title || cfg.id);
-  return { success: true, script: _glCsConnScript_(code, key, cfg), status: glCsConnStatus_(code) };
+  return { success: true, script: _glCsConnScript_(list, cfg), sheets: list.map(function (x) { return x.code; }), status: glCsConnStatus_(code) };
 }
 // ⏱️ (V4.440) تكرار فحص الموصل داخل الشيت = زمن مزامنة هذا الشيت (التلقائية مطفأة ⇒ كل ساعة احتياطاً؛ التعديلات تُرسل فوراً دائماً)
 function _glCsConnEvery_(code, cfg) {
@@ -5355,23 +5374,24 @@ function glCsConnStatus_(code) {
   return { on: true, at: cfg.conn.at, by: cfg.conn.by, pushedAt: d && d.pushedAt || 0, changedAt: d && d.changedAt || 0, pulledAt: d && d.pulledAt || 0,
     rows: d && d.rows ? d.rows.length : 0, pending: d && d.pending ? Object.keys(d.pending).length : 0, agent: d && d.agent || '' };
 }
-function _glCsConnScript_(code, key, cfg) {
-  var C = { url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), code: code, key: key, tab: cfg.tab || '', ver: 'cs-2' };
+function _glCsConnScript_(list, cfg) {
+  var C = { url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), sheets: list, ver: 'cs-3' };
   return [
-    '/* 🔌 موصل شيت العهدة ببرنامج العمرة — لا تعدّل هذا الملف. يرسل الشيت لقاعدة بيانات البرنامج فور أي تعديل وكل دقيقة،',
-    '   ويكتب أرقام القيود التي يسجّلها البرنامج بعمود القيد. التشغيل: اختر الدالة setup ثم ▶ تشغيل ووافق على الصلاحيات (مرة واحدة). */',
+    '/* 🔌 موصل شيتات العهدة ببرنامج العمرة — لا تعدّل هذا الملف. يرسل أوراق هذا الملف لقاعدة بيانات البرنامج فور أي تعديل وكل فترة،',
+    '   ويكتب أرقام القيود التي يسجّلها البرنامج بعمود القيد. سكربت واحد لكل الأوراق الموصولة. التشغيل: اختر الدالة setup ثم ▶ تشغيل ووافق على الصلاحيات (مرة واحدة). */',
     'var CS = ' + JSON.stringify(C) + ';',
     'function setup() {',
     '  ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });',
+    '  PropertiesService.getDocumentProperties().deleteProperty(\'cs_every\');',
     '  var ss = SpreadsheetApp.getActive();',
     '  ScriptApp.newTrigger(\'csOnEdit\').forSpreadsheet(ss).onEdit().create();',
     '  ScriptApp.newTrigger(\'csOnChange\').forSpreadsheet(ss).onChange().create();',
-    '  var r = csSync_(true, 30000); ss.toast(\'✅ تم ربط الشيت بالبرنامج — \' + r, \'موصل العهدة\', 10);',
+    '  var r = csSync_(true, 30000); ss.toast(\'✅ تم ربط \' + CS.sheets.length + \' ورقة بالبرنامج — \' + r, \'موصل العهدة\', 10);',
     '}',
-    'function csOnEdit(e) { csSync_(false, 3000); }',
+    'function csOnEdit(e) { csSync_(false, 3000, e && e.range && e.range.getSheet().getName()); }',
     'function csOnChange(e) { csSync_(false, 3000); }',
     'function csTick() { csSync_(false, 20000); }',
-    '// تكرار الفحص الاحتياطي = زمن مزامنة هذا الشيت بالبرنامج (يُضبط ذاتياً من رد قاعدة البيانات)',
+    '// تكرار الفحص الاحتياطي = أقصر زمن مزامنة بين الأوراق (يُضبط ذاتياً من رد قاعدة البيانات)',
     'function csEnsureTick_(n) {',
     '  n = Math.max(1, +n || 60); var P = PropertiesService.getDocumentProperties();',
     '  if (+P.getProperty(\'cs_every\') === n && ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === \'csTick\'; })) return;',
@@ -5383,34 +5403,43 @@ function _glCsConnScript_(code, key, cfg) {
     '}',
     'function csEnc_(v) { if (Object.prototype.toString.call(v) === \'[object Date]\') return isNaN(v.getTime()) ? \'\' : { $d: v.getTime() }; if (typeof v === \'number\' && !isFinite(v)) return \'\'; return v; }',
     'function csSig_(row, skip) { return (row || []).map(function (x, i) { if (i === skip || x === null || x === undefined) return \'\'; if (typeof x === \'object\' && x.$d !== undefined) return \'d\' + x.$d; return String(x).trim(); }).join(\'\\u241f\').replace(/\\u241f+$/, \'\'); }',
-    'function csSheet_() { var ss = SpreadsheetApp.getActive(), sh = CS.tab ? ss.getSheetByName(CS.tab) : ss.getSheets()[0]; if (!sh) throw new Error(\'الورقة غير موجودة: \' + CS.tab); return sh; }',
     'function csCall_(fn, body) {',
     '  var r = UrlFetchApp.fetch(CS.url + \'/rest/v1/rpc/\' + fn, { method: \'post\', contentType: \'application/json\', headers: { apikey: CS.anon, Authorization: \'Bearer \' + CS.anon }, payload: JSON.stringify(body), muteHttpExceptions: true });',
     '  if (r.getResponseCode() >= 300) throw new Error(fn + \' \' + r.getResponseCode() + \': \' + r.getContentText().slice(0, 300));',
     '  return JSON.parse(r.getContentText() || \'null\');',
     '}',
-    'function csSync_(force, wait) {',
+    '// only: اسم ورقة (تعديل بورقة واحدة ⇒ لا نمسّ بقية الأوراق)',
+    'function csSync_(force, wait, only) {',
     '  var lk = LockService.getDocumentLock(); if (!lk.tryLock(wait || 3000)) return \'مشغول\';',
     '  try {',
-    '    var ss = SpreadsheetApp.getActive(), sh = csSheet_(), last = sh.getLastRow(), lc = Math.min(26, Math.max(1, sh.getLastColumn()));',
-    '    var rows = (last >= 1 ? sh.getRange(1, 1, last, lc).getValues() : []).map(function (r) { return r.map(csEnc_); });',
-    '    var h = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(rows) + \'|\' + sh.getName(), Utilities.Charset.UTF_8));',
-    '    var P = PropertiesService.getDocumentProperties(), send = force || h !== P.getProperty(\'cs_h\') || Date.now() - (+P.getProperty(\'cs_at\') || 0) > 600000;',
-    '    var res = csCall_(\'cs_push\', { p_code: CS.code, p_key: CS.key, p: send ? { sheetId: ss.getId(), tab: sh.getName(), title: ss.getName(), firstRow: 1, lastCol: lc, rows: rows, hash: h, agent: CS.ver } : { sheetId: ss.getId(), agent: CS.ver } });',
-    '    if (send) { P.setProperty(\'cs_h\', h); P.setProperty(\'cs_at\', String(Date.now())); }',
-    '    try { if (res && res.every) csEnsureTick_(res.every); } catch (eT) {}',
-    '    var pend = (res && res.pending) || {}, done = {}, n = 0;',
-    '    Object.keys(pend).forEach(function (k) {',
-    '      var it = pend[k], obj = it && typeof it === \'object\' && it.v !== undefined, v = obj ? it.v : it, r = +k.split(\'|\')[0], c = +k.split(\'|\')[1], t = r;',
-    '      if (obj && it.sig !== undefined && csSig_(rows[r - 1], c - 1) !== it.sig) {   // الصف تحرّك (إدراج/حذف) ⇒ نبحث عنه ببصمته',
-    '        var hits = []; rows.forEach(function (rw, i) { if (csSig_(rw, c - 1) === it.sig) hits.push(i + 1); }); t = hits.length === 1 ? hits[0] : 0;',
-    '      }',
-    '      if (t) { sh.getRange(t, c).setNumberFormat(\'@\').setValue(v && typeof v === \'object\' && v.$d !== undefined ? new Date(v.$d) : v); n++; }',
-    '      done[k] = it;',
+    '    var ss = SpreadsheetApp.getActive(), out = [], every = 0;',
+    '    CS.sheets.forEach(function (S) {',
+    '      var sh = S.tab ? ss.getSheetByName(S.tab) : ss.getSheets()[0]; if (!sh) { out.push(S.code + \': الورقة غير موجودة\'); return; }',
+    '      if (only && sh.getName() !== only) return;',
+    '      try { var r = csOne_(ss, sh, S, force); out.push(S.code + \': \' + r.msg); if (r.every && (!every || r.every < every)) every = r.every; } catch (e) { out.push(S.code + \': \' + e.message); }',
     '    });',
-    '    if (Object.keys(done).length) { csCall_(\'cs_ack\', { p_code: CS.code, p_key: CS.key, p_done: done }); if (n) P.deleteProperty(\'cs_h\'); }',
-    '    return (send ? \'أُرسل \' + rows.length + \' صف\' : \'بلا تغيير\') + (n ? \' · كُتب \' + n + \' رقم قيد\' : \'\');',
+    '    if (every) try { csEnsureTick_(every); } catch (eT) {}',
+    '    return out.join(\' | \');',
     '  } finally { lk.releaseLock(); }',
+    '}',
+    'function csOne_(ss, sh, S, force) {',
+    '  var last = sh.getLastRow(), lc = Math.min(26, Math.max(1, sh.getLastColumn()));',
+    '  var rows = (last >= 1 ? sh.getRange(1, 1, last, lc).getValues() : []).map(function (r) { return r.map(csEnc_); });',
+    '  var h = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(rows) + \'|\' + sh.getName(), Utilities.Charset.UTF_8));',
+    '  var P = PropertiesService.getDocumentProperties(), kh = \'cs_h_\' + S.code, ka = \'cs_at_\' + S.code, send = force || h !== P.getProperty(kh) || Date.now() - (+P.getProperty(ka) || 0) > 600000;',
+    '  var res = csCall_(\'cs_push\', { p_code: S.code, p_key: S.key, p: send ? { sheetId: ss.getId(), tab: sh.getName(), title: ss.getName(), firstRow: 1, lastCol: lc, rows: rows, hash: h, agent: CS.ver } : { sheetId: ss.getId(), agent: CS.ver } });',
+    '  if (send) { P.setProperty(kh, h); P.setProperty(ka, String(Date.now())); }',
+    '  var pend = (res && res.pending) || {}, done = {}, n = 0;',
+    '  Object.keys(pend).forEach(function (k) {',
+    '    var it = pend[k], obj = it && typeof it === \'object\' && it.v !== undefined, v = obj ? it.v : it, r = +k.split(\'|\')[0], c = +k.split(\'|\')[1], t = r;',
+    '    if (obj && it.sig !== undefined && csSig_(rows[r - 1], c - 1) !== it.sig) {   // الصف تحرّك (إدراج/حذف) ⇒ نبحث عنه ببصمته',
+    '      var hits = []; rows.forEach(function (rw, i) { if (csSig_(rw, c - 1) === it.sig) hits.push(i + 1); }); t = hits.length === 1 ? hits[0] : 0;',
+    '    }',
+    '    if (t) { sh.getRange(t, c).setNumberFormat(\'@\').setValue(v && typeof v === \'object\' && v.$d !== undefined ? new Date(v.$d) : v); n++; }',
+    '    done[k] = it;',
+    '  });',
+    '  if (Object.keys(done).length) { csCall_(\'cs_ack\', { p_code: S.code, p_key: S.key, p_done: done }); if (n) P.deleteProperty(kh); }',
+    '  return { msg: (send ? \'أُرسل \' + rows.length + \' صف\' : \'بلا تغيير\') + (n ? \' · كُتب \' + n + \' رقم قيد\' : \'\'), every: res && res.every };',
     '}'
   ].join('\n');
 }

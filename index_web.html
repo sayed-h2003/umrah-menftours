@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.440  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.441  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9723,7 +9723,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.440";
+var CLIENT_APP_VERSION = "4.441";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -54287,7 +54287,7 @@ function glCsConnSt_(code) {
   }, function () {});
 }
 function glCsConnSetup_(code, btn) {
-  showElegantConfirm({ icon: '🔌', title: 'موصل شيت العهدة', message: 'سيُنشأ مفتاح جديد للموصل (أي موصل سابق لهذا الشيت يتوقف حتى تلصق السكربت الجديد). متابعة؟', buttons: [
+  showElegantConfirm({ icon: '🔌', title: 'موصل شيت العهدة', message: 'سيُنشأ سكربت واحد للملف كله: لو بنفس الملف عهد أخرى (ورقة لكل عهدة) يشملها السكربت معاً، وتُجدَّد مفاتيحها كلها (أي موصل سابق لهذا الملف يتوقف حتى تلصق السكربت الجديد). متابعة؟', buttons: [
     { label: 'نعم، أنشئ', class: 'btn-primary', onClick: function () {
       if (btn) btn.disabled = true;
       glRun('glCsConnectorSetup', [code], function (r) {
@@ -54296,7 +54296,7 @@ function glCsConnSetup_(code, btn) {
         box.innerHTML = '<div class="alert alert-info mt-2 mb-1" style="font-size:12.5px;line-height:1.9;"><b>خطوات التفعيل (مرة واحدة):</b><br>' +
           '1) افتح شيت العهدة ⇐ <b>الإضافات ← Apps Script</b>.<br>2) امسح المحتوى والصق السكربت أدناه بالكامل ثم 💾 حفظ.<br>' +
           '3) اختر الدالة <b>setup</b> من القائمة أعلى المحرر ثم ▶ <b>تشغيل</b> ووافق على الصلاحيات (حساب صاحب الشيت).<br>' +
-          '4) يظهر بالشيت «✅ تم ربط الشيت بالبرنامج». بعدها كل تعديل يصل فوراً، وأرقام القيود تُكتب بالشيت خلال دقيقة.<br>' +
+          '4) يظهر بالشيت «✅ تم ربط N ورقة بالبرنامج»' + ((r.sheets || []).length > 1 ? ' — السكربت يخدم أوراق العهد: ' + glEsc((r.sheets || []).join('، ')) : '') + '. بعدها كل تعديل يصل فوراً، وأرقام القيود تُكتب بالشيت خلال دقيقة.<br>' +
           '<span class="text-danger">🔒 السكربت يحوي مفتاحاً سرياً لهذا الشيت وحده — لا تنشره خارج الشيت.</span></div>' +
           '<textarea id="glCsConnTxt" class="form-control gl-latin" dir="ltr" rows="8" style="font-size:11px;" readonly></textarea>' +
           '<button class="btn btn-sm btn-success mt-1" onclick="var t=document.getElementById(\'glCsConnTxt\');t.select();try{navigator.clipboard.writeText(t.value);}catch(e){document.execCommand(\'copy\');}showToast(\'📋 نُسخ السكربت\')">📋 نسخ السكربت</button>';
