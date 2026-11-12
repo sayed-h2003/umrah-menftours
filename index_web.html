@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.446  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.447  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7831,23 +7831,30 @@ var LF_ = (function () {
      ومهلتها لا تُحتسب بعدّاد الإخفاق العام — كانت 4 مهلات للخزينة/القيود/الأرصدة تعطّل كل قراءات Postgres دقيقتين
      (فترتدّ بوتستراب التأشيرات والإقلاع وحفظ المجموعة لـApps Script). الآن تبريد لكل دالة على حدة بعد مهلتين متتاليتين. */
   var SLOW_RX_ = { glTreasury: 1, glListEntries: 1, glPartyBalances: 1, glStatementHb: 1, glStatement: 1, glBankPending: 1, getAllMovementsAuth: 1, getUnifiedStatement: 1, glAccountStatement: 1, glTrialBalance: 1 };
+  /* 🚦 (V4.447) حدّ تزامن لنداءات Postgres (6): قاعدة الخطة المجانية تتشبّع عند ~10 نداءات معاً بالإقلاع فتنتهي مهلتها (15 ث) وترتد لـApps Script (أبطأ وتزيد الحمل)؛
+     الطابور يبدأ عدّ المهلة لحظة الإرسال الفعلي لا الانتظار، والكتابات تتقدّم على القراءات */
+  var LIM_ = { n: 0, q: [], max: 6 };
+  function LIMQ_(run, front) {
+    var item = function () { LIM_.n++; var d = false; run(function () { if (d) return; d = true; LIM_.n--; var nx = LIM_.q.shift(); if (nx) nx(); }); };
+    if (LIM_.n < LIM_.max) item(); else if (front) LIM_.q.unshift(item); else LIM_.q.push(item);
+  }
   function glRpc(rpc, body, cb, fn, need) {
     if (!glRpcReady(need) || typeof fetch !== 'function') return false;
     SP.fnOffAt = SP.fnOffAt || {}; SP.fnF = SP.fnF || {};
     if (fn && SP.fnOffAt[fn]) { if (now() - SP.fnOffAt[fn] < 120000) return false; delete SP.fnOffAt[fn]; SP.fnF[fn] = 0; }
     var KF = need ? 'stFails' : 'glFails', KO = need ? 'stOff' : 'glOff';
     var isW = (rpc === 'rw_call'), slow = !!(fn && SLOW_RX_[fn]);   /* (V4.379) كتابة: بلا طلب مزدوج (hedge) · مهلة أطول · فشلها لا يعطّل القراءات */
-    var c = SP.cfg, t0 = now(), done = false, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var c = SP.cfg, t0 = now(), done = false, rel = null, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var fin = function (res, why) {
-      if (done) return; done = true; clearTimeout(to);
+      if (done) return; done = true; clearTimeout(to); if (rel) { var rl0 = rel; rel = null; rl0(); }
       if (res) { SP[KF] = 0; if (fn) SP.fnF[fn] = 0; try { console.info('⚡ supabase', fn || rpc, (now() - t0) + 'ms'); } catch (e0) {} }
       else { try { console.info('↩︎ apps-script', fn || rpc, why || ''); } catch (e1) {} }
       try { var sl = (window.__SRC = window.__SRC || []); sl.push([fn || rpc, res ? 'pg' : 'as', now() - t0, why || '', now()]); if (sl.length > 600) sl.shift(); } catch (eS) {}   // (V4.410) لوحة «مصدر البيانات»
       try { cb(res, why); } catch (e2) { console.error('LF glRpc ' + (fn || rpc), e2); }
     };
     var soft = function (m) { fin(null, m ? 'soft: ' + String(m).slice(0, 400) : 'soft'); };   /* (V4.415) سبب الرجوع يظهر بلوحة «مصدر البيانات» */
-    var to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout');
-      if (!isW && fn) { SP.fnF[fn] = (SP.fnF[fn] || 0) + 1; if (SP.fnF[fn] >= 2) SP.fnOffAt[fn] = now(); } }, isW ? 25000 : (slow ? 24000 : 15000));   // (V4.442) 15 ث: الارتداد لـ Apps Script أبطأ أصلاً (20–30 ث)
+    var to = null, startT = function () { t0 = now(); to = setTimeout(function () { try { if (ctl) ctl.abort(); } catch (e) {} fin(null, 'timeout');
+      if (!isW && fn) { SP.fnF[fn] = (SP.fnF[fn] || 0) + 1; if (SP.fnF[fn] >= 2) SP.fnOffAt[fn] = now(); } }, isW ? 25000 : (slow ? 24000 : 15000)); };   // (V4.442) 15 ث: الارتداد لـ Apps Script أبطأ أصلاً (20–30 ث)
     try {
       // (V4.376) اتصال أول بطيء بـSupabase (شوهد ≈6 ث للاتصال الأولي) ⇒ طلب ثانٍ مطابق بعد 1.5 ث والأسبق يفوز (قراءات فقط ⇒ آمن) — يحجب الانتظار حتى مهلة 6 ث
       var hedged = false, go = function () {
@@ -7869,7 +7876,7 @@ var LF_ = (function () {
             fin(null, 'http ' + r.status + em);
           });
       };
-      go().then(handle, function () { if (!hedged) { if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } fin(null, 'net'); } });
+      LIMQ_(function (release) { rel = release; startT(); go().then(handle, function () { if (!hedged) { if (!isW) { SP[KF] = (SP[KF] || 0) + 1; if (SP[KF] >= 4) SP[KO] = true; } fin(null, 'net'); } }); }, isW);
     } catch (e) { fin(null, 'ex'); }
     return true;
   }
@@ -8414,7 +8421,7 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     var ep0 = S.epoch;
     var go = function () {
       var mine = null; if (sk) { mine = S.infl[sk] = []; S.inflT[sk] = now(); }
-      var r = STRPC[fn] ? stRunner(getPrev, fn) : getPrev();   // ⚡ (المرحلة 4) قراءة من Postgres إن كانت مجموعتها حيّة، وإلا Apps Script
+      var r = (STRPC[fn] || GAS_RX_.test(fn)) ? stRunner(getPrev, fn) : getPrev();   // (V4.447) دوال الحسابات العامة تمر بـgas (Edge) قبل Apps Script   // ⚡ (المرحلة 4) قراءة من Postgres إن كانت مجموعتها حيّة، وإلا Apps Script
       r = r.withSuccessHandler(function (res, uo) {
         var f = mine; if (sk && S.infl[sk] === mine) delete S.infl[sk];
         if (k && cacheable(res) && ep0 === S.epoch) { var cs = csig(res), old = S.mem[k]; putEntry({ k: k, fn: fn, d: clone(res), h: old && old.cs === cs ? old.h : '', cs: cs, g: READ[fn], dv: old && old.cs === cs ? old.dv : null, sAt: now(), vAt: old && old.cs === cs ? old.vAt : 0 }); }
@@ -9849,7 +9856,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.446";
+var CLIENT_APP_VERSION = "4.447";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
