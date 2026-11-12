@@ -11,6 +11,51 @@
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
+/* 🎥 (V4.445) مسجّل الجلسة: Console + الشبكة + أخطاء الصفحة + المهام الطويلة + زمن التحميل — يعرضه وينسخه/ينزّله «لوحة الأداء والمصدر» (شارة الإصدار).
+   خصوصية: لا تُسجَّل الترويسات ولا الرموز (apikey/Authorization/token) ولا أجسام الطلبات — فقط اسم الدالة p_fn ونص الخطأ عند الإخفاق. */
+(function () {
+  var L = window.__LOG = { t0: Date.now(), con: [], net: [], err: [], lt: { n: 0, ms: 0, max: 0, top: [] } };
+  var cap = function (a, x, n) { a.push(x); if (a.length > n) a.shift(); };
+  var str = function (v) { try { if (v instanceof Error) return (v.message || String(v)) + (v.stack ? ' @' + String(v.stack).split('\n').slice(1, 3).join(' ').replace(/\s+/g, ' ') : ''); if (typeof v === 'object') return JSON.stringify(v); return String(v); } catch (e) { return String(v); } };
+  var san = function (u) { u = String(u || ''); return u.replace(/[?#].*$/, '').replace(/^https?:\/\/[^/]*supabase\.co/, 'supa').replace(/^https?:\/\/[^/]*google[^/]*\.com/, 'g').slice(0, 160); };
+  ['error', 'warn', 'info', 'log'].forEach(function (lv) {
+    var o = console[lv]; if (typeof o !== 'function') return;
+    console[lv] = function () {
+      try { var t = Array.prototype.map.call(arguments, str).join(' ').replace(/(eyJ[\w-]{10,}\.[\w-]+\.[\w-]+|sbp_\w+)/g, '‹token›').slice(0, 600); cap(L.con, [Date.now(), lv, t], lv === 'error' || lv === 'warn' ? 400 : 400); } catch (e) {}
+      return o.apply(console, arguments);
+    };
+  });
+  window.addEventListener('error', function (e) { try { cap(L.err, [Date.now(), 'error', (e.message || '') + ' @' + san(e.filename) + ':' + (e.lineno || '') + ':' + (e.colno || '')], 200); } catch (x) {} }, true);
+  window.addEventListener('unhandledrejection', function (e) { try { cap(L.err, [Date.now(), 'promise', str(e.reason).slice(0, 600)], 200); } catch (x) {} });
+  // الشبكة: fetch
+  if (window.fetch) {
+    var of = window.fetch;
+    window.fetch = function (input, init) {
+      var t0 = Date.now(), url = san(typeof input === 'string' ? input : (input && input.url)), m = (init && init.method) || 'GET', fn = '';
+      try { var b = init && init.body; if (typeof b === 'string' && b.length < 200000) { var mm = b.match(/"p_fn"\s*:\s*"([A-Za-z0-9_]+)"/); if (mm) fn = mm[1]; } } catch (e) {}
+      var rec = { t: t0, k: 'fetch', m: m, u: url, fn: fn, st: 0, ms: 0, sz: -1, e: '' };
+      var p = of.apply(this, arguments);
+      p.then(function (r) {
+        rec.st = r.status; rec.ms = Date.now() - t0; try { rec.sz = +(r.headers.get('content-length') || -1); } catch (e) {}
+        if (!r.ok) { try { r.clone().text().then(function (t) { rec.e = String(t || '').slice(0, 500); }, function () {}); } catch (e2) {} }
+        cap(L.net, rec, 800);
+      }, function (er) { rec.ms = Date.now() - t0; rec.e = (er && er.name === 'AbortError') ? 'abort/timeout' : str(er).slice(0, 200); cap(L.net, rec, 800); });
+      return p;
+    };
+  }
+  // الشبكة: XHR (نداءات google.script.run الداخلية)
+  try {
+    var XO = XMLHttpRequest.prototype.open, XS = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (m, u) { this.__r = { t: 0, k: 'xhr', m: m, u: san(u), fn: '', st: 0, ms: 0, sz: -1, e: '' }; return XO.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function () {
+      var x = this, r = x.__r; if (r) { r.t = Date.now(); x.addEventListener('loadend', function () { r.ms = Date.now() - r.t; r.st = x.status; try { r.sz = (x.responseText || '').length; } catch (e) {} if (x.status === 0 || x.status >= 400) { try { r.e = String(x.responseText || 'network').slice(0, 300); } catch (e2) { r.e = 'network'; } } cap(L.net, r, 800); }); }
+      return XS.apply(this, arguments);
+    };
+  } catch (e) {}
+  try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { var d = Math.round(e.duration); L.lt.n++; L.lt.ms += d; if (d > L.lt.max) L.lt.max = d; if (d >= 200) cap(L.lt.top, [Math.round(performance.timeOrigin + e.startTime), d], 30); }); }).observe({ type: 'longtask', buffered: true }); } catch (e) {}
+})();
+</script>
+<script>
 /* ⏱️ (V4.360) قياس زمن كل نداء خادم (الذهاب والإياب كما يشعر به المستخدم) — يُجمَّع ويُرسل كل 5 دقائق بنداء واحد
    perfReport. الغلاف لا يغيّر أي سلوك: نفس المعالجات ونفس الوسائط، ويقيس فقط. */
 window.PERF_ = (function () {
@@ -10462,8 +10507,9 @@ function srcPanel_() {
   var h = '<div style="position:fixed;inset:0;z-index:2147483100;background:rgba(15,23,42,.55);display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto;" onclick="if(event.target===this)this.remove()" id="srcPanel">' +
     '<div style="background:#fff;border-radius:12px;max-width:980px;width:100%;padding:14px 16px;direction:rtl;font-size:12.5px;">' +
     '<div class="d-flex align-items-center gap-2 mb-2"><b style="font-size:15px;">🧭 مصدر البيانات — الجلسة الحالية</b><span class="ms-auto"></span>' +
-    '<button class="btn btn-outline-secondary btn-sm" onclick="window.__SRC=[];window.__GSR=[];srcPanel_();srcPanel_()">🧹 تصفير العدّ</button> ' +
+    '<button class="btn btn-outline-secondary btn-sm" onclick="window.__SRC=[];window.__GSR=[];if(window.__LOG){__LOG.con=[];__LOG.net=[];__LOG.err=[];__LOG.lt={n:0,ms:0,max:0,top:[]};__LOG.t0=Date.now();}srcPanel_();srcPanel_()">🧹 تصفير العدّ</button> ' +
     '<button class="btn btn-success btn-sm fw-bold" onclick="srcCopy_(this)">📋 نسخ النتائج</button> ' +
+    '<button class="btn btn-outline-success btn-sm" onclick="logDownload_()" title="كل السجلات كملف JSON">💾 تنزيل السجل الكامل</button> ' +
     '<button class="btn btn-outline-primary btn-sm" onclick="srcPanel_();srcPanel_()">🔄 تحديث</button> ' +
     '<button class="btn btn-outline-dark btn-sm" onclick="document.getElementById(\'srcPanel\').remove()">✕</button></div>' +
     '<div class="mb-2" style="background:#f1f5f9;border-radius:8px;padding:6px 10px;">' +
@@ -10476,6 +10522,7 @@ function srcPanel_() {
     rows.map(function (r) { return '<tr><td dir="ltr" style="text-align:left;">' + glEscSafe_(r.f) + '</td><td>' + r.st + '</td><td>' + r.m.pg + ' · ' + avg(r.m.pgMs, r.m.pg) + '</td><td>' + r.m.as + ' · ' + avg(r.m.asMs, r.m.as) + '</td><td class="text-muted">' + glEscSafe_(r.m.why) + '</td></tr>'; }).join('') +
     '</tbody></table></div>' +
     (notCalled.length ? '<details><summary class="small text-muted">دوال مدعومة بـPostgres لم تُستخدم بعد بهذه الجلسة (' + notCalled.length + ')</summary><div dir="ltr" class="small text-muted" style="text-align:left;">' + notCalled.map(glEscSafe_).join(' · ') + '</div></details>' : '') +
+    _logPanelHtml_() +
     '<div class="small text-muted mt-2">الأحمر 🔴 هو ما يلزم نقله لاحقاً. ما يظهر هنا يخص ما استخدمتَه فقط — افتح الشاشات التي تهمك ثم راجع اللوحة.</div></div></div>';
   // نص النسخ (للإرسال): ترويسة الحالة ثم سطر لكل دالة — الحالة | pg ن·متوسط | as ن·متوسط | سبب
   var L = ['مصدر البيانات — V' + (window.CLIENT_APP_VERSION || '') + ' — ' + new Date().toLocaleString('en-GB'),
@@ -10484,8 +10531,63 @@ function srcPanel_() {
     'الملخص: PG فقط ' + cnt[3] + ' · مختلط ' + cnt[2] + ' · مدعومة وترتد ' + cnt[1] + ' · Apps Script فقط ' + cnt[0], ''];
   rows.forEach(function (r) { L.push([r.st, r.f, 'PG ' + r.m.pg + '×' + avg(r.m.pgMs, r.m.pg), 'AS ' + r.m.as + '×' + avg(r.m.asMs, r.m.as), r.m.why].join(' | ')); });
   if (notCalled.length) L.push('', 'مدعومة ولم تُستخدم: ' + notCalled.join(', '));
+  try { L.push('', _logReport_()); } catch (eLr) {}
   window.__srcRep = L.join('\n');
   var w = document.createElement('div'); w.innerHTML = h; document.body.appendChild(w.firstChild);
+}
+/* 🎥 (V4.445) أقسام مسجّل الجلسة باللوحة + نص التقرير المنسوخ + ملف التنزيل */
+function _logT_(t) { var d = new Date(t); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
+function _logNetKey_(r) { return (r.u || '').replace(/^supa\/rest\/v1\/rpc\//, 'rpc/') + (r.fn ? ':' + r.fn : ''); }
+function _logStats_() {
+  var L = window.__LOG || { con: [], net: [], err: [], lt: { n: 0, ms: 0, max: 0, top: [] }, t0: Date.now() };
+  var bad = L.net.filter(function (r) { return r.st === 0 || r.st >= 400 || r.e; });
+  var slow = L.net.slice().sort(function (a, b) { return b.ms - a.ms; }).slice(0, 25);
+  var G = {}; L.net.forEach(function (r) { var k = _logNetKey_(r), g = G[k] || (G[k] = { k: k, n: 0, ms: 0, max: 0, bad: 0, sz: 0 }); g.n++; g.ms += r.ms; if (r.ms > g.max) g.max = r.ms; if (r.st === 0 || r.st >= 400) g.bad++; if (r.sz > 0) g.sz += r.sz; });
+  var grp = Object.keys(G).map(function (k) { return G[k]; }).sort(function (a, b) { return b.ms - a.ms; });
+  var ce = L.con.filter(function (c) { return c[1] === 'error' || c[1] === 'warn'; });
+  var nav = {}; try { var n = performance.getEntriesByType('navigation')[0]; if (n) nav = { dcl: Math.round(n.domContentLoadedEventEnd), load: Math.round(n.loadEventEnd), ttfb: Math.round(n.responseStart), size: n.transferSize || 0 }; } catch (e) {}
+  var mem = {}; try { if (performance.memory) mem = { used: Math.round(performance.memory.usedJSHeapSize / 1048576), lim: Math.round(performance.memory.jsHeapSizeLimit / 1048576) }; } catch (e) {}
+  var boot = ''; try { boot = (window.__BOOT_STEPS || []).length + ' خطوة' + (window.__BOOT_T0 ? '' : ''); } catch (e) {}
+  return { L: L, bad: bad, slow: slow, grp: grp, ce: ce, nav: nav, mem: mem, boot: boot };
+}
+function _logPanelHtml_() {
+  var S = _logStats_(), E = glEscSafe_, L = S.L, cn = (navigator.connection || {});
+  var tb = function (head, rows) { return '<div style="max-height:34vh;overflow:auto;"><table class="table table-sm table-bordered mb-2" style="font-size:11.5px;"><thead class="table-light"><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + rows.join('') + '</tbody></table></div>'; };
+  var td = function (v, ltr) { return '<td' + (ltr ? ' dir="ltr" style="text-align:left;word-break:break-all;"' : '') + '>' + E(v) + '</td>'; };
+  var sec = function (title, body, open) { return '<details class="mb-2"' + (open ? ' open' : '') + '><summary class="fw-bold" style="cursor:pointer;">' + title + '</summary>' + body + '</details>'; };
+  var h = '<hr class="my-2"><div class="fw-bold mb-1" style="font-size:14px;">🎥 سجل الجلسة (منذ ' + _logT_(L.t0) + ')</div>' +
+    '<div class="mb-2" style="background:#f8fafc;border-radius:8px;padding:6px 10px;">' +
+      '🌐 طلبات الشبكة: <b>' + L.net.length + '</b> · فاشلة: <b class="' + (S.bad.length ? 'text-danger' : '') + '">' + S.bad.length + '</b> · ' +
+      '🧾 أخطاء/تحذيرات Console: <b class="' + (S.ce.length ? 'text-danger' : '') + '">' + S.ce.length + '</b> · ⛔ أخطاء الصفحة: <b class="' + (L.err.length ? 'text-danger' : '') + '">' + L.err.length + '</b> · ' +
+      '🧱 مهام طويلة تجمّد الشاشة: <b>' + L.lt.n + '</b> (' + L.lt.ms + 'ms، أقصاها ' + L.lt.max + 'ms)<br>' +
+      '⏱️ تحميل الصفحة: ' + (S.nav.load ? S.nav.load + 'ms (DOM ' + S.nav.dcl + 'ms · أول بايت ' + S.nav.ttfb + 'ms)' : '—') +
+      (S.mem.used ? ' · 🧠 الذاكرة ' + S.mem.used + '/' + S.mem.lim + 'MB' : '') + ' · 📶 ' + E((cn.effectiveType || '?') + ' ' + (cn.downlink || '?') + 'Mb rtt' + (cn.rtt || '?')) + '</div>';
+  h += sec('❌ الطلبات الفاشلة (' + S.bad.length + ')', S.bad.length ? tb(['الوقت', 'الطلب', 'الحالة', 'الزمن', 'الرد/الخطأ'], S.bad.slice().reverse().map(function (r) { return '<tr>' + td(_logT_(r.t)) + td(_logNetKey_(r), 1) + td(r.st || 'شبكة') + td(r.ms + 'ms') + td(r.e, 1) + '</tr>'; })) : '<div class="text-muted small">لا شيء ✅</div>', S.bad.length > 0);
+  h += sec('🐢 أبطأ الطلبات', tb(['الوقت', 'الطلب', 'الحالة', 'الزمن'], S.slow.map(function (r) { return '<tr>' + td(_logT_(r.t)) + td(_logNetKey_(r), 1) + td(r.st || '—') + td(r.ms + 'ms') + '</tr>'; })));
+  h += sec('📊 ملخص الشبكة حسب الطلب', tb(['الطلب', 'المرات', 'المتوسط', 'الأقصى', 'فاشلة', 'الحجم'], S.grp.slice(0, 60).map(function (g) { return '<tr>' + td(g.k, 1) + td(g.n) + td(Math.round(g.ms / g.n) + 'ms') + td(g.max + 'ms') + td(g.bad || '') + td(g.sz ? Math.round(g.sz / 1024) + 'KB' : '') + '</tr>'; })));
+  h += sec('🧾 Console — الأخطاء والتحذيرات (' + S.ce.length + ')', S.ce.length ? tb(['الوقت', 'النوع', 'الرسالة'], S.ce.slice().reverse().map(function (c) { return '<tr>' + td(_logT_(c[0])) + td(c[1]) + td(c[2], 1) + '</tr>'; })) : '<div class="text-muted small">لا شيء ✅</div>', S.ce.length > 0);
+  h += sec('⛔ أخطاء الصفحة غير الملتقطة (' + L.err.length + ')', L.err.length ? tb(['الوقت', 'النوع', 'الخطأ'], L.err.slice().reverse().map(function (c) { return '<tr>' + td(_logT_(c[0])) + td(c[1]) + td(c[2], 1) + '</tr>'; })) : '<div class="text-muted small">لا شيء ✅</div>', L.err.length > 0);
+  h += sec('📜 Console كامل (آخر ' + L.con.length + ')', tb(['الوقت', 'النوع', 'الرسالة'], L.con.slice(-200).reverse().map(function (c) { return '<tr>' + td(_logT_(c[0])) + td(c[1]) + td(c[2], 1) + '</tr>'; })));
+  return h;
+}
+function _logReport_() {
+  var S = _logStats_(), L = S.L, cn = navigator.connection || {}, o = [];
+  o.push('## SESSION since=' + _logT_(L.t0) + ' net=' + L.net.length + ' bad=' + S.bad.length + ' conErr=' + S.ce.length + ' pageErr=' + L.err.length + ' longtasks=' + L.lt.n + '/' + L.lt.ms + 'ms max=' + L.lt.max +
+    ' load=' + (S.nav.load || '-') + ' dcl=' + (S.nav.dcl || '-') + ' ttfb=' + (S.nav.ttfb || '-') + ' mem=' + (S.mem.used || '-') + '/' + (S.mem.lim || '-') + 'MB net=' + (cn.effectiveType || '') + '/' + (cn.downlink || '') + '/' + (cn.rtt || ''));
+  o.push('## NET-FAILED time|req|status|ms|resp'); S.bad.slice(-60).forEach(function (r) { o.push([_logT_(r.t), _logNetKey_(r), r.st || 'net', r.ms, String(r.e || '').replace(/\s+/g, ' ').slice(0, 300)].join('|')); });
+  o.push('## NET-SLOW time|req|status|ms'); S.slow.slice(0, 15).forEach(function (r) { o.push([_logT_(r.t), _logNetKey_(r), r.st, r.ms].join('|')); });
+  o.push('## NET-BY req|n|avg|max|bad|KB'); S.grp.slice(0, 40).forEach(function (g) { o.push([g.k, g.n, Math.round(g.ms / g.n), g.max, g.bad, Math.round(g.sz / 1024)].join('|')); });
+  o.push('## CONSOLE-ERR time|lvl|msg'); S.ce.slice(-60).forEach(function (c) { o.push([_logT_(c[0]), c[1], c[2].replace(/\s+/g, ' ').slice(0, 300)].join('|')); });
+  o.push('## PAGE-ERR'); L.err.slice(-30).forEach(function (c) { o.push([_logT_(c[0]), c[1], c[2].replace(/\s+/g, ' ').slice(0, 300)].join('|')); });
+  o.push('## LONGTASKS ' + L.lt.top.map(function (x) { return _logT_(x[0]) + '=' + x[1]; }).join(' '));
+  return o.join('\n');
+}
+function logDownload_() {
+  try {
+    var data = { v: window.CLIENT_APP_VERSION, at: new Date().toISOString(), ua: navigator.userAgent, report: window.__srcRep || '', log: window.__LOG || {}, src: window.__SRC || [], gsr: window.__GSR || [], boot: window.__BOOT_STEPS || [] };
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+    a.download = 'session-log-' + (window.CLIENT_APP_VERSION || '') + '-' + Date.now() + '.json'; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  } catch (e) { alert('تعذّر التنزيل: ' + e.message); }
 }
 function srcCopy_(btn) {
   var t = window.__srcRep || '', ok = function () { if (btn) { btn.textContent = '✅ نُسخ — الصقه في المحادثة'; setTimeout(function () { btn.textContent = '📋 نسخ النتائج'; }, 2500); } };
