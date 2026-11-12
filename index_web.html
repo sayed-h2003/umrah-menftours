@@ -1699,7 +1699,7 @@ input[type="date"]:not(:focus):not(:valid) {
     </div>
 
     <!-- ⧉ (V4.385) فتح الشاشة الحالية (حتى كشف الرحلة/النماذج المفتوحة) في تبويب منفصل بالمتصفح -->
-    <button id="openNewTabBtn" class="btn btn-sm btn-outline-light flex-shrink-0 d-none" type="button" onclick="openCurrentInBrowserTab_()" title="فتح هذه الشاشة في تبويب منفصل بالمتصفح" style="padding: 4px 10px;"><i class="fas fa-up-right-from-square"></i></button>
+    <button id="openNewTabBtn" class="btn btn-sm btn-outline-light flex-shrink-0 d-none" type="button" onclick="appTabMenu_(this)" title="فتح شاشة بتبويب داخلي جديد" style="padding: 4px 10px;"><i class="fas fa-up-right-from-square"></i></button>
     <!-- 🔔 (V4.32) جرس التنبيهات — عميل جديد على رحلة / تغيّر تسكين أو عدد أو فندق لعميل له حساب مسجَّل -->
     <div class="dropdown flex-shrink-0 d-none" id="notifBellWrap">
       <button id="notifBellBtn" class="btn btn-sm btn-outline-light position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false" onclick="_notifOpen_()" title="التنبيهات" style="padding: 4px 10px;">
@@ -7758,7 +7758,7 @@ var LF_ = (function () {
      التجديد: supaIssueToken (Apps Script) قبل انتهاء الرمز بساعة والرمز الحالي يبقى صالحاً أثناءه. التخزين: sessionStorage كما كان + نسخة localStorage
      (رمز قصير العمر فقط، يُمسح بالخروج) كي لا تنتظر أول قراءة بعد إعادة فتح المتصفح نداء الرمز. */
   function spSet(r) {
-    SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, webUrl: r.webUrl || '', gl: !!r.glStore, st: { groups: (r.store && r.store.groups) || [], dv: !!(r.store && r.store.dv) } }; SP.st = 2;   // st (المرحلة 4): المجموعات الحيّة بالمخزن + هل data_versions بـ Postgres مرجع النبضة
+    SP.cfg = { url: r.url, anon: r.anon, token: r.token, exp: r.expiresAt, webUrl: r.webUrl || '', gl: !!r.glStore, at: now(), st: { groups: (r.store && r.store.groups) || [], dv: !!(r.store && r.store.dv) } }; SP.st = 2;   // st (المرحلة 4): المجموعات الحيّة بالمخزن + هل data_versions بـ Postgres مرجع النبضة
     // gl: قيود الحسابات في Postgres (GL_STORE=supabase) ⇒ يُسمح بقراءة شاشاتها منه
     try { sessionStorage.setItem(spStoreKey(), JSON.stringify(SP.cfg)); } catch (e2) {}
     try { localStorage.setItem('lf_supa_ls|' + user(), JSON.stringify(SP.cfg)); } catch (e2b) {}
@@ -7773,7 +7773,7 @@ var LF_ = (function () {
     } catch (e) { return false; }
   }
   function spRefreshMaybe() {
-    if (SP.refreshing || !SP.cfg || SP.cfg.exp - now() > 3600000 || now() < (SP.rnext || 0) || !window.authToken) return;
+    if (SP.refreshing || !SP.cfg || (SP.cfg.exp - now() > 3600000 && now() - (SP.cfg.at || 0) < 600000) || now() < (SP.rnext || 0) || !window.authToken) return;   // (V4.445) المجموعات الحيّة تُجدَّد كل 10 دقائق (تفعيل gas/wgl يظهر بلا إعادة دخول)
     SP.refreshing = true; var ep = S.epoch;
     raw().withSuccessHandler(function (r) {
       SP.refreshing = false; if (ep !== S.epoch) return;
@@ -8112,7 +8112,7 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
           if (ep !== S.epoch) return;
           var j = x.j || {}, ms = now() - t0;
           try { var sl = (window.__SRC = window.__SRC || []); sl.push([fn, j.ok ? 'pg' : 'as', ms, j.ok ? '' : 'gas: ' + String(j.error || x.st).slice(0, 200), now()]); } catch (eS) {}
-          if (j.ok) { try { console.info('⚙️ gas', fn, ms + 'ms', 'runs=' + j.runs); } catch (e0) {} ok(j.d); return; }
+          if (j.ok) { try { console.info('⚙️ gas', fn, ms + 'ms', 'runs=' + j.runs); } catch (e0) {} ok(j.d); try { if (window.GL && !GL_RO_RX_.test(fn)) GL._wAt = 0; } catch (e1) {} return; }   // gas يعيد بناء gl_aux بنفس الطلب ⇒ لا حاجة لحجب قراءات Postgres بعد الكتابة
           if (x.st === 404 || x.st === 401 || x.st === 503 || j.unsupported || !x.j) { if (x.st === 404) SP.gasOff = true; fallback(); return; }
           fail(new Error(String(j.error || 'خطأ غير معروف')));
         }, function () { if (ep === S.epoch) fallback(); });
@@ -9098,11 +9098,11 @@ window.openCurrentInBrowserTab_ = function () {
   function sync() {
     try {
       var open = !!document.querySelector('.modal.show, .cc-edit-backdrop, .transient-overlay'), b = document.getElementById('openTabFloat');
-      if (!open || !window._wrapUrl_) { if (b) b.style.display = 'none'; return; }
+      if (!open || typeof window.appTabMenu_ !== 'function') { if (b) b.style.display = 'none'; return; }
       if (!b) {
-        b = document.createElement('button'); b.id = 'openTabFloat'; b.type = 'button'; b.title = 'فتح الشاشة الحالية في تبويب منفصل'; b.textContent = '⧉';
+        b = document.createElement('button'); b.id = 'openTabFloat'; b.type = 'button'; b.title = 'فتح شاشة بتبويب داخلي جديد (تُعلَّق هذه النافذة وتعود عند الرجوع لتبويبها)'; b.textContent = '⧉';
         b.style.cssText = 'position:fixed;bottom:14px;left:14px;z-index:2147483000;width:38px;height:38px;border-radius:50%;border:0;background:#1e3d59;color:#fff;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:pointer;';
-        b.onclick = function () { try { openCurrentInBrowserTab_(); } catch (e) {} };
+        b.onclick = function () { try { appTabMenu_(b); } catch (e) {} };
         document.body.appendChild(b);
       }
       b.style.display = 'block';
@@ -58461,7 +58461,7 @@ function aiSettingsTest_(btn) {
   .app-tab.on { background: #f8fafc; color: #1e3d59; }
   .app-tab.on .x:hover { background: #e2e8f0; }
   #appTabsAdd { background: rgba(255,255,255,.16); color: #fff; border: none; border-radius: 8px; padding: 1px 10px; font-size: 16px; line-height: 1.5; }
-  #appTabsMenu { position: fixed; z-index: 2147483000; background: #fff; border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.28); max-height: 70vh; overflow: auto; min-width: 250px; padding: 6px 0; direction: rtl; }
+  #appTabsMenu { position: fixed; z-index: 2147483600; background: #fff; border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.28); max-height: 70vh; overflow: auto; min-width: 250px; padding: 6px 0; direction: rtl; }
   #appTabsMenu a { display: block; padding: 6px 14px; font-size: 13px; color: #1e293b; text-decoration: none; }
   #appTabsMenu a:hover { background: #eff6ff; }
   #appTabsMenu .sep { border-top: 1px solid #e2e8f0; margin: 4px 0; }
@@ -59252,8 +59252,23 @@ return { validate: validateMovementsLogic_, build: buildAllMovements_ };
   window.appGo_ = go;
   window.appCurKey_ = curKey;
   var canOpen = function (key) { var pg = pageOf(key); return !!document.getElementById('section-' + pg) && (typeof _canOpenScreen_ !== 'function' || _canOpenScreen_(pg)); };
+  // (V4.445) نوافذ bootstrap المفتوحة تُعلَّق عند مغادرة التبويب وتعود عند الرجوع إليه (النافذة تتبع تبويبها)
+  var parkModals = function (t) {
+    try {
+      var ms = Array.prototype.filter.call(document.querySelectorAll('.modal.show'), function (m) { return m.id && m.id !== 'tripPilgrimsModal'; });
+      t.modals = ms.map(function (m) { return m.id; });
+      ms.forEach(function (m) { var i = window.bootstrap && bootstrap.Modal.getInstance(m); if (i) i.hide(); });
+    } catch (e) {}
+  };
+  var unparkModals = function (t) {
+    try {
+      var ids = t && t.modals; if (!ids || !ids.length) return; t.modals = [];
+      setTimeout(function () { ids.forEach(function (id) { var m = document.getElementById(id); if (m && window.bootstrap) bootstrap.Modal.getOrCreateInstance(m).show(); }); }, 350);
+    } catch (e) {}
+  };
   var deactivate = function (t) {
     if (!t) return;
+    parkModals(t);
     if (t.live) { var k = curKey(); if (k) { t.key = k; t.title = titleOf(k); } }
     if (t.live && curPage() === 'gl') glPark(t);
   };
@@ -59277,6 +59292,7 @@ return { validate: validateMovementsLogic_, build: buildAllMovements_ };
         if (p[0] === 'hotels' && p[1] && window.HBX && HBX.page !== p[1] && typeof hbxShow === 'function') hbxShow(p[1]);
       } else { t.live = true; go(t.key); }
       t.live = true;
+      unparkModals(t);
     } finally { T.busy = false; }
     render();
   };
@@ -59309,9 +59325,12 @@ return { validate: validateMovementsLogic_, build: buildAllMovements_ };
     m.innerHTML = (pageOf(ck) === 'gl' ? '<a href="#" data-k="' + E(ck) + '" data-dup="1">⧉ نسخة من الشاشة الحالية بتبويب جديد</a><div class="sep"></div>' : '') +
       '<div class="px-3 pb-1 small text-muted">افتح بتبويب جديد:</div>' +
       opts.map(function (o) { return '<a href="#" data-k="' + E(o.k) + '" style="' + (o.sub ? 'padding-right:28px;font-size:12px;' : '') + '">' + E(o.t) + '</a>'; }).join('');
+    if (window.openKeyInBrowserTab_ && window._wrapUrl_) m.innerHTML += '<div class="sep"></div><a href="#" data-b="1">🌐 الشاشة الحالية بتبويب متصفح منفصل</a>';
     document.body.appendChild(m);
-    var r = btn.getBoundingClientRect(); m.style.top = (r.bottom + 4) + 'px'; m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.left)) + 'px';
-    m.addEventListener('click', function (e) { var a = e.target.closest('a[data-k]'); if (!a) return; e.preventDefault(); m.remove(); open(a.getAttribute('data-k'), { dup: !!a.getAttribute('data-dup') }); });
+    var r = btn.getBoundingClientRect(); m.style.top = Math.max(8, Math.min(window.innerHeight - m.offsetHeight - 8, r.bottom + 4)) + 'px'; m.style.left = Math.max(8, Math.min(window.innerWidth - m.offsetWidth - 8, r.left)) + 'px';
+    m.addEventListener('click', function (e) {
+      var ab = e.target.closest('a[data-b]'); if (ab) { e.preventDefault(); m.remove(); try { openCurrentInBrowserTab_(); } catch (x) {} return; }
+      var a = e.target.closest('a[data-k]'); if (!a) return; e.preventDefault(); m.remove(); open(a.getAttribute('data-k'), { dup: !!a.getAttribute('data-dup') }); });
     setTimeout(function () { document.addEventListener('mousedown', function f(e) { if (!m.contains(e.target) && e.target !== btn) { m.remove(); document.removeEventListener('mousedown', f); } }); }, 0);
   };
   // ——— تغليف التنقل: التنقل داخل التبويب يحدّث مفتاحه؛ شاشة مفتوحة بتبويب آخر ⇒ يُنتقل لتبويبها ———
@@ -59356,8 +59375,7 @@ return { validate: validateMovementsLogic_, build: buildAllMovements_ };
     var a = e.target.closest && e.target.closest('#appSidebar a.nav-link'); if (!a) return;
     var k = sideKey(a); if (!k) return;
     e.preventDefault(); e.stopPropagation();
-    if (window.openKeyInBrowserTab_ && window.openKeyInBrowserTab_(k)) return;   // (V4.385) تبويب منفصل حقيقي بالمتصفح؛ وإلا التبويب الداخلي كما كان
-    open(k);
+    open(k);   // (V4.445) تبويب داخلي (بلا إعادة دخول) — التبويب المنفصل بالمتصفح صار خياراً بقائمة ＋
     try { if (typeof closeAppSidebarOnMobile === 'function') closeAppSidebarOnMobile(); } catch (x) {}
   };
   document.addEventListener('click', function (e) { if (e.ctrlKey || e.metaKey) sideNew(e); }, true);
