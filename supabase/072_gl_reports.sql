@@ -180,3 +180,72 @@ do $$ declare r record; begin
     execute format('grant execute on function %s to service_role', r.sig);
   end loop;
 end $$;
+
+-- ===== (الجزء 2) القيد الواحد · المرفقات · الحسابات المقابلة · قيود ERP المحتفظ بها · سجل صف القيد =====
+create or replace function _glr_ovr(k text) returns jsonb language sql stable set search_path = public as
+$$ with r as (select rn, _glx_str(_rx_c(raw, 1)) t, raw from _rx_rows('gl_auto_override') where _glx_str(_rx_c(raw, 0)) = k and _glx_str(_rx_c(raw, 1)) <> '')
+   select case when not exists (select 1 from r) then null else jsonb_build_object(
+     'acc', coalesce((select jsonb_agg(jsonb_build_object('from', _glx_str(_rx_c(raw, 3)), 'to', _glx_str(_rx_c(raw, 4)), 'cur', _glx_cur(coalesce(nullif(_rx_c(raw, 5), '""'::jsonb), '"EGP"')),
+              'side', case when _glx_str(_rx_c(raw, 6)) = 'C' then 'C' else 'D' end, 'by', _glx_str(_rx_c(raw, 9)), 'at', _glx_str(_rx_c(raw, 10))) order by rn) from r where t = 'acc'), '[]'::jsonb),
+     'hdr', (select coalesce(_rx_json(coalesce(nullif(_glx_str(_rx_c(raw, 8)), ''), '{}')), '{}'::jsonb) from r where t = 'hdr' order by rn desc limit 1),
+     'freeze', (select jsonb_build_object('by', _glx_str(_rx_c(raw, 9)), 'at', _glx_str(_rx_c(raw, 10))) from r where t = 'freeze' order by rn desc limit 1),
+     'vd', (select jsonb_build_object('by', _glx_str(_rx_c(raw, 9)), 'at', _glx_str(_rx_c(raw, 10)), 'note', _glx_str(_rx_c(raw, 8))) from r where t = 'void' order by rn desc limit 1),
+     'keep', (select jsonb_build_object('by', _glx_str(_rx_c(raw, 9)), 'at', _glx_str(_rx_c(raw, 10))) from r where t = 'keep' order by rn desc limit 1)) end $$;
+create or replace function rx2_glgetentry(a jsonb, u text) returns jsonb language plpgsql stable set search_path = public as
+$$ declare id_ text := _glx_trim(coalesce(a ->> 1, '')); e jsonb; sk text; ov jsonb; pk jsonb; pc jsonb; begin
+  perform _glx_need('');
+  e := glx_get_entries_bulk_raw(jsonb_build_array(id_)) -> 'entries' -> 0;
+  if e is null then raise exception 'القيد غير موجود' using errcode = 'P0001'; end if;
+  e := e || jsonb_build_object('due', coalesce(_glx_aux('due') ->> id_, ''), 'ver', gl_entry_ver_raw(id_));
+  sk := coalesce(e ->> 'sourceKey', '');
+  if sk ~ '^(AUTO|CUST):' then ov := _glr_ovr(case when sk like 'CUST:%' then sk || '#' || id_ else sk end); if ov is not null then e := e || jsonb_build_object('ovr', ov); end if; end if;
+  select raw into pk from _rx_rows('gl_pending') where sk like 'AUTO:%' and _glx_str(_rx_c(raw, 0)) = sk order by rn desc limit 1;
+  select raw into pc from _rx_rows('gl_pending') where _glx_str(_rx_c(raw, 0)) = 'CCY:' || id_ order by rn desc limit 1;
+  if pk is not null then e := e || jsonb_build_object('pend', jsonb_build_object('kind', _glx_str(_rx_c(pk, 2)), 'hash', _glx_str(_rx_c(pk, 7)), 'at', _glx_str(_rx_c(pk, 8)),
+    'rejected', _glx_str(_rx_c(pk, 9)) = 'مرفوض', 'newAmt', _glx_str(_rx_c(pk, 13)), 'diff', left(_glx_str(_rx_c(pk, 14)), 1500))); end if;
+  if pc is not null then e := e || jsonb_build_object('ccyPend', jsonb_build_object('amt', _glx_str(_rx_c(pc, 13)), 'note', _glx_str(_rx_c(pc, 14)))); end if;
+  return jsonb_build_object('success', true, 'entry', e); end $$;
+create or replace function rx2_glattachlist(a jsonb, u text) returns jsonb language plpgsql stable set search_path = public as
+$$ begin perform _glx_need(''); return jsonb_build_object('success', true, 'files', coalesce(_glx_aux('att') -> _glx_trim(coalesce(a ->> 1, '')), '[]'::jsonb)); end $$;
+create or replace function rx2_acccounteraccounts(a jsonb, u text) returns jsonb language plpgsql stable set search_path = public as
+$$ begin
+  if not app_has('accounts.view') then raise exception 'لا تملك صلاحية عرض حسابات العملاء' using errcode = '42501'; end if;
+  return jsonb_build_object('success', true, 'accounts', coalesce((select jsonb_agg(jsonb_build_object('code', v ->> 'code', 'name', v ->> 'name', 'currency', coalesce(v ->> 'currency', ''), 'kind', coalesce(v ->> 'kind', ''))
+      order by coalesce((v ->> '_row')::int, 0), k collate "C")
+    from jsonb_each(_glx_aux('accounts')) q(k, v)
+   where not coalesce((v ->> 'isGroup')::boolean, false) and coalesce(v ->> 'active', '') <> 'false' and coalesce(v ->> 'kind', '') not in ('fx', 'trip', 'hbrev')), '[]'::jsonb)); end $$;
+create or replace function rx2_glhbkeeplist(a jsonb, u text) returns jsonb language plpgsql stable set search_path = public as
+$$ begin
+  perform _glx_need('hb');
+  return jsonb_build_object('success', true, 'rows', coalesce((select jsonb_agg(jsonb_build_object('key', _glx_str(_rx_c(k.raw, 0)), 'erp', _glx_str(_rx_c(k.raw, 1)),
+      'erpDesc', case when e.raw is null then '(قيد الـ ERP غير موجود)' else _glx_str(e.raw -> 4) end, 'erpDate', case when e.raw is null then '' else _glx_date(e.raw -> 2) end,
+      'hbDesc', _glx_str(_rx_c(k.raw, 2)), 'by', _glx_str(_rx_c(k.raw, 3)), 'at', _glx_str(_rx_c(k.raw, 4))) order by k.rn desc)
+    from _rx_rows('gl_hb_keep_erp') k left join gl_entries e on e.entry_id = _glx_str(_rx_c(k.raw, 1)) where _glx_str(_rx_c(k.raw, 0)) <> ''), '[]'::jsonb)); end $$;
+create or replace function rx2_glrowhistory(a jsonb, u text) returns jsonb language plpgsql stable set search_path = public as
+$$ declare id_ text := _glx_trim(coalesce(a ->> 1, '')); er jsonb; sk text; v_src text; sid text; lbl text; keys jsonb; rn_ text; ct jsonb; rows_ jsonb; p text[];
+  lbls jsonb := '{"CP":"دفعة العميل","CI":"بنود العميل بالرحلة","TRIP":"بنود العميل بالرحلة","AP":"دفعة الوكيل","AI":"بند حساب الوكيل","VZ":"مجموعة التأشيرات","MF":"ملف المراجعة","RF":"إيصال رسوم الغرفة","TR":"تشغيلة النقل","HB":"حجز الفنادق","HBP":"دفعة الحجوزات","OPEN":"الأرصدة الافتتاحية","CAT":"اتفاقية الإعاشة"}'; begin
+  perform _glx_need('');
+  select raw into er from gl_entries where entry_id = id_;
+  if er is null then raise exception 'القيد غير موجود' using errcode = 'P0001'; end if;
+  sk := _glx_str(er -> 6); keys := jsonb_build_object('GL:' || id_, 'القيد ' || id_);
+  p := regexp_match(sk, '^AUTO:([A-Z]+):(.*)$');
+  if p is not null then
+    v_src := p[1]; sid := regexp_replace(p[2], '#\d+$', ''); lbl := coalesce(lbls ->> v_src, 'المصدر');
+    if v_src in ('AP', 'AI', 'VZ', 'MF') then keys := keys || jsonb_build_object(v_src || ':' || sid, lbl);
+    elsif v_src in ('TR', 'RF') then keys := keys || jsonb_build_object(sid, lbl); rn_ := (regexp_match(_glx_str(er -> 4), 'إيصال\s+(\S+)'))[1]; if rn_ is not null and rn_ <> '—' then keys := keys || jsonb_build_object(rn_, lbl); end if;
+    elsif v_src in ('TRIP', 'CI') then ct := jsonb_build_object('client', split_part(sid, '|', 1), 'trip', coalesce(nullif(split_part(sid, '|', 2), ''), 'عام'), 'rx', '', 'lbl', lbl);
+    elsif v_src = 'CP' then select jsonb_build_object('client', _rx_trim(_rx_s(_rx_c(raw, 1))), 'trip', coalesce(nullif(_rx_trim(_rx_s(_rx_c(raw, 2))), ''), 'عام'), 'rx', 'دفعة|تحويل', 'lbl', 'دفعات العميل بالرحلة')
+                            into ct from _rx_rows('acc_payments') where _rx_s(_rx_c(raw, 0)) = sid order by rn limit 1; end if;
+  end if;
+  select coalesce(jsonb_agg(jsonb_build_object('timestamp', coalesce(ts_str, ''), 'username', coalesce(nullif(username, ''), '-'), 'action', coalesce(nullif(action, ''), '-'),
+      'recordId', coalesce(keys ->> record_id, ct ->> 'lbl'), 'field', coalesce(nullif(field, ''), '-'), 'oldValue', coalesce(nullif(old_value, ''), '-'), 'newValue', coalesce(nullif(new_value, ''), '-')) order by t_ms desc, rn desc), '[]'::jsonb)
+    into rows_ from audit_log
+   where src in ('main', 'pg') and (keys ? record_id or (ct is not null and record_id = ct ->> 'client' and field = ct ->> 'trip' and (ct ->> 'rx' = '' or action ~ (ct ->> 'rx'))));
+  return jsonb_build_object('success', true, 'rows', rows_, 'source', case when p is null then '' else coalesce(lbls ->> v_src, v_src) end, 'auto', p is not null); end $$;
+do $$ declare r record; begin
+  for r in select p.oid::regprocedure::text sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname in ('_glr_ovr','rx2_glgetentry','rx2_glattachlist','rx2_acccounteraccounts','rx2_glhbkeeplist','rx2_glrowhistory') loop
+    execute format('revoke all on function %s from public, anon, authenticated', r.sig);
+    execute format('grant execute on function %s to service_role', r.sig);
+  end loop;
+end $$;

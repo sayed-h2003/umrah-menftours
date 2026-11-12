@@ -8032,6 +8032,7 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     /* (V4.443) 066 — دوال ظهرت بالاستخدام اليومي: تعليم تنبيه مقروء · تسعير بنود العميل (قراءة/حفظ) · العملاء ذوو التنبيهات */
     markNotificationRead: { need: ['misc', 'wbk'], rpc: 'rw_call' },
     getClientPricing: { need: ['acc'], rpc: 'rx_call2' }, saveClientPricing: { need: ['acc', 'wbk'], rpc: 'rw_call' },
+    accCounterAccounts: { need: ['acc'], rpc: 'rx_call2' },   /* (V4.445) 072 */
     getClientsWithAlerts: { need: ['acc', 'core'], rpc: 'rx_call2' },   /* (V4.443) 065: كل الكتابات (Postgres وApps Script) تظهر بالسجل فوراً ⇒ أُلغيت إعادة التحقق من Apps Script بعد كل حفظ */   /* (V4.385) كان يتجاوز Supabase 90 ث بعد أي حفظ (⇒ 6–9 ث كل فتح)؛ الآن يعرض من Postgres فوراً ثم يصحّح من Apps Script بالخلفية */
     saveUiPref: { need: ['misc'], rpc: 'app_save_ui_pref', body: function (a) { return { p_screen: a[1], p_prefs: a[2] === undefined ? null : a[2] }; }, out: function () { return { success: true }; } },
     getAppBootstrap: { need: ['cfg', 'core', 'bookings', 'acc', 'misc', '@dv'], rpc: 'app_boot', body: function () { return {}; }, out: function (r) { return { success: true, parts: r.parts || {}, serverMs: r.serverMs }; } },
@@ -50737,6 +50738,11 @@ var GL_SUPA_ = {
 ['glBalanceSheet', 'glIncomeStatement', 'glProfitability', 'glCashFlow', 'glAging', 'glListBatches', 'glStmtLog', 'glEntryHistory', 'glOpeningInfo', 'glFindDupEntryIds', 'glFindOrphanEntries'].forEach(function (f) {
   GL_SUPA_[f] = { rpc: 'rx_call2', aux: /^gl(CashFlow|Aging|OpeningInfo|FindOrphanEntries)$/.test(f) ? 1 : 0, body: function (a) { return { p_fn: f, p_args: [null].concat(a || []) }; }, out: function (r) { return r && r.d; } };
 });
+['glGetEntry', 'glRowHistory', 'glAttachList', 'glHbKeepList'].forEach(function (f) {
+  GL_SUPA_[f] = { rpc: 'rx_call2', aux: 1, body: function (a) { return { p_fn: f, p_args: [null].concat(a || []) }; }, out: function (r) { return r && r.d; } };
+});
+/* بصمة إصدار القيد (ver) من Postgres تطابق مسار الحفظ بـ Postgres فقط ⇒ glGetEntry من Postgres حين تكون كتابة القيود به (wgl) */
+GL_SUPA_.glGetEntry.when = function () { try { return (LF_.srcInfo().groups || []).indexOf('wgl') >= 0; } catch (e) { return false; } };
 /* ✍️ (V4.425) كتابة القيود من Postgres (051_gl_write_path.sql) — حفظ/ترحيل/إلغاء/حذف قيد. الخادم يعلن المجموعة 'wgl' بعد glWriteOn().
    أخطاء العمل (فترة مقفلة/صلاحية/عدم اتزان…) تُعرض كما هي من Postgres؛ الحالات المرفوضة صراحةً 0A000 (قيود AUTO/CUST · due · اعتماد معلَّق · مسودة SCR) فقط هي التي تُنفَّذ بـApps Script حتى يُنقل محرك القيود التلقائية.
    لا إعادة محاولة بـApps Script عند انقطاع/مهلة (قد يكون الحفظ تمّ) — تُعرض رسالة تطلب مراجعة القيد. لا تُحجب القراءات بعدها (لا تغيّر gl_aux). */
