@@ -50733,6 +50733,10 @@ var GL_SUPA_ = {
   glGetEntriesBulk: { rpc: 'glx_get_entries_bulk', aux: 1, body: function (a) { return { ids: a[0] || [] }; } },
   glPendingList: { rpc: 'glx_pending_list', aux: 1, body: function () { return {}; } }
 };
+/* 📊 (V4.445) 072_gl_reports.sql — التقارير المالية وشاشات القراءة عبر rx_call2 (الرد d بنفس شكل Apps Script) */
+['glBalanceSheet', 'glIncomeStatement', 'glProfitability', 'glCashFlow', 'glAging', 'glListBatches', 'glStmtLog', 'glEntryHistory', 'glOpeningInfo', 'glFindDupEntryIds', 'glFindOrphanEntries'].forEach(function (f) {
+  GL_SUPA_[f] = { rpc: 'rx_call2', aux: /^gl(CashFlow|Aging|OpeningInfo|FindOrphanEntries)$/.test(f) ? 1 : 0, body: function (a) { return { p_fn: f, p_args: [null].concat(a || []) }; }, out: function (r) { return r && r.d; } };
+});
 /* ✍️ (V4.425) كتابة القيود من Postgres (051_gl_write_path.sql) — حفظ/ترحيل/إلغاء/حذف قيد. الخادم يعلن المجموعة 'wgl' بعد glWriteOn().
    أخطاء العمل (فترة مقفلة/صلاحية/عدم اتزان…) تُعرض كما هي من Postgres؛ الحالات المرفوضة صراحةً 0A000 (قيود AUTO/CUST · due · اعتماد معلَّق · مسودة SCR) فقط هي التي تُنفَّذ بـApps Script حتى يُنقل محرك القيود التلقائية.
    لا إعادة محاولة بـApps Script عند انقطاع/مهلة (قد يكون الحفظ تمّ) — تُعرض رسالة تطلب مراجعة القيد. لا تُحجب القراءات بعدها (لا تغيّر gl_aux). */
@@ -50779,7 +50783,7 @@ function glRunApps_(fn, args, ok, fail) {
   var sx = ro && GL_SUPA_[fn], a = args || [];
   try {
     if (sx && typeof LF_ !== 'undefined' && LF_.glRpc && (!sx.when || sx.when(a)) && !(sx.aux && Date.now() - (GL._wAt || 0) < GL_AUX_GATE_)) {
-      if (LF_.glRpc(sx.rpc, sx.body(a), function (res) { if (res) ok(res); else viaApps(); }, fn)) return;
+      if (LF_.glRpc(sx.rpc, sx.body(a), function (res) { var v = res && sx.out ? sx.out(res) : res; if (v) ok(v); else viaApps(); }, fn)) return;
     }
   } catch (eSx) { console.error('GL supa router', eSx); }
   viaApps();
