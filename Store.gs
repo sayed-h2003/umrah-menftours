@@ -27,7 +27,9 @@ var ST_GROUPS_ = {
   misc: ['app_users', 'user_ui_prefs', 'notifications', 'housing_notes', 'merged_housing', 'catering_contracts'],
   // جداول ملف الحسابات الجانبية التي لا يقرؤها أي برنامج آخر مباشرة من الشيت. (gl_accounts/gl_settings خارجها: HB_GlLink.gs:64,68 و HB_Code.gs:4685 يقرؤونها من الشيت)
   glaux: ['gl_batches', 'gl_pending', 'gl_pay_direct', 'gl_auto_log', 'gl_statements', 'gl_attachments', 'gl_fx_daily', 'gl_hb_map', 'gl_hb_pay', 'gl_hb_trip', 'gl_hb_mirror', 'gl_hb_keep_erp',
-          'gl_recon_links', 'gl_auto_override', 'gl_bank_due', 'gl_maker_checker', 'gl_charters', 'gl_deleted']
+          'gl_recon_links', 'gl_auto_override', 'gl_bank_due', 'gl_maker_checker', 'gl_charters', 'gl_deleted'],
+  // (V4.445) دليل الحسابات وإعدادات الحسابات: برنامج الحجوزات صار يقرؤهما عبر _glSS_ (HB_GlLink.glLinkSS_) ⇒ آمنان بطبقة التخزين
+  glcore: ['gl_accounts', 'gl_settings']
 };
 var ST_NEVER_ = { gl_entries: 1, gl_lines: 1 };   // لهما طبقتهما الخاصة (GlStore.gs / GL_STORE)
 // أعمدة المبالغ لمقارنة المجاميع (مثل mgVerify): [جدول منمّط ← عمود]
@@ -773,6 +775,10 @@ function storeCutoverBookingsApply() { return storeCutover('bookings', true); }
 function storeCutoverVisaApply() { return storeCutover('visa', true); }
 function storeCutoverMiscApply() { return storeCutover('misc', true); }
 function storeCutoverGlAuxApply() { return storeCutover('glaux', true); }
+function storeCompareGlCore() { return storeCompare('glcore'); }
+function storeCutoverGlCore() { return storeCutover('glcore', false); }
+function storeCutoverGlCoreApply() { return storeCutover('glcore', true); }
+function storeRollbackGlCore() { return storeRollback('glcore'); }
 function storeRollbackMinistry() { return storeRollback('ministry'); }
 function storeRollbackCore() { return storeRollback('core'); }
 function storeRollbackAcc() { return storeRollback('acc'); }
@@ -933,6 +939,9 @@ function _glOutboxDrain_(maxMs) {
         else if (/^bot:/.test(x.kind)) {
           var info = Object.assign({}, p); if (Array.isArray(info.parties)) info.parties = info.parties.join(' ← ');
           _glBotQ_(String(x.kind).slice(4), info);
+        }
+        else if (x.kind === 'gl:bump') {   // (V4.445) دليل الحسابات/الإعدادات كُتبت من Postgres ⇒ إبطال كاش الحسابات والإعدادات فوراً
+          try { _GL_ACC_MEMO_ = null; if (typeof _glSetDrop_ === 'function') _glSetDrop_(); if (typeof _glBump_ === 'function') _glBump_(); CacheService.getScriptCache().removeAll(['gll_accs', 'gll_accs2', 'gll_ents']); } catch (eB) {}
         }
         else if (x.kind === 'gl:dirty') { try { CacheService.getScriptCache().put('gl_dirty', String(Date.now()), 21600); } catch (e1) {} }
         else if (x.kind === 'dv_bump') { try { if (typeof _dvBump_ === 'function') _dvBump_((p.groups || []).filter(function (g) { return LF_GROUPS_.indexOf(g) >= 0; })); } catch (e2) {} }

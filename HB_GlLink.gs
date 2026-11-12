@@ -13,7 +13,12 @@ var GLL_META_HEADERS_ = ['معرّف الدفعة', 'الحساب النقدي',
 var GLL_CUR_ = { SAR: 1, EGP: 1, USD: 1 };
 
 function glLinkId_() { var p = PropertiesService.getScriptProperties(); return (p.getProperty('GL_LINK_SS_ID') || p.getProperty('GL_SPREADSHEET_ID') || '').trim(); }   // (H4) نفس ملف الحسابات العامة للمشروع
-function glLinkSS_() { var id = glLinkId_(); return id ? SpreadsheetApp.openById(id) : null; }
+function glLinkSS_() {
+  var id = glLinkId_(); if (!id) return null;
+  // (V4.445) داخل مشروع العمرة ونفس ملف الحسابات ⇒ عبر طبقة التخزين (_glSS_) فتُقرأ GL_Accounts/GL_Settings من Postgres حين تكون مفعَّلة (مجموعة glcore)
+  try { if (typeof _glSS_ === 'function' && typeof _glSSId_ === 'function' && _glSSId_() === id) return _glSS_(); } catch (e) {}
+  return SpreadsheetApp.openById(id);
+}
 
 function glLinkMetaSheet_() {
   var ss = getSS_(), sh = ss.getSheetByName(GLL_META_SHEET_);
@@ -83,8 +88,10 @@ function glLinkEntryIndex_() {
   var cache = CacheService.getScriptCache(), hit = cache.get('gll_ents');
   if (hit) { try { return JSON.parse(hit); } catch (e) {} }
   var ss = glLinkSS_(), out = {}; if (!ss) return out;
-  var sh = ss.getSheetByName('GL_Entries');
-  if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues().forEach(function (r) {
+  // (V4.445) القيود تعيش بـ Supabase عند GL_STORE=supabase ⇒ تُقرأ عبر _glRows_ (كان يقرأ الشيت القديم الراكد)
+  var rows = null; try { if (typeof _glRows_ === 'function' && typeof _glSSId_ === 'function' && _glSSId_() === glLinkId_()) rows = _glRows_('entries'); } catch (eR) { rows = null; }
+  var sh = rows ? null : ss.getSheetByName('GL_Entries');
+  (rows || (sh && sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues() : [])).forEach(function (r) {
     var k = String(r[6] || ''); if (k.indexOf('AUTO:HB') !== 0 || String(r[5]) !== 'مرحّل') return;
     out[k.slice(5)] = String(r[0]);   // بدون البادئة AUTO: لتصغير الكاش
   });

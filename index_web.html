@@ -50747,6 +50747,8 @@ GL_SUPA_.glGetEntry.when = function () { try { return (LF_.srcInfo().groups || [
    أخطاء العمل (فترة مقفلة/صلاحية/عدم اتزان…) تُعرض كما هي من Postgres؛ الحالات المرفوضة صراحةً 0A000 (قيود AUTO/CUST · due · اعتماد معلَّق · مسودة SCR) فقط هي التي تُنفَّذ بـApps Script حتى يُنقل محرك القيود التلقائية.
    لا إعادة محاولة بـApps Script عند انقطاع/مهلة (قد يكون الحفظ تمّ) — تُعرض رسالة تطلب مراجعة القيد. لا تُحجب القراءات بعدها (لا تغيّر gl_aux). */
 var GL_PGW_ = { glSaveEntry: 1, glPostEntry: 1, glVoidEntry: 1, glDeleteEntry: 1, glSaveEntriesBulk: 1, glVoidEntriesBulk: 1, glDeleteEntriesBulk: 1 };
+/* (V4.445) 073_gl_coa.sql — دليل الحسابات والإعدادات (قبل تفعيل glcore ترفض بـ0A000 ⇒ Apps Script) */
+['glSaveAccount', 'glDeleteAccount', 'glSaveSettings', 'glSetLockDate', 'glBalUserCustSet', 'glCacheReset'].forEach(function (f) { GL_PGW_[f] = 1; });
 function glRun(fn, args, ok, fail) {
   if (GL_PGW_[fn] && typeof LF_ !== 'undefined' && LF_.glRpc && !(function () { try { return localStorage.getItem('lf_supa_off') === '1'; } catch (e) { return false; } })()) {
     var errOut = function (m) { if (fail) fail(new Error(m)); else _showPopup(m, 'error'); };
