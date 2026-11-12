@@ -13,6 +13,63 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
 <meta name="theme-color" content="#7d5a2c">
 <script>
+/* ⚙️ (V4.453) دوال برنامج الحجوزات عبر دالة gas (Supabase Edge) بدل Apps Script — كل google.script.run تمر هنا:
+   برمز Supabase (من الدخول/hbSupaToken) ⇒ gas؛ غير مدعوم (ملف خارجي/تليجرام/PDF…) أو 401/503/انقطاع ⇒ Apps Script كالمعتاد.
+   ما رُفض كغير مدعوم يُتخطى 10 دقائق. إيقاف كامل: خاصية HB_GAS_OFF=1 أو localStorage hb_gas_off=1 */
+var HB_SUPA_ = null, HB_GAS_SKIP_ = {}, HB_RAW_GSR_ = null;
+var HB_GAS_DENY_ = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken|hbGetAppVersion)$|Template$|Telegram|Tg[A-Z]|Pdf|Gemini|Drive|Upload|Email|^lf(Fetch|Poll)$|^perfReport$/i;
+function hbSupaSet_(s) {
+  HB_SUPA_ = s && s.token ? s : null;
+  clearTimeout(hbSupaSet_.t);
+  if (HB_SUPA_ && HB_SUPA_.expiresAt) hbSupaSet_.t = setTimeout(hbSupaRenew_, Math.max(60000, HB_SUPA_.expiresAt - Date.now() - 3600000));
+}
+function hbSupaRenew_() {
+  try { if (!HB_RAW_GSR_ || typeof currentSessionToken === 'undefined' || !currentSessionToken) return;
+    HB_RAW_GSR_.withSuccessHandler(function (r) { if (r && r.ok) hbSupaSet_(r.supa); }).withFailureHandler(function () {}).hbSupaToken(currentSessionToken); } catch (e) {}
+}
+(function () {
+  try {
+    if (typeof google === 'undefined' || !google.script || !google.script.run || typeof Proxy === 'undefined' || !window.fetch) return;
+    var raw = HB_RAW_GSR_ = google.script.run;
+    var off = function () { try { return localStorage.getItem('hb_gas_off') === '1'; } catch (e) { return false; } };
+    var viaRaw = function (k, a, sh, fh, uo, hasUo) {
+      if ((k === 'login' || k === 'hbSsoLogin') && sh) { var s0 = sh; sh = function (r, u) { try { if (r && r.ok) hbSupaSet_(r.supa); } catch (e) {} return s0(r, u); }; }
+      var r = raw; if (sh) r = r.withSuccessHandler(sh); if (fh) r = r.withFailureHandler(fh); if (hasUo) r = r.withUserObject(uo);
+      return r[k].apply(r, a);
+    };
+    var call = function (k, a, sh, fh, uo, hasUo) {
+      var S = HB_SUPA_;
+      if (!S || !S.gas || off() || HB_GAS_DENY_.test(k) || (HB_GAS_SKIP_[k] && HB_GAS_SKIP_[k] > Date.now()) || a.some(function (x) { return x && x.tagName; })) return viaRaw(k, a, sh, fh, uo, hasUo);
+      var t0 = Date.now(), back = function () { viaRaw(k, a, sh, fh, uo, hasUo); };
+      fetch(S.url + '/functions/v1/gas', { method: 'POST', headers: { Authorization: 'Bearer ' + S.token, apikey: S.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ fn: k, args: a, raw: true }) })
+        .then(function (r) { return r.json().then(function (j) { return { st: r.status, j: j }; }, function () { return { st: r.status, j: null }; }); })
+        .then(function (x) {
+          var j = x.j || {};
+          if (j.ok) { try { console.info('⚙️ gas', k, (Date.now() - t0) + 'ms', 'runs=' + j.runs); } catch (e0) {} if (sh) sh(j.d, uo); return; }
+          if (x.st === 401) { HB_SUPA_ = null; hbSupaRenew_(); }
+          if (x.st === 404) S.gas = false;
+          if (j.unsupported) HB_GAS_SKIP_[k] = Date.now() + 600000;
+          if (x.st === 404 || x.st === 401 || x.st === 503 || j.unsupported || !x.j) { try { console.info('↩️ gas→AS', k, String(j.error || x.st).slice(0, 160)); } catch (e1) {} back(); return; }
+          var er = new Error(String(j.error || 'خطأ غير معروف'));
+          if (fh) fh(er, uo); else setTimeout(function () { throw er; });
+        }, back);
+    };
+    var mk = function (sh, fh, uo, hasUo) {
+      return new Proxy({}, { get: function (t, k) {
+        if (k === 'withSuccessHandler') return function (f) { return mk(f, fh, uo, hasUo); };
+        if (k === 'withFailureHandler') return function (f) { return mk(sh, f, uo, hasUo); };
+        if (k === 'withUserObject') return function (o) { return mk(sh, fh, o, true); };
+        if (typeof k !== 'string' || k === 'then') return undefined;
+        return function () { call(k, Array.prototype.slice.call(arguments), sh, fh, uo, hasUo); };
+      } });
+    };
+    var w = mk();
+    try { google.script.run = w; } catch (e2) {}
+    if (google.script.run !== w) { try { Object.defineProperty(google.script, 'run', { value: w, configurable: true, writable: true }); } catch (e3) {} }
+  } catch (e) {}
+})();
+</script>
+<script>
   /* على الموبايل: 100vh تُحسب أحيانًا بناءً على ارتفاع الشاشة الكامل (قبل ظهور شريط العنوان/الأدوات)
      فيصبح أطول من المساحة المرئية فعليًا، فتظهر شاشة الدخول أو النوافذ المنبثقة (مثل اختيار نوع
      المشاركة) وقد "انزاحت" لأسفل مع فراغ أعلاها لأن المتصفح يرسم الصفحة بالحجم الأكبر. نحسب الارتفاع
@@ -3625,6 +3682,7 @@ function applyUserUiPrefs_(prefs) {
 }
 
 function clearStoredToken_() {
+  try { hbSupaSet_(null); } catch (e0) {}
   try { localStorage.removeItem(SESSION_TOKEN_KEY_); } catch (e) {}
   try { sessionStorage.removeItem(SESSION_TOKEN_KEY_); } catch (e) {}
 }
@@ -3767,6 +3825,7 @@ function wireLoginForm_() {
 var appStarted_ = false;
 function onAuthSuccess_(token, user, sessionMinutes) {
   currentSessionToken = token; currentUser = user;
+  setTimeout(function () { try { if (!HB_SUPA_) hbSupaRenew_(); } catch (e) {} }, 1500);   // (V4.453) رمز gas بعد استئناف جلسة محفوظة
   if (typeof HB_EMBED !== 'undefined' && HB_EMBED && typeof hbEmbedReady_ === 'function') setTimeout(hbEmbedReady_, 0);   // (V4.248) إخفاء «جارٍ الفتح…»
   setTimeout(function () { glLinkLoad_(); }, 1500);   // (7.15.0) قائمة الحسابات النقدية من الحسابات العامة (لا تؤخر فتح البرنامج)
   // تُستدعى قبل أي شيء آخر: تكتب تفضيلات الواجهة المحفوظة بالحساب إلى localStorage حتى

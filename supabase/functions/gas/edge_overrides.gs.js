@@ -1,7 +1,7 @@
 /* ⚙️ (V4.445) تعريفات تُلحق بآخر كود Apps Script داخل Edge Function «gas» — آخر تعريف للدالة هو المعتمد.
    الهوية من JWT · كل نداءات Supabase عبر الشريط (__EDGE.req) · جداول طبقة التخزين والقيود من اللقطة · السجل عبر صادر audit. */
-function requireAuth_(token) { var s = __EDGE.session(); if (!s) throw new Error('جلسة غير صالحة أو منتهية - يرجى تسجيل الدخول مرة أخرى'); return s; }
-function validateSession_(token) { return __EDGE.session(); }
+function requireAuth_(token) { var s = __EDGE.session(); if (!s || s.hb) throw new Error('جلسة غير صالحة أو منتهية - يرجى تسجيل الدخول مرة أخرى'); return s; }
+function validateSession_(token) { var s = __EDGE.session(); return s && !s.hb ? s : null; }
 function _supaReq_(method, path, body, prefer) { return __EDGE.req(method, path, body, prefer); }
 function _stReadAll_(t) { return __EDGE.readTable(t); }
 function _stVerFetch_(t) { var v = String(__EDGE.vers([t])[t] || '0'); try { _stTokPut_(t, v); } catch (e) {} return v; }
@@ -59,5 +59,16 @@ SpreadsheetApp = (function (base) {
     return base.openById(id);
   } });
 })(SpreadsheetApp);
+/* ⚙️ (V4.453) جلسة برنامج الحجوزات من رمز Supabase (مطالبة hb) بدل خصائص الجلسات — رمز برنامج العمرة بلا hb ⇒ غير مدعوم (يرتد لـApps Script).
+   رموز برنامج الحجوزات لا تفتح دوال برنامج العمرة (requireAuth_ يرفضها). المستخدم من ورقة «المستخدمون» (طبقة التخزين hb_users) + سقف الدخول الموحّد. */
+function checkSession(token) {
+  var s = __EDGE.session(), h = s && s.hb;
+  if (!h || !h.u) __EDGE.unsup('جلسة برنامج الحجوزات');
+  var sh = ensureUsersSheet_(), i = findUserRow_(sh, h.u);
+  if (i === -1) return { ok: false };
+  var row = sh.getRange(i, 1, 1, 8).getValues()[0];
+  if (row[6] === false) return { ok: false };
+  return safeReturn_({ ok: true, user: capUserBySso_(userRecordFromRow_(row), h.cap || null), sessionMinutes: getSessionDurationMinutes() });
+}
 /* اختبار محلي فقط (tools/hb_conn_test.mjs) — لا يُستدعى من الواجهة (الاسم ينتهي بـ _) */
 function _hbConnTestWrite_() { var sh = openSourceSpreadsheet_().getSheetByName('حجوزات مكة'); sh.getRange(5, 16).setValue('ملغى'); return sh.getRange(5, 16).getValue(); }

@@ -79,10 +79,27 @@ function hbSsoLogin(code) {
     user = capUserBySso_(user, info.cap || 'view');
     writeSessions_(sessions);
     hbLogChange_(user, 'الدخول', user.username, 'دخول موحّد من برنامج العمرة (' + info.u + ')', '', '');
-    return safeReturn_({ ok: true, token: token, user: user, sessionMinutes: minutes });
+    return safeReturn_({ ok: true, token: token, user: user, sessionMinutes: minutes, supa: _hbSupa_(user.username, info.cap || 'view') });
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+/* ⚙️ (V4.453) رمز Supabase لبرنامج الحجوزات: دوال البرنامج تعمل بدالة gas (Edge) بدل Apps Script.
+   الرمز بلا صلاحيات برنامج العمرة (perms فارغة، app_user = hb:<اسم المستخدم>) ويحمل hb:{u, cap} ⇒ تبني منه gas بطاقة المستخدم
+   من ورقة «المستخدمون» (طبقة التخزين) مع نفس سقف الدخول الموحّد. gas: هل فعّل المالك supaGasOn. */
+function _hbSupa_(username, cap) {
+  try {
+    if (typeof _supaTokenFor_ !== 'function') return null;
+    var r = _supaTokenFor_({ username: 'hb:' + username, fullName: username, permissions: [] }, { hb: { u: String(username), cap: cap || '' } });
+    if (!r || !r.enabled) return null;
+    var P = PropertiesService.getScriptProperties();
+    return { url: r.url, anon: r.anon, token: r.token, expiresAt: r.expiresAt, gas: P.getProperty('SUPA_GAS_OK') === '1' && P.getProperty('HB_GAS_OFF') !== '1' };
+  } catch (e) { return null; }
+}
+function hbSupaToken(token) {
+  var user = requireSession_(token), sess = readSessions_()[token] || {};
+  return { ok: true, supa: _hbSupa_(user.username, sess.cap || '') };
 }
 
 /* ---------- نقل الإعدادات من المشروع القديم ---------- */

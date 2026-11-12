@@ -11,7 +11,7 @@ const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Head
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const H = { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
 const SHARED_CACHE = new Map(), SNAP_CACHE = new Map();   // ذاكرة العامل بين الطلبات
-const DENY = /^(do(Get|Post)|onOpen|onEdit|store(Cutover|Rollback)|supa(Sync|Write|Issue)|gl(StoreCutover|ShadowSync)|mg[A-Z]|setup|install|uninstall)/i;
+const DENY = /^(do(Get|Post)|onOpen|onEdit|store(Cutover|Rollback)|supa(Sync|Write|Issue)|gl(StoreCutover|ShadowSync)|mg[A-Z]|setup|install|uninstall)/i, DENY_X = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken)$/;
 
 async function db(fn: string, args: Record<string, unknown>) {
   const r = await fetch(`${URL_}/rest/v1/rpc/${fn}`, { method: 'POST', headers: H, body: JSON.stringify(args || {}) });
@@ -47,7 +47,7 @@ async function verifyJwt(tok: string, secret: string) {
   const r = await fetch(`${URL_}/rest/v1/rpc/gas_whoami`, { method: 'POST', headers: { apikey: Deno.env.get('SUPABASE_ANON_KEY') || KEY, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: '{}' });
   if (!r.ok) return null;
   const w = await r.json().catch(() => null);
-  return w && w.user ? { app_user: w.user, perms: w.perms || [] } : null;
+  return w && w.user ? { app_user: w.user, perms: w.perms || [], hb: w.hb || null } : null;
 }
 
 Deno.serve(async (req) => {
@@ -55,10 +55,10 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ ok: false, error: 'method' }, 405);
   const claims = await verifyJwt(String(req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), Deno.env.get('APP_JWT_SECRET') || '').catch(() => null);
   if (!claims) return json({ ok: false, error: 'جلسة غير صالحة أو منتهية - يرجى تسجيل الدخول مرة أخرى' }, 401);
-  let body: { fn?: string; args?: unknown[] };
+  let body: { fn?: string; args?: unknown[]; raw?: boolean };
   try { body = await req.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
   const fn = String(body.fn || '');
-  if (!/^[A-Za-z][A-Za-z0-9]{2,60}$/.test(fn) || DENY.test(fn)) return json({ ok: false, error: 'دالة غير مسموحة: ' + fn, unsupported: true }, 400);
+  if (!/^[A-Za-z][A-Za-z0-9]{2,60}$/.test(fn) || DENY.test(fn) || DENY_X.test(fn)) return json({ ok: false, error: 'دالة غير مسموحة: ' + fn, unsupported: true }, 400);
   const owner = crypto.randomUUID(), t0 = Date.now();
   // قفل تأجير: تشغيل كاتب واحد في وقت واحد (بديل LockService)
   let got = false;
@@ -69,8 +69,9 @@ Deno.serve(async (req) => {
     const secretKeys = { SUPA_URL: URL_, SUPA_SERVICE_KEY: KEY };
     Object.assign(props, secretKeys);
     const s = new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, snapCache: SNAP_CACHE, tz: props.APP_TZ || 'Africa/Cairo',
-      session: { username: claims.app_user, permissions: (claims.perms || []).join(','), fullName: claims.app_user }, log: (x: string) => console.log(x) });
-    const d = await s.run(fn, [null].concat(Array.isArray(body.args) ? body.args : []));
+      session: { username: claims.app_user, permissions: (claims.perms || []).join(','), fullName: claims.app_user, hb: claims.hb || null }, log: (x: string) => console.log(x) });
+    const A = Array.isArray(body.args) ? body.args : [];   // raw: برنامج الحجوزات يرسل رمز جلسته بنفسه كأول معامل
+    const d = await s.run(fn, body.raw ? A : [null].concat(A));
     // خصائص السكربت التي تغيّرت ⇒ gas_props + صادر kvset لـ Apps Script (ما دام يعمل)
     const w = s.propW as Record<string, string | null>, put: Record<string, string> = {}, del: string[] = [];
     Object.keys(w).forEach((k) => { if (k in secretKeys) return; if (w[k] === null) del.push(k); else put[k] = w[k] as string; });

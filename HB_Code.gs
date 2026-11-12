@@ -349,7 +349,7 @@ function login(username, password) {
     sessions[token] = { username: user.username, expiresAt: Date.now() + minutes * 60000 };
     writeSessions_(sessions);
     hbLogChange_(user, 'الدخول', user.username, 'تسجيل دخول', '', '');
-    return safeReturn_({ ok: true, token: token, user: user, sessionMinutes: minutes });
+    return safeReturn_({ ok: true, token: token, user: user, sessionMinutes: minutes, supa: (typeof _hbSupa_ === 'function' ? _hbSupa_(user.username, '') : null) });
   } catch (e) {
     return { ok: false, error: e.message };
   }

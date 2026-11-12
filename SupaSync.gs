@@ -65,13 +65,13 @@ function supaIssueToken(authToken) { return _supaTokenFor_(requireAuth_(authToke
 function _supaBootCfg_(username, fullName, permissions) {
   try { return _supaTokenFor_({ username: username, fullName: fullName, permissions: permissions }); } catch (e) { return { success: true, enabled: false }; }
 }
-function _supaTokenFor_(s) {
+function _supaTokenFor_(s, extra) {
   if (!_supaOn_() || !_supaP_('SUPA_JWT_SECRET') || !_supaP_('SUPA_ANON_KEY')) return { success: true, enabled: false };
   var perms = []; try { var pv = s.permissions; perms = Array.isArray(pv) ? pv : String(pv || '').split(/[,،;|]/).map(function (x) { return x.trim(); }).filter(Boolean); } catch (e) {}
   perms = _supaExpandPerms_(perms);   // ⚡ (V4.374) نفس تدرّج _sessionHasPerm_ (تعديل ⇒ إضافة+عرض…) كي تطابق فحوص Postgres فحوص الخادم
   var now = Math.floor(Date.now() / 1000), exp = now + 8 * 3600;
   var b64 = function (o) { return Utilities.base64EncodeWebSafe(Utilities.newBlob(typeof o === 'string' ? o : JSON.stringify(o)).getBytes()).replace(/=+$/, ''); };
-  var head = b64({ alg: 'HS256', typ: 'JWT' }), body = b64({ role: 'authenticated', aud: 'authenticated', sub: String(s.username), app_user: String(s.username), name: String(s.fullName || s.username), perms: perms, iat: now, exp: exp });   // name: اسم العرض للمتصلين الآن (app_pulse)
+  var head = b64({ alg: 'HS256', typ: 'JWT' }), body = b64(Object.assign({ role: 'authenticated', aud: 'authenticated', sub: String(s.username), app_user: String(s.username), name: String(s.fullName || s.username), perms: perms, iat: now, exp: exp }, extra || {}));   // name: اسم العرض للمتصلين الآن (app_pulse)
   var sig = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(head + '.' + body, _supaP_('SUPA_JWT_SECRET'))).replace(/=+$/, '');
   var webUrl = ''; try { webUrl = ScriptApp.getService().getUrl() || ''; } catch (eW) {}   // ⚡ (V4.385) رابط التطبيق للطباعة بلا نداء getWebAppUrl
   return { success: true, enabled: true, webUrl: webUrl, url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), token: head + '.' + body + '.' + sig, expiresAt: exp * 1000,
