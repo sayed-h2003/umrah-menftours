@@ -8101,6 +8101,24 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
     return go(d.rpc || 'rx_call', d.body ? d.body(a) : { p_fn: fn, p_args: a });
   }
   // بديل r = google.script.run (المغلَّف) لدالة مدعومة: نفس واجهة withSuccessHandler/withFailureHandler/withUserObject
+  var GAS_RX_ = /^(gl[A-Z]\w*|acc(CounterAccounts|GlPullPayments|PayCounterSet|HbSyncAll)|clientAccountBg|ccAccountsLite|ccQuickAccount|saveGeneralPaymentsBulk|getAgentAccountExtras)$/;
+  function gasCall(fn, args, ok, fail, fallback) {
+    try {
+      spInit(); if (!spReady() || SP.gasOff || !GAS_RX_.test(fn) || ((SP.cfg.st || {}).groups || []).indexOf('gas') < 0 || typeof fetch !== 'function') return false;
+      var t0 = now(), a = (args || []).slice(1), ep = S.epoch;
+      fetch(SP.cfg.url + '/functions/v1/gas', { method: 'POST', headers: { Authorization: 'Bearer ' + SP.cfg.token, apikey: SP.cfg.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ fn: fn, args: a }) })
+        .then(function (r) { return r.json().then(function (j) { return { st: r.status, j: j }; }, function () { return { st: r.status, j: null }; }); })
+        .then(function (x) {
+          if (ep !== S.epoch) return;
+          var j = x.j || {}, ms = now() - t0;
+          try { var sl = (window.__SRC = window.__SRC || []); sl.push([fn, j.ok ? 'pg' : 'as', ms, j.ok ? '' : 'gas: ' + String(j.error || x.st).slice(0, 200), now()]); } catch (eS) {}
+          if (j.ok) { try { console.info('⚙️ gas', fn, ms + 'ms', 'runs=' + j.runs); } catch (e0) {} ok(j.d); return; }
+          if (x.st === 404 || x.st === 401 || x.st === 503 || j.unsupported || !x.j) { if (x.st === 404) SP.gasOff = true; fallback(); return; }
+          fail(new Error(String(j.error || 'خطأ غير معروف')));
+        }, function () { if (ep === S.epoch) fallback(); });
+      return true;
+    } catch (e) { return false; }
+  }
   function stRunner(getPrev, fn) {
     var s = null, f = null, uo, hasUo = false;
     var p = new Proxy({}, { get: function (t0, prop) {
@@ -8110,7 +8128,9 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
       if (typeof prop !== 'string' || prop === 'then') return undefined;
       return function () {
         var a = Array.prototype.slice.call(arguments);
-        var viaApps = function () { var n = getPrev(); if (s) n = n.withSuccessHandler(s); if (f) n = n.withFailureHandler(f); if (hasUo) n = n.withUserObject(uo); n[prop].apply(n, a); };
+        var viaApps0 = function () { var n = getPrev(); if (s) n = n.withSuccessHandler(s); if (f) n = n.withFailureHandler(f); if (hasUo) n = n.withUserObject(uo); n[prop].apply(n, a); };
+        /* ⚙️ (V4.445) Edge Function «gas»: دوال الحسابات العامة تُنفَّذ بنفس كود Apps Script داخل Supabase؛ غير المدعوم هناك فقط ⇒ Apps Script */
+        var viaApps = function () { if (!gasCall(prop, a, function (d) { if (s) s(d, uo); }, function (e) { if (f) f(e, uo); else console.error(prop, e); }, viaApps0)) viaApps0(); };
         if (!stRoute(prop, a, function (x, why) {
           if (!x) {
             if (why === 'epoch') return;

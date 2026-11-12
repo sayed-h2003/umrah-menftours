@@ -419,6 +419,7 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
     try { hbSnapSync_(false); } catch (eHs) { Logger.log('hbSnap: ' + eHs); }   // (V4.420) نسخة قراءة الحجوزات
     try { usersMirrorTick_(false); } catch (eUm) { Logger.log('usersMirror: ' + eUm); }   // (V4.419) مرآة المستخدمين PG→الورقة
     try { supaGlMetaSync_(); } catch (eGm) { Logger.log('supaGlMeta: ' + eGm); }   // ⚡ (V4.417) رابط ملف الحسابات + عدد صفوف شيتات العهد الناقصة (لـ glx_bootstrap)
+    try { supaPropsSync_(false); } catch (eGp) { Logger.log('gasProps: ' + eGp); }   // (V4.445) خصائص السكربت ⇒ gas_props (Edge Function gas)
     var b378 = _supaBootSync_();   // ⚡ (V4.378) app_config + حالة القيود + سجل التعديلات
     return 'ok work=' + work + ' glaux=' + gx + ' boot=' + b378 + ' ms=' + (Date.now() - t0);
   } finally { try { lk.releaseLock(); } catch (e) {} }
@@ -496,7 +497,7 @@ function supaDvSeedNow() { requireScriptOwner_(); var r = _dvPgReconcile_(); Log
 function _supaStoreInfo_() {
   var out = _supaStoreInfo0_();
   // ⚡ (V4.378) مجموعات «زائفة» تعلن جاهزية ما يُقرأ من app_config/audit_log: cfg (الإعدادات) · glkick (عدّادات القيود) · audit (سجل التعديلات)
-  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); if (_supaP_('SUPA_AUD_OK') === '1' && _supaP_('SUPA_AUD_FULL') === '1') out.groups.push('audfull'); if (_supaP_('SUPA_KV_OK') === '1') out.groups.push('kv'); if (_supaP_('SUPA_BOT_OK') === '1') out.groups.push('bots'); if (_supaP_('SUPA_W_MF') === '1') out.groups.push('wmf'); if (_supaP_('SUPA_W_VZ') === '1') out.groups.push('wvz'); if (_supaP_('SUPA_W_BK') === '1') out.groups.push('wbk'); if (_usersSot_()) out.groups.push('wusr'); if (_supaP_('SUPA_W_GL') === '1') out.groups.push('wgl'); } catch (e) {}   // (V4.378) kv = ACC_PRICING/MF_EXEC_POLICY/NOTIF_TOGGLES منسوخة · bots = bookings_via_bot معبّأة
+  try { if (!_supaBootOn_()) return out; if (_supaP_('SUPA_CFG_OK') === '1') out.groups.push('cfg'); if (_supaP_('SUPA_GLK_OK') === '1') out.groups.push('glkick'); if (_supaP_('SUPA_AUD_OK') === '1') out.groups.push('audit'); if (_supaP_('SUPA_AUD_OK') === '1' && _supaP_('SUPA_AUD_FULL') === '1') out.groups.push('audfull'); if (_supaP_('SUPA_KV_OK') === '1') out.groups.push('kv'); if (_supaP_('SUPA_BOT_OK') === '1') out.groups.push('bots'); if (_supaP_('SUPA_W_MF') === '1') out.groups.push('wmf'); if (_supaP_('SUPA_W_VZ') === '1') out.groups.push('wvz'); if (_supaP_('SUPA_W_BK') === '1') out.groups.push('wbk'); if (_usersSot_()) out.groups.push('wusr'); if (_supaP_('SUPA_W_GL') === '1') out.groups.push('wgl'); if (_supaP_('SUPA_GAS_OK') === '1') out.groups.push('gas'); } catch (e) {}   // (V4.378) kv = ACC_PRICING/MF_EXEC_POLICY/NOTIF_TOGGLES منسوخة · bots = bookings_via_bot معبّأة
   return out;
 }
 function _supaStoreInfo0_() {
@@ -660,3 +661,18 @@ function supaAuthSeedNow() {
   Logger.log('app_secrets: ' + (ok ? 'ok' : 'fail') + ' | app_config: ' + c);
   return ok ? 'ok' : 'fail';
 }
+
+/* ⚙️ (V4.445) Edge Function «gas»: نسخة خصائص السكربت بـ gas_props (تُرفع عند تغيّر البصمة؛ الأسرار مستثناة — للـEdge متغيّراته الخاصة).
+   التفعيل بعد نشر الدالة: supaGasOn() من المحرر (يرفع الخصائص ويعلن المجموعة «gas» فيبدأ المتصفح بتوجيه دوال الحسابات العامة إليها). */
+var GAS_PROPS_SKIP_RX_ = /(SERVICE_KEY|JWT_SECRET|PASSWORD|^sess_|^SESS)/i;
+function supaPropsSync_(force) {
+  var P = PropertiesService.getScriptProperties(), all = P.getProperties(), o = {};
+  Object.keys(all).sort().forEach(function (k) { if (!GAS_PROPS_SKIP_RX_.test(k) && String(all[k]).length < 90000) o[k] = String(all[k]); });
+  var h = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(o)));
+  var c = CacheService.getScriptCache(); if (!force && c.get('gas_props_h') === h) return 'same';
+  var r = _supaReq_('post', 'rpc/gas_props_put', { p: o, p_replace: true });
+  if (r.code >= 200 && r.code < 300) { c.put('gas_props_h', h, 21600); return 'ok'; }
+  return 'err ' + r.code;
+}
+function supaGasOn() { requireScriptOwner_(); var r = supaPropsSync_(true); if (r === 'ok') PropertiesService.getScriptProperties().setProperty('SUPA_GAS_OK', '1'); Logger.log('gas: ' + r); return r; }
+function supaGasOff() { requireScriptOwner_(); PropertiesService.getScriptProperties().deleteProperty('SUPA_GAS_OK'); return 'off'; }
