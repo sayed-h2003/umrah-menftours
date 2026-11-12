@@ -63,10 +63,17 @@ SpreadsheetApp = (function (base) {
    رموز برنامج الحجوزات لا تفتح دوال برنامج العمرة (requireAuth_ يرفضها). المستخدم من ورقة «المستخدمون» (طبقة التخزين hb_users) + سقف الدخول الموحّد. */
 function checkSession(token) {
   var s = __EDGE.session(), h = s && s.hb;
+  if (!h && s && s.username) {   // (V4.454) برنامج الحجوزات المضمَّن يستعمل رمز برنامج العمرة نفسه ⇒ نفس قواعد الدخول الموحّد (048 + hbSsoLogin)
+    var P = String(s.permissions || '').split(',').map(function (x) { return x.trim(); }), adm = P.indexOf('admin') >= 0, cap = adm ? 'admin' : '';
+    if (!adm) ['delete', 'edit', 'add', 'view'].some(function (c) { if (P.indexOf('hotels.' + c) >= 0) { cap = c; return true; } return false; });
+    if (!cap) return { ok: false };
+    h = { u: s.username, cap: cap, adm: adm };
+  }
   if (!h || !h.u) __EDGE.unsup('جلسة برنامج الحجوزات');
-  var sh = ensureUsersSheet_(), i = findUserRow_(sh, h.u);
-  if (i === -1) return { ok: false };
-  var row = sh.getRange(i, 1, 1, 8).getValues()[0];
+  var sh = ensureUsersSheet_(), i = findUserRow_(sh, h.u), row = null;
+  if (i !== -1) row = sh.getRange(i, 1, 1, 8).getValues()[0];
+  else if (h.adm && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues().some(function (r) { if (r[6] !== false && userRecordFromRow_(r).role === 'admin') { row = r; return true; } return false; });
+  if (!row) return { ok: false };
   if (row[6] === false) return { ok: false };
   return safeReturn_({ ok: true, user: capUserBySso_(userRecordFromRow_(row), h.cap || null), sessionMinutes: getSessionDurationMinutes() });
 }

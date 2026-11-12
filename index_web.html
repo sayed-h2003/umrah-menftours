@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.453  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.454  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -54,6 +54,20 @@
   } catch (e) {}
   try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { var d = Math.round(e.duration); L.lt.n++; L.lt.ms += d; if (d > L.lt.max) L.lt.max = d; if (d >= 200) cap(L.lt.top, [Math.round(performance.timeOrigin + e.startTime), d], 30); }); }).observe({ type: 'longtask', buffered: true }); } catch (e) {}
 })();
+/* 🎥 (V4.454) سجلات إطار برنامج الحجوزات المضمَّن تُدمج هنا بعلامة [HB] / HB: فتظهر بنفس لوحة الأداء والتقرير المنسوخ */
+window.addEventListener('message', function (ev) {
+  var d = ev && ev.data, g = d && d.hbLog; if (!g || typeof g !== 'object' || d.sec) return;
+  try {
+    var L = window.__LOG, cap = function (a, x, n) { a.push(x); if (a.length > n) a.shift(); }, s = function (v) { return String(v == null ? '' : v).slice(0, 600); };
+    (g.con || []).forEach(function (c) { cap(L.con, [+c[0] || Date.now(), s(c[1]), '[HB] ' + s(c[2])], 400); });
+    (g.err || []).forEach(function (c) { cap(L.err, [+c[0] || Date.now(), s(c[1]), '[HB] ' + s(c[2])], 200); });
+    (g.net || []).forEach(function (r) { if (r && typeof r === 'object') cap(L.net, { t: +r.t || Date.now(), k: s(r.k), m: s(r.m), u: 'HB:' + s(r.u), fn: s(r.fn), st: +r.st || 0, ms: +r.ms || 0, sz: +r.sz || -1, e: s(r.e) }, 800); });
+    if (g.lt) { L.lt.n += +g.lt.n || 0; L.lt.ms += +g.lt.ms || 0; if (+g.lt.max > L.lt.max) L.lt.max = +g.lt.max; }
+    window.__SRC = window.__SRC || []; window.__GSR = window.__GSR || [];
+    (g.src || []).forEach(function (r) { window.__SRC.push(['HB·' + s(r[0]), r[1] === 'pg' ? 'pg' : 'as', +r[2] || 0, s(r[3]), +r[4] || Date.now()]); });
+    (g.gsr || []).forEach(function (r) { window.__GSR.push(['HB·' + s(r[0]), +r[1] || 0, !!r[2], +r[3] || Date.now()]); if (window.__GSR.length > 300) window.__GSR.shift(); });
+  } catch (e) {}
+});
 </script>
 <script>
 /* ⏱️ (V4.360) قياس زمن كل نداء خادم (الذهاب والإياب كما يشعر به المستخدم) — يُجمَّع ويُرسل كل 5 دقائق بنداء واحد
@@ -7754,6 +7768,8 @@ var LF_ = (function () {
   var SP = { st: 0, cfg: null, fails: 0, off: false, next: 0 };   // st: 0 لم يبدأ · 1 جارٍ · 2 جاهز · 3 معطَّل
   function spStoreKey() { return 'lf_supa|' + user(); }
   function spReady() { return SP.st === 2 && !SP.off && SP.cfg && SP.cfg.exp - now() > 120000; }
+  // 🏨 (V4.454) برنامج الحجوزات المضمَّن يستعمل نفس رمز Supabase ونفس gas (مصدر بيانات واحد) — يُرسَل لإطاره عند جاهزيته وكل 10 دقائق
+  window.__hbSupaCfg = function () { try { if (!spReady()) return null; return { url: SP.cfg.url, anon: SP.cfg.anon, token: SP.cfg.token, expiresAt: SP.cfg.exp, gas: ((SP.cfg.st || {}).groups || []).indexOf('gas') >= 0 && !SP.gasOff }; } catch (e) { return null; } };
   /* ⚡ (V4.378) رمز Supabase يصل مع loginUser/resumeSession (res.supa) ⇒ spAdopt قبل أول قراءة (لا نداء supaIssueToken منفصل ≈6 ث).
      التجديد: supaIssueToken (Apps Script) قبل انتهاء الرمز بساعة والرمز الحالي يبقى صالحاً أثناءه. التخزين: sessionStorage كما كان + نسخة localStorage
      (رمز قصير العمر فقط، يُمسح بالخروج) كي لا تنتظر أول قراءة بعد إعادة فتح المتصفح نداء الرمز. */
@@ -9856,7 +9872,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.453";
+var CLIENT_APP_VERSION = "4.454";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -56861,7 +56877,7 @@ function hbxShell_() {
         if (d.sec) return;   // (V4.253) رسائل إطارات الإعدادات المضمَّنة — لها معالجها الخاص
         if (d.hbPage) { HBX.page = String(d.hbPage); hbxTabs(); }
         else if (d.hbBell !== undefined) { HBX.bell = +d.hbBell || 0; hbxTabs(); }
-        else if (d.hbReady) { HBX.ready = true; HBX._retried = 0; clearTimeout(HBX._wd); if (HBX.page && HBX.frame) hbPostDeep_(HBX.frame.contentWindow, { hbShow: HBX.page }); }
+        else if (d.hbReady) { HBX.ready = true; HBX._retried = 0; clearTimeout(HBX._wd); hbxSupaPush_(); if (HBX.page && HBX.frame) hbPostDeep_(HBX.frame.contentWindow, { hbShow: HBX.page }); }
         else if (d.hbRetry) { hbxLoad(); }
         else if (d.hbPay) { hbxPay(d.hbPay); }
       });
@@ -56871,6 +56887,8 @@ function hbxShell_() {
   }
   return true;
 }
+function hbxSupaPush_() { try { var c = window.__hbSupaCfg && __hbSupaCfg(); if (c && HBX.frame && HBX.frame.contentWindow) hbPostDeep_(HBX.frame.contentWindow, { hbSupa: c }); } catch (e) {} }
+setInterval(function () { if (window.HBX && HBX.ready) hbxSupaPush_(); }, 600000);
 function hbxInit() {
   if (!hbxShell_()) return;
   hbxTabs();

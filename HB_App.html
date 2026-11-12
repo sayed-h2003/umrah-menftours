@@ -13,18 +13,67 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, viewport-fit=cover">
 <meta name="theme-color" content="#7d5a2c">
 <script>
+/* 🎥 (V4.454) مسجّل الجلسة نفسه في برنامج العمرة (Console · Network · أخطاء · مهام طويلة) — في الوضع المضمَّن تُرسَل السجلات للوحة الأداء ببرنامج العمرة */
+(function () {
+  var L = window.__LOG = { t0: Date.now(), con: [], net: [], err: [], lt: { n: 0, ms: 0, max: 0, top: [] } };
+  var cap = function (a, x, n) { a.push(x); if (a.length > n) a.shift(); };
+  var str = function (v) { try { if (v instanceof Error) return (v.message || String(v)) + (v.stack ? ' @' + String(v.stack).split('\n').slice(1, 3).join(' ').replace(/\s+/g, ' ') : ''); if (typeof v === 'object') return JSON.stringify(v); return String(v); } catch (e) { return String(v); } };
+  var san = function (u) { u = String(u || ''); return u.replace(/[?#].*$/, '').replace(/^https?:\/\/[^/]*supabase\.co/, 'supa').replace(/^https?:\/\/[^/]*google[^/]*\.com/, 'g').slice(0, 160); };
+  ['error', 'warn', 'info', 'log'].forEach(function (lv) {
+    var o = console[lv]; if (typeof o !== 'function') return;
+    console[lv] = function () {
+      try { var t = Array.prototype.map.call(arguments, str).join(' ').replace(/(eyJ[\w-]{10,}\.[\w-]+\.[\w-]+|sbp_\w+)/g, '‹token›').slice(0, 600); cap(L.con, [Date.now(), lv, t], lv === 'error' || lv === 'warn' ? 400 : 400); } catch (e) {}
+      return o.apply(console, arguments);
+    };
+  });
+  window.addEventListener('error', function (e) { try { cap(L.err, [Date.now(), 'error', (e.message || '') + ' @' + san(e.filename) + ':' + (e.lineno || '') + ':' + (e.colno || '')], 200); } catch (x) {} }, true);
+  window.addEventListener('unhandledrejection', function (e) { try { cap(L.err, [Date.now(), 'promise', str(e.reason).slice(0, 600)], 200); } catch (x) {} });
+  // الشبكة: fetch
+  if (window.fetch) {
+    var of = window.fetch;
+    window.fetch = function (input, init) {
+      var t0 = Date.now(), url = san(typeof input === 'string' ? input : (input && input.url)), m = (init && init.method) || 'GET', fn = '';
+      try { var b = init && init.body; if (typeof b === 'string' && b.length < 200000) { var mm = b.match(/"p_fn"\s*:\s*"([A-Za-z0-9_]+)"/); if (mm) fn = mm[1]; } } catch (e) {}
+      var rec = { t: t0, k: 'fetch', m: m, u: url, fn: fn, st: 0, ms: 0, sz: -1, e: '' };
+      var p = of.apply(this, arguments);
+      p.then(function (r) {
+        rec.st = r.status; rec.ms = Date.now() - t0; try { rec.sz = +(r.headers.get('content-length') || -1); } catch (e) {}
+        if (!r.ok) { try { r.clone().text().then(function (t) { rec.e = String(t || '').slice(0, 500); }, function () {}); } catch (e2) {} }
+        cap(L.net, rec, 800);
+      }, function (er) { rec.ms = Date.now() - t0; rec.e = (er && er.name === 'AbortError') ? 'abort/timeout' : str(er).slice(0, 200); cap(L.net, rec, 800); });
+      return p;
+    };
+  }
+  // الشبكة: XHR (نداءات google.script.run الداخلية)
+  try {
+    var XO = XMLHttpRequest.prototype.open, XS = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (m, u) { this.__r = { t: 0, k: 'xhr', m: m, u: san(u), fn: '', st: 0, ms: 0, sz: -1, e: '' }; return XO.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function () {
+      var x = this, r = x.__r; if (r) { r.t = Date.now(); x.addEventListener('loadend', function () { r.ms = Date.now() - r.t; r.st = x.status; try { r.sz = (x.responseText || '').length; } catch (e) {} if (x.status === 0 || x.status >= 400) { try { r.e = String(x.responseText || 'network').slice(0, 300); } catch (e2) { r.e = 'network'; } } cap(L.net, r, 800); }); }
+      return XS.apply(this, arguments);
+    };
+  } catch (e) {}
+  try { new PerformanceObserver(function (l) { l.getEntries().forEach(function (e) { var d = Math.round(e.duration); L.lt.n++; L.lt.ms += d; if (d > L.lt.max) L.lt.max = d; if (d >= 200) cap(L.lt.top, [Math.round(performance.timeOrigin + e.startTime), d], 30); }); }).observe({ type: 'longtask', buffered: true }); } catch (e) {}
+})();
+</script>
+<script>
 /* ⚙️ (V4.453) دوال برنامج الحجوزات عبر دالة gas (Supabase Edge) بدل Apps Script — كل google.script.run تمر هنا:
    برمز Supabase (من الدخول/hbSupaToken) ⇒ gas؛ غير مدعوم (ملف خارجي/تليجرام/PDF…) أو 401/503/انقطاع ⇒ Apps Script كالمعتاد.
    ما رُفض كغير مدعوم يُتخطى 10 دقائق. إيقاف كامل: خاصية HB_GAS_OFF=1 أو localStorage hb_gas_off=1 */
 var HB_SUPA_ = null, HB_GAS_SKIP_ = {}, HB_RAW_GSR_ = null;
+window.__SRC = window.__SRC || []; window.__GSR = window.__GSR || [];
+function hbSrc_(fn, how, ms, why) { try { window.__SRC.push([fn, how, ms, why || '', Date.now()]); if (window.__SRC.length > 600) window.__SRC.shift(); } catch (e) {} }
 var HB_GAS_DENY_ = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken|hbGetAppVersion)$|Template$|Telegram|Tg[A-Z]|Pdf|Gemini|Drive|Upload|Email|^lf(Fetch|Poll)$|^perfReport$/i;
-function hbSupaSet_(s) {
-  HB_SUPA_ = s && s.token ? s : null;
+function hbSupaSet_(s, erp) {
+  // (V4.454) مضمَّن ببرنامج العمرة ⇒ رمزه هو المصدر (نفس المستخدم/الصلاحيات/الجلسة) ولا يُستبدل برمز الحجوزات الخاص
+  if (s && !erp && HB_SUPA_ && HB_SUPA_.erp) return;
+  if (s && erp && !/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(String(s.url || ''))) return;
+  HB_SUPA_ = s && s.token ? s : null; if (HB_SUPA_ && erp) HB_SUPA_.erp = true;
   clearTimeout(hbSupaSet_.t);
-  if (HB_SUPA_ && HB_SUPA_.expiresAt) hbSupaSet_.t = setTimeout(hbSupaRenew_, Math.max(60000, HB_SUPA_.expiresAt - Date.now() - 3600000));
+  if (HB_SUPA_ && !erp && HB_SUPA_.expiresAt) hbSupaSet_.t = setTimeout(hbSupaRenew_, Math.max(60000, HB_SUPA_.expiresAt - Date.now() - 3600000));
 }
 function hbSupaRenew_() {
-  try { if (!HB_RAW_GSR_ || typeof currentSessionToken === 'undefined' || !currentSessionToken) return;
+  try { if ((HB_SUPA_ && HB_SUPA_.erp) || !HB_RAW_GSR_ || typeof currentSessionToken === 'undefined' || !currentSessionToken) return;
     HB_RAW_GSR_.withSuccessHandler(function (r) { if (r && r.ok) hbSupaSet_(r.supa); }).withFailureHandler(function () {}).hbSupaToken(currentSessionToken); } catch (e) {}
 }
 (function () {
@@ -33,18 +82,22 @@ function hbSupaRenew_() {
     var raw = HB_RAW_GSR_ = google.script.run;
     var off = function () { try { return localStorage.getItem('hb_gas_off') === '1'; } catch (e) { return false; } };
     var viaRaw = function (k, a, sh, fh, uo, hasUo) {
+      var t1 = Date.now(), wrap = function (f, ok) { return function (r, u) { try { window.__GSR.push([k, Date.now() - t1, ok, Date.now()]); if (window.__GSR.length > 300) window.__GSR.shift(); } catch (e) {} if (f) return f(r, u); }; };
+      sh = wrap(sh, true); fh = wrap(fh, false);
       if ((k === 'login' || k === 'hbSsoLogin') && sh) { var s0 = sh; sh = function (r, u) { try { if (r && r.ok) hbSupaSet_(r.supa); } catch (e) {} return s0(r, u); }; }
       var r = raw; if (sh) r = r.withSuccessHandler(sh); if (fh) r = r.withFailureHandler(fh); if (hasUo) r = r.withUserObject(uo);
       return r[k].apply(r, a);
     };
     var call = function (k, a, sh, fh, uo, hasUo) {
       var S = HB_SUPA_;
+      if ((!S || !S.gas || off()) && !HB_GAS_DENY_.test(k)) hbSrc_(k, 'as', 0, !S ? 'no-token' : 'gas-off');
       if (!S || !S.gas || off() || HB_GAS_DENY_.test(k) || (HB_GAS_SKIP_[k] && HB_GAS_SKIP_[k] > Date.now()) || a.some(function (x) { return x && x.tagName; })) return viaRaw(k, a, sh, fh, uo, hasUo);
       var t0 = Date.now(), back = function () { viaRaw(k, a, sh, fh, uo, hasUo); };
       fetch(S.url + '/functions/v1/gas', { method: 'POST', headers: { Authorization: 'Bearer ' + S.token, apikey: S.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ fn: k, args: a, raw: true }) })
         .then(function (r) { return r.json().then(function (j) { return { st: r.status, j: j }; }, function () { return { st: r.status, j: null }; }); })
         .then(function (x) {
           var j = x.j || {};
+          var ms = Date.now() - t0; hbSrc_(k, j.ok ? 'pg' : 'as', ms, j.ok ? '' : 'gas: ' + String(j.error || x.st).slice(0, 200));
           if (j.ok) { try { console.info('⚙️ gas', k, (Date.now() - t0) + 'ms', 'runs=' + j.runs); } catch (e0) {} if (sh) sh(j.d, uo); return; }
           if (x.st === 401) { HB_SUPA_ = null; hbSupaRenew_(); }
           if (x.st === 404) S.gas = false;
@@ -3104,6 +3157,18 @@ if (HB_EMBED) {
     var w = window, n = 0;
     try { while (n < 8 && w.parent && w.parent !== w) { w = w.parent; n++; try { w.postMessage(m, '*'); } catch (eP) {} } } catch (eW) {}
   };
+  // 🎥 (V4.454) سجلات هذا الإطار (Console/Network/الأخطاء/مصدر كل دالة) ⇒ لوحة الأداء ببرنامج العمرة كل 3 ث (الجديد فقط)
+  setInterval(function () {
+    try {
+      var L = window.__LOG || {}, out = {}, n = 0;
+      [['con', L.con], ['net', L.net], ['err', L.err], ['src', window.__SRC], ['gsr', window.__GSR]].forEach(function (p) {
+        var a = (p[1] || []).filter(function (x) { return x && !x.__s; }); a.forEach(function (x) { try { Object.defineProperty(x, '__s', { value: 1 }); } catch (e) {} });
+        if (a.length) { out[p[0]] = JSON.parse(JSON.stringify(a)); n += a.length; }
+      });
+      if (L.lt && L.lt.n !== hbPost_.lt) { out.lt = { n: L.lt.n - (hbPost_.lt || 0), ms: L.lt.ms - (hbPost_.ltms || 0), max: L.lt.max }; hbPost_.lt = L.lt.n; hbPost_.ltms = L.lt.ms; n++; }
+      if (n) hbPost_({ hbLog: out });
+    } catch (e) {}
+  }, 3000);
   window.hbEmbedReady_ = function () { var o = document.getElementById('hbEmbedLoad'); if (o) o.remove(); hbPost_({ hbReady: 1 }); };
   window.hbEmbedFail_ = function (msg) {
     var o = document.getElementById('hbEmbedLoad'); if (!o) return;
@@ -3152,6 +3217,7 @@ if (HB_EMBED) {
     // (V4.290) حفظ من برنامج الحسابات (دفعة/قيد) ⇒ كشف الحساب المفتوح يُحدَّث بهدوء، أو يُعلَّم ليُحدَّث عند الرجوع إليه
     // ⚡ (V4.367) حفظ هناك = كتابة بهذا الجهاز ⇒ نسخ الكشوف المحفوظة «قديمة» (لا عرض فوري منها قبل تأكيد الخادم)
     if (d.hbRefresh) { try { window.lastDataWriteTs_ = Date.now(); if (window.HBLF) HBLF.markStale(); if (typeof stmtSoftReload_ === 'function') stmtSoftReload_(true); } catch (eR) {} return; }
+    if (d.hbSupa !== undefined) { try { hbSupaSet_(d.hbSupa, true); } catch (eS) {} return; }   // (V4.454) رمز برنامج العمرة
     if (!d.hbShow) return;
     try { if (typeof currentUser !== 'undefined' && currentUser) showPage(String(d.hbShow)); else INITIAL_PAGE = String(d.hbShow); } catch (eM) {}
   });
