@@ -7,7 +7,7 @@ name: Deploy gas edge function
 on:
   workflow_dispatch:
   push:
-    paths: ['*.gs', 'supabase/functions/gas/**', 'tools/build_gas_bundle.mjs']
+    paths: ['*.gs', 'supabase/functions/gas/**', 'tools/build_gas_bundle.mjs', '.github/workflows/deploy-gas.yml']
 jobs:
   deploy:
     runs-on: ubuntu-latest
