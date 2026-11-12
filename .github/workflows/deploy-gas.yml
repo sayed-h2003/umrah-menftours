@@ -22,4 +22,4 @@ jobs:
       - name: Deploy
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase functions deploy gas --no-verify-jwt --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+        run: supabase functions deploy gas --no-verify-jwt --yes --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
