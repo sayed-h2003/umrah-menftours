@@ -22,3 +22,40 @@ function __edgeEnd() {
   // تغيّرت بيانات الحسابات ⇒ gl_aux (شاشات القراءة بـ Postgres) تُعاد بنفس الطلب بدل انتظار مشغّل الدقيقة
   if (__EDGE.propChanged('GL_DATA_VER') && typeof supaGlAuxSync_ === 'function') supaGlAuxSync_(true);
 }
+/* ⚙️ (V4.450) ملف برنامج الحجوزات يُقرأ من نسخة hb_snap (قراءة فقط) — أي كتابة به ⇒ غير مدعوم (يرجع لـApps Script) */
+SpreadsheetApp = (function (base) {
+  var ro = function (what) { return function () { __EDGE.unsup('كتابة بملف الحجوزات: ' + what); }; };
+  var sheet = function (tbl, name) {
+    var rows = null, load = function () { if (!rows) { rows = {}; __EDGE.hbRows(tbl).forEach(function (x) { rows[x[0]] = (x[1] || []).map(_stDec_); }); } return rows; };
+    var last = function () { var m = 0; Object.keys(load()).forEach(function (k) { if (+k > m) m = +k; }); return m; };
+    var lastC = function () { var m = 0; Object.keys(load()).forEach(function (k) { if (rows[k].length > m) m = rows[k].length; }); return m; };
+    var range = function (r, c, nr, nc) {
+      nr = nr || 1; nc = nc || 1;
+      return { getValues: function () { var out = [], R = load(); for (var i = 0; i < nr; i++) { var src = R[r + i] || [], row = []; for (var j = 0; j < nc; j++) { var v = src[c - 1 + j]; row.push(v === undefined || v === null ? '' : v); } out.push(row); } return out; },
+        getDisplayValues: function () { return this.getValues().map(function (rw) { return rw.map(String); }); }, getValue: function () { return this.getValues()[0][0]; },
+        setValue: ro('setValue'), setValues: ro('setValues'), clearContent: ro('clearContent'), setNumberFormat: function () { return this; }, getNumRows: function () { return nr; } };
+    };
+    return { getName: function () { return name; }, getLastRow: last, getLastColumn: lastC, getMaxRows: last, getRange: range,
+      getDataRange: function () { return range(1, 1, Math.max(1, last()), Math.max(1, lastC())); },
+      appendRow: ro('appendRow'), insertRowAfter: ro('insertRow'), insertRowsAfter: ro('insertRows'), deleteRow: ro('deleteRow'), deleteRows: ro('deleteRows') };
+  };
+  var book = function (id) {
+    var c = _glHbCfg_(), isSrc = id === (c.srcId || c.ssId), isMain = id === c.ssId;
+    return { getId: function () { return id; }, getUrl: function () { return 'https://docs.google.com/spreadsheets/d/' + id; }, getName: function () { return 'hb'; },
+      getSpreadsheetTimeZone: function () { return Session.getScriptTimeZone(); },
+      getSheetByName: function (n) {
+        if (isSrc && n === c.mk) return sheet('mk', n); if (isSrc && n === c.md) return sheet('md', n);
+        if (isMain && n === c.pay) return sheet('pay', n); if (isMain && n === 'البيانات المحاسبية للدفعات') return sheet('meta', n); if (isMain && n === c.prof) return sheet('prof', n);
+        __EDGE.unsup('ورقة «' + n + '» بملف الحجوزات');
+      }, insertSheet: ro('insertSheet'), getSheets: function () { __EDGE.unsup('getSheets بملف الحجوزات'); } };
+  };
+  var inCfg = false;
+  return Object.assign({}, base, { openById: function (id) {
+    if (inCfg || !id) return base.openById(id);
+    try { if (id === _glSSId_()) return base.openById(id); } catch (e0) {}   // ملف الحسابات نفسه ⇒ طبقة التخزين
+    var c = null; inCfg = true;
+    try { c = _glHbCfg_(); } catch (e) { c = null; } finally { inCfg = false; }
+    if (c && (id === c.ssId || id === c.srcId)) return book(id);
+    return base.openById(id);
+  } });
+})(SpreadsheetApp);

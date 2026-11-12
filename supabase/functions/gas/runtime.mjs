@@ -161,6 +161,14 @@ export class GasSession {
       },
       req: (m, p, b, pref) => S.req(m, p, b, pref),
       propChanged: (k) => Object.prototype.hasOwnProperty.call(S.propW, k),
+      unsup: (what) => { S.unsup = S.unsup || what; throw new Error('GAS_EDGE_UNSUPPORTED: ' + what); },
+      // نسخة ملف برنامج الحجوزات (hb_snap): {tbl: [[rn, raw]...]} — قراءة فقط
+      hbRows: (tbl) => {
+        if (S.suspended) throw S.suspended;
+        if (!S.hb) throw (S.suspended = new Suspend('hb'));
+        if (!(S.hb.n >= 5) || !(S.hb.age <= 900)) { S.unsup = S.unsup || 'hb_snap قديمة أو ناقصة (' + S.hb.age + ' ث)'; throw new Error('GAS_EDGE_UNSUPPORTED: ' + S.unsup); }
+        return (S.hb.tables || {})[tbl] || [];
+      },
     };
   }
   // نداء REST نحو Supabase من كود .gs
@@ -249,6 +257,7 @@ export class GasSession {
       this.tape = this.tape.slice(0, this.pos);
       if (sp.kind === 'table') await this.loadTables(this.allLoaded ? Array.from(this.need) : null).then(() => { this.allLoaded = true; });
       else if (sp.kind === 'vers') { await this.loadTables([]); this.versLoaded = true; }
+      else if (sp.kind === 'hb') { this.hb = await this.o.db('gas_hb_snap', {}); }
       else if (sp.kind === 'gl') await this.loadGl(sp.data);
       else {
         await this.flushDeferred();

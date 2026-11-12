@@ -689,6 +689,7 @@ function _stSetFlag_(tables, on) {
   _stReset_();
   try { if (typeof _dvBump_ === 'function') _dvBump_(LF_GROUPS_); } catch (e) {}
   try { clearAllCache_(); } catch (e2) {}
+  try { if (typeof supaPropsSync_ === 'function') supaPropsSync_(true); } catch (e3) {}   // (V4.450) gas (Edge) يعرف الجداول المفعّلة فوراً
 }
 function _stLockAll_(withGl) {
   var sl = LockService.getScriptLock(); sl.waitLock(120000);
