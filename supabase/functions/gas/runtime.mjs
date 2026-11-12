@@ -197,7 +197,7 @@ export class GasSession {
   // كتابات ردّها معروف مسبقاً ⇒ تُؤجَّل
   deferable(m, p, b) {
     if (m === 'post' && p === 'rpc/store_put') { const t = b && b.p && b.p.t; return { code: 200, text: JSON.stringify({ ver: this.verOf(t) + 1, mirror: { ok: 0, err: 0 } }) }; }
-    if (m === 'post' && /^rpc\/(gl_store_put|gl_store_delete|kv_set|bot_mark|dv_set|store_mirror_prune)$/.test(p)) return { code: 200, text: 'null' };
+    if (m === 'post' && /^rpc\/(gl_store_put|gl_store_delete|kv_set|bot_mark|dv_set|store_mirror_prune|cs_queue)$/.test(p)) return { code: 200, text: 'null' };
     if (m === 'post' && /^(app_outbox|gl_outbox|audit_log)(\?|$)/.test(p)) return { code: 201, text: '' };
     if (m === 'post' && /^(gl_aux|read_cache|app_config)\?on_conflict=[\w,]+$/.test(p)) return { code: 201, text: '' };
     return null;

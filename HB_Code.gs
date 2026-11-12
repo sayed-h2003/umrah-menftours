@@ -824,7 +824,7 @@ function openSourceSpreadsheet_(s) {
   if (active && (!s.spreadsheetId || s.spreadsheetId === 'ACTIVE' || s.spreadsheetId === active.getId())) {
     return active;
   }
-  return SpreadsheetApp.openById(s.spreadsheetId);
+  return (typeof hbBookById_ === 'function') ? hbBookById_(s.spreadsheetId) : SpreadsheetApp.openById(s.spreadsheetId);   // (V4.452) موصل الحجوزات
 }
 // زر "استخدم ملف البرنامج نفسه": يضبط المصدر على الملف النشط بعد التأكد أن الشيتين موجودان
 function useProgramSpreadsheetAsSource(token) {

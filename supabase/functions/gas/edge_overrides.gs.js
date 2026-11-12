@@ -59,3 +59,5 @@ SpreadsheetApp = (function (base) {
     return base.openById(id);
   } });
 })(SpreadsheetApp);
+/* اختبار محلي فقط (tools/hb_conn_test.mjs) — لا يُستدعى من الواجهة (الاسم ينتهي بـ _) */
+function _hbConnTestWrite_() { var sh = openSourceSpreadsheet_().getSheetByName('حجوزات مكة'); sh.getRange(5, 16).setValue('ملغى'); return sh.getRange(5, 16).getValue(); }

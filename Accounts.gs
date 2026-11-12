@@ -5392,8 +5392,9 @@ function glCsConnStatus_(code) {
   return { on: true, at: cfg.conn.at, by: cfg.conn.by, pushedAt: d && d.pushedAt || 0, changedAt: d && d.changedAt || 0, pulledAt: d && d.pulledAt || 0,
     rows: d && d.rows ? d.rows.length : 0, pending: d && d.pending ? Object.keys(d.pending).length : 0, agent: d && d.agent || '' };
 }
-function _glCsConnScript_(list, cfg) {
-  var C = { url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), sheets: list, ver: 'cs-3' };
+// (V4.452) عام: لكل ورقة cols (عدد الأعمدة، افتراضي 26) · txt=false (لا يحوّل الخلية لنص) · sc (عمود مفتاح الصف لتحديده بدل بصمة الصف كاملة)
+function _glCsConnScript_(list, cfg, label) {
+  var C = { url: _supaP_('SUPA_URL').replace(/\/+$/, ''), anon: _supaP_('SUPA_ANON_KEY'), sheets: list, ver: 'cs-4', label: label || 'موصل العهدة' };
   return [
     '/* 🔌 موصل شيتات العهدة ببرنامج العمرة — لا تعدّل هذا الملف. يرسل أوراق هذا الملف لقاعدة بيانات البرنامج فور أي تعديل وكل فترة،',
     '   ويكتب أرقام القيود التي يسجّلها البرنامج بعمود القيد. سكربت واحد لكل الأوراق الموصولة. التشغيل: اختر الدالة setup ثم ▶ تشغيل ووافق على الصلاحيات (مرة واحدة). */',
@@ -5404,7 +5405,7 @@ function _glCsConnScript_(list, cfg) {
     '  var ss = SpreadsheetApp.getActive();',
     '  ScriptApp.newTrigger(\'csOnEdit\').forSpreadsheet(ss).onEdit().create();',
     '  ScriptApp.newTrigger(\'csOnChange\').forSpreadsheet(ss).onChange().create();',
-    '  var r = csSync_(true, 30000); ss.toast(\'✅ تم ربط \' + CS.sheets.length + \' ورقة بالبرنامج — \' + r, \'موصل العهدة\', 10);',
+    '  var r = csSync_(true, 30000); ss.toast(\'✅ تم ربط \' + CS.sheets.length + \' ورقة بالبرنامج — \' + r, CS.label, 10);',
     '}',
     'function csOnEdit(e) { csSync_(false, 3000, e && e.range && e.range.getSheet().getName()); }',
     'function csOnChange(e) { csSync_(false, 3000); }',
@@ -5421,6 +5422,7 @@ function _glCsConnScript_(list, cfg) {
     '}',
     'function csEnc_(v) { if (Object.prototype.toString.call(v) === \'[object Date]\') return isNaN(v.getTime()) ? \'\' : { $d: v.getTime() }; if (typeof v === \'number\' && !isFinite(v)) return \'\'; return v; }',
     'function csSig_(row, skip) { return (row || []).map(function (x, i) { if (i === skip || x === null || x === undefined) return \'\'; if (typeof x === \'object\' && x.$d !== undefined) return \'d\' + x.$d; return String(x).trim(); }).join(\'\\u241f\').replace(/\\u241f+$/, \'\'); }',
+    'function csKey_(row, sc) { var x = (row || [])[sc - 1]; if (x === null || x === undefined) return \'\'; if (typeof x === \'object\' && x.$d !== undefined) return \'d\' + x.$d; return String(x).trim(); }',
     'function csCall_(fn, body) {',
     '  var r = UrlFetchApp.fetch(CS.url + \'/rest/v1/rpc/\' + fn, { method: \'post\', contentType: \'application/json\', headers: { apikey: CS.anon, Authorization: \'Bearer \' + CS.anon }, payload: JSON.stringify(body), muteHttpExceptions: true });',
     '  if (r.getResponseCode() >= 300) throw new Error(fn + \' \' + r.getResponseCode() + \': \' + r.getContentText().slice(0, 300));',
@@ -5441,7 +5443,7 @@ function _glCsConnScript_(list, cfg) {
     '  } finally { lk.releaseLock(); }',
     '}',
     'function csOne_(ss, sh, S, force) {',
-    '  var last = sh.getLastRow(), lc = Math.min(26, Math.max(1, sh.getLastColumn()));',
+    '  var last = sh.getLastRow(), lc = Math.min(S.cols || 26, Math.max(1, sh.getLastColumn()));',
     '  var rows = (last >= 1 ? sh.getRange(1, 1, last, lc).getValues() : []).map(function (r) { return r.map(csEnc_); });',
     '  var h = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(rows) + \'|\' + sh.getName(), Utilities.Charset.UTF_8));',
     '  var P = PropertiesService.getDocumentProperties(), kh = \'cs_h_\' + S.code, ka = \'cs_at_\' + S.code, send = force || h !== P.getProperty(kh) || Date.now() - (+P.getProperty(ka) || 0) > 600000;',
@@ -5450,14 +5452,15 @@ function _glCsConnScript_(list, cfg) {
     '  var pend = (res && res.pending) || {}, done = {}, n = 0;',
     '  Object.keys(pend).forEach(function (k) {',
     '    var it = pend[k], obj = it && typeof it === \'object\' && it.v !== undefined, v = obj ? it.v : it, r = +k.split(\'|\')[0], c = +k.split(\'|\')[1], t = r;',
-    '    if (obj && it.sig !== undefined && csSig_(rows[r - 1], c - 1) !== it.sig) {   // الصف تحرّك (إدراج/حذف) ⇒ نبحث عنه ببصمته',
-    '      var hits = []; rows.forEach(function (rw, i) { if (csSig_(rw, c - 1) === it.sig) hits.push(i + 1); }); t = hits.length === 1 ? hits[0] : 0;',
+    '    var fp = function (rw) { return obj && it.sc ? csKey_(rw, it.sc) : csSig_(rw, c - 1); };',
+    '    if (obj && it.sig !== undefined && fp(rows[r - 1]) !== it.sig) {   // الصف تحرّك (إدراج/حذف) ⇒ نبحث عنه ببصمته',
+    '      var hits = []; rows.forEach(function (rw, i) { if (fp(rw) === it.sig) hits.push(i + 1); }); t = it.sig !== \'\' && hits.length === 1 ? hits[0] : 0;',
     '    }',
-    '    if (t) { sh.getRange(t, c).setNumberFormat(\'@\').setValue(v && typeof v === \'object\' && v.$d !== undefined ? new Date(v.$d) : v); n++; }',
+    '    if (t) { var cell = sh.getRange(t, c); if (S.txt !== false) cell.setNumberFormat(\'@\'); cell.setValue(v && typeof v === \'object\' && v.$d !== undefined ? new Date(v.$d) : v); n++; }',
     '    done[k] = it;',
     '  });',
     '  if (Object.keys(done).length) { csCall_(\'cs_ack\', { p_code: S.code, p_key: S.key, p_done: done }); if (n) P.deleteProperty(kh); }',
-    '  return { msg: (send ? \'أُرسل \' + rows.length + \' صف\' : \'بلا تغيير\') + (n ? \' · كُتب \' + n + \' رقم قيد\' : \'\'), every: res && res.every };',
+    '  return { msg: (send ? \'أُرسل \' + rows.length + \' صف\' : \'بلا تغيير\') + (n ? \' · كُتب \' + n + \' خلية\' : \'\'), every: res && res.every };',
     '}'
   ].join('\n');
 }
@@ -7253,7 +7256,7 @@ function _glHbRead_() {
   if (_GL_HB_MEMO_) return _GL_HB_MEMO_;
   var c = _glHbCfg_();
   if (!c.ssId) throw new Error('لم يُربط ملف برنامج الحجوزات بعد');
-  var ss = hbBookById_(c.ssId), src = (c.srcId && c.srcId !== c.ssId) ? SpreadsheetApp.openById(c.srcId) : ss;
+  var ss = hbBookById_(c.ssId), src = (c.srcId && c.srcId !== c.ssId) ? hbBookById_(c.srcId) : ss;
   var bookings = [], seen = {};
   [[c.mk, c.mkRow, 'مكة'], [c.md, c.mdRow, 'المدينة']].forEach(function (d) {
     var sh = src.getSheetByName(d[0]);
