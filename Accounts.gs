@@ -1724,7 +1724,7 @@ function glSaveEntry(authToken, e, post) {
       var _oldLines = (oldSt === GL_ST_POSTED_) ? _glLinesOf_(_glStr_(f.r[0])) : [];   // ⚡ (V4.232) للدلتا — قبل الحذف
       var _curL = _glLinesOf_(_glStr_(f.r[0])), _audB = (typeof _audSnapRows_ === 'function') ? _audSnapRows_(f.r, _curL) : null;
       // 🔐 (V4.346) تعديل متزامن: القيد تغيّر بعد فتحه بنافذة هذا المستخدم ⇒ رفض بدل مسح تعديل الآخر بصمت
-      if (_glStr_(e.baseVer) && typeof _glEntryVer_ === 'function' && _glStr_(e.baseVer) !== _glEntryVer_(f.r, _curL))
+      if (_glStr_(e.baseVer) && typeof _glEntryVer_ === 'function' && !_glVerOk_(_glStr_(e.baseVer), _glStr_(f.r[0]), f.r, _curL))
         throw new Error('⚠️ عدّل مستخدم آخر هذا القيد بعد فتحك له' + (_glStr_(f.r[16]) ? ' (' + _glStr_(f.r[16]) + (_glStr_(f.r[17]) ? ' — ' + _glStr_(f.r[17]) : '') + ')' : '') + ' — أغلق النافذة وافتح القيد من جديد لترى التعديل ثم أعد تعديلك');
       (typeof _snapEntryTake_ === 'function') && _snapEntryTake_(_glStr_(f.r[0]), f.r, _curL, oldSt === GL_ST_POSTED_ ? 'قبل تعديل قيد مرحّل' : 'قبل تعديل قيد', session.username);   // ⏪ (V4.346) نسخة قابلة للاستعادة   // 🛡️ (V4.345) حالة القيد قبل التعديل — للسجل المحصّن
       var sk = _glStr_(f.r[6]);
@@ -2259,12 +2259,21 @@ function _glEntryFull_(id) {
   e.attachments = _glAttachMap_()[id] || [];
   return e;
 }
+/* 🔐 (V4.451) بصمة إصدار القيد موحّدة مع Postgres: القيود تعيش بـ Supabase (GL_STORE) ومسار حفظها هناك يقارن gl_entry_ver_raw —
+   كانت Apps Script/gas تعطي بصمة بأسلوب آخر (_glEntryVer_) فيُرفض كل حفظ لقيد فُتح من غير Postgres بـ«عدّل مستخدم آخر هذا القيد». */
+function _glPgVer_(id) {
+  try { if (typeof _glStOn_ === 'function' && _glStOn_()) { var r = _supaReq_('post', 'rpc/gl_entry_ver_raw', { p_id: String(id) }); if (r.code >= 200 && r.code < 300) { var v = JSON.parse(r.text || 'null'); if (v) return String(v); } } } catch (e) {}
+  return '';
+}
+function _glVerOf_(id, r, lines) { return _glPgVer_(id) || _glEntryVer_(r, lines); }
+// تُقبل البصمة بأيٍّ من الأسلوبين (نوافذ مفتوحة قبل التحديث)
+function _glVerOk_(base, id, r, lines) { return base === _glEntryVer_(r, lines) || base === _glPgVer_(id); }
 function glGetEntry(authToken, id) {
   _glPerm_(authToken, 'view');
   var e = _glEntryFull_(_glStr_(id));
   if (!e) throw new Error('القيد غير موجود');
   e.due = _glDueMap_()[e.id] || '';
-  try { var _fv = _glFindEntry_(e.id); if (_fv && typeof _glEntryVer_ === 'function') e.ver = _glEntryVer_(_fv.r, _glLinesOf_(e.id)); } catch (eV) {}   // 🔐 (V4.346) بصمة الإصدار
+  try { var _fv = _glFindEntry_(e.id); if (_fv && typeof _glEntryVer_ === 'function') e.ver = _glVerOf_(e.id, _fv.r, _glLinesOf_(e.id)); } catch (eV) {}   // 🔐 (V4.346) بصمة الإصدار
   // ✍️ (V4.319) التعديلات اليدوية الدائمة على القيد التلقائي/قيد الشيت (لعرض «معدَّل يدوياً» وزر «↺ إعادة للتلقائي»)
   if (/^(AUTO|CUST):/.test(_glStr_(e.sourceKey))) { var x = _glOvrMap_()[/^CUST:/.test(e.sourceKey) ? e.sourceKey + '#' + e.id : e.sourceKey];
     if (x) e.ovr = { acc: x.acc.map(function (a) { return { from: a.from, to: a.to, cur: a.cur, side: a.side, by: a.by, at: a.at }; }), hdr: x.hdr || null, freeze: x.freeze || null, vd: x.vd || null, keep: x.keep || null }; }
