@@ -3659,6 +3659,13 @@ function _glAutoApply_(built, user, dry, opts) {
   if (!dry && unfrozen.length) _glOvrDrop_(unfrozen, ['freeze']);   // اعتُمد مصدره ⇒ ينتهي التجميد (تبقى قواعد الحساب/البيان)
   if (!dry && unkeep.length) _glOvrDrop_(unkeep, ['keep']);
   res.manualPending = Object.keys(frozenQ).length;
+  // ⚙️ (V4.445) دفعات: حد أقصى للتغييرات بالنداء الواحد (بيئة Edge: حد زمن المعالج) — الباقي يُنفَّذ بالنداء التالي (التطبيق متكرر الأمان: يقارن بالقائم)
+  var lim = +opts.limit || 0;
+  if (!dry && lim > 0 && creates.length + updates.length + voids.length > lim) {
+    var tot = creates.length + updates.length + voids.length;
+    updates = updates.slice(0, lim); voids = voids.slice(0, Math.max(0, lim - updates.length)); creates = creates.slice(0, Math.max(0, lim - updates.length - voids.length));
+    res.more = tot - (creates.length + updates.length + voids.length); res.created = creates.length; res.updated = updates.length; res.voided = voids.length;
+  }
   if (dry || (!creates.length && !updates.length && !voids.length)) return res;
   if (_glAutoPgOn_()) {   // ✍️ (V4.427) الكتابة بمعاملة واحدة بـPostgres (053) بدل إعادة كتابة الشيتات كاملةً — القرارات أعلاه كما هي
     var pl = { user: user, creates: creates.map(function (c) { return { key: c.e.key, hash: c.hash, H: c.H, v: c.v }; }),
@@ -4021,6 +4028,8 @@ function _glAutoRun_(user, dry, opts) {
   res.blocked = res.blocked.slice(0, 200); res.errors = res.errors.slice(0, 200);
   return res;
 }
+// ⚙️ (V4.445) داخل Edge Function «gas» تُنفَّذ المزامنة الكاملة بدفعات (500 تغيير/نداء)؛ في Apps Script بلا حد كما كانت
+function _glAutoLimit_() { return (typeof __EDGE !== 'undefined') ? (+_supaP_('GL_EDGE_BATCH') || 400) : 0; }   // خاصية GL_EDGE_BATCH لضبط الحجم
 function glAutoPreview(authToken) {
   _glPerm_(authToken, 'view', 'auto');
   var r = _glAutoRun_('', true);
@@ -4033,7 +4042,7 @@ function glAutoSync(authToken) {
   var lock = _glLock_(); lock.waitLock(60000);
   try {
     _glCatFlushQ_(session.username);   // 🛡️ (V4.323 مراجعة)
-    var r = _glAutoRun_(session.username, false);
+    var r = _glAutoRun_(session.username, false, { limit: _glAutoLimit_() });
     _glAutoSaveLast_(r, session.username);
     if (r.created || r.updated || r.voided) logChange_(session.username, 'مزامنة القيود التلقائية', 'GL:auto', '-', '-',
       'جديد ' + r.created + '، معدّل ' + r.updated + '، ملغى ' + r.voided + (r.blocked.length ? '، محجوز بفترة مقفلة ' + r.blocked.length : ''));

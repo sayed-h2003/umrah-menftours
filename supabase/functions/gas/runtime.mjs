@@ -50,7 +50,7 @@ export class GasSession {
   constructor(opt) {
     this.o = opt;                       // {src, db(rpc), http(fetch-like), props, session, tz, now}
     this.tape = []; this.snap = { vers: {}, meta: {}, rows: {} }; this.gl = {}; this.props = Object.assign({}, opt.props || {});
-    this.propW = {}; this.cacheShared = opt.cache || new Map(); this.t0 = opt.now || Date.now(); this.runs = 0; this.need = new Set();
+    this.propW = {}; this.cacheShared = opt.cache || new Map(); this.t0 = opt.now || Date.now(); this.seed = (opt.seed || (Math.random() * 4294967296)) >>> 0; this.runs = 0; this.need = new Set();
   }
   // ===== تحميل اللقطة =====
   async loadTables(tbls) {
@@ -65,7 +65,7 @@ export class GasSession {
   async loadGl(key) { this.gl[key] = await this.o.db('gas_gl_rows', { p_key: key }); }
   // ===== التشغيل =====
   instantiate() {
-    const S = this, rnd = prng(0x9e3779b9), tick = { n: 0 };
+    const S = this, rnd = prng(S.seed), tick = { n: 0 };   // بذرة فريدة لكل طلب وثابتة بين إعادات تشغيله (معرّفات الصفوف لا تتكرر بين الطلبات)
     const clock = () => S.t0 + (tick.n++);
     class GDate extends Date { constructor(...a) { if (a.length === 0) super(clock()); else super(...a); } static now() { return clock(); } }
     const GMath = Object.create(Math); GMath.random = rnd;
@@ -131,7 +131,7 @@ export class GasSession {
         if (S.suspended) throw S.suspended;
         if (!S.snap.rows[t] && S.allLoaded) { S.snap.rows[t] = []; S.snap.meta[t] = { hdr: [], exists: false }; }   // لا وجود له بطبقة التخزين
         if (!S.snap.rows[t]) { S.need.add(t); throw (S.suspended = new Suspend('table', t)); }
-        return { ver: String(S.snap.vers[t] || 0), exists: !!(S.snap.meta[t] && S.snap.meta[t].exists !== false), hdr: (S.snap.meta[t] || {}).hdr || [], rows: S.snap.rows[t].slice() };
+        return { ver: String(S.verOf(t)), exists: !!(S.snap.meta[t] && S.snap.meta[t].exists !== false), hdr: (S.snap.meta[t] || {}).hdr || [], rows: S.snap.rows[t].slice() };
       },
       vers: (tbls) => { const o = {}; (tbls || Object.keys(S.snap.vers)).forEach((t) => { if (S.snap.vers[t] !== undefined) o[t] = S.snap.vers[t]; }); return o; },
       glRows: (key) => {
@@ -150,7 +150,7 @@ export class GasSession {
     // قراءات طبقة التخزين من اللقطة (لا تدخل الشريط)
     if (m === 'post' && p === 'rpc/store_vers') {
       if (!this.versLoaded) throw (this.suspended = new Suspend('vers'));
-      const o = {}; const ts = b && b.p_tbls ? b.p_tbls : Object.keys(this.snap.vers); ts.forEach((t) => { if (this.snap.vers[t] !== undefined) o[t] = this.snap.vers[t]; });
+      const o = {}; const ts = b && b.p_tbls ? b.p_tbls : Object.keys(this.snap.vers); ts.forEach((t) => { if (this.snap.vers[t] !== undefined) o[t] = this.verOf(t); });
       return { code: 200, text: JSON.stringify(o) };
     }
     if (m === 'post' && p === 'rpc/store_read') {
@@ -164,11 +164,14 @@ export class GasSession {
     if (def) { this.tape.push({ k, r: def, deferred: true, done: false, req: { m, p, b, pref } }); this.pos++; return def; }
     throw (this.suspended = new Suspend('req', { k, req: { m, p, b, pref } }));
   }
+  // إصدار الجدول = إصدار اللقطة + عدد ما رفعناه له بهذا التشغيل حتى الآن (حتمي بين إعادات التشغيل)
+  verOf(t) { let v = +this.snap.vers[t] || 0; for (let i = 0; i < this.pos && i < this.tape.length; i++) { const x = this.tape[i]; if (x.req && x.req.p === 'rpc/store_put' && x.req.b && x.req.b.p && x.req.b.p.t === t) v++; } return v; }
   // كتابات ردّها معروف مسبقاً ⇒ تُؤجَّل
   deferable(m, p, b) {
-    if (m === 'post' && p === 'rpc/store_put') { const t = b && b.p && b.p.t; const v = (+this.snap.vers[t] || 0) + 1; this.snap.vers[t] = v; return { code: 200, text: JSON.stringify({ ver: v, mirror: { ok: 0, err: 0 } }) }; }
+    if (m === 'post' && p === 'rpc/store_put') { const t = b && b.p && b.p.t; return { code: 200, text: JSON.stringify({ ver: this.verOf(t) + 1, mirror: { ok: 0, err: 0 } }) }; }
     if (m === 'post' && /^rpc\/(gl_store_put|gl_store_delete|kv_set|bot_mark|dv_set|store_mirror_prune)$/.test(p)) return { code: 200, text: 'null' };
     if (m === 'post' && /^(app_outbox|gl_outbox|audit_log)(\?|$)/.test(p)) return { code: 201, text: '' };
+    if (m === 'post' && /^(gl_aux|read_cache|app_config)\?on_conflict=[\w,]+$/.test(p)) return { code: 201, text: '' };
     return null;
   }
   fetch(url, opt) {
@@ -190,11 +193,15 @@ export class GasSession {
     const pend = this.tape.filter((t) => t.deferred && !t.done); if (!pend.length) return;
     const ops = pend.map((t) => { const q = t.req, rpc = /^rpc\/(\w+)$/.exec(q.p), tb = /^(\w+)/.exec(q.p)[1];
       if (rpc) return { rpc: rpc[1], b: q.b || {} };
+      const oc = /on_conflict=([\w,]+)/.exec(q.p);
+      if (oc && tb !== 'audit_log') return { upsert: tb, conflict: oc[1].split(','), rows: [].concat(q.b) };
       return tb === 'audit_log' ? { up: 'audit_log', rows: [].concat(q.b) } : { ins: tb, rows: [].concat(q.b) }; });
     await this.o.db('gas_apply', { ops });
     pend.forEach((t) => { t.done = true; });
   }
+  async preload() { await this.loadTables(null); this.allLoaded = true; await Promise.all([this.loadGl('entries'), this.loadGl('lines')]); }
   async run(fn, args, maxRuns = 14) {
+    if (this.o.preload !== false && !this.allLoaded) await this.preload();
     for (this.runs = 0; this.runs < maxRuns; this.runs++) {
       const get = this.instantiate();
       let result, err = null;

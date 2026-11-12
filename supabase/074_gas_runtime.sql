@@ -73,6 +73,13 @@ $$ declare o jsonb; n int := 0; r jsonb; begin
       for r in select * from jsonb_array_elements(o -> 'rows') loop
         execute format('insert into %I (kind, payload) values ($1, $2)', o ->> 'ins') using r ->> 'kind', coalesce(r -> 'payload', '{}'::jsonb);
       end loop;
+    elsif o ? 'upsert' and o ->> 'upsert' in ('gl_aux', 'read_cache', 'app_config') then
+      declare cols text; conf text; begin
+        select string_agg(quote_ident(k), ',') into cols from jsonb_object_keys(o -> 'rows' -> 0) k;
+        select string_agg(quote_ident(c), ',') into conf from jsonb_array_elements_text(o -> 'conflict') c;
+        execute format('insert into %I (%s) select %s from jsonb_populate_recordset(null::%I, $1) on conflict (%s) do update set (%s) = row(%s)',
+          o ->> 'upsert', cols, cols, o ->> 'upsert', conf, cols, (select string_agg('excluded.' || quote_ident(k), ',') from jsonb_object_keys(o -> 'rows' -> 0) k)) using o -> 'rows';
+      end;
     elsif o ->> 'up' = 'audit_log' then
       insert into audit_log select * from jsonb_populate_recordset(null::audit_log, o -> 'rows') on conflict (src, rn) do nothing;
     else raise exception 'gas_apply: عملية غير مدعومة %', left(o::text, 120);

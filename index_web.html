@@ -56680,12 +56680,18 @@ function glAutoPreviewUI(btn) {
 function glAutoSyncUI(btn) {
   askConfirm_('مزامنة القيود التلقائية الآن؟\nتُنشأ قيود الأحداث الجديدة وتُحدَّث قيود ما تغيّر وتُلغى قيود ما حُذف من الشاشات.', function () {
     btn.disabled = true; btn.innerHTML = '⏳ جاري المزامنة…';
-    glRun('glAutoSync', [], function (res) {
+    /* ⚙️ (V4.445) بيئة Edge تنفّذ بدفعات (more = تغييرات متبقية) ⇒ تُكرَّر النداءات تلقائياً حتى الاكتمال مع تجميع الأعداد */
+    var acc = { created: 0, updated: 0, voided: 0 }, round = 0;
+    var step = function () { glRun('glAutoSync', [], function (res) {
+      acc.created += +res.created || 0; acc.updated += +res.updated || 0; acc.voided += +res.voided || 0;
+      if (res.more > 0 && ++round < 60) { btn.innerHTML = '⏳ جاري المزامنة… (متبقٍ ' + res.more + ')'; step(); return; }
+      res.created = acc.created; res.updated = acc.updated; res.voided = acc.voided;
       btn.disabled = false; btn.innerHTML = '🔄 مزامنة الآن';
       GL._autoRes = res; GL._autoResDry = false;
       showToast('✅ جديد ' + res.created + ' · معدّل ' + res.updated + ' · ملغى ' + res.voided);
       glRefreshData(function () { GL.settings.auto_last = JSON.stringify(res.last || {}); glRenderAuto(); });
-    }, function (e) { btn.disabled = false; btn.innerHTML = '🔄 مزامنة الآن'; _showPopup(e.message || e, 'error'); });
+    }, function (e) { btn.disabled = false; btn.innerHTML = '🔄 مزامنة الآن'; _showPopup(e.message || e, 'error'); }); };
+    step();
   }, { title: 'مزامنة القيود التلقائية', icon: '🔄', yesLabel: 'مزامنة', danger: false });
 }
 function glAutoDraw(r, dry) {
