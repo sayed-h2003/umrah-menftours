@@ -53,16 +53,36 @@ export class GasSession {
     this.propW = {}; this.cacheShared = opt.cache || new Map(); this.t0 = opt.now || Date.now(); this.seed = (opt.seed || (Math.random() * 4294967296)) >>> 0; this.runs = 0; this.need = new Set();
   }
   // ===== تحميل اللقطة =====
+  // اللقطة مع ذاكرة على مستوى العامل (opt.snapCache): لا يُعاد جلب جدول لم يتغيّر إصداره منذ طلب سابق
   async loadTables(tbls) {
-    const r = await this.o.db('gas_snapshot', { p_tbls: tbls || null });
-    this.versLoaded = true;
-    Object.assign(this.snap.vers, r.vers || {}); Object.assign(this.snap.meta, r.meta || {}); Object.assign(this.snap.rows, r.rows || {});
+    const C = this.o.snapCache || null;
+    if (!this.versLoaded) {
+      const v = await this.o.db('gas_snapshot', { p_tbls: [] });
+      this.snap.vers = v.vers || {}; this.glver = v.glver || {}; this.versLoaded = true;
+    }
+    const want = (tbls || Object.keys(this.snap.vers)).filter((t) => !this.snap.rows[t]);
+    const fetchList = [];
+    want.forEach((t) => {
+      const c = C && C.get('t:' + t);
+      if (c && String(c.ver) === String(this.snap.vers[t])) { this.snap.rows[t] = c.rows; this.snap.meta[t] = c.meta; }
+      else fetchList.push(t);
+    });
+    if (fetchList.length) {
+      const r = await this.o.db('gas_snapshot', { p_tbls: fetchList });
+      Object.assign(this.snap.meta, r.meta || {}); Object.assign(this.snap.rows, r.rows || {});
+      fetchList.forEach((t) => { if (C && this.snap.rows[t]) C.set('t:' + t, { ver: (r.vers || {})[t], rows: this.snap.rows[t], meta: this.snap.meta[t] }); });
+    }
     if (!tbls) Object.keys(this.snap.vers).forEach((t) => { if (!this.snap.rows[t]) this.snap.rows[t] = []; });
     Array.from(this.need).forEach((t) => { if (!this.snap.rows[t]) { this.snap.rows[t] = []; this.snap.meta[t] = { hdr: [], exists: false }; } });
     (tbls || []).forEach((t) => { if (!this.snap.rows[t]) { this.snap.rows[t] = []; this.snap.meta[t] = { hdr: [], exists: false }; } });
     this.need.clear();
   }
-  async loadGl(key) { this.gl[key] = await this.o.db('gas_gl_rows', { p_key: key }); }
+  async loadGl(key) {
+    const C = this.o.snapCache || null, v = String((this.glver || {})['gl_' + key] ?? ''), c = C && C.get('gl:' + key);
+    if (c && v !== '' && c.ver === v) { this.gl[key] = c.rows; return; }
+    this.gl[key] = await this.o.db('gas_gl_rows', { p_key: key });
+    if (C && v !== '') C.set('gl:' + key, { ver: v, rows: this.gl[key] });
+  }
   // ===== التشغيل =====
   instantiate() {
     const S = this, rnd = prng(S.seed), tick = { n: 0 };   // بذرة فريدة لكل طلب وثابتة بين إعادات تشغيله (معرّفات الصفوف لا تتكرر بين الطلبات)
@@ -199,7 +219,12 @@ export class GasSession {
     await this.o.db('gas_apply', { ops });
     pend.forEach((t) => { t.done = true; });
   }
-  async preload() { await this.loadTables(null); this.allLoaded = true; await Promise.all([this.loadGl('entries'), this.loadGl('lines')]); }
+  async preload() {
+    await this.loadTables([]);
+    const gl = Object.keys(this.snap.vers).filter((t) => /^gl_/.test(t));
+    await this.loadTables(gl);
+    await Promise.all([this.loadGl('entries'), this.loadGl('lines')]);
+  }
   async run(fn, args, maxRuns = 14) {
     if (this.o.preload !== false && !this.allLoaded) await this.preload();
     for (this.runs = 0; this.runs < maxRuns; this.runs++) {

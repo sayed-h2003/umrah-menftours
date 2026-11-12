@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.448  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.449  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -8111,7 +8111,7 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
   var GAS_RX_ = /^(gl[A-Z]\w*|acc(CounterAccounts|GlPullPayments|PayCounterSet|HbSyncAll)|clientAccountBg|ccAccountsLite|ccQuickAccount|saveGeneralPaymentsBulk|getAgentAccountExtras)$/;
   function gasCall(fn, args, ok, fail, fallback) {
     try {
-      spInit(); if (!spReady() || SP.gasOff || !GAS_RX_.test(fn) || ((SP.cfg.st || {}).groups || []).indexOf('gas') < 0 || typeof fetch !== 'function') return false;
+      spInit(); SP.gasSkip = SP.gasSkip || {}; if (SP.gasSkip[fn] && now() - SP.gasSkip[fn] < 600000) return false; if (!spReady() || SP.gasOff || !GAS_RX_.test(fn) || ((SP.cfg.st || {}).groups || []).indexOf('gas') < 0 || typeof fetch !== 'function') return false;
       var t0 = now(), a = (args || []).slice(1), ep = S.epoch;
       fetch(SP.cfg.url + '/functions/v1/gas', { method: 'POST', headers: { Authorization: 'Bearer ' + SP.cfg.token, apikey: SP.cfg.anon, 'Content-Type': 'application/json' }, body: JSON.stringify({ fn: fn, args: a }) })
         .then(function (r) { return r.json().then(function (j) { return { st: r.status, j: j }; }, function () { return { st: r.status, j: null }; }); })
@@ -8120,7 +8120,7 @@ function _glKick_(d) { try { if (d && d.success !== false) _RAWRUN_().withFailur
           var j = x.j || {}, ms = now() - t0;
           try { var sl = (window.__SRC = window.__SRC || []); sl.push([fn, j.ok ? 'pg' : 'as', ms, j.ok ? '' : 'gas: ' + String(j.error || x.st).slice(0, 200), now()]); } catch (eS) {}
           if (j.ok) { try { console.info('⚙️ gas', fn, ms + 'ms', 'runs=' + j.runs); } catch (e0) {} ok(j.d); try { if (window.GL && !GL_RO_RX_.test(fn)) GL._wAt = 0; } catch (e1) {} return; }   // gas يعيد بناء gl_aux بنفس الطلب ⇒ لا حاجة لحجب قراءات Postgres بعد الكتابة
-          if (x.st === 404 || x.st === 401 || x.st === 503 || j.unsupported || !x.j) { if (x.st === 404) SP.gasOff = true; fallback(); return; }
+          if (x.st === 404 || x.st === 401 || x.st === 503 || j.unsupported || !x.j) { if (x.st === 404) SP.gasOff = true; if (j.unsupported) SP.gasSkip[fn] = now(); fallback(); return; }   // (V4.449) غير مدعوم ⇒ لا يُحاول gas لهذه الدالة 10 دقائق
           fail(new Error(String(j.error || 'خطأ غير معروف')));
         }, function () { if (ep === S.epoch) fallback(); });
       return true;
@@ -9856,7 +9856,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.448";
+var CLIENT_APP_VERSION = "4.449";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

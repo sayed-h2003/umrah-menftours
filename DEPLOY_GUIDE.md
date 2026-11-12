@@ -3466,3 +3466,10 @@
 2. أعد نشر الدالة `gas` (index.ts تغيّر): Actions ← «Deploy gas edge function» ← Run workflow (أو يتم تلقائياً عند الرفع للفرع إن كانت الأسرار مضبوطة).
 3. ارفع index_web.html و Code.gs. خروج ثم دخول.
 - `clientAccountBg` يمر الآن بـgas أيضاً.
+
+## V4.449 — تسريع gas (ذاكرة اللقطة بين الطلبات + تحميل جداول الحسابات أولاً)
+1. SQL: `077_gas_cache.sql`.
+2. الدالة gas تُنشر تلقائياً من GitHub Actions مع هذا الرفع (تحقق من العلامة الخضراء).
+3. ارفع index_web.html و Code.gs.
+4. **الأهم — يلزم لعمل gas:** من محرر Apps Script في وقت هادئ: `storeCompareGlCore()` ثم `storeCutoverGlCoreApply()` (رسالة gas الحالية «sheet GL_Settings/GL_Accounts» تعني أن هذه الخطوة لم تُنفَّذ).
+- الطلب الثاني فما بعده لا يجلب إلا الجداول التي تغيّرت · دالة «غير مدعومة» لا تُحاوَل 10 دقائق.

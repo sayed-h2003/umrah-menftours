@@ -10,7 +10,7 @@ const origin = Deno.env.get('ALLOWED_ORIGIN') || '*';
 const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'content-type, authorization, apikey, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Vary': 'Origin' };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const H = { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
-const SHARED_CACHE = new Map();
+const SHARED_CACHE = new Map(), SNAP_CACHE = new Map();   // ذاكرة العامل بين الطلبات
 const DENY = /^(do(Get|Post)|onOpen|onEdit|store(Cutover|Rollback)|supa(Sync|Write|Issue)|gl(StoreCutover|ShadowSync)|mg[A-Z]|setup|install|uninstall)/i;
 
 async function db(fn: string, args: Record<string, unknown>) {
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     const props = await db('gas_props_all', {});
     const secretKeys = { SUPA_URL: URL_, SUPA_SERVICE_KEY: KEY };
     Object.assign(props, secretKeys);
-    const s = new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, tz: props.APP_TZ || 'Africa/Cairo',
+    const s = new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, snapCache: SNAP_CACHE, tz: props.APP_TZ || 'Africa/Cairo',
       session: { username: claims.app_user, permissions: (claims.perms || []).join(','), fullName: claims.app_user }, log: (x: string) => console.log(x) });
     const d = await s.run(fn, [null].concat(Array.isArray(body.args) ? body.args : []));
     // خصائص السكربت التي تغيّرت ⇒ gas_props + صادر kvset لـ Apps Script (ما دام يعمل)
