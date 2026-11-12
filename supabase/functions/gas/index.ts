@@ -32,12 +32,22 @@ async function ext(e: { url: string; opt: Record<string, any> }) {
 }
 function b64u(s: string) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), (c) => c.charCodeAt(0)); }
 async function verifyJwt(tok: string, secret: string) {
-  const [h, p, sig] = tok.split('.'); if (!h || !p || !sig) return null;
-  const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
-  if (!(await crypto.subtle.verify('HMAC', k, b64u(sig), new TextEncoder().encode(h + '.' + p)))) return null;
-  const c = JSON.parse(new TextDecoder().decode(b64u(p)));
-  if (!c.app_user || (c.exp && c.exp * 1000 < Date.now())) return null;
-  return c;
+  // 1) تحقق محلي إن وُجد السر ونجح (سريع)
+  try {
+    const [h, p, sig] = tok.split('.');
+    if (secret && h && p && sig) {
+      const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret.trim()), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+      if (await crypto.subtle.verify('HMAC', k, b64u(sig), new TextEncoder().encode(h + '.' + p))) {
+        const c = JSON.parse(new TextDecoder().decode(b64u(p)));
+        if (c.app_user && !(c.exp && c.exp * 1000 < Date.now())) return c;
+      }
+    }
+  } catch { /* ننتقل للتحقق عبر Supabase */ }
+  // 2) PostgREST يتحقق من التوقيع بسر المشروع ويعيد هوية المستخدم (لا يلزم تطابق APP_JWT_SECRET)
+  const r = await fetch(`${URL_}/rest/v1/rpc/gas_whoami`, { method: 'POST', headers: { apikey: Deno.env.get('SUPABASE_ANON_KEY') || KEY, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: '{}' });
+  if (!r.ok) return null;
+  const w = await r.json().catch(() => null);
+  return w && w.user ? { app_user: w.user, perms: w.perms || [] } : null;
 }
 
 Deno.serve(async (req) => {
