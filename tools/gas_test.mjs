@@ -17,7 +17,7 @@ const http = async (q) => {
   } catch (e) { return { code: 400, text: String(e.stderr || e.message) }; }
 };
 const [fn, a] = process.argv.slice(2);
-const props = { SUPA_URL: 'http://local', SUPA_SERVICE_KEY: 'x', SUPA_ENABLED: '1', STORE_TABLES: 'all', GL_STORE: 'supabase', GL_SPREADSHEET_ID: 'gl1', SUPA_W_GL: '1' };
+const props = { SUPA_URL: 'http://local', SUPA_SERVICE_KEY: 'x', SUPA_ENABLED: '1', STORE_TABLES: process.env.ST || 'ministry,core,acc,bookings,visa,misc,glaux,glcore', GL_STORE: 'supabase', GL_SPREADSHEET_ID: 'gl1', SUPA_W_GL: '1' };
 const s = new GasSession({ snapCache: new Map(), src: SRC, db, http, ext: async () => ({ code: 599, text: 'no ext' }), props, session: { username: 'admin', permissions: 'admin' }, tz: 'Africa/Cairo', allowPrivate: true, debug: process.env.GAS_DEBUG ? (x) => console.error('DBG', x) : null, log: (x) => console.error('LOG', x) });
 const t0 = Date.now(), c0 = process.cpuUsage();
 try { const r = await s.run(fn, (fn.endsWith('_') ? [] : [null]).concat(JSON.parse(a || '[]'))); console.log(String(JSON.stringify(r)).slice(0, 1500)); }

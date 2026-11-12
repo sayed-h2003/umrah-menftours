@@ -255,7 +255,7 @@ function _hbSnapMd5_(str) { return Utilities.computeDigest(Utilities.DigestAlgor
 // يقرأ الشيتات الخمسة كما يقرؤها _glHbRead_ تماماً (نفس الأعمدة والصفوف) ⇒ { mk, md, pay, meta, prof } بصفوف مرمّزة [rn, cells]
 function _hbSnapRead_() {
   var c = _glHbCfg_(); if (!c.ssId) throw new Error('لم يُربط ملف برنامج الحجوزات بعد');
-  var ss = SpreadsheetApp.openById(c.ssId), src = (c.srcId && c.srcId !== c.ssId) ? SpreadsheetApp.openById(c.srcId) : ss, out = {};
+  var ss = hbBookById_(c.ssId), src = (c.srcId && c.srcId !== c.ssId) ? SpreadsheetApp.openById(c.srcId) : ss, out = {};
   var rd = function (book, name, from, cols) {
     var sh = book.getSheetByName(name); if (!sh) return [];
     var last = sh.getLastRow(); if (last < from) return [];

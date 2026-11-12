@@ -29,7 +29,9 @@ var ST_GROUPS_ = {
   glaux: ['gl_batches', 'gl_pending', 'gl_pay_direct', 'gl_auto_log', 'gl_statements', 'gl_attachments', 'gl_fx_daily', 'gl_hb_map', 'gl_hb_pay', 'gl_hb_trip', 'gl_hb_mirror', 'gl_hb_keep_erp',
           'gl_recon_links', 'gl_auto_override', 'gl_bank_due', 'gl_maker_checker', 'gl_charters', 'gl_deleted'],
   // (V4.445) دليل الحسابات وإعدادات الحسابات: برنامج الحجوزات صار يقرؤهما عبر _glSS_ (HB_GlLink.glLinkSS_) ⇒ آمنان بطبقة التخزين
-  glcore: ['gl_accounts', 'gl_settings']
+  glcore: ['gl_accounts', 'gl_settings'],
+  // (V4.451) الأوراق الداخلية لملف برنامج الحجوزات — شيتا مكة والمدينة و«العملاء والموردين» تبقى شيتات إدخال خارجية (موصل)
+  hb: ['hb_users', 'hb_acc_perms', 'hb_changelog', 'hb_qaid_edit', 'hb_portal', 'hb_portal_req', 'hb_payments', 'hb_pay_meta', 'hb_profiles', 'hb_pay_bin', 'hb_tg_queue', 'hb_tg_users']
 };
 var ST_NEVER_ = { gl_entries: 1, gl_lines: 1 };   // لهما طبقتهما الخاصة (GlStore.gs / GL_STORE)
 // أعمدة المبالغ لمقارنة المجاميع (مثل mgVerify): [جدول منمّط ← عمود]
@@ -54,22 +56,22 @@ function _stExpand_(list) {
 }
 function _stCfg_() {
   if (_ST_CFG_) return _ST_CFG_;
-  var cfg = { on: false, set: {}, bySheet: { main: {}, gl: {} } };
+  var cfg = { on: false, set: {}, bySheet: { main: {}, gl: {}, hb: {} } };
   try {
     var raw = _supaP_('STORE_TABLES');
     if (raw && _supaP_('SUPA_URL') && _supaP_('SUPA_SERVICE_KEY')) {
       cfg.set = _stExpand_(raw);
       if (typeof _usersSot_ === 'function' && _usersSot_()) delete cfg.set['app_users'];   // (V4.419) Postgres هو المرجع — لا مزامنة ورقة→PG للمستخدمين
       var specs = _stSpecs_();
-      Object.keys(cfg.set).forEach(function (t) { var sp = specs[t]; cfg.bySheet[sp.ss === 'gl' ? 'gl' : 'main'][sp.sheet] = sp; cfg.on = true; });
+      Object.keys(cfg.set).forEach(function (t) { var sp = specs[t]; cfg.bySheet[sp.ss === 'gl' || sp.ss === 'hb' ? sp.ss : 'main'][sp.sheet] = sp; cfg.on = true; });
     }
-  } catch (e) { cfg = { on: false, set: {}, bySheet: { main: {}, gl: {} } }; }
+  } catch (e) { cfg = { on: false, set: {}, bySheet: { main: {}, gl: {}, hb: {} } }; }
   _ST_CFG_ = cfg; return cfg;
 }
 function _stActive_() { return _stCfg_().on; }
 // للاختبارات/بعد تغيير المفتاح: إعادة قراءة المفتاح وتفريغ الصور
 function _stReset_() { _ST_CFG_ = null; _ST_IMG_ = {}; _ST_SHEETS_ = {}; _ST_WRAP_ = {}; _ST_BYPASS_ = false; _ST_FLUSHING_ = false; _ST_EX_ = null; _ST_WARM_ = {}; _ST_FAIL_ = null; }
-function _stSpecFor_(which, sheetName) { if (_ST_BYPASS_) return null; var m = _stCfg_().bySheet[which === 'gl' ? 'gl' : 'main']; return m.hasOwnProperty(sheetName) ? m[sheetName] : null; }
+function _stSpecFor_(which, sheetName) { if (_ST_BYPASS_) return null; var m = _stCfg_().bySheet[which === 'gl' || which === 'hb' ? which : 'main']; return m.hasOwnProperty(sheetName) ? m[sheetName] : null; }
 
 /* ---------------- الغلاف (نقطة الاختناق) ---------------- */
 function _stWrapSS_(ss, which) {
@@ -482,10 +484,12 @@ function _stWrapLock_(l) {
 /* ============================================================================
    أدوات المالك (من المحرر فقط)
    ============================================================================ */
+// (V4.451) ملف الجدول: الرئيسي · الحسابات العامة · برنامج الحجوزات (hb)
+function _stBook_(sp) { return sp.ss === 'gl' ? _glSS_() : (sp.ss === 'hb' ? hbProgramSS_() : getSpreadsheet_()); }
 function _stSheetRaw_(sp) {   // الشيت الحقيقي متجاوزاً الطبقة ⇒ {exists, hdr, rows:[cells]} (الصفوف الفارغة بالوسط تبقى · الذيل يُقصّ)
   var save = _ST_BYPASS_; _ST_BYPASS_ = true;
   try {
-    var ss = sp.ss === 'gl' ? _glSS_() : getSpreadsheet_(), sh = ss.getSheetByName(sp.sheet);
+    var ss = _stBook_(sp), sh = ss.getSheetByName(sp.sheet);
     if (!sh) return { exists: false, hdr: [], rows: [] };
     var lr = sh.getLastRow(), lc = sh.getLastColumn();
     if (lr < 1 || lc < 1) return { exists: true, hdr: [], rows: [] };
@@ -732,7 +736,7 @@ function storeRollback(group) {
       if (!st.exists) { log.push('↩︎ ' + t + ': لا بيانات بالمخزن — تُرك الشيت'); return; }
       var save = _ST_BYPASS_; _ST_BYPASS_ = true;
       try {
-        var ss = sp.ss === 'gl' ? _glSS_() : getSpreadsheet_(), sh = ss.getSheetByName(sp.sheet) || ss.insertSheet(sp.sheet);
+        var ss = _stBook_(sp), sh = ss.getSheetByName(sp.sheet) || ss.insertSheet(sp.sheet);
         var hdr = (st.hdr || []).map(_stDec_), rows = st.rows.map(function (r) { return (r[2] || []).map(_stDec_); });
         var W = Math.max(hdr.length, rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0), 1), pad = function (r) { var x = r.slice(); while (x.length < W) x.push(''); return x; };
         var last = sh.getLastRow(), lc = Math.max(sh.getLastColumn(), W);
@@ -777,6 +781,10 @@ function storeCutoverVisaApply() { return storeCutover('visa', true); }
 function storeCutoverMiscApply() { return storeCutover('misc', true); }
 function storeCutoverGlAuxApply() { return storeCutover('glaux', true); }
 function storeCompareGlCore() { return storeCompare('glcore'); }
+function storeCompareHb() { return storeCompare('hb'); }
+function storeCutoverHb() { return storeCutover('hb', false); }
+function storeCutoverHbApply() { return storeCutover('hb', true); }
+function storeRollbackHb() { return storeRollback('hb'); }
 function storeCutoverGlCore() { return storeCutover('glcore', false); }
 function storeCutoverGlCoreApply() { return storeCutover('glcore', true); }
 function storeRollbackGlCore() { return storeRollback('glcore'); }

@@ -1105,7 +1105,7 @@ function glAccountDelete(authToken, code, confirmText, sig) {
     // البيانات المحاسبية للدفعات داخل ملف برنامج الحجوزات (حساب نقدي = الكود ⇒ يُحذف الصف كما يفعل برنامج الحجوزات للحساب الفارغ)
     var nMeta = 0;
     try {
-      var hbId = _glSettings_().hb_ss_id, mSh = hbId ? SpreadsheetApp.openById(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null;
+      var hbId = _glSettings_().hb_ss_id, mSh = hbId ? hbBookById_(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null;
       if (mSh && mSh.getLastRow() > 1) {
         var mv = mSh.getRange(2, 1, mSh.getLastRow() - 1, 6).getValues(), mDel = [];
         mv.forEach(function (r, i) { if (_glStr_(r[1]) === code) mDel.push(i + 2); });
@@ -1261,7 +1261,7 @@ function glAccountRestore(authToken, delId, dry) {
     try { var AS = _glApSheets_(); ['pay', 'item'].forEach(function (t) { extApp(AS[t].sh, AS[t].W, ext.filter(function (o) { return o.key === AS[t].name && Array.isArray(o.data); }).sort(byRow).map(function (o) { return o.data; })); }); } catch (eA) { Logger.log('accrestore ap: ' + eA.message); }
     var metaRows = ext.filter(function (o) { return o.key === 'HB:البيانات المحاسبية للدفعات' && Array.isArray(o.data); }).map(function (o) { return o.data; });
     if (metaRows.length) {
-      try { var hbId = _glSettings_().hb_ss_id, mSh = hbId ? SpreadsheetApp.openById(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null; if (mSh) extApp(mSh, 6, metaRows); } catch (eMe) { Logger.log('accrestore hb meta: ' + eMe.message); }
+      try { var hbId = _glSettings_().hb_ss_id, mSh = hbId ? hbBookById_(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null; if (mSh) extApp(mSh, 6, metaRows); } catch (eMe) { Logger.log('accrestore hb meta: ' + eMe.message); }
     }
     // 5) إلغاء التقاعد وعلامات «الطرف محذوف»
     var AD = JSON.parse(JSON.stringify(_glAccDeleted_()));
@@ -1357,7 +1357,7 @@ function _glMoveAccountCore_(code, newParent, user, opts) {
   var nMeta = 0;
   try {
     var hbId = _glSettings_().hb_ss_id;
-    var mSh = hbId ? SpreadsheetApp.openById(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null;
+    var mSh = hbId ? hbBookById_(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null;
     if (mSh && mSh.getLastRow() > 1) {
       var mv = mSh.getRange(2, 2, mSh.getLastRow() - 1, 1).getValues(), ch = false;
       mv.forEach(function (r) { var v = _glStr_(r[0]); if (map[v]) { r[0] = map[v]; nMeta++; ch = true; } });
@@ -1414,7 +1414,7 @@ function glMergeAccounts(authToken, from, to, dry) {
     fix('hbmap', 2); fix('hbpay', 1); fix('cpdir', 1); fix('autoovr', 3); fix('autoovr', 4);   // (V4.319) قواعد التعديل اليدوي للقيود التلقائية
     try { var catM = {}; catM[from] = to; _glCatRecode_(catM); } catch (eCat) {}   // 🍽️ (V4.323) اتفاقيات الإعاشة تتبع الحساب المدموج فيه
     try {
-      var hbId = _glSettings_().hb_ss_id, mSh = hbId ? SpreadsheetApp.openById(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null;
+      var hbId = _glSettings_().hb_ss_id, mSh = hbId ? hbBookById_(hbId).getSheetByName('البيانات المحاسبية للدفعات') : null;
       if (mSh && mSh.getLastRow() > 1) { var mv = mSh.getRange(2, 2, mSh.getLastRow() - 1, 1).getValues(), ch = false; mv.forEach(function (r) { if (_glStr_(r[0]) === from) { r[0] = to; ch = true; } }); if (ch) mSh.getRange(2, 2, mv.length, 1).setNumberFormat('@').setValues(mv); }
     } catch (eM) {}
     // 3) الحساب الباقي يرث ربط المدموج (وإلا يُحفظ كرابط إضافي) ثم حذف المدموج
@@ -7253,7 +7253,7 @@ function _glHbRead_() {
   if (_GL_HB_MEMO_) return _GL_HB_MEMO_;
   var c = _glHbCfg_();
   if (!c.ssId) throw new Error('لم يُربط ملف برنامج الحجوزات بعد');
-  var ss = SpreadsheetApp.openById(c.ssId), src = (c.srcId && c.srcId !== c.ssId) ? SpreadsheetApp.openById(c.srcId) : ss;
+  var ss = hbBookById_(c.ssId), src = (c.srcId && c.srcId !== c.ssId) ? SpreadsheetApp.openById(c.srcId) : ss;
   var bookings = [], seen = {};
   [[c.mk, c.mkRow, 'مكة'], [c.md, c.mdRow, 'المدينة']].forEach(function (d) {
     var sh = src.getSheetByName(d[0]);
@@ -7808,7 +7808,7 @@ function _glRefsFor_(list) {
    التلقائي AUTO:HBP بالحسابات العامة ③ تعليمها «لا تحتاج قيداً». كل ذلك بسجل ربط بإعدادات الحسابات (hb_paylink / hb_paynoent) بلا لمس شيتات الحجوزات. */
 function _glHbPayFind_(payId) {
   var c = _glHbCfg_(); if (!c.ssId) throw new Error('برنامج الحجوزات غير مربوط');
-  var sh = SpreadsheetApp.openById(c.ssId).getSheetByName(c.pay); if (!sh || sh.getLastRow() < 2) return null;
+  var sh = hbBookById_(c.ssId).getSheetByName(c.pay); if (!sh || sh.getLastRow() < 2) return null;
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 10).getValues();
   for (var i = 0; i < vals.length; i++) if (_glStr_(vals[i][7]) === _glStr_(payId)) {
     var r = vals[i]; return { id: _glStr_(r[7]), party: _glStr_(r[1]), date: _glAutoDate_(r[0]), dir: _glStr_(r[2]), amount: _glR2_(parseFloat(r[3]) || 0), note: _glStr_(r[4]) };
@@ -7848,7 +7848,7 @@ function _glHbPayMapSet_(setting, payId, val) {
    بالحجوزات، أو نسختان). لكل صف: مصدره (قيد/حجوزات) ورقم القيد والسند والطرف المقابل — ليقرر المستخدم: حذف/دمج/إبقاء أحدها/تجاهل. */
 function _glHbDupScan_(onlyParty) {
   var c = _glHbCfg_(); if (!c.ssId) return [];
-  var ss = SpreadsheetApp.openById(c.ssId), psh = ss.getSheetByName(c.pay); if (!psh || psh.getLastRow() < 2) return [];
+  var ss = hbBookById_(c.ssId), psh = ss.getSheetByName(c.pay); if (!psh || psh.getLastRow() < 2) return [];
   var vals = psh.getRange(2, 1, psh.getLastRow() - 1, 10).getValues(), nz = onlyParty ? _glHbKey_(onlyParty) : '', groups = {}, ign = {};
   try { ign = JSON.parse(_glSettings_().hb_dup_ign || '{}') || {}; } catch (e0) {}
   vals.forEach(function (r, i) {
@@ -7885,7 +7885,7 @@ function _glHbDupScan_(onlyParty) {
 // تطبيق قرارات المستخدم: ops = [{act:'del', ids:[…]} | {act:'ignore', sig}]. حذف نسخة قيد = «إخفاء بالكشف فقط» (القيد يبقى) · حذف دفعة حجوزات = حذفها بالكشف
 // opts.delNative(id) ⇒ يحذف دفعة حجوزات (من HB_Bridge بصلاحياتها). يُرجع {done, errors}
 function _glHbDupApply_(ops, delNative) {
-  var c = _glHbCfg_(), ss = SpreadsheetApp.openById(c.ssId), psh = ss.getSheetByName(c.pay), done = 0, errors = [], hid = _glScrHide_(), touched = {}, ign = null;
+  var c = _glHbCfg_(), ss = hbBookById_(c.ssId), psh = ss.getSheetByName(c.pay), done = 0, errors = [], hid = _glScrHide_(), touched = {}, ign = null;
   var rowsOfId = {}; if (psh && psh.getLastRow() >= 2) psh.getRange(2, 1, psh.getLastRow() - 1, 8).getValues().forEach(function (r) { var id = _glStr_(r[7]); if (id) rowsOfId[id] = _glStr_(r[1]); });
   (ops || []).forEach(function (op) {
     if (op && op.act === 'ignore' && op.sig) { if (!ign) { try { ign = JSON.parse(_glSettings_().hb_dup_ign || '{}') || {}; } catch (e) { ign = {}; } } ign[String(op.sig).slice(0, 300)] = 1; done++; return; }
@@ -7915,7 +7915,7 @@ function _glHbLinkedParties_(entryId) {
   var ids = {}, n = 0; Object.keys(pl).forEach(function (k) { if (String(pl[k]) === String(entryId)) { ids[k] = 1; n++; } });
   if (!n) return {};
   var out = {}, c = _glHbCfg_(); if (!c.ssId) return {};
-  var sh = SpreadsheetApp.openById(c.ssId).getSheetByName(c.pay); if (!sh || sh.getLastRow() < 2) return {};
+  var sh = hbBookById_(c.ssId).getSheetByName(c.pay); if (!sh || sh.getLastRow() < 2) return {};
   sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues().forEach(function (r) { if (ids[_glStr_(r[7])]) out[_glHbKey_(_glStr_(r[1]))] = 1; });
   return out;
 }
@@ -8018,7 +8018,7 @@ function _glMirFlush_(budgetMs) {
     var opt = {};
     try { opt.parties = _glHbMirrorParties_(); } catch (eP) {}
     try { opt.fx = _glFxDailyMap_(); } catch (eF) {}
-    try { var c = _glHbCfg_(); if (c.ssId) opt.ss = SpreadsheetApp.openById(c.ssId); } catch (eS) {}
+    try { var c = _glHbCfg_(); if (c.ssId) opt.ss = hbBookById_(c.ssId); } catch (eS) {}
     order.forEach(function (id) {
       var g = by[id];
       if (Date.now() - t0 > (budgetMs || 60000)) { left++; return; }
@@ -8045,7 +8045,7 @@ function _glHbMirrorSync_(entryId, opt) {
   var skipped = want.skipped || [];
   if (!want.length && !wasRow) return skipped.length ? { written: 0, removed: 0, skipped: skipped } : null;   // لا نسخة سابقة ولا جديدة ⇒ بلا فتح ملف الحجوزات
   var c = _glHbCfg_(); if (!c.ssId) return null;
-  var ss = opt.ss || SpreadsheetApp.openById(c.ssId), sh = ss.getSheetByName(c.pay); if (!sh) return null;
+  var ss = opt.ss || hbBookById_(c.ssId), sh = ss.getSheetByName(c.pay); if (!sh) return null;
   var pre = 'GL:' + id + ':', last = sh.getLastRow(), have = [];
   // ⚡ (V4.294) قيد منشأ للتوّ (opt.isNew): معرّفه تسلسلي جديد لم يُنسَخ قطّ ⇒ لا صفوف «GL:id:» سابقة له بشيت
   // الدفعات، فنتخطّى قراءة عمود H كاملاً. كانت هذه القراءة جولة شبكية لكل قيد عند اعتماد/مزامنة عدة صفوف عهدة،
@@ -8325,7 +8325,7 @@ function _glHbMirrorAll_(onlyParty) {
     var mine = {}; _glRows_('lines').forEach(function (l) { if (codes[_glStr_(l[4])]) mine[_glStr_(l[0])] = 1; });
     Object.keys(ids).forEach(function (id) { if (!mine[id]) delete ids[id]; });
   }
-  var ss = SpreadsheetApp.openById(c.ssId), n = 0, rows = 0;
+  var ss = hbBookById_(c.ssId), n = 0, rows = 0;
   Object.keys(ids).forEach(function (id) {
     var r = _glHbMirrorSync_(id, { cutK: cutK, parties: parties, fx: fx, ss: ss, dup: dup });
     if (r && r.written) { n++; rows += r.written; }
@@ -8517,7 +8517,7 @@ function glHbDeletePays(authToken, ids) {
   var lock = _glLock_(); lock.waitLock(30000);
   try {
     var c = _glHbCfg_(); if (!c.ssId) throw new Error('ملف الحجوزات غير مربوط');
-    var sh = SpreadsheetApp.openById(c.ssId).getSheetByName(c.pay); if (!sh) throw new Error('لم أجد شيت «' + c.pay + '»');
+    var sh = hbBookById_(c.ssId).getSheetByName(c.pay); if (!sh) throw new Error('لم أجد شيت «' + c.pay + '»');
     var last = sh.getLastRow(); if (last < 2) throw new Error('سجل الدفعات فارغ');
     var want = {}; ids.forEach(function (id) { want[id] = 1; });
     var vals = sh.getRange(2, 1, last - 1, 10).getValues(), rows = [], gone = [];

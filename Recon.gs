@@ -210,7 +210,7 @@ function _reconHbWhy_(X, p, base, parties, claimed) {
 /* ---------- 🏨 دفعات الحجوزات ---------- */
 function _reconHb_(X, out) {
   var c = _glHbCfg_(); if (!c.ssId) return;
-  var sh = SpreadsheetApp.openById(c.ssId).getSheetByName(c.pay); if (!sh || sh.getLastRow() < 2) return;
+  var sh = hbBookById_(c.ssId).getSheetByName(c.pay); if (!sh || sh.getLastRow() < 2) return;
   var vals = sh.getRange(2, 1, sh.getLastRow() - 1, 10).getValues(), pays = [], mirrored = {};
   vals.forEach(function (r, i) {
     var party = _glStr_(r[1]), amt = _glR2_(parseFloat(r[3]) || 0), dir = _glStr_(r[2]); if (!party || !amt || /يدوي/.test(dir)) return;

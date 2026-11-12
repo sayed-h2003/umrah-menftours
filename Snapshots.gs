@@ -377,7 +377,7 @@ var _SNAP_LIVE_SS_ = {};
 function _snapLiveSheet_(name) {
   var srcs = _snapSources_();
   for (var i = 0; i < srcs.length; i++) {
-    try { var ss = _SNAP_LIVE_SS_[srcs[i].id] || (_SNAP_LIVE_SS_[srcs[i].id] = (srcs[i].role === 'main' ? getSpreadsheet_() : SpreadsheetApp.openById(srcs[i].id))); var sh = ss.getSheetByName(name); if (sh) { var stK = (name === GL_SHEETS_.entries.name) ? 'entries' : (name === GL_SHEETS_.lines.name ? 'lines' : ''); if (stK && _glStX_(stK)) sh = _glStSheet_(stK); /* 🗄️ (V4.373) GL_STORE: الورقة الحية = Supabase */ return { sh: sh, role: srcs[i].role }; } } catch (e) {}
+    try { var ss = _SNAP_LIVE_SS_[srcs[i].id] || (_SNAP_LIVE_SS_[srcs[i].id] = (srcs[i].role === 'main' ? getSpreadsheet_() : (srcs[i].role === 'gl' && typeof _glSS_ === 'function' ? _glSS_() : (srcs[i].role === 'hb' && typeof hbBookById_ === 'function' ? hbBookById_(srcs[i].id) : SpreadsheetApp.openById(srcs[i].id))))); var sh = ss.getSheetByName(name); if (sh) { var stK = (name === GL_SHEETS_.entries.name) ? 'entries' : (name === GL_SHEETS_.lines.name ? 'lines' : ''); if (stK && _glStX_(stK)) sh = _glStSheet_(stK); /* 🗄️ (V4.373) GL_STORE: الورقة الحية = Supabase */ return { sh: sh, role: srcs[i].role }; } } catch (e) {}
   }
   return null;
 }

@@ -240,6 +240,18 @@ var MG_SPECS_ = [
   { t: 'gl_bank_due', ss: 'gl', sheet: 'GL_BankDue', pk: ['key'], req: ['key'], rowObj: 'data', cols: [['key', 0, 'S']] },
   { t: 'gl_maker_checker', ss: 'gl', sheet: 'GL_MakerChecker', pk: ['id'], req: ['id'], rowObj: 'data', cols: [['id', 0, 'S'], ['status', 'الحالة', 's']] },
   { t: 'gl_charters', ss: 'gl', sheet: 'GL_HB_Charters', pk: ['id'], req: ['id'], rowObj: 'data', cols: [['id', 0, 'S']] },
+  { t: 'hb_users', ss: 'hb', sheet: 'المستخدمون', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_acc_perms', ss: 'hb', sheet: 'صلاحيات الحسابات', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_changelog', ss: 'hb', sheet: 'سجل تعديلات الحجوزات', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_qaid_edit', ss: 'hb', sheet: 'حجوزات معدَّلة بعد القيد', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_portal', ss: 'hb', sheet: 'بوابة العملاء', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_portal_req', ss: 'hb', sheet: 'طلبات العملاء', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_payments', ss: 'hb', sheet: 'سجل الدفعات', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_pay_meta', ss: 'hb', sheet: 'البيانات المحاسبية للدفعات', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_profiles', ss: 'hb', sheet: 'بيانات الحسابات', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_pay_bin', ss: 'hb', sheet: 'سلة دفعات الحجوزات المحذوفة', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_tg_queue', ss: 'hb', sheet: 'قائمة تنبيهات تليجرام', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
+  { t: 'hb_tg_users', ss: 'hb', sheet: 'مستخدمو بوت تليجرام', pk: ['k'], req: [], rowObj: 'data', cols: [['k', 0, 'S']], storeOnly: true },   // (V4.451) طبقة التخزين فقط
   { t: 'gl_deleted', ss: 'gl', sheet: 'GL_Deleted', pk: ['id'], wipe: true, req: ['del_id'], rowObj: 'payload', cols: [['del_id', 0, 'S'], ['role', 1, 's']], chunk: 200 }
 ];
 

@@ -19,11 +19,14 @@ function hbProgramId_() {
   return String(id).trim();
 }
 var _HB_PROGRAM_SS_ = null;
+// (V4.451) أي فتح لملف برنامج الحجوزات بمعرّفه يمر بنفس الغلاف (وإلا تُقرأ الأوراق المنقولة من الشيت الراكد)
+function hbBookById_(id) { try { if (id && id === hbProgramId_()) return hbProgramSS_(); } catch (e) {} return SpreadsheetApp.openById(id); }
 function hbProgramSS_() {
   if (_HB_PROGRAM_SS_) return _HB_PROGRAM_SS_;
   var id = hbProgramId_();
   if (!id) throw new Error('لم يُحدَّد ملف برنامج الحجوزات — من «الحسابات العامة ← 🏨 الحجوزات ← الربط والمزامنة» الصق رابط الملف');
   _HB_PROGRAM_SS_ = SpreadsheetApp.openById(id);
+  if (typeof _stWrapSS_ === 'function') _HB_PROGRAM_SS_ = _stWrapSS_(_HB_PROGRAM_SS_, 'hb');   // (V4.451) الأوراق الداخلية من طبقة التخزين (مجموعة hb)
   return _HB_PROGRAM_SS_;
 }
 
