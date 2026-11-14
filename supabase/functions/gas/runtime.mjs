@@ -66,7 +66,7 @@ function blob(data, type, name) {
 export class GasSession {
   constructor(opt) {
     this.o = opt;                       // {src, db(rpc), http(fetch-like), props, session, tz, now}
-    this.tape = []; this.snap = { vers: {}, meta: {}, rows: {} }; this.gl = {}; this.props = Object.assign({}, opt.props || {});
+    this.tape = []; this.snap = { vers: {}, meta: {}, rows: {} }; this.gl = {}; this.props0 = Object.assign({}, opt.props || {}); this.props = Object.assign({}, this.props0);
     this.propW = {}; this.cacheShared = opt.cache || new Map(); this.t0 = opt.now || Date.now(); this.seed = (opt.seed || (Math.random() * 4294967296)) >>> 0; this.runs = 0; this.need = new Set();
   }
   // ===== تحميل اللقطة =====
@@ -297,6 +297,7 @@ export class GasSession {
   async run(fn, args, maxRuns = 14) {
     if (this.o.preload !== false && !this.allLoaded) await this.preload();
     for (this.runs = 0; this.runs < maxRuns; this.runs++) {
+      this.props = Object.assign({}, this.props0); this.propW = {};   // (V4.460) كل إعادة تشغيل تبدأ من خصائص الطلب الأصلية (لا أثر لتشغيل سابق علّق)
       const get = this.instantiate();
       let result, err = null;
       try {

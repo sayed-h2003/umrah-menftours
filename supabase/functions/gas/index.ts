@@ -11,7 +11,7 @@ const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Head
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const H = { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
 const SHARED_CACHE = new Map(), SNAP_CACHE = new Map();   // ذاكرة العامل بين الطلبات
-const DENY = /^(do(Get|Post)|onOpen|onEdit|store(Cutover|Rollback)|supa(Sync|Write|Issue)|gl(StoreCutover|ShadowSync)|mg[A-Z]|setup|install|uninstall)/i, DENY_X = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken)$/;
+const DENY = /^(do(Get|Post)|onOpen|onEdit|store(Cutover|Rollback)|supa(Sync|Write|Issue)|gl(StoreCutover|ShadowSync)|mg[A-Z]|setup|install|uninstall)/i, DENY_X = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken)$/, CRON_FNS = /^(supaCronTick)$/;
 
 async function db(fn: string, args: Record<string, unknown>) {
   const r = await fetch(`${URL_}/rest/v1/rpc/${fn}`, { method: 'POST', headers: H, body: JSON.stringify(args || {}) });
@@ -53,22 +53,34 @@ async function verifyJwt(tok: string, secret: string) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   if (req.method !== 'POST') return json({ ok: false, error: 'method' }, 405);
+  // ⏰ (V4.460) مهام مجدولة من pg_cron (084): {fn, cron: CRON_SECRET} — بلا JWT، بقائمة دوال محددة وجلسة «system»
+  let raw = '';
+  try { raw = await req.text(); } catch { return json({ ok: false, error: 'bad body' }, 400); }
+  let body: { fn?: string; args?: unknown[]; raw?: boolean; cron?: string };
+  try { body = JSON.parse(raw || '{}'); } catch { return json({ ok: false, error: 'bad json' }, 400); }
+  if (body.cron) {
+    const P = await db('gas_props_all', {});
+    const fnc = String(body.fn || '');
+    if (!P.CRON_SECRET || body.cron !== P.CRON_SECRET || P.CRON_ON_SUPA !== '1' || !CRON_FNS.test(fnc)) return json({ ok: false, error: 'cron denied' }, 403);
+    return runFn(fnc, [], { username: 'system', permissions: 'admin', fullName: 'system', hb: null }, false);
+  }
   const claims = await verifyJwt(String(req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), Deno.env.get('APP_JWT_SECRET') || '').catch(() => null);
   if (!claims) return json({ ok: false, error: 'جلسة غير صالحة أو منتهية - يرجى تسجيل الدخول مرة أخرى' }, 401);
-  let body: { fn?: string; args?: unknown[]; raw?: boolean };
-  try { body = await req.json(); } catch { return json({ ok: false, error: 'bad json' }, 400); }
   const fn = String(body.fn || '');
   if (!/^[A-Za-z][A-Za-z0-9]{2,60}$/.test(fn) || DENY.test(fn) || DENY_X.test(fn)) return json({ ok: false, error: 'دالة غير مسموحة: ' + fn, unsupported: true }, 400);
+  const A = Array.isArray(body.args) ? body.args : [];   // raw: برنامج الحجوزات يرسل رمز جلسته بنفسه كأول معامل
+  return runFn(fn, body.raw ? A : [null].concat(A), { username: claims.app_user, permissions: (claims.perms || []).join(','), fullName: claims.app_user, hb: claims.hb || null }, !!body.raw);
+});
+
+async function runFn(fn: string, args: unknown[], session: Record<string, unknown>, hbPre: boolean) {
   const owner = crypto.randomUUID(), t0 = Date.now();
   let got = false;
   try {
     const secretKeys = { SUPA_URL: URL_, SUPA_SERVICE_KEY: KEY };
-    const A = Array.isArray(body.args) ? body.args : [];   // raw: برنامج الحجوزات يرسل رمز جلسته بنفسه كأول معامل
-    const args = body.raw ? A : [null].concat(A);
     const mk = async (ro: boolean) => {
       const props = Object.assign(await db('gas_props_all', {}), secretKeys);
-      return new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, snapCache: SNAP_CACHE, tz: props.APP_TZ || 'Africa/Cairo', ro, preload: body.raw ? 'hb' : undefined,
-        session: { username: claims.app_user, permissions: (claims.perms || []).join(','), fullName: claims.app_user, hb: claims.hb || null }, log: (x: string) => console.log(x) });
+      return new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, snapCache: SNAP_CACHE, tz: props.APP_TZ || 'Africa/Cairo', ro, preload: hbPre ? 'hb' : undefined,
+        session, log: (x: string) => console.log(x) });
     };
     // (V4.455) 1) قراءة بلا قفل (لا تنتظر الكتّاب ولا بعضها) · 2) أول محاولة كتابة ⇒ NEED_LEASE قبل أي أثر ⇒ إعادة التشغيل بقفل التأجير (كاتب واحد في وقت واحد — بديل LockService)
     let s = await mk(true), d;
@@ -90,4 +102,4 @@ Deno.serve(async (req) => {
     const m = String((e as Error)?.message || e);
     return json({ ok: false, error: m.replace(/^Error:\s*/, ''), unsupported: /GAS_EDGE_UNSUPPORTED|GAS_EDGE:/.test(m) }, 200);
   } finally { if (got) await db('gas_lease_drop', { p_name: 'gas', p_owner: owner }).catch(() => {}); }
-});
+}

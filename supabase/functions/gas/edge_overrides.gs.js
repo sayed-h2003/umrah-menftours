@@ -81,3 +81,26 @@ function checkSession(token) {
 function _hbConnTestWrite_() { var sh = openSourceSpreadsheet_().getSheetByName('حجوزات مكة'); sh.getRange(5, 16).setValue('ملغى'); return sh.getRange(5, 16).getValue(); }
 /* ⚙️ (V4.455) lfFetch يبحث عن دالة القراءة بالاسم في globalThis — هنا الدوال داخل نطاق الحزمة ⇒ خريطة بأسماء LF_READ_ فقط */
 function _lfG_() { var o = {}; Object.keys(LF_READ_).forEach(function (k) { try { var f = eval(k); if (typeof f === 'function') o[k] = f; } catch (e) {} }); return o; }
+/* ⚙️ (V4.460) ورقة AuditLog للقراءة فقط من جدول audit_log (تُقرأ لوسم إشعارات البوت) — الكتابة عبر صادر audit كما سبق */
+getSpreadsheet_ = (function (orig) {
+  var vs = null;
+  var audit = function () {
+    if (vs) return vs;
+    var r = _supaReq_('get', 'audit_log?src=eq.main&username=eq.TelegramBot&select=ts_str,username,action,record_id&order=rn.asc&limit=20000'), a = [];
+    try { a = JSON.parse(r.text || '[]'); } catch (e) { a = []; }
+    var rows = [['الوقت', 'المستخدم', 'الإجراء', 'السجل']].concat(a.map(function (x) { return [x.ts_str, x.username, x.action, x.record_id]; }));
+    var rng = function (r0, c0, nr, nc) { nr = nr || 1; nc = nc || 1; return { getValues: function () { var o = []; for (var i = 0; i < nr; i++) { var src = rows[r0 - 1 + i] || [], w = []; for (var j = 0; j < nc; j++) w.push(src[c0 - 1 + j] === undefined ? '' : src[c0 - 1 + j]); o.push(w); } return o; },
+      getDisplayValues: function () { return this.getValues().map(function (w) { return w.map(String); }); }, getValue: function () { return this.getValues()[0][0]; },
+      setValue: function () { __EDGE.unsup('كتابة AuditLog'); }, setValues: function () { __EDGE.unsup('كتابة AuditLog'); } }; };
+    vs = { getName: function () { return 'AuditLog'; }, getLastRow: function () { return rows.length; }, getLastColumn: function () { return 4; }, getRange: rng,
+      getDataRange: function () { return rng(1, 1, rows.length, 4); }, appendRow: function () { __EDGE.unsup('كتابة AuditLog'); } };
+    return vs;
+  };
+  return function () {
+    var ss = orig.apply(this, arguments);
+    return new Proxy(ss, { get: function (t, k) {
+      if (k === 'getSheetByName') return function (n) { return n === 'AuditLog' ? audit() : t.getSheetByName(n); };
+      var v = t[k]; return typeof v === 'function' ? v.bind(t) : v;
+    } });
+  };
+})(getSpreadsheet_);

@@ -7144,7 +7144,9 @@ function tgSafeHour_(h, def) {
 // فالحذف وإعادة الإنشاء هو الطريق الوحيد لضمان مطابقة الساعة المحفوظة في الإعدادات
 function ensureTelegramTrigger_() {
   var cfg = tgCfg_();
-  if (!tgTriggerExists_('drainTelegramQueue')) {
+  var onSupa = PropertiesService.getScriptProperties().getProperty('CRON_ON_SUPA') === '1';   // (V4.460) الجدولة من Supabase ⇒ لا مشغّلات تليجرام هنا (عدا مراقبة تعديل الشيت)
+  if (onSupa) { ['drainTelegramQueue', 'tgDailyArrivalsJob', 'tgDailyMissingJob'].forEach(tgRemoveTrigger_); }
+  if (!onSupa && !tgTriggerExists_('drainTelegramQueue')) {
     ScriptApp.newTrigger('drainTelegramQueue').timeBased().everyMinutes(1).create();
   }
   // مراقبة التعديل المباشر على شيت الحجوزات: مشغّل قابل للتثبيت لا بسيط — يعمل بصلاحية كاملة
@@ -7155,6 +7157,7 @@ function ensureTelegramTrigger_() {
     } catch (eTrig) { Logger.log('ensureTelegramTrigger_/sheetEdit: ' + eTrig.message); }
   }
   tgRemoveTrigger_('tgDailyArrivalsJob');
+  if (onSupa) return;
   if (cfg.events.daily_arrivals) {
     ScriptApp.newTrigger('tgDailyArrivalsJob').timeBased()
       .atHour(tgSafeHour_(cfg.dailyArrivalsHour, 7)).everyDays(1).create();

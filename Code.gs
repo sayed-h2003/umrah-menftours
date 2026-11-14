@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.459";
+var APP_VERSION = "4.460";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -8359,6 +8359,7 @@ function setupTelegramDailyTrigger_() {
     }
   });
 
+  if (PropertiesService.getScriptProperties().getProperty('CRON_ON_SUPA') === '1') return '✅ التنبيه اليومي يُجدوَل من Supabase (supaCronTick) — بلا مشغّل هنا';   // (V4.460)
   // الساعة من الإعدادات (الافتراضي 16 = 4 عصراً)
   var hour = parseInt(PropertiesService.getScriptProperties().getProperty('TELEGRAM_ALERT_HOUR') || '16');
   if (isNaN(hour) || hour < 0 || hour > 23) hour = 16;
@@ -28856,4 +28857,58 @@ function tgDiagAll() {
   try { out.push('رابط التطبيق: ' + (ScriptApp.getService().getUrl() ? 'منشور' : 'غير منشور')); } catch (e) {}
   out.push('المنطقة الزمنية: ' + Session.getScriptTimeZone() + ' · الآن: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'));
   var msg = out.join('\n'); Logger.log(msg); return msg;
+}
+
+
+/* ⏰ (V4.460) مهام تليجرام المجدولة من Supabase (pg_cron ⇒ دالة gas) بدل مشغّلات Apps Script:
+   الاتصال بتليجرام يخرج من Supabase فلا يُحسب من حصة UrlFetch اليومية لحساب Google.
+   supaCronTick كل دقيقة: تفريغ طابور تليجرام وسحب الأوامر (drainTelegramQueue) + المهام اليومية مرة واحدة يومياً بعد ساعتها.
+   supaCronOn() / supaCronOff() من المحرر (المالك) — الإيقاف يعيد مشغّلات Apps Script كما كانت. */
+var SUPA_CRON_DAILY_ = ['tgDailyArrivalsJob', 'tgDailyMissingJob', 'sendTelegramArrivalAlerts'];
+function _supaCronHours_() {
+  var P = PropertiesService.getScriptProperties(), cfg = {};
+  try { cfg = tgCfg_(); } catch (e) { cfg = {}; }
+  var ev = cfg.events || {};
+  return {
+    tgDailyArrivalsJob: cfg.enabled && ev.daily_arrivals ? tgSafeHour_(cfg.dailyArrivalsHour, 7) : -1,
+    tgDailyMissingJob: cfg.enabled && ev.daily_missing ? tgSafeHour_(cfg.dailyMissingHour, 20) : -1,
+    sendTelegramArrivalAlerts: (function () { var h = parseInt(P.getProperty('TELEGRAM_ALERT_HOUR') || '16', 10); return isNaN(h) || h < 0 || h > 23 ? 16 : h; })()
+  };
+}
+function supaCronTick() {
+  var P = PropertiesService.getScriptProperties(), out = {};
+  if (P.getProperty('CRON_ON_SUPA') !== '1') return { off: true };
+  try { out.drain = drainTelegramQueue(); } catch (e) { out.drain = 'err: ' + e.message; }
+  var tz = Session.getScriptTimeZone(), now = new Date(), day = Utilities.formatDate(now, tz, 'yyyyMMdd'), h = +Utilities.formatDate(now, tz, 'H'), hrs = _supaCronHours_();
+  SUPA_CRON_DAILY_.forEach(function (fn) {
+    if (hrs[fn] < 0 || h < hrs[fn] || P.getProperty('CRON_DAY_' + fn) === day) return;
+    P.setProperty('CRON_DAY_' + fn, day);
+    try {
+      if (fn === 'tgDailyArrivalsJob') out[fn] = tgDailyArrivalsJob() || 'ok';
+      else if (fn === 'tgDailyMissingJob') out[fn] = tgDailyMissingJob() || 'ok';
+      else out[fn] = sendTelegramArrivalAlerts();
+    } catch (e) { out[fn] = 'err: ' + e.message; }
+  });
+  return out;
+}
+function supaCronOn() {
+  requireScriptOwner_();
+  var P = PropertiesService.getScriptProperties();
+  if (!P.getProperty('CRON_SECRET')) P.setProperty('CRON_SECRET', Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''));
+  // المهام التي فات وقتها اليوم وأدّاها Apps Script ⇒ لا تُكرَّر اليوم
+  var tz = Session.getScriptTimeZone(), now = new Date(), day = Utilities.formatDate(now, tz, 'yyyyMMdd'), h = +Utilities.formatDate(now, tz, 'H'), hrs = _supaCronHours_();
+  SUPA_CRON_DAILY_.forEach(function (fn) { if (hrs[fn] >= 0 && h >= hrs[fn]) P.setProperty('CRON_DAY_' + fn, day); });
+  P.setProperty('CRON_ON_SUPA', '1');
+  ['drainTelegramQueue'].concat(SUPA_CRON_DAILY_).forEach(function (fn) { ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === fn) ScriptApp.deleteTrigger(t); }); });
+  var r = supaPropsSync_(true);
+  var msg = '✅ تليجرام يُجدوَل من Supabase — حُذفت مشغّلات Apps Script الخاصة به (رفع الإعدادات: ' + r + '). تأكد من تشغيل 084_gas_cron.sql.';
+  Logger.log(msg); return msg;
+}
+function supaCronOff() {
+  requireScriptOwner_();
+  PropertiesService.getScriptProperties().setProperty('CRON_ON_SUPA', '0');
+  try { ensureTelegramTrigger_(); } catch (e) { Logger.log('ensureTelegramTrigger_: ' + e.message); }
+  try { setupTelegramDailyTrigger_(); } catch (e) { Logger.log('setupTelegramDailyTrigger_: ' + e.message); }
+  supaPropsSync_(true);
+  var msg = '↩️ عادت مهام تليجرام لمشغّلات Apps Script'; Logger.log(msg); return msg;
 }
