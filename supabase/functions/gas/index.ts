@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
     const P = await db('gas_props_all', {});
     const fnc = String(body.fn || '');
     if (!P.CRON_SECRET || body.cron !== P.CRON_SECRET || P.CRON_ON_SUPA !== '1' || !CRON_FNS.test(fnc)) return json({ ok: false, error: 'cron denied' }, 403);
-    return runFn(fnc, [], { username: 'system', permissions: 'admin', fullName: 'system', hb: null }, false);
+    return runFn(fnc, [], { username: 'system', permissions: 'admin', fullName: 'system', hb: null }, true);   // (V4.462) بيانات الحجوزات فقط (لا تحميل القيود كلها)
   }
   const claims = await verifyJwt(String(req.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''), Deno.env.get('APP_JWT_SECRET') || '').catch(() => null);
   if (!claims) return json({ ok: false, error: 'جلسة غير صالحة أو منتهية - يرجى تسجيل الدخول مرة أخرى' }, 401);
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
 
 async function runFn(fn: string, args: unknown[], session: Record<string, unknown>, hbPre: boolean) {
   const owner = crypto.randomUUID(), t0 = Date.now();
-  let got = false;
+  let got = false, why = '';
   try {
     const secretKeys = { SUPA_URL: URL_, SUPA_SERVICE_KEY: KEY };
     const mk = async (ro: boolean) => {
@@ -101,6 +101,7 @@ async function runFn(fn: string, args: unknown[], session: Record<string, unknow
     try { d = await s.run(fn, args); }
     catch (e0) {
       if (!(e0 && (e0 as { needLease?: boolean }).needLease)) throw e0;
+      why = String((e0 as Error).message || '').replace(/^GAS_NEED_LEASE:\s*/, '').slice(0, 80);
       for (let i = 0; i < 40 && !got; i++) { got = await db('gas_lease_take', { p_name: 'gas', p_owner: owner, p_ttl_sec: 120 }); if (!got) await new Promise((r) => setTimeout(r, 500)); }
       if (!got) return json({ ok: false, error: 'الخادم مشغول — أعد المحاولة بعد لحظات', busy: true }, 503);
       s = await mk(false); d = await s.run(fn, args);
@@ -111,7 +112,7 @@ async function runFn(fn: string, args: unknown[], session: Record<string, unknow
     if (Object.keys(put).length) await db('gas_props_put', { p: put });
     if (del.length) await db('gas_props_del', { p_keys: del });
     if (Object.keys(put).length || del.length) await http({ m: 'post', p: 'app_outbox', b: { kind: 'kvset', payload: { kv: Object.assign({}, put, Object.fromEntries(del.map((k) => [k, '']))) } } });
-    return json({ ok: true, d: d === undefined ? null : d, ms: Date.now() - t0, runs: s.runs + 1, lease: got });
+    return json({ ok: true, d: d === undefined ? null : d, ms: Date.now() - t0, runs: s.runs + 1, lease: got, why: why || undefined });
   } catch (e) {
     const m = String((e as Error)?.message || e);
     return json({ ok: false, error: m.replace(/^Error:\s*/, ''), unsupported: /GAS_EDGE_UNSUPPORTED|GAS_EDGE:/.test(m) }, 200);

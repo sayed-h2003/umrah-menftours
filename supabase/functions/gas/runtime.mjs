@@ -11,6 +11,8 @@ const SUSP = (e) => e && e.__gasSuspend;
 // (V4.455) تشغيل «قراءة فقط» بلا قفل: أول محاولة كتابة (مؤجلة/خاصية/طلب غير معروف/نداء خارجي) ⇒ NEED_LEASE قبل أي أثر ⇒ يعاد التشغيل بالقفل
 const NEED_LEASE = 'GAS_NEED_LEASE';
 const READ_RPC_RX = /^rpc\/(cs_get|store_read|gl_entry_ver_raw|gas_whoami|gas_snapshot|gas_gl_rows|gas_hb_snap|gas_props_all|rx_\w+|app_kv_get\w*)$/;
+// (V4.462) نداءات خارجية للقراءة فقط مسموحة بلا قفل: سحب تحديثات تليجرام (لا يتقدّم offset إلا بنداء لاحق بعد حفظه) وفحص الحالة
+const READ_EXT_RX = /^https:\/\/api\.telegram\.org\/bot[^/]+\/(getUpdates|getWebhookInfo|getMe|getChat)\b/;
 const needLease = (why) => { const e = new Error(NEED_LEASE + ': ' + why); e.needLease = true; return e; };
 
 // ---------- أدوات ----------
@@ -324,7 +326,11 @@ export class GasSession {
       else if (sp.kind === 'hb') { this.hb = await this.o.db('gas_hb_snap', {}); }
       else if (sp.kind === 'gl') await Promise.all(['entries', 'lines'].filter((k) => k === sp.data || !this.gl[k]).map((k) => this.loadGl(k)));   // القيود وسطورها معاً (رحلة واحدة)
       else {
-        if (this.o.ro && (sp.data.ext || (String(sp.data.req.m).toLowerCase() !== 'get' && !READ_RPC_RX.test(sp.data.req.p)) || this.tape.some((t) => t.deferred && !t.done))) throw needLease(sp.data.ext ? 'ext' : sp.data.req.m + ' ' + sp.data.req.p);
+        if (this.o.ro) {
+          const X = sp.data.ext, okExt = X && String((X.opt && X.opt.method) || 'get').toLowerCase() === 'get' && READ_EXT_RX.test(String(X.url));
+          const bad = X ? !okExt : (String(sp.data.req.m).toLowerCase() !== 'get' && !READ_RPC_RX.test(sp.data.req.p));
+          if (bad || this.tape.some((t) => t.deferred && !t.done)) throw needLease(X ? 'ext ' + String(X.url).replace(/bot[^/]+/, 'bot*').slice(0, 60) : sp.data.req.m + ' ' + sp.data.req.p);
+        }
         await this.flushDeferred();
         const r = sp.data.ext ? await this.o.ext(sp.data.ext) : await this.o.http(sp.data.req);
         this.tape.push({ k: sp.data.k, r, done: true });
