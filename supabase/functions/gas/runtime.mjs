@@ -75,7 +75,7 @@ export class GasSession {
     const C = this.o.snapCache || null;
     if (!this.versLoaded) {
       const v = await this.o.db('gas_snapshot', { p_tbls: [] });
-      this.snap.vers = v.vers || {}; this.glver = v.glver || {}; this.versLoaded = true;
+      this.snap.vers = v.vers || {}; this.glver = v.glver || {}; this.csver = v.csver || {}; this.versLoaded = true;
     }
     const want = (tbls || Object.keys(this.snap.vers)).filter((t) => !this.snap.rows[t]);
     const fetchList = [];
@@ -93,6 +93,22 @@ export class GasSession {
     Array.from(this.need).forEach((t) => { if (!this.snap.rows[t]) { this.snap.rows[t] = []; this.snap.meta[t] = { hdr: [], exists: false }; } });
     (tbls || []).forEach((t) => { if (!this.snap.rows[t]) { this.snap.rows[t] = []; this.snap.meta[t] = { hdr: [], exists: false }; } });
     this.need.clear();
+  }
+  // (V4.456) صورة شيت موصول (cs_get) بالذاكرة بين الطلبات بإصدارها (082) — نص الرد نفسه كما يعيده PostgREST
+  async loadCs(code) {
+    if (!this.cs) this.cs = {};
+    if (this.cs[code]) return;
+    const C = this.o.snapCache || null, v = String((this.csver || {})[code] ?? ''), c = C && C.get('cs:' + code);
+    if (c && v !== '' && c.ver === v) { this.cs[code] = c.r; return; }
+    const r = await this.o.http({ m: 'post', p: 'rpc/cs_get', b: { p_code: code } });
+    this.cs[code] = r;
+    if (C && v !== '' && r && r.code < 300) C.set('cs:' + code, { ver: v, r });
+  }
+  // مجموعة الجدول: hb_* / gl_* تُجلب معاً (طلب واحد بدل إعادة تشغيل لكل جدول) — ولا تحميل لكل الجداول أبداً
+  tblGroup(list) {
+    const out = new Set(list), all = Object.keys(this.snap.vers);
+    list.forEach((t) => { const m = /^(hb|gl)_/.exec(t); if (m) all.forEach((x) => { if (x.indexOf(m[1] + '_') === 0) out.add(x); }); });
+    return Array.from(out);
   }
   async loadGl(key) {
     const C = this.o.snapCache || null, v = String((this.glver || {})['gl_' + key] ?? ''), c = C && C.get('gl:' + key);
@@ -216,6 +232,11 @@ export class GasSession {
       const o = {}; const ts = b && b.p_tbls ? b.p_tbls : Object.keys(this.snap.vers); ts.forEach((t) => { if (this.snap.vers[t] !== undefined) o[t] = this.verOf(t); });
       return { code: 200, text: JSON.stringify(o) };
     }
+    if (m === 'post' && p === 'rpc/cs_get' && b && b.p_code && this.versLoaded) {
+      const code = String(b.p_code);
+      if (this.cs && this.cs[code]) return this.cs[code];
+      throw (this.suspended = new Suspend('cs', code));
+    }
     if (m === 'post' && p === 'rpc/store_read') {
       const t = this.edgeApi().readTable(b.p_tbl), off = +b.p_off || 0, lim = +b.p_lim || 1000;
       return { code: 200, text: JSON.stringify({ ver: +t.ver, exists: t.exists, hdr: t.hdr, n: t.rows.length, rows: t.rows.slice(off, off + lim) }) };
@@ -264,6 +285,11 @@ export class GasSession {
   }
   async preload() {
     await this.loadTables([]);
+    if (this.o.preload === 'hb') {   // برنامج الحجوزات: جداوله + شيتات الموصل معاً (تشغيل واحد غالباً) — القيود عند الحاجة فقط
+      let codes = []; try { const c = JSON.parse(this.props.HB_SRC_CONN || 'null'); if (c && c.on && c.tabs) codes = Object.keys(c.tabs).map((k) => c.tabs[k].code).filter(Boolean); } catch (e) { codes = []; }
+      await Promise.all([this.loadTables(this.tblGroup(Object.keys(this.snap.vers).filter((t) => /^hb_/.test(t)))), ...codes.map((c) => this.loadCs(c))]);
+      return;
+    }
     const gl = Object.keys(this.snap.vers).filter((t) => /^gl_/.test(t));
     await this.loadTables(gl);
     await Promise.all([this.loadGl('entries'), this.loadGl('lines')]);
@@ -291,10 +317,11 @@ export class GasSession {
       if (this.o.debug) this.o.debug('suspend ' + sp.kind + ' ' + JSON.stringify(sp.data || '').slice(0, 300) + ' pos=' + this.pos + ' tape=' + this.tape.length);
       if (sp.kind === 'diverge') throw new Error('GAS_EDGE: تشغيل غير حتمي عند النداء ' + sp.data.at + ' — ' + sp.data.want + ' ≠ ' + sp.data.got);
       this.tape = this.tape.slice(0, this.pos);
-      if (sp.kind === 'table') await this.loadTables(this.allLoaded ? Array.from(this.need) : null).then(() => { this.allLoaded = true; });
+      if (sp.kind === 'table') await this.loadTables(this.tblGroup(Array.from(this.need)));
+      else if (sp.kind === 'cs') await this.loadCs(sp.data);
       else if (sp.kind === 'vers') { await this.loadTables([]); this.versLoaded = true; }
       else if (sp.kind === 'hb') { this.hb = await this.o.db('gas_hb_snap', {}); }
-      else if (sp.kind === 'gl') await this.loadGl(sp.data);
+      else if (sp.kind === 'gl') await Promise.all(['entries', 'lines'].filter((k) => k === sp.data || !this.gl[k]).map((k) => this.loadGl(k)));   // القيود وسطورها معاً (رحلة واحدة)
       else {
         if (this.o.ro && (sp.data.ext || (String(sp.data.req.m).toLowerCase() !== 'get' && !READ_RPC_RX.test(sp.data.req.p)) || this.tape.some((t) => t.deferred && !t.done))) throw needLease(sp.data.ext ? 'ext' : sp.data.req.m + ' ' + sp.data.req.p);
         await this.flushDeferred();

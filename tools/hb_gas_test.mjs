@@ -14,9 +14,11 @@ const tabs = { mk: { tab: 'حجوزات مكة', cols: 34, txt: false, sc: 3, co
 const props = { SUPA_URL: 'http://local', SUPA_SERVICE_KEY: 'x', SUPA_ENABLED: '1', STORE_TABLES: 'ministry,core,acc,bookings,visa,misc,glaux,glcore,hb', GL_STORE: 'supabase', GL_SPREADSHEET_ID: 'gl1',
   HB_SRC_CONN: JSON.stringify({ sheetId: 'HB1', tabs, on: true }), SRC_SS_ID: 'HB1' };
 const [fn, a, u, cap] = process.argv.slice(2);
-const mk = (ro) => new GasSession({ ro, src: SRC, db, http, ext: async () => ({ code: 599, text: '' }), props, snapCache: new Map(), tz: 'Africa/Cairo', allowPrivate: true,
+const SC = new Map();
+const mk = (ro) => new GasSession({ debug: process.env.GAS_DEBUG ? (x) => console.error('DBG', x) : null, ro, preload: 'hb', snapCache: SC, src: SRC, db, http, ext: async () => ({ code: 599, text: '' }), props, tz: 'Africa/Cairo', allowPrivate: true,
   session: u === 'erp' ? { username: 'admin', permissions: 'admin' } : u === 'erpsara' ? { username: 'sara', permissions: 'hotels.add,hotels.view,gl.view' } : u === 'erpx' ? { username: 'sara', permissions: 'gl.view' } : { username: 'hb:' + (u || 'sara'), permissions: '', hb: { u: u || 'sara', cap: cap || '' } }, log: (x) => console.error('LOG', x) });
 const t0 = Date.now(); let s = mk(true), lease = false;
 try { let r; try { r = await s.run(fn, JSON.parse(a || '[]')); } catch (e) { if (!e.needLease) throw e; lease = e.message; s = mk(false); r = await s.run(fn, JSON.parse(a || '[]')); } console.log(String(JSON.stringify(r)).slice(0, 1200)); } catch (e) { console.log('ERROR', e.message, s.unsup ? '(unsup: ' + s.unsup + ')' : ''); }
 console.error('lease=' + lease);
+if (process.env.TWICE) { const t1 = Date.now(); const s2 = mk(true); await s2.run(fn, JSON.parse(a || '[]')); console.error('2nd: runs=' + (s2.runs + 1) + ' wall=' + (Date.now() - t1) + 'ms'); }
 console.error('runs=' + (s.runs + 1) + ' wall=' + (Date.now() - t0) + 'ms');

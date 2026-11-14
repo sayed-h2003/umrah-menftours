@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const args = body.raw ? A : [null].concat(A);
     const mk = async (ro: boolean) => {
       const props = Object.assign(await db('gas_props_all', {}), secretKeys);
-      return new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, snapCache: SNAP_CACHE, tz: props.APP_TZ || 'Africa/Cairo', ro,
+      return new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, snapCache: SNAP_CACHE, tz: props.APP_TZ || 'Africa/Cairo', ro, preload: body.raw ? 'hb' : undefined,
         session: { username: claims.app_user, permissions: (claims.perms || []).join(','), fullName: claims.app_user, hb: claims.hb || null }, log: (x: string) => console.log(x) });
     };
     // (V4.455) 1) قراءة بلا قفل (لا تنتظر الكتّاب ولا بعضها) · 2) أول محاولة كتابة ⇒ NEED_LEASE قبل أي أثر ⇒ إعادة التشغيل بقفل التأجير (كاتب واحد في وقت واحد — بديل LockService)

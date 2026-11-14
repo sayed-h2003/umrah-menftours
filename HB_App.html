@@ -4797,7 +4797,8 @@ var HBLF = (function () {
   function paintBar() {
     var row = cardsRow(), el = document.getElementById('hbLfBar');
     var dim = function (v) { if (row) Array.prototype.forEach.call(row.querySelectorAll('.summary-card'), function (x) { x.style.opacity = v; }); };
-    if (V.st === 'ok' || !row) { if (el) el.remove(); dim(''); if (row) row.style.position = ''; return; }
+    // (V4.456) التحقق صامت: لا شريط «⏳ يتم التحقق…» ولا تعتيم البطاقات (الخادم صار ≈ ثانية عبر gas) — الشريط للفشل/التغيّر فقط
+    if (V.st === 'ok' || V.st === 'checking' || !row) { if (el) el.remove(); dim(''); if (row) row.style.position = ''; return; }
     if (!el) { el = document.createElement('div'); el.id = 'hbLfBar'; el.dir = 'rtl'; }
     if (el.parentNode !== row) row.appendChild(el);
     row.style.position = 'relative';
