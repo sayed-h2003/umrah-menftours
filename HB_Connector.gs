@@ -129,7 +129,7 @@ function hbSrcConnectorSetup() {
     t.code = 'HBSRC:' + k;
     var r = _supaReq_('post', 'rpc/cs_setup', { p_code: t.code, p_key: key, p_sheet_id: id });
     if (r.code >= 300) throw new Error('تعذّر إعداد الموصل (طبّق 061): ' + String(r.text).slice(0, 200));
-    _supaReq_('post', 'rpc/cs_set_every', { p_code: t.code, p_min: 1 });
+    _supaReq_('post', 'rpc/cs_set_every', { p_code: t.code, p_min: 5 });   // (V4.459) كل 5 د (التعديل بالشيت يُرسل فوراً عبر onEdit) — حصة UrlFetch
     list.push({ code: t.code, key: key, tab: t.tab, cols: t.cols, txt: t.txt, sc: t.sc });
   });
   var cfg = { sheetId: id, tabs: tabs, at: new Date().toISOString(), on: false };

@@ -414,11 +414,11 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
       keys.forEach(function (g) { done[g] = okGroups[g]; });
       PropertiesService.getScriptProperties().setProperty('SUPA_SYNCED', JSON.stringify(done));
     }
-    try { _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (المرحلة 4)
+    try { if (_ufEvery_('dvpg', 180)) _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (المرحلة 4)
     var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
-    try { hbSnapSync_(false); } catch (eHs) { Logger.log('hbSnap: ' + eHs); }   // (V4.420) نسخة قراءة الحجوزات
-    try { usersMirrorTick_(false); } catch (eUm) { Logger.log('usersMirror: ' + eUm); }   // (V4.419) مرآة المستخدمين PG→الورقة
-    try { supaGlMetaSync_(); } catch (eGm) { Logger.log('supaGlMeta: ' + eGm); }   // ⚡ (V4.417) رابط ملف الحسابات + عدد صفوف شيتات العهد الناقصة (لـ glx_bootstrap)
+    try { if (!_hbConnOnQ_() && _ufEvery_('hbsnap', 300)) hbSnapSync_(false); } catch (eHs) { Logger.log('hbSnap: ' + eHs); }   // (V4.420) نسخة قراءة الحجوزات
+    try { if (_ufEvery_('umirror', 300)) usersMirrorTick_(false); } catch (eUm) { Logger.log('usersMirror: ' + eUm); }   // (V4.419) مرآة المستخدمين PG→الورقة
+    try { if (_ufEvery_('glmeta', 600)) supaGlMetaSync_(); } catch (eGm) { Logger.log('supaGlMeta: ' + eGm); }   // ⚡ (V4.417) رابط ملف الحسابات + عدد صفوف شيتات العهد الناقصة (لـ glx_bootstrap)
     try { supaPropsSync_(false); } catch (eGp) { Logger.log('gasProps: ' + eGp); }   // (V4.445) خصائص السكربت ⇒ gas_props (Edge Function gas)
     var b378 = _supaBootSync_();   // ⚡ (V4.378) app_config + حالة القيود + سجل التعديلات
     return 'ok work=' + work + ' glaux=' + gx + ' boot=' + b378 + ' ms=' + (Date.now() - t0);
@@ -677,3 +677,54 @@ function supaPropsSync_(force) {
 }
 function supaGasOn() { requireScriptOwner_(); var r = supaPropsSync_(true); if (r === 'ok') PropertiesService.getScriptProperties().setProperty('SUPA_GAS_OK', '1'); Logger.log('gas: ' + r); return r; }
 function supaGasOff() { requireScriptOwner_(); PropertiesService.getScriptProperties().deleteProperty('SUPA_GAS_OK'); return 'off'; }
+
+/* 📊 (V4.459) حصة UrlFetch اليومية (≈20,000 لحساب Gmail شخصي) — كل نداء Supabase/تليجرام من Apps Script يُحسب منها، والموصلات بالشيتات
+   تُحسب على نفس الحساب. نفادها يوقف تليجرام والدخول وكل دالة تكلّم Supabase من Apps Script حتى منتصف ليل المحيط الهادئ (≈10 ص القاهرة).
+   _ufEvery_: خطوة دورية تُنفَّذ مرة كل N ثانية مهما تكرر المشغّل (CacheService لا يُحسب من حصة UrlFetch).
+   العدّاد: كل نداء يُسجَّل بالكاش حسب الوجهة ⇒ ufStats() يبيّن أين تُستهلك الحصة اليوم. */
+function _ufEvery_(k, sec) {
+  try { var c = CacheService.getScriptCache(), kk = 'ufev_' + k; if (c.get(kk)) return false; c.put(kk, '1', sec); return true; } catch (e) { return true; }
+}
+function _hbConnOnQ_() { try { var c = JSON.parse(PropertiesService.getScriptProperties().getProperty('HB_SRC_CONN') || 'null'); return !!(c && c.on); } catch (e) { return false; } }
+function _ufDay_() { return Utilities.formatDate(new Date(), 'America/Los_Angeles', 'yyyyMMdd'); }
+function _ufTag_(url) {
+  var u = String(url || ''), m;
+  if ((m = u.match(/\/rest\/v1\/rpc\/(\w+)/))) return 'supa:rpc/' + m[1];
+  if ((m = u.match(/\/rest\/v1\/(\w+)/))) return 'supa:' + m[1];
+  if ((m = u.match(/\/functions\/v1\/(\w+)/))) return 'supa:fn/' + m[1];
+  if ((m = u.match(/api\.telegram\.org\/bot[^/]+\/(\w+)/))) return 'tg:' + m[1];
+  return ((u.match(/^https?:\/\/([^/?#]+)/) || [])[1] || '?');
+}
+function _ufBump_(urls) {
+  try {
+    var c = CacheService.getScriptCache(), d = _ufDay_(), add = {};
+    urls.forEach(function (u) { var t = _ufTag_(u); add[t] = (add[t] || 0) + 1; });
+    var keys = Object.keys(add).map(function (t) { return 'uf_' + d + '_' + t; }), cur = c.getAll(keys.concat(['uf_' + d + '__idx'])) || {};
+    var idx = {}; try { idx = JSON.parse(cur['uf_' + d + '__idx'] || '{}'); } catch (e) {}
+    var put = {};
+    Object.keys(add).forEach(function (t) { var k = 'uf_' + d + '_' + t; put[k] = String((+cur[k] || 0) + add[t]); idx[t] = 1; });
+    put['uf_' + d + '__idx'] = JSON.stringify(idx);
+    c.putAll(put, 21600);
+  } catch (e) {}
+}
+(function () {
+  try {
+    if (typeof __EDGE !== 'undefined' || typeof UrlFetchApp === 'undefined' || UrlFetchApp.__uf) return;
+    var real = UrlFetchApp, w = {
+      __uf: true,
+      fetch: function (url, opt) { _ufBump_([url]); return opt === undefined ? real.fetch(url) : real.fetch(url, opt); },
+      fetchAll: function (reqs) { _ufBump_((reqs || []).map(function (r) { return typeof r === 'string' ? r : r && r.url; })); return real.fetchAll(reqs); },
+      getRequest: function (url, opt) { return real.getRequest(url, opt); }
+    };
+    UrlFetchApp = w;
+  } catch (e) {}
+})();
+function ufStats() {
+  var c = CacheService.getScriptCache(), d = _ufDay_(), idx = {};
+  try { idx = JSON.parse(c.get('uf_' + d + '__idx') || '{}'); } catch (e) {}
+  var ks = Object.keys(idx), vals = ks.length ? c.getAll(ks.map(function (t) { return 'uf_' + d + '_' + t; })) : {}, rows = [], tot = 0;
+  ks.forEach(function (t) { var n = +vals['uf_' + d + '_' + t] || 0; tot += n; rows.push([t, n]); });
+  rows.sort(function (a, b) { return b[1] - a[1]; });
+  var msg = 'UrlFetch اليوم (من هذا المشروع فقط، منذ رفع V4.459): ' + tot + '\n' + rows.map(function (r) { return r[1] + '\t' + r[0]; }).join('\n');
+  Logger.log(msg); return msg;
+}
