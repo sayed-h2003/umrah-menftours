@@ -9581,7 +9581,7 @@ function glBotSetWebhook(authToken) {
   var base = '';
   try { base = typeof tgExecBase_ === 'function' ? tgExecBase_(P.getProperty(typeof TG_PROP_HOOKURL_ !== 'undefined' ? TG_PROP_HOOKURL_ : 'x') || '') : ''; } catch (e) {}
   if (!/^https:/.test(base)) base = ScriptApp.getService().getUrl();
-  var url = base + '?glbot=' + sec;
+  var url = _tgRelayUrl_(base + '?glbot=' + sec);
   _glBotApi_('setWebhook', { url: url, allowed_updates: JSON.stringify(['message', 'callback_query']), drop_pending_updates: 'true', max_connections: '5' });
   try { _glBotApi_('setMyCommands', { commands: JSON.stringify(GLBOT_CMDS_.map(function (x) { return { command: x[1].slice(1), description: x[3].slice(0, 60) }; })) }); } catch (eC) {}
   return { success: true, url: url.replace(sec, '•••') };

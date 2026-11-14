@@ -53,6 +53,20 @@ async function verifyJwt(tok: string, secret: string) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   if (req.method !== 'POST') return json({ ok: false, error: 'method' }, 405);
+  // 📨 (V4.461) مستقبِل تليجرام: ?tgw=<TG_RELAY_SECRET>&q=<استعلام البوت الأصلي> ⇒ رد 200 فوراً (تليجرام لا يتبع تحويل 302 الذي يرده Apps Script
+  //    فيعتبره فشلاً ويعيد الإرسال/يوقف الـWebhook) ثم يمرّر التحديث كما هو لـdoPost بالبرنامج بالخلفية. الاستقبال بـApps Script لا يُحسب من حصة UrlFetch.
+  const U = new URL(req.url);
+  if (U.searchParams.has('tgw')) {
+    const P = await db('gas_props_all', {}).catch(() => ({}));
+    if (!P.TG_RELAY_SECRET || U.searchParams.get('tgw') !== P.TG_RELAY_SECRET || !/^https:\/\/script\.google\.com\//.test(String(P.TG_RELAY_EXEC || ''))) return new Response('forbidden', { status: 403 });
+    const upd = await req.text();
+    const q = String(U.searchParams.get('q') || '').replace(/^\?/, '');
+    const target = String(P.TG_RELAY_EXEC).split('?')[0] + (q ? '?' + q : '');
+    const fwd = fetch(target, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: upd, redirect: 'follow' })
+      .then((r) => { if (r.status >= 400) console.log('tg relay', r.status, q.slice(0, 40)); return r.text(); }).catch((e) => console.log('tg relay err', String(e)));
+    try { (globalThis as any).EdgeRuntime.waitUntil(fwd); } catch { await fwd; }
+    return new Response('ok', { status: 200 });
+  }
   // ⏰ (V4.460) مهام مجدولة من pg_cron (084): {fn, cron: CRON_SECRET} — بلا JWT، بقائمة دوال محددة وجلسة «system»
   let raw = '';
   try { raw = await req.text(); } catch { return json({ ok: false, error: 'bad body' }, 400); }

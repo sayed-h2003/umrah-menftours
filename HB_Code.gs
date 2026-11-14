@@ -8906,7 +8906,7 @@ function tgExecBase_(base) {
 }
 function tgWebhookUrl_(base) {
   var stored = PropertiesService.getScriptProperties().getProperty(TG_PROP_HOOKURL_) || '';
-  return tgExecBase_(base || stored) + '?tghook=' + tgHookSecret_();
+  return _tgRelayUrl_(tgExecBase_(base || stored) + '?tghook=' + tgHookSecret_());
 }
 // الحقيقة الكاملة بعد تشخيصين متتاليين (الأول ظنّ 302 مقبولًا، والثاني ظنّه بنيويًا لا مفر
 // منه — وكلاهما خطأ):

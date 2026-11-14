@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.460";
+var APP_VERSION = "4.461";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -9011,7 +9011,7 @@ function setTgCateringWebhook(authToken) {
   var webAppUrl = '';
   try { webAppUrl = ScriptApp.getService().getUrl(); } catch (_e) {}
   if (!webAppUrl) return { success: false, error: 'رابط الـWeb App غير متاح — انشر البرنامج أولاً' };
-  var hookUrl = webAppUrl + (webAppUrl.indexOf('?') > -1 ? '&' : '?') + 'bot=catering';
+  var hookUrl = _tgRelayUrl_(webAppUrl + (webAppUrl.indexOf('?') > -1 ? '&' : '?') + 'bot=catering');
   try {
     var r = UrlFetchApp.fetch('https://api.telegram.org/bot' + cfg.token + '/setWebhook',
       { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
@@ -12311,7 +12311,7 @@ function setupTelegramWebhook_() {
 
   var webhookUrl = "https://api.telegram.org/bot" + token + "/setWebhook";
   var payload = {
-    url: webAppUrl,
+    url: _tgRelayUrl_(webAppUrl),
     allowed_updates: ["message", "callback_query"],
     drop_pending_updates: true
   };
@@ -28911,4 +28911,54 @@ function supaCronOff() {
   try { setupTelegramDailyTrigger_(); } catch (e) { Logger.log('setupTelegramDailyTrigger_: ' + e.message); }
   supaPropsSync_(true);
   var msg = '↩️ عادت مهام تليجرام لمشغّلات Apps Script'; Logger.log(msg); return msg;
+}
+
+
+/* 📨 (V4.461) استقبال البوتات عبر Supabase: رابط الـWebhook لكل بوت يصبح دالة gas (?tgw=سر) ترد على تليجرام فوراً وتمرّر التحديث لـdoPost هنا.
+   السبب: Apps Script يرد على كل POST بتحويل 302 وتليجرام لا يتبعه ⇒ يعتبر التسليم فاشلاً، يعيد الإرسال، ثم يُسقط الـWebhook (البوت لا يستقبل).
+   tgRelayOn() من المحرر: يضبط السر ورابط البرنامج ويسجّل الـWebhook لكل بوت مضبوط (الرئيسي، الإعاشة المستقل، بوت الحسابات، بوت الحجوزات إن كان بوضع Webhook).
+   tgRelayOff(): يعيد كل بوت لرابط البرنامج المباشر. */
+function _tgRelayUrl_(execUrl) {
+  var P = PropertiesService.getScriptProperties();
+  if (P.getProperty('TG_RELAY_ON') !== '1') return execUrl;
+  var sup = String(P.getProperty('SUPA_URL') || '').replace(/\/+$/, ''), sec = P.getProperty('TG_RELAY_SECRET');
+  if (!sup || !sec) return execUrl;
+  var u = String(execUrl || ''), q = u.indexOf('?') >= 0 ? u.slice(u.indexOf('?') + 1) : '';
+  return sup + '/functions/v1/gas?tgw=' + encodeURIComponent(sec) + (q ? '&q=' + encodeURIComponent(q) : '');
+}
+function _tgRelaySet_(token, url, updates) {
+  var r = UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/setWebhook', { method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    payload: JSON.stringify({ url: url, allowed_updates: updates, drop_pending_updates: false, max_connections: 5 }) });
+  var j = {}; try { j = JSON.parse(r.getContentText() || '{}'); } catch (e) {}
+  return j.ok ? '✅' : '❌ ' + (j.description || r.getResponseCode());
+}
+function _tgRelayBots_() {
+  var P = PropertiesService.getScriptProperties(), exec = '', bots = [];
+  try { exec = tgExecBase_(''); } catch (e) { exec = ScriptApp.getService().getUrl(); }
+  var main = ''; try { main = TELEGRAM_CONFIG.token || ''; } catch (e) {}
+  if (main) bots.push({ name: 'البوت الرئيسي', token: main, url: exec, up: ['message', 'callback_query'] });
+  try { var cc = _tgccCfg_(); if (cc && cc.token && cc.token !== main) bots.push({ name: 'بوت اتفاقيات الإعاشة', token: cc.token, url: exec + '?bot=catering', up: ['message', 'callback_query'] }); } catch (e) {}
+  var gb = P.getProperty('GLBOT_TOKEN'), gs = P.getProperty('GLBOT_HOOK');
+  if (gb && gs) bots.push({ name: 'بوت الحسابات', token: gb, url: exec + '?glbot=' + gs, up: ['message', 'callback_query'] });
+  try { if (tgToken_() && tgBotMode_() === 'webhook') bots.push({ name: 'بوت الحجوزات', token: tgToken_(), url: exec + '?tghook=' + tgHookSecret_(), up: ['message', 'callback_query', 'my_chat_member'] }); } catch (e) {}
+  return { exec: exec, bots: bots };
+}
+function tgRelayOn() {
+  requireScriptOwner_();
+  var P = PropertiesService.getScriptProperties(), B = _tgRelayBots_();
+  if (!/^https:\/\/script\.google\.com\//.test(B.exec)) throw new Error('رابط البرنامج المنشور (/exec) غير متاح — انشر البرنامج أولاً');
+  if (!P.getProperty('TG_RELAY_SECRET')) P.setProperty('TG_RELAY_SECRET', Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '').slice(0, 16));
+  P.setProperty('TG_RELAY_EXEC', B.exec);
+  P.setProperty('TG_RELAY_ON', '1');
+  var ps = supaPropsSync_(true);   // السر ورابط البرنامج إلى gas_props قبل تسجيل الروابط (المستقبِل يقرؤهما)
+  var out = ['رفع الإعدادات لـSupabase: ' + ps].concat(B.bots.map(function (b) { return b.name + ': ' + _tgRelaySet_(b.token, _tgRelayUrl_(b.url), b.up); }));
+  if (!B.bots.length) out.push('لا بوتات مضبوطة');
+  out.push('بوت الحجوزات بوضع السحب يبقى كما هو (يسحب الأوامر كل دقيقة من Supabase).');
+  var msg = out.join('\n'); Logger.log(msg); return msg;
+}
+function tgRelayOff() {
+  requireScriptOwner_();
+  PropertiesService.getScriptProperties().setProperty('TG_RELAY_ON', '0');
+  var B = _tgRelayBots_(), msg = B.bots.map(function (b) { return b.name + ': ' + _tgRelaySet_(b.token, b.url, b.up); }).join('\n') || 'لا بوتات';
+  Logger.log(msg); return msg;
 }
