@@ -668,6 +668,7 @@ var GAS_PROPS_SKIP_RX_ = /(SERVICE_KEY|JWT_SECRET|PASSWORD|^sess_|^SESS)/i;
 function supaPropsSync_(force) {
   var P = PropertiesService.getScriptProperties(), all = P.getProperties(), o = {};
   Object.keys(all).sort().forEach(function (k) { if (!GAS_PROPS_SKIP_RX_.test(k) && String(all[k]).length < 90000) o[k] = String(all[k]); });
+  if (!o.APP_TZ) { try { o.APP_TZ = Session.getScriptTimeZone(); } catch (eTz) {} }   // (V4.455) gas بنفس منطقة السكربت (كانت افتراضياً القاهرة ⇒ تواريخ منتصف الليل تظهر باليوم السابق)
   var h = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(o)));
   var c = CacheService.getScriptCache(); if (!force && c.get('gas_props_h') === h) return 'same';
   var r = _supaReq_('post', 'rpc/gas_props_put', { p: o, p_replace: true });

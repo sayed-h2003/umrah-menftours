@@ -79,3 +79,5 @@ function checkSession(token) {
 }
 /* اختبار محلي فقط (tools/hb_conn_test.mjs) — لا يُستدعى من الواجهة (الاسم ينتهي بـ _) */
 function _hbConnTestWrite_() { var sh = openSourceSpreadsheet_().getSheetByName('حجوزات مكة'); sh.getRange(5, 16).setValue('ملغى'); return sh.getRange(5, 16).getValue(); }
+/* ⚙️ (V4.455) lfFetch يبحث عن دالة القراءة بالاسم في globalThis — هنا الدوال داخل نطاق الحزمة ⇒ خريطة بأسماء LF_READ_ فقط */
+function _lfG_() { var o = {}; Object.keys(LF_READ_).forEach(function (k) { try { var f = eval(k); if (typeof f === 'function') o[k] = f; } catch (e) {} }); return o; }

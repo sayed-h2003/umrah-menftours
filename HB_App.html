@@ -63,7 +63,7 @@
 var HB_SUPA_ = null, HB_GAS_SKIP_ = {}, HB_RAW_GSR_ = null;
 window.__SRC = window.__SRC || []; window.__GSR = window.__GSR || [];
 function hbSrc_(fn, how, ms, why) { try { window.__SRC.push([fn, how, ms, why || '', Date.now()]); if (window.__SRC.length > 600) window.__SRC.shift(); } catch (e) {} }
-var HB_GAS_DENY_ = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken|hbGetAppVersion)$|Template$|Telegram|Tg[A-Z]|Pdf|Gemini|Drive|Upload|Email|^lf(Fetch|Poll)$|^perfReport$/i;
+var HB_GAS_DENY_ = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken|hbGetAppVersion)$|Template$|Telegram|Tg[A-Z]|Pdf|Gemini|Drive|Upload|Email|^perfReport$/i;
 function hbSupaSet_(s, erp) {
   // (V4.454) مضمَّن ببرنامج العمرة ⇒ رمزه هو المصدر (نفس المستخدم/الصلاحيات/الجلسة) ولا يُستبدل برمز الحجوزات الخاص
   if (s && !erp && HB_SUPA_ && HB_SUPA_.erp) return;

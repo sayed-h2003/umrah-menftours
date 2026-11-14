@@ -8,6 +8,10 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 
 class Suspend { constructor(kind, data) { this.kind = kind; this.data = data; this.__gasSuspend = true; } }
 const SUSP = (e) => e && e.__gasSuspend;
+// (V4.455) تشغيل «قراءة فقط» بلا قفل: أول محاولة كتابة (مؤجلة/خاصية/طلب غير معروف/نداء خارجي) ⇒ NEED_LEASE قبل أي أثر ⇒ يعاد التشغيل بالقفل
+const NEED_LEASE = 'GAS_NEED_LEASE';
+const READ_RPC_RX = /^rpc\/(cs_get|store_read|gl_entry_ver_raw|gas_whoami|gas_snapshot|gas_gl_rows|gas_hb_snap|gas_props_all|rx_\w+|app_kv_get\w*)$/;
+const needLease = (why) => { const e = new Error(NEED_LEASE + ': ' + why); e.needLease = true; return e; };
 
 // ---------- أدوات ----------
 function prng(seed) { let s = seed >>> 0 || 1; return () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; }; }
@@ -15,6 +19,19 @@ function tzName(tz) { const m = /^(?:GMT|UTC)([+-])(\d{1,2})(?::?(\d{2}))?$/.exe
 function parts(d, tz) {
   const f = new Intl.DateTimeFormat('en-US', { timeZone: tzName(tz), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', weekday: 'short' });
   const o = {}; for (const p of f.formatToParts(d)) o[p.type] = p.value; return o;
+}
+// (V4.455) التوقيت المحلي = منطقة السكربت (كما في Apps Script) بدل UTC بيئة Edge: إزاحة المنطقة عند لحظة ما + تحويل «وقت محلي» ⇒ لحظة
+function tzKit(tz) {
+  const f = new Intl.DateTimeFormat('en-US', { timeZone: tzName(tz), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  const C = new Map(), Q = 900000;
+  const off = (ms) => {
+    if (!isFinite(ms)) return 0;
+    const k = Math.floor(ms / Q); let v = C.get(k);
+    if (v === undefined) { const o = {}; for (const p of f.formatToParts(new Date(k * Q))) o[p.type] = p.value; const u = new Date(0); u.setUTCFullYear(+o.year, +o.month - 1, +o.day); u.setUTCHours(+o.hour % 24, +o.minute, +o.second, 0); v = u.getTime() - k * Q; C.set(k, v); }
+    return v;
+  };
+  const fromLocal = (L) => { if (!isFinite(L)) return NaN; const o1 = off(L - off(L)); return L - o1; };
+  return { off, fromLocal };
 }
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -87,7 +104,25 @@ export class GasSession {
   instantiate() {
     const S = this, rnd = prng(S.seed), tick = { n: 0 };   // بذرة فريدة لكل طلب وثابتة بين إعادات تشغيله (معرّفات الصفوف لا تتكرر بين الطلبات)
     const clock = () => S.t0 + (tick.n++);
-    class GDate extends Date { constructor(...a) { if (a.length === 0) super(clock()); else super(...a); } static now() { return clock(); } }
+    const K = tzKit(S.o.tz), RD = Date, T = (d) => RD.prototype.getTime.call(d), LP = (d) => { const t = T(d); return new RD(t + K.off(t)); };
+    const ABS_RX = /(Z|[+-]\d\d:?\d\d|GMT|UTC)(\s*\(.*\))?\s*$/i, DONLY_RX = /^\s*\d{4}(-\d\d(-\d\d)?)?\s*$/;
+    class GDate extends RD {
+      constructor(...a) {
+        if (a.length === 0) super(clock());
+        else if (a.length >= 2) { const u = new RD(0); u.setUTCFullYear(+a[0] >= 0 && +a[0] <= 99 ? 1900 + +a[0] : +a[0], +a[1], a.length > 2 ? +a[2] : 1); u.setUTCHours(+(a[3] || 0), +(a[4] || 0), +(a[5] || 0), +(a[6] || 0)); super(K.fromLocal(u.getTime())); }
+        else if (typeof a[0] === 'string') super(GDate.parse(a[0]));
+        else super(a[0] instanceof RD ? T(a[0]) : a[0]);
+      }
+      static now() { return clock(); }
+      static parse(x) { const s = String(x), u = RD.parse(s); if (!isFinite(u) || ABS_RX.test(s) || DONLY_RX.test(s)) return u; return K.fromLocal(u); }
+      getFullYear() { return LP(this).getUTCFullYear(); } getMonth() { return LP(this).getUTCMonth(); } getDate() { return LP(this).getUTCDate(); } getDay() { return LP(this).getUTCDay(); }
+      getHours() { return LP(this).getUTCHours(); } getMinutes() { return LP(this).getUTCMinutes(); } getSeconds() { return LP(this).getUTCSeconds(); } getMilliseconds() { return LP(this).getUTCMilliseconds(); }
+      getYear() { return this.getFullYear() - 1900; }
+      getTimezoneOffset() { return -K.off(T(this)) / 60000; }
+      _lset(m, a) { const L = LP(this); RD.prototype[m].apply(L, a); return RD.prototype.setTime.call(this, K.fromLocal(L.getTime())); }
+      setFullYear(...a) { return this._lset('setUTCFullYear', a); } setMonth(...a) { return this._lset('setUTCMonth', a); } setDate(...a) { return this._lset('setUTCDate', a); }
+      setHours(...a) { return this._lset('setUTCHours', a); } setMinutes(...a) { return this._lset('setUTCMinutes', a); } setSeconds(...a) { return this._lset('setUTCSeconds', a); } setMilliseconds(...a) { return this._lset('setUTCMilliseconds', a); }
+    }
     const GMath = Object.create(Math); GMath.random = rnd;
     const uuid = () => { const h = Array.from({ length: 32 }, () => Math.floor(rnd() * 16).toString(16)).join(''); return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`; };
     const cache = new Map(), cacheW = [];
@@ -246,6 +281,7 @@ export class GasSession {
       const sp = this.suspended || (SUSP(err) ? err : null);
       if (!sp && this.unsup) throw new Error('GAS_EDGE_UNSUPPORTED: ' + this.unsup);
       if (!sp) {
+        if (this.o.ro) { const pend = this.tape.filter((t) => t.deferred && !t.done); if (pend.length) throw needLease(pend[0].req.p); const pk = Object.keys(this.propW); if (pk.length) throw needLease('prop ' + pk[0]); }
         await this.flushDeferred();
         if (err) throw err;
         this.cacheW.forEach(([k, e]) => { if (e) this.cacheShared.set(k, e); else this.cacheShared.delete(k); });
@@ -260,6 +296,7 @@ export class GasSession {
       else if (sp.kind === 'hb') { this.hb = await this.o.db('gas_hb_snap', {}); }
       else if (sp.kind === 'gl') await this.loadGl(sp.data);
       else {
+        if (this.o.ro && (sp.data.ext || (String(sp.data.req.m).toLowerCase() !== 'get' && !READ_RPC_RX.test(sp.data.req.p)) || this.tape.some((t) => t.deferred && !t.done))) throw needLease(sp.data.ext ? 'ext' : sp.data.req.m + ' ' + sp.data.req.p);
         await this.flushDeferred();
         const r = sp.data.ext ? await this.o.ext(sp.data.ext) : await this.o.http(sp.data.req);
         this.tape.push({ k: sp.data.k, r, done: true });

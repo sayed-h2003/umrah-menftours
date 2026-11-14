@@ -60,27 +60,34 @@ Deno.serve(async (req) => {
   const fn = String(body.fn || '');
   if (!/^[A-Za-z][A-Za-z0-9]{2,60}$/.test(fn) || DENY.test(fn) || DENY_X.test(fn)) return json({ ok: false, error: 'دالة غير مسموحة: ' + fn, unsupported: true }, 400);
   const owner = crypto.randomUUID(), t0 = Date.now();
-  // قفل تأجير: تشغيل كاتب واحد في وقت واحد (بديل LockService)
   let got = false;
-  for (let i = 0; i < 40 && !got; i++) { got = await db('gas_lease_take', { p_name: 'gas', p_owner: owner, p_ttl_sec: 120 }); if (!got) await new Promise((r) => setTimeout(r, 500)); }
-  if (!got) return json({ ok: false, error: 'الخادم مشغول — أعد المحاولة بعد لحظات', busy: true }, 503);
   try {
-    const props = await db('gas_props_all', {});
     const secretKeys = { SUPA_URL: URL_, SUPA_SERVICE_KEY: KEY };
-    Object.assign(props, secretKeys);
-    const s = new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, snapCache: SNAP_CACHE, tz: props.APP_TZ || 'Africa/Cairo',
-      session: { username: claims.app_user, permissions: (claims.perms || []).join(','), fullName: claims.app_user, hb: claims.hb || null }, log: (x: string) => console.log(x) });
     const A = Array.isArray(body.args) ? body.args : [];   // raw: برنامج الحجوزات يرسل رمز جلسته بنفسه كأول معامل
-    const d = await s.run(fn, body.raw ? A : [null].concat(A));
+    const args = body.raw ? A : [null].concat(A);
+    const mk = async (ro: boolean) => {
+      const props = Object.assign(await db('gas_props_all', {}), secretKeys);
+      return new GasSession({ src: SRC, db, http, ext, props, cache: SHARED_CACHE, snapCache: SNAP_CACHE, tz: props.APP_TZ || 'Africa/Cairo', ro,
+        session: { username: claims.app_user, permissions: (claims.perms || []).join(','), fullName: claims.app_user, hb: claims.hb || null }, log: (x: string) => console.log(x) });
+    };
+    // (V4.455) 1) قراءة بلا قفل (لا تنتظر الكتّاب ولا بعضها) · 2) أول محاولة كتابة ⇒ NEED_LEASE قبل أي أثر ⇒ إعادة التشغيل بقفل التأجير (كاتب واحد في وقت واحد — بديل LockService)
+    let s = await mk(true), d;
+    try { d = await s.run(fn, args); }
+    catch (e0) {
+      if (!(e0 && (e0 as { needLease?: boolean }).needLease)) throw e0;
+      for (let i = 0; i < 40 && !got; i++) { got = await db('gas_lease_take', { p_name: 'gas', p_owner: owner, p_ttl_sec: 120 }); if (!got) await new Promise((r) => setTimeout(r, 500)); }
+      if (!got) return json({ ok: false, error: 'الخادم مشغول — أعد المحاولة بعد لحظات', busy: true }, 503);
+      s = await mk(false); d = await s.run(fn, args);
+    }
     // خصائص السكربت التي تغيّرت ⇒ gas_props + صادر kvset لـ Apps Script (ما دام يعمل)
     const w = s.propW as Record<string, string | null>, put: Record<string, string> = {}, del: string[] = [];
     Object.keys(w).forEach((k) => { if (k in secretKeys) return; if (w[k] === null) del.push(k); else put[k] = w[k] as string; });
     if (Object.keys(put).length) await db('gas_props_put', { p: put });
     if (del.length) await db('gas_props_del', { p_keys: del });
     if (Object.keys(put).length || del.length) await http({ m: 'post', p: 'app_outbox', b: { kind: 'kvset', payload: { kv: Object.assign({}, put, Object.fromEntries(del.map((k) => [k, '']))) } } });
-    return json({ ok: true, d: d === undefined ? null : d, ms: Date.now() - t0, runs: s.runs + 1 });
+    return json({ ok: true, d: d === undefined ? null : d, ms: Date.now() - t0, runs: s.runs + 1, lease: got });
   } catch (e) {
     const m = String((e as Error)?.message || e);
     return json({ ok: false, error: m.replace(/^Error:\s*/, ''), unsupported: /GAS_EDGE_UNSUPPORTED|GAS_EDGE:/.test(m) }, 200);
-  } finally { await db('gas_lease_drop', { p_name: 'gas', p_owner: owner }).catch(() => {}); }
+  } finally { if (got) await db('gas_lease_drop', { p_name: 'gas', p_owner: owner }).catch(() => {}); }
 });
