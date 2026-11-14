@@ -11,7 +11,7 @@ const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Head
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 const H = { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' };
 const SHARED_CACHE = new Map(), SNAP_CACHE = new Map();   // ذاكرة العامل بين الطلبات
-const DENY = /^(do(Get|Post)|onOpen|onEdit|store(Cutover|Rollback)|supa(Sync|Write|Issue)|gl(StoreCutover|ShadowSync)|mg[A-Z]|setup|install|uninstall)/i, DENY_X = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken)$/, CRON_FNS = /^(supaCronTick)$/;
+const DENY = /^(do(Get|Post)|onOpen|onEdit|store(Cutover|Rollback)|supa(Sync|Write|Issue)|gl(StoreCutover|ShadowSync)|mg[A-Z]|setup|install|uninstall)/i, DENY_X = /^(login|logout|checkSession|hbSsoLogin|hbSupaToken)$/, CRON_FNS = /^(supaCronTick|supaCronGl)$/;
 
 async function db(fn: string, args: Record<string, unknown>) {
   const r = await fetch(`${URL_}/rest/v1/rpc/${fn}`, { method: 'POST', headers: H, body: JSON.stringify(args || {}) });

@@ -6690,16 +6690,8 @@ function tgProcessUpdate_(upd) {
 }
 
 // ⏱️ (V4.365) قياس كل جزء من مهمة الدقيقة (يُسجَّل في «قياس الأداء» باسم drainTelegramQueue›الجزء إن تجاوز 0.3 ث)
-function _tgStep_(name, fn) { return (typeof _perfStep_ === 'function') ? _perfStep_('drainTelegramQueue›' + name, fn) : fn(); }
-function drainTelegramQueue() {
-  // وضع السحب: نسحب التحديثات الواردة أولاً (الأوامر والأزرار والربط) ثم نُرسل الطابور.
-  // في الوضع اللحظي (ويب هوك) ترجع هذه فورًا بلا أي نداء شبكة
-  try { _tgStep_('poll', function () { tgPollUpdates_(); }); } catch (ePoll) { Logger.log('drain/poll: ' + ePoll.message); }
-  // فحص خفيف (نداء شبكة واحد) كل دقيقة في وضع الويب هوك فقط — يضمن عدم بقاء التسجيل معطَّلاً
-  // بصمت لأكثر من دورة واحدة مهما كان سبب العطل
-  try { _tgStep_('heal', function () { tgWebhookSelfHeal_(); }); } catch (eHeal) { Logger.log('drain/heal: ' + eHeal.message); }
-  // تفريغ دفعات تعديل الحجوزات المُجمَّعة التي انتهت مهلتها — بصرف النظر عن وضع البوت
-  try { _tgStep_('editBatch', function () { tgFlushDueBookingEditBatches_(); }); } catch (eBatch) { Logger.log('drain/batch: ' + eBatch.message); }
+var _TG_LEAN_ = false;
+function drainGlSide_() {
   // ⏳ (V4.333) طابور عمليات الحسابات: يُفرَّغ ما تبقى فيه حتى لو أُغلقت صفحة صاحبه
   try { if (typeof glJobTick_ === 'function') _tgStep_('glJobs', function () { glJobTick_(); }); } catch (eJq) { Logger.log('drain/jobq: ' + eJq.message); }
   // ⚡ (V4.330) تعديلات الشيت التي لم تُرحَّل فوراً (مزامنة جارية/قفل مشغول) تُلتقط هنا خلال دقيقة
@@ -6711,6 +6703,18 @@ function drainTelegramQueue() {
   try { if (typeof _glHbLinkedMirFix_ === 'function') _tgStep_('lnkFix', function () { _glHbLinkedMirFix_(); }); } catch (eLf) { Logger.log('drain/lnkFix: ' + eLf.message); }
   try { if (typeof custodySyncTick_ === 'function') _tgStep_('custody', function () { custodySyncTick_(); }); }
   catch (eCus) { Logger.log('drain/custody: ' + eCus.message); }
+}
+function _tgStep_(name, fn) { return (typeof _perfStep_ === 'function') ? _perfStep_('drainTelegramQueue›' + name, fn) : fn(); }
+function drainTelegramQueue() {
+  // وضع السحب: نسحب التحديثات الواردة أولاً (الأوامر والأزرار والربط) ثم نُرسل الطابور.
+  // في الوضع اللحظي (ويب هوك) ترجع هذه فورًا بلا أي نداء شبكة
+  try { _tgStep_('poll', function () { tgPollUpdates_(); }); } catch (ePoll) { Logger.log('drain/poll: ' + ePoll.message); }
+  // فحص خفيف (نداء شبكة واحد) كل دقيقة في وضع الويب هوك فقط — يضمن عدم بقاء التسجيل معطَّلاً
+  // بصمت لأكثر من دورة واحدة مهما كان سبب العطل
+  try { _tgStep_('heal', function () { tgWebhookSelfHeal_(); }); } catch (eHeal) { Logger.log('drain/heal: ' + eHeal.message); }
+  // تفريغ دفعات تعديل الحجوزات المُجمَّعة التي انتهت مهلتها — بصرف النظر عن وضع البوت
+  try { _tgStep_('editBatch', function () { tgFlushDueBookingEditBatches_(); }); } catch (eBatch) { Logger.log('drain/batch: ' + eBatch.message); }
+  if (!_TG_LEAN_) drainGlSide_();   // (V4.464) خطوات الحسابات الجانبية — من جدولة Supabase تعمل بمهمة منفصلة كل 5 دقائق (supaCronGl)
   // طابور فارغ = لا شيء نفعله: لا قفل، ولا فتح ملف الشيت، ولا قراءة ورقة
   if (!tgQueueShouldScan_()) return { ok: true, sent: 0, reason: 'الطابور فارغ' };
   // ⚡ (V4.307) قفل مُسمّى خاص بالطابور بدل قفل السكربت العام: الإرسال هنا يحسب أرصدة/كشوفاً ويرسل لتليجرام (15-34 ثانية

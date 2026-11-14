@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.463";
+var APP_VERSION = "4.464";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -28881,6 +28881,7 @@ function _supaOnce_(key) {   // (085) true أول مرة فقط لهذا الم�
 function supaCronTick() {
   var P = PropertiesService.getScriptProperties(), out = {};
   if (P.getProperty('CRON_ON_SUPA') !== '1') return { off: true };
+  _TG_LEAN_ = true;   // (V4.464) تليجرام فقط هنا — خطوات الحسابات بـsupaCronGl كل 5 دقائق
   try { out.drain = drainTelegramQueue(); } catch (e) { out.drain = 'err: ' + e.message; }
   var tz = Session.getScriptTimeZone(), now = new Date(), day = Utilities.formatDate(now, tz, 'yyyyMMdd'), h = +Utilities.formatDate(now, tz, 'H'), hrs = _supaCronHours_();
   SUPA_CRON_DAILY_.forEach(function (fn) {
@@ -28894,6 +28895,10 @@ function supaCronTick() {
     } catch (e) { out[fn] = 'err: ' + e.message; }
   });
   return out;
+}
+function supaCronGl() {
+  if (PropertiesService.getScriptProperties().getProperty('CRON_ON_SUPA') !== '1') return { off: true };
+  drainGlSide_(); return { ok: true };
 }
 function supaCronOn() {
   requireScriptOwner_();

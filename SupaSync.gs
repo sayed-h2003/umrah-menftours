@@ -416,7 +416,7 @@ function supaSyncTick_() {   // خاصة (مشغّل الدقيقة) — لا ت
     }
     try { if (_ufEvery_('dvpg', 180)) _dvPgReconcile_(); } catch (eDv) { Logger.log('dvPg: ' + eDv); }   // (المرحلة 4)
     var gx = ''; try { gx = supaGlAuxSync_(false); } catch (eGx) { gx = 'err:' + String(eGx && eGx.message || eGx).slice(0, 80); Logger.log('supaGlAux: ' + gx); }   // ⚡ (V4.374)
-    try { if (!_hbConnOnQ_() && _ufEvery_('hbsnap', 300)) hbSnapSync_(false); } catch (eHs) { Logger.log('hbSnap: ' + eHs); }   // (V4.420) نسخة قراءة الحجوزات
+    try { hbSnapSync_(false); } catch (eHs) { Logger.log('hbSnap: ' + eHs); }   // (V4.464) مطلوبة دائماً: كشف الفندق بالحسابات العامة (glx_statement_hb) يرفض نسخة أقدم من 5 دقائق — مقيّدة داخلياً بدقيقتين
     try { if (_ufEvery_('umirror', 300)) usersMirrorTick_(false); } catch (eUm) { Logger.log('usersMirror: ' + eUm); }   // (V4.419) مرآة المستخدمين PG→الورقة
     try { if (_ufEvery_('glmeta', 600)) supaGlMetaSync_(); } catch (eGm) { Logger.log('supaGlMeta: ' + eGm); }   // ⚡ (V4.417) رابط ملف الحسابات + عدد صفوف شيتات العهد الناقصة (لـ glx_bootstrap)
     try { supaPropsSync_(false); } catch (eGp) { Logger.log('gasProps: ' + eGp); }   // (V4.445) خصائص السكربت ⇒ gas_props (Edge Function gas)

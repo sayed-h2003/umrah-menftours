@@ -327,7 +327,7 @@ export class GasSession {
       else if (sp.kind === 'gl') await Promise.all(['entries', 'lines'].filter((k) => k === sp.data || !this.gl[k]).map((k) => this.loadGl(k)));   // القيود وسطورها معاً (رحلة واحدة)
       else {
         if (this.o.ro) {
-          const X = sp.data.ext, okExt = X && String((X.opt && X.opt.method) || 'get').toLowerCase() === 'get' && READ_EXT_RX.test(String(X.url));
+          const X = sp.data.ext, okExt = X && READ_EXT_RX.test(String(X.url));   // (V4.464) أيّاً كانت الطريقة (tgApi_ يرسل POST)
           const bad = X ? !okExt : (String(sp.data.req.m).toLowerCase() !== 'get' && !READ_RPC_RX.test(sp.data.req.p));
           if (bad || this.tape.some((t) => t.deferred && !t.done)) throw needLease(X ? 'ext ' + String(X.url).replace(/bot[^/]+/, 'bot*').slice(0, 60) : sp.data.req.m + ' ' + sp.data.req.p);
         }
