@@ -73,7 +73,7 @@ function hbSupaSet_(s, erp) {
   if (HB_SUPA_ && !erp && HB_SUPA_.expiresAt) hbSupaSet_.t = setTimeout(hbSupaRenew_, Math.max(60000, HB_SUPA_.expiresAt - Date.now() - 3600000));
 }
 function hbSupaRenew_() {
-  try { if ((HB_SUPA_ && HB_SUPA_.erp) || !HB_RAW_GSR_ || typeof currentSessionToken === 'undefined' || !currentSessionToken) return;
+  try { if (window.__HB_INLINE__ || (HB_SUPA_ && HB_SUPA_.erp) || !HB_RAW_GSR_ || typeof currentSessionToken === 'undefined' || !currentSessionToken) return;
     HB_RAW_GSR_.withSuccessHandler(function (r) { if (r && r.ok) hbSupaSet_(r.supa); }).withFailureHandler(function () {}).hbSupaToken(currentSessionToken); } catch (e) {}
 }
 (function () {
@@ -89,6 +89,10 @@ function hbSupaRenew_() {
       return r[k].apply(r, a);
     };
     var call = function (k, a, sh, fh, uo, hasUo) {
+      if (window.__HB_INLINE__) {   // (V4.457) مدمج بصفحة برنامج العمرة: فحص الجلسة عبر gas برمزها، والإصدار محلي
+        if (k === 'checkSession') k = 'hbWhoAmI';
+        else if (k === 'hbGetAppVersion') { try { if (sh) sh({ version: String(window.__HB_INLINE__) }, uo); } catch (eV) {} return; }
+      }
       var S = HB_SUPA_;
       if ((!S || !S.gas || off()) && !HB_GAS_DENY_.test(k)) hbSrc_(k, 'as', 0, !S ? 'no-token' : 'gas-off');
       if (!S || !S.gas || off() || HB_GAS_DENY_.test(k) || (HB_GAS_SKIP_[k] && HB_GAS_SKIP_[k] > Date.now()) || a.some(function (x) { return x && x.tagName; })) return viaRaw(k, a, sh, fh, uo, hasUo);
@@ -4308,7 +4312,14 @@ window.onload = function () {
 
   var stored = null;
   try { stored = localStorage.getItem(SESSION_TOKEN_KEY_) || sessionStorage.getItem(SESSION_TOKEN_KEY_); } catch (e) {}
-  if (SSO_CODE) {
+  if (window.__HB_INLINE__) {   // (V4.457) جلسة برنامج العمرة نفسها — بلا دخول موحّد ولا رمز محفوظ
+    var ptok = ''; try { ptok = String(window.parent.authToken || ''); } catch (ePT) {}
+    try { if (window.parent.__hbSupaCfg) hbSupaSet_(window.parent.__hbSupaCfg(), true); } catch (ePS) {}
+    google.script.run.withSuccessHandler(function (res) {
+      if (res && res.ok) onAuthSuccess_(ptok, res.user, res.sessionMinutes);
+      else if (HB_EMBED) hbEmbedFail_('حسابك غير معرَّف في برنامج الحجوزات أو بلا صلاحية الفنادق — راجع المدير');
+    }).withFailureHandler(function (err) { if (HB_EMBED) hbEmbedFail_((err && err.message) || 'تعذّر فتح برنامج الحجوزات'); }).hbWhoAmI(ptok);
+  } else if (SSO_CODE) {
     google.script.run.withSuccessHandler(function (res) {
       if (res && res.ok) { try { sessionStorage.setItem(SESSION_TOKEN_KEY_, res.token); } catch (ex) {} onAuthSuccess_(res.token, res.user, res.sessionMinutes); }
       else { var er = document.getElementById('loginErr'); if (er) er.textContent = (res && res.error) || 'تعذّر الدخول الموحّد — سجّل الدخول يدويًا'; if (HB_EMBED) hbEmbedFail_((res && res.error) || 'تعذّر الدخول الموحّد'); }

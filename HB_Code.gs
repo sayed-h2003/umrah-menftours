@@ -401,7 +401,14 @@ function checkSession(token) {
 
     var sessions = readSessions_();
     var sess = sessions[token];
-    if (!sess) return { ok: false };
+    if (!sess) {   // (V4.457) رمز جلسة برنامج العمرة (الحجوزات مدمجة بصفحته)
+      var eu = (typeof _hbErpUser_ === 'function') ? _hbErpUser_(token) : null;
+      if (!eu) return { ok: false };
+      var eo = safeReturn_({ ok: true, user: eu, sessionMinutes: getSessionDurationMinutes(), erp: true });
+      SESSION_MEMO_[token] = eo;
+      if (cache) { try { cache.put(cacheKey, JSON.stringify(eo), SESSION_CACHE_TTL_); } catch (e4) {} }
+      return eo;
+    }
     var sh = ensureUsersSheet_();
     var rowIdx = findUserRow_(sh, sess.username);
     if (rowIdx === -1) return { ok: false };

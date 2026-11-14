@@ -98,9 +98,34 @@ function _hbSupa_(username, cap) {
   } catch (e) { return null; }
 }
 function hbSupaToken(token) {
+  var cs = checkSession(token); if (cs && cs.ok && cs.erp) return { ok: true, supa: null };   // (V4.457) جلسة برنامج العمرة تستعمل رمزها هي (بسقف hotels.*) — لا رمز حجوزات مستقل لها
   var user = requireSession_(token), sess = readSessions_()[token] || {};
   return { ok: true, supa: _hbSupa_(user.username, sess.cap || '') };
 }
+
+/* 🏨 (V4.457) برنامج الحجوزات مدمج بصفحة برنامج العمرة نفسها (لا صفحة Apps Script ثانية ولا دخول موحّد):
+   الواجهة تُجلب مرة لكل إصدار (hbAppHtml) وتُحفظ بالمتصفح، وجلسة برنامج العمرة نفسها = جلسة الحجوزات
+   (checkSession يقبل رمزها بنفس قواعد الدخول الموحّد: نفس الاسم أو أول مدير للمدير + سقف hotels.*). */
+function _hbErpUser_(token) {
+  var s = null; try { s = validateSession_(token); } catch (e) { s = null; }
+  if (!s) return null;
+  var isAdm = _sessionHasPerm_(s, 'admin');
+  var cap = isAdm ? 'admin' : (['delete', 'edit', 'add', 'view'].filter(function (c) { return _sessionHasPerm_(s, 'hotels.' + c); })[0] || '');
+  if (!cap) return null;
+  var sh = ensureUsersSheet_(), i = findUserRow_(sh, s.username), row = null;
+  if (i !== -1) row = sh.getRange(i, 1, 1, 8).getValues()[0];
+  else if (isAdm && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues().some(function (r) { if (r[6] !== false && userRecordFromRow_(r).role === 'admin') { row = r; return true; } return false; });
+  if (!row || row[6] === false) return null;
+  return capUserBySso_(userRecordFromRow_(row), cap);
+}
+function hbAppHtml(authToken) {
+  var session = requireAuth_(authToken);
+  if (!_sessionHasPerm_(session, 'admin') && !_sessionHasPerm_(session, 'hotels.view')) throw new Error('لا تملك صلاحية الدخول لبرنامج حجوزات الفنادق');
+  var t = HtmlService.createTemplateFromFile('HB_App');
+  t.baseUrl = getAppBaseUrl_(); t.initialPage = ''; t.ssoCode = ''; t.embed = '1'; t.hbSec = '';
+  return { v: String(typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), html: t.evaluate().getContent() };
+}
+function hbWhoAmI(token) { return checkSession(token); }
 
 /* ---------- نقل الإعدادات من المشروع القديم ---------- */
 // المشروع القديم (بعد استبدال كوده بملف hotels/OLD_PROJECT_Stub.gs) يكتب خصائصه في ورقة مخفية

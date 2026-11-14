@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.456  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.457  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -9872,7 +9872,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.456";
+var CLIENT_APP_VERSION = "4.457";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر
@@ -56944,7 +56944,52 @@ function hbxSize() {
   var top = w.getBoundingClientRect().top; var h = Math.max(420, window.innerHeight - Math.max(0, top) - 8);
   w.style.height = h + 'px'; if (HBX.frame) HBX.frame.style.height = h + 'px';
 }
+/* 🏨 (V4.457) برنامج الحجوزات مدمج بالصفحة نفسها: واجهته تُجلب مرة لكل إصدار (hbAppHtml) وتُحفظ بالمتصفح (IndexedDB) ثم تُرسم
+   بإطار srcdoc من نفس الأصل — يستعمل جلسة برنامج العمرة ورمز Supabase وgoogle.script.run الأصلي مباشرة: لا صفحة Apps Script ثانية
+   ولا hotelsHandoff/hbSsoLogin. أي تعذّر ⇒ الطريقة السابقة (رابط ?page=hotels). إيقاف: localStorage.hbx_inline_off='1' */
+function hbxIdb_(mode, val, cb) {
+  try {
+    var rq = indexedDB.open('hbx-app', 1);
+    rq.onupgradeneeded = function () { rq.result.createObjectStore('k'); };
+    rq.onerror = function () { cb(null); };
+    rq.onsuccess = function () {
+      try {
+        var db = rq.result, tx = db.transaction('k', mode), st = tx.objectStore('k');
+        if (mode === 'readwrite') { st.put(val, 'app'); tx.oncomplete = function () { db.close(); cb(true); }; tx.onerror = function () { db.close(); cb(null); }; }
+        else { var g = st.get('app'); g.onsuccess = function () { db.close(); cb(g.result || null); }; g.onerror = function () { db.close(); cb(null); }; }
+      } catch (e) { cb(null); }
+    };
+  } catch (e) { cb(null); }
+}
+function hbxHtml_(cb) {
+  var ver = String(window.CLIENT_APP_VERSION || '');
+  if (HBX._html && HBX._htmlV === ver) { cb(HBX._html); return; }
+  var fetchIt = function () {
+    window.gsrNative_.withSuccessHandler(function (r) {
+      if (r && r.html) { HBX._html = r.html; HBX._htmlV = ver; hbxIdb_('readwrite', { v: ver, html: r.html }, function () {}); cb(r.html); } else cb(null);
+    }).withFailureHandler(function () { cb(null); }).hbAppHtml(window.authToken);
+  };
+  hbxIdb_('readonly', null, function (rec) { if (rec && rec.v === ver && rec.html) { HBX._html = rec.html; HBX._htmlV = ver; cb(rec.html); } else fetchIt(); });
+}
 function hbxLoad() {
+  var w = document.getElementById('hbxWrap'); if (!w || HBX.loading) return;
+  var off = false; try { off = localStorage.getItem('hbx_inline_off') === '1'; } catch (e) {}
+  if (off || HBX._retried || !window.gsrNative_ || !window.indexedDB || !('srcdoc' in document.createElement('iframe'))) { hbxLoadUrl_(); return; }
+  HBX.loading = true; HBX.frame = null; HBX.ready = false;
+  w.innerHTML = '<div class="gl-card text-muted text-center py-4">⏳ جارٍ فتح الشاشة…</div>';
+  hbxHtml_(function (html) {
+    HBX.loading = false;
+    if (!html) { hbxLoadUrl_(); return; }
+    var inj = '<scr' + 'ipt>window.__HB_INLINE__=' + JSON.stringify(String(window.CLIENT_APP_VERSION || '1')) + ';try{var P=window.parent,G=P.google.script;window.google={script:{run:P.gsrNative_,host:G.host,url:G.url,history:G.history}};}catch(e){}</scr' + 'ipt>';
+    var doc = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + inj; }) : inj + html;
+    var f = document.createElement('iframe');
+    f.style.cssText = 'width:100%;height:600px;border:0;border-radius:12px;background:#f4f6f9;box-shadow:0 2px 8px rgba(15,23,42,.08);';
+    f.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen; web-share');
+    f.srcdoc = doc;
+    w.innerHTML = ''; w.appendChild(f); HBX.frame = f; HBX.inline = true; HBX.loadedAt = Date.now(); hbxSize(); hbxWatch_();
+  });
+}
+function hbxLoadUrl_() {
   var w = document.getElementById('hbxWrap'); if (!w || HBX.loading) return;
   HBX.loading = true; HBX.frame = null; HBX.ready = false;
   w.innerHTML = '<div class="gl-card text-muted text-center py-4">⏳ جارٍ فتح الشاشة…</div>';
