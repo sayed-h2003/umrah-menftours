@@ -109,7 +109,7 @@ async function runFn(fn: string, args: unknown[], session: Record<string, unknow
     // خصائص السكربت التي تغيّرت ⇒ gas_props + صادر kvset لـ Apps Script (ما دام يعمل)
     const w = s.propW as Record<string, string | null>, put: Record<string, string> = {}, del: string[] = [];
     Object.keys(w).forEach((k) => { if (k in secretKeys) return; if (w[k] === null) del.push(k); else put[k] = w[k] as string; });
-    if (Object.keys(put).length) await db('gas_props_put', { p: put });
+    if (Object.keys(put).length) await db('gas_props_put', { p: put, p_src: 'edge' });   // (085) مملوكة لـgas 15 دقيقة (لا يكتب فوقها رفع Apps Script)
     if (del.length) await db('gas_props_del', { p_keys: del });
     if (Object.keys(put).length || del.length) await http({ m: 'post', p: 'app_outbox', b: { kind: 'kvset', payload: { kv: Object.assign({}, put, Object.fromEntries(del.map((k) => [k, '']))) } } });
     return json({ ok: true, d: d === undefined ? null : d, ms: Date.now() - t0, runs: s.runs + 1, lease: got, why: why || undefined });

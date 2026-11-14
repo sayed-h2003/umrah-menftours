@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.462";
+var APP_VERSION = "4.463";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -28875,6 +28875,9 @@ function _supaCronHours_() {
     sendTelegramArrivalAlerts: (function () { var h = parseInt(P.getProperty('TELEGRAM_ALERT_HOUR') || '16', 10); return isNaN(h) || h < 0 || h > 23 ? 16 : h; })()
   };
 }
+function _supaOnce_(key) {   // (085) true أول مرة فقط لهذا المفتاح (ذرّي) — تعذّر الاتصال ⇒ false (الأسلم: لا إرسال مكرر)
+  try { var r = _supaReq_('post', 'rpc/gas_once', { p_key: String(key) }); return r.code < 300 && /^(true|t)$/.test(String(r.text).trim()); } catch (e) { return false; }
+}
 function supaCronTick() {
   var P = PropertiesService.getScriptProperties(), out = {};
   if (P.getProperty('CRON_ON_SUPA') !== '1') return { off: true };
@@ -28882,6 +28885,7 @@ function supaCronTick() {
   var tz = Session.getScriptTimeZone(), now = new Date(), day = Utilities.formatDate(now, tz, 'yyyyMMdd'), h = +Utilities.formatDate(now, tz, 'H'), hrs = _supaCronHours_();
   SUPA_CRON_DAILY_.forEach(function (fn) {
     if (hrs[fn] < 0 || h < hrs[fn] || P.getProperty('CRON_DAY_' + fn) === day) return;
+    if (!_supaOnce_('CRON_' + fn + '_' + day)) { P.setProperty('CRON_DAY_' + fn, day); return; }   // (V4.463) علامة ذرّية بقاعدة البيانات — لا تكرار حتى لو مُسحت الخاصية
     P.setProperty('CRON_DAY_' + fn, day);
     try {
       if (fn === 'tgDailyArrivalsJob') out[fn] = tgDailyArrivalsJob() || 'ok';
@@ -28897,7 +28901,7 @@ function supaCronOn() {
   if (!P.getProperty('CRON_SECRET')) P.setProperty('CRON_SECRET', Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, ''));
   // المهام التي فات وقتها اليوم وأدّاها Apps Script ⇒ لا تُكرَّر اليوم
   var tz = Session.getScriptTimeZone(), now = new Date(), day = Utilities.formatDate(now, tz, 'yyyyMMdd'), h = +Utilities.formatDate(now, tz, 'H'), hrs = _supaCronHours_();
-  SUPA_CRON_DAILY_.forEach(function (fn) { if (hrs[fn] >= 0 && h >= hrs[fn]) P.setProperty('CRON_DAY_' + fn, day); });
+  SUPA_CRON_DAILY_.forEach(function (fn) { if (hrs[fn] >= 0 && h >= hrs[fn]) { P.setProperty('CRON_DAY_' + fn, day); try { _supaOnce_('CRON_' + fn + '_' + day); } catch (e) {} } });
   P.setProperty('CRON_ON_SUPA', '1');
   ['drainTelegramQueue'].concat(SUPA_CRON_DAILY_).forEach(function (fn) { ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === fn) ScriptApp.deleteTrigger(t); }); });
   var r = supaPropsSync_(true);
