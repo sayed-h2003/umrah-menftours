@@ -7,7 +7,7 @@
   <title>ادارة رحلات العمرة</title>
 
 <!-- ============================================================================
-     🏷️ إصدار الواجهة: V4.457  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
+     🏷️ إصدار الواجهة: V4.458  (يُحدَّث مع كل إصدار — المرجع الفعلي: CLIENT_APP_VERSION)
      🩺 متتبِّع الإقلاع (Boot Tracer)
      ============================================================================ -->
 <script>
@@ -7445,6 +7445,16 @@ function _jobQueueRun_(getReal, st, fn, args) {
 }
 function _runExec_(getReal, st, fn, args, attempt, busyN) {
   attempt = attempt || 0; busyN = busyN || 0;
+  // 🔒 (V4.458) لا يخرج لـApps Script أي نداء برمز الدخول السريع «المعلّق» — من أي مسار (إعادة المحاولة بعد «جلسة غير صالحة» كانت تستبدل
+  // الرمز القديم بالمعلّق وترسله مباشرة ⇒ سيل نداءات مرفوضة يؤخّر loginUser نفسه ثم «انتهت الجلسة»). يُحجز حتى يصل الرمز الحقيقي.
+  var gG = window._authGate;
+  if (gG && !gG.done && fn !== 'loginUser' && fn !== 'resumeSession' && fn !== 'perfPing') {
+    var hasPh = function (x) { return x === gG.ph || (Array.isArray(x) && x.indexOf(gG.ph) >= 0); };
+    if (args.some(hasPh)) {
+      gG.q.push(function (tok) { _runExec_(getReal, st, fn, args.map(function (x) { return x === gG.ph ? tok : (Array.isArray(x) ? x.map(function (y) { return y === gG.ph ? tok : y; }) : x); }), attempt, busyN); });
+      return;
+    }
+  }
   var r = getReal();
   if (st.ok) r = r.withSuccessHandler(function (res, uo) {
     // نتيجة «الشيت مشغول» (قفل السكربت قبل الكتابة) ⇒ إعادة تلقائية بتأخير متزايد بدل رسالة للمستخدم
@@ -9353,10 +9363,14 @@ appDiv.style.backgroundColor = "white";
     window._authGate = { ph: ph, q: [], done: false };
     fr.token = ph;
     _onLoginRes_(fr);
-    google.script.run
-      .withSuccessHandler(function (r) { _fastLoginAdopt_(r, _lu_); })
-      .withFailureHandler(function () { setTimeout(function () { google.script.run.withSuccessHandler(function (r) { _fastLoginAdopt_(r, _lu_); }).withFailureHandler(function () { _fastLoginAdopt_(null, _lu_); }).loginUser(_lu_, _lp_, _lr_); }, 1500); })
-      .loginUser(_lu_, _lp_, _lr_);
+    // (V4.458) جلسة Apps Script بالخلفية: حتى 6 محاولات بتأخير متزايد (≈ دقيقة) قبل اعتبار الاتصال متعذّراً — العمل مستمر من Postgres أثناءها
+    var _bgTry_ = function (n) {
+      google.script.run
+        .withSuccessHandler(function (r) { _fastLoginAdopt_(r, _lu_); })
+        .withFailureHandler(function () { if (n >= 5) { _fastLoginAdopt_(null, _lu_); return; } setTimeout(function () { _bgTry_(n + 1); }, [1500, 3000, 6000, 12000, 20000][n]); })
+        .loginUser(_lu_, _lp_, _lr_);
+    };
+    _bgTry_(0);
   });
 }
 
@@ -9872,7 +9886,7 @@ function pilgrimVisaNote_(p) {
 
 // 🩺 CLIENT_APP_VERSION: رقم إصدار الواجهة — لازم يطابق النص داخل appVersionBadge بالأعلى
 // وكمان يطابق APP_VERSION في Code.gs. ارفعه مع كل تعديل جوهري + Deploy جديد.
-var CLIENT_APP_VERSION = "4.457";
+var CLIENT_APP_VERSION = "4.458";
 // 🏷️ (V4.107) رقم الإصدار بشاشة الدخول — يُملأ من نفس المصدر فلا يحتاج موضع تعديل إضافي عند كل نشر
 (function() { var t = document.getElementById('loginVersionTag'); if (t) t.textContent = 'V' + CLIENT_APP_VERSION; })();
 // 🏷️ (V4.298-fix) رقم الإصدار في الشريط العلوي يُضبَط ديناميكياً من CLIENT_APP_VERSION — فلا يبقى نصّاً ثابتاً قديماً بعد كل نشر

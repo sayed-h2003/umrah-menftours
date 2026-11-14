@@ -33,7 +33,7 @@ var __PERF_T0__ = (typeof __PERF_T0__ === 'number') ? __PERF_T0__ : Date.now();
 // 🏷️ رقم إصدار الخادم — يُطبع في سجل Executions مع كل طلب، وارفعه مع كل نشر
 // جنباً إلى جنب مع شارة الإصدار في index_web.html (سطر الـ badge بالشريط العلوي)
 // حتى تتأكد من مطابقة الاثنين بعد أي Deploy.
-var APP_VERSION = "4.457";
+var APP_VERSION = "4.458";
 
 // يستدعيها العميل (index_web.html) لمقارنة إصدار الخادم الفعلي المنشور بإصدار الواجهة الظاهر بالشريط العلوي
 function getAppVersion() {
@@ -28827,3 +28827,33 @@ function _dqPgOnly_() { return { success: false, error: 'أداة التدقيق
 function accDataAudit(authToken) { requireAuth_(authToken); return _dqPgOnly_(); }
 function accOrphanFix(authToken, p) { requireAuth_(authToken); return _dqPgOnly_(); }
 function clientMergeName(authToken, from, to) { requireAuth_(authToken); return _dqPgOnly_(); }
+
+/* 🩺 (V4.458) تشخيص تليجرام من المحرر (المالك): لكل بوت مضبوط بخصائص السكربت — هل التوكن صالح، حالة الـWebhook وآخر خطأ عنده،
+   عدد التحديثات المنتظرة، والمشغّلات المجدولة. لا يطبع أي توكن. شغّل tgDiagAll ثم أرسل السجل. */
+function tgDiagAll() {
+  requireScriptOwner_();
+  var P = PropertiesService.getScriptProperties().getProperties(), out = [], seen = {};
+  var call = function (tok, m) {
+    try { var r = UrlFetchApp.fetch('https://api.telegram.org/bot' + tok + '/' + m, { muteHttpExceptions: true }); return { code: r.getResponseCode(), j: JSON.parse(r.getContentText() || '{}') }; }
+    catch (e) { return { code: 0, err: String(e && e.message || e) }; }
+  };
+  var toks = [];
+  Object.keys(P).sort().forEach(function (k) {
+    var v = String(P[k] || ''), m = v.match(/\d{6,}:[A-Za-z0-9_-]{30,}/g);
+    (m || []).forEach(function (t) { if (!seen[t]) { seen[t] = 1; toks.push({ key: k, tok: t }); } });
+  });
+  try { if (typeof TELEGRAM_CONFIG !== 'undefined' && TELEGRAM_CONFIG.token && !seen[TELEGRAM_CONFIG.token]) toks.push({ key: 'TELEGRAM_CONFIG', tok: TELEGRAM_CONFIG.token }); } catch (e) {}
+  out.push('بوتات مضبوطة: ' + toks.length);
+  toks.forEach(function (t) {
+    var me = call(t.tok, 'getMe'), wi = call(t.tok, 'getWebhookInfo'), w = (wi.j && wi.j.result) || {};
+    out.push('• ' + t.key + ': ' + (me.err ? '❌ تعذّر الاتصال: ' + me.err : (me.j && me.j.ok ? '✅ @' + me.j.result.username : '❌ التوكن مرفوض (' + me.code + ') ' + ((me.j && me.j.description) || ''))) +
+      ' | webhook: ' + (w.url ? 'مضبوط' + (/script\.google\.com/.test(w.url) ? ' (Apps Script)' : ' (' + String(w.url).replace(/^https?:\/\/([^/]+).*$/, '$1') + ')') : 'غير مضبوط') +
+      ' | منتظرة: ' + (w.pending_update_count || 0) +
+      (w.last_error_message ? ' | آخر خطأ: ' + w.last_error_message + ' @ ' + Utilities.formatDate(new Date((w.last_error_date || 0) * 1000), Session.getScriptTimeZone(), 'dd/MM HH:mm') : ''));
+  });
+  var T = {}; ScriptApp.getProjectTriggers().forEach(function (tr) { var h = tr.getHandlerFunction(); T[h] = (T[h] || 0) + 1; });
+  out.push('المشغّلات: ' + Object.keys(T).sort().map(function (h) { return h + '×' + T[h]; }).join(' · '));
+  try { out.push('رابط التطبيق: ' + (ScriptApp.getService().getUrl() ? 'منشور' : 'غير منشور')); } catch (e) {}
+  out.push('المنطقة الزمنية: ' + Session.getScriptTimeZone() + ' · الآن: ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm'));
+  var msg = out.join('\n'); Logger.log(msg); return msg;
+}
